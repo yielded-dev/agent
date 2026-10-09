@@ -1,0 +1,388 @@
+{
+  "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+  "promptReads": "87158447db05a1a2f9cfe4c38ea0aff4bceb4e3d",
+  "terminalReads": "4417a0955e9c61cd3a45ac4cf4ad1e5c8f431228",
+  "method": "Read existing modelSnapshots[0] and subtract readPrompt counters; compare final counts. No new instrumentation or reruns.",
+  "boundary": "Counter start immediately before YieldedDO.turn; first snapshot at scripted respond entry, before transcript conversion. Includes inline admission/process and runtime setup; excludes deployed HTTP/provider transport.",
+  "unavailable": [
+    "Separate Effect totals for admission, materialization, continuation, initialContext, journal fold, or history digest",
+    "SQL rows at first-model boundary",
+    "JSON.stringify/canonical traversal byte counts, crypto bytes, CPU, latency"
+  ],
+  "rawCaptureSha256": {
+    "yielded-baseline-250.json": "0a431091229ce791bd5d23c74713d632281e4622f371de7f98c16ce0574d6516",
+    "yielded-prompt-reads-250.json": "7b9d965406551b3c60ad987664226e4d43a62106aac534d66d23079658d9b3e6",
+    "yielded-terminal-reads-250.json": "5f1ce4401a0f54d9301077e96e5867189f4202998569e9aa4fa44cbed75e1573",
+    "yielded-baseline-1000.json": "b118d49d121f935af0fd7c91d58835809b879650f4613819d315a81493140f10",
+    "yielded-prompt-reads-1000.json": "87d2ff6eccfa1f113d98bfac3248fb657d35c3d60d9ff31755b526004688659c",
+    "yielded-terminal-reads-1000.json": "218e48f25399a40f16235b404e1fd8dcbd46ebb809b96bc7b0fab1df5ab461e8"
+  },
+  "rows": [
+    {
+      "turns": 250,
+      "variant": "baseline",
+      "seedFingerprint": "dcea9f30b0917245",
+      "measuredFingerprint": "c29eb4d490969f50",
+      "firstModelEffects": 56123,
+      "readPromptEffects": 37839,
+      "outsideReadPromptEffects": 18284,
+      "postFirstEffects": 22046,
+      "wholeRunEffects": 78169,
+      "readPromptRecords": 1334,
+      "readPromptJsonBytes": 1024025,
+      "readPromptPages": 6,
+      "metadataVisits": 1335,
+      "projectionVisits": 1335,
+      "journalProjections": 1,
+      "outsideReadPromptSchemaNodes": 35733,
+      "outsideReadPromptSchemaRoots": 572,
+      "outsideReadPromptCanonicalDecodes": 5,
+      "outsideReadPromptCanonicalBytes": 3993,
+      "fullEnvelopeDecodes": 4,
+      "outsideReadPromptDecodedTags": {
+        "ThreadCreated": 1,
+        "UserInputRecorded": 1,
+        "RunContinuation": 2,
+        "RunContextRecorded": 1
+      },
+      "projectedRecordTags": {
+        "UserInputRecorded": 251,
+        "ModelResponseRecorded": 417,
+        "ToolCallSettled": 167,
+        "RunCompleted": 250,
+        "SubmissionSettled": 250
+      },
+      "modelIntervalEffects": [
+        2381,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323
+      ],
+      "afterLastModelEffects": 3404,
+      "wholeRunSqlOutsidePrompt": {
+        "calls": 231,
+        "rowsRead": 2977,
+        "rowsWritten": 544
+      },
+      "wholeRunSqlOwnershipClaim": {
+        "calls": 2,
+        "rowsRead": 504,
+        "rowsWritten": 0
+      },
+      "wholeRunSqlJournalRangeUpdate": {
+        "calls": 12,
+        "rowsRead": 72,
+        "rowsWritten": 12
+      }
+    },
+    {
+      "turns": 250,
+      "variant": "prompt-reads",
+      "seedFingerprint": "dcea9f30b0917245",
+      "measuredFingerprint": "c29eb4d490969f50",
+      "firstModelEffects": 52065,
+      "readPromptEffects": 35320,
+      "outsideReadPromptEffects": 16745,
+      "postFirstEffects": 22046,
+      "wholeRunEffects": 74111,
+      "readPromptRecords": 1084,
+      "readPromptJsonBytes": 933135,
+      "readPromptPages": 5,
+      "metadataVisits": 1085,
+      "projectionVisits": 1085,
+      "journalProjections": 1,
+      "outsideReadPromptSchemaNodes": 35733,
+      "outsideReadPromptSchemaRoots": 572,
+      "outsideReadPromptCanonicalDecodes": 5,
+      "outsideReadPromptCanonicalBytes": 3993,
+      "fullEnvelopeDecodes": 4,
+      "outsideReadPromptDecodedTags": {
+        "ThreadCreated": 1,
+        "UserInputRecorded": 1,
+        "RunContinuation": 2,
+        "RunContextRecorded": 1
+      },
+      "projectedRecordTags": {
+        "ModelResponseRecorded": 417,
+        "ToolCallSettled": 167,
+        "RunCompleted": 250,
+        "SubmissionSettled": 250,
+        "UserInputRecorded": 1
+      },
+      "modelIntervalEffects": [
+        2381,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323
+      ],
+      "afterLastModelEffects": 3404,
+      "wholeRunSqlOutsidePrompt": {
+        "calls": 231,
+        "rowsRead": 2977,
+        "rowsWritten": 544
+      },
+      "wholeRunSqlOwnershipClaim": {
+        "calls": 2,
+        "rowsRead": 504,
+        "rowsWritten": 0
+      },
+      "wholeRunSqlJournalRangeUpdate": {
+        "calls": 12,
+        "rowsRead": 72,
+        "rowsWritten": 12
+      }
+    },
+    {
+      "turns": 250,
+      "variant": "terminal-reads",
+      "seedFingerprint": "dcea9f30b0917245",
+      "measuredFingerprint": "c29eb4d490969f50",
+      "firstModelEffects": 52075,
+      "readPromptEffects": 35318,
+      "outsideReadPromptEffects": 16757,
+      "postFirstEffects": 22046,
+      "wholeRunEffects": 74121,
+      "readPromptRecords": 1086,
+      "readPromptJsonBytes": 776769,
+      "readPromptPages": 5,
+      "metadataVisits": 1087,
+      "projectionVisits": 1087,
+      "journalProjections": 1,
+      "outsideReadPromptSchemaNodes": 35733,
+      "outsideReadPromptSchemaRoots": 572,
+      "outsideReadPromptCanonicalDecodes": 5,
+      "outsideReadPromptCanonicalBytes": 3993,
+      "fullEnvelopeDecodes": 4,
+      "outsideReadPromptDecodedTags": {
+        "ThreadCreated": 1,
+        "UserInputRecorded": 1,
+        "RunContinuation": 2,
+        "RunContextRecorded": 1
+      },
+      "projectedRecordTags": {
+        "UserInputRecorded": 251,
+        "ModelResponseRecorded": 417,
+        "ToolCallSettled": 167,
+        "RunCompleted": 250,
+        "SubmissionSettled": 2
+      },
+      "modelIntervalEffects": [
+        2381,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323
+      ],
+      "afterLastModelEffects": 3404,
+      "wholeRunSqlOutsidePrompt": {
+        "calls": 231,
+        "rowsRead": 2977,
+        "rowsWritten": 544
+      },
+      "wholeRunSqlOwnershipClaim": {
+        "calls": 2,
+        "rowsRead": 504,
+        "rowsWritten": 0
+      },
+      "wholeRunSqlJournalRangeUpdate": {
+        "calls": 12,
+        "rowsRead": 72,
+        "rowsWritten": 12
+      }
+    },
+    {
+      "turns": 1000,
+      "variant": "baseline",
+      "seedFingerprint": "ac520308146f2a8f",
+      "measuredFingerprint": "02f7ac7f9eb06bee",
+      "firstModelEffects": 208859,
+      "readPromptEffects": 151084,
+      "outsideReadPromptEffects": 57775,
+      "postFirstEffects": 22046,
+      "wholeRunEffects": 230905,
+      "readPromptRecords": 5334,
+      "readPromptJsonBytes": 4112455,
+      "readPromptPages": 21,
+      "metadataVisits": 5335,
+      "projectionVisits": 5335,
+      "journalProjections": 1,
+      "outsideReadPromptSchemaNodes": 119733,
+      "outsideReadPromptSchemaRoots": 1572,
+      "outsideReadPromptCanonicalDecodes": 5,
+      "outsideReadPromptCanonicalBytes": 3995,
+      "fullEnvelopeDecodes": 4,
+      "outsideReadPromptDecodedTags": {
+        "ThreadCreated": 1,
+        "UserInputRecorded": 1,
+        "RunContinuation": 2,
+        "RunContextRecorded": 1
+      },
+      "projectedRecordTags": {
+        "UserInputRecorded": 1001,
+        "ModelResponseRecorded": 1667,
+        "ToolCallSettled": 667,
+        "RunCompleted": 1000,
+        "SubmissionSettled": 1000
+      },
+      "modelIntervalEffects": [
+        2381,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323
+      ],
+      "afterLastModelEffects": 3404,
+      "wholeRunSqlOutsidePrompt": {
+        "calls": 231,
+        "rowsRead": 4585,
+        "rowsWritten": 544
+      },
+      "wholeRunSqlOwnershipClaim": {
+        "calls": 2,
+        "rowsRead": 2004,
+        "rowsWritten": 0
+      },
+      "wholeRunSqlJournalRangeUpdate": {
+        "calls": 12,
+        "rowsRead": 180,
+        "rowsWritten": 12
+      }
+    },
+    {
+      "turns": 1000,
+      "variant": "prompt-reads",
+      "seedFingerprint": "ac520308146f2a8f",
+      "measuredFingerprint": "02f7ac7f9eb06bee",
+      "firstModelEffects": 192609,
+      "readPromptEffects": 141000,
+      "outsideReadPromptEffects": 51609,
+      "postFirstEffects": 22046,
+      "wholeRunEffects": 214655,
+      "readPromptRecords": 4334,
+      "readPromptJsonBytes": 3748565,
+      "readPromptPages": 17,
+      "metadataVisits": 4335,
+      "projectionVisits": 4335,
+      "journalProjections": 1,
+      "outsideReadPromptSchemaNodes": 119733,
+      "outsideReadPromptSchemaRoots": 1572,
+      "outsideReadPromptCanonicalDecodes": 5,
+      "outsideReadPromptCanonicalBytes": 3995,
+      "fullEnvelopeDecodes": 4,
+      "outsideReadPromptDecodedTags": {
+        "ThreadCreated": 1,
+        "UserInputRecorded": 1,
+        "RunContinuation": 2,
+        "RunContextRecorded": 1
+      },
+      "projectedRecordTags": {
+        "ModelResponseRecorded": 1667,
+        "ToolCallSettled": 667,
+        "RunCompleted": 1000,
+        "SubmissionSettled": 1000,
+        "UserInputRecorded": 1
+      },
+      "modelIntervalEffects": [
+        2381,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323
+      ],
+      "afterLastModelEffects": 3404,
+      "wholeRunSqlOutsidePrompt": {
+        "calls": 231,
+        "rowsRead": 4585,
+        "rowsWritten": 544
+      },
+      "wholeRunSqlOwnershipClaim": {
+        "calls": 2,
+        "rowsRead": 2004,
+        "rowsWritten": 0
+      },
+      "wholeRunSqlJournalRangeUpdate": {
+        "calls": 12,
+        "rowsRead": 180,
+        "rowsWritten": 12
+      }
+    },
+    {
+      "turns": 1000,
+      "variant": "terminal-reads",
+      "seedFingerprint": "ac520308146f2a8f",
+      "measuredFingerprint": "02f7ac7f9eb06bee",
+      "firstModelEffects": 192687,
+      "readPromptEffects": 141041,
+      "outsideReadPromptEffects": 51646,
+      "postFirstEffects": 22046,
+      "wholeRunEffects": 214733,
+      "readPromptRecords": 4340,
+      "readPromptJsonBytes": 3121437,
+      "readPromptPages": 17,
+      "metadataVisits": 4341,
+      "projectionVisits": 4341,
+      "journalProjections": 1,
+      "outsideReadPromptSchemaNodes": 119733,
+      "outsideReadPromptSchemaRoots": 1572,
+      "outsideReadPromptCanonicalDecodes": 5,
+      "outsideReadPromptCanonicalBytes": 3995,
+      "fullEnvelopeDecodes": 4,
+      "outsideReadPromptDecodedTags": {
+        "ThreadCreated": 1,
+        "UserInputRecorded": 1,
+        "RunContinuation": 2,
+        "RunContextRecorded": 1
+      },
+      "projectedRecordTags": {
+        "UserInputRecorded": 1001,
+        "ModelResponseRecorded": 1667,
+        "ToolCallSettled": 667,
+        "RunCompleted": 1000,
+        "SubmissionSettled": 6
+      },
+      "modelIntervalEffects": [
+        2381,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323,
+        2323
+      ],
+      "afterLastModelEffects": 3404,
+      "wholeRunSqlOutsidePrompt": {
+        "calls": 231,
+        "rowsRead": 4585,
+        "rowsWritten": 544
+      },
+      "wholeRunSqlOwnershipClaim": {
+        "calls": 2,
+        "rowsRead": 2004,
+        "rowsWritten": 0
+      },
+      "wholeRunSqlJournalRangeUpdate": {
+        "calls": 12,
+        "rowsRead": 180,
+        "rowsWritten": 12
+      }
+    }
+  ]
+}

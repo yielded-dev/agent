@@ -1,0 +1,27 @@
+diff --git a/packages/storage-sql/src/SqlThreadNativeReads.ts b/packages/storage-sql/src/SqlThreadNativeReads.ts
+index 22ee61ab..3751eecb 100644
+--- a/packages/storage-sql/src/SqlThreadNativeReads.ts
++++ b/packages/storage-sql/src/SqlThreadNativeReads.ts
+@@ -1078,11 +1078,14 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
+           if (request.throughSequence > tail.tail_sequence)
+             return yield* failure("prompt read is ahead of canonical tail");
+ 
++          // Input messages are captured by ModelResponseRecorded. Compaction creators and late
++          // Tool owners are fetched exactly by initialContext when their admission boundary matters.
+           // Bound raw hydration before the narrow decoder discards large non-prompt fields.
+           const plan = yield* decodePromptPlan(
+             yield* sql`SELECT sequence, ${promptRecordBytes} AS record_json_bytes
+             FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_prompt")}
+             WHERE thread_id=${request.threadId} AND ${sql.literal(SQL_PROMPT_PREDICATE)}
++              AND record_tag<>'UserInputRecorded'
+               AND sequence>${request.afterSequence ?? 0} AND sequence<=${request.throughSequence}
+             ORDER BY sequence LIMIT ${request.limit}`.pipe(execute),
+           );
+@@ -1117,6 +1120,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
+               yield* sql`SELECT thread_id, sequence, record_id, ${recordJson} AS record_json
+               FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_prompt")}
+               WHERE thread_id=${request.threadId} AND ${sql.literal(SQL_PROMPT_PREDICATE)}
++                AND record_tag<>'UserInputRecorded'
+                 AND sequence>=${page[0].sequence} AND sequence<=${page[page.length - 1].sequence}
+               ORDER BY sequence`.pipe(execute),
+             );

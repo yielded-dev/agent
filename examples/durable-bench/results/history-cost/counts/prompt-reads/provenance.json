@@ -1,0 +1,81 @@
+{
+  "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+  "candidate": "87158447db05a1a2f9cfe4c38ea0aff4bceb4e3d",
+  "variant": "prompt-reads",
+  "scope": "One inline Run through settlement; operation counts, no timing claim",
+  "versions": {
+    "effect": "4.0.0",
+    "pi-durable": "1.0.4",
+    "bun": "1.4.2",
+    "miniflare": "5.20260811.1-alpha"
+  },
+  "productDiff": "Exact candidate SqlThreadNativeReads.ts substituted before applying original hooks; native baseline Records.ts unchanged. Commit documentation and changeset do not affect this capture.",
+  "sourceSha256": {
+    "baselineRecords": "2e06b93c3d002b394e1dddc62775125dac186a2a979fe8ca1a1387ec0a4a5679",
+    "candidateRecords": "2e06b93c3d002b394e1dddc62775125dac186a2a979fe8ca1a1387ec0a4a5679",
+    "baselineSql": "f0bb2755dd5648a5fd010eee158cb7dc43e7e21f02fdccaf681262f38d0b114a",
+    "candidateSql": "7245980cedee14e8476373c87c8f47957362f8f36f2f90398bbe1348c0740fee",
+    "baselineInstrumentation": "bef6b0766c19cfdddce0e6b888062c8a8e39beb1794463c6fbac4f559df23b7f",
+    "promptReadsInstrumentation": "854bd201865bf6482d409db71368e579424a36d7d19736e5f03a9c16a8b44d21",
+    "probe": "4b28b0ecccd11bb9056080148c71db92a4c1a6a233f80c352bcccd733f65507a",
+    "driver": "de21cf59415803343891b12636f3122de9a23535ae2001fcd460338222a36cac",
+    "storageTransfer": "1864adff1dae2af5579ada9ce0f1794556c78ff06a2dd47b161e335ba75bccfc",
+    "protocol": "8f862e013692075f6c2a9a4362e52a3f6af7fb175d223adb78e68f0bdd460135"
+  },
+  "unchangedHooksVerified": "Removing only the SQL variant source selector reproduces the original baseline instrumentation byte-for-byte; probe and transfer helpers are byte-identical.",
+  "rawCaptureSha256": {
+    "yielded-baseline-50.json": "5b16a68afeb483c6f7b9e230791b3d4791cf5107c3b3f7250edfe2395b021c2b",
+    "yielded-prompt-reads-50.json": "3fcf0d20f6e8ccaa8e67050d8923d3021d9df1b0b54254b6f4d190198908989d",
+    "yielded-baseline-250.json": "0a431091229ce791bd5d23c74713d632281e4622f371de7f98c16ce0574d6516",
+    "yielded-prompt-reads-250.json": "7b9d965406551b3c60ad987664226e4d43a62106aac534d66d23079658d9b3e6",
+    "yielded-baseline-1000.json": "b118d49d121f935af0fd7c91d58835809b879650f4613819d315a81493140f10",
+    "yielded-prompt-reads-1000.json": "87d2ff6eccfa1f113d98bfac3248fb657d35c3d60d9ff31755b526004688659c",
+    "yielded-baseline-3500.json": "5773bb5a3691b9e408062f80a94dfa05c5e0b01cd8c814fb943829f4f903d896",
+    "yielded-prompt-reads-3500.json": "1c5b3fdafe2ddf74b2a707ec39d140b4ba7f6ab00a941022f6eafb41588872cf"
+  },
+  "portableCopyChanges": [
+    "Explicit fixture/output paths and candidate source path arguments",
+    "No counter hooks or measured boundaries changed"
+  ],
+  "validation": {
+    "sizes": [
+      50,
+      250,
+      1000,
+      3500
+    ],
+    "baselineCaptures": "Reused previously verified captures; no new baseline repeats",
+    "candidateCaptures": "One fresh import and new Run per size",
+    "fingerprints": "Seed and last model request match baseline at all four sizes",
+    "normalizedImportTables": "Equal to baseline at every size",
+    "nativeRecords": "Byte-identical to baseline and candidate commit",
+    "portableReplay": {
+      "sizes": [
+        50
+      ],
+      "variants": [
+        "prompt-reads"
+      ],
+      "matchedFields": [
+        "counts",
+        "sql",
+        "visits",
+        "modelSnapshots",
+        "normalized",
+        "seedFingerprint",
+        "fingerprint",
+        "messages",
+        "candidateRevision"
+      ],
+      "candidateSqlReconstruction": "byte-for-byte match",
+      "shellSyntax": "passed"
+    }
+  },
+  "largeArtifactsIncluded": false,
+  "canonicalArchiveSha256": {
+    "archive-50.json": "e2714cdcb51197a41742a83c31faf5bde215a21608340606b5d5d38ce77ab22e",
+    "archive-250.json": "a147b7df7706b56e6967b9f36d53f171cd2e87740b8e9f1735bcaa9138c90a8b",
+    "archive-1000.json": "b70c40a799270ab8b74a9ec8b9b31926cf2a3621be688cbe68245213cc7fd9b3",
+    "archive-3500.json": "6a9787a49bb909eb37ec534d904ddb1f6aa7b66a54b28b026fc9b83c1afa2a44"
+  }
+}

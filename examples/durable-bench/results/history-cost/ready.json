@@ -1,0 +1,37 @@
+[
+  {
+    "revision": "87158447db05a1a2f9cfe4c38ea0aff4bceb4e3d",
+    "command": "vp run ready",
+    "exitCode": 0,
+    "environment": {
+      "postgresAdminDatabase": "postgres (existing local server)",
+      "vendoredThirdPartyNodeModules": false,
+      "hostLoopbackAccess": true
+    },
+    "logSha256": "311f49d4466bd4864f47b31b5b878c4a087126b5835df002dd909b49f55f1a9a"
+  },
+  {
+    "revision": "4417a0955e9c61cd3a45ac4cf4ad1e5c8f431228",
+    "command": "vp run ready",
+    "exitCode": 0,
+    "environment": {
+      "postgresAdminDatabase": "postgres (task-owned temporary server)",
+      "managedNode": "24.21.0",
+      "vendoredThirdPartyNodeModules": false,
+      "hostLoopbackAccess": true
+    },
+    "logSha256": "2e7dcdea225d3111abccb7ef8b6265afa6b4e062cb957381b311843df388924f"
+  },
+  {
+    "revision": "0451aacb627ec3dbe76618c043bce9d6b91596ad",
+    "command": "vp run ready",
+    "exitCode": 0,
+    "environment": {
+      "postgresAdminDatabase": "postgres (task-owned temporary server)",
+      "managedNode": "24.21.0",
+      "vendoredThirdPartyNodeModules": false,
+      "hostLoopbackAccess": true
+    },
+    "logSha256": "558ac929ba6024fa768821ddde598a77ccb9475c0e2bf54686bd13990e0b75b1"
+  }
+]

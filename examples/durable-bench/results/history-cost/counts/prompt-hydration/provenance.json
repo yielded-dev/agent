@@ -1,0 +1,69 @@
+{
+  "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+  "candidate": "0451aacb627ec3dbe76618c043bce9d6b91596ad",
+  "versions": {
+    "effect": "4.0.0",
+    "pi-durable": "1.0.4",
+    "bun": "1.4.2",
+    "miniflare": "5.20260811.1-alpha"
+  },
+  "candidateFiles": {
+    "Records.ts": "0a96a8364e6ce987c014767a62164d22c0342fa84f9c2ed85b885886b38eadf3",
+    "history-prompt.ts": "076504d9b740a3251798f551aa4c13ef59f5524a8964cdafb5b37c3ad1ed8735"
+  },
+  "capturedSources": {
+    "instrument.ts": "c7ec2e29713a971478dea50859d09169890b6b070e18f4323cb871621fbd7af3",
+    "storage.ts": "1864adff1dae2af5579ada9ce0f1794556c78ff06a2dd47b161e335ba75bccfc",
+    "protocol.ts": "8f862e013692075f6c2a9a4362e52a3f6af7fb175d223adb78e68f0bdd460135",
+    "run.ts": "c70a1c219c4d8f508ab7315fed1d5853bdfde946dea0f33733f530b93abcb033",
+    "probe.js": "4b28b0ecccd11bb9056080148c71db92a4c1a6a233f80c352bcccd733f65507a"
+  },
+  "rawCaptureSha256": {
+    "baseline-50": "5b16a68afeb483c6f7b9e230791b3d4791cf5107c3b3f7250edfe2395b021c2b",
+    "prompt-hydration-50": "aeaa28639fbab05fea526567512228509cf0a316cc72afe3fa7f124b42dd6579",
+    "baseline-250": "0a431091229ce791bd5d23c74713d632281e4622f371de7f98c16ce0574d6516",
+    "prompt-hydration-250": "6ca9102938575fd0efcdeab04eac975e5fb969627503200b91c05d3e9c0e95c9",
+    "baseline-1000": "b118d49d121f935af0fd7c91d58835809b879650f4613819d315a81493140f10",
+    "prompt-hydration-1000": "9b9a7539acab3e4cbe8869afdfad8edf112ccaf07bfaa13ca97140b4fb4378dd",
+    "baseline-3500": "5773bb5a3691b9e408062f80a94dfa05c5e0b01cd8c814fb943829f4f903d896",
+    "prompt-hydration-3500": "f63c8dc0f52c71ceff6ab93ad256eef8473216fb80870af99fd60dfa5758dda9",
+    "digest-baseline-250": "83fa4b1cb427e1c5cb0b9e6b36a0febe33f1079f557a760d5758ddb53604fb59",
+    "digest-candidate-250": "c340d759a648b2a823b34878fa98188e6f84f3f664f30a378d3ce1614be5199b",
+    "digest-baseline-1000": "0b02e48eb368cce5fe930f71c107d6174117f3e81a5539b9b9640ea5ff9ee0b0",
+    "digest-candidate-1000": "67886451831141cee10c19fd3e5b94770e08ab1e703077e9ea839cd51d1dcce8"
+  },
+  "archiveSha256": {
+    "archive-50.json": "e2714cdcb51197a41742a83c31faf5bde215a21608340606b5d5d38ce77ab22e",
+    "archive-250.json": "a147b7df7706b56e6967b9f36d53f171cd2e87740b8e9f1735bcaa9138c90a8b",
+    "archive-1000.json": "b70c40a799270ab8b74a9ec8b9b31926cf2a3621be688cbe68245213cc7fd9b3",
+    "archive-3500.json": "6a9787a49bb909eb37ec534d904ddb1f6aa7b66a54b28b026fc9b83c1afa2a44"
+  },
+  "validation": {
+    "main": "All four fingerprints, normalized imports, SQL breakdowns, records/bytes, metadata/projection visits match baseline",
+    "supplement": "250/1000 baseline and candidate: stripping historyDigest fields reproduces counts and every model snapshot exactly; SQL/visits/fingerprints also exact",
+    "portableReplay": {
+      "size": 50,
+      "variant": "prompt-hydration",
+      "matchedFields": [
+        "counts",
+        "sql",
+        "visits",
+        "modelSnapshots",
+        "normalized",
+        "seedFingerprint",
+        "fingerprint",
+        "messages",
+        "candidateRevision",
+        "supplementalDigestScope"
+      ]
+    },
+    "patchReconstruction": "Both candidate files byte-identical to committed sources",
+    "shellSyntax": "passed"
+  },
+  "portableChanges": [
+    "Public driver can export missing input archives into its own output when no shared archive directory is specified",
+    "Explicit shared archive directory remains read-only",
+    "Counter hooks and measurement window unchanged"
+  ],
+  "largeArtifactsIncluded": false
+}

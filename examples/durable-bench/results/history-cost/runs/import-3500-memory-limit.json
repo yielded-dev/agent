@@ -1,0 +1,317 @@
+{
+  "run": "history-cost-mv0jlaoa-53211c82",
+  "revision": "272cf74ff70bb50d82032cb7189620589d87921b",
+  "dirty": true,
+  "startedAt": "2026-10-09T05:46:08.842Z",
+  "wallMs": 509199,
+  "options": {
+    "targets": [
+      "yielded",
+      "pi"
+    ],
+    "sizes": [
+      50,
+      250,
+      1000,
+      3500
+    ],
+    "ttft": [
+      0,
+      400
+    ],
+    "objects": 10,
+    "repeats": 6,
+    "concurrency": 10,
+    "cold": true,
+    "cpu": true,
+    "keep": false,
+    "rigorous": true,
+    "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+    "candidate": "87158447db05a1a2f9cfe4c38ea0aff4bceb4e3d"
+  },
+  "builds": [
+    {
+      "label": "baseline",
+      "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "07a88fc3ae22e6364306b59fbdc93337e792df3904b7403710fc0f917c020e36"
+    },
+    {
+      "label": "candidate",
+      "revision": "87158447db05a1a2f9cfe4c38ea0aff4bceb4e3d",
+      "sha256": "c7b7e7fa461a365ae1a1c47c8c0f4cac10c5c712a9141246edecec40aadbb8da"
+    }
+  ],
+  "fixtures": [
+    {
+      "target": "yielded",
+      "history": 50,
+      "fingerprint": "b017b487524e44a4",
+      "tables": {
+        "platform_cloudflare_due_queue": 4,
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 235,
+        "effect_agent_canonical_records": 603,
+        "effect_agent_record_runs": 368,
+        "effect_agent_tool_declarations": 34,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 50,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 0,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 1,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 50,
+        "effect_agent_settlement_spans": 150,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      },
+      "mode": "import",
+      "fallbackReason": "Import-normalized table counts: effect_agent_attempts 50 -> 0; canonical history and transcript unchanged"
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "tables": {
+        "platform_cloudflare_due_queue": 4,
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 1168,
+        "effect_agent_canonical_records": 3002,
+        "effect_agent_record_runs": 1834,
+        "effect_agent_tool_declarations": 167,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 250,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 0,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 3,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 250,
+        "effect_agent_settlement_spans": 750,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      },
+      "mode": "import",
+      "fallbackReason": "Import-normalized table counts: effect_agent_attempts 250 -> 0; canonical history and transcript unchanged"
+    },
+    {
+      "target": "yielded",
+      "history": 1000,
+      "fingerprint": "ac520308146f2a8f",
+      "tables": {
+        "platform_cloudflare_due_queue": 4,
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 4668,
+        "effect_agent_canonical_records": 12002,
+        "effect_agent_record_runs": 7334,
+        "effect_agent_tool_declarations": 667,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 1000,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 0,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 12,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 1000,
+        "effect_agent_settlement_spans": 3000,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      },
+      "mode": "import",
+      "fallbackReason": "Import-normalized table counts: effect_agent_attempts 1000 -> 0; canonical history and transcript unchanged"
+    },
+    {
+      "target": "yielded",
+      "history": 3500,
+      "fingerprint": "0a8c8e4b0d9a0794",
+      "tables": {
+        "platform_cloudflare_due_queue": 4,
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 16335,
+        "effect_agent_canonical_records": 42003,
+        "effect_agent_record_runs": 25668,
+        "effect_agent_tool_declarations": 2334,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 3500,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 0,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 42,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 3500,
+        "effect_agent_settlement_spans": 10500,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      },
+      "mode": "import",
+      "fallbackReason": "Import-normalized table counts: effect_agent_attempts 3500 -> 0; canonical history and transcript unchanged"
+    },
+    {
+      "target": "pi",
+      "history": 50,
+      "fingerprint": "b017b487524e44a4",
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 343,
+        "conversations": 1,
+        "entries": 169,
+        "tasks": 118,
+        "submissions": 50,
+        "documents": 5,
+        "document_revisions": 5
+      },
+      "mode": "import"
+    },
+    {
+      "target": "pi",
+      "history": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 1675,
+        "conversations": 1,
+        "entries": 835,
+        "tasks": 584,
+        "submissions": 250,
+        "documents": 5,
+        "document_revisions": 5
+      },
+      "mode": "import"
+    },
+    {
+      "target": "pi",
+      "history": 1000,
+      "fingerprint": "ac520308146f2a8f",
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 6675,
+        "conversations": 1,
+        "entries": 3335,
+        "tasks": 2334,
+        "submissions": 1000,
+        "documents": 5,
+        "document_revisions": 5
+      },
+      "mode": "import"
+    },
+    {
+      "target": "pi",
+      "history": 3500,
+      "fingerprint": "0a8c8e4b0d9a0794",
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 23343,
+        "conversations": 1,
+        "entries": 11669,
+        "tasks": 8168,
+        "submissions": 3500,
+        "documents": 5,
+        "document_revisions": 5
+      },
+      "mode": "import"
+    }
+  ],
+  "complete": false,
+  "failures": [
+    "yielded/3500/0 seed: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Durable Object's isolate exceeded its memory limit and was reset.\",\"sample\":\"import\"}"
+  ],
+  "cleanup": {
+    "verified": true,
+    "workers": [],
+    "namespaces": []
+  },
+  "kept": false,
+  "rawSha256": "3722a0659258551a9d4a8a27ac2aaca6756e9cdfa62974e222499d9a48eb10b4",
+  "samplesByStatus": {},
+  "cpuOutcomes": [
+    {
+      "target": "unattributed",
+      "kind": "alarm",
+      "outcome": "canceled",
+      "count": 5
+    },
+    {
+      "target": "unattributed",
+      "kind": "alarm",
+      "outcome": "ok",
+      "count": 8
+    },
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "exceededMemory",
+      "count": 1
+    },
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "ok",
+      "count": 32
+    }
+  ],
+  "unmatchedCpuMarkers": 0
+}

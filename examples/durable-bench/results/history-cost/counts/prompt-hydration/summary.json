@@ -1,0 +1,705 @@
+{
+  "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+  "candidate": "0451aacb627ec3dbe76618c043bce9d6b91596ad",
+  "variant": "prompt-hydration",
+  "comparison": "Original counters, digest scope off; prior baseline captures reused",
+  "rows": [
+    {
+      "turns": 50,
+      "seedFingerprint": "b017b487524e44a4",
+      "measuredFingerprint": "7b3b83c4979d51bb",
+      "baseline": {
+        "counts": {
+          "readPromptCalls": 2,
+          "readPrompt.records": 268,
+          "readPrompt.canonicalJsonBytes": 204113,
+          "readPrompt.encodedMessagePasses": 184,
+          "readPrompt.nativeMessagePasses": 184,
+          "readPrompt.schemaNodeCalls": 12494,
+          "readPrompt.schemaRootDecoderCalls": 92,
+          "readPrompt.effectEvaluations": 7667,
+          "promptDecode.schemaNodeCalls": 9524,
+          "promptDecode.schemaRootDecoderCalls": 86,
+          "promptDecode.effectEvaluations": 7533,
+          "journalMetadata.records": 269,
+          "journalFold.records": 269,
+          "journalProjections": 1,
+          "jsonDecode.records": 284,
+          "canonicalJsonBytes": 224583,
+          "fullEnvelopeDecodes": 4,
+          "schemaNodeCalls": 36669,
+          "effectEvaluations": 37112,
+          "modelCalls": 9
+        },
+        "firstModelEffects": 15349,
+        "firstModelReadPromptEffects": 7667,
+        "firstModelOutsideReadPromptEffects": 7682,
+        "postFirstEffects": 21763,
+        "decoderSchemaNodesPerRecord": 35.53731343283582,
+        "visits": {
+          "jsonDecode": {
+            "unique": 283,
+            "histogram": {
+              "1": 282,
+              "2": 1
+            }
+          },
+          "readPrompt": {
+            "unique": 268,
+            "histogram": {
+              "1": 268
+            }
+          },
+          "journalMetadata": {
+            "unique": 269,
+            "histogram": {
+              "1": 269
+            }
+          },
+          "journalFold": {
+            "unique": 269,
+            "histogram": {
+              "1": 269
+            }
+          }
+        },
+        "sql": {
+          "all": {
+            "calls": 206,
+            "rowsRead": 1220,
+            "rowsWritten": 544
+          },
+          "prompt": {
+            "calls": 4,
+            "rowsRead": 539,
+            "rowsWritten": 0
+          },
+          "planning": {
+            "calls": 2,
+            "rowsRead": 269,
+            "rowsWritten": 0
+          },
+          "hydration": {
+            "calls": 2,
+            "rowsRead": 270,
+            "rowsWritten": 0
+          }
+        }
+      },
+      "promptHydration": {
+        "counts": {
+          "readPromptCalls": 2,
+          "readPrompt.records": 268,
+          "readPrompt.canonicalJsonBytes": 204113,
+          "readPrompt.encodedMessagePasses": 184,
+          "readPrompt.nativeMessagePasses": 0,
+          "readPrompt.schemaNodeCalls": 9544,
+          "readPrompt.schemaRootDecoderCalls": 8,
+          "readPrompt.effectEvaluations": 2836,
+          "promptDecode.schemaNodeCalls": 6574,
+          "promptDecode.schemaRootDecoderCalls": 2,
+          "promptDecode.effectEvaluations": 2702,
+          "journalMetadata.records": 269,
+          "journalFold.records": 269,
+          "journalProjections": 1,
+          "jsonDecode.records": 284,
+          "canonicalJsonBytes": 224583,
+          "fullEnvelopeDecodes": 4,
+          "schemaNodeCalls": 33719,
+          "effectEvaluations": 32281,
+          "modelCalls": 9
+        },
+        "firstModelEffects": 10518,
+        "firstModelReadPromptEffects": 2836,
+        "firstModelOutsideReadPromptEffects": 7682,
+        "postFirstEffects": 21763,
+        "decoderSchemaNodesPerRecord": 24.529850746268657,
+        "visits": {
+          "jsonDecode": {
+            "unique": 283,
+            "histogram": {
+              "1": 282,
+              "2": 1
+            }
+          },
+          "readPrompt": {
+            "unique": 268,
+            "histogram": {
+              "1": 268
+            }
+          },
+          "journalMetadata": {
+            "unique": 269,
+            "histogram": {
+              "1": 269
+            }
+          },
+          "journalFold": {
+            "unique": 269,
+            "histogram": {
+              "1": 269
+            }
+          }
+        },
+        "sql": {
+          "all": {
+            "calls": 206,
+            "rowsRead": 1220,
+            "rowsWritten": 544
+          },
+          "prompt": {
+            "calls": 4,
+            "rowsRead": 539,
+            "rowsWritten": 0
+          },
+          "planning": {
+            "calls": 2,
+            "rowsRead": 269,
+            "rowsWritten": 0
+          },
+          "hydration": {
+            "calls": 2,
+            "rowsRead": 270,
+            "rowsWritten": 0
+          }
+        }
+      }
+    },
+    {
+      "turns": 250,
+      "seedFingerprint": "dcea9f30b0917245",
+      "measuredFingerprint": "c29eb4d490969f50",
+      "baseline": {
+        "counts": {
+          "readPromptCalls": 6,
+          "readPrompt.records": 1334,
+          "readPrompt.canonicalJsonBytes": 1024025,
+          "readPrompt.encodedMessagePasses": 917,
+          "readPrompt.nativeMessagePasses": 917,
+          "readPrompt.schemaNodeCalls": 62107,
+          "readPrompt.schemaRootDecoderCalls": 441,
+          "readPrompt.effectEvaluations": 37839,
+          "promptDecode.schemaNodeCalls": 47367,
+          "promptDecode.schemaRootDecoderCalls": 423,
+          "promptDecode.effectEvaluations": 37437,
+          "journalMetadata.records": 1335,
+          "journalFold.records": 1335,
+          "journalProjections": 1,
+          "jsonDecode.records": 1350,
+          "canonicalJsonBytes": 1044505,
+          "fullEnvelopeDecodes": 4,
+          "schemaNodeCalls": 126172,
+          "effectEvaluations": 78169,
+          "modelCalls": 9
+        },
+        "firstModelEffects": 56123,
+        "firstModelReadPromptEffects": 37839,
+        "firstModelOutsideReadPromptEffects": 18284,
+        "postFirstEffects": 22046,
+        "decoderSchemaNodesPerRecord": 35.507496251874066,
+        "visits": {
+          "jsonDecode": {
+            "unique": 1349,
+            "histogram": {
+              "1": 1348,
+              "2": 1
+            }
+          },
+          "readPrompt": {
+            "unique": 1334,
+            "histogram": {
+              "1": 1334
+            }
+          },
+          "journalMetadata": {
+            "unique": 1335,
+            "histogram": {
+              "1": 1335
+            }
+          },
+          "journalFold": {
+            "unique": 1335,
+            "histogram": {
+              "1": 1335
+            }
+          }
+        },
+        "sql": {
+          "all": {
+            "calls": 243,
+            "rowsRead": 5652,
+            "rowsWritten": 544
+          },
+          "prompt": {
+            "calls": 12,
+            "rowsRead": 2675,
+            "rowsWritten": 0
+          },
+          "planning": {
+            "calls": 6,
+            "rowsRead": 1335,
+            "rowsWritten": 0
+          },
+          "hydration": {
+            "calls": 6,
+            "rowsRead": 1340,
+            "rowsWritten": 0
+          }
+        }
+      },
+      "promptHydration": {
+        "counts": {
+          "readPromptCalls": 6,
+          "readPrompt.records": 1334,
+          "readPrompt.canonicalJsonBytes": 1024025,
+          "readPrompt.encodedMessagePasses": 917,
+          "readPrompt.nativeMessagePasses": 0,
+          "readPrompt.schemaNodeCalls": 47432,
+          "readPrompt.schemaRootDecoderCalls": 24,
+          "readPrompt.effectEvaluations": 13814,
+          "promptDecode.schemaNodeCalls": 32692,
+          "promptDecode.schemaRootDecoderCalls": 6,
+          "promptDecode.effectEvaluations": 13412,
+          "journalMetadata.records": 1335,
+          "journalFold.records": 1335,
+          "journalProjections": 1,
+          "jsonDecode.records": 1350,
+          "canonicalJsonBytes": 1044505,
+          "fullEnvelopeDecodes": 4,
+          "schemaNodeCalls": 111497,
+          "effectEvaluations": 54144,
+          "modelCalls": 9
+        },
+        "firstModelEffects": 32098,
+        "firstModelReadPromptEffects": 13814,
+        "firstModelOutsideReadPromptEffects": 18284,
+        "postFirstEffects": 22046,
+        "decoderSchemaNodesPerRecord": 24.506746626686656,
+        "visits": {
+          "jsonDecode": {
+            "unique": 1349,
+            "histogram": {
+              "1": 1348,
+              "2": 1
+            }
+          },
+          "readPrompt": {
+            "unique": 1334,
+            "histogram": {
+              "1": 1334
+            }
+          },
+          "journalMetadata": {
+            "unique": 1335,
+            "histogram": {
+              "1": 1335
+            }
+          },
+          "journalFold": {
+            "unique": 1335,
+            "histogram": {
+              "1": 1335
+            }
+          }
+        },
+        "sql": {
+          "all": {
+            "calls": 243,
+            "rowsRead": 5652,
+            "rowsWritten": 544
+          },
+          "prompt": {
+            "calls": 12,
+            "rowsRead": 2675,
+            "rowsWritten": 0
+          },
+          "planning": {
+            "calls": 6,
+            "rowsRead": 1335,
+            "rowsWritten": 0
+          },
+          "hydration": {
+            "calls": 6,
+            "rowsRead": 1340,
+            "rowsWritten": 0
+          }
+        }
+      }
+    },
+    {
+      "turns": 1000,
+      "seedFingerprint": "ac520308146f2a8f",
+      "measuredFingerprint": "02f7ac7f9eb06bee",
+      "baseline": {
+        "counts": {
+          "readPromptCalls": 21,
+          "readPrompt.records": 5334,
+          "readPrompt.canonicalJsonBytes": 4112455,
+          "readPrompt.encodedMessagePasses": 3667,
+          "readPrompt.nativeMessagePasses": 3667,
+          "readPrompt.schemaNodeCalls": 248287,
+          "readPrompt.schemaRootDecoderCalls": 1751,
+          "readPrompt.effectEvaluations": 151084,
+          "promptDecode.schemaNodeCalls": 189382,
+          "promptDecode.schemaRootDecoderCalls": 1688,
+          "promptDecode.effectEvaluations": 149674,
+          "journalMetadata.records": 5335,
+          "journalFold.records": 5335,
+          "journalProjections": 1,
+          "jsonDecode.records": 5350,
+          "canonicalJsonBytes": 4132937,
+          "fullEnvelopeDecodes": 4,
+          "schemaNodeCalls": 396352,
+          "effectEvaluations": 230905,
+          "modelCalls": 9
+        },
+        "firstModelEffects": 208859,
+        "firstModelReadPromptEffects": 151084,
+        "firstModelOutsideReadPromptEffects": 57775,
+        "postFirstEffects": 22046,
+        "decoderSchemaNodesPerRecord": 35.50468691413573,
+        "visits": {
+          "jsonDecode": {
+            "unique": 5349,
+            "histogram": {
+              "1": 5348,
+              "2": 1
+            }
+          },
+          "readPrompt": {
+            "unique": 5334,
+            "histogram": {
+              "1": 5334
+            }
+          },
+          "journalMetadata": {
+            "unique": 5335,
+            "histogram": {
+              "1": 5335
+            }
+          },
+          "journalFold": {
+            "unique": 5335,
+            "histogram": {
+              "1": 5335
+            }
+          }
+        },
+        "sql": {
+          "all": {
+            "calls": 273,
+            "rowsRead": 15275,
+            "rowsWritten": 544
+          },
+          "prompt": {
+            "calls": 42,
+            "rowsRead": 10690,
+            "rowsWritten": 0
+          },
+          "planning": {
+            "calls": 21,
+            "rowsRead": 5335,
+            "rowsWritten": 0
+          },
+          "hydration": {
+            "calls": 21,
+            "rowsRead": 5355,
+            "rowsWritten": 0
+          }
+        }
+      },
+      "promptHydration": {
+        "counts": {
+          "readPromptCalls": 21,
+          "readPrompt.records": 5334,
+          "readPrompt.canonicalJsonBytes": 4112455,
+          "readPrompt.encodedMessagePasses": 3667,
+          "readPrompt.nativeMessagePasses": 0,
+          "readPrompt.schemaNodeCalls": 189612,
+          "readPrompt.schemaRootDecoderCalls": 84,
+          "readPrompt.effectEvaluations": 55010,
+          "promptDecode.schemaNodeCalls": 130707,
+          "promptDecode.schemaRootDecoderCalls": 21,
+          "promptDecode.effectEvaluations": 53603,
+          "journalMetadata.records": 5335,
+          "journalFold.records": 5335,
+          "journalProjections": 1,
+          "jsonDecode.records": 5350,
+          "canonicalJsonBytes": 4132937,
+          "fullEnvelopeDecodes": 4,
+          "schemaNodeCalls": 337677,
+          "effectEvaluations": 134829,
+          "modelCalls": 9
+        },
+        "firstModelEffects": 112783,
+        "firstModelReadPromptEffects": 55010,
+        "firstModelOutsideReadPromptEffects": 57773,
+        "postFirstEffects": 22046,
+        "decoderSchemaNodesPerRecord": 24.504499437570303,
+        "visits": {
+          "jsonDecode": {
+            "unique": 5349,
+            "histogram": {
+              "1": 5348,
+              "2": 1
+            }
+          },
+          "readPrompt": {
+            "unique": 5334,
+            "histogram": {
+              "1": 5334
+            }
+          },
+          "journalMetadata": {
+            "unique": 5335,
+            "histogram": {
+              "1": 5335
+            }
+          },
+          "journalFold": {
+            "unique": 5335,
+            "histogram": {
+              "1": 5335
+            }
+          }
+        },
+        "sql": {
+          "all": {
+            "calls": 273,
+            "rowsRead": 15275,
+            "rowsWritten": 544
+          },
+          "prompt": {
+            "calls": 42,
+            "rowsRead": 10690,
+            "rowsWritten": 0
+          },
+          "planning": {
+            "calls": 21,
+            "rowsRead": 5335,
+            "rowsWritten": 0
+          },
+          "hydration": {
+            "calls": 21,
+            "rowsRead": 5355,
+            "rowsWritten": 0
+          }
+        }
+      }
+    },
+    {
+      "turns": 3500,
+      "seedFingerprint": "0a8c8e4b0d9a0794",
+      "measuredFingerprint": "6dd3a56608e79a1d",
+      "baseline": {
+        "counts": {
+          "readPromptCalls": 73,
+          "readPrompt.records": 18668,
+          "readPrompt.canonicalJsonBytes": 14430077,
+          "readPrompt.encodedMessagePasses": 12834,
+          "readPrompt.nativeMessagePasses": 12834,
+          "readPrompt.schemaNodeCalls": 868946,
+          "readPrompt.schemaRootDecoderCalls": 6126,
+          "readPrompt.effectEvaluations": 528733,
+          "promptDecode.schemaNodeCalls": 662795,
+          "promptDecode.schemaRootDecoderCalls": 5907,
+          "promptDecode.effectEvaluations": 523833,
+          "journalMetadata.records": 18669,
+          "journalFold.records": 18669,
+          "journalProjections": 1,
+          "jsonDecode.records": 18684,
+          "canonicalJsonBytes": 14450569,
+          "fullEnvelopeDecodes": 4,
+          "schemaNodeCalls": 1297043,
+          "effectEvaluations": 740267,
+          "modelCalls": 9
+        },
+        "firstModelEffects": 718221,
+        "firstModelReadPromptEffects": 528733,
+        "firstModelOutsideReadPromptEffects": 189488,
+        "postFirstEffects": 22046,
+        "decoderSchemaNodesPerRecord": 35.50433897578744,
+        "visits": {
+          "jsonDecode": {
+            "unique": 18683,
+            "histogram": {
+              "1": 18682,
+              "2": 1
+            }
+          },
+          "readPrompt": {
+            "unique": 18668,
+            "histogram": {
+              "1": 18668
+            }
+          },
+          "journalMetadata": {
+            "unique": 18669,
+            "histogram": {
+              "1": 18669
+            }
+          },
+          "journalFold": {
+            "unique": 18669,
+            "histogram": {
+              "1": 18669
+            }
+          }
+        },
+        "sql": {
+          "all": {
+            "calls": 377,
+            "rowsRead": 47355,
+            "rowsWritten": 544
+          },
+          "prompt": {
+            "calls": 146,
+            "rowsRead": 37410,
+            "rowsWritten": 0
+          },
+          "planning": {
+            "calls": 73,
+            "rowsRead": 18669,
+            "rowsWritten": 0
+          },
+          "hydration": {
+            "calls": 73,
+            "rowsRead": 18741,
+            "rowsWritten": 0
+          }
+        }
+      },
+      "promptHydration": {
+        "counts": {
+          "readPromptCalls": 73,
+          "readPrompt.records": 18668,
+          "readPrompt.canonicalJsonBytes": 14430077,
+          "readPrompt.encodedMessagePasses": 12834,
+          "readPrompt.nativeMessagePasses": 0,
+          "readPrompt.schemaNodeCalls": 663596,
+          "readPrompt.schemaRootDecoderCalls": 292,
+          "readPrompt.effectEvaluations": 192490,
+          "promptDecode.schemaNodeCalls": 457445,
+          "promptDecode.schemaRootDecoderCalls": 73,
+          "promptDecode.effectEvaluations": 187590,
+          "journalMetadata.records": 18669,
+          "journalFold.records": 18669,
+          "journalProjections": 1,
+          "jsonDecode.records": 18684,
+          "canonicalJsonBytes": 14450569,
+          "fullEnvelopeDecodes": 4,
+          "schemaNodeCalls": 1091693,
+          "effectEvaluations": 404028,
+          "modelCalls": 9
+        },
+        "firstModelEffects": 381982,
+        "firstModelReadPromptEffects": 192490,
+        "firstModelOutsideReadPromptEffects": 189492,
+        "postFirstEffects": 22046,
+        "decoderSchemaNodesPerRecord": 24.504231840582815,
+        "visits": {
+          "jsonDecode": {
+            "unique": 18683,
+            "histogram": {
+              "1": 18682,
+              "2": 1
+            }
+          },
+          "readPrompt": {
+            "unique": 18668,
+            "histogram": {
+              "1": 18668
+            }
+          },
+          "journalMetadata": {
+            "unique": 18669,
+            "histogram": {
+              "1": 18669
+            }
+          },
+          "journalFold": {
+            "unique": 18669,
+            "histogram": {
+              "1": 18669
+            }
+          }
+        },
+        "sql": {
+          "all": {
+            "calls": 377,
+            "rowsRead": 47355,
+            "rowsWritten": 544
+          },
+          "prompt": {
+            "calls": 146,
+            "rowsRead": 37410,
+            "rowsWritten": 0
+          },
+          "planning": {
+            "calls": 73,
+            "rowsRead": 18669,
+            "rowsWritten": 0
+          },
+          "hydration": {
+            "calls": 73,
+            "rowsRead": 18741,
+            "rowsWritten": 0
+          }
+        }
+      }
+    }
+  ],
+  "supplementalDigest": {
+    "method": "Identical additional caller scope for fresh baseline and candidate captures at250/1000; no Effect operations added",
+    "rows": [
+      {
+        "turns": 250,
+        "unscopedCountsAndSnapshotsExactlyReproduced": true,
+        "baseline": {
+          "historyDigest": {
+            "schemaRootDecoderCalls": 3,
+            "schemaNodeCalls": 27703,
+            "effectEvaluations": 2753
+          },
+          "outsideReadPromptSchemaNodes": 35733,
+          "outsideReadPromptAndDigestSchemaNodes": 8030,
+          "outsideReadPromptAndDigestEffects": 15531
+        },
+        "promptHydration": {
+          "historyDigest": {
+            "schemaRootDecoderCalls": 3,
+            "schemaNodeCalls": 27703,
+            "effectEvaluations": 2753
+          },
+          "outsideReadPromptSchemaNodes": 35733,
+          "outsideReadPromptAndDigestSchemaNodes": 8030,
+          "outsideReadPromptAndDigestEffects": 15531
+        }
+      },
+      {
+        "turns": 1000,
+        "unscopedCountsAndSnapshotsExactlyReproduced": true,
+        "baseline": {
+          "historyDigest": {
+            "schemaRootDecoderCalls": 3,
+            "schemaNodeCalls": 110703,
+            "effectEvaluations": 10861
+          },
+          "outsideReadPromptSchemaNodes": 119733,
+          "outsideReadPromptAndDigestSchemaNodes": 9030,
+          "outsideReadPromptAndDigestEffects": 46914
+        },
+        "promptHydration": {
+          "historyDigest": {
+            "schemaRootDecoderCalls": 3,
+            "schemaNodeCalls": 110703,
+            "effectEvaluations": 10861
+          },
+          "outsideReadPromptSchemaNodes": 119733,
+          "outsideReadPromptAndDigestSchemaNodes": 9030,
+          "outsideReadPromptAndDigestEffects": 46912
+        }
+      }
+    ]
+  }
+}

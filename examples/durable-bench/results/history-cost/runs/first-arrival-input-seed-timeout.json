@@ -1,0 +1,247 @@
+{
+  "run": "history-cost-mv0klmmw-f8c37776",
+  "revision": "78cb4eb7589984c1cd194e0cb01a5a0055a6d3f3",
+  "dirty": true,
+  "startedAt": "2026-10-09T06:14:23.960Z",
+  "wallMs": 958158,
+  "options": {
+    "targets": [
+      "yielded",
+      "pi"
+    ],
+    "sizes": [
+      250,
+      1000
+    ],
+    "ttft": [
+      0
+    ],
+    "objects": 10,
+    "repeats": 6,
+    "concurrency": 10,
+    "cold": true,
+    "cpu": true,
+    "keep": false,
+    "rigorous": true,
+    "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+    "candidate": "87158447db05a1a2f9cfe4c38ea0aff4bceb4e3d"
+  },
+  "builds": [
+    {
+      "label": "baseline",
+      "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "3d6ce98c6153fab36cdbfb37990fecb1a9ad4d25096ce600d73cd59d2fac285b"
+    },
+    {
+      "label": "candidate",
+      "revision": "87158447db05a1a2f9cfe4c38ea0aff4bceb4e3d",
+      "sha256": "02890b40c1716b1c17935f6999a9d55029e0aa7ac440341eace73f735918568b"
+    }
+  ],
+  "fixtures": [
+    {
+      "target": "yielded",
+      "history": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "tables": {
+        "platform_cloudflare_due_queue": 4,
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 1168,
+        "effect_agent_canonical_records": 3002,
+        "effect_agent_record_runs": 1834,
+        "effect_agent_tool_declarations": 167,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 250,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 0,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 3,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 250,
+        "effect_agent_settlement_spans": 750,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      },
+      "mode": "import",
+      "fallbackReason": "Import-normalized table counts: effect_agent_attempts 250 -> 0; canonical history and transcript unchanged"
+    },
+    {
+      "target": "yielded",
+      "history": 1000,
+      "fingerprint": "ac520308146f2a8f",
+      "tables": {
+        "platform_cloudflare_due_queue": 4,
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 4668,
+        "effect_agent_canonical_records": 12002,
+        "effect_agent_record_runs": 7334,
+        "effect_agent_tool_declarations": 667,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 1000,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 0,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 12,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 1000,
+        "effect_agent_settlement_spans": 3000,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      },
+      "mode": "import",
+      "fallbackReason": "Import-normalized table counts: effect_agent_attempts 1000 -> 0; canonical history and transcript unchanged"
+    },
+    {
+      "target": "pi",
+      "history": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 1675,
+        "conversations": 1,
+        "entries": 835,
+        "tasks": 584,
+        "submissions": 250,
+        "documents": 5,
+        "document_revisions": 5
+      },
+      "mode": "import"
+    },
+    {
+      "target": "pi",
+      "history": 1000,
+      "fingerprint": "ac520308146f2a8f",
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 6675,
+        "conversations": 1,
+        "entries": 3335,
+        "tasks": 2334,
+        "submissions": 1000,
+        "documents": 5,
+        "document_revisions": 5
+      },
+      "mode": "import"
+    }
+  ],
+  "complete": false,
+  "failures": [
+    "yielded/250/0 seed: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Durable Object storage operation exceeded timeout which caused object to be reset.\",\"sample\":\"import\"}"
+  ],
+  "cleanup": {
+    "verified": true,
+    "workers": [],
+    "namespaces": []
+  },
+  "kept": false,
+  "rawSha256": "9d625ed158d1d849bb9cea81cd6d8b3dda2a56a544538ee6321292a30ee6e43d",
+  "samplesByStatus": {},
+  "fingerprintsVerified": 0,
+  "modelRequestsVerified": 0,
+  "clockChecks": {
+    "valid": 0,
+    "rejected": 0,
+    "intervalWidthMs": {
+      "n": 0,
+      "median": null,
+      "q1": null,
+      "q3": null,
+      "min": null,
+      "max": null
+    },
+    "providerColos": {}
+  },
+  "cpuOutcomes": [
+    {
+      "target": "unattributed",
+      "kind": "alarm",
+      "outcome": "canceled",
+      "count": 11,
+      "cpuMs": {
+        "n": 11,
+        "median": 0,
+        "q1": 0.0,
+        "q3": 85976.5,
+        "min": 0,
+        "max": 122784
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "alarm",
+      "outcome": "exceededWallTime",
+      "count": 1,
+      "cpuMs": {
+        "n": 1,
+        "median": 27606,
+        "q1": 27606.0,
+        "q3": 27606.0,
+        "min": 27606,
+        "max": 27606
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "alarm",
+      "outcome": "ok",
+      "count": 12,
+      "cpuMs": {
+        "n": 12,
+        "median": 9790.5,
+        "q1": 57.0,
+        "q3": 22152.25,
+        "min": 25,
+        "max": 75443
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "ok",
+      "count": 61,
+      "cpuMs": {
+        "n": 61,
+        "median": 114,
+        "q1": 1.0,
+        "q3": 310.0,
+        "min": 0,
+        "max": 776
+      }
+    }
+  ],
+  "unmatchedCpuMarkers": 0,
+  "cells": [],
+  "objects": []
+}

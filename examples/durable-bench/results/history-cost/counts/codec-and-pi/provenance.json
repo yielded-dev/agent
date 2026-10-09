@@ -1,0 +1,49 @@
+{
+  "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+  "candidate": "40485f33e9779f301a5756a544bfa3f21a7e1e2e",
+  "candidateDisposition": "Rejected: no demonstrated warm improvement.",
+  "scope": "Deterministic operation counts only; local inline Run through settlement; no timing claims.",
+  "versions": {
+    "effect": "4.0.0",
+    "pi-durable": "1.0.4",
+    "bun": "1.4.2",
+    "miniflare": "5.20260811.1-alpha"
+  },
+  "originalSha256": {
+    "candidateRecords": "cf342f5ab7dae9d3cd5672cfb7361a09675ef9730a50510a9595a9f60658cafc",
+    "instrument": "bef6b0766c19cfdddce0e6b888062c8a8e39beb1794463c6fbac4f559df23b7f",
+    "probe": "4b28b0ecccd11bb9056080148c71db92a4c1a6a233f80c352bcccd733f65507a",
+    "driver": "14642acc4e02750e26fa18b4d44bcbcf293526bb7deb82e0a0b1aca3a51ac79d",
+    "storageTransfer": "1864adff1dae2af5579ada9ce0f1794556c78ff06a2dd47b161e335ba75bccfc",
+    "protocol": "8f862e013692075f6c2a9a4362e52a3f6af7fb175d223adb78e68f0bdd460135"
+  },
+  "fixtureFingerprints": {
+    "50": "b017b487524e44a4",
+    "250": "dcea9f30b0917245",
+    "1000": "ac520308146f2a8f",
+    "3500": "0a8c8e4b0d9a0794"
+  },
+  "portableCopyChanges": [
+    "driver input/output locations are CLI flags",
+    "instrumentation receives the candidate source path as an argument",
+    "no measurement hooks changed"
+  ],
+  "largeArtifactsIncluded": false,
+  "packagingValidation": {
+    "candidateReconstruction": "byte-for-byte match",
+    "portableReplaySizes": [
+      50
+    ],
+    "portableReplayVariants": [
+      "baseline",
+      "candidate"
+    ],
+    "matchedFields": [
+      "counts",
+      "sql",
+      "visits",
+      "seedFingerprint",
+      "fingerprint"
+    ]
+  }
+}

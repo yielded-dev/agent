@@ -1,0 +1,81 @@
+{
+  "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+  "candidate": "4417a0955e9c61cd3a45ac4cf4ad1e5c8f431228",
+  "variant": "terminal-reads",
+  "scope": "One inline Run through settlement; operation counts, no timing claim",
+  "versions": {
+    "effect": "4.0.0",
+    "pi-durable": "1.0.4",
+    "bun": "1.4.2",
+    "miniflare": "5.20260811.1-alpha"
+  },
+  "productDiff": "Exact candidate SqlThreadNativeReads.ts substituted before applying original hooks; native baseline Records.ts unchanged. Commit documentation and changeset do not affect this capture.",
+  "sourceSha256": {
+    "baselineRecords": "2e06b93c3d002b394e1dddc62775125dac186a2a979fe8ca1a1387ec0a4a5679",
+    "candidateRecords": "2e06b93c3d002b394e1dddc62775125dac186a2a979fe8ca1a1387ec0a4a5679",
+    "baselineSql": "f0bb2755dd5648a5fd010eee158cb7dc43e7e21f02fdccaf681262f38d0b114a",
+    "candidateSql": "9384d3bcf530669b4c3dd6b7179c62ecfb4b30f5b349b14edbc15745bf47fa48",
+    "baselineInstrumentation": "bef6b0766c19cfdddce0e6b888062c8a8e39beb1794463c6fbac4f559df23b7f",
+    "terminalReadsInstrumentation": "abdc5e46f51966fbe43082734776ae1040ad04e4ea9bf66fdd52783dbce38a77",
+    "probe": "4b28b0ecccd11bb9056080148c71db92a4c1a6a233f80c352bcccd733f65507a",
+    "driver": "0c7a75d940f8c6d17576d22cf63bee391fff559ded8157ed8d3d4931fee6b248",
+    "storageTransfer": "1864adff1dae2af5579ada9ce0f1794556c78ff06a2dd47b161e335ba75bccfc",
+    "protocol": "8f862e013692075f6c2a9a4362e52a3f6af7fb175d223adb78e68f0bdd460135"
+  },
+  "unchangedHooksVerified": "Removing the two SQL variant source selectors reproduces the original baseline instrumentation byte-for-byte; probe and transfer helpers are byte-identical.",
+  "rawCaptureSha256": {
+    "yielded-baseline-50.json": "5b16a68afeb483c6f7b9e230791b3d4791cf5107c3b3f7250edfe2395b021c2b",
+    "yielded-terminal-reads-50.json": "f44cd36d09be01e7a4c94d38e83e6cb6f41db2d40b7ddabb9704d744e93ef3dd",
+    "yielded-baseline-250.json": "0a431091229ce791bd5d23c74713d632281e4622f371de7f98c16ce0574d6516",
+    "yielded-terminal-reads-250.json": "5f1ce4401a0f54d9301077e96e5867189f4202998569e9aa4fa44cbed75e1573",
+    "yielded-baseline-1000.json": "b118d49d121f935af0fd7c91d58835809b879650f4613819d315a81493140f10",
+    "yielded-terminal-reads-1000.json": "218e48f25399a40f16235b404e1fd8dcbd46ebb809b96bc7b0fab1df5ab461e8",
+    "yielded-baseline-3500.json": "5773bb5a3691b9e408062f80a94dfa05c5e0b01cd8c814fb943829f4f903d896",
+    "yielded-terminal-reads-3500.json": "e8a684544f09eb1b5eacc3b4cb826ceecff09d5f61ac12200a305c613114ec01"
+  },
+  "portableCopyChanges": [
+    "Explicit fixture/output paths and candidate source path arguments",
+    "No counter hooks or measured boundaries changed"
+  ],
+  "validation": {
+    "sizes": [
+      50,
+      250,
+      1000,
+      3500
+    ],
+    "baselineCaptures": "Reused previously verified captures; no new baseline repeats",
+    "candidateCaptures": "One fresh import and new Run per size",
+    "fingerprints": "Seed and last model request match baseline at all four sizes",
+    "normalizedImportTables": "Equal to baseline at every size",
+    "nativeRecords": "Byte-identical to baseline and candidate commit",
+    "portableReplay": {
+      "sizes": [
+        50
+      ],
+      "variants": [
+        "terminal-reads"
+      ],
+      "matchedFields": [
+        "counts",
+        "sql",
+        "visits",
+        "modelSnapshots",
+        "normalized",
+        "seedFingerprint",
+        "fingerprint",
+        "messages",
+        "candidateRevision"
+      ],
+      "candidateSqlReconstruction": "byte-for-byte match; original input filter absent",
+      "shellSyntax": "passed"
+    }
+  },
+  "largeArtifactsIncluded": false,
+  "canonicalArchiveSha256": {
+    "archive-50.json": "e2714cdcb51197a41742a83c31faf5bde215a21608340606b5d5d38ce77ab22e",
+    "archive-250.json": "a147b7df7706b56e6967b9f36d53f171cd2e87740b8e9f1735bcaa9138c90a8b",
+    "archive-1000.json": "b70c40a799270ab8b74a9ec8b9b31926cf2a3621be688cbe68245213cc7fd9b3",
+    "archive-3500.json": "6a9787a49bb909eb37ec534d904ddb1f6aa7b66a54b28b026fc9b83c1afa2a44"
+  }
+}

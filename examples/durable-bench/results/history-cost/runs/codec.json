@@ -1,0 +1,4878 @@
+{
+  "run": "history-cost-mv0j2fkd-1abb7517",
+  "revision": "9c63a3e864018e60e928f80205c2382ca43ae173",
+  "dirty": true,
+  "startedAt": "2026-10-09T05:31:28.717Z",
+  "wallMs": 384322,
+  "options": {
+    "targets": [
+      "yielded",
+      "pi"
+    ],
+    "sizes": [
+      50,
+      250
+    ],
+    "ttft": [
+      0
+    ],
+    "objects": 10,
+    "repeats": 6,
+    "concurrency": 10,
+    "cold": true,
+    "cpu": true,
+    "keep": false,
+    "rigorous": true,
+    "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+    "candidate": "40485f33e9779f301a5756a544bfa3f21a7e1e2e"
+  },
+  "builds": [
+    {
+      "label": "baseline",
+      "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "e569e4dc99150a700f3c4551ffdd6cbd2dca19474613cdcb293b5532e8cc66e9"
+    },
+    {
+      "label": "candidate",
+      "revision": "40485f33e9779f301a5756a544bfa3f21a7e1e2e",
+      "sha256": "757513b134dd235859ca16dc6a4220666f23fa1da8cd111cd86daad2d821e893"
+    }
+  ],
+  "fixtures": [
+    {
+      "target": "yielded",
+      "history": 50,
+      "fingerprint": "b017b487524e44a4",
+      "tables": {
+        "platform_cloudflare_due_queue": 4,
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 235,
+        "effect_agent_canonical_records": 603,
+        "effect_agent_record_runs": 368,
+        "effect_agent_tool_declarations": 34,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 50,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 0,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 1,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 50,
+        "effect_agent_settlement_spans": 150,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      },
+      "mode": "import",
+      "fallbackReason": "Import-normalized table counts: effect_agent_attempts 50 -> 0; canonical history and transcript unchanged"
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "tables": {
+        "platform_cloudflare_due_queue": 4,
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 1168,
+        "effect_agent_canonical_records": 3002,
+        "effect_agent_record_runs": 1834,
+        "effect_agent_tool_declarations": 167,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 250,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 0,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 3,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 250,
+        "effect_agent_settlement_spans": 750,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      },
+      "mode": "import",
+      "fallbackReason": "Import-normalized table counts: effect_agent_attempts 250 -> 0; canonical history and transcript unchanged"
+    },
+    {
+      "target": "pi",
+      "history": 50,
+      "fingerprint": "b017b487524e44a4",
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 343,
+        "conversations": 1,
+        "entries": 169,
+        "tasks": 118,
+        "submissions": 50,
+        "documents": 5,
+        "document_revisions": 5
+      },
+      "mode": "import"
+    },
+    {
+      "target": "pi",
+      "history": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 1675,
+        "conversations": 1,
+        "entries": 835,
+        "tasks": 584,
+        "submissions": 250,
+        "documents": 5,
+        "document_revisions": 5
+      },
+      "mode": "import"
+    }
+  ],
+  "complete": true,
+  "failures": [],
+  "cleanup": {
+    "verified": true,
+    "workers": [],
+    "namespaces": []
+  },
+  "kept": false,
+  "rawSha256": "f9110d7938bcf9266525ca7751a373def5ca9c9964da99dcb9db33360754f39e",
+  "samplesByStatus": {
+    "ok": 1280
+  },
+  "fingerprintsVerified": 1280,
+  "modelRequestsVerified": 11520,
+  "cpuOutcomes": [
+    {
+      "target": "pi",
+      "kind": "run",
+      "outcome": "ok",
+      "count": 628
+    },
+    {
+      "target": "unattributed",
+      "kind": "alarm",
+      "outcome": "canceled",
+      "count": 645
+    },
+    {
+      "target": "unattributed",
+      "kind": "alarm",
+      "outcome": "ok",
+      "count": 27
+    },
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "aborted",
+      "count": 159
+    },
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "canceled",
+      "count": 2
+    },
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "ok",
+      "count": 4837
+    },
+    {
+      "target": "unattributed",
+      "kind": "jsrpc",
+      "outcome": "ok",
+      "count": 5
+    },
+    {
+      "target": "yielded",
+      "kind": "alarm",
+      "outcome": "ok",
+      "count": 630
+    },
+    {
+      "target": "yielded",
+      "kind": "await",
+      "outcome": "ok",
+      "count": 631
+    },
+    {
+      "target": "yielded",
+      "kind": "submit",
+      "outcome": "ok",
+      "count": 633
+    }
+  ],
+  "unmatchedCpuMarkers": 11,
+  "turns": [
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 10,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1184
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 10,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1142
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 10,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1395
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 10,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1387
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 11,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1279
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 11,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1098
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 11,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        954
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 11,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1162
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 12,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        936
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 12,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        789
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 12,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1398
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 12,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1313
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 13,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        918
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 13,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1191
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 13,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1223
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 13,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1175
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 14,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1396
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 14,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        933
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 14,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        973
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 14,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1057
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 15,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        859
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 15,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1042
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 15,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1375
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 15,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1049
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 16,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        933
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 16,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        961
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 16,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        698
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 16,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1190
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 17,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        978
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 17,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        914
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 17,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        872
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 17,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1713
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 18,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        995
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 18,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        869
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 18,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1019
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 18,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        787
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 19,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1321
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 19,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        977
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 19,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1495
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 19,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1251
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 10,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        2099
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 10,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1750
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 10,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1651
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 10,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1786
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 11,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1652
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 11,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1778
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 11,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1212
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 11,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1637
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 12,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1333
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 12,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1315
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 12,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1256
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 12,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1602
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 13,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1481
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 13,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1587
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 13,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1598
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 13,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1388
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 14,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1764
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 14,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1870
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 14,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1710
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 14,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1863
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 15,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1531
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 15,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1489
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 15,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1200
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 15,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1956
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 16,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1599
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 16,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1362
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 16,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1356
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 16,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1843
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 17,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        3030
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 17,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1952
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 17,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1606
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 17,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        2437
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 18,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1877
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 18,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1849
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 18,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1418
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 18,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1283
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 19,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1495
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 19,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1529
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 19,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1336
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 19,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        2399
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 10,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        778,
+        736,
+        738,
+        736,
+        723,
+        723
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 10,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        820,
+        736,
+        748,
+        758,
+        749,
+        773
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 10,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        801,
+        760,
+        742,
+        748,
+        794,
+        771
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 10,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        980,
+        793,
+        891,
+        791,
+        775,
+        857
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 11,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        479,
+        584,
+        593,
+        795,
+        854,
+        648
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 11,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1065,
+        759,
+        644,
+        626,
+        1199,
+        904
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 11,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        671,
+        490,
+        451,
+        543,
+        502,
+        462
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 11,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        890,
+        1191,
+        952,
+        865,
+        761,
+        720
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 12,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        472,
+        540,
+        580,
+        742,
+        601,
+        591
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 12,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        907,
+        767,
+        658,
+        665,
+        801,
+        656
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 12,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        626,
+        496,
+        557,
+        579,
+        608,
+        538
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 12,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        663,
+        704,
+        740,
+        766,
+        752,
+        754
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 13,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        677,
+        703,
+        779,
+        770,
+        762,
+        734
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 13,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        894,
+        733,
+        743,
+        763,
+        787,
+        684
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 13,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        742,
+        667,
+        653,
+        668,
+        743,
+        720
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 13,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        733,
+        761,
+        749,
+        818,
+        786,
+        754
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 14,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        547,
+        574,
+        622,
+        606,
+        545,
+        598
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 14,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        617,
+        559,
+        548,
+        545,
+        593,
+        547
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 14,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        869,
+        615,
+        582,
+        637,
+        651,
+        649
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 14,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        643,
+        616,
+        580,
+        644,
+        602,
+        598
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 15,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        704,
+        698,
+        691,
+        712,
+        684,
+        702
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 15,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        729,
+        676,
+        641,
+        680,
+        771,
+        810
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 15,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        729,
+        687,
+        693,
+        707,
+        735,
+        705
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 15,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        985,
+        720,
+        701,
+        819,
+        710,
+        737
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 16,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        569,
+        584,
+        595,
+        648,
+        641,
+        634
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 16,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        648,
+        612,
+        556,
+        634,
+        733,
+        586
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 16,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        635,
+        541,
+        537,
+        556,
+        751,
+        621
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 16,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        649,
+        744,
+        661,
+        823,
+        761,
+        879
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 17,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        649,
+        562,
+        574,
+        628,
+        592,
+        618
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 17,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        637,
+        629,
+        597,
+        608,
+        619,
+        577
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 17,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        675,
+        582,
+        578,
+        590,
+        609,
+        599
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 17,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        619,
+        634,
+        620,
+        819,
+        629,
+        598
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 18,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        626,
+        585,
+        587,
+        719,
+        594,
+        594
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 18,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        749,
+        611,
+        598,
+        658,
+        631,
+        617
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 18,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        632,
+        584,
+        577,
+        589,
+        614,
+        616
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 18,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        625,
+        625,
+        586,
+        580,
+        579,
+        604
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 19,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        690,
+        818,
+        898,
+        825,
+        650,
+        644
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 19,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1575,
+        716,
+        673,
+        786,
+        690,
+        769
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 19,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1103,
+        725,
+        673,
+        708,
+        751,
+        1544
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 19,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        873,
+        921,
+        896,
+        841,
+        839,
+        820
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 10,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1029,
+        1063,
+        872,
+        873,
+        855,
+        1493
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 10,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1105,
+        871,
+        954,
+        971,
+        861,
+        951
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 10,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        705,
+        741,
+        845,
+        858,
+        737,
+        685
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 10,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1031,
+        1112,
+        935,
+        889,
+        1171,
+        1032
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 11,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1013,
+        1004,
+        827,
+        843,
+        795,
+        834
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 11,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        902,
+        1102,
+        915,
+        945,
+        1017,
+        921
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 11,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        597,
+        919,
+        662,
+        631,
+        833,
+        1387
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 11,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        957,
+        985,
+        827,
+        797,
+        945,
+        673
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 12,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        688,
+        798,
+        710,
+        779,
+        687,
+        884
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 12,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        855,
+        1053,
+        744,
+        736,
+        740,
+        857
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 12,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        770,
+        738,
+        897,
+        796,
+        760,
+        745
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 12,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        921,
+        875,
+        807,
+        850,
+        1050,
+        851
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 13,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        818,
+        1058,
+        782,
+        810,
+        800,
+        778
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 13,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        881,
+        865,
+        767,
+        780,
+        835,
+        954
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 13,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        755,
+        820,
+        835,
+        774,
+        768,
+        795
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 13,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        887,
+        823,
+        848,
+        891,
+        961,
+        831
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 14,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        913,
+        1107,
+        1023,
+        851,
+        859,
+        981
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 14,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1230,
+        890,
+        1108,
+        963,
+        1722,
+        1222
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 14,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        941,
+        986,
+        700,
+        654,
+        720,
+        714
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 14,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1135,
+        1129,
+        1034,
+        923,
+        1577,
+        1109
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 15,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        840,
+        925,
+        887,
+        958,
+        829,
+        1062
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 15,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        983,
+        916,
+        726,
+        834,
+        1104,
+        956
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 15,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        808,
+        861,
+        778,
+        744,
+        869,
+        678
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 15,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1085,
+        1045,
+        925,
+        944,
+        1293,
+        875
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 16,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        895,
+        1084,
+        946,
+        1039,
+        869,
+        920
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 16,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        828,
+        794,
+        730,
+        749,
+        726,
+        859
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 16,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        730,
+        808,
+        1090,
+        753,
+        801,
+        743
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 16,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        992,
+        976,
+        996,
+        952,
+        1189,
+        1026
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 17,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1008,
+        1260,
+        1008,
+        959,
+        929,
+        951
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 17,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1177,
+        1185,
+        1248,
+        1131,
+        1113,
+        1350
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 17,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        959,
+        972,
+        1304,
+        952,
+        1072,
+        979
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 17,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1275,
+        1171,
+        1096,
+        1165,
+        1281,
+        1057
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 18,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        837,
+        879,
+        837,
+        809,
+        804,
+        797
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 18,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1175,
+        975,
+        970,
+        893,
+        902,
+        1024
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 18,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        690,
+        709,
+        898,
+        688,
+        744,
+        718
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 18,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        905,
+        863,
+        992,
+        864,
+        887,
+        846
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 19,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        841,
+        895,
+        766,
+        754,
+        831,
+        766
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 19,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        926,
+        858,
+        797,
+        777,
+        893,
+        920
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 19,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        746,
+        788,
+        724,
+        736,
+        741,
+        721
+      ]
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 19,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        929,
+        821,
+        779,
+        783,
+        891,
+        822
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 0,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1099
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 0,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1107
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 0,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        901
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 0,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        905
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 1,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1294
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 1,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1107
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 1,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1278
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 1,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1669
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 2,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        790
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 2,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        885
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 2,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        770
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 2,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        794
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 3,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1580
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 3,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1253
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 3,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1210
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 3,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1750
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 4,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1038
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 4,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        908
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 4,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        929
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 4,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1120
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 5,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        842
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 5,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        975
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 5,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        960
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 5,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        965
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 6,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1560
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 6,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1577
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 6,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1252
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 6,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1318
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 7,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1055
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 7,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1116
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 7,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        991
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 7,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        909
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 8,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1514
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 8,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1397
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 8,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1137
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 8,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        2259
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 9,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1850
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 9,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1493
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 9,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1597
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "pi",
+      "object": 9,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1828
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 0,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        2110
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 0,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        2147
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 0,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        2849
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 0,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        2220
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 1,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        2354
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 1,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        2538
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 1,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        2393
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 1,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        3063
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 2,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        2015
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 2,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1836
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 2,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1642
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 2,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1946
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 3,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1449
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 3,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        2012
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 3,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1198
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 3,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1399
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 4,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1675
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 4,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1743
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 4,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1218
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 4,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1204
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 5,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1290
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 5,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        2273
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 5,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1847
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 5,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1294
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 6,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        2364
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 6,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        2093
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 6,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1854
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 6,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        2059
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 7,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1977
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 7,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        2049
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 7,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1881
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 7,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1748
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 8,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        2621
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 8,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        2829
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 8,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1925
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 8,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        2194
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 9,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1570
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 9,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1396
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 9,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        2513
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "target": "yielded",
+      "object": 9,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        2211
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 0,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        617,
+        632,
+        610,
+        636,
+        604,
+        614
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 0,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        646,
+        663,
+        739,
+        657,
+        661,
+        734
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 0,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        633,
+        647,
+        643,
+        572,
+        599,
+        670
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 0,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        640,
+        678,
+        694,
+        752,
+        740,
+        752
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 1,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        891,
+        778,
+        850,
+        742,
+        750,
+        781
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 1,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        897,
+        828,
+        828,
+        732,
+        790,
+        818
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 1,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        784,
+        814,
+        853,
+        800,
+        726,
+        745
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 1,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        762,
+        854,
+        840,
+        844,
+        930,
+        850
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 2,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        447,
+        454,
+        424,
+        599,
+        441,
+        457
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 2,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        535,
+        689,
+        623,
+        666,
+        554,
+        502
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 2,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        452,
+        425,
+        464,
+        384,
+        380,
+        339
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 2,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        636,
+        512,
+        477,
+        557,
+        561,
+        518
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 3,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        848,
+        875,
+        893,
+        848,
+        826,
+        829
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 3,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1326,
+        966,
+        963,
+        1055,
+        900,
+        1129
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 3,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        837,
+        871,
+        778,
+        852,
+        1039,
+        844
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 3,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        972,
+        1039,
+        953,
+        1104,
+        1122,
+        1335
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 4,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        647,
+        680,
+        640,
+        616,
+        633,
+        724
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 4,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        661,
+        665,
+        675,
+        697,
+        645,
+        690
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 4,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        632,
+        711,
+        619,
+        628,
+        636,
+        620
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 4,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        656,
+        682,
+        670,
+        693,
+        678,
+        693
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 5,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        623,
+        674,
+        699,
+        713,
+        788,
+        660
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 5,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        706,
+        725,
+        669,
+        640,
+        675,
+        628
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 5,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        625,
+        601,
+        572,
+        594,
+        572,
+        585
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 5,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        676,
+        633,
+        686,
+        691,
+        613,
+        1169
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 6,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        864,
+        829,
+        837,
+        1004,
+        943,
+        1140
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 6,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1229,
+        1043,
+        862,
+        801,
+        806,
+        916
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 6,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1094,
+        884,
+        1092,
+        784,
+        791,
+        878
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 6,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1011,
+        891,
+        927,
+        1019,
+        1014,
+        974
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 7,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        622,
+        642,
+        621,
+        654,
+        679,
+        600
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 7,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        689,
+        659,
+        671,
+        687,
+        649,
+        713
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 7,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        644,
+        665,
+        643,
+        637,
+        698,
+        619
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 7,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        648,
+        663,
+        651,
+        649,
+        624,
+        673
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 8,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        814,
+        787,
+        736,
+        841,
+        824,
+        735
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 8,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        886,
+        825,
+        849,
+        862,
+        889,
+        941
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 8,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        956,
+        949,
+        1049,
+        855,
+        796,
+        801
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 8,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        924,
+        821,
+        804,
+        821,
+        861,
+        1063
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 9,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        961,
+        794,
+        738,
+        766,
+        847,
+        828
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 9,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        954,
+        736,
+        735,
+        857,
+        857,
+        754
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 9,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        756,
+        737,
+        945,
+        998,
+        902,
+        853
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "pi",
+      "object": 9,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1417,
+        1331,
+        1109,
+        1085,
+        1282,
+        1253
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 0,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1246,
+        1089,
+        1198,
+        1073,
+        1151,
+        1139
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 0,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1250,
+        1273,
+        1234,
+        1156,
+        1148,
+        1143
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 0,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1199,
+        1084,
+        1107,
+        1364,
+        1156,
+        1223
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 0,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1261,
+        1187,
+        1304,
+        1340,
+        1112,
+        1389
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 1,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1366,
+        1107,
+        1248,
+        1119,
+        1229,
+        1040
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 1,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1518,
+        1362,
+        1589,
+        1270,
+        1431,
+        1216
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 1,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1357,
+        1049,
+        1204,
+        1701,
+        1172,
+        1130
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 1,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1365,
+        1249,
+        1419,
+        1339,
+        1426,
+        1294
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 2,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1243,
+        1137,
+        1244,
+        1160,
+        1078,
+        1028
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 2,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1111,
+        1114,
+        1217,
+        1060,
+        1211,
+        1168
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 2,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1110,
+        1051,
+        1106,
+        1070,
+        1038,
+        985
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 2,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1169,
+        1237,
+        1166,
+        1163,
+        1105,
+        1308
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 3,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        884,
+        854,
+        843,
+        885,
+        835,
+        803
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 3,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        936,
+        861,
+        890,
+        895,
+        855,
+        820
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 3,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        800,
+        795,
+        841,
+        784,
+        745,
+        748
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 3,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1020,
+        977,
+        999,
+        951,
+        1079,
+        1097
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 4,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        715,
+        742,
+        742,
+        663,
+        641,
+        822
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 4,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        698,
+        845,
+        685,
+        620,
+        768,
+        685
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 4,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        727,
+        639,
+        620,
+        667,
+        588,
+        585
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 4,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        760,
+        688,
+        820,
+        667,
+        719,
+        769
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 5,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        988,
+        1049,
+        903,
+        855,
+        836,
+        951
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 5,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        905,
+        882,
+        917,
+        855,
+        913,
+        856
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 5,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        892,
+        822,
+        929,
+        857,
+        828,
+        849
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 5,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        922,
+        867,
+        934,
+        890,
+        1271,
+        925
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 6,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1331,
+        1228,
+        1433,
+        1201,
+        1180,
+        1148
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 6,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1465,
+        1327,
+        1236,
+        1288,
+        1671,
+        1275
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 6,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1127,
+        1324,
+        1292,
+        1359,
+        1248,
+        1225
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 6,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1569,
+        1775,
+        1234,
+        1208,
+        1300,
+        1187
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 7,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1033,
+        993,
+        920,
+        1020,
+        1041,
+        940
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 7,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1079,
+        1090,
+        1171,
+        1025,
+        1036,
+        1106
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 7,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1872,
+        868,
+        875,
+        959,
+        862,
+        876
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 7,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1048,
+        1049,
+        1048,
+        1058,
+        1165,
+        1094
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 8,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        1090,
+        992,
+        1334,
+        1109,
+        1131,
+        1579
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 8,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        1358,
+        1291,
+        1179,
+        1178,
+        1159,
+        1005
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 8,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        1080,
+        1270,
+        1048,
+        1007,
+        1065,
+        971
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 8,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1093,
+        1166,
+        1258,
+        1033,
+        1681,
+        1185
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 9,
+      "build": "baseline",
+      "epoch": 1,
+      "turnMs": [
+        866,
+        1052,
+        927,
+        864,
+        899,
+        883
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 9,
+      "build": "baseline",
+      "epoch": 2,
+      "turnMs": [
+        951,
+        955,
+        948,
+        1146,
+        970,
+        960
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 9,
+      "build": "candidate",
+      "epoch": 0,
+      "turnMs": [
+        919,
+        968,
+        911,
+        1078,
+        1013,
+        993
+      ]
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "target": "yielded",
+      "object": 9,
+      "build": "candidate",
+      "epoch": 3,
+      "turnMs": [
+        1044,
+        1036,
+        1178,
+        996,
+        1191,
+        1005
+      ]
+    }
+  ]
+}

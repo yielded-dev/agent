@@ -1,0 +1,1178 @@
+{
+  "run": "history-cost-mv0k9vgt-5bb1b677",
+  "revision": "78cb4eb7589984c1cd194e0cb01a5a0055a6d3f3",
+  "dirty": true,
+  "startedAt": "2026-10-09T06:05:15.533Z",
+  "wallMs": 270821,
+  "options": {
+    "targets": [
+      "yielded",
+      "pi"
+    ],
+    "sizes": [
+      1000
+    ],
+    "ttft": [
+      0
+    ],
+    "objects": 1,
+    "repeats": 1,
+    "concurrency": 1,
+    "cold": true,
+    "cpu": true,
+    "keep": false,
+    "rigorous": true,
+    "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+    "candidate": "87158447db05a1a2f9cfe4c38ea0aff4bceb4e3d"
+  },
+  "builds": [
+    {
+      "label": "baseline",
+      "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "201ced0f86c3348078b3144e75c77122b09aa10a17764658e6e222271df708ca"
+    },
+    {
+      "label": "candidate",
+      "revision": "87158447db05a1a2f9cfe4c38ea0aff4bceb4e3d",
+      "sha256": "fc827aa014bc0397464d9b136a2ed611ff288477eb5260403996f7eacda80a60"
+    }
+  ],
+  "fixtures": [
+    {
+      "target": "yielded",
+      "history": 1000,
+      "fingerprint": "ac520308146f2a8f",
+      "tables": {
+        "platform_cloudflare_due_queue": 4,
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 4668,
+        "effect_agent_canonical_records": 12002,
+        "effect_agent_record_runs": 7334,
+        "effect_agent_tool_declarations": 667,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 1000,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 0,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 12,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 1000,
+        "effect_agent_settlement_spans": 3000,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      },
+      "mode": "import",
+      "fallbackReason": "Import-normalized table counts: effect_agent_attempts 1000 -> 0; canonical history and transcript unchanged"
+    },
+    {
+      "target": "pi",
+      "history": 1000,
+      "fingerprint": "ac520308146f2a8f",
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 6675,
+        "conversations": 1,
+        "entries": 3335,
+        "tasks": 2334,
+        "submissions": 1000,
+        "documents": 5,
+        "document_revisions": 5
+      },
+      "mode": "import"
+    }
+  ],
+  "complete": true,
+  "failures": [],
+  "cleanup": {
+    "verified": true,
+    "workers": [],
+    "namespaces": []
+  },
+  "kept": false,
+  "rawSha256": "1728228310c4597c2714510007c14e73988dc155b31832e5dccd8466d21c1f9b",
+  "samplesByStatus": {
+    "ok": 24
+  },
+  "fingerprintsVerified": 24,
+  "modelRequestsVerified": 216,
+  "clockChecks": {
+    "valid": 0,
+    "rejected": 0,
+    "intervalWidthMs": {
+      "n": 0,
+      "median": null,
+      "q1": null,
+      "q3": null,
+      "min": null,
+      "max": null
+    },
+    "providerColos": {
+      "unavailable": 16
+    }
+  },
+  "cpuOutcomes": [
+    {
+      "target": "pi",
+      "kind": "run",
+      "outcome": "ok",
+      "count": 12,
+      "cpuMs": {
+        "n": 12,
+        "median": 1280.0,
+        "q1": 1144.25,
+        "q3": 1571.5,
+        "min": 1060,
+        "max": 1721
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "alarm",
+      "outcome": "canceled",
+      "count": 11,
+      "cpuMs": {
+        "n": 11,
+        "median": 0,
+        "q1": 0.0,
+        "q3": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "alarm",
+      "outcome": "ok",
+      "count": 1,
+      "cpuMs": {
+        "n": 1,
+        "median": 73794,
+        "q1": 73794.0,
+        "q3": 73794.0,
+        "min": 73794,
+        "max": 73794
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "aborted",
+      "count": 8,
+      "cpuMs": {
+        "n": 8,
+        "median": 0.0,
+        "q1": 0.0,
+        "q3": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "ok",
+      "count": 130,
+      "cpuMs": {
+        "n": 130,
+        "median": 1.0,
+        "q1": 0.0,
+        "q3": 4.0,
+        "min": 0,
+        "max": 576
+      }
+    },
+    {
+      "target": "yielded",
+      "kind": "alarm",
+      "outcome": "ok",
+      "count": 10,
+      "cpuMs": {
+        "n": 10,
+        "median": 699.5,
+        "q1": 600.75,
+        "q3": 898.0,
+        "min": 464,
+        "max": 1060
+      }
+    },
+    {
+      "target": "yielded",
+      "kind": "await",
+      "outcome": "ok",
+      "count": 10,
+      "cpuMs": {
+        "n": 10,
+        "median": 597.5,
+        "q1": 494.0,
+        "q3": 674.0,
+        "min": 426,
+        "max": 833
+      }
+    },
+    {
+      "target": "yielded",
+      "kind": "submit",
+      "outcome": "ok",
+      "count": 12,
+      "cpuMs": {
+        "n": 12,
+        "median": 19.5,
+        "q1": 15.0,
+        "q3": 95.5,
+        "min": 11,
+        "max": 107
+      }
+    }
+  ],
+  "unmatchedCpuMarkers": 1,
+  "cells": [
+    {
+      "history": 1000,
+      "ttftMs": 0,
+      "state": "cold",
+      "metrics": {
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 2738.0,
+                  "q1": 2738.0,
+                  "q3": 2738.0,
+                  "min": 2738.0,
+                  "max": 2738.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 154,
+                  "q1": 154.0,
+                  "q3": 154.0,
+                  "min": 154,
+                  "max": 154
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 2572.0,
+                  "q1": 2572.0,
+                  "q3": 2572.0,
+                  "min": 2572.0,
+                  "max": 2572.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 726,
+                  "q1": 726.0,
+                  "q3": 726.0,
+                  "min": 726,
+                  "max": 726
+                }
+              },
+              "yieldedDivPi": 0.9393718042366691
+            },
+            "candidate": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 2790.5,
+                  "q1": 2790.5,
+                  "q3": 2790.5,
+                  "min": 2790.5,
+                  "max": 2790.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 697,
+                  "q1": 697.0,
+                  "q3": 697.0,
+                  "min": 697,
+                  "max": 697
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 3021.5,
+                  "q1": 3021.5,
+                  "q3": 3021.5,
+                  "min": 3021.5,
+                  "max": 3021.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 417,
+                  "q1": 417.0,
+                  "q3": 417.0,
+                  "min": 417,
+                  "max": 417
+                }
+              },
+              "yieldedDivPi": 1.0827808636445082
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 1,
+              "median": 1.1747667185069985,
+              "q1": 1.1747667185069985,
+              "q3": 1.1747667185069985,
+              "min": 1.1747667185069985,
+              "max": 1.1747667185069985
+            },
+            "deltaMs": {
+              "n": 1,
+              "median": 449.5,
+              "q1": 449.5,
+              "q3": 449.5,
+              "min": 449.5,
+              "max": 449.5
+            },
+            "baselineEpochDrift": {
+              "n": 1,
+              "median": 0.3286555002263467,
+              "q1": 0.3286555002263467,
+              "q3": 0.3286555002263467,
+              "min": 0.3286555002263467,
+              "max": 0.3286555002263467
+            }
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 817.5,
+                  "q1": 817.5,
+                  "q3": 817.5,
+                  "min": 817.5,
+                  "max": 817.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 321,
+                  "q1": 321.0,
+                  "q3": 321.0,
+                  "min": 321,
+                  "max": 321
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 1055.0,
+                  "q1": 1055.0,
+                  "q3": 1055.0,
+                  "min": 1055.0,
+                  "max": 1055.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 956,
+                  "q1": 956.0,
+                  "q3": 956.0,
+                  "min": 956,
+                  "max": 956
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 1,
+              "median": 1.290519877675841,
+              "q1": 1.290519877675841,
+              "q3": 1.290519877675841,
+              "min": 1.290519877675841,
+              "max": 1.290519877675841
+            },
+            "deltaMs": {
+              "n": 1,
+              "median": 237.5,
+              "q1": 237.5,
+              "q3": 237.5,
+              "min": 237.5,
+              "max": 237.5
+            },
+            "baselineEpochDrift": {
+              "n": 1,
+              "median": 0.4885844748858448,
+              "q1": 0.4885844748858448,
+              "q3": 0.4885844748858448,
+              "min": 0.4885844748858448,
+              "max": 0.4885844748858448
+            }
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 1,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "history": 1000,
+      "ttftMs": 0,
+      "state": "warm",
+      "metrics": {
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 1725.5,
+                  "q1": 1725.5,
+                  "q3": 1725.5,
+                  "min": 1725.5,
+                  "max": 1725.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 9,
+                  "q1": 9.0,
+                  "q3": 9.0,
+                  "min": 9,
+                  "max": 9
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 1708.5,
+                  "q1": 1708.5,
+                  "q3": 1708.5,
+                  "min": 1708.5,
+                  "max": 1708.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 51,
+                  "q1": 51.0,
+                  "q3": 51.0,
+                  "min": 51,
+                  "max": 51
+                }
+              },
+              "yieldedDivPi": 0.9901477832512315
+            },
+            "candidate": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 1662.5,
+                  "q1": 1662.5,
+                  "q3": 1662.5,
+                  "min": 1662.5,
+                  "max": 1662.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 145,
+                  "q1": 145.0,
+                  "q3": 145.0,
+                  "min": 145,
+                  "max": 145
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 1737.5,
+                  "q1": 1737.5,
+                  "q3": 1737.5,
+                  "min": 1737.5,
+                  "max": 1737.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 223,
+                  "q1": 223.0,
+                  "q3": 223.0,
+                  "min": 223,
+                  "max": 223
+                }
+              },
+              "yieldedDivPi": 1.0451127819548873
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 1,
+              "median": 1.0169739537606086,
+              "q1": 1.0169739537606086,
+              "q3": 1.0169739537606086,
+              "min": 1.0169739537606086,
+              "max": 1.0169739537606086
+            },
+            "deltaMs": {
+              "n": 1,
+              "median": 29.0,
+              "q1": 29.0,
+              "q3": 29.0,
+              "min": 29.0,
+              "max": 29.0
+            },
+            "baselineEpochDrift": {
+              "n": 1,
+              "median": 0.030303030303030276,
+              "q1": 0.030303030303030276,
+              "q3": 0.030303030303030276,
+              "min": 0.030303030303030276,
+              "max": 0.030303030303030276
+            }
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 720.0,
+                  "q1": 720.0,
+                  "q3": 720.0,
+                  "min": 720.0,
+                  "max": 720.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 182,
+                  "q1": 182.0,
+                  "q3": 182.0,
+                  "min": 182,
+                  "max": 182
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 712.5,
+                  "q1": 712.5,
+                  "q3": 712.5,
+                  "min": 712.5,
+                  "max": 712.5
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 105,
+                  "q1": 105.0,
+                  "q3": 105.0,
+                  "min": 105,
+                  "max": 105
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 1,
+              "median": 0.9895833333333334,
+              "q1": 0.9895833333333334,
+              "q3": 0.9895833333333334,
+              "min": 0.9895833333333334,
+              "max": 0.9895833333333334
+            },
+            "deltaMs": {
+              "n": 1,
+              "median": -7.5,
+              "q1": -7.5,
+              "q3": -7.5,
+              "min": -7.5,
+              "max": -7.5
+            },
+            "baselineEpochDrift": {
+              "n": 1,
+              "median": 0.2893481717011128,
+              "q1": 0.2893481717011128,
+              "q3": 0.2893481717011128,
+              "min": 0.2893481717011128,
+              "max": 0.2893481717011128
+            }
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 1,
+                "samples": 2,
+                "objectMedians": {
+                  "n": 1,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 1,
+                  "median": 0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 1,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          }
+        }
+      }
+    }
+  ],
+  "objects": [
+    {
+      "target": "pi",
+      "history": 1000,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 0,
+      "build": "baseline",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "driverMs": 2661,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "driverMs": 2143,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "driverMs": 1721,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ]
+      }
+    },
+    {
+      "target": "pi",
+      "history": 1000,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 1,
+      "build": "candidate",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "driverMs": 2442,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "driverMs": 1894,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "driverMs": 1735,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ]
+      }
+    },
+    {
+      "target": "pi",
+      "history": 1000,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 2,
+      "build": "candidate",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "driverMs": 3139,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "driverMs": 1717,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "driverMs": 1590,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ]
+      }
+    },
+    {
+      "target": "pi",
+      "history": 1000,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 3,
+      "build": "baseline",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "driverMs": 2815,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "driverMs": 1566,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "driverMs": 1730,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ]
+      }
+    },
+    {
+      "target": "yielded",
+      "history": 1000,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 0,
+      "build": "baseline",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "driverMs": 2209,
+            "admissionMs": 978,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "driverMs": 1743,
+            "admissionMs": 858,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "driverMs": 1734,
+            "admissionMs": 629,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ]
+      }
+    },
+    {
+      "target": "yielded",
+      "history": 1000,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 1,
+      "build": "candidate",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "driverMs": 3230,
+            "admissionMs": 577,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "driverMs": 1751,
+            "admissionMs": 752,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "driverMs": 1626,
+            "admissionMs": 660,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ]
+      }
+    },
+    {
+      "target": "yielded",
+      "history": 1000,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 2,
+      "build": "candidate",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "driverMs": 2813,
+            "admissionMs": 1533,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "driverMs": 1823,
+            "admissionMs": 878,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "driverMs": 1849,
+            "admissionMs": 765,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ]
+      }
+    },
+    {
+      "target": "yielded",
+      "history": 1000,
+      "ttftMs": 0,
+      "object": "0",
+      "epoch": 3,
+      "build": "baseline",
+      "states": {
+        "cold": [
+          {
+            "repeat": 0,
+            "status": "ok",
+            "driverMs": 2935,
+            "admissionMs": 657,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warmup": [
+          {
+            "repeat": 1,
+            "status": "ok",
+            "driverMs": 1449,
+            "admissionMs": 635,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ],
+        "warm": [
+          {
+            "repeat": 2,
+            "status": "ok",
+            "driverMs": 1683,
+            "admissionMs": 811,
+            "gapMs": 0,
+            "colo": "SJC"
+          }
+        ]
+      }
+    }
+  ]
+}

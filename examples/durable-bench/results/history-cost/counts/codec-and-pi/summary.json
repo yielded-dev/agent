@@ -1,0 +1,522 @@
+{
+  "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+  "candidate": "40485f33",
+  "rows": [
+    {
+      "turns": 50,
+      "seedFingerprint": "b017b487524e44a4",
+      "measuredFingerprint": "7b3b83c4979d51bb",
+      "baseline": {
+        "storedCanonicalRecords": 603,
+        "promptRecords": 268,
+        "promptPages": 2,
+        "rawJsonBytes": 204113,
+        "historicalJsonPassHistogram": {
+          "1": 268
+        },
+        "encodedMessagePasses": 184,
+        "nativeMessagePasses": 184,
+        "readPromptSchemaNodes": 12494,
+        "readPromptSchemaNodesPerRecord": 46.61940298507463,
+        "decoderSchemaNodes": 9524,
+        "decoderSchemaNodesPerRecord": 35.53731343283582,
+        "decoderRootCalls": 86,
+        "readPromptEffectEvaluations": 7667,
+        "decoderEffectEvaluations": 7533,
+        "totalEffectEvaluations": 37112,
+        "totalSchemaNodes": 36669,
+        "journalMetadataVisits": 269,
+        "journalProjectionVisits": 269,
+        "journalProjections": 1,
+        "canonicalJsonDecodeCalls": 284,
+        "canonicalJsonBytes": 224583,
+        "fullEnvelopeDecodes": 4,
+        "sql": {
+          "calls": 206,
+          "rowsRead": 1220,
+          "rowsWritten": 544
+        },
+        "promptSql": {
+          "calls": 4,
+          "rowsRead": 539,
+          "rowsWritten": 0
+        },
+        "promptSqlPlanning": {
+          "calls": 2,
+          "rowsRead": 269,
+          "rowsWritten": 0
+        },
+        "promptSqlHydration": {
+          "calls": 2,
+          "rowsRead": 270,
+          "rowsWritten": 0
+        },
+        "modelCalls": 9
+      },
+      "candidate": {
+        "storedCanonicalRecords": 603,
+        "promptRecords": 268,
+        "promptPages": 2,
+        "rawJsonBytes": 204113,
+        "historicalJsonPassHistogram": {
+          "1": 268
+        },
+        "encodedMessagePasses": 0,
+        "nativeMessagePasses": 184,
+        "readPromptSchemaNodes": 10614,
+        "readPromptSchemaNodesPerRecord": 39.6044776119403,
+        "decoderSchemaNodes": 7644,
+        "decoderSchemaNodesPerRecord": 28.52238805970149,
+        "decoderRootCalls": 2,
+        "readPromptEffectEvaluations": 7737,
+        "decoderEffectEvaluations": 7603,
+        "totalEffectEvaluations": 37182,
+        "totalSchemaNodes": 34789,
+        "journalMetadataVisits": 269,
+        "journalProjectionVisits": 269,
+        "journalProjections": 1,
+        "canonicalJsonDecodeCalls": 284,
+        "canonicalJsonBytes": 224583,
+        "fullEnvelopeDecodes": 4,
+        "sql": {
+          "calls": 206,
+          "rowsRead": 1220,
+          "rowsWritten": 544
+        },
+        "promptSql": {
+          "calls": 4,
+          "rowsRead": 539,
+          "rowsWritten": 0
+        },
+        "promptSqlPlanning": {
+          "calls": 2,
+          "rowsRead": 269,
+          "rowsWritten": 0
+        },
+        "promptSqlHydration": {
+          "calls": 2,
+          "rowsRead": 270,
+          "rowsWritten": 0
+        },
+        "modelCalls": 9
+      },
+      "pi": {
+        "storedEntries": 169,
+        "historicalEntryDecodes": 3044,
+        "historicalJsonBytes": 1080912,
+        "totalEntryDecodes": 3257,
+        "totalEntryJsonBytes": 1175170,
+        "entryVisitHistogram": {
+          "5": 2,
+          "7": 2,
+          "9": 2,
+          "11": 2,
+          "13": 2,
+          "15": 2,
+          "17": 2,
+          "18": 168,
+          "19": 2,
+          "20": 1,
+          "21": 1
+        },
+        "contextDerivations": 18,
+        "rangeScans": 18,
+        "metadataEntryVisits": 3204,
+        "projectionEntryVisits": 3204,
+        "sql": {
+          "calls": 1049,
+          "rowsRead": 4500,
+          "rowsWritten": 869
+        },
+        "modelCalls": 9
+      }
+    },
+    {
+      "turns": 250,
+      "seedFingerprint": "dcea9f30b0917245",
+      "measuredFingerprint": "c29eb4d490969f50",
+      "baseline": {
+        "storedCanonicalRecords": 3002,
+        "promptRecords": 1334,
+        "promptPages": 6,
+        "rawJsonBytes": 1024025,
+        "historicalJsonPassHistogram": {
+          "1": 1334
+        },
+        "encodedMessagePasses": 917,
+        "nativeMessagePasses": 917,
+        "readPromptSchemaNodes": 62107,
+        "readPromptSchemaNodesPerRecord": 46.55697151424288,
+        "decoderSchemaNodes": 47367,
+        "decoderSchemaNodesPerRecord": 35.507496251874066,
+        "decoderRootCalls": 423,
+        "readPromptEffectEvaluations": 37839,
+        "decoderEffectEvaluations": 37437,
+        "totalEffectEvaluations": 78169,
+        "totalSchemaNodes": 126172,
+        "journalMetadataVisits": 1335,
+        "journalProjectionVisits": 1335,
+        "journalProjections": 1,
+        "canonicalJsonDecodeCalls": 1350,
+        "canonicalJsonBytes": 1044505,
+        "fullEnvelopeDecodes": 4,
+        "sql": {
+          "calls": 243,
+          "rowsRead": 5652,
+          "rowsWritten": 544
+        },
+        "promptSql": {
+          "calls": 12,
+          "rowsRead": 2675,
+          "rowsWritten": 0
+        },
+        "promptSqlPlanning": {
+          "calls": 6,
+          "rowsRead": 1335,
+          "rowsWritten": 0
+        },
+        "promptSqlHydration": {
+          "calls": 6,
+          "rowsRead": 1340,
+          "rowsWritten": 0
+        },
+        "modelCalls": 9
+      },
+      "candidate": {
+        "storedCanonicalRecords": 3002,
+        "promptRecords": 1334,
+        "promptPages": 6,
+        "rawJsonBytes": 1024025,
+        "historicalJsonPassHistogram": {
+          "1": 1334
+        },
+        "encodedMessagePasses": 0,
+        "nativeMessagePasses": 917,
+        "readPromptSchemaNodes": 52767,
+        "readPromptSchemaNodesPerRecord": 39.55547226386807,
+        "decoderSchemaNodes": 38027,
+        "decoderSchemaNodesPerRecord": 28.50599700149925,
+        "decoderRootCalls": 6,
+        "readPromptEffectEvaluations": 38196,
+        "decoderEffectEvaluations": 37794,
+        "totalEffectEvaluations": 78526,
+        "totalSchemaNodes": 116832,
+        "journalMetadataVisits": 1335,
+        "journalProjectionVisits": 1335,
+        "journalProjections": 1,
+        "canonicalJsonDecodeCalls": 1350,
+        "canonicalJsonBytes": 1044505,
+        "fullEnvelopeDecodes": 4,
+        "sql": {
+          "calls": 243,
+          "rowsRead": 5652,
+          "rowsWritten": 544
+        },
+        "promptSql": {
+          "calls": 12,
+          "rowsRead": 2675,
+          "rowsWritten": 0
+        },
+        "promptSqlPlanning": {
+          "calls": 6,
+          "rowsRead": 1335,
+          "rowsWritten": 0
+        },
+        "promptSqlHydration": {
+          "calls": 6,
+          "rowsRead": 1340,
+          "rowsWritten": 0
+        },
+        "modelCalls": 9
+      },
+      "pi": {
+        "storedEntries": 835,
+        "historicalEntryDecodes": 15086,
+        "historicalJsonBytes": 5515302,
+        "totalEntryDecodes": 15299,
+        "totalEntryJsonBytes": 5610560,
+        "entryVisitHistogram": {
+          "5": 2,
+          "7": 2,
+          "9": 2,
+          "11": 2,
+          "13": 2,
+          "15": 2,
+          "17": 2,
+          "18": 807,
+          "19": 2,
+          "20": 28,
+          "21": 1
+        },
+        "contextDerivations": 18,
+        "rangeScans": 18,
+        "metadataEntryVisits": 15192,
+        "projectionEntryVisits": 15192,
+        "sql": {
+          "calls": 1157,
+          "rowsRead": 16596,
+          "rowsWritten": 869
+        },
+        "modelCalls": 9
+      }
+    },
+    {
+      "turns": 1000,
+      "seedFingerprint": "ac520308146f2a8f",
+      "measuredFingerprint": "02f7ac7f9eb06bee",
+      "baseline": {
+        "storedCanonicalRecords": 12002,
+        "promptRecords": 5334,
+        "promptPages": 21,
+        "rawJsonBytes": 4112455,
+        "historicalJsonPassHistogram": {
+          "1": 5334
+        },
+        "encodedMessagePasses": 3667,
+        "nativeMessagePasses": 3667,
+        "readPromptSchemaNodes": 248287,
+        "readPromptSchemaNodesPerRecord": 46.54799400074991,
+        "decoderSchemaNodes": 189382,
+        "decoderSchemaNodesPerRecord": 35.50468691413573,
+        "decoderRootCalls": 1688,
+        "readPromptEffectEvaluations": 151084,
+        "decoderEffectEvaluations": 149674,
+        "totalEffectEvaluations": 230905,
+        "totalSchemaNodes": 396352,
+        "journalMetadataVisits": 5335,
+        "journalProjectionVisits": 5335,
+        "journalProjections": 1,
+        "canonicalJsonDecodeCalls": 5350,
+        "canonicalJsonBytes": 4132937,
+        "fullEnvelopeDecodes": 4,
+        "sql": {
+          "calls": 273,
+          "rowsRead": 15275,
+          "rowsWritten": 544
+        },
+        "promptSql": {
+          "calls": 42,
+          "rowsRead": 10690,
+          "rowsWritten": 0
+        },
+        "promptSqlPlanning": {
+          "calls": 21,
+          "rowsRead": 5335,
+          "rowsWritten": 0
+        },
+        "promptSqlHydration": {
+          "calls": 21,
+          "rowsRead": 5355,
+          "rowsWritten": 0
+        },
+        "modelCalls": 9
+      },
+      "candidate": {
+        "storedCanonicalRecords": 12002,
+        "promptRecords": 5334,
+        "promptPages": 21,
+        "rawJsonBytes": 4112455,
+        "historicalJsonPassHistogram": {
+          "1": 5334
+        },
+        "encodedMessagePasses": 0,
+        "nativeMessagePasses": 3667,
+        "readPromptSchemaNodes": 210947,
+        "readPromptSchemaNodesPerRecord": 39.54761904761905,
+        "decoderSchemaNodes": 152042,
+        "decoderSchemaNodesPerRecord": 28.504311961004873,
+        "decoderRootCalls": 21,
+        "readPromptEffectEvaluations": 152506,
+        "decoderEffectEvaluations": 151099,
+        "totalEffectEvaluations": 232328,
+        "totalSchemaNodes": 359012,
+        "journalMetadataVisits": 5335,
+        "journalProjectionVisits": 5335,
+        "journalProjections": 1,
+        "canonicalJsonDecodeCalls": 5350,
+        "canonicalJsonBytes": 4132937,
+        "fullEnvelopeDecodes": 4,
+        "sql": {
+          "calls": 273,
+          "rowsRead": 15275,
+          "rowsWritten": 544
+        },
+        "promptSql": {
+          "calls": 42,
+          "rowsRead": 10690,
+          "rowsWritten": 0
+        },
+        "promptSqlPlanning": {
+          "calls": 21,
+          "rowsRead": 5335,
+          "rowsWritten": 0
+        },
+        "promptSqlHydration": {
+          "calls": 21,
+          "rowsRead": 5355,
+          "rowsWritten": 0
+        },
+        "modelCalls": 9
+      },
+      "pi": {
+        "storedEntries": 3335,
+        "historicalEntryDecodes": 60266,
+        "historicalJsonBytes": 22409010,
+        "totalEntryDecodes": 60479,
+        "totalEntryJsonBytes": 22504287,
+        "entryVisitHistogram": {
+          "5": 2,
+          "7": 2,
+          "9": 2,
+          "11": 2,
+          "13": 2,
+          "15": 2,
+          "17": 2,
+          "18": 3217,
+          "19": 2,
+          "20": 118,
+          "21": 1
+        },
+        "contextDerivations": 18,
+        "rangeScans": 18,
+        "metadataEntryVisits": 60192,
+        "projectionEntryVisits": 60192,
+        "sql": {
+          "calls": 1517,
+          "rowsRead": 61956,
+          "rowsWritten": 869
+        },
+        "modelCalls": 9
+      }
+    },
+    {
+      "turns": 3500,
+      "seedFingerprint": "0a8c8e4b0d9a0794",
+      "measuredFingerprint": "6dd3a56608e79a1d",
+      "baseline": {
+        "storedCanonicalRecords": 42003,
+        "promptRecords": 18668,
+        "promptPages": 73,
+        "rawJsonBytes": 14430077,
+        "historicalJsonPassHistogram": {
+          "1": 18668
+        },
+        "encodedMessagePasses": 12834,
+        "nativeMessagePasses": 12834,
+        "readPromptSchemaNodes": 868946,
+        "readPromptSchemaNodesPerRecord": 46.54735376044568,
+        "decoderSchemaNodes": 662795,
+        "decoderSchemaNodesPerRecord": 35.50433897578744,
+        "decoderRootCalls": 5907,
+        "readPromptEffectEvaluations": 528733,
+        "decoderEffectEvaluations": 523833,
+        "totalEffectEvaluations": 740267,
+        "totalSchemaNodes": 1297043,
+        "journalMetadataVisits": 18669,
+        "journalProjectionVisits": 18669,
+        "journalProjections": 1,
+        "canonicalJsonDecodeCalls": 18684,
+        "canonicalJsonBytes": 14450569,
+        "fullEnvelopeDecodes": 4,
+        "sql": {
+          "calls": 377,
+          "rowsRead": 47355,
+          "rowsWritten": 544
+        },
+        "promptSql": {
+          "calls": 146,
+          "rowsRead": 37410,
+          "rowsWritten": 0
+        },
+        "promptSqlPlanning": {
+          "calls": 73,
+          "rowsRead": 18669,
+          "rowsWritten": 0
+        },
+        "promptSqlHydration": {
+          "calls": 73,
+          "rowsRead": 18741,
+          "rowsWritten": 0
+        },
+        "modelCalls": 9
+      },
+      "candidate": {
+        "storedCanonicalRecords": 42003,
+        "promptRecords": 18668,
+        "promptPages": 73,
+        "rawJsonBytes": 14430077,
+        "historicalJsonPassHistogram": {
+          "1": 18668
+        },
+        "encodedMessagePasses": 0,
+        "nativeMessagePasses": 12834,
+        "readPromptSchemaNodes": 738266,
+        "readPromptSchemaNodesPerRecord": 39.54713949003643,
+        "decoderSchemaNodes": 532115,
+        "decoderSchemaNodesPerRecord": 28.50412470537819,
+        "decoderRootCalls": 73,
+        "readPromptEffectEvaluations": 533692,
+        "decoderEffectEvaluations": 528798,
+        "totalEffectEvaluations": 745236,
+        "totalSchemaNodes": 1166363,
+        "journalMetadataVisits": 18669,
+        "journalProjectionVisits": 18669,
+        "journalProjections": 1,
+        "canonicalJsonDecodeCalls": 18684,
+        "canonicalJsonBytes": 14450569,
+        "fullEnvelopeDecodes": 4,
+        "sql": {
+          "calls": 377,
+          "rowsRead": 47355,
+          "rowsWritten": 544
+        },
+        "promptSql": {
+          "calls": 146,
+          "rowsRead": 37410,
+          "rowsWritten": 0
+        },
+        "promptSqlPlanning": {
+          "calls": 73,
+          "rowsRead": 18669,
+          "rowsWritten": 0
+        },
+        "promptSqlHydration": {
+          "calls": 73,
+          "rowsRead": 18741,
+          "rowsWritten": 0
+        },
+        "modelCalls": 9
+      },
+      "pi": {
+        "storedEntries": 11669,
+        "historicalEntryDecodes": 210854,
+        "historicalJsonBytes": 79377432,
+        "totalEntryDecodes": 211067,
+        "totalEntryJsonBytes": 79473498,
+        "entryVisitHistogram": {
+          "5": 2,
+          "7": 2,
+          "9": 2,
+          "11": 2,
+          "13": 2,
+          "15": 2,
+          "17": 2,
+          "18": 11263,
+          "19": 2,
+          "20": 406,
+          "21": 1
+        },
+        "contextDerivations": 18,
+        "rangeScans": 18,
+        "metadataEntryVisits": 210204,
+        "projectionEntryVisits": 210204,
+        "sql": {
+          "calls": 2669,
+          "rowsRead": 213120,
+          "rowsWritten": 869
+        },
+        "modelCalls": 9
+      }
+    }
+  ]
+}

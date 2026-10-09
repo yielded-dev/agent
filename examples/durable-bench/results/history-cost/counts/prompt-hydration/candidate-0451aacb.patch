@@ -1,0 +1,99 @@
+diff --git a/packages/effect-agent/src/durable/Records.ts b/packages/effect-agent/src/durable/Records.ts
+index c0954fc1..e4139efe 100644
+--- a/packages/effect-agent/src/durable/Records.ts
++++ b/packages/effect-agent/src/durable/Records.ts
+@@ -34,6 +34,7 @@ import { ToolParameterRejection } from "../core/ToolResult.ts";
+ import { ModelCallUsage, RunUsageSummary, RunTotals } from "../core/Usage.ts";
+ import { WorkerBudgetScope, WorkerRef, WorkerSource, WorkerStop } from "../core/Worker.ts";
+ import { ContextHandoff } from "../engine/ContextWindow.ts";
++import { HistoryPrompt } from "./internal/history-prompt.ts";
+ 
+ /** Stable identity of one canonical record. */
+ export const RecordId = Schema.NonEmptyString.pipe(Schema.brand("@effect-agent/thread/RecordId"));
+@@ -1357,12 +1358,12 @@ export const PromptRecordPayload = Schema.TaggedUnion({
+   },
+   ModelCompleted: {
+     runId: RunId,
+-    history: Schema.optionalKey(Prompt.Prompt),
++    history: Schema.optionalKey(HistoryPrompt),
+   },
+   ModelResponseRecorded: {
+     runId: RunId,
+     turn: TurnNumber,
+-    messages: Prompt.Prompt,
++    messages: HistoryPrompt,
+     runScopedPrefixLength: ModelResponseRecorded.fields.runScopedPrefixLength,
+   },
+   ToolCallSettled: {
+diff --git a/packages/effect-agent/src/durable/internal/history-prompt.ts b/packages/effect-agent/src/durable/internal/history-prompt.ts
+new file mode 100644
+index 00000000..6a6250c1
+--- /dev/null
++++ b/packages/effect-agent/src/durable/internal/history-prompt.ts
+@@ -0,0 +1,66 @@
++import { Effect, Schema, SchemaParser, SchemaTransformation } from "effect";
++import { Prompt } from "effect/ai";
++
++function restorePart(part: Prompt.UserMessagePartEncoded): Prompt.UserMessagePart;
++function restorePart(part: Prompt.AssistantMessagePartEncoded): Prompt.AssistantMessagePart;
++function restorePart(part: Prompt.ToolMessagePartEncoded): Prompt.ToolMessagePart;
++function restorePart(part: Prompt.PartEncoded): Prompt.Part {
++  switch (part.type) {
++    case "text":
++      return Prompt.textPart(part);
++    case "reasoning":
++      return Prompt.reasoningPart(part);
++    case "file":
++      return Prompt.filePart(part);
++    case "tool-call":
++      return Prompt.toolCallPart({ ...part, providerExecuted: part.providerExecuted ?? false });
++    case "tool-result":
++      return Prompt.toolResultPart({ ...part, providerExecuted: part.providerExecuted ?? false });
++    case "tool-approval-request":
++      return Prompt.toolApprovalRequestPart(part);
++    case "tool-approval-response":
++      return Prompt.toolApprovalResponsePart(part);
++  }
++}
++
++const restoreMessage = (message: Prompt.MessageEncoded): Prompt.Message => {
++  switch (message.role) {
++    case "system":
++      return Prompt.makeMessage("system", message);
++    case "user":
++      return Prompt.makeMessage("user", {
++        ...message,
++        content:
++          typeof message.content === "string"
++            ? [Prompt.textPart({ text: message.content })]
++            : message.content.map((part) => restorePart(part)),
++      });
++    case "assistant":
++      return Prompt.makeMessage("assistant", {
++        ...message,
++        content:
++          typeof message.content === "string"
++            ? [Prompt.textPart({ text: message.content })]
++            : message.content.map((part) => restorePart(part)),
++      });
++    case "tool":
++      return Prompt.makeMessage("tool", {
++        ...message,
++        content: message.content.map((part) => restorePart(part)),
++      });
++  }
++};
++
++/**
++ * Validate the upstream encoded history once, then restore native values with its constructors.
++ * The canonical codec remains authoritative at append, import, recovery and explicit verification.
++ */
++export const HistoryPrompt = Schema.toEncoded(Prompt.Prompt).pipe(
++  Schema.decodeTo(
++    Schema.toType(Prompt.Prompt),
++    SchemaTransformation.transformEffect({
++      decode: (input) => Effect.succeed(Prompt.fromMessages(input.content.map(restoreMessage))),
++      encode: SchemaParser.encodeEffect(Prompt.Prompt),
++    }),
++  ),
++);

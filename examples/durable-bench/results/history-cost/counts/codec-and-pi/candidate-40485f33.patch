@@ -1,0 +1,43 @@
+diff --git a/packages/effect-agent/src/durable/Records.ts b/packages/effect-agent/src/durable/Records.ts
+index c0954fc1..916cec4b 100644
+--- a/packages/effect-agent/src/durable/Records.ts
++++ b/packages/effect-agent/src/durable/Records.ts
+@@ -1,4 +1,4 @@
+-import { Option, Schema, Struct } from "effect";
++import { Option, Schema, SchemaTransformation, Struct } from "effect";
+ import { Prompt } from "effect/ai";
+ 
+ import { InputMessage } from "../capabilities/Messaging.ts";
+@@ -1348,6 +1348,17 @@ export class CanonicalRecordEnvelope extends Schema.Class<CanonicalRecordEnvelop
+   record: RecordEnvelope,
+ }) {}
+ 
++/** Materialize history from one decode of the native Message schema. */
++const HistoryPrompt = Schema.Struct({ content: Schema.Array(Prompt.Message) }).pipe(
++  Schema.decodeTo(
++    Schema.toType(Prompt.Prompt),
++    SchemaTransformation.transform({
++      decode: ({ content }) => Prompt.fromMessages(content),
++      encode: (prompt) => ({ content: prompt.content }),
++    }),
++  ),
++);
++
+ /** Read-only history of validated facts. Original inputs establish Run view boundaries. */
+ export const PromptRecordPayload = Schema.TaggedUnion({
+   UserInputRecorded: {
+@@ -1357,12 +1368,12 @@ export const PromptRecordPayload = Schema.TaggedUnion({
+   },
+   ModelCompleted: {
+     runId: RunId,
+-    history: Schema.optionalKey(Prompt.Prompt),
++    history: Schema.optionalKey(HistoryPrompt),
+   },
+   ModelResponseRecorded: {
+     runId: RunId,
+     turn: TurnNumber,
+-    messages: Prompt.Prompt,
++    messages: HistoryPrompt,
+     runScopedPrefixLength: ModelResponseRecorded.fields.runScopedPrefixLength,
+   },
+   ToolCallSettled: {
