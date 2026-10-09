@@ -1,0 +1,90 @@
+{
+  "frameworkRevision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+  "productChanges": false,
+  "recordFormatChanged": false,
+  "thirdPartyNodeModulesPresent": false,
+  "artifactVerification": {
+    "checkedAt": "2026-10-09T08:51:35Z",
+    "finishedRuns": 17,
+    "controlledRuns": 8,
+    "controlledTurnsIncludingWarmup": 4160,
+    "measuredTurns": 2880,
+    "compactRows": 1280,
+    "uploadResponses": 62,
+    "verifiedCompiledBundles": 10,
+    "freshCompleteObjectsPerTargetAndGroup": 15,
+    "result": "All controlled runs completed every planned turn with verified transcripts and target cleanup. Compact row lengths and epoch arrays match. Both final fresh-isolate runs have no failed or excluded samples."
+  },
+  "publicationPrivacyCheck": {
+    "checkedAt": "2026-10-09T08:51:35.922Z",
+    "evidenceFilesAndHarnessDiffs": 11,
+    "privateValueCategories": 5,
+    "matches": [],
+    "scope": "Exact configured account identifier, API token, benchmark token, account name and subdomain, plus email patterns. Run before private-state removal; the later cleanup record contains empty resource lists."
+  },
+  "toolchainDoctor": {
+    "command": "vp env doctor",
+    "exitCode": 0,
+    "result": "All checks passed; existing nvm and volta PATH advisories."
+  },
+  "readyAttempts": [
+    {
+      "command": "vp run ready",
+      "exitCode": 1,
+      "result": "PostgreSQL certification could not connect to the default local server. Three other tasks ended with exit 137. No product code was changed."
+    },
+    {
+      "command": "EFFECT_AGENT_TEST_POSTGRES_URL=<temporary-local-server> vp run ready",
+      "exitCode": 0,
+      "completedAt": "2026-10-09T06:47:07Z",
+      "tasks": 71,
+      "cacheHits": 32,
+      "result": "Static checks, export and record-format checks, tests, package and documentation builds passed. PostgreSQL 18.6 ran in a task-owned temporary directory."
+    }
+  ],
+  "localPostgresCleanup": {
+    "stopped": true,
+    "temporaryDataDirectoryRemoved": true
+  },
+  "thousandTurnControlBuilds": {
+    "frameworkRevision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+    "harnessRevision": "41d51e719248eee83dd71343302468112b6a174f",
+    "differingLines": 136,
+    "onlySourcePathCommentsDiffer": true,
+    "normalization": "Replace /baseline/source/ and /candidate/source/ with /LABEL/source/.",
+    "normalizedBundleSha256": "35fad20d906575e241a5c89b046045222c385687be87017c630070b693e0707a"
+  },
+  "freshIsolateHarness": {
+    "revision": "f579db4f2e295df9110b8dadcaf186b985d3432b",
+    "source": "https://github.com/yielded-dev/agent/tree/dan/cold-storage-isolate-bench",
+    "upstreamHarnessPatch": "https://github.com/yielded-dev/agent/blob/dan/isolate-start-evidence/examples/durable-bench/results/isolate-start/harness.patch",
+    "upstreamHarnessPatchSha256": "9e5b7b56ed4c2ae4fc31945184f03b441ccbc4035733773620eae1499c56c209",
+    "staticCheck": "vp check --fix: 30 files, no warnings or errors; commit hook also passed.",
+    "cliHelp": "passed",
+    "localBundleVerification": {
+      "yieldedBytes": 3588208,
+      "piBytes": 1710893,
+      "piRetainedEffectModules": 0
+    },
+    "localFixtureVerification": {
+      "historyTurns": 50,
+      "yieldedFingerprint": "b017b487524e44a4",
+      "piFingerprint": "b017b487524e44a4",
+      "yieldedTables": 32,
+      "piTables": 9
+    },
+    "localChecksAreLatencyEvidence": false,
+    "initialRevision": "2b00c8a88aa8e34f22f930dcd37416547d2f6bd3",
+    "readinessFix": {
+      "reason": "Previous Worker build served measured pi requests after three matching stateless health rounds.",
+      "change": "Wait 60 seconds after each measured upload, then require ten matching health rounds from controller and driver. No measured Object is probed and no failed input is replayed.",
+      "verification": "vp check --fix passed for the changed controller file; commit hook also passed."
+    },
+    "readinessRevision": "31c6e662486b3d7064dfcd1bf956606a9e3d95df",
+    "paddingPreparationSimplification": {
+      "reason": "An untimed repeated-padding preparation returned HTTP 500 after three successful measured epochs. Its cause is unknown.",
+      "change": "Prepare padding only on label changes; repeated labels retain the existing padding. Current post-turn database size is still recorded. Worker code is unchanged.",
+      "verification": "vp check --fix and the commit hook passed for the changed controller file."
+    }
+  }
+}

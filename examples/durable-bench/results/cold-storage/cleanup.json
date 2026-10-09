@@ -1,0 +1,27 @@
+{
+  "checkedAt": "2026-10-09T08:52:28.287Z",
+  "prefix": "cold-storage",
+  "verified": true,
+  "workers": [],
+  "namespaces": [],
+  "inventory": {
+    "workers": "GET workers/scripts (unpaginated)",
+    "namespaces": "GET workers/durable_objects/namespaces, per_page=100 until exhausted",
+    "namespacePages": 1
+  },
+  "privateStateRemoved": true,
+  "phases": {
+    "objectPhase": {
+      "checkedAt": "2026-10-09T07:30:17.491Z",
+      "verified": true,
+      "workers": [],
+      "namespaces": []
+    },
+    "freshIsolatePhase": {
+      "checkedAt": "2026-10-09T08:51:51.428Z",
+      "verified": true,
+      "workers": [],
+      "namespaces": []
+    }
+  }
+}

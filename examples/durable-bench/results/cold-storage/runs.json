@@ -1,0 +1,3976 @@
+{
+  "preflight": [
+    {
+      "outcome": "ConfigError",
+      "reason": "An inner direnv load in the temporary worktree cleared inherited Cloudflare credentials. No deployed resources or timing samples."
+    }
+  ],
+  "note": "Every non-ok platform outcome is retained as observed; unattributed cancellations are not reclassified as successful turns. Invocation telemetry may be sampled or delayed.",
+  "runs": [
+    {
+      "run": "cold-storage-mv0izkpq-f0e52b57",
+      "harnessRevision": "9c63a3e864018e60e928f80205c2382ca43ae173",
+      "dirty": true,
+      "startedAt": "2026-10-09T05:29:15.422Z",
+      "wallMs": 4810,
+      "complete": false,
+      "interpretation": "Excluded setup failure",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50
+        ],
+        "ttft": [
+          0
+        ],
+        "objects": 2,
+        "repeats": 2,
+        "concurrency": 4,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "storageProbe": "untouched",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e"
+      },
+      "builds": [],
+      "fixtures": [],
+      "samples": 0,
+      "plannedTimingSamples": 64,
+      "measured": 0,
+      "warmup": 0,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 0,
+      "coldVerified": 0,
+      "residentVerified": 0,
+      "freshVerified": 0,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [],
+      "resetOutcomes": {},
+      "nonOkResets": [],
+      "colos": [],
+      "controllerColos": [],
+      "failureCount": 1,
+      "failures": [
+        "Local fixture transfer failed before measurement."
+      ],
+      "observedInvocations": null,
+      "nonOkInvocations": {},
+      "unmatchedCpuMarkers": null,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-mv0j00ry-b3d971d5",
+      "harnessRevision": "9c63a3e864018e60e928f80205c2382ca43ae173",
+      "dirty": true,
+      "startedAt": "2026-10-09T05:29:36.238Z",
+      "wallMs": 1538,
+      "complete": false,
+      "interpretation": "Excluded setup failure",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50
+        ],
+        "ttft": [
+          0
+        ],
+        "objects": 2,
+        "repeats": 2,
+        "concurrency": 4,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "storageProbe": "untouched",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e"
+      },
+      "builds": [],
+      "fixtures": [],
+      "samples": 0,
+      "plannedTimingSamples": 64,
+      "measured": 0,
+      "warmup": 0,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 0,
+      "coldVerified": 0,
+      "residentVerified": 0,
+      "freshVerified": 0,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [],
+      "resetOutcomes": {},
+      "nonOkResets": [],
+      "colos": [],
+      "controllerColos": [],
+      "failureCount": 1,
+      "failures": [
+        "Local fixture transfer failed native DurableObjectState brand validation after a Proxy was supplied."
+      ],
+      "observedInvocations": null,
+      "nonOkInvocations": {},
+      "unmatchedCpuMarkers": null,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-mv0j0fwc-aa9db8fa",
+      "harnessRevision": "9c63a3e864018e60e928f80205c2382ca43ae173",
+      "dirty": true,
+      "startedAt": "2026-10-09T05:29:55.836Z",
+      "wallMs": 116939,
+      "complete": true,
+      "interpretation": "Excluded pilot: padding preparation overlapped other Objects' timed turns; only two Objects per target.",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50
+        ],
+        "ttft": [
+          0
+        ],
+        "objects": 2,
+        "repeats": 2,
+        "concurrency": 4,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "storageProbe": "untouched",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e"
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "13ec4a87f4a24a6e3f55583d40b6601be7682799db3f96935d4fce656ba02d1d"
+        },
+        {
+          "label": "candidate",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "13ec4a87f4a24a6e3f55583d40b6601be7682799db3f96935d4fce656ba02d1d"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 64,
+      "plannedTimingSamples": 64,
+      "measured": 48,
+      "warmup": 16,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 64,
+      "coldVerified": 16,
+      "residentVerified": 32,
+      "freshVerified": 0,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [],
+      "resetOutcomes": {},
+      "nonOkResets": [],
+      "colos": [
+        "SJC"
+      ],
+      "controllerColos": [
+        "SJC"
+      ],
+      "failureCount": 0,
+      "failures": [],
+      "observedInvocations": 819,
+      "nonOkInvocations": {
+        "unattributed/alarm/canceled": 102,
+        "unattributed/fetch/aborted": 16
+      },
+      "unmatchedCpuMarkers": 4,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-mv0j41av-3a74d6b8",
+      "harnessRevision": "9c63a3e864018e60e928f80205c2382ca43ae173",
+      "dirty": true,
+      "startedAt": "2026-10-09T05:32:43.543Z",
+      "wallMs": 52593,
+      "complete": false,
+      "interpretation": "Excluded setup failure",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50
+        ],
+        "ttft": [
+          0
+        ],
+        "objects": 10,
+        "repeats": 3,
+        "concurrency": 4,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "storageProbe": "untouched",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e"
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "6e5286077f04665e894f28b11324df614b7160aac4dd7411e80ef639e9bbb5e1"
+        },
+        {
+          "label": "candidate",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "6e5286077f04665e894f28b11324df614b7160aac4dd7411e80ef639e9bbb5e1"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 0,
+      "plannedTimingSamples": 400,
+      "measured": 0,
+      "warmup": 0,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 0,
+      "coldVerified": 0,
+      "residentVerified": 0,
+      "freshVerified": 0,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [],
+      "resetOutcomes": {},
+      "nonOkResets": [],
+      "colos": [],
+      "controllerColos": [],
+      "failureCount": 1,
+      "failures": [
+        "Yielded 50-turn instant seed returned HTTP 404 during route propagation; input was not retried."
+      ],
+      "observedInvocations": 5,
+      "nonOkInvocations": {
+        "unattributed/fetch/canceled": 1
+      },
+      "unmatchedCpuMarkers": 0,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-mv0j72rc-a5d8ade0",
+      "harnessRevision": "ce0ce8dd87fc625d32ad71836f0badd296959d04",
+      "dirty": false,
+      "startedAt": "2026-10-09T05:35:05.400Z",
+      "wallMs": 286137,
+      "complete": true,
+      "interpretation": "Controlled measurement",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50
+        ],
+        "ttft": [
+          0
+        ],
+        "objects": 10,
+        "repeats": 3,
+        "concurrency": 4,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "storageProbe": "untouched",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e"
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "efc0358cb9d2b45ce7bbc49e1931867decb7837875651cd7de6a82036910be4b"
+        },
+        {
+          "label": "candidate",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "efc0358cb9d2b45ce7bbc49e1931867decb7837875651cd7de6a82036910be4b"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 400,
+      "plannedTimingSamples": 400,
+      "measured": 320,
+      "warmup": 80,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 400,
+      "coldVerified": 80,
+      "residentVerified": 240,
+      "freshVerified": 0,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [],
+      "resetOutcomes": {},
+      "nonOkResets": [],
+      "colos": [
+        "SJC"
+      ],
+      "controllerColos": [
+        "SJC"
+      ],
+      "failureCount": 0,
+      "failures": [],
+      "observedInvocations": 4796,
+      "nonOkInvocations": {
+        "unattributed/alarm/canceled": 671,
+        "unattributed/fetch/aborted": 79,
+        "unattributed/fetch/canceled": 3
+      },
+      "unmatchedCpuMarkers": 6,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-mv0jdxog-a828e38e",
+      "harnessRevision": "d0240c360f8615c27236ebcb343e5f789d3e39fd",
+      "dirty": false,
+      "startedAt": "2026-10-09T05:40:25.408Z",
+      "wallMs": 279259,
+      "complete": true,
+      "interpretation": "Controlled measurement",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50
+        ],
+        "ttft": [
+          0
+        ],
+        "objects": 10,
+        "repeats": 3,
+        "concurrency": 4,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "storageProbe": "touched",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e"
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "4561b1b794e5ea3463f72ff966293fdb50f44d16593354d33d5044486a6465ad"
+        },
+        {
+          "label": "candidate",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "4561b1b794e5ea3463f72ff966293fdb50f44d16593354d33d5044486a6465ad"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 400,
+      "plannedTimingSamples": 400,
+      "measured": 320,
+      "warmup": 80,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 400,
+      "coldVerified": 80,
+      "residentVerified": 240,
+      "freshVerified": 0,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [],
+      "resetOutcomes": {},
+      "nonOkResets": [],
+      "colos": [
+        "SJC"
+      ],
+      "controllerColos": [
+        "SJC"
+      ],
+      "failureCount": 0,
+      "failures": [],
+      "observedInvocations": 4750,
+      "nonOkInvocations": {
+        "unattributed/alarm/canceled": 649,
+        "unattributed/fetch/aborted": 79,
+        "unattributed/fetch/canceled": 3
+      },
+      "unmatchedCpuMarkers": 17,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-mv0jl3ms-0bb0310b",
+      "harnessRevision": "63419790de4c6b2228712553628ccad6ef1a593b",
+      "dirty": false,
+      "startedAt": "2026-10-09T05:45:59.716Z",
+      "wallMs": 528201,
+      "complete": false,
+      "interpretation": "Excluded setup failure",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50,
+          250,
+          1000
+        ],
+        "ttft": [
+          0,
+          400
+        ],
+        "objects": 10,
+        "repeats": 1,
+        "concurrency": 6,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "storageProbe": "none",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e"
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "0d75b399b8b1d0e344d5543cad758997c231ea7866272ade7cdaffe7490e7708"
+        },
+        {
+          "label": "candidate",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "7a6f2b64d7801fab0200cb74ed7112f7bda8351a305d348dde98711344f03147"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "yielded",
+          "historyTurns": 250,
+          "fingerprint": "dcea9f30b0917245",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "yielded",
+          "historyTurns": 1000,
+          "fingerprint": "ac520308146f2a8f",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "import",
+          "expectedTableCount": 9
+        },
+        {
+          "target": "pi",
+          "historyTurns": 250,
+          "fingerprint": "dcea9f30b0917245",
+          "mode": "import",
+          "expectedTableCount": 9
+        },
+        {
+          "target": "pi",
+          "historyTurns": 1000,
+          "fingerprint": "ac520308146f2a8f",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 0,
+      "plannedTimingSamples": 1440,
+      "measured": 0,
+      "warmup": 0,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 0,
+      "coldVerified": 0,
+      "residentVerified": 0,
+      "freshVerified": 0,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [],
+      "resetOutcomes": {},
+      "nonOkResets": [],
+      "colos": [],
+      "controllerColos": [],
+      "failureCount": 1,
+      "failures": [
+        "Yielded 1000-turn 400ms seed response was lost; outcome stayed unknown and input was not retried. No timing samples."
+      ],
+      "observedInvocations": 14254,
+      "nonOkInvocations": {
+        "unattributed/fetch/canceled": 6,
+        "unattributed/alarm/canceled": 3266,
+        "yielded/submit/canceled": 6
+      },
+      "unmatchedCpuMarkers": 55,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-mv0jzyza-03b6ae39",
+      "harnessRevision": "c149ee6e30b9c00776934983ce770e3355899c30",
+      "dirty": false,
+      "startedAt": "2026-10-09T05:57:33.526Z",
+      "wallMs": 402528,
+      "complete": false,
+      "interpretation": "Excluded setup failure",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50,
+          250,
+          1000
+        ],
+        "ttft": [
+          0,
+          400
+        ],
+        "objects": 10,
+        "repeats": 1,
+        "concurrency": 6,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "storageProbe": "none",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e"
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "95c2617f365fd25a20533afa29cfec9fca464a567dbd747812c453c7b2b0a78d"
+        },
+        {
+          "label": "candidate",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "2d33b831df1488c9e4918e34caf1a5fcc2ba5a44bd83611271a8d11d267fc714"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "yielded",
+          "historyTurns": 250,
+          "fingerprint": "dcea9f30b0917245",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "yielded",
+          "historyTurns": 1000,
+          "fingerprint": "ac520308146f2a8f",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "import",
+          "expectedTableCount": 9
+        },
+        {
+          "target": "pi",
+          "historyTurns": 250,
+          "fingerprint": "dcea9f30b0917245",
+          "mode": "import",
+          "expectedTableCount": 9
+        },
+        {
+          "target": "pi",
+          "historyTurns": 1000,
+          "fingerprint": "ac520308146f2a8f",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 0,
+      "plannedTimingSamples": 1440,
+      "measured": 0,
+      "warmup": 0,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 0,
+      "coldVerified": 0,
+      "residentVerified": 0,
+      "freshVerified": 0,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [],
+      "resetOutcomes": {},
+      "nonOkResets": [],
+      "colos": [],
+      "controllerColos": [],
+      "failureCount": 1,
+      "failures": [
+        "A Yielded 250-turn 400ms seed response was lost after 80/120 Objects verified. Outcome stayed unknown; no input was retried and no timed turns ran. Observed cancellations are preserved below."
+      ],
+      "observedInvocations": 39084,
+      "nonOkInvocations": {
+        "unattributed/fetch/canceled": 14,
+        "unattributed/alarm/canceled": 8962,
+        "yielded/submit/canceled": 7,
+        "yielded/await/canceled": 4,
+        "unattributed/jsrpc/canceled": 2,
+        "unattributed/ambiguous/canceled": 1
+      },
+      "unmatchedCpuMarkers": 271,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-mv0kbt0j-f7d4aef9",
+      "harnessRevision": "41d51e719248eee83dd71343302468112b6a174f",
+      "dirty": false,
+      "startedAt": "2026-10-09T06:06:45.667Z",
+      "wallMs": 531088,
+      "complete": true,
+      "interpretation": "Controlled measurement",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50
+        ],
+        "ttft": [
+          0,
+          400
+        ],
+        "objects": 10,
+        "repeats": 1,
+        "concurrency": 6,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "storageProbe": "none",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e"
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "78de980a099ccdf54119eac35d2647b720acf784467782dabd1b38fe7747c9c9"
+        },
+        {
+          "label": "candidate",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "329d8eaccaca7affa2d3f7e482db62218df99e6f7024a16f6cf29ba2eca2bb5c"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 480,
+      "plannedTimingSamples": 480,
+      "measured": 320,
+      "warmup": 160,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 480,
+      "coldVerified": 160,
+      "residentVerified": 160,
+      "freshVerified": 0,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [],
+      "resetOutcomes": {},
+      "nonOkResets": [],
+      "colos": [
+        "SJC"
+      ],
+      "controllerColos": [
+        "SJC"
+      ],
+      "failureCount": 0,
+      "failures": [],
+      "observedInvocations": 7399,
+      "nonOkInvocations": {
+        "unattributed/alarm/canceled": 1155,
+        "unattributed/fetch/aborted": 158
+      },
+      "unmatchedCpuMarkers": 20,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-mv0knik1-1f2be739",
+      "harnessRevision": "41d51e719248eee83dd71343302468112b6a174f",
+      "dirty": false,
+      "startedAt": "2026-10-09T06:15:51.985Z",
+      "wallMs": 956205,
+      "complete": true,
+      "interpretation": "Controlled measurement",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          250
+        ],
+        "ttft": [
+          0,
+          400
+        ],
+        "objects": 10,
+        "repeats": 1,
+        "concurrency": 6,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "storageProbe": "none",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e"
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "726922ab94e840d1a2d64d598ef3a81930a6cad86d0d2e8ff3d1baa1fc53e58f"
+        },
+        {
+          "label": "candidate",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "1eaadde9bc4dbdfcda79fb59069d7b2eecc946884fff53dc60f160e951172ee9"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 250,
+          "fingerprint": "dcea9f30b0917245",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 250,
+          "fingerprint": "dcea9f30b0917245",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 480,
+      "plannedTimingSamples": 480,
+      "measured": 320,
+      "warmup": 160,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 480,
+      "coldVerified": 160,
+      "residentVerified": 160,
+      "freshVerified": 0,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [],
+      "resetOutcomes": {},
+      "nonOkResets": [],
+      "colos": [
+        "SJC"
+      ],
+      "controllerColos": [
+        "SJC"
+      ],
+      "failureCount": 0,
+      "failures": [],
+      "observedInvocations": 23273,
+      "nonOkInvocations": {
+        "unattributed/alarm/canceled": 4946,
+        "unattributed/fetch/aborted": 158,
+        "unattributed/fetch/canceled": 4
+      },
+      "unmatchedCpuMarkers": 52,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-mv0la2q7-48de3796",
+      "harnessRevision": "6364dcf6c8d5f02b96671ee432851f8a82417daa",
+      "dirty": false,
+      "startedAt": "2026-10-09T06:33:24.559Z",
+      "wallMs": 304319,
+      "complete": true,
+      "interpretation": "Controlled measurement",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50
+        ],
+        "ttft": [
+          0
+        ],
+        "objects": 20,
+        "repeats": 1,
+        "concurrency": 6,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "storageProbe": "allocated",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e"
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "548c14d47094c42b4863378f91b99800b2a6c735dfe3badcd3c717223e27deab"
+        },
+        {
+          "label": "candidate",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "548c14d47094c42b4863378f91b99800b2a6c735dfe3badcd3c717223e27deab"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 480,
+      "plannedTimingSamples": 480,
+      "measured": 320,
+      "warmup": 160,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 480,
+      "coldVerified": 160,
+      "residentVerified": 160,
+      "freshVerified": 0,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [],
+      "resetOutcomes": {},
+      "nonOkResets": [],
+      "colos": [
+        "SJC"
+      ],
+      "controllerColos": [
+        "SJC"
+      ],
+      "failureCount": 0,
+      "failures": [],
+      "observedInvocations": 7638,
+      "nonOkInvocations": {
+        "unattributed/alarm/canceled": 1154,
+        "unattributed/fetch/aborted": 158,
+        "unattributed/fetch/canceled": 4
+      },
+      "unmatchedCpuMarkers": 32,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-mv0li21e-017e9807",
+      "harnessRevision": "41d51e719248eee83dd71343302468112b6a174f",
+      "dirty": false,
+      "startedAt": "2026-10-09T06:39:36.914Z",
+      "wallMs": 2999209,
+      "complete": true,
+      "interpretation": "Controlled measurement",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          1000
+        ],
+        "ttft": [
+          0,
+          400
+        ],
+        "objects": 10,
+        "repeats": 1,
+        "concurrency": 6,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "storageProbe": "none",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e"
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "79a03de72dab237d94c40b04b37ddd2d72a4f3ea042ca364e85ca50b2d6ffa3b"
+        },
+        {
+          "label": "candidate",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "35bd3850a0b6eeda1cb5c03088c065aaefc1acb375a76d0c2a2a104ce4e1e67f"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 1000,
+          "fingerprint": "ac520308146f2a8f",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 1000,
+          "fingerprint": "ac520308146f2a8f",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 480,
+      "plannedTimingSamples": 480,
+      "measured": 320,
+      "warmup": 160,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 480,
+      "coldVerified": 160,
+      "residentVerified": 160,
+      "freshVerified": 0,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [],
+      "resetOutcomes": {},
+      "nonOkResets": [],
+      "colos": [
+        "SJC"
+      ],
+      "controllerColos": [
+        "SJC"
+      ],
+      "failureCount": 0,
+      "failures": [],
+      "observedInvocations": 82089,
+      "nonOkInvocations": {
+        "unattributed/alarm/canceled": 18772,
+        "unattributed/fetch/aborted": 155,
+        "unattributed/fetch/canceled": 1
+      },
+      "unmatchedCpuMarkers": 308,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "harnessRevision": "2b00c8a88aa8e34f22f930dcd37416547d2f6bd3",
+      "dirty": false,
+      "startedAt": "2026-10-09T07:30:37.668Z",
+      "wallMs": 495042,
+      "complete": false,
+      "interpretation": "Excluded incomplete measured run",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50
+        ],
+        "ttft": [
+          0
+        ],
+        "objects": 30,
+        "repeats": 1,
+        "concurrency": 6,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "isolate": true,
+        "storageProbe": "untouched",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e",
+        "order": "AABB",
+        "initialNamespaceReadiness": {
+          "propagationWaitMs": 30000,
+          "probesPerRound": 6,
+          "consecutiveRounds": 3,
+          "measuredObjectsTouched": false
+        }
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "target": "yielded",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "10f441e8845bd23baebb8c0927024b41668d96e33678be0c996aededbe3c2159"
+        },
+        {
+          "label": "candidate",
+          "target": "yielded",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "10f441e8845bd23baebb8c0927024b41668d96e33678be0c996aededbe3c2159"
+        },
+        {
+          "label": "control",
+          "target": "pi",
+          "revision": "2b00c8a88aa8e34f22f930dcd37416547d2f6bd3",
+          "sha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 720,
+      "plannedTimingSamples": 720,
+      "measured": 435,
+      "warmup": 240,
+      "nonOkSamples": 68,
+      "fingerprintVerified": 655,
+      "coldVerified": 0,
+      "residentVerified": 216,
+      "freshVerified": 220,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 1,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "failed",
+          "outcome": "unknown",
+          "reasons": [],
+          "failure": "Previous Worker build served after readiness",
+          "httpStatuses": [
+            502,
+            409
+          ],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 1,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 1,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 26,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "failed",
+          "outcome": "unknown",
+          "reasons": [],
+          "failure": "Previous Worker build served after readiness",
+          "httpStatuses": [
+            502,
+            409
+          ],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 26,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 13,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "failed",
+          "outcome": "unknown",
+          "reasons": [],
+          "failure": "Previous Worker build served after readiness",
+          "httpStatuses": [
+            502,
+            409
+          ],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 13,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 25,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "failed",
+          "outcome": "unknown",
+          "reasons": [],
+          "failure": "Previous Worker build served after readiness",
+          "httpStatuses": [
+            502,
+            409
+          ],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 25,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 25,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 4,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "excluded",
+          "outcome": "completed",
+          "reasons": [
+            "Object build mismatch or missing",
+            "Object isolate UUID unchanged or missing",
+            "Object isolate constructor count is not one"
+          ],
+          "failure": null,
+          "httpStatuses": [],
+          "turnMs": 532,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 4,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "excluded",
+          "outcome": "completed",
+          "reasons": [
+            "Object build mismatch or missing"
+          ],
+          "failure": null,
+          "httpStatuses": [],
+          "turnMs": 485,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 4,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "excluded",
+          "outcome": "completed",
+          "reasons": [
+            "Object build mismatch or missing"
+          ],
+          "failure": null,
+          "httpStatuses": [],
+          "turnMs": 487,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 21,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "failed",
+          "outcome": "completed",
+          "reasons": [],
+          "failure": "Previous Worker build served after readiness",
+          "httpStatuses": [
+            409
+          ],
+          "turnMs": 849,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 0,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "failed",
+          "outcome": "unknown",
+          "reasons": [],
+          "failure": "Previous Worker build served after readiness",
+          "httpStatuses": [
+            502,
+            409
+          ],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 0,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 0,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 21,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 21,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 27,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "failed",
+          "outcome": "unknown",
+          "reasons": [],
+          "failure": "Previous Worker build served after readiness",
+          "httpStatuses": [
+            502,
+            409
+          ],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 27,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 27,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 12,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "failed",
+          "outcome": "completed",
+          "reasons": [],
+          "failure": "Previous Worker build served after readiness",
+          "httpStatuses": [
+            409
+          ],
+          "turnMs": 581,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 12,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 19,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "failed",
+          "outcome": "unknown",
+          "reasons": [],
+          "failure": "Previous Worker build served after readiness",
+          "httpStatuses": [
+            502,
+            409
+          ],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 18,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "failed",
+          "outcome": "unknown",
+          "reasons": [],
+          "failure": "Previous Worker build served after readiness",
+          "httpStatuses": [
+            502,
+            409
+          ],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 20,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "failed",
+          "outcome": "unknown",
+          "reasons": [],
+          "failure": "Previous Worker build served after readiness",
+          "httpStatuses": [
+            502,
+            409
+          ],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 20,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 20,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 5,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "failed",
+          "outcome": "completed",
+          "reasons": [],
+          "failure": "Previous Worker build served after readiness",
+          "httpStatuses": [
+            409
+          ],
+          "turnMs": 889,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 5,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 5,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 18,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 18,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 18,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 12,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 12,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 12,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 19,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 19,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 19,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 5,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 5,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 5,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 20,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 20,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 20,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 1,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 1,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 1,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 21,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 21,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 21,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 13,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 13,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 13,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 0,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 0,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 0,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 25,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 25,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 25,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 26,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 26,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 26,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 27,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 27,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 27,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        }
+      ],
+      "uploads": [
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "epoch": null,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "10f441e8845bd23baebb8c0927024b41668d96e33678be0c996aededbe3c2159",
+          "uploadedSha256": "fbea78f5c6a55b0344dafc4d5cd21394557db33c2c270703a4a6a3e18d2840b3",
+          "resetCount": 0,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "seed",
+          "epoch": null,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "a3cba85b139b9ee8b686fb1658d752b7b2ae9b462b67b91aa792f9c4c220f003",
+          "resetCount": 0,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 0,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "10f441e8845bd23baebb8c0927024b41668d96e33678be0c996aededbe3c2159",
+          "uploadedSha256": "762bfd480a475056af90260d48c45fa8b38869eadcb5dd883ca910c4dfe81cbb",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "a91b3724659a229c54361c4d0094b5dae5c12f1409a8bfd25b8fdc0b26683d0b",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": [
+            {
+              "ingress": "controller",
+              "attempt": 0,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 0,
+              "failure": "Previous build still serving during propagation"
+            }
+          ]
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "10f441e8845bd23baebb8c0927024b41668d96e33678be0c996aededbe3c2159",
+          "uploadedSha256": "e49bdc7a8285852ff5ce274d10b9b71c2919e671330a124d152347189a18805d",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": [
+            {
+              "ingress": "controller",
+              "attempt": 0,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 0,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 1,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 1,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 2,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 3,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 4,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 5,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 5,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 7,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 7,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 8,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 8,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 9,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 11,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 11,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 12,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 13,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 14,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 15,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 15,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 16,
+              "failure": "Previous build still serving during propagation"
+            }
+          ]
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 1,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "a50ba2548d93e0268b30cf6f7d008040919af7673df7cd4d65a8f46c54516a53",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": [
+            {
+              "ingress": "controller",
+              "attempt": 0,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 0,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 1,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 2,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 2,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 3,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 3,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 5,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 6,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 8,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 8,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 9,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 11,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 11,
+              "failure": "Previous build still serving during propagation"
+            }
+          ]
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 2,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "10f441e8845bd23baebb8c0927024b41668d96e33678be0c996aededbe3c2159",
+          "uploadedSha256": "88fe12771992d645b91b5269ee238e4e1c86cd2b65c812573037ef100048cc26",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": [
+            {
+              "ingress": "driver",
+              "attempt": 2,
+              "failure": "Previous build still serving during propagation"
+            },
+            {
+              "ingress": "controller",
+              "attempt": 3,
+              "failure": "Previous build still serving during propagation"
+            }
+          ]
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 2,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "44f6ea6f745ccd165d4583cc28585e815573d96ec9171b962643c53860ab2b4d",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 3,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "10f441e8845bd23baebb8c0927024b41668d96e33678be0c996aededbe3c2159",
+          "uploadedSha256": "8d24d721f462fa47ae1e2cb0d891ceebbaaa6d4d99c7415644e9cc0b53eb3625",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 3,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "257b158d56c4adf85b789d36118f1397cd0badbe702a8da57d6c8a5aebc0604a",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        }
+      ],
+      "resetOutcomes": {
+        "ok": 240
+      },
+      "nonOkResets": [],
+      "colos": [
+        "SJC"
+      ],
+      "controllerColos": [
+        "SJC"
+      ],
+      "failureCount": 12,
+      "failures": [
+        "The first fresh-isolate probe encountered previous-build pi responses during the treatment epochs after stateless health checks had passed. HTTP 409 build mismatches were observed directly and inside driver HTTP 502 responses. Failed inputs were not retried, subsequent inputs to affected Objects were skipped, and this incomplete run is excluded from performance claims."
+      ],
+      "observedInvocations": 11454,
+      "nonOkInvocations": {
+        "yielded/alarm/canceled": 1739,
+        "yielded/cold-abort/aborted": 118,
+        "yielded/fetch/canceled": 1,
+        "pi/cold-abort/aborted": 117,
+        "pi/fetch/canceled": 1
+      },
+      "unmatchedCpuMarkers": 25,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "harnessRevision": "31c6e662486b3d7064dfcd1bf956606a9e3d95df",
+      "dirty": false,
+      "startedAt": "2026-10-09T07:39:42.392Z",
+      "wallMs": 1001863,
+      "complete": true,
+      "interpretation": "Controlled measurement",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50
+        ],
+        "ttft": [
+          0
+        ],
+        "objects": 30,
+        "repeats": 1,
+        "concurrency": 6,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "isolate": true,
+        "storageProbe": "untouched",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e",
+        "order": "AABB",
+        "initialNamespaceReadiness": {
+          "propagationWaitMs": 30000,
+          "probesPerRound": 6,
+          "consecutiveRounds": 3,
+          "measuredObjectsTouched": false
+        },
+        "measuredBuildReadiness": {
+          "propagationWaitMs": 60000,
+          "ingresses": [
+            "controller",
+            "driver"
+          ],
+          "consecutiveRounds": 10,
+          "measuredObjectsTouched": false
+        }
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "target": "yielded",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "d3618034b995d576afeea6931aa06448bdcfeba8e3b41f2f3602345d91c4a2ba"
+        },
+        {
+          "label": "candidate",
+          "target": "yielded",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "d3618034b995d576afeea6931aa06448bdcfeba8e3b41f2f3602345d91c4a2ba"
+        },
+        {
+          "label": "control",
+          "target": "pi",
+          "revision": "31c6e662486b3d7064dfcd1bf956606a9e3d95df",
+          "sha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 720,
+      "plannedTimingSamples": 720,
+      "measured": 480,
+      "warmup": 240,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 720,
+      "coldVerified": 0,
+      "residentVerified": 240,
+      "freshVerified": 240,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "epoch": null,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "d3618034b995d576afeea6931aa06448bdcfeba8e3b41f2f3602345d91c4a2ba",
+          "uploadedSha256": "507bc953efae17da8cef33f1280cb81c46966781813e066e4592fcd8183e90e4",
+          "resetCount": 0,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "seed",
+          "epoch": null,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "387f87539eeed25538f6a1dc40981cabd93aa061144e6bcf7bc03ee1e5310729",
+          "resetCount": 0,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 0,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "d3618034b995d576afeea6931aa06448bdcfeba8e3b41f2f3602345d91c4a2ba",
+          "uploadedSha256": "5742d9adf4ab8325a49eb6c5c3daddc827b781a636185480d0b032590a62ce99",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "f1f0a0a2cae15b2dab6639706aae8d32085935e5d5b31c002e57c30a1b284025",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "d3618034b995d576afeea6931aa06448bdcfeba8e3b41f2f3602345d91c4a2ba",
+          "uploadedSha256": "4e983a3875de73d34f642d60d613f61ee1557f60ed2e449010f2700bbe2dd4fe",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 1,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "dbfd4346a5eab8152cc9e5c61076f590ac605dabd1402c902d17f3cc0805f594",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 2,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "d3618034b995d576afeea6931aa06448bdcfeba8e3b41f2f3602345d91c4a2ba",
+          "uploadedSha256": "ecfd32187a642a255bb1a9f43c748c12759e2ac47d23b72f226800b1747956a7",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 2,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "efc6490ff98f2c491c4afe1ccd239c1b8e941a6fdff8c00da8e3890303565939",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 3,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "d3618034b995d576afeea6931aa06448bdcfeba8e3b41f2f3602345d91c4a2ba",
+          "uploadedSha256": "cca2188523379230c6d96114915e17c24a427e3bdbc81859ac247cf31307e814",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 3,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "1755e90f192a4b7f55bb687d46f018c9c1a791c3997f9b4cc6e329fd79b38b39",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        }
+      ],
+      "resetOutcomes": {
+        "ok": 240
+      },
+      "nonOkResets": [],
+      "colos": [
+        "SJC"
+      ],
+      "controllerColos": [
+        "SJC"
+      ],
+      "failureCount": 0,
+      "failures": [],
+      "observedInvocations": 11737,
+      "nonOkInvocations": {
+        "yielded/alarm/canceled": 1753,
+        "yielded/fetch/canceled": 3,
+        "yielded/cold-abort/aborted": 118,
+        "pi/cold-abort/aborted": 116,
+        "pi/fetch/aborted": 1,
+        "pi/fetch/canceled": 1
+      },
+      "unmatchedCpuMarkers": 26,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-fresh-mv0oa4rz-3b39c0b1",
+      "harnessRevision": "31c6e662486b3d7064dfcd1bf956606a9e3d95df",
+      "dirty": false,
+      "startedAt": "2026-10-09T07:57:26.063Z",
+      "wallMs": 810446,
+      "complete": false,
+      "interpretation": "Excluded incomplete measured run",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50
+        ],
+        "ttft": [
+          0
+        ],
+        "objects": 30,
+        "repeats": 1,
+        "concurrency": 6,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "isolate": true,
+        "storageProbe": "touched",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e",
+        "order": "AABB",
+        "initialNamespaceReadiness": {
+          "propagationWaitMs": 30000,
+          "probesPerRound": 6,
+          "consecutiveRounds": 3,
+          "measuredObjectsTouched": false
+        },
+        "measuredBuildReadiness": {
+          "propagationWaitMs": 60000,
+          "ingresses": [
+            "controller",
+            "driver"
+          ],
+          "consecutiveRounds": 10,
+          "measuredObjectsTouched": false
+        }
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "target": "yielded",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "724a2809ebaf697894171a20c72744e95fb21aa754c0c8072d9ebe7066f3af2a"
+        },
+        {
+          "label": "candidate",
+          "target": "yielded",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "724a2809ebaf697894171a20c72744e95fb21aa754c0c8072d9ebe7066f3af2a"
+        },
+        {
+          "label": "control",
+          "target": "pi",
+          "revision": "31c6e662486b3d7064dfcd1bf956606a9e3d95df",
+          "sha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 540,
+      "plannedTimingSamples": 720,
+      "measured": 360,
+      "warmup": 180,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 540,
+      "coldVerified": 0,
+      "residentVerified": 180,
+      "freshVerified": 180,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "epoch": null,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "724a2809ebaf697894171a20c72744e95fb21aa754c0c8072d9ebe7066f3af2a",
+          "uploadedSha256": "a14f7df04084ec58c59965aaf1c8f55de600db8979087f4fd68601b3712a18db",
+          "resetCount": 0,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "seed",
+          "epoch": null,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "a776427781855951d2786dd269beeb7c1cb1d867754c0332c53424eec0892f8a",
+          "resetCount": 0,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 0,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "724a2809ebaf697894171a20c72744e95fb21aa754c0c8072d9ebe7066f3af2a",
+          "uploadedSha256": "c8f5bf85ca0eba7c3cfdc05c5a97384fa55ac16e41db1ebc69b68fd137fdcd02",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "b729f556f7b02c463c3f6de0d5ae442dd1c657defc4c1f3a5089fdfaf612cf2e",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "724a2809ebaf697894171a20c72744e95fb21aa754c0c8072d9ebe7066f3af2a",
+          "uploadedSha256": "c62f4d2f3a68089faae641319208179b4249af89f633ba719a76c74bfc4938a5",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 1,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "107a95ad8c470b2b2a9f5dd2386185a0bb2008684d88c1f708b2ec0c1a313c5e",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 2,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "724a2809ebaf697894171a20c72744e95fb21aa754c0c8072d9ebe7066f3af2a",
+          "uploadedSha256": "c8d3b09f956488044d9142e82f084166418d22aa0731abdc0ad0c8e82e83b030",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 2,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "d49507d901dcd534f9f2b4e995fff620d1a078ca7df60b253bf141b4c20d2671",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        }
+      ],
+      "resetOutcomes": {
+        "ok": 180
+      },
+      "nonOkResets": [],
+      "colos": [
+        "SJC"
+      ],
+      "controllerColos": [
+        "SJC"
+      ],
+      "failureCount": 1,
+      "failures": [
+        "The first fresh-isolate forced-read run completed three epochs (540 successful turns), then untimed padding preparation for epoch four returned HTTP 500 with an internal-error reference. The final 180 planned turns were not attempted. No CPU- or memory-limit outcome was observed. The underlying cause is not established; no input was retried. This incomplete run is excluded from performance claims."
+      ],
+      "observedInvocations": 10284,
+      "nonOkInvocations": {
+        "yielded/fetch/canceled": 5,
+        "yielded/alarm/canceled": 1617,
+        "yielded/cold-abort/aborted": 90,
+        "pi/fetch/canceled": 6,
+        "pi/cold-abort/aborted": 87
+      },
+      "unmatchedCpuMarkers": 49,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "harnessRevision": "f579db4f2e295df9110b8dadcaf186b985d3432b",
+      "dirty": false,
+      "startedAt": "2026-10-09T08:14:38.725Z",
+      "wallMs": 1006422,
+      "complete": false,
+      "interpretation": "Excluded incomplete measured run",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50
+        ],
+        "ttft": [
+          0
+        ],
+        "objects": 30,
+        "repeats": 1,
+        "concurrency": 6,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "isolate": true,
+        "storageProbe": "touched",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e",
+        "order": "AABB",
+        "initialNamespaceReadiness": {
+          "propagationWaitMs": 30000,
+          "probesPerRound": 6,
+          "consecutiveRounds": 3,
+          "measuredObjectsTouched": false
+        },
+        "measuredBuildReadiness": {
+          "propagationWaitMs": 60000,
+          "ingresses": [
+            "controller",
+            "driver"
+          ],
+          "consecutiveRounds": 10,
+          "measuredObjectsTouched": false
+        },
+        "paddingPreparation": {
+          "when": "label changes",
+          "paddingBytesMeasuredAt": "preparation",
+          "currentDatabaseBytesMeasuredAfterEveryTurn": true
+        }
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "target": "yielded",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "0a0b96f579edf23f631be693830a2a921fb385dee1fe42209ac94e88d74cbd8e"
+        },
+        {
+          "label": "candidate",
+          "target": "yielded",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "0a0b96f579edf23f631be693830a2a921fb385dee1fe42209ac94e88d74cbd8e"
+        },
+        {
+          "label": "control",
+          "target": "pi",
+          "revision": "f579db4f2e295df9110b8dadcaf186b985d3432b",
+          "sha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 720,
+      "plannedTimingSamples": 720,
+      "measured": 470,
+      "warmup": 240,
+      "nonOkSamples": 13,
+      "fingerprintVerified": 711,
+      "coldVerified": 0,
+      "residentVerified": 236,
+      "freshVerified": 234,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 9,
+          "epoch": 0,
+          "label": "baseline",
+          "storageGroup": "control",
+          "status": "excluded",
+          "outcome": "completed",
+          "reasons": [
+            "Object isolate constructor count is not one"
+          ],
+          "failure": null,
+          "httpStatuses": [],
+          "turnMs": 1151,
+          "admissionMs": 415
+        },
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 9,
+          "epoch": 1,
+          "label": "baseline",
+          "storageGroup": "control",
+          "status": "excluded",
+          "outcome": "completed",
+          "reasons": [
+            "Object isolate constructor count is not one"
+          ],
+          "failure": null,
+          "httpStatuses": [],
+          "turnMs": 1188,
+          "admissionMs": 374
+        },
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 10,
+          "epoch": 2,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "excluded",
+          "outcome": "completed",
+          "reasons": [
+            "Object isolate constructor count is not one"
+          ],
+          "failure": null,
+          "httpStatuses": [],
+          "turnMs": 1342,
+          "admissionMs": 582
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 29,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "failed",
+          "outcome": "unknown",
+          "reasons": [],
+          "failure": "HTTP 502",
+          "httpStatuses": [
+            502,
+            500
+          ],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 22,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "failed",
+          "outcome": "completed",
+          "reasons": [],
+          "failure": "HTTP 500",
+          "httpStatuses": [
+            500
+          ],
+          "turnMs": 739,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 18,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "failed",
+          "outcome": "completed",
+          "reasons": [],
+          "failure": "HTTP 500",
+          "httpStatuses": [
+            500
+          ],
+          "turnMs": 792,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 16,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "failed",
+          "outcome": "completed",
+          "reasons": [],
+          "failure": "HTTP 500",
+          "httpStatuses": [
+            500
+          ],
+          "turnMs": 1070,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 16,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 16,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warmup",
+          "objectIndex": 29,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 29,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "control",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "warm",
+          "objectIndex": 18,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "reasons": [],
+          "failure": "Not sent after an earlier turn failed",
+          "httpStatuses": [],
+          "turnMs": null,
+          "admissionMs": null
+        },
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "providerDelayMs": 0,
+          "state": "fresh-first-turn",
+          "objectIndex": 10,
+          "epoch": 3,
+          "label": "candidate",
+          "storageGroup": "grown",
+          "status": "excluded",
+          "outcome": "completed",
+          "reasons": [
+            "Object isolate constructor count is not one"
+          ],
+          "failure": null,
+          "httpStatuses": [],
+          "turnMs": 1588,
+          "admissionMs": 635
+        }
+      ],
+      "uploads": [
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "epoch": null,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0a0b96f579edf23f631be693830a2a921fb385dee1fe42209ac94e88d74cbd8e",
+          "uploadedSha256": "cb45d28c723add5f3ef681844b9f0f13bbd193ecea0609052a9aa0d297f05167",
+          "resetCount": 0,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "seed",
+          "epoch": null,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "e28c1104118e93c0eecfd286107b853e941e84eb41443ce558e41bff7d0b69df",
+          "resetCount": 0,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 0,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0a0b96f579edf23f631be693830a2a921fb385dee1fe42209ac94e88d74cbd8e",
+          "uploadedSha256": "d3f1958af0ae9c219abfeaecaed0f95c3f308636c5520212abce5e6d1c4e449d",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "f7c8d3530ae7284a715534b0c9e1eb0b81d670ba6ababb01302b911dd1782708",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0a0b96f579edf23f631be693830a2a921fb385dee1fe42209ac94e88d74cbd8e",
+          "uploadedSha256": "f269bb67925773bf03203742f5a8942cf9e31f86b2b11e3fd6e75f0e7788b5b3",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 1,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "937139126d0dea8f60ae6b91c6405ab6e43ca6ac4446c40934c4c454b73672f3",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 2,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "0a0b96f579edf23f631be693830a2a921fb385dee1fe42209ac94e88d74cbd8e",
+          "uploadedSha256": "b7793bf07f7d7f095ba5e196c9a25d4db6debfc77124ffdc9b5c4146b5d4d7f1",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 2,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "6f7b0b86862dbe018f82766f77fb44bebd83c3cdccb603e2185e949713e6c238",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 3,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "0a0b96f579edf23f631be693830a2a921fb385dee1fe42209ac94e88d74cbd8e",
+          "uploadedSha256": "eef4fcaf6ba3456934b630e1e8705cdbb56148ed44215d2be6ac7e5ed2429815",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 3,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "c415db98f05fa3abcaa415ade72ad1346303db66fe1f7c60a69a94c864eea262",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        }
+      ],
+      "resetOutcomes": {
+        "ok": 240
+      },
+      "nonOkResets": [],
+      "colos": [
+        "SJC"
+      ],
+      "controllerColos": [
+        "SJC"
+      ],
+      "failureCount": 4,
+      "failures": [
+        "All four epochs finished, with 707 ok turns, four freshness exclusions, four failed turns and five skipped follow-ups. Four pi Objects returned HTTP 500 internal-error references, including one unpadded control; one error was wrapped by the driver as HTTP 502. The cause is unknown and no CPU- or memory-limit outcome was observed. No uncertain input was retried. Target cleanup was API-verified; the run is excluded from performance claims and an unchanged replication uses new Objects."
+      ],
+      "observedInvocations": 11441,
+      "nonOkInvocations": {
+        "yielded/alarm/canceled": 1706,
+        "yielded/cold-abort/aborted": 116,
+        "pi/fetch/canceled": 2,
+        "pi/cold-abort/aborted": 119
+      },
+      "unmatchedCpuMarkers": 14,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "harnessRevision": "f579db4f2e295df9110b8dadcaf186b985d3432b",
+      "dirty": false,
+      "startedAt": "2026-10-09T08:32:16.107Z",
+      "wallMs": 972093,
+      "complete": true,
+      "interpretation": "Controlled measurement",
+      "options": {
+        "targets": [
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          50
+        ],
+        "ttft": [
+          0
+        ],
+        "objects": 30,
+        "repeats": 1,
+        "concurrency": 6,
+        "cold": true,
+        "cpu": true,
+        "keep": false,
+        "rigorous": true,
+        "isolate": true,
+        "storageProbe": "touched",
+        "paddingMiB": 32,
+        "baseline": "07f0272e",
+        "candidate": "07f0272e",
+        "order": "AABB",
+        "initialNamespaceReadiness": {
+          "propagationWaitMs": 30000,
+          "probesPerRound": 6,
+          "consecutiveRounds": 3,
+          "measuredObjectsTouched": false
+        },
+        "measuredBuildReadiness": {
+          "propagationWaitMs": 60000,
+          "ingresses": [
+            "controller",
+            "driver"
+          ],
+          "consecutiveRounds": 10,
+          "measuredObjectsTouched": false
+        },
+        "paddingPreparation": {
+          "when": "label changes",
+          "paddingBytesMeasuredAt": "preparation",
+          "currentDatabaseBytesMeasuredAfterEveryTurn": true
+        }
+      },
+      "builds": [
+        {
+          "label": "baseline",
+          "target": "yielded",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "8d1c474311fc07e1c90bdb31f754002772c024e6793b7a6097d51e0409df9613"
+        },
+        {
+          "label": "candidate",
+          "target": "yielded",
+          "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+          "sha256": "8d1c474311fc07e1c90bdb31f754002772c024e6793b7a6097d51e0409df9613"
+        },
+        {
+          "label": "control",
+          "target": "pi",
+          "revision": "f579db4f2e295df9110b8dadcaf186b985d3432b",
+          "sha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5"
+        }
+      ],
+      "fixtures": [
+        {
+          "target": "yielded",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "replay",
+          "expectedTableCount": 32
+        },
+        {
+          "target": "pi",
+          "historyTurns": 50,
+          "fingerprint": "b017b487524e44a4",
+          "mode": "import",
+          "expectedTableCount": 9
+        }
+      ],
+      "samples": 720,
+      "plannedTimingSamples": 720,
+      "measured": 480,
+      "warmup": 240,
+      "nonOkSamples": 0,
+      "fingerprintVerified": 720,
+      "coldVerified": 0,
+      "residentVerified": 240,
+      "freshVerified": 240,
+      "freshVerificationMismatches": 0,
+      "nonOkSampleDetails": [],
+      "uploads": [
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "epoch": null,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "8d1c474311fc07e1c90bdb31f754002772c024e6793b7a6097d51e0409df9613",
+          "uploadedSha256": "efb5abdcb8893b391be9f35c44c9b6b1ab6e0cc873b7fea9dc673fb4171bc882",
+          "resetCount": 0,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "seed",
+          "epoch": null,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "f0c39fdfec143691ee16d643c96538cd8878de6f8f9bf513c5c47c850b93d253",
+          "resetCount": 0,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 0,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "8d1c474311fc07e1c90bdb31f754002772c024e6793b7a6097d51e0409df9613",
+          "uploadedSha256": "63c69d18d775326fcc4ac6a1b425977d47e2b06320d05b039451b8b8f3f42ffa",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "4d6e3330ece8f6ece3a99dc5b1c65092d2db436ff2193e0510c3c0613fd82271",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "8d1c474311fc07e1c90bdb31f754002772c024e6793b7a6097d51e0409df9613",
+          "uploadedSha256": "d763fa757f27582e347741fbe71dac7854d68edca7b345d3df92a040dbceb5b9",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 1,
+          "label": "baseline",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "438301a4585dbf3fb5851136593b5629bfca0d957b4742985356ca991e170587",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 2,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "8d1c474311fc07e1c90bdb31f754002772c024e6793b7a6097d51e0409df9613",
+          "uploadedSha256": "d70f4834c6d927a30c4164c1a5b96938734227295e3e4a90c322dc9ab808c13f",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 2,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "4e475b50ac012a759f361c7905c6f67b4c7293658b1e11b7d1a5b8da36676ac2",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 3,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "8d1c474311fc07e1c90bdb31f754002772c024e6793b7a6097d51e0409df9613",
+          "uploadedSha256": "7a7e208378dc2c58fd1bec1c202cfcf2c83d24b483c5e284c17ffa08731ad49c",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 3,
+          "label": "candidate",
+          "status": "ready",
+          "sourceSha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+          "uploadedSha256": "b222495ede64f1cd18db0a634e06e443e1afc34358f18c608182938542afaec8",
+          "resetCount": 30,
+          "failure": null,
+          "readinessFailures": []
+        }
+      ],
+      "resetOutcomes": {
+        "ok": 240
+      },
+      "nonOkResets": [],
+      "colos": [
+        "SJC"
+      ],
+      "controllerColos": [
+        "SJC"
+      ],
+      "failureCount": 0,
+      "failures": [],
+      "observedInvocations": 11440,
+      "nonOkInvocations": {
+        "yielded/alarm/canceled": 1720,
+        "yielded/cold-abort/aborted": 116,
+        "yielded/fetch/canceled": 2,
+        "pi/cold-abort/aborted": 118
+      },
+      "unmatchedCpuMarkers": 37,
+      "targetCleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    }
+  ]
+}

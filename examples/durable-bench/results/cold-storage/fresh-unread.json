@@ -1,0 +1,551 @@
+{
+  "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+  "complete": true,
+  "diagnosticOnly": false,
+  "failures": 0,
+  "samples": 720,
+  "statuses": {
+    "ok": 720
+  },
+  "cleanup": {
+    "verified": true,
+    "workers": [],
+    "namespaces": []
+  },
+  "cells": [
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "fresh-first-turn",
+      "groups": [
+        {
+          "group": "grown",
+          "targets": {
+            "yielded": {
+              "completeObjects": 15,
+              "plannedObjects": 15,
+              "excludedObjects": 0,
+              "labels": {
+                "baseline": {
+                  "turnMs": 1569.5,
+                  "admissionMs": 714.5,
+                  "activeBytes": 3637248,
+                  "submitCpuMs": 145.5,
+                  "observedSubmitInvocations": 30,
+                  "runCpuMs": null,
+                  "observedRunInvocations": 0,
+                  "postTurnActiveBytes": 3788800,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 1190,
+                    "admitted": 1260.5,
+                    "first-provider": 2134.5,
+                    "settled": 2524.5
+                  }
+                },
+                "candidate": {
+                  "turnMs": 1614,
+                  "admissionMs": 706.5,
+                  "activeBytes": 42334208,
+                  "submitCpuMs": 133,
+                  "observedSubmitInvocations": 30,
+                  "runCpuMs": null,
+                  "observedRunInvocations": 0,
+                  "postTurnActiveBytes": 42496000,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 1190,
+                    "admitted": 1266.5,
+                    "first-provider": 2380.5,
+                    "settled": 2770.5
+                  }
+                }
+              },
+              "paired": {
+                "driverMs": {
+                  "n": 15,
+                  "delta": 7,
+                  "ratio": 1.0048577376821652,
+                  "baselineSpread": 115,
+                  "candidateSpread": 93,
+                  "separated": 3
+                },
+                "admissionMs": {
+                  "n": 15,
+                  "delta": -6,
+                  "ratio": 0.9898648648648649,
+                  "baselineSpread": 45,
+                  "candidateSpread": 63,
+                  "separated": 5
+                }
+              }
+            },
+            "pi": {
+              "completeObjects": 15,
+              "plannedObjects": 15,
+              "excludedObjects": 0,
+              "labels": {
+                "baseline": {
+                  "turnMs": 940.5,
+                  "admissionMs": null,
+                  "activeBytes": 272384,
+                  "submitCpuMs": null,
+                  "observedSubmitInvocations": 0,
+                  "runCpuMs": 382.5,
+                  "observedRunInvocations": 30,
+                  "postTurnActiveBytes": 290816,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 29,
+                    "admitted": null,
+                    "first-provider": 513,
+                    "settled": 5015
+                  }
+                },
+                "candidate": {
+                  "turnMs": 893,
+                  "admissionMs": null,
+                  "activeBytes": 38184960,
+                  "submitCpuMs": null,
+                  "observedSubmitInvocations": 0,
+                  "runCpuMs": 441,
+                  "observedRunInvocations": 29,
+                  "postTurnActiveBytes": 38199296,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 29,
+                    "admitted": null,
+                    "first-provider": 733,
+                    "settled": 6995
+                  }
+                }
+              },
+              "paired": {
+                "driverMs": {
+                  "n": 15,
+                  "delta": -36.5,
+                  "ratio": 0.9660622966062297,
+                  "baselineSpread": 76,
+                  "candidateSpread": 112,
+                  "separated": 1
+                },
+                "admissionMs": {
+                  "n": 0,
+                  "delta": null,
+                  "ratio": null,
+                  "baselineSpread": null,
+                  "candidateSpread": null,
+                  "separated": 0
+                }
+              }
+            }
+          },
+          "yieldedPi": {
+            "baseline": 1.6687931951089845,
+            "candidate": 1.8073908174692048
+          }
+        },
+        {
+          "group": "control",
+          "targets": {
+            "yielded": {
+              "completeObjects": 15,
+              "plannedObjects": 15,
+              "excludedObjects": 0,
+              "labels": {
+                "baseline": {
+                  "turnMs": 1744,
+                  "admissionMs": 735.5,
+                  "activeBytes": 3637248,
+                  "submitCpuMs": 162,
+                  "observedSubmitInvocations": 30,
+                  "runCpuMs": null,
+                  "observedRunInvocations": 0,
+                  "postTurnActiveBytes": 3788800,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 1190,
+                    "admitted": 1260.5,
+                    "first-provider": 2134.5,
+                    "settled": 2524.5
+                  }
+                },
+                "candidate": {
+                  "turnMs": 1680.5,
+                  "admissionMs": 838.5,
+                  "activeBytes": 4532224,
+                  "submitCpuMs": 152.5,
+                  "observedSubmitInvocations": 30,
+                  "runCpuMs": null,
+                  "observedRunInvocations": 0,
+                  "postTurnActiveBytes": 4694016,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 1190,
+                    "admitted": 1266.5,
+                    "first-provider": 2380.5,
+                    "settled": 2770.5
+                  }
+                }
+              },
+              "paired": {
+                "driverMs": {
+                  "n": 15,
+                  "delta": -61,
+                  "ratio": 0.963841138114997,
+                  "baselineSpread": 209,
+                  "candidateSpread": 117,
+                  "separated": 2
+                },
+                "admissionMs": {
+                  "n": 15,
+                  "delta": 24,
+                  "ratio": 1.0458015267175573,
+                  "baselineSpread": 97,
+                  "candidateSpread": 50,
+                  "separated": 5
+                }
+              }
+            },
+            "pi": {
+              "completeObjects": 15,
+              "plannedObjects": 15,
+              "excludedObjects": 0,
+              "labels": {
+                "baseline": {
+                  "turnMs": 906,
+                  "admissionMs": null,
+                  "activeBytes": 272384,
+                  "submitCpuMs": null,
+                  "observedSubmitInvocations": 0,
+                  "runCpuMs": 390,
+                  "observedRunInvocations": 30,
+                  "postTurnActiveBytes": 290816,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 29,
+                    "admitted": null,
+                    "first-provider": 513,
+                    "settled": 5015
+                  }
+                },
+                "candidate": {
+                  "turnMs": 1004.5,
+                  "admissionMs": null,
+                  "activeBytes": 382976,
+                  "submitCpuMs": null,
+                  "observedSubmitInvocations": 0,
+                  "runCpuMs": 421,
+                  "observedRunInvocations": 29,
+                  "postTurnActiveBytes": 397312,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 29,
+                    "admitted": null,
+                    "first-provider": 733,
+                    "settled": 6995
+                  }
+                }
+              },
+              "paired": {
+                "driverMs": {
+                  "n": 15,
+                  "delta": 35,
+                  "ratio": 1.0386313465783665,
+                  "baselineSpread": 98,
+                  "candidateSpread": 101,
+                  "separated": 3
+                },
+                "admissionMs": {
+                  "n": 0,
+                  "delta": null,
+                  "ratio": null,
+                  "baselineSpread": null,
+                  "candidateSpread": null,
+                  "separated": 0
+                }
+              }
+            }
+          },
+          "yieldedPi": {
+            "baseline": 1.924944812362031,
+            "candidate": 1.6729716276754605
+          }
+        }
+      ],
+      "differenceOfPairedMedianChangesMs": {
+        "yielded/driverMs": 68,
+        "yielded/admissionMs": -30,
+        "pi/driverMs": -71.5,
+        "pi/admissionMs": null
+      }
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "groups": [
+        {
+          "group": "grown",
+          "targets": {
+            "yielded": {
+              "completeObjects": 15,
+              "plannedObjects": 15,
+              "excludedObjects": 0,
+              "labels": {
+                "baseline": {
+                  "turnMs": 775.5,
+                  "admissionMs": 160,
+                  "activeBytes": 3637248,
+                  "submitCpuMs": 7,
+                  "observedSubmitInvocations": 30,
+                  "runCpuMs": null,
+                  "observedRunInvocations": 0,
+                  "postTurnActiveBytes": 4083712,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 0,
+                    "admitted": 16,
+                    "first-provider": 784,
+                    "settled": 988
+                  }
+                },
+                "candidate": {
+                  "turnMs": 814.5,
+                  "admissionMs": 215.5,
+                  "activeBytes": 42334208,
+                  "submitCpuMs": 7,
+                  "observedSubmitInvocations": 30,
+                  "runCpuMs": null,
+                  "observedRunInvocations": 0,
+                  "postTurnActiveBytes": 42801152,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 0,
+                    "admitted": 16,
+                    "first-provider": 1024,
+                    "settled": 1228
+                  }
+                }
+              },
+              "paired": {
+                "driverMs": {
+                  "n": 15,
+                  "delta": 19,
+                  "ratio": 1.024804177545692,
+                  "baselineSpread": 43,
+                  "candidateSpread": 97,
+                  "separated": 1
+                },
+                "admissionMs": {
+                  "n": 15,
+                  "delta": 63,
+                  "ratio": 1.31875,
+                  "baselineSpread": 16,
+                  "candidateSpread": 45,
+                  "separated": 7
+                }
+              }
+            },
+            "pi": {
+              "completeObjects": 15,
+              "plannedObjects": 15,
+              "excludedObjects": 0,
+              "labels": {
+                "baseline": {
+                  "turnMs": 613.5,
+                  "admissionMs": null,
+                  "activeBytes": 272384,
+                  "submitCpuMs": null,
+                  "observedSubmitInvocations": 0,
+                  "runCpuMs": 254,
+                  "observedRunInvocations": 30,
+                  "postTurnActiveBytes": 325632,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 0,
+                    "admitted": null,
+                    "first-provider": 532,
+                    "settled": 5622
+                  }
+                },
+                "candidate": {
+                  "turnMs": 648,
+                  "admissionMs": null,
+                  "activeBytes": 38184960,
+                  "submitCpuMs": null,
+                  "observedSubmitInvocations": 0,
+                  "runCpuMs": 313,
+                  "observedRunInvocations": 30,
+                  "postTurnActiveBytes": 38236160,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 0,
+                    "admitted": null,
+                    "first-provider": 750,
+                    "settled": 7584
+                  }
+                }
+              },
+              "paired": {
+                "driverMs": {
+                  "n": 15,
+                  "delta": 31,
+                  "ratio": 1.0477657935285054,
+                  "baselineSpread": 23,
+                  "candidateSpread": 46,
+                  "separated": 6
+                },
+                "admissionMs": {
+                  "n": 0,
+                  "delta": null,
+                  "ratio": null,
+                  "baselineSpread": null,
+                  "candidateSpread": null,
+                  "separated": 0
+                }
+              }
+            }
+          },
+          "yieldedPi": {
+            "baseline": 1.2640586797066016,
+            "candidate": 1.2569444444444444
+          }
+        },
+        {
+          "group": "control",
+          "targets": {
+            "yielded": {
+              "completeObjects": 15,
+              "plannedObjects": 15,
+              "excludedObjects": 0,
+              "labels": {
+                "baseline": {
+                  "turnMs": 838,
+                  "admissionMs": 193,
+                  "activeBytes": 3637248,
+                  "submitCpuMs": 7.5,
+                  "observedSubmitInvocations": 30,
+                  "runCpuMs": null,
+                  "observedRunInvocations": 0,
+                  "postTurnActiveBytes": 4083712,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 0,
+                    "admitted": 16,
+                    "first-provider": 784,
+                    "settled": 988
+                  }
+                },
+                "candidate": {
+                  "turnMs": 877,
+                  "admissionMs": 251,
+                  "activeBytes": 4532224,
+                  "submitCpuMs": 7,
+                  "observedSubmitInvocations": 29,
+                  "runCpuMs": null,
+                  "observedRunInvocations": 0,
+                  "postTurnActiveBytes": 4999168,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 0,
+                    "admitted": 16,
+                    "first-provider": 1024,
+                    "settled": 1228
+                  }
+                }
+              },
+              "paired": {
+                "driverMs": {
+                  "n": 15,
+                  "delta": 18,
+                  "ratio": 1.0225937641211025,
+                  "baselineSpread": 78,
+                  "candidateSpread": 107,
+                  "separated": 2
+                },
+                "admissionMs": {
+                  "n": 15,
+                  "delta": 29.5,
+                  "ratio": 1.1586021505376345,
+                  "baselineSpread": 50,
+                  "candidateSpread": 56,
+                  "separated": 4
+                }
+              }
+            },
+            "pi": {
+              "completeObjects": 15,
+              "plannedObjects": 15,
+              "excludedObjects": 0,
+              "labels": {
+                "baseline": {
+                  "turnMs": 637.5,
+                  "admissionMs": null,
+                  "activeBytes": 272384,
+                  "submitCpuMs": null,
+                  "observedSubmitInvocations": 0,
+                  "runCpuMs": 249.5,
+                  "observedRunInvocations": 30,
+                  "postTurnActiveBytes": 325632,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 0,
+                    "admitted": null,
+                    "first-provider": 532,
+                    "settled": 5622
+                  }
+                },
+                "candidate": {
+                  "turnMs": 690,
+                  "admissionMs": null,
+                  "activeBytes": 382976,
+                  "submitCpuMs": null,
+                  "observedSubmitInvocations": 0,
+                  "runCpuMs": 297,
+                  "observedRunInvocations": 28,
+                  "postTurnActiveBytes": 434176,
+                  "touchedPaddingBytes": 0,
+                  "sqlRows": {
+                    "entry": 0,
+                    "admitted": null,
+                    "first-provider": 750,
+                    "settled": 7584
+                  }
+                }
+              },
+              "paired": {
+                "driverMs": {
+                  "n": 15,
+                  "delta": 23.5,
+                  "ratio": 1.0380067567567568,
+                  "baselineSpread": 51,
+                  "candidateSpread": 45,
+                  "separated": 6
+                },
+                "admissionMs": {
+                  "n": 0,
+                  "delta": null,
+                  "ratio": null,
+                  "baselineSpread": null,
+                  "candidateSpread": null,
+                  "separated": 0
+                }
+              }
+            }
+          },
+          "yieldedPi": {
+            "baseline": 1.3145098039215686,
+            "candidate": 1.271014492753623
+          }
+        }
+      ],
+      "differenceOfPairedMedianChangesMs": {
+        "yielded/driverMs": 1,
+        "yielded/admissionMs": 33.5,
+        "pi/driverMs": 7.5,
+        "pi/admissionMs": null
+      }
+    }
+  ]
+}

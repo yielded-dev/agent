@@ -1,0 +1,603 @@
+{
+  "purpose": "Deterministic local storage counts; not timing evidence or deployed file sizes",
+  "harnessRevision": "c149ee6e",
+  "fixtures": [
+    {
+      "target": "yielded",
+      "history": 50,
+      "fingerprint": "b017b487524e44a4",
+      "localPages": {
+        "page_size": 4096,
+        "page_count": 542,
+        "freelist_count": 0
+      },
+      "largestTablesAndIndexes": [
+        {
+          "name": "effect_agent_canonical_records",
+          "pages": 236,
+          "bytes": 966656
+        },
+        {
+          "name": "effect_agent_canonical_batches",
+          "pages": 20,
+          "bytes": 81920
+        },
+        {
+          "name": "sqlite_autoindex_effect_agent_canonical_records_2",
+          "pages": 17,
+          "bytes": 69632
+        },
+        {
+          "name": "sqlite_schema",
+          "pages": 15,
+          "bytes": 61440
+        },
+        {
+          "name": "effect_agent_records_call",
+          "pages": 15,
+          "bytes": 61440
+        },
+        {
+          "name": "effect_agent_submissions",
+          "pages": 14,
+          "bytes": 57344
+        },
+        {
+          "name": "effect_agent_canonical_records_batch",
+          "pages": 13,
+          "bytes": 53248
+        },
+        {
+          "name": "effect_agent_records_run_identity",
+          "pages": 11,
+          "bytes": 45056
+        },
+        {
+          "name": "sqlite_autoindex_effect_agent_record_runs_1",
+          "pages": 7,
+          "bytes": 28672
+        },
+        {
+          "name": "effect_agent_record_runs",
+          "pages": 7,
+          "bytes": 28672
+        },
+        {
+          "name": "sqlite_autoindex_effect_agent_canonical_batches_1",
+          "pages": 6,
+          "bytes": 24576
+        },
+        {
+          "name": "effect_agent_worker_execution",
+          "pages": 6,
+          "bytes": 24576
+        }
+      ],
+      "canonicalRecords": [
+        {
+          "kind": "RunContinuation",
+          "records": 234,
+          "jsonBytes": 350091
+        },
+        {
+          "kind": "ModelResponseRecorded",
+          "records": 84,
+          "jsonBytes": 96167
+        },
+        {
+          "kind": "SubmissionSettled",
+          "records": 50,
+          "jsonBytes": 49850
+        },
+        {
+          "kind": "RunContextRecorded",
+          "records": 50,
+          "jsonBytes": 33147
+        },
+        {
+          "kind": "ToolCallSettled",
+          "records": 34,
+          "jsonBytes": 20756
+        },
+        {
+          "kind": "RunCompleted",
+          "records": 50,
+          "jsonBytes": 19200
+        },
+        {
+          "kind": "UserInputRecorded",
+          "records": 50,
+          "jsonBytes": 18140
+        },
+        {
+          "kind": "RunStarted",
+          "records": 50,
+          "jsonBytes": 15950
+        },
+        {
+          "kind": "ThreadCreated",
+          "records": 1,
+          "jsonBytes": 606
+        }
+      ],
+      "batchHeaders": {
+        "batches": 235,
+        "jsonBytes": 24467
+      },
+      "archiveRows": {
+        "batches": 0,
+        "records": 0
+      }
+    },
+    {
+      "target": "pi",
+      "history": 50,
+      "fingerprint": "b017b487524e44a4",
+      "localPages": {
+        "page_size": 4096,
+        "page_count": 58,
+        "freelist_count": 0
+      },
+      "largestTablesAndIndexes": [
+        {
+          "name": "entries",
+          "pages": 18,
+          "bytes": 73728
+        },
+        {
+          "name": "tasks",
+          "pages": 9,
+          "bytes": 36864
+        },
+        {
+          "name": "submissions",
+          "pages": 3,
+          "bytes": 12288
+        },
+        {
+          "name": "sqlite_schema",
+          "pages": 3,
+          "bytes": 12288
+        },
+        {
+          "name": "record_ids",
+          "pages": 3,
+          "bytes": 12288
+        },
+        {
+          "name": "tasks_by_status",
+          "pages": 1,
+          "bytes": 4096
+        },
+        {
+          "name": "tasks_by_kind",
+          "pages": 1,
+          "bytes": 4096
+        },
+        {
+          "name": "tasks_by_conversation",
+          "pages": 1,
+          "bytes": 4096
+        },
+        {
+          "name": "tasks_by_background",
+          "pages": 1,
+          "bytes": 4096
+        },
+        {
+          "name": "tasks_by_abort_requested",
+          "pages": 1,
+          "bytes": 4096
+        },
+        {
+          "name": "submissions_by_status",
+          "pages": 1,
+          "bytes": 4096
+        },
+        {
+          "name": "submissions_by_request",
+          "pages": 1,
+          "bytes": 4096
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "localPages": {
+        "page_size": 4096,
+        "page_count": 2009,
+        "freelist_count": 0
+      },
+      "largestTablesAndIndexes": [
+        {
+          "name": "effect_agent_canonical_records",
+          "pages": 1174,
+          "bytes": 4808704
+        },
+        {
+          "name": "effect_agent_canonical_batches",
+          "pages": 93,
+          "bytes": 380928
+        },
+        {
+          "name": "sqlite_autoindex_effect_agent_canonical_records_2",
+          "pages": 82,
+          "bytes": 335872
+        },
+        {
+          "name": "effect_agent_records_call",
+          "pages": 67,
+          "bytes": 274432
+        },
+        {
+          "name": "effect_agent_submissions",
+          "pages": 64,
+          "bytes": 262144
+        },
+        {
+          "name": "effect_agent_canonical_records_batch",
+          "pages": 62,
+          "bytes": 253952
+        },
+        {
+          "name": "effect_agent_records_run_identity",
+          "pages": 50,
+          "bytes": 204800
+        },
+        {
+          "name": "sqlite_autoindex_effect_agent_record_runs_1",
+          "pages": 33,
+          "bytes": 135168
+        },
+        {
+          "name": "effect_agent_record_runs",
+          "pages": 30,
+          "bytes": 122880
+        },
+        {
+          "name": "effect_agent_worker_execution",
+          "pages": 29,
+          "bytes": 118784
+        },
+        {
+          "name": "effect_agent_records_tag",
+          "pages": 29,
+          "bytes": 118784
+        },
+        {
+          "name": "sqlite_autoindex_effect_agent_canonical_batches_1",
+          "pages": 23,
+          "bytes": 94208
+        }
+      ],
+      "canonicalRecords": [
+        {
+          "kind": "RunContinuation",
+          "records": 1167,
+          "jsonBytes": 1745913
+        },
+        {
+          "kind": "ModelResponseRecorded",
+          "records": 417,
+          "jsonBytes": 477794
+        },
+        {
+          "kind": "SubmissionSettled",
+          "records": 250,
+          "jsonBytes": 249250
+        },
+        {
+          "kind": "RunContextRecorded",
+          "records": 250,
+          "jsonBytes": 166263
+        },
+        {
+          "kind": "ToolCallSettled",
+          "records": 167,
+          "jsonBytes": 110091
+        },
+        {
+          "kind": "RunCompleted",
+          "records": 250,
+          "jsonBytes": 96000
+        },
+        {
+          "kind": "UserInputRecorded",
+          "records": 250,
+          "jsonBytes": 90890
+        },
+        {
+          "kind": "RunStarted",
+          "records": 250,
+          "jsonBytes": 79750
+        },
+        {
+          "kind": "ThreadCreated",
+          "records": 1,
+          "jsonBytes": 606
+        }
+      ],
+      "batchHeaders": {
+        "batches": 1168,
+        "jsonBytes": 121767
+      },
+      "archiveRows": {
+        "batches": 0,
+        "records": 0
+      }
+    },
+    {
+      "target": "pi",
+      "history": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "localPages": {
+        "page_size": 4096,
+        "page_count": 184,
+        "freelist_count": 0
+      },
+      "largestTablesAndIndexes": [
+        {
+          "name": "entries",
+          "pages": 87,
+          "bytes": 356352
+        },
+        {
+          "name": "tasks",
+          "pages": 40,
+          "bytes": 163840
+        },
+        {
+          "name": "submissions",
+          "pages": 9,
+          "bytes": 36864
+        },
+        {
+          "name": "record_ids",
+          "pages": 7,
+          "bytes": 28672
+        },
+        {
+          "name": "tasks_by_kind",
+          "pages": 5,
+          "bytes": 20480
+        },
+        {
+          "name": "tasks_by_status",
+          "pages": 4,
+          "bytes": 16384
+        },
+        {
+          "name": "entries_by_conversation",
+          "pages": 4,
+          "bytes": 16384
+        },
+        {
+          "name": "tasks_by_conversation",
+          "pages": 3,
+          "bytes": 12288
+        },
+        {
+          "name": "tasks_by_background",
+          "pages": 3,
+          "bytes": 12288
+        },
+        {
+          "name": "tasks_by_abort_requested",
+          "pages": 3,
+          "bytes": 12288
+        },
+        {
+          "name": "sqlite_schema",
+          "pages": 3,
+          "bytes": 12288
+        },
+        {
+          "name": "submissions_by_status",
+          "pages": 1,
+          "bytes": 4096
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 1000,
+      "fingerprint": "ac520308146f2a8f",
+      "localPages": {
+        "page_size": 4096,
+        "page_count": 7467,
+        "freelist_count": 0
+      },
+      "largestTablesAndIndexes": [
+        {
+          "name": "effect_agent_canonical_records",
+          "pages": 4691,
+          "bytes": 19214336
+        },
+        {
+          "name": "effect_agent_canonical_batches",
+          "pages": 368,
+          "bytes": 1507328
+        },
+        {
+          "name": "sqlite_autoindex_effect_agent_canonical_records_2",
+          "pages": 323,
+          "bytes": 1323008
+        },
+        {
+          "name": "effect_agent_records_call",
+          "pages": 264,
+          "bytes": 1081344
+        },
+        {
+          "name": "effect_agent_submissions",
+          "pages": 251,
+          "bytes": 1028096
+        },
+        {
+          "name": "effect_agent_canonical_records_batch",
+          "pages": 240,
+          "bytes": 983040
+        },
+        {
+          "name": "effect_agent_records_run_identity",
+          "pages": 202,
+          "bytes": 827392
+        },
+        {
+          "name": "sqlite_autoindex_effect_agent_record_runs_1",
+          "pages": 133,
+          "bytes": 544768
+        },
+        {
+          "name": "effect_agent_record_runs",
+          "pages": 114,
+          "bytes": 466944
+        },
+        {
+          "name": "effect_agent_worker_execution",
+          "pages": 106,
+          "bytes": 434176
+        },
+        {
+          "name": "effect_agent_records_tag",
+          "pages": 106,
+          "bytes": 434176
+        },
+        {
+          "name": "sqlite_autoindex_effect_agent_canonical_batches_1",
+          "pages": 93,
+          "bytes": 380928
+        }
+      ],
+      "canonicalRecords": [
+        {
+          "kind": "RunContinuation",
+          "records": 4667,
+          "jsonBytes": 6982433
+        },
+        {
+          "kind": "ModelResponseRecorded",
+          "records": 1667,
+          "jsonBytes": 1911294
+        },
+        {
+          "kind": "SubmissionSettled",
+          "records": 1000,
+          "jsonBytes": 997000
+        },
+        {
+          "kind": "RunContextRecorded",
+          "records": 1000,
+          "jsonBytes": 666629
+        },
+        {
+          "kind": "ToolCallSettled",
+          "records": 667,
+          "jsonBytes": 456271
+        },
+        {
+          "kind": "RunCompleted",
+          "records": 1000,
+          "jsonBytes": 384000
+        },
+        {
+          "kind": "UserInputRecorded",
+          "records": 1000,
+          "jsonBytes": 363890
+        },
+        {
+          "kind": "RunStarted",
+          "records": 1000,
+          "jsonBytes": 319000
+        },
+        {
+          "kind": "ThreadCreated",
+          "records": 1,
+          "jsonBytes": 606
+        }
+      ],
+      "batchHeaders": {
+        "batches": 4668,
+        "jsonBytes": 486767
+      },
+      "archiveRows": {
+        "batches": 0,
+        "records": 0
+      }
+    },
+    {
+      "target": "pi",
+      "history": 1000,
+      "fingerprint": "ac520308146f2a8f",
+      "localPages": {
+        "page_size": 4096,
+        "page_count": 661,
+        "freelist_count": 0
+      },
+      "largestTablesAndIndexes": [
+        {
+          "name": "entries",
+          "pages": 347,
+          "bytes": 1421312
+        },
+        {
+          "name": "tasks",
+          "pages": 157,
+          "bytes": 643072
+        },
+        {
+          "name": "submissions",
+          "pages": 34,
+          "bytes": 139264
+        },
+        {
+          "name": "record_ids",
+          "pages": 23,
+          "bytes": 94208
+        },
+        {
+          "name": "tasks_by_kind",
+          "pages": 17,
+          "bytes": 69632
+        },
+        {
+          "name": "entries_by_conversation",
+          "pages": 16,
+          "bytes": 65536
+        },
+        {
+          "name": "tasks_by_status",
+          "pages": 13,
+          "bytes": 53248
+        },
+        {
+          "name": "tasks_by_conversation",
+          "pages": 8,
+          "bytes": 32768
+        },
+        {
+          "name": "tasks_by_background",
+          "pages": 8,
+          "bytes": 32768
+        },
+        {
+          "name": "tasks_by_abort_requested",
+          "pages": 8,
+          "bytes": 32768
+        },
+        {
+          "name": "submissions_by_status",
+          "pages": 5,
+          "bytes": 20480
+        },
+        {
+          "name": "submissions_by_request",
+          "pages": 5,
+          "bytes": 20480
+        }
+      ]
+    }
+  ]
+}

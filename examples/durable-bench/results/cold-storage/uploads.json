@@ -1,0 +1,1275 @@
+{
+  "note": "Every observed fresh-harness upload response, including Alchemy placeholders. Worker startup_ms is upload-time telemetry, not turn latency. Counts of retained modules use esbuild output inputs with positive bytesInOutput. No account identifiers, headers, bindings or Object identifiers are retained.",
+  "uploads": [
+    {
+      "at": "2026-10-09T07:30:42.056Z",
+      "run": null,
+      "target": "provider",
+      "label": null,
+      "phase": "infrastructure",
+      "epoch": null,
+      "artifact": "alchemy-placeholder",
+      "status": 200,
+      "success": true,
+      "startupMs": 1,
+      "files": [
+        {
+          "name": "main.js",
+          "bytes": 150
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:30:42.099Z",
+      "run": null,
+      "target": "driver",
+      "label": null,
+      "phase": "infrastructure",
+      "epoch": null,
+      "artifact": "alchemy-placeholder",
+      "status": 200,
+      "success": true,
+      "startupMs": 2,
+      "files": [
+        {
+          "name": "main.js",
+          "bytes": 150
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:30:43.106Z",
+      "run": null,
+      "target": "provider",
+      "label": null,
+      "phase": "infrastructure",
+      "epoch": null,
+      "artifact": "infrastructure-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 35,
+      "files": [
+        {
+          "name": "provider.mjs",
+          "bytes": 845491
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:30:43.268Z",
+      "run": null,
+      "target": "driver",
+      "label": null,
+      "phase": "infrastructure",
+      "epoch": null,
+      "artifact": "infrastructure-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 34,
+      "files": [
+        {
+          "name": "driver.mjs",
+          "bytes": 847690
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:30:59.013Z",
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "alchemy-placeholder",
+      "status": 200,
+      "success": true,
+      "startupMs": 1,
+      "files": [
+        {
+          "name": "main.js",
+          "bytes": 250
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:31:00.933Z",
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 91,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596786
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:31:41.414Z",
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "alchemy-placeholder",
+      "status": 200,
+      "success": true,
+      "startupMs": 1,
+      "files": [
+        {
+          "name": "main.js",
+          "bytes": 245
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:31:42.864Z",
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 13,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692165
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:34:02.848Z",
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 0,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 142,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596784
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:34:08.985Z",
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 0,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 18,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692163
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:34:55.181Z",
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 1,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 67,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596784
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:35:23.631Z",
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 1,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 14,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692163
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:36:27.766Z",
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "target": "yielded",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 2,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 108,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596785
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:36:39.237Z",
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "target": "pi",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 2,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 13,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692164
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:37:29.751Z",
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "target": "yielded",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 3,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 109,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596785
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:37:35.390Z",
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "target": "pi",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 3,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 18,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692164
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:39:56.684Z",
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "alchemy-placeholder",
+      "status": 200,
+      "success": true,
+      "startupMs": 1,
+      "files": [
+        {
+          "name": "main.js",
+          "bytes": 250
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:39:58.714Z",
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 73,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596786
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:40:36.885Z",
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "alchemy-placeholder",
+      "status": 200,
+      "success": true,
+      "startupMs": 2,
+      "files": [
+        {
+          "name": "main.js",
+          "bytes": 245
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:40:38.376Z",
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 18,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692165
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:42:58.220Z",
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 0,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 74,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596784
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:44:11.992Z",
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 0,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 16,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692163
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:46:06.002Z",
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 1,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 133,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596784
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:47:20.121Z",
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 1,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 28,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692163
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:49:20.493Z",
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "target": "yielded",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 2,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 77,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596785
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:50:34.627Z",
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "target": "pi",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 2,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 18,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692164
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:52:36.443Z",
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "target": "yielded",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 3,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 83,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596785
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:53:50.484Z",
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "target": "pi",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 3,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 19,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692164
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:57:39.186Z",
+      "run": "cold-storage-fresh-mv0oa4rz-3b39c0b1",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "alchemy-placeholder",
+      "status": 200,
+      "success": true,
+      "startupMs": 1,
+      "files": [
+        {
+          "name": "main.js",
+          "bytes": 250
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:57:41.272Z",
+      "run": "cold-storage-fresh-mv0oa4rz-3b39c0b1",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 73,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596786
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:58:20.328Z",
+      "run": "cold-storage-fresh-mv0oa4rz-3b39c0b1",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "alchemy-placeholder",
+      "status": 200,
+      "success": true,
+      "startupMs": 1,
+      "files": [
+        {
+          "name": "main.js",
+          "bytes": 245
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T07:58:21.828Z",
+      "run": "cold-storage-fresh-mv0oa4rz-3b39c0b1",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 14,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692165
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:00:44.740Z",
+      "run": "cold-storage-fresh-mv0oa4rz-3b39c0b1",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 0,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 71,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596784
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:01:59.535Z",
+      "run": "cold-storage-fresh-mv0oa4rz-3b39c0b1",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 0,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 16,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692163
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:03:50.315Z",
+      "run": "cold-storage-fresh-mv0oa4rz-3b39c0b1",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 1,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 74,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596784
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:05:06.982Z",
+      "run": "cold-storage-fresh-mv0oa4rz-3b39c0b1",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 1,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 14,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692163
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:07:07.418Z",
+      "run": "cold-storage-fresh-mv0oa4rz-3b39c0b1",
+      "target": "yielded",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 2,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 91,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596785
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:08:22.067Z",
+      "run": "cold-storage-fresh-mv0oa4rz-3b39c0b1",
+      "target": "pi",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 2,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 19,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692164
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:14:52.556Z",
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "alchemy-placeholder",
+      "status": 200,
+      "success": true,
+      "startupMs": 1,
+      "files": [
+        {
+          "name": "main.js",
+          "bytes": 250
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:14:54.725Z",
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 91,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596786
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:15:33.508Z",
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "alchemy-placeholder",
+      "status": 200,
+      "success": true,
+      "startupMs": 1,
+      "files": [
+        {
+          "name": "main.js",
+          "bytes": 245
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:15:35.532Z",
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 14,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692165
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:18:14.425Z",
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 0,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 100,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596784
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:19:27.842Z",
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 0,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 15,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692163
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:21:17.464Z",
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 1,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 73,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596784
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:22:31.801Z",
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 1,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 16,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692163
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:24:28.835Z",
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "target": "yielded",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 2,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 73,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596785
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:25:42.123Z",
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "target": "pi",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 2,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 16,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692164
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:27:33.031Z",
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "target": "yielded",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 3,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 116,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596785
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:28:46.632Z",
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "target": "pi",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 3,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 14,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692164
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:32:29.086Z",
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "alchemy-placeholder",
+      "status": 200,
+      "success": true,
+      "startupMs": 1,
+      "files": [
+        {
+          "name": "main.js",
+          "bytes": 250
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:32:31.233Z",
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 157,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596786
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:33:09.863Z",
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "alchemy-placeholder",
+      "status": 200,
+      "success": true,
+      "startupMs": 2,
+      "files": [
+        {
+          "name": "main.js",
+          "bytes": 245
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:33:11.276Z",
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "seed",
+      "epoch": null,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 15,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692165
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:35:25.763Z",
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 0,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 73,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596784
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:36:40.262Z",
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 0,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 15,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692163
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:38:29.464Z",
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "target": "yielded",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 1,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 84,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596784
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:39:43.523Z",
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "target": "pi",
+      "label": "baseline",
+      "phase": "epoch",
+      "epoch": 1,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 13,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692163
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:41:39.645Z",
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "target": "yielded",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 2,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 150,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596785
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:42:54.381Z",
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "target": "pi",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 2,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 17,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692164
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:44:44.069Z",
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "target": "yielded",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 3,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 98,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 3596785
+        }
+      ],
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T08:45:57.772Z",
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "target": "pi",
+      "label": "candidate",
+      "phase": "epoch",
+      "epoch": 3,
+      "artifact": "worker-bundle",
+      "status": 200,
+      "success": true,
+      "startupMs": 14,
+      "files": [
+        {
+          "name": "worker.mjs",
+          "bytes": 1692164
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "compiledBundles": [
+    {
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "target": "yielded",
+      "bytes": 3596626,
+      "sha256": "10f441e8845bd23baebb8c0927024b41668d96e33678be0c996aededbe3c2159",
+      "allLabelsMatch": true,
+      "retainedModules": 352,
+      "retainedEffectFamilyModules": 205
+    },
+    {
+      "run": "cold-storage-fresh-mv0nbnqc-d686f432",
+      "target": "pi",
+      "bytes": 1692010,
+      "sha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+      "allLabelsMatch": true,
+      "retainedModules": 812,
+      "retainedEffectFamilyModules": 0
+    },
+    {
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "target": "yielded",
+      "bytes": 3596626,
+      "sha256": "d3618034b995d576afeea6931aa06448bdcfeba8e3b41f2f3602345d91c4a2ba",
+      "allLabelsMatch": true,
+      "retainedModules": 352,
+      "retainedEffectFamilyModules": 205
+    },
+    {
+      "run": "cold-storage-fresh-mv0nnc1k-090b1fa8",
+      "target": "pi",
+      "bytes": 1692010,
+      "sha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+      "allLabelsMatch": true,
+      "retainedModules": 812,
+      "retainedEffectFamilyModules": 0
+    },
+    {
+      "run": "cold-storage-fresh-mv0oa4rz-3b39c0b1",
+      "target": "yielded",
+      "bytes": 3596626,
+      "sha256": "724a2809ebaf697894171a20c72744e95fb21aa754c0c8072d9ebe7066f3af2a",
+      "allLabelsMatch": true,
+      "retainedModules": 352,
+      "retainedEffectFamilyModules": 205
+    },
+    {
+      "run": "cold-storage-fresh-mv0oa4rz-3b39c0b1",
+      "target": "pi",
+      "bytes": 1692010,
+      "sha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+      "allLabelsMatch": true,
+      "retainedModules": 812,
+      "retainedEffectFamilyModules": 0
+    },
+    {
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "target": "yielded",
+      "bytes": 3596626,
+      "sha256": "0a0b96f579edf23f631be693830a2a921fb385dee1fe42209ac94e88d74cbd8e",
+      "allLabelsMatch": true,
+      "retainedModules": 352,
+      "retainedEffectFamilyModules": 205
+    },
+    {
+      "run": "cold-storage-fresh-mv0ow9l1-5509c5e4",
+      "target": "pi",
+      "bytes": 1692010,
+      "sha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+      "allLabelsMatch": true,
+      "retainedModules": 812,
+      "retainedEffectFamilyModules": 0
+    },
+    {
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "target": "yielded",
+      "bytes": 3596626,
+      "sha256": "8d1c474311fc07e1c90bdb31f754002772c024e6793b7a6097d51e0409df9613",
+      "allLabelsMatch": true,
+      "retainedModules": 352,
+      "retainedEffectFamilyModules": 205
+    },
+    {
+      "run": "cold-storage-fresh-mv0pixgr-669f75e3",
+      "target": "pi",
+      "bytes": 1692010,
+      "sha256": "0151fda2ef22d3a37aa6814d4f0c05b905b580924f5a2f5def02ffffc20f51a5",
+      "allLabelsMatch": true,
+      "retainedModules": 812,
+      "retainedEffectFamilyModules": 0
+    }
+  ]
+}
