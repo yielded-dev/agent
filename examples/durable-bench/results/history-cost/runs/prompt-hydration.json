@@ -1,0 +1,5788 @@
+{
+  "run": "history-cost-mv0m6t0i-88e992cd",
+  "revision": "78cb4eb7589984c1cd194e0cb01a5a0055a6d3f3",
+  "dirty": true,
+  "startedAt": "2026-10-09T06:58:51.618Z",
+  "wallMs": 2090426,
+  "options": {
+    "targets": [
+      "yielded",
+      "pi"
+    ],
+    "sizes": [
+      50,
+      250,
+      1000
+    ],
+    "ttft": [
+      0,
+      400
+    ],
+    "objects": 10,
+    "repeats": 6,
+    "concurrency": 10,
+    "cold": true,
+    "cpu": true,
+    "keep": false,
+    "rigorous": true,
+    "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+    "candidate": "0451aacb627ec3dbe76618c043bce9d6b91596ad"
+  },
+  "seedBuild": {
+    "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+    "sha256": "3ef90d161e3c3752a8af3673b640e58138205516576e3bd8d3cfebb52749bbd4"
+  },
+  "builds": [
+    {
+      "label": "baseline",
+      "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "8ebf12884440b9e0ac45a3f8e9757c3f9b8aa1521c1498d0867cbdbd49fa9b82"
+    },
+    {
+      "label": "candidate",
+      "revision": "0451aacb627ec3dbe76618c043bce9d6b91596ad",
+      "sha256": "1efe37eaae9a47dcced2a27cfab3f4b17b0d6482d4bd4802025d947afc5def75"
+    }
+  ],
+  "fixtures": [
+    {
+      "target": "yielded",
+      "history": 50,
+      "fingerprint": "b017b487524e44a4",
+      "tables": {
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 235,
+        "effect_agent_canonical_records": 603,
+        "effect_agent_record_runs": 368,
+        "effect_agent_tool_declarations": 34,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 50,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 0,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 1,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 50,
+        "effect_agent_settlement_spans": 150,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      },
+      "mode": "import",
+      "fallbackReason": "Import-normalized table counts: platform_cloudflare_due_queue 4 -> absent, effect_agent_attempts 50 -> 0; canonical history and transcript unchanged"
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "tables": {
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 1168,
+        "effect_agent_canonical_records": 3002,
+        "effect_agent_record_runs": 1834,
+        "effect_agent_tool_declarations": 167,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 250,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 0,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 3,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 250,
+        "effect_agent_settlement_spans": 750,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      },
+      "mode": "import",
+      "fallbackReason": "Import-normalized table counts: platform_cloudflare_due_queue 4 -> absent, effect_agent_attempts 250 -> 0; canonical history and transcript unchanged"
+    },
+    {
+      "target": "yielded",
+      "history": 1000,
+      "fingerprint": "ac520308146f2a8f",
+      "tables": {
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 4668,
+        "effect_agent_canonical_records": 12002,
+        "effect_agent_record_runs": 7334,
+        "effect_agent_tool_declarations": 667,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 1000,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 0,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 12,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 1000,
+        "effect_agent_settlement_spans": 3000,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      },
+      "mode": "import",
+      "fallbackReason": "Import-normalized table counts: platform_cloudflare_due_queue 4 -> absent, effect_agent_attempts 1000 -> 0; canonical history and transcript unchanged"
+    },
+    {
+      "target": "pi",
+      "history": 50,
+      "fingerprint": "b017b487524e44a4",
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 343,
+        "conversations": 1,
+        "entries": 169,
+        "tasks": 118,
+        "submissions": 50,
+        "documents": 5,
+        "document_revisions": 5
+      },
+      "mode": "import"
+    },
+    {
+      "target": "pi",
+      "history": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 1675,
+        "conversations": 1,
+        "entries": 835,
+        "tasks": 584,
+        "submissions": 250,
+        "documents": 5,
+        "document_revisions": 5
+      },
+      "mode": "import"
+    },
+    {
+      "target": "pi",
+      "history": 1000,
+      "fingerprint": "ac520308146f2a8f",
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 6675,
+        "conversations": 1,
+        "entries": 3335,
+        "tasks": 2334,
+        "submissions": 1000,
+        "documents": 5,
+        "document_revisions": 5
+      },
+      "mode": "import"
+    }
+  ],
+  "complete": true,
+  "failures": [],
+  "cleanup": {
+    "verified": true,
+    "workers": [],
+    "namespaces": []
+  },
+  "kept": false,
+  "rawSha256": "e9f804de47a12ef85e0aba55152216208939758946cef5af8d502d3ff22df4d1",
+  "samplesByStatus": {
+    "ok": 3840
+  },
+  "fingerprintsVerified": 3840,
+  "modelRequestsVerified": 34560,
+  "clockChecks": {
+    "valid": 3359,
+    "rejected": 1,
+    "intervalWidthMs": {
+      "n": 3359,
+      "median": 31,
+      "q1": 26.0,
+      "q3": 46.0,
+      "min": 17,
+      "max": 87
+    },
+    "providerColos": {
+      "DEN": 140,
+      "SJC": 1764,
+      "DFW": 644,
+      "LAX": 644,
+      "SEA": 168
+    }
+  },
+  "cpuOutcomes": [
+    {
+      "target": "pi",
+      "kind": "run",
+      "outcome": "ok",
+      "count": 1872,
+      "cpuMs": {
+        "n": 1872,
+        "median": 422.0,
+        "q1": 298.0,
+        "q3": 647.25,
+        "min": 122,
+        "max": 1769
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "alarm",
+      "outcome": "canceled",
+      "count": 1934,
+      "cpuMs": {
+        "n": 1934,
+        "median": 0.0,
+        "q1": 0.0,
+        "q3": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "alarm",
+      "outcome": "ok",
+      "count": 123,
+      "cpuMs": {
+        "n": 123,
+        "median": 25,
+        "q1": 0.0,
+        "q3": 48.5,
+        "min": 0,
+        "max": 647
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "ambiguous",
+      "outcome": "ok",
+      "count": 47,
+      "cpuMs": {
+        "n": 47,
+        "median": 524,
+        "q1": 443.0,
+        "q3": 647.5,
+        "min": 260,
+        "max": 1279
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "aborted",
+      "count": 476,
+      "cpuMs": {
+        "n": 476,
+        "median": 0.0,
+        "q1": 0.0,
+        "q3": 0.0,
+        "min": 0,
+        "max": 1
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "canceled",
+      "count": 209,
+      "cpuMs": {
+        "n": 209,
+        "median": 0,
+        "q1": 0.0,
+        "q3": 0.0,
+        "min": 0,
+        "max": 5
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "ok",
+      "count": 59462,
+      "cpuMs": {
+        "n": 59462,
+        "median": 0.0,
+        "q1": 0.0,
+        "q3": 1.0,
+        "min": 0,
+        "max": 7572
+      }
+    },
+    {
+      "target": "unattributed",
+      "kind": "jsrpc",
+      "outcome": "ok",
+      "count": 8,
+      "cpuMs": {
+        "n": 8,
+        "median": 191.0,
+        "q1": 21.25,
+        "q3": 577.25,
+        "min": 7,
+        "max": 702
+      }
+    },
+    {
+      "target": "yielded",
+      "kind": "alarm",
+      "outcome": "ok",
+      "count": 1841,
+      "cpuMs": {
+        "n": 1841,
+        "median": 250,
+        "q1": 123.0,
+        "q3": 435.0,
+        "min": 1,
+        "max": 1346
+      }
+    },
+    {
+      "target": "yielded",
+      "kind": "await",
+      "outcome": "ok",
+      "count": 1829,
+      "cpuMs": {
+        "n": 1829,
+        "median": 365,
+        "q1": 258.0,
+        "q3": 501.0,
+        "min": 113,
+        "max": 1575
+      }
+    },
+    {
+      "target": "yielded",
+      "kind": "submit",
+      "outcome": "ok",
+      "count": 1893,
+      "cpuMs": {
+        "n": 1893,
+        "median": 10,
+        "q1": 7.0,
+        "q3": 16.0,
+        "min": 3,
+        "max": 177
+      }
+    }
+  ],
+  "unmatchedCpuMarkers": 61,
+  "cells": [
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "cold",
+      "metrics": {
+        "firstRequestMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 227.125,
+                  "q1": 198.25,
+                  "q3": 243.5,
+                  "min": 184.75,
+                  "max": 280.25
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 16.75,
+                  "q1": 5.625,
+                  "q3": 38.75,
+                  "min": 2.0,
+                  "max": 51
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 581.625,
+                  "q1": 495.0625,
+                  "q3": 742.75,
+                  "min": 443.5,
+                  "max": 876.75
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 36.5,
+                  "q1": 22.25,
+                  "q3": 56.5,
+                  "min": 10.0,
+                  "max": 132
+                }
+              },
+              "yieldedDivPi": 2.560814529444139
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 235.375,
+                  "q1": 210.4375,
+                  "q3": 249.3125,
+                  "min": 196.25,
+                  "max": 262.25
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 22.25,
+                  "q1": 11.625,
+                  "q3": 54.0,
+                  "min": 7,
+                  "max": 133.5
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 694.875,
+                  "q1": 608.125,
+                  "q3": 833.1875,
+                  "min": 481.25,
+                  "max": 924.25
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 107.25,
+                  "q1": 73.125,
+                  "q3": 153.75,
+                  "min": 51.5,
+                  "max": 286
+                }
+              },
+              "yieldedDivPi": 2.952203929899097
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.1335276196994375,
+              "q1": 1.0946163950688952,
+              "q3": 1.2441967336756168,
+              "min": 1.0236669518106645,
+              "max": 1.2914035939776591
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 89.75,
+              "q1": 76.3125,
+              "q3": 115.75,
+              "min": 19.5,
+              "max": 150.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.06480260989060915,
+              "q1": 0.0372929071102448,
+              "q3": 0.07920482813206692,
+              "min": 0.020682523267838704,
+              "max": 0.19619500594530326
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        },
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 891.5,
+                  "q1": 791.25,
+                  "q3": 1009.375,
+                  "min": 627.0,
+                  "max": 1079.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 45.0,
+                  "q1": 34.5,
+                  "q3": 57.5,
+                  "min": 11,
+                  "max": 129
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1312.25,
+                  "q1": 1076.75,
+                  "q3": 1747.5,
+                  "min": 965.5,
+                  "max": 1904.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 54.0,
+                  "q1": 51.5,
+                  "q3": 63.75,
+                  "min": 35,
+                  "max": 119
+                }
+              },
+              "yieldedDivPi": 1.4719573752103197
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 926.25,
+                  "q1": 845.875,
+                  "q3": 1010.375,
+                  "min": 622.5,
+                  "max": 1098.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 138.5,
+                  "q1": 80.25,
+                  "q3": 180.5,
+                  "min": 11,
+                  "max": 335
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1403.5,
+                  "q1": 1160.625,
+                  "q3": 1761.875,
+                  "min": 1042.0,
+                  "max": 1859.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 130.5,
+                  "q1": 63.5,
+                  "q3": 153.75,
+                  "min": 29,
+                  "max": 269
+                }
+              },
+              "yieldedDivPi": 1.5152496626180836
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.0316164750132282,
+              "q1": 0.9915929755345441,
+              "q3": 1.101759551362868,
+              "min": 0.9761124121779859,
+              "max": 1.1985111662531018
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 38.75,
+              "q1": -10.0,
+              "q3": 131.75,
+              "min": -45.0,
+              "max": 200.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.03676977476674392,
+              "q1": 0.033598312783906625,
+              "q3": 0.05233637443209682,
+              "min": 0.029302077783697422,
+              "max": 0.11595639246778999
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 530.0,
+                  "q1": 461.75,
+                  "q3": 703.25,
+                  "min": 177.0,
+                  "max": 846.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 29.0,
+                  "q1": 14.25,
+                  "q3": 52.75,
+                  "min": 6,
+                  "max": 114
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 637.5,
+                  "q1": 469.0,
+                  "q3": 788.625,
+                  "min": 328.0,
+                  "max": 929.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 158.0,
+                  "q1": 99.75,
+                  "q3": 288.75,
+                  "min": 47,
+                  "max": 543
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.1472716822935447,
+              "q1": 1.0995795778919788,
+              "q3": 1.2674298802475887,
+              "min": 0.8249194414607949,
+              "max": 1.8531073446327684
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 97.5,
+              "q1": 79.5,
+              "q3": 140.875,
+              "min": -81.5,
+              "max": 266.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.057876598998094275,
+              "q1": 0.03251025368373073,
+              "q3": 0.10063932980599655,
+              "min": 0.011787819253438192,
+              "max": 0.21666666666666656
+            }
+          },
+          "coverage": {
+            "availableSamples": 40,
+            "completeSamples": 40,
+            "incompleteObjects": []
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        }
+      }
+    },
+    {
+      "history": 50,
+      "ttftMs": 0,
+      "state": "warm",
+      "metrics": {
+        "firstRequestMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 58.875,
+                  "q1": 56.5625,
+                  "q3": 68.5,
+                  "min": 35.5,
+                  "max": 77.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 41.25,
+                  "q1": 17.5,
+                  "q3": 62.125,
+                  "min": 12,
+                  "max": 122.5
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 197.5,
+                  "q1": 194.375,
+                  "q3": 257.3125,
+                  "min": 166.25,
+                  "max": 304.75
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 66.0,
+                  "q1": 61.5,
+                  "q3": 105.875,
+                  "min": 60,
+                  "max": 243.5
+                }
+              },
+              "yieldedDivPi": 3.3545647558386413
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 62.125,
+                  "q1": 59.5,
+                  "q3": 66.0625,
+                  "min": 38.0,
+                  "max": 72.25
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 27.5,
+                  "q1": 11.125,
+                  "q3": 111.375,
+                  "min": 8.0,
+                  "max": 293.0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 198.0,
+                  "q1": 189.875,
+                  "q3": 229.1875,
+                  "min": 159.5,
+                  "max": 284.25
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 95.5,
+                  "q1": 88.25,
+                  "q3": 208.25,
+                  "min": 73,
+                  "max": 257.5
+                }
+              },
+              "yieldedDivPi": 3.187122736418511
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9656474519632414,
+              "q1": 0.9366719260782996,
+              "q3": 0.9926704795968403,
+              "min": 0.8443396226415094,
+              "max": 1.0231065468549423
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -7.5,
+              "q1": -17.0,
+              "q3": -1.5625,
+              "min": -41.25,
+              "max": 4.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.08990714014546641,
+              "q1": 0.07950822590983547,
+              "q3": 0.14697979086471685,
+              "min": 0.0038659793814432852,
+              "max": 0.25412221144519886
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        },
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 663.25,
+                  "q1": 587.125,
+                  "q3": 746.125,
+                  "min": 409.0,
+                  "max": 800.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 224.0,
+                  "q1": 143.25,
+                  "q3": 288.5,
+                  "min": 90,
+                  "max": 322
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 788.0,
+                  "q1": 696.125,
+                  "q3": 994.0,
+                  "min": 545.5,
+                  "max": 1182.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 206.0,
+                  "q1": 155.25,
+                  "q3": 282.25,
+                  "min": 122,
+                  "max": 536
+                }
+              },
+              "yieldedDivPi": 1.1880889558989822
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 696.75,
+                  "q1": 570.125,
+                  "q3": 739.125,
+                  "min": 445.0,
+                  "max": 826.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 258.5,
+                  "q1": 151.0,
+                  "q3": 386.75,
+                  "min": 57,
+                  "max": 2231
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 790.75,
+                  "q1": 670.125,
+                  "q3": 943.0,
+                  "min": 561.0,
+                  "max": 1109.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 209.0,
+                  "q1": 179.25,
+                  "q3": 267.5,
+                  "min": 117,
+                  "max": 556
+                }
+              },
+              "yieldedDivPi": 1.1349120918550413
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.995950509593688,
+              "q1": 0.9422339821154527,
+              "q3": 1.017115858974412,
+              "min": 0.8971223021582734,
+              "max": 1.034324942791762
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -3.0,
+              "q1": -61.5,
+              "q3": 13.0,
+              "min": -78.0,
+              "max": 30.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.07100523412177684,
+              "q1": 0.0532204535950388,
+              "q3": 0.12076537204529908,
+              "min": 0.009379509379509487,
+              "max": 0.1846001974333662
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 206.75,
+                  "q1": 173.375,
+                  "q3": 242.75,
+                  "min": 60.0,
+                  "max": 284.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 78.0,
+                  "q1": 63.5,
+                  "q3": 114.75,
+                  "min": 58,
+                  "max": 291
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 192.5,
+                  "q1": 175.375,
+                  "q3": 212.0,
+                  "min": 61.5,
+                  "max": 269.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 147.5,
+                  "q1": 93.25,
+                  "q3": 221.75,
+                  "min": 77,
+                  "max": 244
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9443128372168148,
+              "q1": 0.9281992045853317,
+              "q3": 0.9984724967061923,
+              "min": 0.8141414141414142,
+              "max": 1.0621301775147929
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -13.0,
+              "q1": -15.5,
+              "q3": -1.0,
+              "min": -46.0,
+              "max": 10.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.07286725835394547,
+              "q1": 0.04220608702502571,
+              "q3": 0.15333856600467283,
+              "min": 0.02034883720930236,
+              "max": 0.28274428274428276
+            }
+          },
+          "coverage": {
+            "availableSamples": 240,
+            "completeSamples": 240,
+            "incompleteObjects": []
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        }
+      }
+    },
+    {
+      "history": 50,
+      "ttftMs": 400,
+      "state": "cold",
+      "metrics": {
+        "firstRequestMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 196.375,
+                  "q1": 183.0,
+                  "q3": 249.0,
+                  "min": 153.0,
+                  "max": 375.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 8.5,
+                  "q1": 5.625,
+                  "q3": 20.125,
+                  "min": 2.5,
+                  "max": 263
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 775.5,
+                  "q1": 671.875,
+                  "q3": 912.0,
+                  "min": 509.0,
+                  "max": 1325.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 122.5,
+                  "q1": 88.0,
+                  "q3": 346.0,
+                  "min": 31.5,
+                  "max": 976
+                }
+              },
+              "yieldedDivPi": 3.9490770210057287
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 225.75,
+                  "q1": 194.0625,
+                  "q3": 258.75,
+                  "min": 163.25,
+                  "max": 421.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 24.25,
+                  "q1": 9.375,
+                  "q3": 34.125,
+                  "min": 6,
+                  "max": 552.0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 793.375,
+                  "q1": 693.625,
+                  "q3": 834.0,
+                  "min": 593.75,
+                  "max": 1075.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 88.75,
+                  "q1": 62.25,
+                  "q3": 208.375,
+                  "min": 11,
+                  "max": 406.5
+                }
+              },
+              "yieldedDivPi": 3.514396456256921
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.0061259746851834,
+              "q1": 0.9013512711923937,
+              "q3": 1.169188793545663,
+              "min": 0.6430215526260724,
+              "max": 1.2576398683591914
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 1.875,
+              "q1": -79.5,
+              "q3": 91.375,
+              "min": -426.5,
+              "max": 164.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.17195089581950895,
+              "q1": 0.12294095168528313,
+              "q3": 0.4847155860053704,
+              "min": 0.061046511627907085,
+              "max": 1.1660692951015532
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        },
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 4927.5,
+                  "q1": 4871.625,
+                  "q3": 5051.125,
+                  "min": 4622.5,
+                  "max": 5382.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 49.5,
+                  "q1": 31.0,
+                  "q3": 69.25,
+                  "min": 14,
+                  "max": 252
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5688.75,
+                  "q1": 5496.625,
+                  "q3": 5887.875,
+                  "min": 5353.5,
+                  "max": 6611.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 372.5,
+                  "q1": 211.75,
+                  "q3": 772.25,
+                  "min": 1,
+                  "max": 1511
+                }
+              },
+              "yieldedDivPi": 1.1544901065449011
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5023.0,
+                  "q1": 4919.25,
+                  "q3": 5137.625,
+                  "min": 4794.5,
+                  "max": 5491.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 180.5,
+                  "q1": 110.25,
+                  "q3": 321.25,
+                  "min": 9,
+                  "max": 1716
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5608.5,
+                  "q1": 5506.5,
+                  "q3": 5690.625,
+                  "min": 5394.0,
+                  "max": 6024.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 110.5,
+                  "q1": 48.25,
+                  "q3": 221.0,
+                  "min": 13,
+                  "max": 436
+                }
+              },
+              "yieldedDivPi": 1.1165638064901453
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9898929559742051,
+              "q1": 0.9276286967695344,
+              "q3": 1.0198642970732152,
+              "min": 0.9112153066626333,
+              "max": 1.0311537764897662
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -59.25,
+              "q1": -447.0,
+              "q3": 106.625,
+              "min": -587.0,
+              "max": 172.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.0653140332552502,
+              "q1": 0.038964478549695813,
+              "q3": 0.14357566412066647,
+              "min": 0.00018221574344012836,
+              "max": 0.2580259562841529
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 473.25,
+                  "q1": 244.5,
+                  "q3": 616.375,
+                  "min": 217.0,
+                  "max": 1197.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 37.0,
+                  "q1": 32.25,
+                  "q3": 187.75,
+                  "min": 6,
+                  "max": 457
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 565.0,
+                  "q1": 384.5,
+                  "q3": 643.875,
+                  "min": 329.5,
+                  "max": 767.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 182.5,
+                  "q1": 92.75,
+                  "q3": 385.5,
+                  "min": 45,
+                  "max": 738
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.2587455945698995,
+              "q1": 0.9159537414024203,
+              "q3": 1.4706962298218664,
+              "min": 0.6405010438413361,
+              "max": 2.325531914893617
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 98.25,
+              "q1": -55.25,
+              "q3": 133.875,
+              "min": -430.5,
+              "max": 311.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.14367718875029423,
+              "q1": 0.06701247187154347,
+              "q3": 0.3152350146732169,
+              "min": 0.02586206896551735,
+              "max": 1.9956331877729259
+            }
+          },
+          "coverage": {
+            "availableSamples": 40,
+            "completeSamples": 40,
+            "incompleteObjects": []
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        }
+      }
+    },
+    {
+      "history": 50,
+      "ttftMs": 400,
+      "state": "warm",
+      "metrics": {
+        "firstRequestMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 58.5,
+                  "q1": 49.5,
+                  "q3": 60.75,
+                  "min": 30.5,
+                  "max": 68.75
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 64.75,
+                  "q1": 47.25,
+                  "q3": 80.75,
+                  "min": 12.5,
+                  "max": 140.5
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 255.875,
+                  "q1": 225.875,
+                  "q3": 282.125,
+                  "min": 199.0,
+                  "max": 309.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 143.0,
+                  "q1": 107.5,
+                  "q3": 189.5,
+                  "min": 67.5,
+                  "max": 213.0
+                }
+              },
+              "yieldedDivPi": 4.3739316239316235
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 53.125,
+                  "q1": 50.3125,
+                  "q3": 58.6875,
+                  "min": 38.5,
+                  "max": 64.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 31.25,
+                  "q1": 18.625,
+                  "q3": 66.875,
+                  "min": 16.5,
+                  "max": 454
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 229.125,
+                  "q1": 214.5625,
+                  "q3": 255.8125,
+                  "min": 197.0,
+                  "max": 318.25
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 178.5,
+                  "q1": 143.75,
+                  "q3": 316.0,
+                  "min": 107.0,
+                  "max": 480
+                }
+              },
+              "yieldedDivPi": 4.312941176470588
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9467806718597858,
+              "q1": 0.9120462914518274,
+              "q3": 0.9597179238163214,
+              "min": 0.8066343042071198,
+              "max": 1.0778894472361809
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -12.375,
+              "q1": -20.75,
+              "q3": -10.75,
+              "min": -59.75,
+              "max": 15.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.06217533551445542,
+              "q1": 0.02108635256279484,
+              "q3": 0.12877011014976197,
+              "min": 0.007922535211267512,
+              "max": 0.6099865047233468
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        },
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 4710.5,
+                  "q1": 4654.125,
+                  "q3": 4853.875,
+                  "min": 4479.0,
+                  "max": 4894.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 424.5,
+                  "q1": 180.0,
+                  "q3": 835.5,
+                  "min": 114,
+                  "max": 2376
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 4959.5,
+                  "q1": 4905.25,
+                  "q3": 5020.0,
+                  "min": 4797.5,
+                  "max": 5252.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 296.0,
+                  "q1": 216.5,
+                  "q3": 347.5,
+                  "min": 115,
+                  "max": 686
+                }
+              },
+              "yieldedDivPi": 1.0528606305063157
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 4687.25,
+                  "q1": 4666.0,
+                  "q3": 4811.0,
+                  "min": 4538.0,
+                  "max": 4892.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 525.0,
+                  "q1": 197.5,
+                  "q3": 754.5,
+                  "min": 65,
+                  "max": 1033
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 4910.5,
+                  "q1": 4869.125,
+                  "q3": 5024.875,
+                  "min": 4785.0,
+                  "max": 5192.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 502.0,
+                  "q1": 343.0,
+                  "q3": 649.0,
+                  "min": 251,
+                  "max": 2057
+                }
+              },
+              "yieldedDivPi": 1.0476292068910342
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9935561323257041,
+              "q1": 0.9846662947411067,
+              "q3": 0.9971573519370407,
+              "min": 0.9781453634085213,
+              "max": 1.0062642935268966
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -32.0,
+              "q1": -76.375,
+              "q3": -13.75,
+              "min": -109.0,
+              "max": 31.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.01286892727489164,
+              "q1": 0.010532116372544809,
+              "q3": 0.01794512322000097,
+              "min": 0.00816243240485659,
+              "max": 0.0577108047451107
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 119.75,
+                  "q1": 61.875,
+                  "q3": 202.25,
+                  "min": 55.0,
+                  "max": 309.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 111.5,
+                  "q1": 67.75,
+                  "q3": 167.5,
+                  "min": 31,
+                  "max": 270
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 122.25,
+                  "q1": 61.125,
+                  "q3": 190.125,
+                  "min": 57.0,
+                  "max": 283.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 147.0,
+                  "q1": 118.0,
+                  "q3": 188.75,
+                  "min": 23,
+                  "max": 481
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9906914893617021,
+              "q1": 0.9317116534669468,
+              "q3": 1.0213068181818181,
+              "min": 0.9143780290791599,
+              "max": 1.1
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -1.75,
+              "q1": -12.375,
+              "q3": 1.875,
+              "min": -26.5,
+              "max": 5.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.1262587732682331,
+              "q1": 0.0707301922427847,
+              "q3": 0.20654354402165265,
+              "min": 0.014981273408239737,
+              "max": 0.4380952380952381
+            }
+          },
+          "coverage": {
+            "availableSamples": 240,
+            "completeSamples": 240,
+            "incompleteObjects": []
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        }
+      }
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "cold",
+      "metrics": {
+        "firstRequestMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 214.75,
+                  "q1": 206.25,
+                  "q3": 236.1875,
+                  "min": 165.75,
+                  "max": 477.75
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 18.0,
+                  "q1": 7.375,
+                  "q3": 25.5,
+                  "min": 3.5,
+                  "max": 431.5
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 948.375,
+                  "q1": 743.375,
+                  "q3": 1263.4375,
+                  "min": 596.25,
+                  "max": 1375.25
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 94.75,
+                  "q1": 60.0,
+                  "q3": 124.375,
+                  "min": 4.5,
+                  "max": 563.5
+                }
+              },
+              "yieldedDivPi": 4.416181606519208
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 243.375,
+                  "q1": 226.6875,
+                  "q3": 280.5625,
+                  "min": 210.0,
+                  "max": 629.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 28.25,
+                  "q1": 17.375,
+                  "q3": 61.625,
+                  "min": 3.0,
+                  "max": 932
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1035.625,
+                  "q1": 804.5,
+                  "q3": 1187.3125,
+                  "min": 664.25,
+                  "max": 1466.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 177.0,
+                  "q1": 55.25,
+                  "q3": 215.125,
+                  "min": 5.5,
+                  "max": 237.0
+                }
+              },
+              "yieldedDivPi": 4.255264509501798
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.1180881495540422,
+              "q1": 1.061939717225442,
+              "q3": 1.1497116244451957,
+              "min": 0.7476822395928013,
+              "max": 1.1826779492284718
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 96.125,
+              "q1": 69.5625,
+              "q3": 126.1875,
+              "min": -347.0,
+              "max": 183.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.09858519181138625,
+              "q1": 0.06760614091742578,
+              "q3": 0.21243244968299213,
+              "min": 0.0050561797752808335,
+              "max": 0.5153177869227252
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        },
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 950.0,
+                  "q1": 869.875,
+                  "q3": 1085.125,
+                  "min": 699.0,
+                  "max": 1378.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 99.0,
+                  "q1": 18.0,
+                  "q3": 137.5,
+                  "min": 1,
+                  "max": 416
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1806.75,
+                  "q1": 1596.375,
+                  "q3": 2151.125,
+                  "min": 1229.0,
+                  "max": 2715.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 197.5,
+                  "q1": 131.25,
+                  "q3": 461.25,
+                  "min": 3,
+                  "max": 567
+                }
+              },
+              "yieldedDivPi": 1.901842105263158
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1010.5,
+                  "q1": 979.25,
+                  "q3": 1140.5,
+                  "min": 739.0,
+                  "max": 1280.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 169.0,
+                  "q1": 89.25,
+                  "q3": 218.25,
+                  "min": 0,
+                  "max": 914
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1919.0,
+                  "q1": 1699.375,
+                  "q3": 2142.75,
+                  "min": 1285.5,
+                  "max": 2615.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 151.0,
+                  "q1": 73.0,
+                  "q3": 236.0,
+                  "min": 36,
+                  "max": 313
+                }
+              },
+              "yieldedDivPi": 1.8990598713508164
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.0284026561886428,
+              "q1": 1.0210864799233557,
+              "q3": 1.0493976834672585,
+              "min": 0.9210099606208015,
+              "max": 1.1077431799393773
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 57.25,
+              "q1": 36.75,
+              "q3": 81.75,
+              "min": -170.5,
+              "max": 195.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.13512102850136365,
+              "q1": 0.09148739646028237,
+              "q3": 0.2027382304006114,
+              "min": 0.001948051948051921,
+              "max": 0.28654661016949157
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 634.5,
+                  "q1": 579.875,
+                  "q3": 731.625,
+                  "min": 243.0,
+                  "max": 901.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 404.5,
+                  "q1": 44.25,
+                  "q3": 699.5,
+                  "min": 28,
+                  "max": 773
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 707.75,
+                  "q1": 384.0,
+                  "q3": 829.0,
+                  "min": 294.0,
+                  "max": 992.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 239.5,
+                  "q1": 199.75,
+                  "q3": 682.75,
+                  "min": 169,
+                  "max": 964
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.1609308361144453,
+              "q1": 0.9724541696585222,
+              "q3": 1.193343974365872,
+              "min": 0.53125,
+              "max": 1.2637729549248748
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 69.0,
+              "q1": -33.375,
+              "q3": 123.25,
+              "min": -300.0,
+              "max": 141.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.8757106621184292,
+              "q1": 0.13823590348388748,
+              "q3": 2.14548288289788,
+              "min": 0.04552845528455274,
+              "max": 2.9130434782608696
+            }
+          },
+          "coverage": {
+            "availableSamples": 40,
+            "completeSamples": 40,
+            "incompleteObjects": []
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        }
+      }
+    },
+    {
+      "history": 250,
+      "ttftMs": 0,
+      "state": "warm",
+      "metrics": {
+        "firstRequestMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 63.75,
+                  "q1": 57.25,
+                  "q3": 68.1875,
+                  "min": 39.0,
+                  "max": 79.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 24.0,
+                  "q1": 18.0,
+                  "q3": 54.75,
+                  "min": 16.5,
+                  "max": 102.0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 391.625,
+                  "q1": 297.375,
+                  "q3": 481.875,
+                  "min": 248.75,
+                  "max": 598.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 261.0,
+                  "q1": 204.25,
+                  "q3": 379.125,
+                  "min": 74.0,
+                  "max": 2268
+                }
+              },
+              "yieldedDivPi": 6.143137254901961
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 70.375,
+                  "q1": 65.5625,
+                  "q3": 72.9375,
+                  "min": 38.5,
+                  "max": 75.75
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 61.25,
+                  "q1": 26.875,
+                  "q3": 69.5,
+                  "min": 13.0,
+                  "max": 234.0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 335.375,
+                  "q1": 280.3125,
+                  "q3": 426.625,
+                  "min": 216.75,
+                  "max": 547.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 215.75,
+                  "q1": 185.25,
+                  "q3": 288.125,
+                  "min": 98.5,
+                  "max": 394.0
+                }
+              },
+              "yieldedDivPi": 4.765541740674956
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.8848333214675198,
+              "q1": 0.8206384237791273,
+              "q3": 0.9115290415179805,
+              "min": 0.7884737175427485,
+              "max": 0.9908256880733946
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -46.25,
+              "q1": -72.1875,
+              "q3": -29.9375,
+              "min": -111.25,
+              "max": -2.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.09159790810571522,
+              "q1": 0.0457451858460729,
+              "q3": 0.15570640427126303,
+              "min": 0.0020100502512563345,
+              "max": 0.26262626262626254
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        },
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 663.75,
+                  "q1": 634.0,
+                  "q3": 680.25,
+                  "min": 484.0,
+                  "max": 813.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 205.0,
+                  "q1": 136.25,
+                  "q3": 251.25,
+                  "min": 77,
+                  "max": 983
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1103.0,
+                  "q1": 1021.0,
+                  "q3": 1261.25,
+                  "min": 696.5,
+                  "max": 1697.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 368.5,
+                  "q1": 262.0,
+                  "q3": 517.75,
+                  "min": 190,
+                  "max": 2876
+                }
+              },
+              "yieldedDivPi": 1.6617702448210923
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 685.5,
+                  "q1": 606.25,
+                  "q3": 732.875,
+                  "min": 471.5,
+                  "max": 871.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 188.5,
+                  "q1": 159.0,
+                  "q3": 415.75,
+                  "min": 101,
+                  "max": 994
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1036.5,
+                  "q1": 928.125,
+                  "q3": 1247.375,
+                  "min": 674.0,
+                  "max": 1539.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 368.5,
+                  "q1": 294.75,
+                  "q3": 425.5,
+                  "min": 132,
+                  "max": 684
+                }
+              },
+              "yieldedDivPi": 1.512035010940919
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.957454628236957,
+              "q1": 0.9370195338289214,
+              "q3": 0.9815906787105297,
+              "min": 0.8167354154390101,
+              "max": 1.0054844606946984
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -39.0,
+              "q1": -66.25,
+              "q3": -21.75,
+              "min": -311.0,
+              "max": 6.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.025015710694698323,
+              "q1": 0.009446503983806143,
+              "q3": 0.07553927949110906,
+              "min": 0.0021582733812950394,
+              "max": 0.6677135678391959
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 261.75,
+                  "q1": 80.25,
+                  "q3": 407.25,
+                  "min": 54.0,
+                  "max": 562.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 448.5,
+                  "q1": 149.5,
+                  "q3": 494.75,
+                  "min": 19,
+                  "max": 2210
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 246.5,
+                  "q1": 76.125,
+                  "q3": 405.625,
+                  "min": 66.5,
+                  "max": 535.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 289.5,
+                  "q1": 181.25,
+                  "q3": 373.0,
+                  "min": 101,
+                  "max": 427
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9933515038576082,
+              "q1": 0.8997348484848485,
+              "q3": 1.0173273996233587,
+              "min": 0.676056338028169,
+              "max": 1.25
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -1.5,
+              "q1": -27.0,
+              "q3": 4.375,
+              "min": -125.5,
+              "max": 17.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.12913502806206667,
+              "q1": 0.0955491781509133,
+              "q3": 0.25959259592595924,
+              "min": 0.006993006993007089,
+              "max": 0.9764150943396226
+            }
+          },
+          "coverage": {
+            "availableSamples": 240,
+            "completeSamples": 240,
+            "incompleteObjects": []
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        }
+      }
+    },
+    {
+      "history": 250,
+      "ttftMs": 400,
+      "state": "cold",
+      "metrics": {
+        "firstRequestMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 263.625,
+                  "q1": 224.6875,
+                  "q3": 312.3125,
+                  "min": 209.25,
+                  "max": 492.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 56.25,
+                  "q1": 17.875,
+                  "q3": 140.625,
+                  "min": 5,
+                  "max": 179
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 941.5,
+                  "q1": 727.625,
+                  "q3": 1037.75,
+                  "min": 610.5,
+                  "max": 1282.75
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 90.5,
+                  "q1": 60.125,
+                  "q3": 236.625,
+                  "min": 19.5,
+                  "max": 514.5
+                }
+              },
+              "yieldedDivPi": 3.571360834518729
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 234.25,
+                  "q1": 225.5625,
+                  "q3": 258.1875,
+                  "min": 203.0,
+                  "max": 319.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 14.0,
+                  "q1": 8.0,
+                  "q3": 26.75,
+                  "min": 1,
+                  "max": 62.0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 999.375,
+                  "q1": 830.3125,
+                  "q3": 1131.0625,
+                  "min": 700.25,
+                  "max": 1252.75
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 85.5,
+                  "q1": 34.375,
+                  "q3": 223.875,
+                  "min": 10,
+                  "max": 379
+                }
+              },
+              "yieldedDivPi": 4.266275346851654
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.0821340312469205,
+              "q1": 0.937767208441167,
+              "q3": 1.2745786136329857,
+              "min": 0.7874613438290694,
+              "max": 1.4574119574119575
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 84.0,
+              "q1": -82.8125,
+              "q3": 180.3125,
+              "min": -189.0,
+              "max": 350.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.11517072276602225,
+              "q1": 0.063069803602678,
+              "q3": 0.21179713758680407,
+              "min": 0.030350194552529075,
+              "max": 0.7111264685556324
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        },
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5179.25,
+                  "q1": 5117.0,
+                  "q3": 5292.0,
+                  "min": 4933.0,
+                  "max": 5673.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 155.0,
+                  "q1": 112.25,
+                  "q3": 200.5,
+                  "min": 12,
+                  "max": 537
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5938.5,
+                  "q1": 5675.5,
+                  "q3": 6022.375,
+                  "min": 5414.5,
+                  "max": 6331.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 164.0,
+                  "q1": 91.25,
+                  "q3": 355.5,
+                  "min": 26,
+                  "max": 1404
+                }
+              },
+              "yieldedDivPi": 1.146594584157938
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5086.5,
+                  "q1": 4988.0,
+                  "q3": 5174.75,
+                  "min": 4942.5,
+                  "max": 5413.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 48.5,
+                  "q1": 23.5,
+                  "q3": 131.25,
+                  "min": 7,
+                  "max": 339
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5871.25,
+                  "q1": 5663.5,
+                  "q3": 6077.625,
+                  "min": 5367.5,
+                  "max": 6137.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 159.5,
+                  "q1": 74.25,
+                  "q3": 287.75,
+                  "min": 1,
+                  "max": 311
+                }
+              },
+              "yieldedDivPi": 1.1542809397424556
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.0166047928958644,
+              "q1": 0.977862962991472,
+              "q3": 1.0288579206327162,
+              "min": 0.8902803118261735,
+              "max": 1.047649829162434
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 99.0,
+              "q1": -140.5,
+              "q3": 159.375,
+              "min": -661.5,
+              "max": 273.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.02785685209248767,
+              "q1": 0.016040419765886882,
+              "q3": 0.0586232209555006,
+              "min": 0.004632104044183238,
+              "max": 0.2635629810399849
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 626.5,
+                  "q1": 379.75,
+                  "q3": 733.75,
+                  "min": 240.5,
+                  "max": 1017.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 101.5,
+                  "q1": 25.75,
+                  "q3": 290.25,
+                  "min": 6,
+                  "max": 802
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 771.25,
+                  "q1": 466.625,
+                  "q3": 840.375,
+                  "min": 345.5,
+                  "max": 1162.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 200.0,
+                  "q1": 98.25,
+                  "q3": 232.75,
+                  "min": 60,
+                  "max": 499
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.2731270903010032,
+              "q1": 1.1783019304304923,
+              "q3": 1.3981769626899243,
+              "min": 0.7912755383765875,
+              "max": 1.6777546777546777
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 127.25,
+              "q1": 90.875,
+              "q3": 179.875,
+              "min": -189.0,
+              "max": 407.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.13697486965938388,
+              "q1": 0.07090416663876853,
+              "q3": 0.6868481992486073,
+              "min": 0.021772939346811793,
+              "max": 3.4078212290502794
+            }
+          },
+          "coverage": {
+            "availableSamples": 40,
+            "completeSamples": 40,
+            "incompleteObjects": []
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        }
+      }
+    },
+    {
+      "history": 250,
+      "ttftMs": 400,
+      "state": "warm",
+      "metrics": {
+        "firstRequestMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 69.125,
+                  "q1": 62.1875,
+                  "q3": 85.25,
+                  "min": 57.25,
+                  "max": 90.75
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 39.0,
+                  "q1": 21.125,
+                  "q3": 85.625,
+                  "min": 12.0,
+                  "max": 385.5
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 328.625,
+                  "q1": 286.4375,
+                  "q3": 401.5625,
+                  "min": 269.0,
+                  "max": 509.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 239.5,
+                  "q1": 121.125,
+                  "q3": 266.0,
+                  "min": 60,
+                  "max": 300.5
+                }
+              },
+              "yieldedDivPi": 4.754068716094032
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 63.875,
+                  "q1": 59.375,
+                  "q3": 80.875,
+                  "min": 55.75,
+                  "max": 89.75
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 18.25,
+                  "q1": 15.75,
+                  "q3": 23.625,
+                  "min": 12.5,
+                  "max": 58
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 316.125,
+                  "q1": 272.3125,
+                  "q3": 395.6875,
+                  "min": 235.0,
+                  "max": 424.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 228.0,
+                  "q1": 139.125,
+                  "q3": 274.375,
+                  "min": 105.5,
+                  "max": 1375.0
+                }
+              },
+              "yieldedDivPi": 4.949119373776908
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9515204305423777,
+              "q1": 0.9392122701160986,
+              "q3": 0.9722628313109485,
+              "min": 0.7907662082514735,
+              "max": 1.0540708514605346
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -15.125,
+              "q1": -22.5625,
+              "q3": -8.9375,
+              "min": -106.5,
+              "max": 21.75
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.021665942339262112,
+              "q1": 0.014312475263764057,
+              "q3": 0.05413569453690015,
+              "min": 0.003754693366708306,
+              "max": 0.2477788746298124
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        },
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 4830.25,
+                  "q1": 4748.5,
+                  "q3": 4888.75,
+                  "min": 4731.5,
+                  "max": 4971.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 297.0,
+                  "q1": 118.5,
+                  "q3": 610.25,
+                  "min": 48,
+                  "max": 1509
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5055.5,
+                  "q1": 5016.5,
+                  "q3": 5141.0,
+                  "min": 4804.5,
+                  "max": 5380.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 338.0,
+                  "q1": 290.5,
+                  "q3": 351.25,
+                  "min": 101,
+                  "max": 596
+                }
+              },
+              "yieldedDivPi": 1.0466331970394906
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 4815.5,
+                  "q1": 4779.375,
+                  "q3": 4854.75,
+                  "min": 4718.0,
+                  "max": 4914.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 171.5,
+                  "q1": 135.0,
+                  "q3": 258.25,
+                  "min": 78,
+                  "max": 3215
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5078.0,
+                  "q1": 4985.375,
+                  "q3": 5122.875,
+                  "min": 4778.5,
+                  "max": 5305.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 355.5,
+                  "q1": 336.5,
+                  "q3": 513.5,
+                  "min": 131,
+                  "max": 1630
+                }
+              },
+              "yieldedDivPi": 1.0545114733672516
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9981869719255712,
+              "q1": 0.9897367707981644,
+              "q3": 1.0053559881091572,
+              "min": 0.9756528203698541,
+              "max": 1.0159915733026907
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -8.5,
+              "q1": -52.625,
+              "q3": 27.125,
+              "min": -131.0,
+              "max": 83.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.009093002350438528,
+              "q1": 0.007756809767533568,
+              "q3": 0.01310236549764987,
+              "min": 0.0027841304563984703,
+              "max": 0.017306482064191275
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 264.25,
+                  "q1": 66.375,
+                  "q3": 270.75,
+                  "min": 59.0,
+                  "max": 504.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 150.0,
+                  "q1": 40.25,
+                  "q3": 240.25,
+                  "min": 17,
+                  "max": 438
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 252.5,
+                  "q1": 68.375,
+                  "q3": 265.25,
+                  "min": 58.5,
+                  "max": 404.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 276.5,
+                  "q1": 126.5,
+                  "q3": 446.0,
+                  "min": 113,
+                  "max": 1388
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9883139222927122,
+              "q1": 0.9498550724637681,
+              "q3": 1.0224308385467487,
+              "min": 0.7809712586719524,
+              "max": 1.109375
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -2.25,
+              "q1": -6.25,
+              "q3": 1.375,
+              "min": -110.5,
+              "max": 15.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.04121929695543469,
+              "q1": 0.025179528757694136,
+              "q3": 0.05229382048872183,
+              "min": 0.003972194637537285,
+              "max": 0.09218436873747504
+            }
+          },
+          "coverage": {
+            "availableSamples": 240,
+            "completeSamples": 240,
+            "incompleteObjects": []
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        }
+      }
+    },
+    {
+      "history": 1000,
+      "ttftMs": 0,
+      "state": "cold",
+      "metrics": {
+        "firstRequestMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 337.625,
+                  "q1": 313.5625,
+                  "q3": 378.625,
+                  "min": 254.0,
+                  "max": 411.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 62.75,
+                  "q1": 32.75,
+                  "q3": 91.5,
+                  "min": 9.5,
+                  "max": 197.0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1184.875,
+                  "q1": 1062.875,
+                  "q3": 1323.6875,
+                  "min": 848.25,
+                  "max": 1530.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 69.25,
+                  "q1": 22.875,
+                  "q3": 234.125,
+                  "min": 13.0,
+                  "max": 402
+                }
+              },
+              "yieldedDivPi": 3.509440947797112
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 362.25,
+                  "q1": 321.4375,
+                  "q3": 392.5,
+                  "min": 263.5,
+                  "max": 467.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 48.5,
+                  "q1": 33.25,
+                  "q3": 76.625,
+                  "min": 8.0,
+                  "max": 135
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1133.0,
+                  "q1": 1083.3125,
+                  "q3": 1347.5,
+                  "min": 850.5,
+                  "max": 1565.25
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 135.0,
+                  "q1": 106.375,
+                  "q3": 180.25,
+                  "min": 38.5,
+                  "max": 487
+                }
+              },
+              "yieldedDivPi": 3.1276742581090407
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9872562530835316,
+              "q1": 0.9532488087647775,
+              "q3": 1.031352737125828,
+              "min": 0.9126135216952573,
+              "max": 1.1571745562130178
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -19.375,
+              "q1": -55.4375,
+              "q3": 35.25,
+              "min": -108.25,
+              "max": 212.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.08022400442477873,
+              "q1": 0.018248787260729427,
+              "q3": 0.21593398530444535,
+              "min": 0.009661835748792313,
+              "max": 0.3024830699774266
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        },
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1971.0,
+                  "q1": 1422.75,
+                  "q3": 2103.75,
+                  "min": 1159.0,
+                  "max": 2180.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 130.5,
+                  "q1": 72.25,
+                  "q3": 224.75,
+                  "min": 29,
+                  "max": 370
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 2152.25,
+                  "q1": 1981.25,
+                  "q3": 2371.75,
+                  "min": 1643.0,
+                  "max": 2798.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 105.5,
+                  "q1": 47.25,
+                  "q3": 203.25,
+                  "min": 7,
+                  "max": 398
+                }
+              },
+              "yieldedDivPi": 1.0919583967529174
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1989.25,
+                  "q1": 1379.375,
+                  "q3": 2207.625,
+                  "min": 1164.5,
+                  "max": 2345.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 93.0,
+                  "q1": 56.25,
+                  "q3": 204.75,
+                  "min": 43,
+                  "max": 446
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 2088.0,
+                  "q1": 2036.125,
+                  "q3": 2477.0,
+                  "min": 1616.5,
+                  "max": 2970.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 170.5,
+                  "q1": 143.0,
+                  "q3": 303.75,
+                  "min": 0,
+                  "max": 875
+                }
+              },
+              "yieldedDivPi": 1.0496418248083448
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.0039023222500547,
+              "q1": 0.9781064297711131,
+              "q3": 1.0650377613683342,
+              "min": 0.9491292392300642,
+              "max": 1.2112936344969198
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 12.25,
+              "q1": -44.875,
+              "q3": 160.25,
+              "min": -111.0,
+              "max": 514.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.060581904881794935,
+              "q1": 0.022623890437447947,
+              "q3": 0.08707712883418378,
+              "min": 0.0034313725490195957,
+              "max": 0.19866529774127306
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1002.0,
+                  "q1": 837.5,
+                  "q3": 1191.125,
+                  "min": 198.5,
+                  "max": 1384.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 191.0,
+                  "q1": 35.5,
+                  "q3": 644.5,
+                  "min": 18,
+                  "max": 1179
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 990.25,
+                  "q1": 776.625,
+                  "q3": 1135.375,
+                  "min": 317.0,
+                  "max": 1564.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 195.5,
+                  "q1": 139.0,
+                  "q3": 442.5,
+                  "min": 106,
+                  "max": 1259
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9826534165457383,
+              "q1": 0.9353289579730957,
+              "q3": 1.1218093801625701,
+              "min": 0.43591258121677495,
+              "max": 1.5969773299748111
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -21.0,
+              "q1": -74.625,
+              "q3": 95.25,
+              "min": -477.5,
+              "max": 180.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.19030556028343382,
+              "q1": 0.06747997201191852,
+              "q3": 2.2124634078092043,
+              "min": 0.015215553677092153,
+              "max": 4.587548638132295
+            }
+          },
+          "coverage": {
+            "availableSamples": 40,
+            "completeSamples": 40,
+            "incompleteObjects": []
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        }
+      }
+    },
+    {
+      "history": 1000,
+      "ttftMs": 0,
+      "state": "warm",
+      "metrics": {
+        "firstRequestMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 117.625,
+                  "q1": 87.1875,
+                  "q3": 128.6875,
+                  "min": 84.25,
+                  "max": 148.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 78.25,
+                  "q1": 53.5,
+                  "q3": 95.375,
+                  "min": 30.0,
+                  "max": 111
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 587.375,
+                  "q1": 555.6875,
+                  "q3": 731.0,
+                  "min": 455.0,
+                  "max": 927.75
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 278.25,
+                  "q1": 220.625,
+                  "q3": 370.125,
+                  "min": 90,
+                  "max": 794
+                }
+              },
+              "yieldedDivPi": 4.993623804463337
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 124.75,
+                  "q1": 96.6875,
+                  "q3": 137.625,
+                  "min": 78.0,
+                  "max": 147.25
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 84.5,
+                  "q1": 61.625,
+                  "q3": 94.75,
+                  "min": 44.0,
+                  "max": 139.5
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 546.5,
+                  "q1": 527.9375,
+                  "q3": 646.4375,
+                  "min": 366.25,
+                  "max": 807.25
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 223.0,
+                  "q1": 184.625,
+                  "q3": 293.75,
+                  "min": 100,
+                  "max": 394.5
+                }
+              },
+              "yieldedDivPi": 4.380761523046092
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.8710384869198279,
+              "q1": 0.8384086873357716,
+              "q3": 0.9439070007907062,
+              "min": 0.7729294052251251,
+              "max": 1.0124309392265194
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -86.0,
+              "q1": -97.5625,
+              "q3": -33.0625,
+              "min": -204.25,
+              "max": 6.75
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.04167669836683918,
+              "q1": 0.02466849656299458,
+              "q3": 0.056117924952117204,
+              "min": 0.004592901878914368,
+              "max": 0.17976965448172266
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        },
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1431.0,
+                  "q1": 973.375,
+                  "q3": 1592.875,
+                  "min": 801.0,
+                  "max": 1689.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 329.0,
+                  "q1": 245.5,
+                  "q3": 517.5,
+                  "min": 180,
+                  "max": 866
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1318.5,
+                  "q1": 1279.75,
+                  "q3": 1586.875,
+                  "min": 1085.0,
+                  "max": 1900.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 388.0,
+                  "q1": 247.75,
+                  "q3": 815.75,
+                  "min": 200,
+                  "max": 1036
+                }
+              },
+              "yieldedDivPi": 0.9213836477987422
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1465.5,
+                  "q1": 1021.125,
+                  "q3": 1569.625,
+                  "min": 801.5,
+                  "max": 1608.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 450.5,
+                  "q1": 347.0,
+                  "q3": 575.0,
+                  "min": 246,
+                  "max": 983
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1311.75,
+                  "q1": 1181.375,
+                  "q3": 1484.5,
+                  "min": 976.0,
+                  "max": 1751.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 316.0,
+                  "q1": 236.75,
+                  "q3": 449.5,
+                  "min": 109,
+                  "max": 857
+                }
+              },
+              "yieldedDivPi": 0.8950870010235414
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9309527771422232,
+              "q1": 0.9106912654564588,
+              "q3": 0.9530922956002041,
+              "min": 0.8995391705069125,
+              "max": 1.0178363706863125
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -95.75,
+              "q1": -121.875,
+              "q3": -63.25,
+              "min": -162.5,
+              "max": 23.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.059033652835913,
+              "q1": 0.0399363878512069,
+              "q3": 0.07228094891326275,
+              "min": 0.005039596832253412,
+              "max": 0.14501372369624876
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 575.75,
+                  "q1": 470.875,
+                  "q3": 606.875,
+                  "min": 67.5,
+                  "max": 924.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 331.0,
+                  "q1": 243.75,
+                  "q3": 524.75,
+                  "min": 96,
+                  "max": 752
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 538.25,
+                  "q1": 414.375,
+                  "q3": 560.25,
+                  "min": 70.5,
+                  "max": 695.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 259.5,
+                  "q1": 196.5,
+                  "q3": 434.25,
+                  "min": 97,
+                  "max": 802
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9349117067218131,
+              "q1": 0.8224884126888581,
+              "q3": 0.961731175875701,
+              "min": 0.7527056277056277,
+              "max": 5.659259259259259
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -37.5,
+              "q1": -94.75,
+              "q3": -9.375,
+              "min": -228.5,
+              "max": 314.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.03803473015337677,
+              "q1": 0.01626621598729905,
+              "q3": 0.1285229983729449,
+              "min": 0.0008389261744965459,
+              "max": 3.325925925925926
+            }
+          },
+          "coverage": {
+            "availableSamples": 240,
+            "completeSamples": 240,
+            "incompleteObjects": []
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        }
+      }
+    },
+    {
+      "history": 1000,
+      "ttftMs": 400,
+      "state": "cold",
+      "metrics": {
+        "firstRequestMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 343.5,
+                  "q1": 310.5,
+                  "q3": 415.25,
+                  "min": 197.25,
+                  "max": 489.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 41.5,
+                  "q1": 21.125,
+                  "q3": 108.5,
+                  "min": 10.5,
+                  "max": 141.5
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1248.875,
+                  "q1": 956.3125,
+                  "q3": 1447.4375,
+                  "min": 789.75,
+                  "max": 1542.75
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 96.25,
+                  "q1": 50.875,
+                  "q3": 174.375,
+                  "min": 29.5,
+                  "max": 386.5
+                }
+              },
+              "yieldedDivPi": 3.635735080058224
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 337.75,
+                  "q1": 297.0,
+                  "q3": 406.9375,
+                  "min": 211.5,
+                  "max": 694.25
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 66.0,
+                  "q1": 32.75,
+                  "q3": 120.75,
+                  "min": 9,
+                  "max": 207.5
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 1158.875,
+                  "q1": 948.875,
+                  "q3": 1490.6875,
+                  "min": 839.25,
+                  "max": 1673.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 141.0,
+                  "q1": 66.25,
+                  "q3": 205.125,
+                  "min": 37,
+                  "max": 427.5
+                }
+              },
+              "yieldedDivPi": 3.431162102146558
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.0223780381697953,
+              "q1": 0.9369311414255703,
+              "q3": 1.0758385419594014,
+              "min": 0.8602835422231354,
+              "max": 1.1379017173950008
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 27.75,
+              "q1": -71.9375,
+              "q3": 86.5,
+              "min": -170.0,
+              "max": 202.75
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.0790684164033838,
+              "q1": 0.06211188261496137,
+              "q3": 0.1497022590895133,
+              "min": 0.02026794915836483,
+              "max": 0.28640237124861057
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        },
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5581.5,
+                  "q1": 5292.875,
+                  "q3": 6074.625,
+                  "min": 5099.0,
+                  "max": 6176.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 97.0,
+                  "q1": 34.25,
+                  "q3": 136.25,
+                  "min": 28,
+                  "max": 179
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 6270.0,
+                  "q1": 5896.25,
+                  "q3": 6581.375,
+                  "min": 5671.0,
+                  "max": 6953.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 129.0,
+                  "q1": 77.25,
+                  "q3": 204.5,
+                  "min": 1,
+                  "max": 345
+                }
+              },
+              "yieldedDivPi": 1.1233539371136791
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5541.25,
+                  "q1": 5388.75,
+                  "q3": 6058.25,
+                  "min": 5095.0,
+                  "max": 6479.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 85.5,
+                  "q1": 26.0,
+                  "q3": 172.5,
+                  "min": 4,
+                  "max": 345
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 6095.0,
+                  "q1": 5865.125,
+                  "q3": 6619.75,
+                  "min": 5634.0,
+                  "max": 7040.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 132.5,
+                  "q1": 74.25,
+                  "q3": 430.75,
+                  "min": 51,
+                  "max": 606
+                }
+              },
+              "yieldedDivPi": 1.0999323257387774
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.0035295494108,
+              "q1": 0.9876638516331441,
+              "q3": 1.008890580882586,
+              "min": 0.9387526054192721,
+              "max": 1.0294220359699668
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 21.5,
+              "q1": -77.5,
+              "q3": 59.25,
+              "min": -382.0,
+              "max": 168.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.021823120958007647,
+              "q1": 0.012731378369436441,
+              "q3": 0.03095118820961884,
+              "min": 0.00016860563142806484,
+              "max": 0.05241567912488598
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 800.0,
+                  "q1": 279.75,
+                  "q3": 911.0,
+                  "min": 196.0,
+                  "max": 1471.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 57.0,
+                  "q1": 36.75,
+                  "q3": 101.0,
+                  "min": 32,
+                  "max": 1078
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 878.25,
+                  "q1": 458.875,
+                  "q3": 944.875,
+                  "min": 312.0,
+                  "max": 1289.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 179.0,
+                  "q1": 103.5,
+                  "q3": 816.0,
+                  "min": 48,
+                  "max": 1498
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 1.138170235717927,
+              "q1": 1.0035609087701736,
+              "q3": 1.2701179794668278,
+              "min": 0.6495581237253569,
+              "max": 4.092063492063492
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 64.0,
+              "q1": 2.0,
+              "q3": 108.375,
+              "min": -515.5,
+              "max": 974.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.12850729517396176,
+              "q1": 0.06741573033707865,
+              "q3": 0.49915266408157405,
+              "min": 0.021993127147766245,
+              "max": 3.152046783625731
+            }
+          },
+          "coverage": {
+            "availableSamples": 40,
+            "completeSamples": 40,
+            "incompleteObjects": []
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 20,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "coverage": {
+            "availableSamples": 80,
+            "completeSamples": 80,
+            "incompleteObjects": []
+          }
+        }
+      }
+    },
+    {
+      "history": 1000,
+      "ttftMs": 400,
+      "state": "warm",
+      "metrics": {
+        "firstRequestMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 9,
+                "samples": 108,
+                "objectMedians": {
+                  "n": 9,
+                  "median": 84.0,
+                  "q1": 83.0,
+                  "q3": 140.0,
+                  "min": 78.0,
+                  "max": 156.0
+                },
+                "repeatRange": {
+                  "n": 9,
+                  "median": 78.5,
+                  "q1": 63.5,
+                  "q3": 91.0,
+                  "min": 22.5,
+                  "max": 380.0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 613.25,
+                  "q1": 526.25,
+                  "q3": 834.75,
+                  "min": 465.5,
+                  "max": 1022.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 310.5,
+                  "q1": 255.25,
+                  "q3": 380.625,
+                  "min": 220.0,
+                  "max": 483
+                }
+              },
+              "yieldedDivPi": 7.300595238095238
+            },
+            "candidate": {
+              "pi": {
+                "objects": 9,
+                "samples": 108,
+                "objectMedians": {
+                  "n": 9,
+                  "median": 93.25,
+                  "q1": 86.25,
+                  "q3": 145.0,
+                  "min": 78.25,
+                  "max": 154.75
+                },
+                "repeatRange": {
+                  "n": 9,
+                  "median": 89.5,
+                  "q1": 54.0,
+                  "q3": 116.5,
+                  "min": 44.5,
+                  "max": 448.0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 591.0,
+                  "q1": 456.125,
+                  "q3": 774.1875,
+                  "min": 412.5,
+                  "max": 875.25
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 351.75,
+                  "q1": 239.375,
+                  "q3": 386.75,
+                  "min": 109,
+                  "max": 1193.0
+                }
+              },
+              "yieldedDivPi": 6.337801608579088
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9018361138798695,
+              "q1": 0.8710080280805144,
+              "q3": 0.9286838259172538,
+              "min": 0.8540180694246314,
+              "max": 0.9731202324736651
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -61.125,
+              "q1": -76.3125,
+              "q3": -43.5,
+              "min": -147.25,
+              "max": -18.5
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.10351285168155322,
+              "q1": 0.06060655607745202,
+              "q3": 0.13611707723327776,
+              "min": 0.007132667617689048,
+              "max": 0.23187919463087248
+            }
+          },
+          "coverage": {
+            "availableSamples": 479,
+            "completeSamples": 456,
+            "incompleteObjects": [
+              {
+                "target": "pi",
+                "object": "5",
+                "availableSamples": 23
+              }
+            ]
+          }
+        },
+        "driverMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5053.75,
+                  "q1": 4974.75,
+                  "q3": 5513.625,
+                  "min": 4839.5,
+                  "max": 5630.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 365.5,
+                  "q1": 210.5,
+                  "q3": 555.25,
+                  "min": 171,
+                  "max": 604
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5381.0,
+                  "q1": 5221.5,
+                  "q3": 5705.625,
+                  "min": 5125.5,
+                  "max": 6077.5
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 424.0,
+                  "q1": 388.0,
+                  "q3": 510.75,
+                  "min": 253,
+                  "max": 2646
+                }
+              },
+              "yieldedDivPi": 1.0647538956220628
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5072.0,
+                  "q1": 5003.0,
+                  "q3": 5556.125,
+                  "min": 4834.0,
+                  "max": 5674.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 463.0,
+                  "q1": 267.75,
+                  "q3": 704.25,
+                  "min": 145,
+                  "max": 1474
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 5317.75,
+                  "q1": 5162.0,
+                  "q3": 5681.875,
+                  "min": 5029.5,
+                  "max": 5838.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 533.5,
+                  "q1": 384.5,
+                  "q3": 642.25,
+                  "min": 144,
+                  "max": 1216
+                }
+              },
+              "yieldedDivPi": 1.048452287066246
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9815218935088368,
+              "q1": 0.9733816762990091,
+              "q3": 0.9928082570834875,
+              "min": 0.960592348827643,
+              "max": 1.0075270791261244
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -98.25,
+              "q1": -141.25,
+              "q3": -39.125,
+              "min": -239.5,
+              "max": 41.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.01580631952110345,
+              "q1": 0.006158443812306624,
+              "q3": 0.021236155276813773,
+              "min": 0.0021202775636082194,
+              "max": 0.053485354097144944
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        },
+        "admissionMs": {
+          "builds": {
+            "baseline": {
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 492.25,
+                  "q1": 83.75,
+                  "q3": 748.25,
+                  "min": 63.0,
+                  "max": 1021.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 414.0,
+                  "q1": 334.75,
+                  "q3": 517.25,
+                  "min": 29,
+                  "max": 575
+                }
+              }
+            },
+            "candidate": {
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 432.0,
+                  "q1": 156.75,
+                  "q3": 690.5,
+                  "min": 55.0,
+                  "max": 862.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 361.0,
+                  "q1": 243.75,
+                  "q3": 401.75,
+                  "min": 24,
+                  "max": 1207
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 10,
+              "median": 0.9172106611436781,
+              "q1": 0.8744634229435084,
+              "q3": 0.9936753338018272,
+              "min": 0.8442703232125367,
+              "max": 3.1343283582089554
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": -35.5,
+              "q1": -62.625,
+              "q3": -2.25,
+              "min": -159.0,
+              "max": 286.0
+            },
+            "baselineEpochDrift": {
+              "n": 10,
+              "median": 0.12075797128472865,
+              "q1": 0.10616283428335077,
+              "q3": 0.16980761559939866,
+              "min": 0.02208835341365467,
+              "max": 2.908333333333333
+            }
+          },
+          "coverage": {
+            "availableSamples": 240,
+            "completeSamples": 240,
+            "incompleteObjects": []
+          }
+        },
+        "gapMs": {
+          "builds": {
+            "baseline": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            },
+            "candidate": {
+              "pi": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              },
+              "yielded": {
+                "objects": 10,
+                "samples": 120,
+                "objectMedians": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                },
+                "repeatRange": {
+                  "n": 10,
+                  "median": 0.0,
+                  "q1": 0.0,
+                  "q3": 0.0,
+                  "min": 0,
+                  "max": 0
+                }
+              }
+            }
+          },
+          "pairedYielded": {
+            "candidateDivBaseline": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            },
+            "deltaMs": {
+              "n": 10,
+              "median": 0.0,
+              "q1": 0.0,
+              "q3": 0.0,
+              "min": 0.0,
+              "max": 0.0
+            },
+            "baselineEpochDrift": {
+              "n": 0,
+              "median": null,
+              "q1": null,
+              "q3": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "coverage": {
+            "availableSamples": 480,
+            "completeSamples": 480,
+            "incompleteObjects": []
+          }
+        }
+      }
+    }
+  ],
+  "sampleTable": {
+    "file": "prompt-hydration.samples.csv",
+    "rows": 3840,
+    "sha256": "2c9a4d0e44128ccdd47e9aa6489694b18ee27bad22aa02447228d94c451e8878",
+    "note": "Numeric samples including warmups; blank cells mean absent. Object numbers are local to target/history/TTFT cohorts. Detailed provider probes and raw telemetry remain private; their source result is bound by rawSha256."
+  }
+}

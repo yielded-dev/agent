@@ -1,0 +1,39 @@
+--- a/examples/durable-bench/deployed/worker/host.ts
++++ b/examples/durable-bench/deployed/worker/host.ts
+@@ -45,6 +45,7 @@
+     },
+   ): Promise<Response> {
+     const url = new URL(request.url);
++    if (url.pathname === "/health") return Response.json({ ok: true, build: this.env.BUILD });
+     const query = readQuery(url);
+ 
+     if (query.target !== this.target) throw new Error("Target mismatch");
+--- a/examples/durable-bench/third-party/src/deployed/index.ts
++++ b/examples/durable-bench/third-party/src/deployed/index.ts
+@@ -12,6 +12,7 @@
+ import { COLD_ABORT } from "../../../deployed/worker/host.ts";
+ import { PiDO } from "./pi.ts";
+ import { BulkFixture, Identity, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
++import { Health } from "../../../deployed/model.ts";
+ import { FixtureError } from "../../../deployed/worker/storage.ts";
+ import { ActorDO, ThreadDO, cloudflareThreadName, coordinate } from "./tardie.ts";
+ import { agent, definitions, YieldedDO } from "../../../deployed/worker/yielded.ts";
+@@ -107,6 +108,18 @@
+     try {
+       if (url.pathname === "/health") {
+         await getClient(env).ready;
++        for (const stub of [
++          env.YIELDED.getByName("history-cost-readiness-yielded", { locationHint: "wnam" }),
++          env.PI.getByName("history-cost-readiness-pi", { locationHint: "wnam" }),
++        ]) {
++          const response = await stub.fetch(
++            new Request(new URL("/health", url), { headers: request.headers }),
++          );
++          if (!response.ok) throw new Error("Durable Object health did not propagate");
++          const health = Schema.decodeUnknownSync(Health)(await response.json());
++          if (health.build !== env.BUILD)
++            throw new Error("Durable Object build differs from router build");
++        }
+ 
+         return Response.json({ ok: true, build: env.BUILD });
+       }

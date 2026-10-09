@@ -1,6 +1,6 @@
 # History-dependent turn cost
 
-Work in progress. Latency claims require a completed deployed same-Object comparison; local counts below are diagnostic. The primary metric is submission to the mock provider's first-request arrival, with whole-turn latency retained. Warm/cold, instant/400 ms and 50/250/1,000-turn coverage are tracked separately. A 3,500-turn deployed import exceeded the Object isolate's memory limit; its failure and verified target cleanup are retained.
+Work in progress. Latency claims require a completed deployed same-Object comparison; local counts below are diagnostic. The primary metric is submission to the mock provider's first-request arrival, with whole-turn latency retained. Warm/cold, instant/400 ms and 50/250/1,000-turn coverage are tracked separately. Both the original 3,500-turn import and the repaired snapshot seed exceeded the deployed Object memory limit before timing; their failures and verified target cleanup are retained. Deterministic counts still cover 3,500 turns.
 
 The product baseline is `07f0272e7ba49a494064b6b74c6318b55514ae19` (main after #827). The benchmark is the separate #828 worktree; its latest measured head and local adaptations are recorded per run. Product candidates contain no benchmark or results files.
 
@@ -13,7 +13,7 @@ The product baseline is `07f0272e7ba49a494064b6b74c6318b55514ae19` (main after #
 | Single message-schema traversal | `40485f33` | Remove the outer encoded-message validation while retaining the native decoder | No demonstrated warm gain; no PR |
 | Input filtering | `87158447` | Omit historical admissions from prompt reads; fetch exact compaction/late-owner admissions when needed | Counts and full gate passed; deployed setup failures retained |
 | Terminal filtering | `4417a095` | Omit a duplicate settlement when an earlier terminal record is in the logical read range | Counts complete; timing pending |
-| Native constructor restoration | `0451aacb` | Keep upstream encoded validation and restore native Prompt values with upstream constructors | Counts and full gate passed; deployed timing pending |
+| Native constructor restoration | `0451aacb` | Keep upstream encoded validation and restore native Prompt values with upstream constructors | Measured warm/instant first-arrival gain at 1,000; reverse-order check pending |
 | Direct history digest encoding | `442c988c` | Encode upstream messages once, avoiding the Prompt wrapper's redundant pass | Exact digest equivalence, counts and full gate passed; deployed timing pending |
 
 Canonical append/import/recovery codecs, hash-chain verification, continuation verification, fencing, claims, leases, Unknown handling and confirmed durability remain in place. No warm in-memory context cache is introduced.
@@ -71,9 +71,44 @@ These are complete-turn measurements, before provider-arrival retention was adde
 
 First-arrival measurements use the provider's receipt timestamp and the driver's submission start. Three echo probes before and after each turn travel through the measured Object to bound the driver/provider offset. Pre-probes finish before cold eviction and the timer; post-probes follow the completion timestamp. No Object call occurs between the cold abort and the timed submission. Corrected values use the interval midpoint and require consistent same-colo bounds across the turn. They assume stable provider-host clock offsets within that colo; raw differences and probe evidence are retained. Invalid clock checks are excluded from this metric and explicitly counted. Ratios require complete epoch/repeat coverage for both builds on each Object; incomplete pairs are excluded and counted. The earlier direct driver-to-provider probes reached different colos from model requests, invalidating 24 of 32 non-warmup timestamps in the [one-Object smoke](runs/seed-gate-clock-smoke.json). That smoke makes no latency claim.
 
+### Native constructor restoration: required-size matrix
+
+The first full matrix completed with ten Objects per target/size/provider cell, six warm repeats per pass, BAAB order, 3,840 successful turns and 34,560 matching model requests. The measured revisions are `07f0272e` → `0451aacb`; target cleanup was verified. The primary result is submission to the first provider-request arrival:
+
+| Seed turns | Provider ms | State | Yielded ÷ pi before → after | Paired candidate ÷ baseline | Paired change |
+|---:|---:|---|---:|---:|---:|
+| 50 | 0 | cold | 2.561× → 2.952× | 1.134× | +89.8 ms |
+| 50 | 0 | warm | 3.355× → 3.187× | 0.966× | -7.5 ms |
+| 50 | 400 | cold | 3.949× → 3.514× | 1.006× | +1.9 ms |
+| 50 | 400 | warm | 4.374× → 4.313× | 0.947× | -12.4 ms |
+| 250 | 0 | cold | 4.416× → 4.255× | 1.118× | +96.1 ms |
+| 250 | 0 | warm | 6.143× → 4.766× | 0.885× | -46.2 ms |
+| 250 | 400 | cold | 3.571× → 4.266× | 1.082× | +84.0 ms |
+| 250 | 400 | warm | 4.754× → 4.949× | 0.952× | -15.1 ms |
+| 1,000 | 0 | cold | 3.509× → 3.128× | 0.987× | -19.4 ms |
+| 1,000 | 0 | warm | 4.994× → 4.381× | 0.871× | -86.0 ms |
+| 1,000 | 400 | cold | 3.636× → 3.431× | 1.022× | +27.8 ms |
+| 1,000 | 400 | warm | 7.301× → 6.338× | 0.902× | -61.1 ms |
+
+At 1,000 turns with an instant provider, the paired warm median improved 12.9% (86.0 ms). The six cohort repeat estimates were 0.830–0.923 candidate/baseline (9.3 percentage points of spread); median baseline epoch drift was 4.2%. This clears those observed variations. At 250 warm/instant the apparent 11.5% gain is approximately the 11.4-point repeat spread, so it is not a resolved claim. The 50-turn and 400 ms provider estimates also fall within their observed repeat/control spread. Cold estimates are mixed, including slower 50/250-turn instant medians; an order-reversed check is pending. None of those cells is claimed as a gain.
+
+Whole-turn warm/instant Yielded ÷ pi was 1.188 → 1.135 / 1.662 → 1.512 / 0.921 → 0.895 at 50/250/1,000 seeded turns. Those ratios alone do not establish a gain. [All first-arrival and complete-turn conditions, medians and control drift](runs/prompt-hydration.md), [compact evidence](runs/prompt-hydration.json), [repeat estimates](runs/prompt-hydration.repeats.json), [numeric samples](runs/prompt-hydration.samples.csv).
+
+Successful marked warm/instant invocation CPU medians are below. Each cell has 113–120 observed invocations per build; missing telemetry is not treated as zero. These are whole-invocation CPU costs, not isolated history-decoding microseconds per record.
+
+| Seed turns | Yielded alarm CPU before → after | pi Run CPU before → after |
+|---:|---:|---:|
+| 50 | 112 → 107 ms | 309 → 297 ms |
+| 250 | 270 → 222 ms | 305 → 306 ms |
+| 1,000 | 477.5 → 426 ms | 949 → 930 ms |
+
+The clock check accepted 3,359 of 3,360 non-warmup turns. One pi 1,000-turn warm/400 ms sample had inconsistent bounds, so that metric uses nine complete pi Objects and ten Yielded Objects; all other first-arrival cells have ten each. Median clock-interval width was 31 ms (17–87 ms). Unattributed non-ok telemetry comprised 1,934 canceled alarms, 209 canceled fetches and 476 aborted fetches; the result retains them all, along with 61 unmatched telemetry markers. There were no controller or timed-workflow failures.
+
 ### Setup outcomes retained
 
-- [3,500-turn import](runs/import-3500-memory-limit.json): isolate memory reset before any timed samples. Target cleanup verified.
+- [Reverse-order setup](runs/abba-seed-missing-fetch.json): the first 250-turn seed reached an Object without a fetch handler after router health had passed. Zero timed samples; target cleanup verified. Subsequent runs add separate read-only canary Object health/build checks before seeding and timing. The uncertain seed was not retried.
+
+- [3,500-turn import](runs/import-3500-memory-limit.json): isolate memory reset before any timed samples. Target cleanup verified. The later [snapshot capability probe](runs/snapshot-3500-memory-limit.json) also exceeded the deployed Object memory limit (125.6 s total, zero timed samples), despite a successful local round trip. Its target cleanup was also verified; deployed 3,500-turn timing remains unsupported.
 - [Required-size matrix import](runs/import-250-storage-timeout.json): storage timeout/reset during a 250-turn seed, before timing. Target cleanup verified.
 - [First-arrival matrix import](runs/first-arrival-input-seed-timeout.json): another storage timeout/reset during a 250-turn seed, before timing. Target cleanup verified. Its serial 250/1,000 setup ran for about 16 minutes; observed import fetch CPU was under one second while separate alarm invocations consumed tens of seconds. This suggested alarm/storage interleaving, but does not prove partial canonical rows were visible.
 - [Native-client import](runs/native-import-seed-timeout.json): a 1,000-turn seed timed out despite using the production SQL client and mutation gate. Observed fetch CPU was 139 ms and a concurrent alarm used 44,490 ms; no timed turn ran. Target cleanup verified.

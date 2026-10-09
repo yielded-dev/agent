@@ -1,0 +1,149 @@
+{
+  "run": "history-cost-mv0nhkuq-3a004f7a",
+  "revision": "78cb4eb7589984c1cd194e0cb01a5a0055a6d3f3",
+  "dirty": true,
+  "startedAt": "2026-10-09T07:35:13.874Z",
+  "wallMs": 125610,
+  "options": {
+    "targets": [
+      "yielded",
+      "pi"
+    ],
+    "sizes": [
+      3500
+    ],
+    "ttft": [
+      0
+    ],
+    "objects": 1,
+    "repeats": 1,
+    "concurrency": 2,
+    "cold": true,
+    "cpu": true,
+    "keep": false,
+    "rigorous": true,
+    "baseline": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+    "candidate": "0451aacb627ec3dbe76618c043bce9d6b91596ad"
+  },
+  "seedBuild": {
+    "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+    "sha256": "1436537ce0db9365af2227baeb854efef140de2cae8a9f8e1c51384f930f05fa"
+  },
+  "builds": [
+    {
+      "label": "baseline",
+      "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "7d282e242496d1e9c4399783fbf6dfb0e7088cfab52cbc044d8bd60bfc1fd7aa"
+    },
+    {
+      "label": "candidate",
+      "revision": "0451aacb627ec3dbe76618c043bce9d6b91596ad",
+      "sha256": "47b46d8408f33f5661ba328cb9b91a30ed003ecc245b5e6bb120224007c6874f"
+    }
+  ],
+  "fixtures": [
+    {
+      "target": "yielded",
+      "history": 3500,
+      "fingerprint": "0a8c8e4b0d9a0794",
+      "tables": {
+        "effect_agent_threads": 1,
+        "effect_agent_canonical_batches": 16335,
+        "effect_agent_canonical_records": 42003,
+        "effect_agent_record_runs": 25668,
+        "effect_agent_tool_declarations": 2334,
+        "effect_agent_record_refusals": 0,
+        "effect_agent_checkpoints": 0,
+        "effect_agent_submissions": 3500,
+        "effect_agent_submission_ownership": 0,
+        "effect_agent_attempts": 0,
+        "effect_agent_abort_intents": 0,
+        "effect_agent_approval_decisions": 0,
+        "effect_agent_unknown_resolutions": 0,
+        "effect_agent_child_reservations": 0,
+        "effect_agent_child_settlements": 0,
+        "effect_agent_message_deliveries": 0,
+        "effect_agent_worker_stops": 0,
+        "effect_agent_meta": 1,
+        "effect_agent_journal_ranges": 42,
+        "effect_agent_archive_batches": 0,
+        "effect_agent_archive_records": 0,
+        "effect_agent_live_child_reservations": 0,
+        "effect_agent_transfer_commands": 0,
+        "effect_agent_input_intervals": 3500,
+        "effect_agent_settlement_spans": 10500,
+        "effect_agent_import_fifo": 0,
+        "effect_agent_import_delivery_visits": 0,
+        "effect_agent_transfer_state": 1,
+        "effect_agent_work_index": 1,
+        "effect_agent_work_entries": 0,
+        "effect_agent_schema": 1
+      },
+      "mode": "import",
+      "fallbackReason": "Import-normalized table counts: platform_cloudflare_due_queue 4 -> absent, effect_agent_attempts 3500 -> 0; canonical history and transcript unchanged"
+    },
+    {
+      "target": "pi",
+      "history": 3500,
+      "fingerprint": "0a8c8e4b0d9a0794",
+      "tables": {
+        "durable_schema": 1,
+        "durable_metadata": 1,
+        "record_ids": 23343,
+        "conversations": 1,
+        "entries": 11669,
+        "tasks": 8168,
+        "submissions": 3500,
+        "documents": 5,
+        "document_revisions": 5
+      },
+      "mode": "import"
+    }
+  ],
+  "complete": false,
+  "failures": [
+    "yielded/3500/0 seed: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Durable Object's isolate exceeded its memory limit and was reset.\",\"sample\":\"import\"}"
+  ],
+  "cleanup": {
+    "verified": true,
+    "workers": [],
+    "namespaces": []
+  },
+  "kept": false,
+  "rawSha256": "19417448931133472c1c2a76a59be0d01c30a65814d42655ffb942869ab5e106",
+  "samplesByStatus": {},
+  "fingerprintsVerified": 0,
+  "modelRequestsVerified": 0,
+  "clockChecks": {
+    "valid": 0,
+    "rejected": 0,
+    "intervalWidthMs": {
+      "n": 0,
+      "median": null,
+      "q1": null,
+      "q3": null,
+      "min": null,
+      "max": null
+    },
+    "providerColos": {}
+  },
+  "cpuOutcomes": [
+    {
+      "target": "unattributed",
+      "kind": "fetch",
+      "outcome": "ok",
+      "count": 9,
+      "cpuMs": {
+        "n": 9,
+        "median": 1,
+        "q1": 0.0,
+        "q3": 9.0,
+        "min": 0,
+        "max": 1971
+      }
+    }
+  ],
+  "unmatchedCpuMarkers": 0,
+  "cells": [],
+  "objects": []
+}

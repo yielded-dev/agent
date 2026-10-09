@@ -1,0 +1,13 @@
+--- a/examples/durable-bench/deployed/run.ts
++++ b/examples/durable-bench/deployed/run.ts
+@@ -229,9 +229,7 @@
+     }
+ 
+     const epochs: readonly Label[] = options.rigorous
+-      ? nonce().charAt(0) < "8"
+-        ? ["baseline", "candidate", "candidate", "baseline"]
+-        : ["candidate", "baseline", "baseline", "candidate"]
++      ? ["baseline", "candidate", "candidate", "baseline"]
+       : ["working"];
+ 
+     const turnsPerEpoch = options.repeats + (options.cold ? 2 : 1);
