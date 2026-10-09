@@ -4,6 +4,8 @@ import { Prompt } from "effect/ai";
 import { digestJson } from "../Digest.ts";
 import {
   CanonicalSequence,
+  PromptRecord,
+  PROMPT_EVIDENCE_TAGS,
   type CanonicalRecordEnvelope,
   type RunContextRecorded,
 } from "../Records.ts";
@@ -15,10 +17,30 @@ import {
 } from "../RunJournal.ts";
 import type { ThreadNotMaterialized, ThreadStoreError } from "../ThreadStore.ts";
 import { reference } from "./evidence.ts";
+import type { JournalRecordEnvelope } from "./journal-metadata.ts";
 import { RunContextReader } from "./run-context-reader.ts";
 
 const invalid = (message: string) => RunJournalError.make({ message });
 const encodePrompt = Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt));
+
+const decodePromptRecord = Schema.decodeUnknownEffect(PromptRecord);
+const promptTags = new Set<string>(PROMPT_EVIDENCE_TAGS);
+
+const projectHistoryRecord = (
+  entry: CanonicalRecordEnvelope,
+  ownerRunId: RunContextRecorded["runId"],
+): Effect.Effect<JournalRecordEnvelope> => {
+  const payload = entry.record.payload;
+
+  if (("runId" in payload && payload.runId === ownerRunId) || !promptTags.has(payload._tag))
+    return Effect.succeed(entry);
+
+  return decodePromptRecord({ recordId: entry.record.recordId, payload }).pipe(
+    Effect.map((record) => ({ threadId: entry.threadId, sequence: entry.sequence, record })),
+    // Coverage and later canonical validation must retain their original error precedence.
+    Effect.catchTag("SchemaError", () => Effect.succeed(entry)),
+  );
+};
 
 export const digestRunHistory = (prompt: Prompt.Prompt) =>
   encodePrompt(prompt).pipe(
@@ -62,7 +84,7 @@ const readProjectedHistory = Effect.fnUntraced(function* (
 > {
   yield* validateContextBoundary(context, original);
   const reader = yield* RunContextReader;
-  const records: Array<CanonicalRecordEnvelope> = [];
+  const records: Array<JournalRecordEnvelope> = [];
 
   for (const ref of context.retained) {
     const entry = yield* reader.record(ref.recordId);
@@ -75,7 +97,7 @@ const readProjectedHistory = Effect.fnUntraced(function* (
       (yield* reference(entry.record)).digest !== ref.digest
     )
       return yield* invalid("Saved context has missing or corrupt retained evidence");
-    records.push(entry);
+    records.push(yield* projectHistoryRecord(entry, context.runId));
   }
 
   let after = CanonicalSequence.make(context.historyFrom - 1);
@@ -98,7 +120,7 @@ const readProjectedHistory = Effect.fnUntraced(function* (
       )
         return yield* invalid("Saved context range has invalid canonical ordering");
       after = entry.sequence;
-      records.push(entry);
+      records.push(yield* projectHistoryRecord(entry, context.runId));
     }
     if (page.length < 8) break;
   }
