@@ -35,6 +35,11 @@ AgentPolicy.make({
 installed cost estimator and cache-split usage. `contextTokenLimit` bounds the live context for one
 call. Set it below the model window so output and compaction have room.
 
+For durable Runs, this limit does not bound the memory needed to load or verify history.
+Recovery verifies the context captured at the Run's original admission before applying later
+compaction. Configure compaction from the start: enabling it on a long Thread can still require
+a large initial history read.
+
 ## Prompt preparation order
 
 At run start, the runtime evaluates instructions and the definition's optional
@@ -1060,6 +1065,11 @@ the history view and estimate until compaction changes them. The default compact
 Compaction changes the model view. It never rewrites the thread log. `CompactionPerformed`
 reports each reduction. DN and DC also append `CompactionCreated`, so later attempts and runs use
 the same compacted view.
+
+`contextTokenLimit` limits model input, not peak memory. Durable history is read and projected
+before compaction. Summaries and rollovers can shorten later Runs' read ranges; clearing tool
+results alone does not. Recovery reconstructs the recovering Run's original saved range to verify
+its history digest, even if that Run later compacted.
 
 A summary must finish successfully and contain non-whitespace text. The interpreter charges its
 usage before validating it. A rejected summary leaves the previous summary and coverage in place;
