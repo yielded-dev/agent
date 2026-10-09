@@ -698,8 +698,13 @@ export const run = Effect.fnUntraced(function* (options: Options) {
     const seededKeys = new Set<string>();
     let seededCount = 0;
 
+    // Long public replays go first; timed cohort order below remains shuffled.
+    const setupOrder = [...cohorts].sort(
+      (a, b) => (b.target === "yielded" ? b.history : 0) - (a.target === "yielded" ? a.history : 0),
+    );
+
     yield* Effect.forEach(
-      shuffle(cohorts),
+      setupOrder,
       (cohort) =>
         Effect.gen(function* () {
           const current = live.get(cohort.target);
