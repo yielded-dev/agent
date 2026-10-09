@@ -1,0 +1,41 @@
+{
+  "run": "tail-latency-mv0ptiuj-746a31f1",
+  "inputs": 5120,
+  "statusOk": 5120,
+  "buildAndFingerprintVerified": 5120,
+  "rows": [
+    {
+      "build": "candidate",
+      "n": 1024,
+      "transactions": [
+        34
+      ],
+      "puts": [
+        5
+      ],
+      "setAlarm": [
+        3
+      ],
+      "deleteAlarm": [
+        1
+      ]
+    },
+    {
+      "build": "baseline",
+      "n": 1024,
+      "transactions": [
+        34
+      ],
+      "puts": [
+        18
+      ],
+      "setAlarm": [
+        3
+      ],
+      "deleteAlarm": [
+        1
+      ]
+    }
+  ],
+  "interpretation": "Storage API counts include transaction callback methods; they do not count physical flushes, replication barriers or billed operations."
+}

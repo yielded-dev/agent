@@ -63,11 +63,19 @@
         "tasks": 71,
         "cacheHits": 61,
         "note": "Unchanged full rerun after investigating the timeout; retained successful task caches"
+      },
+      {
+        "command": "EFFECT_AGENT_TEST_POSTGRES_URL=<isolated-local-database> vp run ready",
+        "result": "passed",
+        "tasks": 71,
+        "cacheHits": 65,
+        "note": "Final handoff gate including the consumer changeset; no vendored third-party/node_modules"
       }
     ]
   },
   "newCommittedTests": 0,
   "testOrTimeoutChanges": 0,
   "distributionRecomputation": "All eight percentile, spike-count and maximum within-Object range rows reproduced exactly from the compact latency file",
-  "cleanup": "Pending final remote teardown and local Postgres shutdown"
+  "cleanup": "Pending final remote teardown and local Postgres shutdown",
+  "maintenanceRecomputation": "All 16 percentile, spike-count and maximum within-Object range rows reproduced exactly from the compact latency file"
 }
