@@ -28,7 +28,14 @@ import {
   workspace,
 } from "./platform.ts";
 import { median, table } from "./report.ts";
-import { ColdResult, ImportResult, Metrics, PaddingResult, type Query } from "./worker/protocol.ts";
+import {
+  ColdResult,
+  ImportResult,
+  Metrics,
+  PaddingResult,
+  ReplayResult,
+  type Query,
+} from "./worker/protocol.ts";
 
 const equalCounts = (a: Readonly<Record<string, number>>, b: Readonly<Record<string, number>>) =>
   Object.keys(a).length === Object.keys(b).length &&
@@ -305,6 +312,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         yield* Console.error("Allowing 30 seconds for target route propagation before input…");
         yield* Effect.sleep("30 seconds");
         yield* Console.error(`Seeding and verifying ${cohorts.length} Objects…`);
+        let seededObjects = 0;
+
         yield* Effect.forEach(
           shuffle(cohorts),
           (cohort) =>
@@ -314,6 +323,20 @@ export const run = Effect.fnUntraced(function* (options: Options) {
               );
 
               if (!fixture) return yield* new BenchError({ message: "Missing fixture." });
+
+              if (fixture.mode === "replay") {
+                for (let from = 0; from < cohort.history; from += 25) {
+                  const to = Math.min(from + 25, cohort.history);
+
+                  const replay = (yield* request(url("/seed", cohort), deploy.token, ReplayResult, {
+                    from,
+                    to,
+                  })).value;
+
+                  if (replay.next !== to)
+                    return yield* new BenchError({ message: "Seed chunk acknowledgment differs." });
+                }
+              }
 
               const seeded = (yield* request(
                 url("/import", cohort),
@@ -338,6 +361,9 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                   message:
                     "Deployed seed fingerprint or complete table counts differ from the local fixture.",
                 });
+              seededObjects++;
+              if (seededObjects % 10 === 0 || seededObjects === cohorts.length)
+                yield* Console.error(`Verified ${seededObjects}/${cohorts.length} seeded Objects.`);
             }).pipe(
               Effect.tapCause((cause) =>
                 update((value) => ({
@@ -349,7 +375,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 })),
               ),
             ),
-          { concurrency: options.concurrency, discard: true },
+          { concurrency: Math.max(20, options.concurrency), discard: true },
         );
       }
 
@@ -544,7 +570,6 @@ export const run = Effect.fnUntraced(function* (options: Options) {
 }, Effect.scoped);
 
 export const teardown = Effect.gen(function* () {
-  const cloud = yield* Cloudflare;
   const deploy = yield* deployments;
   const cleanup = yield* deploy.teardown;
 

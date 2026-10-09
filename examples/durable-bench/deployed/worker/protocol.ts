@@ -75,6 +75,16 @@ export const BulkFixture = Schema.Struct({
 
 export type BulkFixture = typeof BulkFixture.Type;
 
+export const ReplayChunk = Schema.Struct({
+  from: Schema.Natural,
+  to: Schema.Natural,
+});
+
+export const ReplayResult = Schema.Struct({
+  ok: Schema.Literal(true),
+  next: Schema.Natural,
+});
+
 export const Identity = Schema.Struct({
   incarnation: Schema.NonEmptyString,
   constructedMs: Schema.Number,

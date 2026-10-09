@@ -11,7 +11,7 @@ import { Effect, Layer, ManagedRuntime, Schema } from "../../../node_modules/eff
 import { history, MEASURED_TOOLS, turn } from "../../../src/plan.ts";
 import { COLD_ABORT } from "../../../deployed/worker/host.ts";
 import { PiDO } from "./pi.ts";
-import { BulkFixture, Identity, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
+import { BulkFixture, Identity, ReplayChunk, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
 import { FixtureError } from "../../../deployed/worker/storage.ts";
 import { ActorDO, ThreadDO, cloudflareThreadName, coordinate } from "./tardie.ts";
 import { agent, definitions, YieldedDO } from "../../../deployed/worker/yielded.ts";
@@ -111,11 +111,11 @@ export default {
         return Response.json({ ok: true, build: env.BUILD });
       }
       const query = readQuery(url);
-      const mutating = ["/import", "/cold", "/submit", "/await", "/run", "/storage"].includes(url.pathname);
+      const mutating = ["/seed", "/import", "/cold", "/submit", "/await", "/run", "/storage"].includes(url.pathname);
 
       if (mutating && request.method !== "POST")
         return new Response("POST required", { status: 405 });
-      if (!["/import", "/cold", "/submit", "/await", "/run", "/metrics", "/storage"].includes(url.pathname))
+      if (!["/seed", "/import", "/cold", "/submit", "/await", "/run", "/metrics", "/storage"].includes(url.pathname))
         return new Response("not found", { status: 404 });
 
       const actor =
@@ -205,51 +205,52 @@ export default {
         throw new Error("Yielded requires submit followed by await");
       let directoryTables: Readonly<Record<string, number>> | undefined;
 
-      if (url.pathname === "/import" && query.target === "yielded") {
-        const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.clone().json());
+      if (url.pathname === "/seed") {
+        if (query.target !== "yielded") throw new Error("Only Yielded uses seed replay");
+        const { from, to } = Schema.decodeUnknownSync(ReplayChunk)(await request.json());
 
-        if (fixture.target !== query.target || fixture.history !== query.history)
-          throw new Error("Fixture/query mismatch");
-        if (fixture.mode === "replay") {
-          if (!fixture.fallbackReason) throw new Error("Replay requires a fallback reason");
-          const cached = getClient(env);
-          const { client, digests } = await cached.ready;
+        if (to <= from || to > query.history || to - from > 25)
+          throw new Error("Invalid seed chunk");
+        const cached = getClient(env);
+        const { client, digests } = await cached.ready;
 
-          if (cached.queries.has(query.object))
-            throw new Error("Concurrent submission to one benchmark Object");
-          cached.queries.set(query.object, query);
-          try {
+        if (cached.queries.has(query.object))
+          throw new Error("Concurrent submission to one benchmark Object");
+        cached.queries.set(query.object, query);
+        try {
+          if (from === 0)
             await env.YIELDED.getByName(query.object, { locationHint: "wnam" }).beginReplay();
-            await cached.runtime.runPromise(
-              Effect.gen(function* () {
-                for (const input of history(0, fixture.history)) {
-                  cached.queries.set(query.object, {
-                    ...query,
-                    sample: input.id,
-                    ttftMs: 0,
-                    chunkDelayMs: 0,
+          await cached.runtime.runPromise(
+            Effect.gen(function* () {
+              for (const input of history(from, to)) {
+                cached.queries.set(query.object, {
+                  ...query,
+                  sample: input.id,
+                  ttftMs: 0,
+                  chunkDelayMs: 0,
+                });
+
+                const receipt = yield* client.submit(agent, input.text, {
+                  threadId: ThreadId.make(query.object),
+                  principal: Principal.make("bench"),
+                  idempotencyKey: IdempotencyKey.make(input.id),
+                  definitions: digests,
+                });
+
+                const settlement = yield* client.awaitSettlement(receipt);
+
+                if (settlement.outcome !== "completed")
+                  return yield* new FixtureError({
+                    message: `Seed ${input.id} did not complete; initialization will not be retried`,
                   });
-
-                  const receipt = yield* client.submit(agent, input.text, {
-                    threadId: ThreadId.make(query.object),
-                    principal: Principal.make("bench"),
-                    idempotencyKey: IdempotencyKey.make(input.id),
-                    definitions: digests,
-                  });
-
-                  const settlement = yield* client.awaitSettlement(receipt);
-
-                  if (settlement.outcome !== "completed")
-                    return yield* new FixtureError({
-                      message: `Seed ${input.id} did not complete; initialization will not be retried`,
-                    });
-                }
-              }),
-            );
-          } finally {
-            cached.queries.delete(query.object);
-          }
+              }
+            }),
+          );
+        } finally {
+          cached.queries.delete(query.object);
         }
+
+        return Response.json({ ok: true, next: to });
       }
       if (url.pathname === "/import" && actor) {
         const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.clone().json());
