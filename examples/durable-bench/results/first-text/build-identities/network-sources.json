@@ -1,27 +1,31 @@
 [
   {
     "path": "examples/durable-bench/results/first-text/network/host.ts",
-    "sha256": "157d55980bedde29d00c4bce55a431bb6157b90cfaff70efd940acb0aa190a3b"
+    "sha256": "8892fe44d3518952d5ecb7e89e8f0a1afd560b58d399136aef27243f86ba1321"
   },
   {
     "path": "examples/durable-bench/results/first-text/network/observe.ts",
-    "sha256": "87bcb3fe6b5117aa1f45e545172caab599a706e21cd949e175b9dd5d230bfd51"
+    "sha256": "79d0c4d5a8ae5529e50a463640c2103bc071c3dbace841ec9a1ecceb3dc7c6c8"
   },
   {
     "path": "examples/durable-bench/results/first-text/network/pi.ts",
     "sha256": "c0a2e10c66906d297ec5b96dccfc57350b38168efe883bc31d180962a821c7c8"
   },
   {
+    "path": "examples/durable-bench/results/first-text/network/proof.ts",
+    "sha256": "f804e40f8470a1addbd3bac3c66582762c7df8cbeada55e99a21c97e412506b9"
+  },
+  {
     "path": "examples/durable-bench/results/first-text/network/protocol.ts",
-    "sha256": "3f87a97ea79b89f1c2eda2256d2f62e5807c34cfa0c24d3c2b208c566e8eef7d"
+    "sha256": "485873edee32abb2cbca4ff0ce6bfc2578405873250c576b224f19e2a5a72876"
   },
   {
     "path": "examples/durable-bench/results/first-text/network/worker.ts",
-    "sha256": "36cf77deb235716cc6ff3c3b7080a7a98c095055e214904893ea680d2b8a7966"
+    "sha256": "66531eef70887d8d091241e44a56fabd323789c7992bd12be6b5a58e53bf7ca4"
   },
   {
     "path": "examples/durable-bench/results/first-text/network/yielded.ts",
-    "sha256": "c3ee5041642542960984c55c9148c5cdf8d971ad017dc28fc5f4b5844d681ca0"
+    "sha256": "0a1aa579090b3a95d47a9f4ab586871ad29d46726ae1700338ac3cd87cf8f423"
   },
   {
     "path": "packages/effect-agent/src/capabilities/BrowserUse.ts",
@@ -86,6 +90,10 @@
   {
     "path": "packages/effect-agent/src/core/Messaging.ts",
     "sha256": "05ffc761ecafdb5276a19f7dbcd1dd67862432d9bc8387b497346cbdcbadc367"
+  },
+  {
+    "path": "packages/effect-agent/src/core/ProvisionalText.ts",
+    "sha256": "2144cb82099b5dd25d15095578a2fd6288fff0547d5db39c174ac8a4f24d5617"
   },
   {
     "path": "packages/effect-agent/src/core/Receipt.ts",
@@ -305,7 +313,7 @@
   },
   {
     "path": "packages/effect-agent/src/durable/internal/agent-registration.ts",
-    "sha256": "90e3d48d7a8f15fba05114551504ba51b948c18936cdc13097584f504cb2f33c"
+    "sha256": "74a41f47744ab53fd3be22f1019e30b709eb8f1c6920e5f18f5cb3407db57a90"
   },
   {
     "path": "packages/effect-agent/src/durable/internal/agent-updates.ts",
@@ -437,7 +445,7 @@
   },
   {
     "path": "packages/effect-agent/src/engine/internal/agent-runtime.ts",
-    "sha256": "0ab78947e9dbabea90ead22a2a6245ea1543e5f0044da6c1569b87eaaf713e00"
+    "sha256": "d1afdc7376afc97d177f0db1cae8bddf41b6d1e3156f4ed799ca5a864930cec5"
   },
   {
     "path": "packages/effect-agent/src/engine/internal/bounded-value.ts",
@@ -462,6 +470,10 @@
   {
     "path": "packages/effect-agent/src/engine/internal/provider-result-staging.ts",
     "sha256": "9bc95869c250528ba50e09732a99344f4cf4666846c614257c9af682e5b7a296"
+  },
+  {
+    "path": "packages/effect-agent/src/engine/internal/provisional-text.ts",
+    "sha256": "134da804d9950519259511164f6c944995c1fe967d19cd568ba4728d13838d48"
   },
   {
     "path": "packages/effect-agent/src/engine/internal/tool-derivative.ts",
@@ -517,7 +529,7 @@
   },
   {
     "path": "packages/platform-cloudflare/src/CloudflareBindings.ts",
-    "sha256": "805028569ffd76297d45264ab5c2e3f03c23fe6af5fcfbf3f9b8a7f08e312da1"
+    "sha256": "fa513d08b486dc2c480aab54fd87828b129004cb2c3521c47c4a34b0eb5f359b"
   },
   {
     "path": "packages/platform-cloudflare/src/CloudflareBrowser.ts",
@@ -545,7 +557,7 @@
   },
   {
     "path": "packages/platform-cloudflare/src/CloudflareThreadClient.ts",
-    "sha256": "d83d6a24fc5a8398b7ab5918f5f405279f5d93b709557765ceadf91f07f216a4"
+    "sha256": "8b30dda1bf419a1245376efdf0a633e2b4e5e6feb3087b42a5a2a756beda1d47"
   },
   {
     "path": "packages/platform-cloudflare/src/InteractiveBrowser.ts",
@@ -553,7 +565,7 @@
   },
   {
     "path": "packages/platform-cloudflare/src/ThreadObject.ts",
-    "sha256": "532f8a06b5fe36bc026a90d44800e41023db7e8ef1d00bcfe60eadf0f003b7d7"
+    "sha256": "2ff4a73a047b7d12ea410c93bd102c4194200f0215a08e295d6bbf7411871ad9"
   },
   {
     "path": "packages/platform-cloudflare/src/WakeScheduler.ts",
@@ -613,7 +625,15 @@
   },
   {
     "path": "packages/platform-cloudflare/src/internal/layers.ts",
-    "sha256": "20e7c77146724ec1da94919e88729b296c958ba94acb892b46c7a5dc6948d1b3"
+    "sha256": "2542b86bfcc394dbb9c573294a551f09e7e10b87de6d81310699d81191a3efc4"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/live-text-protocol.ts",
+    "sha256": "5958428350c5d1aa7950dfb09e7103c81811cae3ded1c141e70447a0edfc7159"
+  },
+  {
+    "path": "packages/platform-cloudflare/src/internal/live-text.ts",
+    "sha256": "c5229c54b423a4ebdb62ab1b411a3fdde0ad51799f4f4075ce88b572190fb0fc"
   },
   {
     "path": "packages/platform-cloudflare/src/internal/message-delivery.ts",

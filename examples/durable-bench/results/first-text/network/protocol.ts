@@ -119,24 +119,26 @@ const argument = Schema.decodeUnknownSync(Schema.Struct({ n: Schema.Int }));
 export const decodeChat = Schema.decodeUnknownSync(Chat);
 
 export const chatTranscript = (chat: typeof Chat.Type): Message[] =>
-  normalize(chat.messages.flatMap((message): Message[] => {
-    if (message.role === "system" || message.role === "developer") return [];
+  normalize(
+    chat.messages.flatMap((message): Message[] => {
+      if (message.role === "system" || message.role === "developer") return [];
 
-    let text =
-      typeof message.content === "string"
-        ? message.content
-        : (message.content ?? []).map((part) => part.text ?? "").join("");
+      let text =
+        typeof message.content === "string"
+          ? message.content
+          : (message.content ?? []).map((part) => part.text ?? "").join("");
 
-    // Effect's native adapters JSON-encode Schema.String tool results; pi sends raw text.
-    if (message.role === "tool" && text.startsWith('"'))
-      text = Schema.decodeUnknownSync(Schema.String)(JSON.parse(text));
+      // Historical pilot normalization only; exact native request hashes separately prove parity.
+      if (message.role === "tool" && text.startsWith('"'))
+        text = Schema.decodeUnknownSync(Schema.String)(JSON.parse(text));
 
-    const calls = message.tool_calls?.map(
-      (call) => argument(JSON.parse(call.function.arguments)).n,
-    );
+      const calls = message.tool_calls?.map(
+        (call) => argument(JSON.parse(call.function.arguments)).n,
+      );
 
-    return [{ role: message.role, text, ...(calls?.length ? { calls } : {}) }];
-  }));
+      return [{ role: message.role, text, ...(calls?.length ? { calls } : {}) }];
+    }),
+  );
 
 /** Native adapters may split one assistant response across adjacent messages. */
 export const normalize = (messages: readonly Message[]): Message[] => {

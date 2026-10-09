@@ -1,0 +1,95 @@
+{
+  "phase": "pilot-prototype",
+  "samples": 2,
+  "cohorts": [
+    {
+      "framework": "yielded",
+      "history": 50,
+      "index": 0,
+      "object": "first-text-f9112703-pilot-prototype-h50-d400-o0"
+    }
+  ],
+  "references": {
+    "50": {
+      "seedFingerprint": "b017b487524e44a4",
+      "turns": {
+        "m0": [
+          {
+            "fingerprint": "a334d85a6e65c3b7",
+            "text": "Lookup 35. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 35. I am checking"
+          },
+          {
+            "fingerprint": "f92b1adc69f99129",
+            "text": "Lookup 36. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 36. I am checking"
+          },
+          {
+            "fingerprint": "2975e506cd094d2a",
+            "text": "Lookup 37. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 37. I am checking"
+          },
+          {
+            "fingerprint": "da82c429a662a1c1",
+            "text": "Lookup 38. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 38. I am checking"
+          },
+          {
+            "fingerprint": "3c979753390ce215",
+            "text": "Lookup 39. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 39. I am checking"
+          },
+          {
+            "fingerprint": "d646833facf5243e",
+            "text": "Lookup 40. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 40. I am checking"
+          },
+          {
+            "fingerprint": "eabafabcef9b8317",
+            "text": "Lookup 41. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 41. I am checking"
+          },
+          {
+            "fingerprint": "c3f518d82dbf30a7",
+            "text": "Lookup 42. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 42. I am checking"
+          },
+          {
+            "fingerprint": "46c30cf86af5f5e7",
+            "text": "Complete. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Complete. I am checking the requested"
+          }
+        ],
+        "m1": [
+          {
+            "fingerprint": "ea2bd409ec31baa9",
+            "text": "Lookup 43. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 43. I am checking"
+          },
+          {
+            "fingerprint": "71602a358690ab4d",
+            "text": "Lookup 44. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 44. I am checking"
+          },
+          {
+            "fingerprint": "d35f8ed1e2a4dae0",
+            "text": "Lookup 45. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 45. I am checking"
+          },
+          {
+            "fingerprint": "be89ff05c5c5a52a",
+            "text": "Lookup 46. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 46. I am checking"
+          },
+          {
+            "fingerprint": "371fb6c3ef097cb5",
+            "text": "Lookup 47. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 47. I am checking"
+          },
+          {
+            "fingerprint": "d5eb3dbae7c240fc",
+            "text": "Lookup 48. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 48. I am checking"
+          },
+          {
+            "fingerprint": "8cf1ec7ef4311d30",
+            "text": "Lookup 49. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 49. I am checking"
+          },
+          {
+            "fingerprint": "ef7959aa02d1eca4",
+            "text": "Lookup 50. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Lookup 50. I am checking"
+          },
+          {
+            "fingerprint": "f3a8e2fc6dccfbe1",
+            "text": "Complete. I am checking the requested records and keeping the answer grounded in the returned data. Each lookup contributes one piece of evidence to this deterministic response. The conversation remains ordered, and the next step follows only after this response has finished. Complete. I am checking the requested"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -131,6 +131,7 @@ import { CloudflareThreadClient } from "../CloudflareThreadClient.ts";
 import { cloudflareWakeSchedulerLayer } from "../WakeScheduler.ts";
 import { cloudflareCryptoLayer } from "./crypto.ts";
 import * as DueQueue from "./due-queue.ts";
+import { LiveTextHub } from "./live-text.ts";
 import {
   guardedMessageDeliveryStoreLayer,
   threadMessageDeliveryLayer,
@@ -215,7 +216,8 @@ export type CloudflareBootstrapServices =
   | ThreadMaintenanceFailpoint
   | RunContextPreparation
   | RunToolAuthorization
-  | ToolReconciler;
+  | ToolReconciler
+  | LiveTextHub;
 
 /** Every construction failure of the assembled Cloudflare durable runtime stack. */
 export type CloudflareDurableRuntimeInitializationError =
@@ -368,6 +370,7 @@ const runtimeConfigLayer = (
             : { estimateCostMicrousd: options.estimateCostMicrousd }),
         }),
         cloudflareCryptoLayer,
+        LiveTextHub.layer,
         storageFailpointLayer({ storage: ctx.storage, failpoint: options.storageFailpoint?.(ctx) }),
         options.runtimeFailpoint === undefined
           ? DurableRuntimeFailpoint.layer

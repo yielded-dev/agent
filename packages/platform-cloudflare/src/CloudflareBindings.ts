@@ -25,7 +25,8 @@ export class CloudflareBindingError extends Schema.TaggedError<CloudflareBinding
  * and the cross-Object transport call it through `DurableObjectNamespace` stubs. Every
  * `encoded` value is a Schema-encoded envelope (`client.ts` wire schemas for host entry
  * points, `@yielded/agent-storage-cloudflare` port envelopes for `portCall`), so the RPC
- * boundary carries only structured-cloneable JSON. The optional trailing trace context is
+ * boundary carries structured-cloneable JSON, except `watchTextEncoded`, which can return
+ * a bounded, disposable byte stream. The optional trailing trace context is
  * transient native RPC metadata, stripped by an opted-in effect-cf receiver before decoding
  * the host or port envelope. It never enters durable state.
  */
@@ -41,6 +42,8 @@ export interface ThreadObjectRpc extends Rpc.DurableObjectBranded {
   awaitProgressEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
   /** Best-effort cancellation for one in-flight progress wait. */
   cancelProgressEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
+  /** Authorized prospective provisional text; byte stream or encoded HostFailed. */
+  watchTextEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
   /** One bounded page of canonical records; answers an `ObservePageResponse`. */
   observePage(encoded: unknown, traceContext?: unknown): Promise<unknown>;
   /** Durable abort intent; answers an `AbortResponse`. */

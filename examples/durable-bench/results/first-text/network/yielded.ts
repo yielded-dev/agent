@@ -4,6 +4,7 @@ import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudfl
 import * as Agent from "@yielded/agent/agent";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { ToolExecutionClass } from "@yielded/agent/durable-step";
+import { OperationDenied } from "@yielded/agent/operation-authorizer";
 import { text as textOutput } from "@yielded/agent/output";
 import { IdempotencyKey, Principal } from "@yielded/agent/receipt";
 import { DefinitionDigestInput } from "@yielded/agent/records";
@@ -144,7 +145,10 @@ const selected = Model.make(
           }),
         );
 
-      return OpenAiLanguageModel.layer({ model: "first-text-1", config: { max_output_tokens: 1024 } }).pipe(
+      return OpenAiLanguageModel.layer({
+        model: "first-text-1",
+        config: { max_output_tokens: 1024 },
+      }).pipe(
         Layer.provide(OpenAiClient.layer({ apiUrl: meter.env.PROVIDER_URL })),
         Layer.provide(FetchHttpClient.layer),
         Layer.provide(Layer.succeed(FetchHttpClient.Fetch, meter.fetch(meter.env))),
@@ -212,8 +216,21 @@ export class NetworkYieldedDO extends ThreadObject.make(runtime, {
   namespaceBinding: "YIELDED",
   deploymentId: "first-text",
   producerPrefix: "first-text",
+  operationAuthorizer: {
+    authorize: (request) =>
+      request.operation === "observe" && request.threadId?.includes("-proof-denied-")
+        ? Effect.fail(
+            OperationDenied.make({
+              operation: request.operation,
+              threadId: request.threadId,
+              reason: "first-text deployed denial proof",
+            }),
+          )
+        : Effect.void,
+  },
 }) {
   private readonly host: Host;
+  private watchEntry?: ReturnType<Observation["entry"]>;
   constructor(ctx: globalThis.DurableObjectState, env: Env) {
     const wrapped = instrument(ctx, env);
 
@@ -260,8 +277,13 @@ export class NetworkYieldedDO extends ThreadObject.make(runtime, {
       url.searchParams.set(key, value);
     const meter = observation(this.ctx.storage);
 
-    meter.begin(readQuery(url), this.ctx);
+    meter.begin(readQuery(url), this.ctx, this.watchEntry);
+    this.watchEntry = undefined;
     return super.submitEncoded(encoded, ...trace);
+  }
+  override watchTextEncoded(encoded: unknown, ...trace: [] | [unknown]): Promise<unknown> {
+    this.watchEntry ??= observation(this.ctx.storage).entry();
+    return super.watchTextEncoded(encoded, ...trace);
   }
   override fetch(request: Request): Promise<globalThis.Response> {
     return invocation.run({ kind: "inline", id: crypto.randomUUID() }, () =>

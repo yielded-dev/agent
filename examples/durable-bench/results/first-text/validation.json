@@ -1,0 +1,26 @@
+{
+  "command": "vp run ready",
+  "exitCode": 0,
+  "tasks": 71,
+  "cacheHits": 36,
+  "completedAt": "2026-10-09T05:33:24Z",
+  "postgres": "Isolated temporary Postgres 18.6 on loopback; existing adapter and certification tests",
+  "newUnitTests": 0,
+  "earlierGateOutcomes": [
+    {
+      "outcome": "type-error",
+      "reason": "Cloudflare worker types require an explicit TextDecoder ignoreBOM option",
+      "resolution": "Added ignoreBOM: false; repository typechecks pass"
+    },
+    {
+      "outcome": "sandbox-restriction",
+      "reason": "EPERM opening localhost listeners for existing Cloudflare tests",
+      "resolution": "Reran the gate with local server binding permitted"
+    },
+    {
+      "outcome": "missing-test-service",
+      "reason": "Postgres certification received ECONNREFUSED",
+      "resolution": "Started an isolated temporary server; full gate passed"
+    }
+  ]
+}

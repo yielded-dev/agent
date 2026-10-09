@@ -1,6 +1,13 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+
 import type { Message } from "../../../src/plan.ts";
-import { decodeProviderReceipt, errorText, type Env, type ProviderReceipt, type Query } from "./protocol.ts";
+import {
+  decodeProviderReceipt,
+  errorText,
+  type Env,
+  type ProviderReceipt,
+  type Query,
+} from "./protocol.ts";
 
 export const invocation = new AsyncLocalStorage<{ kind: string; id: string }>();
 interface Call {
@@ -37,18 +44,33 @@ export class Observation {
     this.firstRequest = false;
     return result;
   }
-  reset(query: Query) { this.query = query; this.calls = []; }
-  identity(state: DurableObjectState, env: Env) {
-    return { objectId: state.id.toString(), incarnation: this.incarnation, constructedMs: this.constructedMs, version: env.VERSION.id, generation: env.PHASE };
+  reset(query: Query) {
+    this.query = query;
+    this.calls = [];
   }
-  begin(query: Query, state: DurableObjectState) {
+  identity(state: DurableObjectState, env: Env) {
+    return {
+      objectId: state.id.toString(),
+      incarnation: this.incarnation,
+      constructedMs: this.constructedMs,
+      version: env.VERSION.id,
+      generation: env.PHASE,
+    };
+  }
+  begin(query: Query, state: DurableObjectState, entry?: ReturnType<Observation["entry"]>) {
     this.reset(query);
     this.active = true;
-    this.measurement = { ...query, ...this.identity(state, this.env), entry: this.entry() };
+    this.measurement = {
+      ...query,
+      ...this.identity(state, this.env),
+      entry: entry ?? this.entry(),
+    };
   }
   alarmEvent(id: string, edge: "start" | "end", _state: DurableObjectState) {
-    if(edge === "start") { this.alarmStarts++; this.activeAlarms.add(id); }
-    else this.activeAlarms.delete(id);
+    if (edge === "start") {
+      this.alarmStarts++;
+      this.activeAlarms.add(id);
+    } else this.activeAlarms.delete(id);
   }
   fetch =
     (env: Env): typeof globalThis.fetch =>
@@ -172,7 +194,9 @@ export class Observation {
         throw cause;
       }
     };
-  finish() { return { calls: this.calls, activeAlarmCount: this.activeAlarms.size }; }
+  finish() {
+    return { calls: this.calls, activeAlarmCount: this.activeAlarms.size };
+  }
 }
 const observations = new WeakMap<DurableObjectStorage, Observation>();
 export const observation = (storage: DurableObjectStorage): Observation => {

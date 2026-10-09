@@ -31,7 +31,9 @@ export class Host {
     if (!this.env.TOKEN || request.headers.get("authorization") !== `Bearer ${this.env.TOKEN}`)
       return new Response("unauthorized", { status: 401 });
     if (url.pathname === "/clock") {
-      const response = await fetch(new URL("/echo", this.env.PROVIDER_URL), { headers: { authorization: "Bearer " + this.env.TOKEN } });
+      const response = await fetch(new URL("/echo", this.env.PROVIDER_URL), {
+        headers: { authorization: "Bearer " + this.env.TOKEN },
+      });
       return new Response(response.body, { status: response.status, headers: response.headers });
     }
     let query: Query;
@@ -47,15 +49,17 @@ export class Host {
           { ok: false, error: "No observation for this sample" },
           { status: 409 },
         );
-      const seeded = decodeSeedState(await this.state.storage.get(seedKey));
-
-
+      const seedState = await this.state.storage.get(seedKey);
+      const seeded =
+        seedState === undefined && query.object.includes("-proof-")
+          ? undefined
+          : decodeSeedState(seedState);
 
       const result = {
         ok: true,
         ...meter.measurement,
         ...meter.finish(),
-        seedFingerprint: seeded.fingerprint,
+        seedFingerprint: seeded?.fingerprint ?? null,
         databaseBytes: this.state.storage.sql.databaseSize,
         metricsObservedMs: Date.now(),
       };
@@ -64,9 +68,7 @@ export class Host {
     }
     const entry = meter.entry();
 
-
     const identity = () => ({
-
       entry,
       ...query,
       ...meter.identity(this.state, this.env),
@@ -164,7 +166,6 @@ export class Host {
       meter.measurement = {
         ...identity(),
         targetEntryMs: Date.now(),
-
       };
       const runStartedMs = Date.now();
 

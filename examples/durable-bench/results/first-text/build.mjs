@@ -129,8 +129,21 @@ export const program = Effect.tryPromise({
         join(privateDirectory, `${name}-${identity.bundleSha256}-inputs.json`),
         JSON.stringify(inputs, null, 2) + "\n",
       );
-      writeFileSync(join(identitiesPath, name + "-sources.json"), JSON.stringify(inputs.filter(item => item.path.startsWith("packages/") || item.path.startsWith("examples/durable-bench/results/first-text/")),null,2)+"\n");
-      const previous = identities.findIndex((item) => item.name === name && item.bundleSha256 === identity.bundleSha256);
+      writeFileSync(
+        join(identitiesPath, name + "-sources.json"),
+        JSON.stringify(
+          inputs.filter(
+            (item) =>
+              item.path.startsWith("packages/") ||
+              item.path.startsWith("examples/durable-bench/results/first-text/"),
+          ),
+          null,
+          2,
+        ) + "\n",
+      );
+      const previous = identities.findIndex(
+        (item) => item.name === name && item.bundleSha256 === identity.bundleSha256,
+      );
 
       if (previous >= 0) identities.splice(previous, 1);
       identities.push(identity);

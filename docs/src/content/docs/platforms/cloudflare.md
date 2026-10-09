@@ -229,6 +229,78 @@ Cancellation is best effort and waits at most one second for the remote reply, s
 does not prevent local shutdown. The Object retains bounded cancellation hints for late retries.
 Expose these Effects through your application's HTTP or RPC API.
 
+### Preview live text
+
+Use `client.watchText(threadId)` to preview disposable assistant-text drafts during a Run.
+It returns `Stream<LiveTextFrame, ClientObserveFailure>`; the `LiveTextFrame` Schema and both
+types are exported from `@yielded/agent-platform-cloudflare/cloudflare-thread-client`.
+The Object requires the same `observe` authorization as canonical reads and isolates the
+addressed Thread, including within a shared Object.
+
+Each subscription starts with `Reset`: `schemaVersion: 1`, `sequence: 0`, `streamId`, and
+`threadId`. Clear old uncommitted drafts when this readiness signal arrives. Later `Event`
+frames carry the same version and stream ID, contiguous positive subscription sequences,
+and an `event: ProvisionalText.Event`. These sequences are independent of canonical log cursors.
+Subscriptions receive only future events, with no snapshot or replay. For a complete new draft,
+consume `Reset` before submitting:
+
+```ts
+import {
+  CloudflareThreadClient,
+  type ClientObserveFailure,
+} from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
+import { Deferred, Effect, Stream } from "effect";
+
+const runWithPreview = Effect.scoped(
+  Effect.gen(function* () {
+    const client = yield* CloudflareThreadClient;
+    const ready = yield* Deferred.make<void, ClientObserveFailure>();
+
+    yield* client.watchText(threadId).pipe(
+      Stream.runForEach((frame) =>
+        frame._tag === "Reset"
+          ? drafts.clearUncommitted.pipe(Effect.andThen(Deferred.succeed(ready, undefined)))
+          : drafts.apply(frame.event),
+      ),
+      Effect.onExit((exit) => Deferred.done(ready, exit)),
+      Effect.ensuring(drafts.clearUncommitted),
+      Effect.forkScoped,
+    );
+
+    yield* Deferred.await(ready);
+    const receipt = yield* client.submit(agent, input, { ...options, threadId });
+    return yield* client.awaitSettlementRecord(receipt);
+  }),
+);
+```
+
+Here `drafts.apply` and `drafts.clearUncommitted` are application-owned Effects for this
+subscription. Keep their state separate from canonical history:
+
+- `Text` carries an upstream Effect `Response` text-start, text-delta, or text-end part.
+  Key drafts by `threadId`, `submissionId`, `attemptId`, `runId`, `turnId`, `generation`, and
+  the native part ID. Ignore deltas whose text-start you have not observed; attaching mid-call
+  can miss a prefix even without a sequence gap. A text-end does not establish a committed result.
+- `Discard` removes the named model-call generation, including on failure or replacement.
+- `AttemptEnded` removes uncommitted drafts for its Thread, Submission, and Attempt.
+
+Only ordinary assistant text is published. Tool arguments, structured final-tool output,
+reasoning, and native provider metadata are excluded. Continue using `readPage` and
+`awaitProgress` for canonical reconciliation. A matching canonical model response or Run
+settlement retires its drafts permanently; ignore delayed events that would restore them.
+Drafts are untrusted model output; render them as text or sanitize them at the display boundary.
+
+A sequence gap, disconnect, or EOF fails with `ClientObserveFailure`. Clear uncommitted drafts,
+reconnect, and reread canonical history. Reconnection starts a fresh subscription; it does not
+resume a draft or require another submission. Closing the observation Scope cancels the stream
+without aborting accepted work.
+
+Each physical Object permits 8 consumers with 32 queued frames each. Slow consumers lose old
+frames independently, without delaying model generation. Limits are 4,096 UTF-16 code units per
+text delta, 256 per identifier, 32 simultaneously open text parts per client, and 32 KiB per
+wire frame. Publication performs no producer I/O
+and adds no durable writes; canonical history and recovery remain unchanged.
+
 ## Configure runtime services
 
 Provide custom services to `ThreadObject.layer(registrations)` before passing the resulting

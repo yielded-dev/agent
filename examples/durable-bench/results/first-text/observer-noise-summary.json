@@ -1,0 +1,77 @@
+{
+  "method": "Three existing 250-seeded prototype Objects; m5 warmup, then m6–m9 alternating live/canonical-only observation with reversed order in one Object. Two samples per mode per Object, one incarnation each. Exact model-visible request hashes match across modes/Objects for every sample/call. No concurrent proof workload.",
+  "objects": [
+    {
+      "object": 1,
+      "onSettlementMs": 16530,
+      "offSettlementMs": 16731,
+      "differenceMs": -201,
+      "differencePercent": -1.2013627398242743,
+      "onSetupMs": 40.5,
+      "withoutSetupDifferenceMs": -241.5,
+      "onFirstVisibleMs": 795,
+      "offFirstVisibleMs": 2371,
+      "onRangeMs": 98,
+      "offRangeMs": 342,
+      "sameIncarnation": true
+    },
+    {
+      "object": 2,
+      "onSettlementMs": 16645,
+      "offSettlementMs": 16659.5,
+      "differenceMs": -14.5,
+      "differencePercent": -0.08703742609321719,
+      "onSetupMs": 19.5,
+      "withoutSetupDifferenceMs": -34,
+      "onFirstVisibleMs": 797.5,
+      "offFirstVisibleMs": 2292,
+      "onRangeMs": 90,
+      "offRangeMs": 341,
+      "sameIncarnation": true
+    },
+    {
+      "object": 0,
+      "onSettlementMs": 16778.5,
+      "offSettlementMs": 16770.5,
+      "differenceMs": 8,
+      "differencePercent": 0.047702811484451324,
+      "onSetupMs": 13,
+      "withoutSetupDifferenceMs": -5,
+      "onFirstVisibleMs": 822.5,
+      "offFirstVisibleMs": 2409.5,
+      "onRangeMs": 255,
+      "offRangeMs": 75,
+      "sameIncarnation": true
+    }
+  ],
+  "pairedDifferenceMs": {
+    "n": 3,
+    "median": -14.5,
+    "q1": -107.75,
+    "q3": -3.25
+  },
+  "pairedDifferencePercent": {
+    "n": 3,
+    "median": -0.08703742609321719,
+    "q1": -0.6442000829587458,
+    "q3": -0.01966730730438293
+  },
+  "withoutSetupDifferenceMs": {
+    "n": 3,
+    "median": -34,
+    "q1": -137.75,
+    "q3": -19.5
+  },
+  "onSettlementMs": {
+    "n": 3,
+    "median": 16645,
+    "q1": 16587.5,
+    "q3": 16711.75
+  },
+  "offSettlementMs": {
+    "n": 3,
+    "median": 16731,
+    "q1": 16695.25,
+    "q3": 16750.75
+  }
+}

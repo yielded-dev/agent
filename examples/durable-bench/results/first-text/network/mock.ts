@@ -1,6 +1,6 @@
-import { fingerprint, next } from "../../../src/plan.ts";
 import { Schema } from "effect";
-import { textFragments } from "./text.ts";
+
+import { fingerprint, next } from "../../../src/plan.ts";
 import {
   chatTranscript,
   decodeChat,
@@ -9,13 +9,20 @@ import {
   type Env,
   type ProviderReceipt,
 } from "./protocol.ts";
+import { textFragments } from "./text.ts";
 
 const encoder = new TextEncoder();
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-const canonical = (value: unknown): string => JSON.stringify(value, (_key, item) =>
-  item !== null && typeof item === "object" && !Array.isArray(item)
-    ? Object.fromEntries(Object.entries(item).sort(([a],[b])=>a.localeCompare(b))) : item);
-const digest = async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value))), byte => byte.toString(16).padStart(2,"0")).join("");
+const canonical = (value: unknown): string =>
+  JSON.stringify(value, (_key, item) =>
+    item !== null && typeof item === "object" && !Array.isArray(item)
+      ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b)))
+      : item,
+  );
+const digest = async (value: string) =>
+  Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value))), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 
 export default {
   async fetch(
@@ -42,7 +49,9 @@ export default {
       const query = readQuery(url);
       const body = await request.text();
       const bodyBytes = encoder.encode(body);
-      const raw = Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Unknown))(JSON.parse(body));
+      const raw = Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Unknown))(
+        JSON.parse(body),
+      );
       const chat = decodeChat(raw);
 
       if (!chat.stream) throw new Error("This benchmark requires stream:true");
@@ -64,7 +73,9 @@ export default {
       });
 
       // The first frame contains text; a role-only header is not a first text token.
-      const fragments = textFragments(step);
+      const fragments = textFragments(step).map((fragment) =>
+        query.sample.startsWith("proof-wide-") ? fragment.padEnd(4096, ".") : fragment,
+      );
       const chunks: object[] = fragments.map((content, index) =>
         envelope({ ...(index === 0 ? { role: "assistant" } : {}), content }),
       );
@@ -96,7 +107,11 @@ export default {
         created,
         model: chat.model,
         choices: [],
-        usage: { prompt_tokens: 1, completion_tokens: fragments.length + ("call" in step ? 3 : 0), total_tokens: 1 + fragments.length + ("call" in step ? 3 : 0) },
+        usage: {
+          prompt_tokens: 1,
+          completion_tokens: fragments.length + ("call" in step ? 3 : 0),
+          total_tokens: 1 + fragments.length + ("call" in step ? 3 : 0),
+        },
       });
 
       const frames = [
@@ -116,9 +131,18 @@ export default {
                 byte.toString(16).padStart(2, "0"),
               ).join(""),
             ),
-          digest(canonical({ model: raw.model, messages: raw.messages, tools: raw.tools,
-            tool_choice: raw.tool_choice, max_tokens: raw.max_tokens, max_completion_tokens: raw.max_completion_tokens,
-            temperature: raw.temperature, top_p: raw.top_p })),
+          digest(
+            canonical({
+              model: raw.model,
+              messages: raw.messages,
+              tools: raw.tools,
+              tool_choice: raw.tool_choice,
+              max_tokens: raw.max_tokens,
+              max_completion_tokens: raw.max_completion_tokens,
+              temperature: raw.temperature,
+              top_p: raw.top_p,
+            }),
+          ),
         ]);
 
       let hashes: ReturnType<typeof computeHashes> | undefined;
@@ -160,7 +184,8 @@ export default {
             // All content / argument fragments precede finish, usage, and [DONE].
             if (index <= frames.length - 3) lastTokenMs = Date.now();
             if (index === frames.length) {
-              const [fingerprint, rawWireFingerprint, modelVisibleFingerprint] = await (hashes ??= computeHashes());
+              const [fingerprint, rawWireFingerprint, modelVisibleFingerprint] = await (hashes ??=
+                computeHashes());
 
               endMs = Date.now();
               receipt = {
@@ -175,10 +200,14 @@ export default {
                 endMs,
                 fingerprint,
                 rawWireFingerprint,
-                framing: JSON.stringify(chat.messages.filter(message => message.role === "system" || message.role === "developer")),
+                framing: JSON.stringify(
+                  chat.messages.filter(
+                    (message) => message.role === "system" || message.role === "developer",
+                  ),
+                ),
                 tools: JSON.stringify(raw.tools),
                 modelVisibleFingerprint,
-                messageShape: chat.messages.map(message=>message.role[0]).join(""),
+                messageShape: chat.messages.map((message) => message.role[0]).join(""),
                 messageTail: JSON.stringify(chat.messages.slice(-4)),
                 requestBytes: bodyBytes.byteLength,
                 colo: typeof request.cf?.colo === "string" ? request.cf.colo : null,

@@ -1,4 +1,40 @@
 {
-  "complete": false,
-  "status": "initialized; cleanup pending"
+  "complete": true,
+  "checkedAt": "2026-10-09T06:00:46.054Z",
+  "checks": [
+    {
+      "worker": "first-text-f9112703-candidate",
+      "status": 404,
+      "remainingNamespaces": 0
+    },
+    {
+      "worker": "first-text-f9112703-primary",
+      "status": 404,
+      "remainingNamespaces": 0
+    },
+    {
+      "worker": "first-text-f9112703-provider",
+      "status": 404,
+      "remainingNamespaces": 0
+    }
+  ],
+  "remaining": {
+    "workers": [],
+    "namespaces": []
+  },
+  "privateStateRemoved": true,
+  "privateValueScanPassed": true,
+  "filesScanned": 70,
+  "telemetryTailCollected": true,
+  "telemetryFailures": [],
+  "localTestService": {
+    "temporaryPostgresStopped": true,
+    "temporaryDirectoryRemoved": true
+  },
+  "changedFilesPrivateValueScan": {
+    "files": 89,
+    "knownPrivateValues": 19,
+    "privateValueHits": 0,
+    "addedEmailMatches": 0
+  }
 }
