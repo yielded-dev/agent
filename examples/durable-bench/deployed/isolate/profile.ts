@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { Effect, FileSystem, Schema } from "effect";
+import { Effect, Exit, Fiber, FileSystem, Schema } from "effect";
 
 import { Cloudflare, request } from "../cloudflare.ts";
 import { BenchError, hash, privateDirectory, redact } from "../platform.ts";
@@ -19,17 +19,13 @@ const Settings = Schema.Struct({
 // The production endpoint rate-limits captures; reserve starts across concurrent Objects.
 let nextCaptureAt = 0;
 
-const reserveCapture = Effect.gen(function* () {
-  const wait = yield* Effect.sync(() => {
-    const now = Date.now();
-    const start = Math.max(now, nextCaptureAt);
+const reserveCapture = Effect.sync(() => {
+  const now = Date.now();
+  const start = Math.max(now, nextCaptureAt);
 
-    nextCaptureAt = start + 15000;
+  nextCaptureAt = start + 15000;
 
-    return start - now;
-  });
-
-  if (wait > 0) yield* Effect.sleep(wait);
+  return start - now;
 });
 
 /** Binary production profiling API. Capture retries are read-only; turns never retry. */
@@ -67,9 +63,27 @@ export const profiler = Effect.fnUntraced(function* (
   const route = `https://api.cloudflare.com/client/v4/accounts/${cloud.accountId}/workers/workers/${worker}/versions/${identity.version}/profile`;
   const preflight: { status: number; message: string }[] = [];
 
-  const capture = Effect.fnUntraced(function* (duration: number, file: string) {
-    if (duration === 1000) yield* reserveCapture;
+  // An idle target can disappear after a successful availability check. Metadata-only
+  // traffic keeps this same isolate loaded without opening the deferred ThreadObject.
+  const waitActive = Effect.fnUntraced(function* (milliseconds: number) {
+    const until = Date.now() + milliseconds;
 
+    for (;;) {
+      const seen = (yield* request(url, token, ProfileIdentity, {}, "30 seconds", expectedBuild))
+        .value;
+
+      if (seen.isolate.id !== identity.isolate.id)
+        return yield* new BenchError({
+          message: "Profile isolate changed during preparation; no input was sent",
+        });
+      const remaining = until - Date.now();
+
+      if (remaining <= 0) return;
+      yield* Effect.sleep(Math.min(1000, remaining));
+    }
+  });
+
+  const capture = Effect.fnUntraced(function* (file: string) {
     const response = yield* Effect.tryPromise({
       try: (signal) =>
         fetch(route, {
@@ -80,7 +94,7 @@ export const profiler = Effect.fnUntraced(function* (
             "content-type": "application/json",
           },
           body: JSON.stringify({
-            duration_ms: duration,
+            duration_ms: 20000,
             profile_type: "cpu",
             namespace_id: namespace,
             actor_id: identity.actorId,
@@ -136,48 +150,52 @@ export const profiler = Effect.fnUntraced(function* (
     );
   });
 
-  // Recent-execution discovery is delayed. Validate availability before appending the
-  // one 250-turn measurement; failed preflights do not initialize the deferred shell.
-  let available = false;
-
+  // Start the real capture directly. Early read-only failures can retry while the
+  // Object stays active; no framework input is sent until a capture remains open.
   for (let attempt = 0; attempt < 8; attempt++) {
-    yield* request(url, token, ProfileIdentity, {}, "30 seconds", expectedBuild);
+    yield* waitActive(yield* reserveCapture);
     yield* before;
-    const result = yield* capture(1000, `preflight-${attempt}.bin`);
+    const active = yield* capture(`attempt-${attempt}.pprof.gz`).pipe(Effect.forkScoped);
 
-    preflight.push({ status: result.status, message: result.message });
-    if (result.status === 200) {
-      available = true;
-      break;
+    const early = yield* Effect.raceFirst(
+      Fiber.await(active),
+      Effect.sleep("2 seconds").pipe(Effect.as(undefined)),
+    );
+
+    if (early === undefined) {
+      const record = Fiber.join(active).pipe(
+        Effect.map((result): ProfileCapture => ({
+          target: query.target,
+          object: query.object,
+          mode,
+          sample: query.sample,
+          status: result.status,
+          bytes: result.bytes,
+          sha256: result.sha256,
+          file: result.file,
+          preflight: [...preflight],
+        })),
+      );
+
+      return { record, before };
     }
-    if (result.status !== 404 && result.status !== 429)
+    if (Exit.isFailure(early)) return yield* Effect.failCause(early.cause);
+    const result = early.value;
+
+    preflight.push({
+      status: result.status,
+      message: result.status === 200 ? "Capture ended before input dispatch" : result.message,
+    });
+    if (result.status !== 200 && result.status !== 404 && result.status !== 429)
       return yield* new BenchError({
-        message: `Profile preflight HTTP ${result.status}: ${result.message}`,
+        message: `Profile preparation HTTP ${result.status}: ${result.message}`,
       });
-    yield* Effect.sleep(
+    yield* waitActive(
       Math.max(15, Number.isFinite(result.retryAfter) ? result.retryAfter : 15) * 1000,
     );
   }
-  if (!available)
-    return yield* new BenchError({
-      message: "Profile target was not discoverable after eight preflights",
-    });
 
-  yield* reserveCapture;
-
-  const record = capture(20000, "cold-first-request.pprof.gz").pipe(
-    Effect.map((result): ProfileCapture => ({
-      target: query.target,
-      object: query.object,
-      mode,
-      sample: query.sample,
-      status: result.status,
-      bytes: result.bytes,
-      sha256: result.sha256,
-      file: result.file,
-      preflight,
-    })),
-  );
-
-  return { record, before };
+  return yield* new BenchError({
+    message: "No active profile capture after eight read-only attempts; no input was sent",
+  });
 });

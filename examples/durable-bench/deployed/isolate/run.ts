@@ -1035,7 +1035,6 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                           }),
                     ),
                   );
-                  yield* Effect.sleep("2 seconds");
                   yield* prepared.before;
                   if (options.coldMode === "object") {
                     const response = (yield* request(
