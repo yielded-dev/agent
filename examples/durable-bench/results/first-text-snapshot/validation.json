@@ -1,0 +1,75 @@
+{
+  "command": "vp run ready",
+  "exitCode": 0,
+  "checkoutBase": "5e4a1d8ce2d65ec8fb9cb7f3b1f1f892352faa55",
+  "appliedPatch": "snapshot.patch",
+  "inputs": [
+    {
+      "path": "packages/platform-cloudflare/src/internal/live-text.ts",
+      "sha256": "00014061ea6c5d1e765f16f7daa403b78cc26608d926c0a4ae8121e8003e832a",
+      "matchesValidationCheckout": true
+    },
+    {
+      "path": "packages/platform-cloudflare/src/internal/live-text-protocol.ts",
+      "sha256": "3865456ab2e1adee0a2955dc236e208f81bb3d80f780b62dbd47f47464512297",
+      "matchesValidationCheckout": true
+    },
+    {
+      "path": "packages/platform-cloudflare/src/CloudflareThreadClient.ts",
+      "sha256": "07c26a2dff0604de7d4b7cdd026aa0f342133e8f60bc8f4adc9aa90e111a98cc",
+      "matchesValidationCheckout": true
+    },
+    {
+      "path": ".changeset/first-text-preview.md",
+      "sha256": "ed7eabeddbed392d3c480a81fa33660713f0f43ff0e099f91e788fc6a05bbe4e",
+      "matchesValidationCheckout": true
+    },
+    {
+      "path": "docs/src/content/docs/platforms/cloudflare.md",
+      "sha256": "18febb51d1b60bee1974d71b07614035086d42c466d294a70a47a72a483cec2c",
+      "matchesValidationCheckout": true
+    },
+    {
+      "path": "docs/src/content/docs/concepts/runtime-model.md",
+      "sha256": "0fcbc9aac2e6572c617f49112ae1d248e300b36317f56f87154c989e80e8ca98",
+      "matchesValidationCheckout": true
+    }
+  ],
+  "node": "24.20.0",
+  "bun": "1.4.2",
+  "postgres": "18.6",
+  "ci": true,
+  "frozenInstall": true,
+  "ignoreInstallScripts": true,
+  "tsgoPatchApplied": true,
+  "thirdPartyNodeModulesPresent": false,
+  "evidencePresent": false,
+  "tasks": 71,
+  "cacheHits": 43,
+  "readyLogSha256": "eeb6d49f7b9e75824714a9c4c59568f7d48740388fabd705607600a69e0ac12c",
+  "postgresStopped": true,
+  "localNonOk": [
+    {
+      "stage": "temporary benchmark dependencies",
+      "outcome": "sandbox tempdir EPERM; same frozen install passed with authorized host access"
+    },
+    {
+      "stage": "source lint",
+      "outcome": "blank-line diagnostics fixed before candidate build and successful full gate"
+    },
+    {
+      "stage": "read-only process inspection after follow-up",
+      "outcome": "sandbox rejected ps; completed 15 turn receipts verified the follow-up without repeating any submission"
+    },
+    {
+      "stage": "report edit",
+      "outcome": "missing path separator caused ENOENT before writing any file; corrected"
+    },
+    {
+      "stage": "evidence whitespace check",
+      "outcome": "git diff --check flags required blank context lines inside the saved unified diff; product diff and non-patch evidence are checked separately"
+    }
+  ],
+  "productCommit": "15b3b93bb895037febf3bacafd371db712b99b29",
+  "committedInputsMatch": true
+}

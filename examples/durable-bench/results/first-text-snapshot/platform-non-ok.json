@@ -1,0 +1,2850 @@
+{
+  "counts": {
+    "provider/canceled/fetch/Worker": 1,
+    "plain/canceled/jsrpc/NetworkYieldedDO": 27,
+    "plain/canceled/alarm/NetworkYieldedDO": 102,
+    "plain/aborted/fetch/NetworkYieldedDO": 6,
+    "candidate/canceled/alarm/NetworkYieldedDO": 123,
+    "candidate/canceled/jsrpc/NetworkYieldedDO": 42,
+    "candidate/aborted/fetch/NetworkYieldedDO": 6
+  },
+  "events": [
+    {
+      "worker": "provider",
+      "outcome": "canceled",
+      "type": "fetch",
+      "cpuTimeMs": 8,
+      "wallTimeMs": 705,
+      "at": 1791565849544
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16721,
+      "at": 1791566216461
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 145,
+      "at": 1791566216333
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16407,
+      "at": 1791566215856
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 104,
+      "at": 1791566215856
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16747,
+      "at": 1791566199562
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 145,
+      "at": 1791566199434
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16671,
+      "at": 1791566182618
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 107,
+      "at": 1791566182544
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 146,
+      "at": 1791566182491
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16527,
+      "at": 1791566165891
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 109,
+      "at": 1791566165891
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16675,
+      "at": 1791566165796
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 151,
+      "at": 1791566165670
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 28,
+      "wallTimeMs": 17037,
+      "at": 1791566149140
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 104,
+      "at": 1791566149140
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 25,
+      "wallTimeMs": 17243,
+      "at": 1791566148912
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 144,
+      "at": 1791566148856
+    },
+    {
+      "worker": "plain",
+      "outcome": "aborted",
+      "type": "fetch",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1,
+      "at": 1791566131945
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16586,
+      "at": 1791566131312
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 104,
+      "at": 1791566131251
+    },
+    {
+      "worker": "plain",
+      "outcome": "aborted",
+      "type": "fetch",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 0,
+      "at": 1791566131229
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16399,
+      "at": 1791566130623
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 90,
+      "at": 1791566130535
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16616,
+      "at": 1791566114566
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 102,
+      "at": 1791566114463
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16359,
+      "at": 1791566113949
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16591,
+      "at": 1791566097749
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 103,
+      "at": 1791566097698
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16434,
+      "at": 1791566097388
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 88,
+      "at": 1791566097273
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 104,
+      "at": 1791566080877
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16467,
+      "at": 1791566080253
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 85,
+      "at": 1791566080165
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 39,
+      "wallTimeMs": 17333,
+      "at": 1791566064028
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 22,
+      "wallTimeMs": 16756,
+      "at": 1791566063576
+    },
+    {
+      "worker": "plain",
+      "outcome": "aborted",
+      "type": "fetch",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 0,
+      "at": 1791566046653
+    },
+    {
+      "worker": "plain",
+      "outcome": "aborted",
+      "type": "fetch",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1,
+      "at": 1791566046484
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16335,
+      "at": 1791566046074
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 50,
+      "at": 1791566046013
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16533,
+      "at": 1791566045729
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 69,
+      "at": 1791566045522
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16239,
+      "at": 1791566029087
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 47,
+      "at": 1791566029062
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16464,
+      "at": 1791566028952
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 60,
+      "at": 1791566028764
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16353,
+      "at": 1791566012352
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 46,
+      "at": 1791566012287
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16535,
+      "at": 1791566012036
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 57,
+      "at": 1791566011820
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16492,
+      "at": 1791565995320
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 60,
+      "at": 1791565995136
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16307,
+      "at": 1791565995120
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 49,
+      "at": 1791565995070
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 31,
+      "wallTimeMs": 16904,
+      "at": 1791565978611
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 46,
+      "at": 1791565978557
+    },
+    {
+      "worker": "plain",
+      "outcome": "aborted",
+      "type": "fetch",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1,
+      "at": 1791565961411
+    },
+    {
+      "worker": "plain",
+      "outcome": "aborted",
+      "type": "fetch",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1,
+      "at": 1791565961116
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 151,
+      "at": 1791564540137
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1699,
+      "at": 1791564539083
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1397,
+      "at": 1791564529458
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1520,
+      "at": 1791564523419
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1790,
+      "at": 1791564522359
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1435,
+      "at": 1791564520111
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 133,
+      "at": 1791564517710
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1230,
+      "at": 1791564516663
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 965,
+      "at": 1791564511554
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1136,
+      "at": 1791564510013
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 934,
+      "at": 1791564509210
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 903,
+      "at": 1791564508502
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 85,
+      "at": 1791564506419
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1079,
+      "at": 1791564506249
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1453,
+      "at": 1791564505547
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 689,
+      "at": 1791564505458
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 726,
+      "at": 1791564504686
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1349,
+      "at": 1791564503454
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1239,
+      "at": 1791564501782
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 110,
+      "at": 1791564500840
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 147,
+      "at": 1791564500640
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 840,
+      "at": 1791564499932
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 967,
+      "at": 1791564499058
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1227,
+      "at": 1791564498976
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 658,
+      "at": 1791564498363
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 111,
+      "at": 1791564498008
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 642,
+      "at": 1791564497678
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 54,
+      "at": 1791564494999
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 111,
+      "at": 1791564494713
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1113,
+      "at": 1791564494234
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 48,
+      "at": 1791564493082
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 112,
+      "at": 1791564491783
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 51,
+      "at": 1791564491336
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1475,
+      "at": 1791564491101
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 54,
+      "at": 1791564489701
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1062,
+      "at": 1791564489541
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 55,
+      "at": 1791564488289
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 935,
+      "at": 1791564487760
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 111,
+      "at": 1791564486660
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 832,
+      "at": 1791564486085
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 74,
+      "at": 1791564485314
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 109,
+      "at": 1791564485126
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 767,
+      "at": 1791564484744
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 53,
+      "at": 1791564484588
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 828,
+      "at": 1791564483275
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 108,
+      "at": 1791564482345
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 51,
+      "at": 1791564482311
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 53,
+      "at": 1791564481432
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 924,
+      "at": 1791564479990
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 52,
+      "at": 1791564479458
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 557,
+      "at": 1791564479319
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1146,
+      "at": 1791564479143
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 927,
+      "at": 1791564478573
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 112,
+      "at": 1791564477818
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 57,
+      "at": 1791564476444
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 45,
+      "at": 1791564475966
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 126,
+      "at": 1791564475266
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1404,
+      "at": 1791564474661
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 83,
+      "at": 1791564473323
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 60,
+      "at": 1791564472702
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 44,
+      "at": 1791564472157
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1102,
+      "at": 1791564471062
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 53,
+      "at": 1791564470809
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 72,
+      "at": 1791564470428
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1380,
+      "at": 1791564470243
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 57,
+      "at": 1791564468858
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 52,
+      "at": 1791564466967
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 58,
+      "at": 1791564466879
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 56,
+      "at": 1791564466482
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 59,
+      "at": 1791564465322
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 61,
+      "at": 1791564464806
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 59,
+      "at": 1791564464747
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 54,
+      "at": 1791564464240
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 59,
+      "at": 1791564463545
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 66,
+      "at": 1791564463314
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 75,
+      "at": 1791564462445
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 62,
+      "at": 1791564462404
+    },
+    {
+      "worker": "plain",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 121,
+      "wallTimeMs": 234,
+      "at": 1791564441186
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 137,
+      "at": 1791565922590
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 206,
+      "wallTimeMs": 18131,
+      "at": 1791565904948
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 140,
+      "at": 1791565904762
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 171,
+      "wallTimeMs": 17197,
+      "at": 1791565885848
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 133,
+      "at": 1791565885703
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 193,
+      "wallTimeMs": 17233,
+      "at": 1791565867688
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 100,
+      "at": 1791565867688
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 81,
+      "at": 1791565850887
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 217,
+      "wallTimeMs": 1968,
+      "at": 1791565849250
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 120,
+      "at": 1791565849250
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 171,
+      "at": 1791565848123
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 160,
+      "at": 1791565748107
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 141,
+      "at": 1791565738659
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 143,
+      "at": 1791565732966
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 141,
+      "at": 1791565728963
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 142,
+      "at": 1791565727667
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 141,
+      "at": 1791565721166
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 143,
+      "at": 1791565718798
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 63,
+      "at": 1791565718329
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 87,
+      "at": 1791565715910
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 147,
+      "at": 1791565715457
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 141,
+      "at": 1791565712225
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 67,
+      "at": 1791565711659
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 149,
+      "at": 1791565710478
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 143,
+      "at": 1791565707891
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 141,
+      "at": 1791565705521
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 155,
+      "at": 1791565704410
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 73,
+      "at": 1791565701554
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 143,
+      "at": 1791565700854
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 155,
+      "at": 1791565699662
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 66,
+      "at": 1791565699271
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 142,
+      "at": 1791565698796
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 65,
+      "at": 1791565696474
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 143,
+      "at": 1791565695525
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 145,
+      "at": 1791565694316
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 82,
+      "at": 1791565693054
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 144,
+      "at": 1791565692944
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 66,
+      "at": 1791565690366
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 141,
+      "at": 1791565689706
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 41,
+      "at": 1791565686355
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 68,
+      "at": 1791565684695
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 45,
+      "at": 1791565684232
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 47,
+      "at": 1791565682347
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 66,
+      "at": 1791565681940
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 47,
+      "at": 1791565681741
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 66,
+      "at": 1791565679331
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 41,
+      "at": 1791565678987
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 76,
+      "at": 1791565677289
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 170,
+      "at": 1791565675201
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 64,
+      "at": 1791565674607
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 70,
+      "at": 1791565672998
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 68,
+      "at": 1791565669741
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 66,
+      "at": 1791565668803
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1693,
+      "at": 1791565667541
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 68,
+      "at": 1791565666524
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 154,
+      "at": 1791565665359
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 67,
+      "at": 1791565664039
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 151,
+      "at": 1791565662986
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 75,
+      "at": 1791565662945
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 150,
+      "at": 1791565661756
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 66,
+      "at": 1791565661201
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 65,
+      "at": 1791565658456
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 68,
+      "at": 1791565657636
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 152,
+      "at": 1791565655085
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1277,
+      "at": 1791565653994
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 51,
+      "at": 1791565653957
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 51,
+      "at": 1791565650912
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 43,
+      "at": 1791565650169
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 151,
+      "at": 1791565649240
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 154,
+      "at": 1791565647928
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 41,
+      "at": 1791565647904
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 41,
+      "at": 1791565647211
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 149,
+      "at": 1791565643777
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 180,
+      "at": 1791565642466
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 43,
+      "at": 1791565642360
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 49,
+      "at": 1791565641549
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 152,
+      "at": 1791565641522
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 151,
+      "at": 1791565639924
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 44,
+      "at": 1791565639530
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 42,
+      "at": 1791565638463
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 150,
+      "at": 1791565638135
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 150,
+      "at": 1791565636467
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 151,
+      "at": 1791565635518
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 49,
+      "at": 1791565635226
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 152,
+      "at": 1791565634606
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 150,
+      "wallTimeMs": 290,
+      "at": 1791565591802
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 65,
+      "at": 1791566378319
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16642,
+      "at": 1791566377744
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 154,
+      "at": 1791566377744
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 135,
+      "at": 1791566376883
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16771,
+      "at": 1791566361433
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 112,
+      "at": 1791566361390
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 151,
+      "at": 1791566360870
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 141,
+      "at": 1791566359881
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 64,
+      "at": 1791566344399
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 3,
+      "wallTimeMs": 16734,
+      "at": 1791566344031
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 150,
+      "at": 1791566344031
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 148,
+      "at": 1791566343220
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16653,
+      "at": 1791566327506
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 64,
+      "at": 1791566327396
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 151,
+      "at": 1791566327099
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16459,
+      "at": 1791566326666
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 148,
+      "at": 1791566326666
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16790,
+      "at": 1791566310676
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 64,
+      "at": 1791566310569
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16633,
+      "at": 1791566310155
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 164,
+      "at": 1791566310155
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16499,
+      "at": 1791566310064
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16810,
+      "at": 1791566218334
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 149,
+      "at": 1791566218334
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16197,
+      "at": 1791566210955
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 42,
+      "at": 1791566210955
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16685,
+      "at": 1791566201271
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 162,
+      "at": 1791566201271
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16309,
+      "at": 1791566194601
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 40,
+      "at": 1791566194575
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16802,
+      "at": 1791566183983
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 151,
+      "at": 1791566183983
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16400,
+      "at": 1791566178069
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 24,
+      "at": 1791566178023
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 3,
+      "wallTimeMs": 16873,
+      "at": 1791566167033
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 155,
+      "at": 1791566167033
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 3,
+      "wallTimeMs": 16348,
+      "at": 1791566161538
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 41,
+      "at": 1791566161509
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 55,
+      "wallTimeMs": 17368,
+      "at": 1791566149963
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 151,
+      "at": 1791566149963
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 65,
+      "wallTimeMs": 16798,
+      "at": 1791566144987
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 41,
+      "at": 1791566144948
+    },
+    {
+      "worker": "candidate",
+      "outcome": "aborted",
+      "type": "fetch",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 1,
+      "at": 1791566132459
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16728,
+      "at": 1791566131501
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 64,
+      "at": 1791566131394
+    },
+    {
+      "worker": "candidate",
+      "outcome": "aborted",
+      "type": "fetch",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 1,
+      "at": 1791566127602
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16341,
+      "at": 1791566126748
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 50,
+      "at": 1791566126728
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16725,
+      "at": 1791566114487
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 63,
+      "at": 1791566114390
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16406,
+      "at": 1791566110257
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 109,
+      "at": 1791566110257
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 2,
+      "wallTimeMs": 19270,
+      "at": 1791566097618
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 2,
+      "wallTimeMs": 16292,
+      "at": 1791566093642
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 43,
+      "at": 1791566093609
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 4,
+      "wallTimeMs": 16945,
+      "at": 1791566078205
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 94,
+      "at": 1791566077983
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 3,
+      "wallTimeMs": 16408,
+      "at": 1791566077176
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 45,
+      "at": 1791566077103
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 67,
+      "wallTimeMs": 17507,
+      "at": 1791566061068
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 63,
+      "at": 1791566060906
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 39,
+      "wallTimeMs": 16844,
+      "at": 1791566060558
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 41,
+      "at": 1791566060508
+    },
+    {
+      "worker": "candidate",
+      "outcome": "aborted",
+      "type": "fetch",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 2,
+      "at": 1791566043429
+    },
+    {
+      "worker": "candidate",
+      "outcome": "aborted",
+      "type": "fetch",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 1,
+      "at": 1791566042972
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16506,
+      "at": 1791566042436
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 155,
+      "at": 1791566042436
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 2,
+      "wallTimeMs": 16261,
+      "at": 1791566042262
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 41,
+      "at": 1791566042219
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 16510,
+      "at": 1791566025617
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 139,
+      "at": 1791566025617
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 2,
+      "wallTimeMs": 16334,
+      "at": 1791566025507
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 40,
+      "at": 1791566025432
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16343,
+      "at": 1791566008999
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 32,
+      "at": 1791566008987
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 16501,
+      "at": 1791566008824
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 138,
+      "at": 1791566008824
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 4,
+      "wallTimeMs": 16567,
+      "at": 1791565992484
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 42,
+      "at": 1791565992418
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 63,
+      "wallTimeMs": 17263,
+      "at": 1791565975631
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 42,
+      "at": 1791565975582
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "jsrpc",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 32,
+      "wallTimeMs": 17073,
+      "at": 1791565974936
+    },
+    {
+      "worker": "candidate",
+      "outcome": "canceled",
+      "type": "alarm",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 135,
+      "at": 1791565974936
+    },
+    {
+      "worker": "candidate",
+      "outcome": "aborted",
+      "type": "fetch",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 1,
+      "at": 1791565958077
+    },
+    {
+      "worker": "candidate",
+      "outcome": "aborted",
+      "type": "fetch",
+      "entrypoint": "NetworkYieldedDO",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 0,
+      "at": 1791565957592
+    }
+  ],
+  "failedRequests": [
+    {
+      "phase": "readiness",
+      "path": "/echo",
+      "status": 404,
+      "startedAt": 1791564370551,
+      "endedAt": 1791564370638,
+      "error": "workers.dev route not yet available during readiness polling"
+    },
+    {
+      "phase": "readiness",
+      "path": "/echo",
+      "status": 404,
+      "startedAt": 1791564372641,
+      "endedAt": 1791564372707,
+      "error": "workers.dev route not yet available during readiness polling"
+    },
+    {
+      "phase": "readiness",
+      "path": "/echo",
+      "status": 404,
+      "startedAt": 1791564374710,
+      "endedAt": 1791564374739,
+      "error": "workers.dev route not yet available during readiness polling"
+    },
+    {
+      "phase": "readiness",
+      "path": "/echo",
+      "status": 404,
+      "startedAt": 1791564376742,
+      "endedAt": 1791564376768,
+      "error": "workers.dev route not yet available during readiness polling"
+    },
+    {
+      "phase": "readiness",
+      "path": "/echo",
+      "status": 404,
+      "startedAt": 1791564378771,
+      "endedAt": 1791564378797,
+      "error": "workers.dev route not yet available during readiness polling"
+    },
+    {
+      "phase": "readiness",
+      "path": "/echo",
+      "status": 404,
+      "startedAt": 1791564380797,
+      "endedAt": 1791564380861,
+      "error": "workers.dev route not yet available during readiness polling"
+    },
+    {
+      "phase": "readiness",
+      "path": "/driver",
+      "status": 500,
+      "startedAt": 1791564392383,
+      "endedAt": 1791564392951,
+      "error": ""
+    },
+    {
+      "phase": "readiness",
+      "path": "/driver",
+      "status": 500,
+      "startedAt": 1791564394953,
+      "endedAt": 1791564395128,
+      "error": ""
+    },
+    {
+      "phase": "readiness",
+      "path": "/driver",
+      "status": 404,
+      "startedAt": 1791564397130,
+      "endedAt": 1791564397217,
+      "error": "workers.dev route not yet available during readiness polling"
+    }
+  ],
+  "scope": "All captured non-ok outcomes; Cloudflare invocation telemetry may be sampled"
+}

@@ -1,0 +1,119 @@
+{
+  "outlier": {
+    "phase": "snapshot-prototype",
+    "history": 250,
+    "object": 0,
+    "sample": "m2",
+    "turnMs": 19091,
+    "retained": true,
+    "call": 2,
+    "fetchToHeadersMs": 2581,
+    "providerFirstTokenMs": 400,
+    "interpretation": "A 2581ms observed provider-header-await interval; not evidence identifying its network/CPU cause, and not subtracted from latency."
+  },
+  "clockWidths": {
+    "min": 20,
+    "median": 38,
+    "max": 165,
+    "calls": 540,
+    "missing": 0
+  },
+  "repeatRanges": [
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "object": 2,
+      "n": 3,
+      "firstVisibleRangeMs": 12,
+      "turnRangeMs": 47
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "object": 0,
+      "n": 3,
+      "firstVisibleRangeMs": 99,
+      "turnRangeMs": 2538
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "object": 1,
+      "n": 3,
+      "firstVisibleRangeMs": 112,
+      "turnRangeMs": 103
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "object": 0,
+      "n": 3,
+      "firstVisibleRangeMs": 80,
+      "turnRangeMs": 103
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "object": 2,
+      "n": 3,
+      "firstVisibleRangeMs": 21,
+      "turnRangeMs": 129
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "object": 1,
+      "n": 3,
+      "firstVisibleRangeMs": 100,
+      "turnRangeMs": 162
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "object": 0,
+      "n": 3,
+      "firstVisibleRangeMs": 21,
+      "turnRangeMs": 49
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "object": 2,
+      "n": 3,
+      "firstVisibleRangeMs": 9,
+      "turnRangeMs": 45
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "object": 1,
+      "n": 3,
+      "firstVisibleRangeMs": 43,
+      "turnRangeMs": 64
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "object": 2,
+      "n": 3,
+      "firstVisibleRangeMs": 34,
+      "turnRangeMs": 86
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "object": 0,
+      "n": 3,
+      "firstVisibleRangeMs": 28,
+      "turnRangeMs": 55
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "object": 1,
+      "n": 3,
+      "firstVisibleRangeMs": 13,
+      "turnRangeMs": 126
+    }
+  ]
+}

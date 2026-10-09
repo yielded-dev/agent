@@ -1,0 +1,27 @@
+{
+  "baselineCommit": "5e4a1d8ce2d65ec8fb9cb7f3b1f1f892352faa55",
+  "productInputs": 188,
+  "changed": [
+    {
+      "path": "examples/durable-bench/results/first-text-snapshot/network/proof.ts",
+      "before": "f804e40f8470a1addbd3bac3c66582762c7df8cbeada55e99a21c97e412506b9",
+      "after": "1b562e3aa9ae41b94d36abd2b630cd5bb5e623c38fa67e1503946bb547e3e18e"
+    },
+    {
+      "path": "packages/platform-cloudflare/src/CloudflareThreadClient.ts",
+      "before": "8b30dda1bf419a1245376efdf0a633e2b4e5e6feb3087b42a5a2a756beda1d47",
+      "after": "07c26a2dff0604de7d4b7cdd026aa0f342133e8f60bc8f4adc9aa90e111a98cc"
+    },
+    {
+      "path": "packages/platform-cloudflare/src/internal/live-text-protocol.ts",
+      "before": "5958428350c5d1aa7950dfb09e7103c81811cae3ded1c141e70447a0edfc7159",
+      "after": "3865456ab2e1adee0a2955dc236e208f81bb3d80f780b62dbd47f47464512297"
+    },
+    {
+      "path": "packages/platform-cloudflare/src/internal/live-text.ts",
+      "before": "159186f0ea0f1dbd4d9dbffa1bc1cd3149b91c693a1b67b381afdab964e6bdc3",
+      "after": "00014061ea6c5d1e765f16f7daa403b78cc26608d926c0a4ae8121e8003e832a"
+    }
+  ],
+  "notes": "The only non-product input change is the deployed proof endpoint; normal timing workflow/provider/fixtures are unchanged."
+}

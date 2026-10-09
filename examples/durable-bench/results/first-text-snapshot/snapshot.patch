@@ -1,0 +1,586 @@
+diff --git a/.changeset/first-text-preview.md b/.changeset/first-text-preview.md
+index c5526366..b85e1805 100644
+--- a/.changeset/first-text-preview.md
++++ b/.changeset/first-text-preview.md
+@@ -3,4 +3,4 @@
+ "@yielded/agent-platform-cloudflare": patch
+ ---
+ 
+-Preview provisional assistant text from durable Cloudflare Threads with `CloudflareThreadClient.watchText`. Reconcile drafts by Attempt and model-call identity to committed history.
++Preview provisional assistant text from durable Cloudflare Threads with `CloudflareThreadClient.watchText`, including current drafts when connecting or catching up. Reconcile drafts by Attempt and model-call identity to committed history.
+diff --git a/docs/src/content/docs/concepts/runtime-model.md b/docs/src/content/docs/concepts/runtime-model.md
+index a7e70348..452a2be6 100644
+--- a/docs/src/content/docs/concepts/runtime-model.md
++++ b/docs/src/content/docs/concepts/runtime-model.md
+@@ -126,11 +126,13 @@ Execution captures its services when it starts; changing a stream consumer's Con
+ does not change the running model, tools, or hooks.
+ 
+ The core `ProvisionalText.Publisher` port defaults to a no-op. A host can supply bounded,
+-synchronous publication of validated native assistant text. Publication performs no I/O and
+-never waits for observers. Drafts carry Attempt and model-call generation identities so failed
+-or replaced calls and ended Attempts can invalidate their own text. Canonical responses and
+-Run settlement supersede matching drafts; delayed draft events must never restore them.
+-This channel leaves canonical history and recovery unchanged. See
++synchronous publication of validated native assistant text and optionally retain memory snapshots
++for active Attempts and model-call generations. These snapshots let observers replace drafts on
++reconnection or queue overflow; they disappear with the host incarnation. Publication performs
++no I/O and never waits for observers. Failed or replaced calls and ended Attempts invalidate
++their own drafts. Canonical responses and Run settlement supersede matching drafts; later
++snapshots or live events must never restore them. This channel leaves canonical history and
++recovery unchanged. See
+ [Cloudflare live text](/platforms/cloudflare/#preview-live-text) for subscription and reconciliation.
+ 
+ See [Run & stream](/guide/run-agents/), [budgets](/concepts/budgets/), and
+diff --git a/docs/src/content/docs/platforms/cloudflare.md b/docs/src/content/docs/platforms/cloudflare.md
+index d199f7aa..7d9f1dbc 100644
+--- a/docs/src/content/docs/platforms/cloudflare.md
++++ b/docs/src/content/docs/platforms/cloudflare.md
+@@ -231,75 +231,89 @@ Expose these Effects through your application's HTTP or RPC API.
+ 
+ ### Preview live text
+ 
+-Use `client.watchText(threadId)` to preview disposable assistant-text drafts during a Run.
+-It returns `Stream<LiveTextFrame, ClientObserveFailure>`; the `LiveTextFrame` Schema and both
+-types are exported from `@yielded/agent-platform-cloudflare/cloudflare-thread-client`.
+-The Object requires the same `observe` authorization as canonical reads and isolates the
+-addressed Thread, including within a shared Object.
+-
+-Each subscription starts with `Reset`: `schemaVersion: 1`, `sequence: 0`, `streamId`, and
+-`threadId`. Clear old uncommitted drafts when this readiness signal arrives. Later `Event`
+-frames carry the same version and stream ID, contiguous positive subscription sequences,
+-and an `event: ProvisionalText.Event`. These sequences are independent of canonical log cursors.
+-Subscriptions receive only future events, with no snapshot or replay. For a complete new draft,
+-consume `Reset` before submitting:
++`watchText(threadId)` returns `Stream<LiveTextFrame, ClientObserveFailure>` over Durable Object
++RPC. The Object requires the same `observe` authorization as canonical reads and isolates the
++addressed Thread, including within a shared Object. It retains drafts for active Attempts and
++model-call generations even without observers, entirely in that Object incarnation's memory.
++Unlike persisted partials, these memory drafts are lost if the Object is evicted mid-response.
+ 
+-```ts
++In an authenticated Worker handler, authorize the requested Thread and forward its draft
++snapshots and live text to the browser as SSE:
++
++```ts twoslash
++import { type ThreadObjectRpc } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
+ import {
+   CloudflareThreadClient,
+-  type ClientObserveFailure,
++  LiveTextFrame,
+ } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
+-import { Deferred, Effect, Stream } from "effect";
++// @types: @cloudflare/workers-types
++import { type ThreadId } from "@yielded/agent/identifiers";
++import { Effect, Schema, Stream } from "effect";
++
++export const textResponse = Effect.fnUntraced(function* (
++  threadId: ThreadId,
++  env: { THREADS: DurableObjectNamespace<ThreadObjectRpc> },
++): Effect.fn.Return<Response> {
++  const encode = Schema.encodeEffect(Schema.fromJsonString(LiveTextFrame));
++  const encoder = new TextEncoder();
++  const bytes = Stream.unwrap(
++    Effect.map(CloudflareThreadClient, (client) => client.watchText(threadId)),
++  ).pipe(
++    Stream.mapEffect((frame) => encode(frame)),
++    Stream.map((json) => encoder.encode(`data: ${json}\n\n`)),
++    Stream.provide(CloudflareThreadClient.layerFromBinding({ namespace: env.THREADS })),
++  );
++  const body = yield* Stream.toReadableStreamEffect(bytes);
+ 
+-const runWithPreview = Effect.scoped(
+-  Effect.gen(function* () {
+-    const client = yield* CloudflareThreadClient;
+-    const ready = yield* Deferred.make<void, ClientObserveFailure>();
+-
+-    yield* client.watchText(threadId).pipe(
+-      Stream.runForEach((frame) =>
+-        frame._tag === "Reset"
+-          ? drafts.clearUncommitted.pipe(Effect.andThen(Deferred.succeed(ready, undefined)))
+-          : drafts.apply(frame.event),
+-      ),
+-      Effect.onExit((exit) => Deferred.done(ready, exit)),
+-      Effect.ensuring(drafts.clearUncommitted),
+-      Effect.forkScoped,
+-    );
+-
+-    yield* Deferred.await(ready);
+-    const receipt = yield* client.submit(agent, input, { ...options, threadId });
+-    return yield* client.awaitSettlementRecord(receipt);
+-  }),
+-);
++  return new Response(body, {
++    headers: {
++      "Content-Type": "text/event-stream; charset=utf-8",
++      "Cache-Control": "no-store",
++    },
++  });
++});
+ ```
+ 
+-Here `drafts.apply` and `drafts.clearUncommitted` are application-owned Effects for this
+-subscription. Keep their state separate from canonical history:
++Return `Effect.runPromise(textResponse(threadId, env))` from that Worker's `fetch` handler
++after authentication and the access check. The client Layer belongs to the body stream's Scope:
++returning the `Response` leaves it alive, and body completion or cancellation closes it.
++The browser can use `EventSource` and decode each `data` value with
++`Schema.fromJsonString(LiveTextFrame)`.
++
++On connection or reconnection, `Reset` carries `schemaVersion: 1`, `sequence: 0`, a new
++`streamId`, and `threadId`. Subsequent `Event` frames carry `event: ProvisionalText.Event` and
++contiguous positive sequences under that stream ID. The snapshot uses upstream Effect `Response`
++text-start parts, coalesced text-deltas of at most 4,096 UTF-16 code units, and text-end parts for
++already-ended text; live events follow. These sequences are independent of canonical log cursors.
++
++Queue overflow replaces queued events with another `Reset`, a new stream ID, and a full snapshot
++of the current draft prefixes before continuing with live events. Overflow does not fail the
++stream. On every `Reset`, clear that subscription's uncommitted drafts and rebuild from the
++following events:
+ 
+ - `Text` carries an upstream Effect `Response` text-start, text-delta, or text-end part.
+   Key drafts by `threadId`, `submissionId`, `attemptId`, `runId`, `turnId`, `generation`, and
+-  the native part ID. Ignore deltas whose text-start you have not observed; attaching mid-call
+-  can miss a prefix even without a sequence gap. A text-end does not establish a committed result.
+-- `Discard` removes the named model-call generation, including on failure or replacement.
+-- `AttemptEnded` removes uncommitted drafts for its Thread, Submission, and Attempt.
++  the native part ID. A text-end does not establish a committed result.
++- `Discard` removes the named generation from retained and displayed drafts.
++- `AttemptEnded` removes retained and displayed drafts for its Thread, Submission, and Attempt.
+ 
+ Only ordinary assistant text is published. Tool arguments, structured final-tool output,
+ reasoning, and native provider metadata are excluded. Continue using `readPage` and
+-`awaitProgress` for canonical reconciliation. A matching canonical model response or Run
+-settlement retires its drafts permanently; ignore delayed events that would restore them.
++`awaitProgress` for canonical history and reconciliation. Keep reconciled Run/Turn identities
++across resets and reconnects: a matching canonical model response or Run settlement retires its
++drafts permanently, including any later snapshot or live events that would restore them.
+ Drafts are untrusted model output; render them as text or sanitize them at the display boundary.
+ 
+-A sequence gap, disconnect, or EOF fails with `ClientObserveFailure`. Clear uncommitted drafts,
+-reconnect, and reread canonical history. Reconnection starts a fresh subscription; it does not
+-resume a draft or require another submission. Closing the observation Scope cancels the stream
+-without aborting accepted work.
++Malformed drafts, exceeded content bounds, disconnects, EOF, and unexpected sequence gaps fail
++with `ClientObserveFailure`. Clear uncommitted drafts and reread canonical history. After a
++disconnect, EOF, or sequence gap, reconnect for a current snapshot. Malformed or oversized drafts
++disable previews until the offending Attempt ends; use canonical reads until then. Cancelling
++observation does not abort accepted work.
+ 
+-Each physical Object permits 8 consumers with 32 queued frames each. Slow consumers lose old
+-frames independently, without delaying model generation. Limits are 4,096 UTF-16 code units per
+-text delta, 256 per identifier, 32 simultaneously open text parts per client, and 32 KiB per
+-wire frame. Publication performs no producer I/O
+-and adds no durable writes; canonical history and recovery remain unchanged.
++Fixed limits per physical Object are 8 consumers, 32 queued frames per consumer, 32 retained
++text parts, and 2,097,152 UTF-16 code units of total draft text. Each text delta is limited to
++4,096 UTF-16 code units, each identifier to 256, and each wire frame to 32 KiB. Publication
++performs no producer I/O, never waits for consumers, and adds no durable writes.
+ 
+ ## Configure runtime services
+ 
+diff --git a/packages/platform-cloudflare/src/CloudflareThreadClient.ts b/packages/platform-cloudflare/src/CloudflareThreadClient.ts
+index ef334cf9..1c4d1490 100644
+--- a/packages/platform-cloudflare/src/CloudflareThreadClient.ts
++++ b/packages/platform-cloudflare/src/CloudflareThreadClient.ts
+@@ -59,6 +59,7 @@ import { cloudflareCryptoLayer } from "./internal/crypto.ts";
+ import {
+   Frame as LiveTextFrame,
+   isBoundedEvent,
++  MAX_DRAFT_PARTS,
+   MAX_FRAME_BYTES,
+   Request as WatchTextRequest,
+ } from "./internal/live-text-protocol.ts";
+@@ -386,16 +387,19 @@ const decodeLiveText = (
+     const models = new Map<string, { attemptId: string; parts: Set<string> }>();
+ 
+     const accept = (frame: LiveTextFrame): boolean => {
+-      if (frame.sequence !== expected++) throw liveTextProtocolFailure();
+       if (frame._tag === "Reset") {
+-        if (streamId !== undefined || frame.threadId !== threadId) throw liveTextProtocolFailure();
++        if (frame.streamId === streamId || frame.threadId !== threadId)
++          throw liveTextProtocolFailure();
+         streamId = frame.streamId;
++        expected = 1;
++        models.clear();
+ 
+         return true;
+       }
+       if (
+         streamId === undefined ||
+         frame.streamId !== streamId ||
++        frame.sequence !== expected++ ||
+         frame.event.threadId !== threadId ||
+         !isBoundedEvent(frame.event)
+       )
+@@ -419,7 +423,10 @@ const decodeLiveText = (
+ 
+       if (event.part.type === "text-start") {
+         if (model?.parts.has(event.part.id)) throw liveTextProtocolFailure();
+-        if ([...models.values()].reduce((size, value) => size + value.parts.size, 0) >= 32)
++        if (
++          [...models.values()].reduce((size, value) => size + value.parts.size, 0) >=
++          MAX_DRAFT_PARTS
++        )
+           throw liveTextProtocolFailure();
+         if (model === undefined) {
+           model = { attemptId: event.attemptId, parts: new Set() };
+@@ -429,8 +436,7 @@ const decodeLiveText = (
+ 
+         return true;
+       }
+-      // A prospective subscription may join during a part: never present its suffix as a prefix.
+-      if (!model?.parts.has(event.part.id)) return false;
++      if (!model?.parts.has(event.part.id)) throw liveTextProtocolFailure();
+       if (event.part.type === "text-end") {
+         model.parts.delete(event.part.id);
+         if (model.parts.size === 0) models.delete(key);
+@@ -537,9 +543,10 @@ export class CloudflareThreadClient extends Context.Service<
+       afterSequence: CanonicalSequence,
+     ) => Effect.Effect<void, ClientProgressFailure>;
+     /**
+-     * Future provisional native text, with an initial Reset readiness frame. Reconcile by
++     * Current provisional text followed by native deltas. Reset starts a replacement snapshot,
++     * including when a slow consumer exceeds the fixed backlog. Reconcile by
+      * Run/Turn identity to canonical records; discard drafts on Discard, AttemptEnded,
+-     * Reset or stream failure. A slow consumer fails on a sequence gap. No replay/retry.
++     * Reset or stream failure. Snapshots exist only in the Object incarnation's memory.
+      * Scope the stream: interruption cancels its remote subscription.
+      */
+     readonly watchText: (threadId: ThreadId) => Stream.Stream<LiveTextFrame, ClientObserveFailure>;
+diff --git a/packages/platform-cloudflare/src/internal/live-text-protocol.ts b/packages/platform-cloudflare/src/internal/live-text-protocol.ts
+index 74cd117c..d16f8bf3 100644
+--- a/packages/platform-cloudflare/src/internal/live-text-protocol.ts
++++ b/packages/platform-cloudflare/src/internal/live-text-protocol.ts
+@@ -7,12 +7,17 @@ export const MAX_ID_LENGTH = 256;
+ export const MAX_DELTA_LENGTH = 4_096;
+ export const BUFFER_SIZE = 32;
+ export const MAX_OBSERVERS = 8;
++export const MAX_DRAFT_PARTS = 32;
++export const MAX_DRAFT_LENGTH = 2 * 1_024 * 1_024;
+ 
+ const streamId = Schema.NonEmptyString.check(Schema.isMaxLength(MAX_ID_LENGTH));
+ 
+ export const Request = Schema.Struct({ schemaVersion: Schema.Literal(1) });
+ 
+-/** Disposable connection framing; sequences have no relationship to canonical sequences. */
++/**
++ * Reset replaces all drafts with a snapshot, streamed as native Text parts before live deltas.
++ * Each snapshot starts a fresh streamId. Its sequences are unrelated to canonical sequences.
++ */
+ export const Frame = Schema.Union([
+   Schema.TaggedStruct("Reset", {
+     schemaVersion: Schema.Literal(1),
+diff --git a/packages/platform-cloudflare/src/internal/live-text.ts b/packages/platform-cloudflare/src/internal/live-text.ts
+index c49a64fc..e14815da 100644
+--- a/packages/platform-cloudflare/src/internal/live-text.ts
++++ b/packages/platform-cloudflare/src/internal/live-text.ts
+@@ -1,25 +1,38 @@
+ import { type ThreadId } from "@yielded/agent/identifiers";
+ import { Publisher, type Event } from "@yielded/agent/provisional-text";
+-import { Context, Effect, Exit, Layer, Queue, Schema, Scope, Stream } from "effect";
++import { Cause, Context, Effect, Exit, Layer, Queue, Schema, Scope, Stream } from "effect";
++import * as Response from "effect/ai/Response";
+ 
+ import { HostProtocolError } from "../CloudflareThreadClient.ts";
+ import {
+   BUFFER_SIZE,
+   Frame,
+   isBoundedEvent,
++  MAX_DELTA_LENGTH,
++  MAX_DRAFT_LENGTH,
++  MAX_DRAFT_PARTS,
+   MAX_FRAME_BYTES,
+   MAX_ID_LENGTH,
+   MAX_OBSERVERS,
+ } from "./live-text-protocol.ts";
+ 
++type TextEvent = Extract<Event, { readonly _tag: "Text" }>;
++
++interface Draft {
++  readonly start: TextEvent;
++  text: string;
++  ended: boolean;
++}
++
+ interface Observer {
+   readonly threadId: ThreadId;
+-  readonly streamId: string;
+-  readonly queue: Queue.Queue<Frame>;
++  readonly queue: Queue.Queue<Event | undefined, HostProtocolError>;
++  snapshot: boolean;
++  streamId: string;
+   sequence: number;
+ }
+ 
+-/** One Object incarnation; owns subscriptions independently of individual RPC event scopes. */
++/** One Object incarnation; owns drafts and subscriptions independently of RPC event scopes. */
+ export class LiveTextHub extends Context.Service<
+   LiveTextHub,
+   {
+@@ -32,88 +45,208 @@ export class LiveTextHub extends Context.Service<
+     Effect.gen(function* () {
+       const owner = yield* Effect.scope;
+       const observers = new Set<Observer>();
+-      const encode = Schema.encodeSync(Schema.fromJsonString(Frame));
++      const drafts = new Map<string, Draft>();
++      let length = 0;
++
++      let unavailable:
++        | { readonly error: HostProtocolError; readonly attemptId: Event["attemptId"] }
++        | undefined;
++
++      const encode = Schema.encodeEffect(Schema.fromJsonString(Frame));
+       const encoder = new TextEncoder();
+ 
+-      const offerUnsafe = (event: Event): boolean => {
+-        if (observers.size === 0) return false;
+-        const bounded = isBoundedEvent(event);
+-        let delivered = false;
++      yield* Effect.addFinalizer(() => Effect.sync(() => drafts.clear()));
++
++      const fail = (attemptId: Event["attemptId"]) => {
++        const error = HostProtocolError.make({
++          message:
++            "Provisional text exceeds its draft bounds or is invalid; read canonical records",
++        });
+ 
+-        // Fixed consumer count and queue capacities. No encoding, I/O or awaited work here.
++        unavailable = { error, attemptId };
++        drafts.clear();
++        length = 0;
+         for (const observer of observers) {
+-          if (observer.threadId !== event.threadId) continue;
+-          const sequence = ++observer.sequence;
+-
+-          if (!bounded) continue; // The next frame exposes this gap, including lost invalidations.
+-          delivered =
+-            Queue.offerUnsafe(observer.queue, {
+-              _tag: "Event",
+-              schemaVersion: 1,
+-              streamId: observer.streamId,
+-              sequence,
+-              event,
+-            }) || delivered;
++          observer.snapshot = true;
++          Queue.failCauseUnsafe(observer.queue, Cause.fail(error));
++          Queue.shutdownUnsafe(observer.queue);
+         }
+ 
+-        return delivered;
++        return false;
+       };
+ 
+-      const open = (threadId: ThreadId) =>
+-        Effect.gen(function* () {
+-          if (threadId.length > MAX_ID_LENGTH || observers.size >= MAX_OBSERVERS)
+-            return yield* HostProtocolError.make({
+-              message: "Provisional text observation capacity exceeded",
+-            });
+-          const scope = yield* Scope.fork(owner);
+-          const queue = yield* Queue.sliding<Frame>(BUFFER_SIZE);
+-
+-          const observer: Observer = {
+-            threadId,
+-            streamId: crypto.randomUUID(),
+-            queue,
+-            sequence: 0,
+-          };
++      const offerUnsafe = (event: Event): boolean => {
++        // Retain drafts even without subscribers. Invalid input disables previews until an
++        // offending Attempt ends; canonical execution never depends on the observer's state.
++        if (event._tag === "AttemptEnded" && event.attemptId === unavailable?.attemptId)
++          unavailable = undefined;
++        if (unavailable !== undefined) return false;
++        if (!isBoundedEvent(event)) return fail(event.attemptId);
++
++        if (event._tag === "Text") {
++          const key = JSON.stringify([
++            event.threadId,
++            event.submissionId,
++            event.attemptId,
++            event.runId,
++            event.turnId,
++            event.generation,
++            event.part.id,
++          ]);
++
++          const draft = drafts.get(key);
++
++          if (event.part.type === "text-start") {
++            if (draft !== undefined || drafts.size >= MAX_DRAFT_PARTS) return fail(event.attemptId);
++            drafts.set(key, { start: event, text: "", ended: false });
++          } else {
++            // After invalidation, never expose an orphaned suffix as a complete prefix.
++            if (draft === undefined) return false;
++            if (draft.ended) return fail(event.attemptId);
++            if (event.part.type === "text-delta") {
++              if (length + event.part.delta.length > MAX_DRAFT_LENGTH) return fail(event.attemptId);
++              draft.text += event.part.delta;
++              length += event.part.delta.length;
++            } else {
++              draft.ended = true;
++            }
++          }
++        } else {
++          for (const [key, draft] of drafts) {
++            const start = draft.start;
++
++            if (
++              start.threadId === event.threadId &&
++              start.submissionId === event.submissionId &&
++              start.attemptId === event.attemptId &&
++              (event._tag === "AttemptEnded" ||
++                (start.runId === event.runId &&
++                  start.turnId === event.turnId &&
++                  start.generation === event.generation))
++            ) {
++              drafts.delete(key);
++              length -= draft.text.length;
++            }
++          }
++        }
+ 
+-          const close = Scope.close(scope, Exit.void);
++        // No snapshot copying, encoding, I/O or awaited work on the producer's path.
++        for (const observer of observers) {
++          if (observer.threadId !== event.threadId) continue;
++          if (!Queue.offerUnsafe(observer.queue, event)) observer.snapshot = true;
++        }
+ 
+-          yield* Scope.addFinalizer(
+-            scope,
+-            Effect.sync(() => {
+-              observers.delete(observer);
+-              Queue.shutdownUnsafe(queue);
+-            }),
+-          );
+-          observers.add(observer);
++        return true;
++      };
+ 
+-          const toBytes = Effect.fnUntraced(function* (frame: Frame) {
+-            const value = encoder.encode(encode(frame) + "\n");
++      const open = Effect.fnUntraced(function* (threadId: ThreadId) {
++        if (unavailable !== undefined) return yield* unavailable.error;
++        if (threadId.length > MAX_ID_LENGTH || observers.size >= MAX_OBSERVERS)
++          return yield* HostProtocolError.make({
++            message: "Provisional text observation capacity exceeded",
++          });
++        const scope = yield* Scope.fork(owner);
++        const queue = yield* Queue.dropping<Event | undefined, HostProtocolError>(BUFFER_SIZE);
++
++        const observer: Observer = {
++          threadId,
++          queue,
++          snapshot: true,
++          streamId: "",
++          sequence: 0,
++        };
++
++        const close = Scope.close(scope, Exit.void);
++
++        yield* Scope.addFinalizer(
++          scope,
++          Effect.sync(() => {
++            observer.snapshot = true;
++            observers.delete(observer);
++            Queue.shutdownUnsafe(queue);
++          }),
++        );
++        observers.add(observer);
++        Queue.offerUnsafe(queue, undefined);
++
++        const frame = (event: Event): Frame => ({
++          _tag: "Event",
++          schemaVersion: 1,
++          streamId: observer.streamId,
++          sequence: ++observer.sequence,
++          event,
++        });
+ 
+-            if (value.byteLength > MAX_FRAME_BYTES)
+-              return yield* HostProtocolError.make({
+-                message: "Provisional text frame exceeds its wire bound",
+-              });
++        const snapshot = function* (): Generator<Frame> {
++          // Capture immutable strings once, then encode bounded slices on consumer pulls.
++          // Queue drain and capture are synchronous so no delta can straddle the snapshot.
++          while (Queue.sizeUnsafe(queue) > 0) Queue.takeUnsafe(queue);
+ 
+-            return value;
+-          });
++          const current = Array.from(drafts.values())
++            .filter((draft) => draft.start.threadId === threadId)
++            .map((draft) => ({ ...draft }));
+ 
+-          const resetFrame: Frame = {
++          observer.snapshot = false;
++          observer.streamId = crypto.randomUUID();
++          observer.sequence = 0;
++          yield {
+             _tag: "Reset",
+             schemaVersion: 1,
+             streamId: observer.streamId,
+             threadId,
+             sequence: 0,
+           };
+-
+-          const frames = Stream.fromEffectRepeat(Queue.take(queue)).pipe(
+-            Stream.prepend([resetFrame]),
+-            Stream.mapEffect(toBytes),
+-            Stream.ensuring(close),
++          for (const draft of current) {
++            yield frame(draft.start);
++            for (let offset = 0; offset < draft.text.length; offset += MAX_DELTA_LENGTH) {
++              yield frame({
++                ...draft.start,
++                part: Response.makePart("text-delta", {
++                  id: draft.start.part.id,
++                  delta: draft.text.slice(offset, offset + MAX_DELTA_LENGTH),
++                }),
++              });
++            }
++            if (draft.ended)
++              yield frame({
++                ...draft.start,
++                part: Response.makePart("text-end", { id: draft.start.part.id }),
++              });
++          }
++        };
++
++        const toBytes = Effect.fnUntraced(function* (value: Frame) {
++          const json = yield* encode(value).pipe(
++            Effect.mapError(() =>
++              HostProtocolError.make({ message: "Provisional text frame is invalid" }),
++            ),
+           );
+ 
+-          return yield* Stream.toReadableStreamEffect(frames);
++          const bytes = encoder.encode(json + "\n");
++
++          if (bytes.byteLength > MAX_FRAME_BYTES)
++            return yield* HostProtocolError.make({
++              message: "Provisional text frame exceeds its wire bound",
++            });
++
++          return bytes;
+         });
+ 
++        const frames = Stream.fromEffectRepeat(Queue.take(queue)).pipe(
++          Stream.flatMap((event) =>
++            observer.snapshot || event === undefined
++              ? Stream.fromIterable(snapshot(), { chunkSize: 1 }).pipe(
++                  Stream.takeWhile(() => !observer.snapshot),
++                )
++              : Stream.succeed(frame(event)),
++          ),
++          Stream.mapEffect(toBytes),
++          Stream.ensuring(close),
++        );
++
++        return yield* Stream.toReadableStreamEffect(frames);
++      });
++
+       return Context.make(LiveTextHub, { open }).pipe(Context.add(Publisher, { offerUnsafe }));
+     }),
+   );

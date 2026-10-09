@@ -1,0 +1,30 @@
+{
+  "complete": true,
+  "checkedAt": "2026-10-09T17:20:46.805Z",
+  "checks": [
+    {
+      "worker": "first-text-d818c661-candidate",
+      "status": 404,
+      "remainingNamespaces": 0
+    },
+    {
+      "worker": "first-text-d818c661-plain",
+      "status": 404,
+      "remainingNamespaces": 0
+    },
+    {
+      "worker": "first-text-d818c661-provider",
+      "status": 404,
+      "remainingNamespaces": 0
+    }
+  ],
+  "remaining": {
+    "workers": [],
+    "namespaces": []
+  },
+  "privateStateRemoved": true,
+  "privateValueScanPassed": true,
+  "filesScanned": 45,
+  "telemetryTailCollected": true,
+  "telemetryFailures": []
+}

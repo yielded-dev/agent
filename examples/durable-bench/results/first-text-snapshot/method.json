@@ -1,0 +1,35 @@
+{
+  "objective": "Measure memory-only snapshots against the already deployed Effect Stream adapter; prove full-prefix late attachment and snapshot catch-up while keeping settlement unchanged.",
+  "baseline": "5e4a1d8ce2d65ec8fb9cb7f3b1f1f892352faa55",
+  "variants": [
+    "plain-prototype",
+    "snapshot-prototype"
+  ],
+  "sample": {
+    "objectsPerSeedPerVariant": 3,
+    "seeds": [
+      50,
+      250
+    ],
+    "turnsPerObject": 5,
+    "cold": "m0, explicit Object reconstruction",
+    "settling": "m1 retained but excluded",
+    "warm": "m2-m4 same-Object repeats"
+  },
+  "provider": {
+    "firstTokenMs": 400,
+    "fragments": 48,
+    "intervalMs": 25,
+    "modelCallsPerTurn": 9,
+    "toolSteps": 8
+  },
+  "timing": "Deployed Cloudflare/Alchemy only. Driver I/O clock for first text and settlement; provider/driver echo envelope for per-call visibility with 1ms quantization.",
+  "hypothesis": "Snapshots preserve complete prefixes for mid-response and lagging consumers without a material settlement penalty. Report all medians/IQRs and same-Object ranges; no fixed speedup claim.",
+  "proof": "Reuse existing deployed lifecycle proof; late attach after observed nonempty provider text and force backlog while generation remains active. Retain all failed/non-ok outcomes.",
+  "resources": "first-text prefix; private mode700 external Alchemy state; destroy and verify API absence.",
+  "followUp": {
+    "reason": "The unpaired 250-turn cohort has +2.0% warm median settlement; retain that result and use the existing paired observation check to test subscription back-pressure.",
+    "workload": "Same three 250-seeded candidate Objects, one warmup m5 then four alternating live/canonical-only turns m6-m9; reverse order on one Object.",
+    "scope": "Subscription/encoding cost only. Snapshot retention remains enabled in both modes, so this does not isolate retention cost versus the previous code."
+  }
+}

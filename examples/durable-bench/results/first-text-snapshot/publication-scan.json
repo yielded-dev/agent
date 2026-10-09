@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-10-09T17:24:45.024Z",
+  "filesExamined": 46,
+  "bytes": 1542503,
+  "emailMatches": 0,
+  "rawUuidMatches": 0,
+  "rawCloudflareResourceIdMatches": 0,
+  "accountHostMatches": 0,
+  "privatePathMatches": 0,
+  "allowedSourceLiteral": "Generic /private/tmp/first-text- allocation/validation prefix in the harness only",
+  "exactPrivateValueScan": "Passed during cleanup for the account, API token, experiment token, account name and Workers subdomain; values were never published",
+  "ephemeralIdentities": "Hashed in the receipt serializer before public evidence was written",
+  "timingValuesRewritten": false,
+  "productCommit": "15b3b93bb895037febf3bacafd371db712b99b29",
+  "deployedProductInputsMatchingCommit": 188,
+  "successfulReadyInputsMatchingCommit": 6,
+  "privateStateRemoved": true,
+  "benchmarkVendorRemoved": true,
+  "evidenceContentSha256": "195edfeff0debcfef614e920a42784569f656fa1c88c434283f3191b4421af8a"
+}

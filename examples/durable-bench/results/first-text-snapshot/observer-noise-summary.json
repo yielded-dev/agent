@@ -1,0 +1,77 @@
+{
+  "method": "Three existing 250-seeded prototype Objects; m5 warmup, then m6–m9 alternating live/canonical-only observation with reversed order in one Object. Two samples per mode per Object, one incarnation each. Exact model-visible request hashes match across modes/Objects for every sample/call. No concurrent proof workload. Snapshot retention stays enabled in both modes; this isolates subscription and frame delivery, not retention versus the previous implementation.",
+  "objects": [
+    {
+      "object": 2,
+      "onSettlementMs": 16375,
+      "offSettlementMs": 16309,
+      "differenceMs": 66,
+      "differencePercent": 0.4046845300140989,
+      "onSetupMs": 22.5,
+      "withoutSetupDifferenceMs": 43.5,
+      "onFirstVisibleMs": 742.5,
+      "offFirstVisibleMs": 2100,
+      "onRangeMs": 24,
+      "offRangeMs": 22,
+      "sameIncarnation": true
+    },
+    {
+      "object": 1,
+      "onSettlementMs": 16576.5,
+      "offSettlementMs": 16525.5,
+      "differenceMs": 51,
+      "differencePercent": 0.3086139602432647,
+      "onSetupMs": 24,
+      "withoutSetupDifferenceMs": 27,
+      "onFirstVisibleMs": 854.5,
+      "offFirstVisibleMs": 2243,
+      "onRangeMs": 77,
+      "offRangeMs": 41,
+      "sameIncarnation": true
+    },
+    {
+      "object": 0,
+      "onSettlementMs": 16533.5,
+      "offSettlementMs": 16647.5,
+      "differenceMs": -114,
+      "differencePercent": -0.6847875056314789,
+      "onSetupMs": 39,
+      "withoutSetupDifferenceMs": -153,
+      "onFirstVisibleMs": 864.5,
+      "offFirstVisibleMs": 2214,
+      "onRangeMs": 125,
+      "offRangeMs": 9,
+      "sameIncarnation": true
+    }
+  ],
+  "pairedDifferenceMs": {
+    "n": 3,
+    "median": 51,
+    "q1": -31.5,
+    "q3": 58.5
+  },
+  "pairedDifferencePercent": {
+    "n": 3,
+    "median": 0.3086139602432647,
+    "q1": -0.18808677269410712,
+    "q3": 0.3566492451286818
+  },
+  "withoutSetupDifferenceMs": {
+    "n": 3,
+    "median": 27,
+    "q1": -63,
+    "q3": 35.25
+  },
+  "onSettlementMs": {
+    "n": 3,
+    "median": 16533.5,
+    "q1": 16454.25,
+    "q3": 16555
+  },
+  "offSettlementMs": {
+    "n": 3,
+    "median": 16525.5,
+    "q1": 16417.25,
+    "q3": 16586.5
+  }
+}

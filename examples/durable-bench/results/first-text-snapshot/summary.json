@@ -1,0 +1,2449 @@
+{
+  "summary": [
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/cold",
+      "objects": 3,
+      "turns": 3,
+      "firstVisibleMs": {
+        "n": 3,
+        "median": 1375,
+        "q1": 1307.5,
+        "q3": 1445.5
+      },
+      "turnMs": {
+        "n": 3,
+        "median": 17246,
+        "q1": 17122.5,
+        "q3": 17268.5
+      },
+      "visibilityMs": {
+        "n": 3,
+        "median": 28,
+        "q1": 26.75,
+        "q3": 29
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -55.5,
+        "q1": -55.75,
+        "q3": -54.75
+      },
+      "missingClockBounds": 0,
+      "maxClockIntervalMs": 66
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/cold",
+      "objects": 3,
+      "turns": 3,
+      "firstVisibleMs": {
+        "n": 3,
+        "median": 1035,
+        "q1": 1034.5,
+        "q3": 1194
+      },
+      "turnMs": {
+        "n": 3,
+        "median": 16764,
+        "q1": 16744.5,
+        "q3": 16972.5
+      },
+      "visibilityMs": {
+        "n": 3,
+        "median": 29,
+        "q1": 20.5,
+        "q3": 53.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -53,
+        "q1": -58.5,
+        "q3": -27.25
+      },
+      "missingClockBounds": 0,
+      "maxClockIntervalMs": 165
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "objects": 3,
+      "turns": 9,
+      "firstVisibleMs": {
+        "n": 3,
+        "median": 831,
+        "q1": 796,
+        "q3": 875
+      },
+      "turnMs": {
+        "n": 3,
+        "median": 16566,
+        "q1": 16483.5,
+        "q3": 16596
+      },
+      "visibilityMs": {
+        "n": 3,
+        "median": 34,
+        "q1": 30.75,
+        "q3": 34.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -52,
+        "q1": -52.75,
+        "q3": -50
+      },
+      "missingClockBounds": 0,
+      "maxClockIntervalMs": 46
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "objects": 3,
+      "turns": 9,
+      "firstVisibleMs": {
+        "n": 3,
+        "median": 665,
+        "q1": 653,
+        "q3": 691.5
+      },
+      "turnMs": {
+        "n": 3,
+        "median": 16238,
+        "q1": 16222,
+        "q3": 16257
+      },
+      "visibilityMs": {
+        "n": 3,
+        "median": 11,
+        "q1": 10.5,
+        "q3": 12.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -67,
+        "q1": -68.5,
+        "q3": -65.75
+      },
+      "missingClockBounds": 0,
+      "maxClockIntervalMs": 41
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/cold",
+      "objects": 3,
+      "turns": 3,
+      "firstVisibleMs": {
+        "n": 3,
+        "median": 1255,
+        "q1": 1152.5,
+        "q3": 1258
+      },
+      "turnMs": {
+        "n": 3,
+        "median": 16809,
+        "q1": 16708,
+        "q3": 16889.5
+      },
+      "visibilityMs": {
+        "n": 3,
+        "median": 32,
+        "q1": 27,
+        "q3": 34
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -50,
+        "q1": -54,
+        "q3": -48.5
+      },
+      "missingClockBounds": 0,
+      "maxClockIntervalMs": 38
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/cold",
+      "objects": 3,
+      "turns": 3,
+      "firstVisibleMs": {
+        "n": 3,
+        "median": 1143,
+        "q1": 1075.5,
+        "q3": 1179
+      },
+      "turnMs": {
+        "n": 3,
+        "median": 17029,
+        "q1": 16864,
+        "q3": 17097
+      },
+      "visibilityMs": {
+        "n": 3,
+        "median": 32.5,
+        "q1": 30.25,
+        "q3": 36
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -46.5,
+        "q1": -48.25,
+        "q3": -42.5
+      },
+      "missingClockBounds": 0,
+      "maxClockIntervalMs": 57
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "objects": 3,
+      "turns": 9,
+      "firstVisibleMs": {
+        "n": 3,
+        "median": 695,
+        "q1": 686,
+        "q3": 706.5
+      },
+      "turnMs": {
+        "n": 3,
+        "median": 16426,
+        "q1": 16351,
+        "q3": 16459.5
+      },
+      "visibilityMs": {
+        "n": 3,
+        "median": 33.5,
+        "q1": 32.25,
+        "q3": 38
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -45.5,
+        "q1": -46.25,
+        "q3": -41
+      },
+      "missingClockBounds": 0,
+      "maxClockIntervalMs": 63
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "objects": 3,
+      "turns": 9,
+      "firstVisibleMs": {
+        "n": 3,
+        "median": 704,
+        "q1": 696,
+        "q3": 710
+      },
+      "turnMs": {
+        "n": 3,
+        "median": 16239,
+        "q1": 16231.5,
+        "q3": 16269
+      },
+      "visibilityMs": {
+        "n": 3,
+        "median": 30,
+        "q1": 28.75,
+        "q3": 30
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -52,
+        "q1": -53,
+        "q3": -51.5
+      },
+      "missingClockBounds": 0,
+      "maxClockIntervalMs": 63
+    }
+  ],
+  "perCall": [
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/cold",
+      "call": 0,
+      "visibilityMs": {
+        "n": 3,
+        "median": 55,
+        "q1": 46.75,
+        "q3": 67
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -55,
+        "q1": -55.5,
+        "q3": -54.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 20,
+        "q1": 19.5,
+        "q3": 20.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 238,
+        "q1": 223.25,
+        "q3": 250
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/cold",
+      "call": 1,
+      "visibilityMs": {
+        "n": 3,
+        "median": 30,
+        "q1": 26.25,
+        "q3": 30.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -55.5,
+        "q1": -56.75,
+        "q3": -54.25
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 19.5,
+        "q1": 18.25,
+        "q3": 20.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 202.5,
+        "q1": 201.75,
+        "q3": 211.25
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/cold",
+      "call": 2,
+      "visibilityMs": {
+        "n": 3,
+        "median": 28,
+        "q1": 26.25,
+        "q3": 29
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -56,
+        "q1": -57,
+        "q3": -55.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 19,
+        "q1": 18,
+        "q3": 19.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 207,
+        "q1": 195.75,
+        "q3": 216.5
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/cold",
+      "call": 3,
+      "visibilityMs": {
+        "n": 3,
+        "median": 25.5,
+        "q1": 23.75,
+        "q3": 26.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -56.5,
+        "q1": -57.75,
+        "q3": -55.25
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 18.5,
+        "q1": 17.25,
+        "q3": 19.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 214,
+        "q1": 200.25,
+        "q3": 214
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/cold",
+      "call": 4,
+      "visibilityMs": {
+        "n": 3,
+        "median": 25.5,
+        "q1": 24.75,
+        "q3": 29.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -54.5,
+        "q1": -55.75,
+        "q3": -53.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 20.5,
+        "q1": 19.25,
+        "q3": 21.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 196,
+        "q1": 188.25,
+        "q3": 201
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/cold",
+      "call": 5,
+      "visibilityMs": {
+        "n": 3,
+        "median": 28,
+        "q1": 26.75,
+        "q3": 28
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -55,
+        "q1": -55.25,
+        "q3": -54.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 20,
+        "q1": 19.75,
+        "q3": 20.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 195,
+        "q1": 188.25,
+        "q3": 206
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/cold",
+      "call": 6,
+      "visibilityMs": {
+        "n": 3,
+        "median": 26.5,
+        "q1": 26.25,
+        "q3": 27.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -53.5,
+        "q1": -54.75,
+        "q3": -53.25
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 21.5,
+        "q1": 20.25,
+        "q3": 21.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 188.5,
+        "q1": 187.75,
+        "q3": 200.75
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/cold",
+      "call": 7,
+      "visibilityMs": {
+        "n": 3,
+        "median": 28.5,
+        "q1": 27.25,
+        "q3": 28.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -55.5,
+        "q1": -56.75,
+        "q3": -53.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 19.5,
+        "q1": 18.25,
+        "q3": 21.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 185,
+        "q1": 181.75,
+        "q3": 194.5
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/cold",
+      "call": 8,
+      "visibilityMs": {
+        "n": 3,
+        "median": 36,
+        "q1": 30.75,
+        "q3": 40.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": 20,
+        "q1": 18.5,
+        "q3": 20.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 20,
+        "q1": 18.5,
+        "q3": 20.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 218,
+        "q1": 205.25,
+        "q3": 220.5
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/cold",
+      "call": 0,
+      "visibilityMs": {
+        "n": 3,
+        "median": 50,
+        "q1": 38.5,
+        "q3": 86.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -59,
+        "q1": -65.5,
+        "q3": -30.25
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 16,
+        "q1": 9.5,
+        "q3": 44.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 201,
+        "q1": 187,
+        "q3": 239.25
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/cold",
+      "call": 1,
+      "visibilityMs": {
+        "n": 3,
+        "median": 25,
+        "q1": 17,
+        "q3": 51.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -56,
+        "q1": -62.5,
+        "q3": -27.25
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 19,
+        "q1": 12.5,
+        "q3": 47.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 219,
+        "q1": 190.5,
+        "q3": 224.75
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/cold",
+      "call": 2,
+      "visibilityMs": {
+        "n": 3,
+        "median": 29,
+        "q1": 20,
+        "q3": 54.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -62,
+        "q1": -63.5,
+        "q3": -31.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 13,
+        "q1": 11.5,
+        "q3": 43.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 149,
+        "q1": 146,
+        "q3": 193.75
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/cold",
+      "call": 3,
+      "visibilityMs": {
+        "n": 3,
+        "median": 23,
+        "q1": 16,
+        "q3": 48.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -58,
+        "q1": -62.5,
+        "q3": -30.25
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 17,
+        "q1": 12.5,
+        "q3": 44.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 149,
+        "q1": 144.5,
+        "q3": 179.75
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/cold",
+      "call": 4,
+      "visibilityMs": {
+        "n": 3,
+        "median": 26,
+        "q1": 18,
+        "q3": 52.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -48,
+        "q1": -50.5,
+        "q3": -24.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 27,
+        "q1": 24.5,
+        "q3": 50.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 157,
+        "q1": 156.5,
+        "q3": 192.25
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/cold",
+      "call": 5,
+      "visibilityMs": {
+        "n": 3,
+        "median": 30,
+        "q1": 26.5,
+        "q3": 54.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -52,
+        "q1": -56,
+        "q3": -26.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 23,
+        "q1": 19,
+        "q3": 48.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 173,
+        "q1": 158.5,
+        "q3": 196.25
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/cold",
+      "call": 6,
+      "visibilityMs": {
+        "n": 3,
+        "median": 32,
+        "q1": 22.5,
+        "q3": 54.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -51,
+        "q1": -57.5,
+        "q3": -24.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 24,
+        "q1": 17.5,
+        "q3": 50.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 186,
+        "q1": 183.5,
+        "q3": 207.25
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/cold",
+      "call": 7,
+      "visibilityMs": {
+        "n": 3,
+        "median": 30,
+        "q1": 21,
+        "q3": 54.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -53,
+        "q1": -58.5,
+        "q3": -27.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 22,
+        "q1": 16.5,
+        "q3": 47.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 154,
+        "q1": 151,
+        "q3": 246.75
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/cold",
+      "call": 8,
+      "visibilityMs": {
+        "n": 3,
+        "median": 27,
+        "q1": 19.5,
+        "q3": 52.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": 27,
+        "q1": 22,
+        "q3": 50.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 27,
+        "q1": 22,
+        "q3": 50.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 211,
+        "q1": 202.5,
+        "q3": 237.75
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "call": 0,
+      "visibilityMs": {
+        "n": 3,
+        "median": 40.5,
+        "q1": 38,
+        "q3": 43.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -55.5,
+        "q1": -56.25,
+        "q3": -53.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 19.5,
+        "q1": 18.75,
+        "q3": 21.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 185,
+        "q1": 180,
+        "q3": 199
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "call": 1,
+      "visibilityMs": {
+        "n": 3,
+        "median": 27,
+        "q1": 26.75,
+        "q3": 30
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -53,
+        "q1": -53.25,
+        "q3": -52.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 22,
+        "q1": 21.75,
+        "q3": 22.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 179.5,
+        "q1": 179.25,
+        "q3": 194
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "call": 2,
+      "visibilityMs": {
+        "n": 3,
+        "median": 29.5,
+        "q1": 29.5,
+        "q3": 31.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -52,
+        "q1": -53.75,
+        "q3": -50.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 23,
+        "q1": 21.25,
+        "q3": 24.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 183,
+        "q1": 178.75,
+        "q3": 192.5
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "call": 3,
+      "visibilityMs": {
+        "n": 3,
+        "median": 32,
+        "q1": 30.25,
+        "q3": 35.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -50,
+        "q1": -53.25,
+        "q3": -48.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 25,
+        "q1": 21.75,
+        "q3": 26.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 207.5,
+        "q1": 189.25,
+        "q3": 207.75
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "call": 4,
+      "visibilityMs": {
+        "n": 3,
+        "median": 33,
+        "q1": 32.5,
+        "q3": 33.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -50,
+        "q1": -52,
+        "q3": -48.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 25,
+        "q1": 23,
+        "q3": 26.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 186,
+        "q1": 181.25,
+        "q3": 193.75
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "call": 5,
+      "visibilityMs": {
+        "n": 3,
+        "median": 32,
+        "q1": 30.5,
+        "q3": 33.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -50,
+        "q1": -52,
+        "q3": -49.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 25,
+        "q1": 23,
+        "q3": 25.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 203.5,
+        "q1": 190.25,
+        "q3": 205.25
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "call": 6,
+      "visibilityMs": {
+        "n": 3,
+        "median": 30,
+        "q1": 29.5,
+        "q3": 30.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -53,
+        "q1": -53,
+        "q3": -50.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 22,
+        "q1": 22,
+        "q3": 24.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 186,
+        "q1": 182.75,
+        "q3": 201
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "call": 7,
+      "visibilityMs": {
+        "n": 3,
+        "median": 35,
+        "q1": 30.75,
+        "q3": 40
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -52,
+        "q1": -53,
+        "q3": -49.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 23,
+        "q1": 22,
+        "q3": 25.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 193,
+        "q1": 183.5,
+        "q3": 203.5
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "call": 8,
+      "visibilityMs": {
+        "n": 3,
+        "median": 32,
+        "q1": 29.5,
+        "q3": 34.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": 22,
+        "q1": 21.5,
+        "q3": 24
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 22,
+        "q1": 21.5,
+        "q3": 24
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 183.5,
+        "q1": 179.75,
+        "q3": 193
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "call": 0,
+      "visibilityMs": {
+        "n": 3,
+        "median": 19.5,
+        "q1": 16.75,
+        "q3": 19.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -67.5,
+        "q1": -68.75,
+        "q3": -67.25
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 7.5,
+        "q1": 6.25,
+        "q3": 7.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 136.5,
+        "q1": 135.75,
+        "q3": 152
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "call": 1,
+      "visibilityMs": {
+        "n": 3,
+        "median": 10,
+        "q1": 9.5,
+        "q3": 11.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -66,
+        "q1": -68,
+        "q3": -65.25
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 9,
+        "q1": 7,
+        "q3": 9.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 150,
+        "q1": 145.75,
+        "q3": 153.25
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "call": 2,
+      "visibilityMs": {
+        "n": 3,
+        "median": 12,
+        "q1": 11.5,
+        "q3": 14.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -66,
+        "q1": -68.5,
+        "q3": -64.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 9,
+        "q1": 6.5,
+        "q3": 10.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 139,
+        "q1": 137.25,
+        "q3": 142.25
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "call": 3,
+      "visibilityMs": {
+        "n": 3,
+        "median": 11,
+        "q1": 10.5,
+        "q3": 11.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -68,
+        "q1": -69,
+        "q3": -66.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 7,
+        "q1": 6,
+        "q3": 8.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 139,
+        "q1": 137.25,
+        "q3": 143.5
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "call": 4,
+      "visibilityMs": {
+        "n": 3,
+        "median": 10,
+        "q1": 10,
+        "q3": 12.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -65.5,
+        "q1": -66.75,
+        "q3": -65.25
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 9.5,
+        "q1": 8.25,
+        "q3": 9.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 134.5,
+        "q1": 134.25,
+        "q3": 140
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "call": 5,
+      "visibilityMs": {
+        "n": 3,
+        "median": 12,
+        "q1": 10,
+        "q3": 12.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -68,
+        "q1": -69,
+        "q3": -67.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 7,
+        "q1": 6,
+        "q3": 7.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 140,
+        "q1": 138,
+        "q3": 145.75
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "call": 6,
+      "visibilityMs": {
+        "n": 3,
+        "median": 11,
+        "q1": 10,
+        "q3": 12.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -66,
+        "q1": -66.25,
+        "q3": -65.25
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 9,
+        "q1": 8.75,
+        "q3": 9.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 142.5,
+        "q1": 139.5,
+        "q3": 148.5
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "call": 7,
+      "visibilityMs": {
+        "n": 3,
+        "median": 12.5,
+        "q1": 11.25,
+        "q3": 13.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -66.5,
+        "q1": -66.75,
+        "q3": -65.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 8.5,
+        "q1": 8.25,
+        "q3": 9.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 136.5,
+        "q1": 135.25,
+        "q3": 144.5
+      }
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "call": 8,
+      "visibilityMs": {
+        "n": 3,
+        "median": 12,
+        "q1": 11,
+        "q3": 13.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": 9,
+        "q1": 8,
+        "q3": 11.25
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 9,
+        "q1": 8,
+        "q3": 11.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 158,
+        "q1": 152,
+        "q3": 160.25
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/cold",
+      "call": 0,
+      "visibilityMs": {
+        "n": 3,
+        "median": 47,
+        "q1": 45.5,
+        "q3": 57.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -52,
+        "q1": -55.5,
+        "q3": -47.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 23,
+        "q1": 19.5,
+        "q3": 27.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 195,
+        "q1": 195,
+        "q3": 202
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/cold",
+      "call": 1,
+      "visibilityMs": {
+        "n": 3,
+        "median": 31,
+        "q1": 26.5,
+        "q3": 33.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -52,
+        "q1": -55,
+        "q3": -48
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 23,
+        "q1": 20,
+        "q3": 27
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 186,
+        "q1": 183,
+        "q3": 188
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/cold",
+      "call": 2,
+      "visibilityMs": {
+        "n": 3,
+        "median": 30,
+        "q1": 25,
+        "q3": 35.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -50,
+        "q1": -53.5,
+        "q3": -45.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 25,
+        "q1": 21.5,
+        "q3": 29.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 181,
+        "q1": 178,
+        "q3": 185.5
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/cold",
+      "call": 3,
+      "visibilityMs": {
+        "n": 3,
+        "median": 28,
+        "q1": 25.5,
+        "q3": 31
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -50,
+        "q1": -54,
+        "q3": -50
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 25,
+        "q1": 21,
+        "q3": 25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 186,
+        "q1": 176,
+        "q3": 193
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/cold",
+      "call": 4,
+      "visibilityMs": {
+        "n": 3,
+        "median": 34,
+        "q1": 28.5,
+        "q3": 34
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -50,
+        "q1": -52.5,
+        "q3": -48.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 25,
+        "q1": 22.5,
+        "q3": 26.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 170,
+        "q1": 165,
+        "q3": 182
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/cold",
+      "call": 5,
+      "visibilityMs": {
+        "n": 3,
+        "median": 30,
+        "q1": 25.5,
+        "q3": 31
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -51,
+        "q1": -54.5,
+        "q3": -50.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 24,
+        "q1": 20.5,
+        "q3": 24.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 169,
+        "q1": 166.5,
+        "q3": 180.5
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/cold",
+      "call": 6,
+      "visibilityMs": {
+        "n": 3,
+        "median": 28,
+        "q1": 24,
+        "q3": 28
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -51,
+        "q1": -53.5,
+        "q3": -51
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 24,
+        "q1": 21.5,
+        "q3": 24
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 173,
+        "q1": 168.5,
+        "q3": 178.5
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/cold",
+      "call": 7,
+      "visibilityMs": {
+        "n": 3,
+        "median": 37,
+        "q1": 29.5,
+        "q3": 37.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -47,
+        "q1": -53,
+        "q3": -46.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 28,
+        "q1": 22,
+        "q3": 28.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 185,
+        "q1": 178,
+        "q3": 190
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/cold",
+      "call": 8,
+      "visibilityMs": {
+        "n": 3,
+        "median": 36,
+        "q1": 30.5,
+        "q3": 37
+      },
+      "completionMs": {
+        "n": 3,
+        "median": 26,
+        "q1": 21.5,
+        "q3": 27
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 26,
+        "q1": 21.5,
+        "q3": 27
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 178,
+        "q1": 177.5,
+        "q3": 188.5
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/cold",
+      "call": 0,
+      "visibilityMs": {
+        "n": 3,
+        "median": 55,
+        "q1": 52.75,
+        "q3": 58.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -46.5,
+        "q1": -49.25,
+        "q3": -43
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 28.5,
+        "q1": 25.75,
+        "q3": 32
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 247.5,
+        "q1": 247.25,
+        "q3": 262.5
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/cold",
+      "call": 1,
+      "visibilityMs": {
+        "n": 3,
+        "median": 29.5,
+        "q1": 29.25,
+        "q3": 33.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -47.5,
+        "q1": -51.25,
+        "q3": -44.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 27.5,
+        "q1": 23.75,
+        "q3": 30.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 233,
+        "q1": 232.75,
+        "q3": 241.75
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/cold",
+      "call": 2,
+      "visibilityMs": {
+        "n": 3,
+        "median": 32.5,
+        "q1": 29.25,
+        "q3": 35.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -45.5,
+        "q1": -48.75,
+        "q3": -42
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 29.5,
+        "q1": 26.25,
+        "q3": 33
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 220.5,
+        "q1": 219.75,
+        "q3": 233.5
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/cold",
+      "call": 3,
+      "visibilityMs": {
+        "n": 3,
+        "median": 31.5,
+        "q1": 27.75,
+        "q3": 36
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -47.5,
+        "q1": -50.25,
+        "q3": -43
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 27.5,
+        "q1": 24.75,
+        "q3": 32
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 242.5,
+        "q1": 227.25,
+        "q3": 247
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/cold",
+      "call": 4,
+      "visibilityMs": {
+        "n": 3,
+        "median": 34.5,
+        "q1": 31.75,
+        "q3": 40.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -46.5,
+        "q1": -47.25,
+        "q3": -42
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 28.5,
+        "q1": 27.75,
+        "q3": 33
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 269.5,
+        "q1": 257,
+        "q3": 283.75
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/cold",
+      "call": 5,
+      "visibilityMs": {
+        "n": 3,
+        "median": 29.5,
+        "q1": 28.75,
+        "q3": 34.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -45.5,
+        "q1": -46.75,
+        "q3": -41.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 29.5,
+        "q1": 28.25,
+        "q3": 33.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 232,
+        "q1": 228.25,
+        "q3": 241.25
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/cold",
+      "call": 6,
+      "visibilityMs": {
+        "n": 3,
+        "median": 33.5,
+        "q1": 29.75,
+        "q3": 38
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -45.5,
+        "q1": -46.75,
+        "q3": -41.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 29.5,
+        "q1": 28.25,
+        "q3": 33.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 243.5,
+        "q1": 237.25,
+        "q3": 251.5
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/cold",
+      "call": 7,
+      "visibilityMs": {
+        "n": 3,
+        "median": 35.5,
+        "q1": 32.25,
+        "q3": 37
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -46.5,
+        "q1": -48.25,
+        "q3": -42.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 28.5,
+        "q1": 26.75,
+        "q3": 32.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 224.5,
+        "q1": 215.75,
+        "q3": 234
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/cold",
+      "call": 8,
+      "visibilityMs": {
+        "n": 3,
+        "median": 30.5,
+        "q1": 28.25,
+        "q3": 33.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": 29.5,
+        "q1": 26.75,
+        "q3": 32.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 29.5,
+        "q1": 26.75,
+        "q3": 32.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 228,
+        "q1": 225.75,
+        "q3": 234.25
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "call": 0,
+      "visibilityMs": {
+        "n": 3,
+        "median": 41,
+        "q1": 40.75,
+        "q3": 41.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -44.5,
+        "q1": -45.75,
+        "q3": -41.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 30.5,
+        "q1": 29.25,
+        "q3": 33.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 213.5,
+        "q1": 213.25,
+        "q3": 223.5
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "call": 1,
+      "visibilityMs": {
+        "n": 3,
+        "median": 30.5,
+        "q1": 30,
+        "q3": 35
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -42.5,
+        "q1": -45,
+        "q3": -41.25
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 32.5,
+        "q1": 30,
+        "q3": 33.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 219.5,
+        "q1": 214.75,
+        "q3": 226.5
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "call": 2,
+      "visibilityMs": {
+        "n": 3,
+        "median": 33.5,
+        "q1": 33.5,
+        "q3": 36.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -46.5,
+        "q1": -46.75,
+        "q3": -42.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 28.5,
+        "q1": 28.25,
+        "q3": 32.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 237.5,
+        "q1": 227.5,
+        "q3": 240.5
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "call": 3,
+      "visibilityMs": {
+        "n": 3,
+        "median": 33.5,
+        "q1": 31.75,
+        "q3": 38
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -44.5,
+        "q1": -46.5,
+        "q3": -40.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 30.5,
+        "q1": 28.5,
+        "q3": 34.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 214.5,
+        "q1": 209.25,
+        "q3": 223
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "call": 4,
+      "visibilityMs": {
+        "n": 3,
+        "median": 32.5,
+        "q1": 31.75,
+        "q3": 38
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -43.5,
+        "q1": -45.25,
+        "q3": -41
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 31.5,
+        "q1": 29.75,
+        "q3": 34
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 226.5,
+        "q1": 217,
+        "q3": 229.25
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "call": 5,
+      "visibilityMs": {
+        "n": 3,
+        "median": 34.5,
+        "q1": 32.75,
+        "q3": 40
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -45.5,
+        "q1": -46.75,
+        "q3": -40
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 29.5,
+        "q1": 28.25,
+        "q3": 35
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 215.5,
+        "q1": 208.75,
+        "q3": 225
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "call": 6,
+      "visibilityMs": {
+        "n": 3,
+        "median": 33.5,
+        "q1": 33.25,
+        "q3": 37.5
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -45.5,
+        "q1": -45.75,
+        "q3": -40.25
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 29.5,
+        "q1": 29.25,
+        "q3": 34.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 224.5,
+        "q1": 215.75,
+        "q3": 228.5
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "call": 7,
+      "visibilityMs": {
+        "n": 3,
+        "median": 32.5,
+        "q1": 31.75,
+        "q3": 39
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -44.5,
+        "q1": -45.25,
+        "q3": -41.25
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 30.5,
+        "q1": 29.75,
+        "q3": 33.75
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 215.5,
+        "q1": 210.25,
+        "q3": 224
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "call": 8,
+      "visibilityMs": {
+        "n": 3,
+        "median": 33,
+        "q1": 32.75,
+        "q3": 37.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": 28.5,
+        "q1": 28.25,
+        "q3": 34
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 28.5,
+        "q1": 28.25,
+        "q3": 34
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 215,
+        "q1": 207.75,
+        "q3": 221.25
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "call": 0,
+      "visibilityMs": {
+        "n": 3,
+        "median": 32.5,
+        "q1": 28.75,
+        "q3": 34.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -55,
+        "q1": -57.75,
+        "q3": -54.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 20,
+        "q1": 17.25,
+        "q3": 20.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 168.5,
+        "q1": 159.75,
+        "q3": 175.75
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "call": 1,
+      "visibilityMs": {
+        "n": 3,
+        "median": 24,
+        "q1": 23,
+        "q3": 26.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -54,
+        "q1": -55.25,
+        "q3": -53.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 21,
+        "q1": 19.75,
+        "q3": 21.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 172.5,
+        "q1": 167.25,
+        "q3": 179.5
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "call": 2,
+      "visibilityMs": {
+        "n": 3,
+        "median": 28.5,
+        "q1": 28,
+        "q3": 30.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -52,
+        "q1": -52.75,
+        "q3": -51.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 23,
+        "q1": 22.25,
+        "q3": 23.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 173,
+        "q1": 164,
+        "q3": 177.25
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "call": 3,
+      "visibilityMs": {
+        "n": 3,
+        "median": 25.5,
+        "q1": 25.5,
+        "q3": 32.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -51.5,
+        "q1": -53.5,
+        "q3": -50.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 23.5,
+        "q1": 21.5,
+        "q3": 24.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 172,
+        "q1": 161,
+        "q3": 174.75
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "call": 4,
+      "visibilityMs": {
+        "n": 3,
+        "median": 29,
+        "q1": 28,
+        "q3": 29
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -52.5,
+        "q1": -52.75,
+        "q3": -50.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 22.5,
+        "q1": 22.25,
+        "q3": 24.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 176.5,
+        "q1": 172.25,
+        "q3": 181.5
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "call": 5,
+      "visibilityMs": {
+        "n": 3,
+        "median": 30,
+        "q1": 28.5,
+        "q3": 32.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -48,
+        "q1": -50.5,
+        "q3": -47.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 27,
+        "q1": 24.5,
+        "q3": 27.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 176.5,
+        "q1": 166.75,
+        "q3": 181
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "call": 6,
+      "visibilityMs": {
+        "n": 3,
+        "median": 33,
+        "q1": 32.25,
+        "q3": 33
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -51,
+        "q1": -52.25,
+        "q3": -50.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 24,
+        "q1": 22.75,
+        "q3": 24.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 176,
+        "q1": 167,
+        "q3": 182.75
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "call": 7,
+      "visibilityMs": {
+        "n": 3,
+        "median": 30,
+        "q1": 26.5,
+        "q3": 31.25
+      },
+      "completionMs": {
+        "n": 3,
+        "median": -52,
+        "q1": -53,
+        "q3": -51.75
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 23,
+        "q1": 22,
+        "q3": 23.25
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 171.5,
+        "q1": 163.25,
+        "q3": 175.25
+      }
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "call": 8,
+      "visibilityMs": {
+        "n": 3,
+        "median": 30.5,
+        "q1": 29.75,
+        "q3": 33.75
+      },
+      "completionMs": {
+        "n": 3,
+        "median": 23,
+        "q1": 22.5,
+        "q3": 24.5
+      },
+      "textCompletionMs": {
+        "n": 3,
+        "median": 23,
+        "q1": 22.5,
+        "q3": 24.5
+      },
+      "finalizationMs": {
+        "n": 3,
+        "median": 165.5,
+        "q1": 159.25,
+        "q3": 182
+      }
+    }
+  ],
+  "repeatRanges": [
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "object": 2,
+      "n": 3,
+      "firstVisibleRangeMs": 12,
+      "turnRangeMs": 47
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "object": 0,
+      "n": 3,
+      "firstVisibleRangeMs": 99,
+      "turnRangeMs": 2538
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/250/warm",
+      "object": 1,
+      "n": 3,
+      "firstVisibleRangeMs": 112,
+      "turnRangeMs": 103
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "object": 0,
+      "n": 3,
+      "firstVisibleRangeMs": 80,
+      "turnRangeMs": 103
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "object": 2,
+      "n": 3,
+      "firstVisibleRangeMs": 21,
+      "turnRangeMs": 129
+    },
+    {
+      "phase": "snapshot-prototype",
+      "cell": "yielded/50/warm",
+      "object": 1,
+      "n": 3,
+      "firstVisibleRangeMs": 100,
+      "turnRangeMs": 162
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "object": 0,
+      "n": 3,
+      "firstVisibleRangeMs": 21,
+      "turnRangeMs": 49
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "object": 2,
+      "n": 3,
+      "firstVisibleRangeMs": 9,
+      "turnRangeMs": 45
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/50/warm",
+      "object": 1,
+      "n": 3,
+      "firstVisibleRangeMs": 43,
+      "turnRangeMs": 64
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "object": 2,
+      "n": 3,
+      "firstVisibleRangeMs": 34,
+      "turnRangeMs": 86
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "object": 0,
+      "n": 3,
+      "firstVisibleRangeMs": 28,
+      "turnRangeMs": 55
+    },
+    {
+      "phase": "plain-prototype",
+      "cell": "yielded/250/warm",
+      "object": 1,
+      "n": 3,
+      "firstVisibleRangeMs": 13,
+      "turnRangeMs": 126
+    }
+  ],
+  "clockAssumption": "Provider/driver offsets during a turn stay within the full same-colo echo envelope (plus 1 ms quantization), including two Object-routed probes after the primary timer. This is a conditional calibration, not a globally synchronized clock guarantee. Midpoints are estimates; signed bounds retained, no unavailable values replaced by zero."
+}
