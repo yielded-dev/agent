@@ -152,7 +152,6 @@ import {
 } from "./provider-result-staging.ts";
 import {
   CurrentAttempt as CurrentProvisionalTextAttempt,
-  type Attempt as ProvisionalTextAttempt,
   type ModelHandle as ProvisionalTextModelHandle,
 } from "./provisional-text.ts";
 import { deliverToolFailure, isolateToolDerivative } from "./tool-derivative.ts";
@@ -559,7 +558,6 @@ interface RunContext {
   readonly agentId: Agent.AnyDefinition["id"];
   readonly threadId: ThreadId;
   readonly runId: RunId;
-  readonly provisionalTextAttempt: ProvisionalTextAttempt | undefined;
   /** Captured once at the Run boundary, never reconstructed from events or durable data. */
   readonly toolFailureObserver: RunToolFailureObserver | undefined;
   /** Agent-Schema encoded input identifying this logical Run's originating authority/wake. */
@@ -6454,11 +6452,14 @@ const makeTurn = <
                         }),
                       ),
                       Stream.onStart(
-                        Effect.sync(() => {
+                        Effect.gen(function* () {
+                          const attempt = yield* CurrentProvisionalTextAttempt;
+
                           trace.usageConsumed = false;
-                          provisionalText = restartRequested
-                            ? undefined
-                            : context.provisionalTextAttempt?.openModel(context.runId, turnId);
+                          provisionalText =
+                            !restartRequested && attempt?.threadId === context.threadId
+                              ? attempt.openModel(context.runId, turnId)
+                              : undefined;
                           activeProvisionalText = provisionalText;
                         }),
                       ),
@@ -8439,7 +8440,6 @@ function executeWithCompletion<
       const ids = yield* IdGenerator;
       const threadId = runOptions.threadId ?? (yield* ids.nextThreadId);
       const runId = runOptions.runId ?? (yield* ids.nextRunId);
-      const provisionalTextAttempt = yield* CurrentProvisionalTextAttempt;
 
       // Durable hosts retain each turn through their journal. Ordinary execution always has
       // an in-memory or on-success history owner; there is no discard-history Layer.
@@ -8620,8 +8620,6 @@ function executeWithCompletion<
             agentId: agent.definition.id,
             threadId,
             runId,
-            provisionalTextAttempt:
-              provisionalTextAttempt?.threadId === threadId ? provisionalTextAttempt : undefined,
             toolFailureObserver: yield* CurrentToolFailureObserver,
             input: undefined,
             pendingFollowUps: [],
