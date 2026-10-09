@@ -15,6 +15,7 @@ export const Query = Schema.Struct({
   expectedBuild: Schema.NonEmptyString,
   ttftMs: Schema.Literals([0, 400]),
   chunkDelayMs: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1000 })),
+  textStreaming: Schema.Boolean,
 });
 
 export type Query = typeof Query.Type;
@@ -35,7 +36,23 @@ export const readQuery = (url: URL): Query =>
     expectedBuild: url.searchParams.get("expectedBuild"),
     ttftMs: Number(url.searchParams.get("ttftMs") ?? 0),
     chunkDelayMs: Number(url.searchParams.get("chunkDelayMs") ?? 0),
+    textStreaming:
+      Schema.decodeUnknownSync(Schema.Literals(["true", "false"]))(
+        url.searchParams.get("textStreaming") ?? "false",
+      ) === "true",
   });
+
+/** Acknowledgement follows public subscription acquisition; text excludes historical messages. */
+export const TextObservation = Schema.Union([
+  Schema.TaggedStruct("Ready", {}),
+  Schema.TaggedStruct("Text", {
+    // Yielded's Receipt submissionId, or the pi sample on its exclusively observed idle conversation.
+    input: Schema.NonEmptyString,
+    text: Schema.NonEmptyString,
+  }),
+]);
+
+export type TextObservation = typeof TextObservation.Type;
 
 export const expectedSeed: Readonly<Record<number, string>> = {
   50: "b017b487524e44a4",

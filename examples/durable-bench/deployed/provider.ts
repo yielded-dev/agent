@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 
 import { fingerprint, history, MEASURED_TOOLS, next, turn } from "../src/plan.ts";
+import { responseText } from "./text.ts";
 import { chatTranscript, decodeChat, readQuery, type ProviderReceipt } from "./worker/protocol.ts";
 
 const encoder = new TextEncoder();
@@ -43,7 +44,8 @@ export default {
         (query.target !== "yielded" ||
           seedIndex >= query.history ||
           query.ttftMs !== 0 ||
-          query.chunkDelayMs !== 0)
+          query.chunkDelayMs !== 0 ||
+          query.textStreaming)
       )
         throw new Error("Seed replay requires a historical turn and the instant provider.");
 
@@ -85,11 +87,12 @@ export default {
           chunks.push(envelope({ tool_calls: [{ index: 0, function: { arguments: part } }] }));
         chunks.push(envelope({}, "tool_calls"));
       } else {
-        chunks.push(
-          envelope({ content: "done after " }),
-          envelope({ content: step.answer.slice("done after ".length) }),
-          envelope({}, "stop"),
-        );
+        const fragments = query.textStreaming
+          ? (responseText(step.answer, true).match(/\S+\s*/g) ?? [])
+          : ["done after ", step.answer.slice("done after ".length)];
+
+        for (const content of fragments) chunks.push(envelope({ content }));
+        chunks.push(envelope({}, "stop"));
       }
       chunks.push({
         id,
@@ -122,7 +125,9 @@ export default {
             const delay =
               index === 0
                 ? Math.max(0, query.ttftMs - (Date.now() - arrivalMs))
-                : query.chunkDelayMs;
+                : query.textStreaming && "answer" in step && query.ttftMs === 400
+                  ? 25
+                  : query.chunkDelayMs;
 
             if (delay) await sleep(delay);
             if (cancelled) return;

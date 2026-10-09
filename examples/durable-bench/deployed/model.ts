@@ -22,6 +22,7 @@ export interface Options {
   readonly targets: readonly (typeof Target.Type)[];
   readonly sizes: readonly number[];
   readonly ttft: readonly (0 | 400)[];
+  readonly textStreaming: boolean;
   readonly objects: number;
   readonly repeats: number;
   readonly concurrency: number;
@@ -54,6 +55,10 @@ export const Sample = Schema.Struct({
   state: Schema.Literals(["cold", "warmup", "warm"]),
   status: Schema.Literals(["running", "ok", "failed"]),
   driverMs: Schema.optionalKey(Schema.Number),
+  firstTextMs: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+  firstText: Schema.optionalKey(Schema.String),
+  observationMs: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+  firstModelRequestMs: Schema.optionalKey(Schema.Number),
   admissionMs: Schema.optionalKey(Schema.Number),
   gapMs: Schema.optionalKey(Schema.Number),
   lastResponseToClientMs: Schema.optionalKey(Schema.Number),
@@ -81,7 +86,7 @@ export const Cleanup = Schema.Struct({
 export type Cleanup = typeof Cleanup.Type;
 
 export const Result = Schema.Struct({
-  version: Schema.Literal(1),
+  version: Schema.Literal(2),
   run: Schema.String,
   revision: Schema.String,
   dirty: Schema.Boolean,
@@ -131,7 +136,11 @@ export const MeasureRequest = Schema.Struct({ query: Query, targetUrl: Schema.St
 export const MeasureResponse = Schema.Struct({
   ok: Schema.Literal(true),
   driverMs: Schema.Number,
+  startedMs: Schema.Number,
   observedMs: Schema.Number,
+  firstTextMs: Schema.NullOr(Schema.Number),
+  firstText: Schema.optionalKey(Schema.String),
+  observationMs: Schema.NullOr(Schema.Number),
   admissionMs: Schema.optionalKey(Schema.Number),
   colo: Schema.NullOr(Schema.String),
 });

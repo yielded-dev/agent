@@ -6,12 +6,12 @@ import { ThreadId } from "@yielded/agent/identifiers";
 import { IdempotencyKey, Principal, Receipt } from "@yielded/agent/receipt";
 import { Settlement } from "@yielded/agent/submission-ledger";
 // The router uses the checkout's Effect; Tardie's adapter uses its isolated SDK version.
-import { Effect, Layer, ManagedRuntime, Schema } from "../../../node_modules/effect/dist/index.js";
+import { Effect, Layer, ManagedRuntime, Schema, Stream } from "../../../node_modules/effect/dist/index.js";
 
 import { history, MEASURED_TOOLS, turn } from "../../../src/plan.ts";
 import { COLD_ABORT } from "../../../deployed/worker/host.ts";
 import { PiDO } from "./pi.ts";
-import { BulkFixture, Identity, ProfileTarget, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
+import { BulkFixture, Identity, ProfileTarget, TextObservation, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
 import { FixtureError } from "../../../deployed/worker/storage.ts";
 import { ActorDO, ThreadDO, cloudflareThreadName, coordinate } from "./tardie.ts";
 import { agent, definitions, YieldedDO } from "../../../deployed/worker/yielded.ts";
@@ -111,7 +111,7 @@ export default {
         return Response.json({ ok: true, build: env.BUILD });
       }
       const query = readQuery(url);
-      if (["/import", "/submit", "/await", "/run", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
+      if (["/import", "/submit", "/await", "/run", "/text", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
         return Response.json(
           {
             ok: false,
@@ -136,7 +136,7 @@ export default {
 
       if (mutating && request.method !== "POST")
         return new Response("POST required", { status: 405 });
-      if (!["/import", "/cold", "/submit", "/await", "/run", "/metrics"].includes(url.pathname))
+      if (!["/import", "/cold", "/submit", "/await", "/run", "/text", "/metrics"].includes(url.pathname))
         return new Response("not found", { status: 404 });
 
       const actor =
@@ -153,6 +153,30 @@ export default {
                 locationHint: "wnam",
               });
 
+      if (url.pathname === "/text" && query.target === "yielded") {
+        const cached = getClient(env);
+        const { client } = await cached.ready;
+        const encoder = new TextEncoder();
+        const encode = Schema.encodeSync(Schema.fromJsonString(TextObservation));
+        const body = await cached.runtime.runPromise(client.watchText(ThreadId.make(query.object)).pipe(
+          Stream.map((frame): readonly TextObservation[] => {
+            if (frame._tag === "Reset") return [{ _tag: "Ready" }];
+            const event = frame.event;
+
+            return event._tag === "Text" && event.part.type === "text-delta" && event.part.delta
+              ? [{ _tag: "Text", input: event.submissionId, text: event.part.delta }]
+              : [];
+          }),
+          Stream.flatMap(Stream.fromArray),
+          Stream.map((frame) => encoder.encode(encode(frame) + "\n")),
+          Stream.toReadableStreamEffect,
+        ));
+
+        return new Response(body, {
+          headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
+        });
+      }
+
       if (url.pathname === "/cold") {
         const identityUrl = new URL(url);
 
@@ -168,7 +192,7 @@ export default {
 
         const threadAborted = await expectedAbort(() => stub.fetch(request));
 
-        // No Object invocation follows these aborts. The driver starts the timer next.
+        // The driver next attaches its observer, then times submission on this new incarnation.
         return Response.json(
           {
             ok: threadAborted && directoryAborted !== false,
@@ -249,6 +273,7 @@ export default {
                     sample: input.id,
                     ttftMs: 0,
                     chunkDelayMs: 0,
+                    textStreaming: false,
                   });
 
                   const receipt = yield* client.submit(agent, input.text, {

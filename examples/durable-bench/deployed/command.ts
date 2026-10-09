@@ -23,6 +23,10 @@ export const command = Command.make(
       Flag.withDefault("0,400"),
       Flag.withDescription("Provider time to first token, in ms: 0,400"),
     ),
+    textStreaming: Flag.Boolean("text-streaming").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription("Stream a longer final reply at 40 fragments/s in the 400 ms cell"),
+    ),
     objects: positive("objects").pipe(
       Flag.withDefault(7),
       Flag.withDescription("Objects per target/cell (default: 7)"),
@@ -106,6 +110,7 @@ export const command = Command.make(
       targets: [...new Set(targets)],
       sizes: [...new Set(sizes)],
       ttft: [...new Set(ttft)],
+      textStreaming: flags.textStreaming,
       objects: flags.objects,
       repeats: Option.getOrElse(flags.repeats, () => (flags.rigorous ? 6 : 4)),
       concurrency: flags.concurrency,
