@@ -1363,11 +1363,6 @@ interface OpenCallReview {
   readonly recovered: number;
 }
 
-interface HistoryEvidence {
-  readonly recordId: RecordId;
-  readonly sequence: CanonicalSequence;
-}
-
 interface InitialJournalSource {
   records: ReadonlyArray<JournalRecordEnvelope> | undefined;
   readonly read: Effect.Effect<
@@ -1401,7 +1396,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         readonly through: CanonicalSequence;
         readonly runId: RunId;
         readonly contextDigest: string | undefined;
-        readonly contextEvidence: ReadonlyArray<HistoryEvidence>;
+        readonly contextEvidence: ReadonlyArray<JournalRecordEnvelope>;
         readonly journal: RunJournalProjection;
         readonly boundaries: ReadonlyArray<JournalBoundary>;
       }
@@ -4871,14 +4866,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       if (originalInput === undefined)
         return yield* RunJournalError.make({ message: "Run has no original context boundary" });
-      const historyEvidence = new Map<RecordId, HistoryEvidence>();
+      const historyEvidence = new Map<RecordId, JournalRecordEnvelope>();
 
       const retainHistory = (entry: JournalRecordEnvelope) => {
         if (priorContext === undefined && entry.sequence < originalInput.sequence)
-          historyEvidence.set(entry.record.recordId, {
-            recordId: entry.record.recordId,
-            sequence: entry.sequence,
-          });
+          historyEvidence.set(entry.record.recordId, entry);
       };
 
       const journal =
@@ -4888,7 +4880,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         cached.runId === runId &&
         cached.contextDigest === priorContext?.digest
           ? (boundaries.push(...cached.boundaries),
-            cached.contextEvidence.forEach((entry) => historyEvidence.set(entry.recordId, entry)),
+            cached.contextEvidence.forEach(retainHistory),
             cached.journal)
           : yield* projectRunJournalStream(
               canonical,
@@ -4992,8 +4984,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               priorContext,
             );
 
-      // All startup passes (including cache hits) are complete. Keep only projected messages
-      // and record identities across external waits; later compaction can reread the exact prefix.
+      // All startup passes (including cache hits) are complete. Release the startup source;
+      // later compaction can reread the exact prefix.
       if (initialJournal !== undefined) initialJournal.records = undefined;
 
       const rolloverOperation =
@@ -5804,7 +5796,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   Effect.gen(function* () {
                     const full = yield* getRecord({
                       threadId: ctx.threadId,
-                      recordId: entry.recordId,
+                      recordId: entry.record.recordId,
                     });
 
                     if (Option.isNone(full) || full.value.sequence !== entry.sequence)
