@@ -983,6 +983,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
 
               yield* update((value) => ({ ...value, samples: [...value.samples, sample] }));
               if (sample.status === "skipped") continue;
+              let dispatched = false;
 
               yield* Effect.gen(function* () {
                 let joined: Effect.Effect<
@@ -1038,6 +1039,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                   }
                 }
                 const before = yield* Clock.currentTimeMillis;
+
+                dispatched = true;
 
                 const measured = yield* request(
                   deploy.driver + "/measure",
@@ -1210,7 +1213,12 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                       ...value,
                       samples: value.samples.map((row) =>
                         key(row) === key(query) && row.sample === query.sample
-                          ? { ...row, status: "failed", outcome: row.outcome ?? "unknown", error }
+                          ? {
+                              ...row,
+                              status: "failed",
+                              outcome: row.outcome ?? (dispatched ? "unknown" : "not-sent"),
+                              error,
+                            }
                           : row,
                       ),
                       failures: [...value.failures, `${key(query)}/${query.sample}: ${error}`],
@@ -1221,7 +1229,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
             }
           }),
         {
-          concurrency: options.profile ? Math.min(2, options.concurrency) : options.concurrency,
+          concurrency: options.profile ? 1 : options.concurrency,
           discard: true,
         },
       );
