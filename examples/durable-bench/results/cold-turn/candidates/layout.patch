@@ -1,0 +1,144 @@
+diff --git a/docs/src/content/docs/storage/cloudflare.md b/docs/src/content/docs/storage/cloudflare.md
+index feadc3be..61e1e499 100644
+--- a/docs/src/content/docs/storage/cloudflare.md
++++ b/docs/src/content/docs/storage/cloudflare.md
+@@ -38,6 +38,11 @@ for application queries.
+ database so ownership claims fence the same records. These adapters provide storage
+ ports; acquiring them alone does not drive agent execution or recovery.
+ 
++`ThreadObject` validates the storage layout once while acquiring its local ports.
++Custom Layer graphs can share `DoThreadStore.storageLayoutLayer` across adapters using
++the same Effect SQL client. Independently acquired stores still validate on open;
++a validation for another client does not bypass that check.
++
+ Use the adapters for ordinary writes. If maintenance writes private adapter tables directly,
+ call `DoThreadStore.invalidate(ctx.storage)` afterward, before serving port reads. Keep
+ port operations quiesced during both steps and enroll the write with the host's mutation gate.
+diff --git a/packages/platform-cloudflare/src/internal/layers.ts b/packages/platform-cloudflare/src/internal/layers.ts
+index 77d692a9..1216d32a 100644
+--- a/packages/platform-cloudflare/src/internal/layers.ts
++++ b/packages/platform-cloudflare/src/internal/layers.ts
+@@ -8,6 +8,7 @@ import { submissionLedgerLayer } from "@yielded/agent-storage-cloudflare/do-subm
+ import {
+   threadStoreLayer,
+   storageConfigLayer,
++  storageLayoutLayer,
+   storageFailpointLayer,
+   sqlOwnerLayer,
+   type DoStorageInitializationError,
+@@ -666,7 +667,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
+         }),
+       ).pipe(Layer.provide(sqlOwnerLayer));
+ 
+-      const localInfrastructure = Layer.mergeAll(infrastructure, sourceOwner);
++      const localInfrastructure = Layer.mergeAll(infrastructure, sourceOwner, storageLayoutLayer);
+ 
+       const sourceProgress = Layer.effect(SqlStorageProgress)(
+         Effect.gen(function* () {
+diff --git a/packages/storage-cloudflare/src/DoThreadStore.ts b/packages/storage-cloudflare/src/DoThreadStore.ts
+index 0874da1f..94dbf200 100644
+--- a/packages/storage-cloudflare/src/DoThreadStore.ts
++++ b/packages/storage-cloudflare/src/DoThreadStore.ts
+@@ -77,7 +77,11 @@ import {
+   RawReadRequest,
+   type DoJournal,
+ } from "./internal/do-journal.ts";
+-import { readDoStorageHeader } from "./internal/migrations.ts";
++import {
++  DoStorageLayout,
++  ensureDoStorageLayout,
++  readDoStorageHeader,
++} from "./internal/migrations.ts";
+ import { invalidateOwnedState, ownedState } from "./internal/owned-state.ts";
+ import { isAppendContention, withStorageSpan } from "./internal/storage-span.ts";
+ 
+@@ -717,6 +721,26 @@ export const threadStoreLayer: Layer.Layer<
+   DoStorageConfig | DoStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
+ > = ThreadReader.layer().pipe(Layer.provideMerge(Layer.effectContext(makeServices())));
+ 
++/**
++ * Validate the layout once for adapters sharing this Layer acquisition and the same SQL client.
++ * Standalone opens and adapters using a different client validate independently. Journal
++ * configuration, owner authority, and verifyOnOpen remain local to each adapter.
++ */
++export const storageLayoutLayer: Layer.Layer<
++  DoStorageLayout,
++  DoStorageInitializationError,
++  SqlClientService.SqlClient
++> = Layer.effect(
++  DoStorageLayout,
++  Effect.gen(function* () {
++    const sql = yield* SqlClientService.SqlClient;
++
++    yield* ensureDoStorageLayout();
++
++    return { sql };
++  }),
++);
++
+ /**
+  * Validated Durable Object storage configuration Layer with the documented defaults applied.
+  * Shared by the ThreadStore and SubmissionLedger convenience layers so their defaults
+diff --git a/packages/storage-cloudflare/src/internal/do-journal.ts b/packages/storage-cloudflare/src/internal/do-journal.ts
+index 66b05608..8974fa7d 100644
+--- a/packages/storage-cloudflare/src/internal/do-journal.ts
++++ b/packages/storage-cloudflare/src/internal/do-journal.ts
+@@ -34,7 +34,7 @@ import {
+   DoValueBoundExceeded,
+   type DoStorageFailpointLocation,
+ } from "../DoStorageError.ts";
+-import { ensureDoStorageLayout } from "./migrations.ts";
++import { DoStorageLayout, ensureDoStorageLayout } from "./migrations.ts";
+ import { ownedState, ownedRows, type OwnedState } from "./owned-state.ts";
+ import {
+   isAppendContention,
+@@ -326,7 +326,11 @@ const ensureCurrentStorage = Effect.fnUntraced(function* (
+   failpoint: DoJournalFailpoint = noFailpoint,
+   maxStoredValueBytes: number,
+ ) {
+-  yield* ensureDoStorageLayout().pipe(Effect.provideService(SqlClient.SqlClient, sql));
++  const layout = yield* Effect.serviceOption(DoStorageLayout);
++
++  if (Option.isNone(layout) || layout.value.sql !== sql) {
++    yield* ensureDoStorageLayout().pipe(Effect.provideService(SqlClient.SqlClient, sql));
++  }
+ 
+   const state = yield* ownedState(sql);
+   const owner = (yield* SqlStorageOwner) ?? state;
+diff --git a/packages/storage-cloudflare/src/internal/migrations.ts b/packages/storage-cloudflare/src/internal/migrations.ts
+index 32595123..f50080c6 100644
+--- a/packages/storage-cloudflare/src/internal/migrations.ts
++++ b/packages/storage-cloudflare/src/internal/migrations.ts
+@@ -2,7 +2,7 @@ import { SQL_PROMPT_PREDICATE } from "@yielded/agent-storage-sql/sql-thread-nati
+ import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
+ import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
+ import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
+-import { Effect, Schema } from "effect";
++import { Context, Effect, Schema } from "effect";
+ import * as SqlClient from "effect/sql/SqlClient";
+ import type { SqlError } from "effect/sql/SqlError";
+ 
+@@ -134,6 +134,12 @@ export interface DoStorageHeader {
+   readonly recordFormat: string;
+ }
+ 
++/** A completed layout acquisition for exactly one SQL client in the current Layer graph. */
++export class DoStorageLayout extends Context.Service<
++  DoStorageLayout,
++  { readonly sql: SqlClient.SqlClient }
++>()("@effect-agent/storage-cloudflare/internal/DoStorageLayout") {}
++
+ const incompatible = (actualVersion: number, message: string) =>
+   DoStorageCompatibilityError.make({
+     actualVersion,
+diff --git a/.changeset/quiet-cloudflare-layout.md b/.changeset/quiet-cloudflare-layout.md
+new file mode 100644
+--- /dev/null
++++ b/.changeset/quiet-cloudflare-layout.md
+@@ -0,0 +1,6 @@
++---
++"@yielded/agent-storage-cloudflare": patch
++"@yielded/agent-platform-cloudflare": patch
++---
++
++Share storage layout validation across a Thread Object's local adapters during construction.

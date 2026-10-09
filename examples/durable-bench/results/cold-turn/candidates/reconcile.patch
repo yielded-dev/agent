@@ -1,0 +1,203 @@
+diff --git a/docs/src/content/docs/platforms/cloudflare.md b/docs/src/content/docs/platforms/cloudflare.md
+index 1abaeaff..342b7c4d 100644
+--- a/docs/src/content/docs/platforms/cloudflare.md
++++ b/docs/src/content/docs/platforms/cloudflare.md
+@@ -473,6 +473,8 @@ A finishing wave cannot erase a newer producer enrollment, and a lane waits for
+ Completions and producer notifications drive the active event; there is no wake-scan timer.
+ The one alarm retains the earliest queued deadline after all admitted resources close. Constructor
+ repair reads only local scheduling state, never application deadline tables or execution history.
++An already registered, idle queue with a matching runtime registry needs no repair transaction;
++pending work and registry changes retain the durable reconciliation path.
+ Future deadlines remain armed when an otherwise quiet event retires.
+ 
+ Declare `dispatchTimeoutMillis` as an integer from 1 to 300000 milliseconds, covering selection,
+diff --git a/packages/platform-cloudflare/src/Alarm.ts b/packages/platform-cloudflare/src/Alarm.ts
+index e400d456..19de9ddc 100644
+--- a/packages/platform-cloudflare/src/Alarm.ts
++++ b/packages/platform-cloudflare/src/Alarm.ts
+@@ -1165,26 +1165,37 @@ export class ThreadMaintenance extends Context.Service<
+         }
+       }).pipe(Effect.catchCause((cause) => ErrorReporter.report(cause)));
+ 
+-      yield* runTransaction("register native maintenance lanes", () =>
+-        dueQueue.transaction(async () => {
+-          for (const id of [
++      yield* dueQueue.withView(
++        runTransaction("register native maintenance lanes", async () => {
++          const ids = [
+             DueQueue.Publication,
+             DueQueue.Projection,
+             DueQueue.Messages,
+             ...framework.lanes.map((lane) => lane.id),
+-          ])
+-            dueQueue.register(id);
++          ];
++
++          const rows = dueQueue.read();
++
++          const start = ids.includes(DueQueue.Lifecycle)
++            ? rows.find((row) => row.id === "effect-agent:lifecycle-start")
++            : undefined;
+ 
+-          // Earlier releases split this one outbox across start and after-native lanes.
+-          // Retire only scheduling metadata, retaining revision fencing and domain retries.
+-          if (framework.lanes.some((lane) => lane.id === DueQueue.Lifecycle)) {
+-            const start = dueQueue.read().find((row) => row.id === "effect-agent:lifecycle-start");
++          if (
++            ids.every((id) => rows.some((row) => row.id === id)) &&
++            (start === undefined || start.dueAt === null)
++          )
++            return;
+ 
++          await dueQueue.transaction(async () => {
++            for (const id of ids) dueQueue.register(id);
++
++            // Earlier releases split this one outbox across start and after-native lanes.
++            // Retire only scheduling metadata, retaining revision fencing and domain retries.
+             if (start !== undefined && start.dueAt !== null) {
+               dueQueue.dirty(DueQueue.Lifecycle, start.dueAt);
+               dueQueue.complete(start, null);
+             }
+-          }
++          });
+         }),
+       );
+ 
+@@ -1525,8 +1536,11 @@ export class ThreadMaintenance extends Context.Service<
+ 
+       // Registry changes, including upgrades from timed binding retries, create one native
+       // opportunity. Unchanged registries leave parked work dormant across Object eviction.
+-      const readCurrentMaintenanceState = async (transaction: DurableObjectTransaction) => {
+-        const current = await readMaintenanceState(transaction);
++      const readCurrentMaintenanceState = async (
++        transaction: DurableObjectTransaction,
++        retained?: Awaited<ReturnType<typeof readMaintenanceState>>,
++      ) => {
++        const current = retained ?? (await readMaintenanceState(transaction));
+ 
+         if (current.state.bindingRegistryKey === runtime.bindingRegistryKey) return current;
+ 
+@@ -1547,31 +1561,60 @@ export class ThreadMaintenance extends Context.Service<
+         yield* failpoint.hit("maintenance:ensure:before");
+         const now = yield* Clock.currentTimeMillis;
+ 
+-        yield* runTransaction("ensure maintenance alarm", () =>
+-          dueQueue.transaction(async (transaction) => {
+-            const { state, initialized } = await readCurrentMaintenanceState(transaction);
++        yield* dueQueue.withView(
++          runTransaction("ensure maintenance alarm", async () => {
++            const current = await readMaintenanceState(ctx.storage);
+ 
+-            recoveryEventsPending = hasRecoveryEvents(state);
++            recoveryEventsPending = hasRecoveryEvents(current.state);
+             const rows = dueQueue.read();
++            const native = rows.find((row) => row.id === DueQueue.Native);
+ 
+-            if (recoveryEventsPending && !rows.some((row) => row.id === DueQueue.RecoveryEvents))
+-              dueQueue.dirty(DueQueue.RecoveryEvents, now);
+-            if (!initialized)
+-              await transaction.put(MAINTENANCE_STATE_KEY, encodeMaintenanceState(state));
++            // Under the mutation gate and storage reservation, an idle queue needs only
++            // its decoded generation/registry check. All repair retains the transaction.
++            if (
++              current.initialized &&
++              current.state.bindingRegistryKey === runtime.bindingRegistryKey &&
++              current.state.dirty <= current.state.processed &&
++              !recoveryEventsPending &&
++              native?.state === "idle" &&
++              native.stalls === 0 &&
++              native.notBefore === 0 &&
++              native.reported === 0 &&
++              rows.every((row) => row.dueAt === null)
++            )
++              return;
++
++            await dueQueue.transaction(async (transaction) => {
++              const { state, initialized } = await readCurrentMaintenanceState(
++                transaction,
++                current,
++              );
++
++              recoveryEventsPending = hasRecoveryEvents(state);
++              const rows = dueQueue.read();
+ 
+-            const native =
+-              state.dirty > state.processed
+-                ? state.retry?.generation === state.dirty
+-                  ? state.retry.notBefore
+-                  : (rows.find((row) => row.id === DueQueue.Native)?.dueAt ??
+-                    now + minimumAlarmDelay)
+-                : null;
++              if (recoveryEventsPending && !rows.some((row) => row.id === DueQueue.RecoveryEvents))
++                dueQueue.dirty(DueQueue.RecoveryEvents, now);
++              if (!initialized)
++                await transaction.put(MAINTENANCE_STATE_KEY, encodeMaintenanceState(state));
++
++              const native =
++                state.dirty > state.processed
++                  ? state.retry?.generation === state.dirty
++                    ? state.retry.notBefore
++                    : (rows.find((row) => row.id === DueQueue.Native)?.dueAt ??
++                      now + minimumAlarmDelay)
++                  : null;
+ 
+-            dueQueue.checkpointNative(native);
+-            const next = DueQueue.next(dueQueue.read());
++              dueQueue.checkpointNative(native);
++              const next = DueQueue.next(dueQueue.read());
+ 
+-            if (Number.isFinite(next))
+-              await ensureTransactionAlarmBy(transaction, Math.max(now + minimumAlarmDelay, next));
++              if (Number.isFinite(next))
++                await ensureTransactionAlarmBy(
++                  transaction,
++                  Math.max(now + minimumAlarmDelay, next),
++                );
++            });
+           }),
+         );
+         yield* failpoint.hit("maintenance:ensure:after");
+diff --git a/packages/platform-cloudflare/src/internal/due-queue.ts b/packages/platform-cloudflare/src/internal/due-queue.ts
+index 35847c18..08940f30 100644
+--- a/packages/platform-cloudflare/src/internal/due-queue.ts
++++ b/packages/platform-cloudflare/src/internal/due-queue.ts
+@@ -276,12 +276,6 @@ export const make = (storage: DurableObjectStorage) => {
+   };
+ 
+   const initialize = () => {
+-    sql.exec(`CREATE TABLE IF NOT EXISTS platform_cloudflare_due_queue (
+-    id TEXT PRIMARY KEY, revision INTEGER NOT NULL, dueAt REAL, stalls INTEGER NOT NULL,
+-    progressKey TEXT, notBefore REAL NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'pending',
+-    reported INTEGER NOT NULL DEFAULT 0
+-  )`);
+-
+     const columns = new Set(
+       sql
+         .exec("PRAGMA table_info(platform_cloudflare_due_queue)")
+@@ -289,6 +283,16 @@ export const make = (storage: DurableObjectStorage) => {
+         .map((row) => row.name),
+     );
+ 
++    if (columns.size === 0) {
++      sql.exec(`CREATE TABLE platform_cloudflare_due_queue (
++    id TEXT PRIMARY KEY, revision INTEGER NOT NULL, dueAt REAL, stalls INTEGER NOT NULL,
++    progressKey TEXT, notBefore REAL NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'pending',
++    reported INTEGER NOT NULL DEFAULT 0
++  )`);
++
++      return;
++    }
++
+     if (!columns.has("reported"))
+       sql.exec(
+         "ALTER TABLE platform_cloudflare_due_queue ADD COLUMN reported INTEGER NOT NULL DEFAULT 0",
+diff --git a/.changeset/idle-cloudflare-reconciliation.md b/.changeset/idle-cloudflare-reconciliation.md
+new file mode 100644
+--- /dev/null
++++ b/.changeset/idle-cloudflare-reconciliation.md
+@@ -0,0 +1,5 @@
++---
++"@yielded/agent-platform-cloudflare": patch
++---
++
++Skip empty initialization and alarm repair transactions when an existing Thread Object's maintenance state is already consistent.

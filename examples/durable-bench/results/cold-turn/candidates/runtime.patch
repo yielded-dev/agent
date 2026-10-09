@@ -1,0 +1,116 @@
+diff --git a/packages/effect-agent/src/durable/RunJournal.ts b/packages/effect-agent/src/durable/RunJournal.ts
+index 65bafc17..4e95bb8c 100644
+--- a/packages/effect-agent/src/durable/RunJournal.ts
++++ b/packages/effect-agent/src/durable/RunJournal.ts
+@@ -1100,27 +1100,37 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
+   ) {
+     const record = envelope.record;
+ 
+-    const declared = declaredApplicationToolCallIds(messages);
++    // Historical result slots reuse the declarations and identities checked for completeness.
++    const historicalDeclarations:
++      | Array<{ readonly call: Prompt.ToolCallPart; readonly resultId: RecordId }>
++      | undefined = payload.runId === ownerRunId ? undefined : [];
++
+     const actualResultIds: Array<RecordId> = [];
+     let incomplete = false;
+ 
+-    for (const id of declared) {
+-      const toolCallId = yield* Effect.try({
+-        try: () => decodeToolCallId(id),
+-        catch: (cause) => journalError("Failed to decode a declared Tool Call ID", cause),
+-      });
++    for (const message of messages.content) {
++      if (message.role !== "assistant") continue;
++      for (const call of message.content) {
++        if (call.type !== "tool-call" || call.providerExecuted) continue;
++
++        const toolCallId = yield* Effect.try({
++          try: () => decodeToolCallId(call.id),
++          catch: (cause) => journalError("Failed to decode a declared Tool Call ID", cause),
++        });
+ 
+-      const resultId = toolCallSettledRecordId(payload.runId, payload.turn, toolCallId);
++        const resultId = toolCallSettledRecordId(payload.runId, payload.turn, toolCallId);
+ 
+-      if (settledToolCallRecordIds.has(resultId)) actualResultIds.push(resultId);
+-      else incomplete = true;
++        historicalDeclarations?.push({ call, resultId });
++        if (settledToolCallRecordIds.has(resultId)) actualResultIds.push(resultId);
++        else incomplete = true;
++      }
+     }
+     if (incomplete) {
+       incompleteToolTurns.add(envelope.record.recordId);
+       incompleteContextRuns.add(payload.runId);
+       for (const recordId of actualResultIds) incompleteToolCalls.add(recordId);
+     }
+-    if (payload.runId !== ownerRunId) return;
++    if (payload.runId !== ownerRunId) return historicalDeclarations;
+     if (!("toolOperations" in payload))
+       return yield* journalError("Owning Run execution requires full canonical evidence");
+     if (payload.turn === 1 && payload.runScopedPrefixLength !== undefined) {
+@@ -1514,11 +1524,12 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
+       const messages = yield* decodePromptMessages(payload.messages);
+       const forRun = payload.runId === ownerRunId;
+ 
+-      pendingToolOrder = new Map(
+-        declaredApplicationToolCallIds(messages).map((id, index) => [id, index]),
+-      );
++      if (forRun)
++        pendingToolOrder = new Map(
++          declaredApplicationToolCallIds(messages).map((id, index) => [id, index]),
++        );
+ 
+-      yield* accountResponse(envelope, payload, messages);
++      const historicalDeclarations = yield* accountResponse(envelope, payload, messages);
+ 
+       const visibleMessages = forRun
+         ? messages.content
+@@ -1528,18 +1539,9 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
+         state.all.push(message);
+         if (!forRun) state.before.push(message);
+       }
+-      if (!forRun) {
+-        const calls = messages.content.flatMap((message) =>
+-          message.role === "assistant"
+-            ? message.content.filter(
+-                (part): part is Prompt.ToolCallPart =>
+-                  part.type === "tool-call" && !part.providerExecuted,
+-              )
+-            : [],
+-        );
+-
+-        if (calls.length > 0) {
+-          const parts = calls.map((call) =>
++      if (historicalDeclarations !== undefined) {
++        if (historicalDeclarations.length > 0) {
++          const parts = historicalDeclarations.map(({ call }) =>
+             Prompt.makePart("tool-result", {
+               id: call.id,
+               name: call.name,
+@@ -1559,13 +1561,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
+ 
+           state.all.push(message);
+           state.before.push(message);
+-          for (const [partIndex, call] of calls.entries()) {
+-            const callId = yield* decodeToolCallIdEffect(call.id).pipe(
+-              Effect.mapError((cause) => journalError("Invalid historical Tool Call ID", cause)),
+-            );
+-
+-            const resultId = toolCallSettledRecordId(payload.runId, payload.turn, callId);
+-
++          for (const [partIndex, { resultId }] of historicalDeclarations.entries()) {
+             // A fixed replay can fill only a result present in its captured metadata. Missing
+             // calls retain their visible Unknown part without an expanded identity directory.
+             if (!settledToolCallRecordIds.has(resultId)) continue;
+diff --git a/.changeset/clear-historical-declarations.md b/.changeset/clear-historical-declarations.md
+new file mode 100644
+--- /dev/null
++++ b/.changeset/clear-historical-declarations.md
+@@ -0,0 +1,5 @@
++---
++"@yielded/agent": patch
++---
++
++Reduce repeated historical Tool Call validation when opening a Thread's model context.

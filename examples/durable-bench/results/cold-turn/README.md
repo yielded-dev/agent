@@ -1,0 +1,21 @@
+Read [report.md](report.md) for the result, [map-before.md](map-before.md) and [await-inventory.md](await-inventory.md) for the frozen baseline, and [map-after.md](map-after.md) for the experimental changes. [scope.md](scope.md) fixes the cold definition and noise threshold before product edits. [cleanup.json](cleanup.json) records the account and final resource checks.
+
+This published branch contains only the reports, measurement and acceptance summaries, cleanup and scan receipts, and the three [candidate patches](candidates/). Raw telemetry, traces, profiles, plans, validation logs, harness scripts, source and bundle archives remain local in this results directory. The complete original evidence commit is preserved on the local-only branch `dan/cold-turn-latency-local-evidence`; that branch is not published.
+
+References to those omitted files, including links in the unchanged frozen maps, refer to the retained local evidence. Public summaries can be reviewed here; replaying the reductions requires that local evidence and harness. No Cloudflare credentials are needed for offline reduction:
+
+```sh
+vp node --experimental-transform-types examples/durable-bench/results/cold-turn/analyze.mjs --phase compare1 --out-dir /private/tmp/cold-turn-review-1
+vp node --experimental-transform-types examples/durable-bench/results/cold-turn/analyze.mjs --phase compare2 --out-dir /private/tmp/cold-turn-review-2
+vp node --experimental-transform-types examples/durable-bench/results/cold-turn/analyze.mjs --phase fresh --out-dir /private/tmp/cold-turn-review-fresh
+vp node examples/durable-bench/results/cold-turn/extract-map.mjs map /private/tmp/cold-turn-review-before.json
+vp node examples/durable-bench/results/cold-turn/extract-map.mjs map-after /private/tmp/cold-turn-review-after.json
+```
+
+The local reducers read plain or gzip inputs. `map/input/` is the exact pre-edit snapshot; the map extractor reproduced its ordered trace byte-for-byte. Root request, attempt and telemetry files cover the full session. A comparison's own plan and completion ledger select its turns; the outcome inventory deliberately includes every captured phase. Candidate CPU aggregates use only complete baseline/candidate Object pairs for that metric. Missing joins stay missing. Local `archives.json` records the uncompressed hashes of compressed artifacts. Frozen maps and the local proof's checksum lists use those logical, uncompressed filenames.
+
+The candidate patches contain the three independent experiments and their changesets. The report summarizes their proof and limits; local `candidates/review.md` and `validation/layout-open/` retain the detailed review and workflow. The workflow uses baseline b246f8aaa3a92d5f82934b1fc7a82356d1ad6664 plus `candidates/layout.patch`. Recorded Worker bytes, original/effective sources and input hashes remain under local `build-identities/`. Controller bytes are archived separately with each comparison receipt. Local elapsed time is never performance evidence.
+
+To reproduce a deployment, use a disposable checkout of that baseline, apply all three candidate patches, and copy the harness sources into a fresh results directory. `build.mjs` inserts observation and the experiment choices; its anchor checks refuse an unexpected product tree. Use checkout `direnv exec . vp node --experimental-transform-types .../run.mjs` for live actions, with new `init`, `deploy`, seed, activation and measurement records. `stack.ts` uses the cold-turn prefix, the checkout's personal Cloudflare account and a private mode-700 temporary Alchemy directory outside the repository. The recorded resource manifest belongs to this completed session. The controller refuses to overwrite it or replay attempted inputs.
+
+The local controller's `destroy-resources` action destroys the Alchemy stages, verifies the empty prefix and captures final telemetry while retaining private credentials for the last artifact scan. `finalize-cleanup` rechecks the prefix, scans raw and decompressed artifacts, and removes that private directory. Both steps completed. The report summarizes the separate fresh-isolate experiment; its detailed entry proof remains in local `fresh-isolate-scope.md`.
