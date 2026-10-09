@@ -22,6 +22,8 @@
     "@types/node": "catalog:",
     "@yielded/agent-testing": "workspace:*",
     "typescript": "catalog:",
-    "vite-plus": "catalog:"
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   }
 }

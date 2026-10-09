@@ -59,8 +59,8 @@
     "effect": "catalog:",
     "effect-cf": "catalog:",
     "esbuild": "catalog:",
-    "oxfmt": "0.68.0",
-    "oxlint": "1.83.0",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
     "typescript": "catalog:",
     "typescript-twoslash": "catalog:",
     "vite": "catalog:",
@@ -76,14 +76,14 @@
     "vitest": "catalog:"
   },
   "engines": {
-    "node": "^22.18.0 || >=24.11.0"
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
   },
   "packageManager": "bun@1.4.2",
   "catalog": {
     "alchemy": "2.0.0-beta.80",
     "@base-ui/react": "1.6.0",
     "@cloudflare/sandbox": "0.13.0-next.738.2",
-    "@cloudflare/vitest-pool-workers": "0.21.3",
+    "@cloudflare/vitest-plugin": "1.4.0",
     "@cloudflare/workers-types": "5.20260926.1",
     "@effect/ai-anthropic": "4.0.0",
     "@effect/ai-openai": "4.0.0",
@@ -132,9 +132,9 @@
     "typescript": "7.0.2",
     "typescript-twoslash": "npm:typescript@6.0.3",
     "use-stick-to-bottom": "1.1.6",
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.3",
-    "vite-plus": "0.3.3",
-    "vitest": "4.1.11",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.1.0",
+    "vite-plus": "1.1.0",
+    "vitest": "5.0.3",
     "wrangler": "4.123.0",
     "isomorphic-git": "1.41.9",
     "memfs": "4.71.0",

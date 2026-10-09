@@ -43,8 +43,8 @@ Replace the package prefix, keeping the module subpath:
 
 ```ts
 import { Agent, AgentRuntime } from "@yielded/agent";
-import * as InMemory from "@yielded/agent/in-memory";
 import { NodeDurableHost } from "@yielded/agent-platform-node";
+import * as InMemory from "@yielded/agent/in-memory";
 ```
 
 The rename preserves APIs, service identities, schema brands, and stored formats.

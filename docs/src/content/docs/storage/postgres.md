@@ -8,16 +8,17 @@ description: Persist thread history and accepted work with an application-owned 
 Connect PostgreSQL storage to your agent using your application's native Effect SQL client:
 
 ```ts twoslash
-import { planner as agent } from "./node-agent.ts";
 import { Identifiers } from "@yielded/agent";
+
+import { planner as agent } from "./node-agent.ts";
 declare const input: string;
 declare const threadId: Identifiers.ThreadId;
-// ---cut---
-import { PostgresStorage } from "@yielded/agent-storage-postgres";
 import { NodeCrypto } from "@effect/platform-node";
 import { PgClient } from "@effect/sql-pg";
-import { Config, Effect, Layer } from "effect";
 import { AgentRuntime, PersistentHistory } from "@yielded/agent";
+// ---cut---
+import { PostgresStorage } from "@yielded/agent-storage-postgres";
+import { Config, Effect, Layer } from "effect";
 
 const Database = PgClient.layerConfig({
   url: Config.Redacted("DATABASE_URL"),

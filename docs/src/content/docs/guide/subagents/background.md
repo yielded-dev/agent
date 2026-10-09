@@ -9,6 +9,7 @@ Give the parent tools to start and steer a researcher while it keeps chatting:
 
 ```ts twoslash
 import { Subagent } from "@yielded/agent";
+
 import { Researcher } from "./researcher.ts";
 
 const background = Subagent.background(Researcher, {

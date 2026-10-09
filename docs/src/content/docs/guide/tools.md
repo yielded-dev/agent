@@ -59,8 +59,8 @@ flowchart LR
 | `probability` | Estimate whether a proposition is true, from 0 to 1            |
 
 ```ts twoslash
-import { Decision, DecisionModel } from "effect/ai";
 import { Effect, Schema } from "effect";
+import { Decision, DecisionModel } from "effect/ai";
 
 const TicketAssessment = Decision.make({
   input: Schema.Struct({ message: Schema.String }),
@@ -230,8 +230,8 @@ uncertain and orchestration tools have different durable settlement paths and ar
 Host context and workflow state can use the same mechanism directly:
 
 ```ts twoslash
-import { RunToolVisibility, Selection } from "@yielded/agent/tool-exposure";
 import type { RunOptions } from "@yielded/agent/run-options";
+import { RunToolVisibility, Selection } from "@yielded/agent/tool-exposure";
 import { Effect, Layer } from "effect";
 
 export const options: RunOptions = {
@@ -529,8 +529,8 @@ requirements stay in the Layer's `R`.
 
 ```ts twoslash
 import { Mcp, McpClient } from "@yielded/agent";
-import { FetchHttpClient } from "effect/http";
 import { Effect, Layer } from "effect";
+import { FetchHttpClient } from "effect/http";
 
 const McpLive = McpClient.layer([
   McpClient.McpHttpTransport.make({ serverId: "docs", url: "https://mcp.example.com/mcp" }),
@@ -582,8 +582,8 @@ handling, and durable child recovery.
 Use `WebSearch.native` to let the agent's own model search and answer in the same call:
 
 ```ts twoslash
-import { WebSearch } from "@yielded/agent";
 import { OpenAiTool } from "@effect/ai-openai";
+import { WebSearch } from "@yielded/agent";
 
 const SearchTools = WebSearch.native({
   tool: OpenAiTool.WebSearch({ search_context_size: "medium" }),
@@ -615,9 +615,9 @@ result. Its handler uses a separately supplied LanguageModel. Include `WebSearch
 agent's toolkit, then provide this handler Layer:
 
 ```ts twoslash
+import { OpenAiClient, OpenAiLanguageModel, OpenAiTool } from "@effect/ai-openai";
 import { WebSearch } from "@yielded/agent";
 import * as Gateway from "@yielded/agent-platform-cloudflare/cloudflare-ai-gateway";
-import { OpenAiClient, OpenAiLanguageModel, OpenAiTool } from "@effect/ai-openai";
 import { Layer, Redacted } from "effect";
 import { FetchHttpClient } from "effect/http";
 

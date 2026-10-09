@@ -71,8 +71,8 @@ The language model adapter keeps strict validation; invalid sums fail with
 Provide `LanguageModelDecisionModel.layer` with any native language model that supports structured output.
 
 ```ts twoslash
-import { LanguageModelDecisionModel } from "@yielded/agent-ai-decision";
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
+import { LanguageModelDecisionModel } from "@yielded/agent-ai-decision";
 import { Config, Effect, Layer, Schema } from "effect";
 import { Decision, DecisionModel } from "effect/ai";
 import { FetchHttpClient } from "effect/http";
@@ -136,9 +136,10 @@ catalog. Supply Jev through [`TypeSafeDecisionModel`](#typesafe-client), or use 
 `DecisionModel` implementation.
 
 ```ts twoslash
-import { Assistant, Research, ThreadModels } from "./auto-model.ts";
-import { Effect, Layer } from "effect";
 import { AgentRuntime, Subagent } from "@yielded/agent";
+import { Effect, Layer } from "effect";
+
+import { Assistant, Research, ThreadModels } from "./auto-model.ts";
 // ---cut---
 const program = AgentRuntime.run(Assistant, "Compare train and bus travel.").pipe(
   Effect.provide(ThreadModels),

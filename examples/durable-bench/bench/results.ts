@@ -1,14 +1,20 @@
 import { readFileSync } from "node:fs";
 
-export interface Line {
-  readonly target: string;
-  readonly version: string;
-  readonly turns: number;
-  readonly open: number;
-  readonly turn: readonly number[];
-  readonly bytes: number;
-  readonly rss?: number;
-}
+import { Schema } from "effect";
+
+const Line = Schema.Struct({
+  target: Schema.String,
+  version: Schema.String,
+  turns: Schema.Number,
+  open: Schema.Number,
+  turn: Schema.Array(Schema.Number),
+  bytes: Schema.Number,
+  rss: Schema.optionalKey(Schema.Number),
+});
+
+export type Line = typeof Line.Type;
+
+const decodeLine = Schema.decodeSync(Schema.fromJsonString(Line));
 
 export interface Metric {
   readonly name: string;
@@ -31,7 +37,7 @@ export const median = (values: readonly number[]): number => {
 export const lines = readFileSync("results/results.jsonl", "utf8")
   .trim()
   .split("\n")
-  .map((line) => JSON.parse(line) as Line);
+  .map((line) => decodeLine(line));
 
 export const label = (line: Line): string => `${line.target} ${line.version}`;
 

@@ -417,7 +417,7 @@ const requirePortThread = (request: PortRequest) => {
 /**
  * Admit an already Schema-decoded request to a logical Thread in this physical owner.
  * Custom hosts validate local placement before calling this Effect and provide their same
- * runtime/maintenance instances. The native endpoint uses this path too: queue limits,
+ * runtime, maintenance and alarm instances. The native endpoint uses this path too: queue limits,
  * idempotent receipts and the pre-admission generation/alarm commit have one owner.
  */
 export const submit = Effect.fnUntraced(function* (threadId: ThreadId, request: SubmitRequest) {
@@ -427,9 +427,11 @@ export const submit = Effect.fnUntraced(function* (threadId: ThreadId, request: 
     return yield* HostProtocolError.make({ message: "The Thread belongs to another Object" });
   const mutations = yield* ThreadMutationGate;
   const runtime = yield* DurableAgentRuntime;
+  const alarm = yield* DurableAlarmService;
 
   yield* gateAdmissionLimits(threadId, request);
 
+  // The mutation gate pre-arms durable maintenance; publication keeps its own wake behavior.
   return yield* mutations.withMutation(
     runtime
       .submit(passthroughSubmitAgent(request.agentId), request.inputPayload, {
@@ -446,7 +448,10 @@ export const submit = Effect.fnUntraced(function* (threadId: ThreadId, request: 
           : { messageAdmission: request.messageAdmission }),
         definitions: request.definitions,
       })
-      .pipe(Effect.tap(() => publishCommitted)),
+      .pipe(
+        alarm.withWakesDeferred,
+        Effect.tap(() => publishCommitted),
+      ),
   );
 });
 

@@ -5,16 +5,18 @@ export default defineConfig({
     tasks: {
       test: {
         command: "vp test --passWithNoTests",
-        // Fresh runners lack Vite's temporary directories. Ignore those and
-        // dependency directory listings, while retaining dependency file hashes.
-        input: [
-          { auto: true },
-          { pattern: "bun.lock", base: "workspace" },
-          { pattern: "!**/node_modules", base: "workspace" },
-          { pattern: "!**/node_modules/.vite*", base: "workspace" },
-          { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
-        ],
-        output: [],
+        cache: {
+          // Fresh runners lack Vite's temporary directories. Ignore those and
+          // dependency directory listings, while retaining dependency file hashes.
+          input: [
+            { auto: true },
+            { pattern: "bun.lock", base: "workspace" },
+            { pattern: "!**/node_modules", base: "workspace" },
+            { pattern: "!**/node_modules/.vite*", base: "workspace" },
+            { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
+          ],
+          output: [],
+        },
       },
     },
   },

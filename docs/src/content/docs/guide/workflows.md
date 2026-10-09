@@ -177,14 +177,14 @@ persist in SQL. The dispatch store shares that SQL connection. Canonical agent h
 submission ledger use a separate SQLite file.
 
 ```ts twoslash
+import { NodeCrypto } from "@effect/platform-node";
+import { SqliteClient } from "@effect/sql-sqlite-node";
 import { NodeDurableAgentRuntime } from "@yielded/agent-platform-node/node-durable-agent-runtime";
 import {
   NodeWorkflowRepairTrigger,
   SqlWorkflowDispatchStore,
 } from "@yielded/agent-platform-node/node-workflow";
 import { WorkflowAgentHost } from "@yielded/agent-workflow/workflow-agent-host";
-import { NodeCrypto } from "@effect/platform-node";
-import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Layer } from "effect";
 import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster";
 

@@ -1,12 +1,16 @@
+import { BrowserCrypto } from "@effect/platform-browser";
 import { ThreadObject } from "@yielded/agent-platform-cloudflare";
 import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
+import { CloudflareThreadClient } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import * as Agent from "@yielded/agent/agent";
+import { digestDefinitions } from "@yielded/agent/digest";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { ToolExecutionClass } from "@yielded/agent/durable-step";
+import { ThreadId } from "@yielded/agent/identifiers";
 import { text as textOutput } from "@yielded/agent/output";
 import { IdempotencyKey, Principal } from "@yielded/agent/receipt";
 import { DefinitionDigestInput } from "@yielded/agent/records";
-import { Effect, Layer, Schema, Stream } from "effect";
+import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect";
 import { DurableObject } from "effect-cf";
 import { LanguageModel, Model, Tool, Toolkit, type Prompt, type Response } from "effect/ai";
 
@@ -140,11 +144,33 @@ const definitions = DefinitionDigestInput.make({
   tools: { lookup: { revision: 1, executionClass: "readonly" } },
 });
 
+const definitionDigests = Effect.runSync(
+  Effect.cached(digestDefinitions(definitions).pipe(Effect.provide(BrowserCrypto.layer))),
+);
+
 const runtime = ThreadObject.layer([{ agent, definitions }]).pipe(
   Layer.provide(tools.toLayer({ lookup: ({ n }) => Effect.succeed(payload(n)) })),
 );
 
 const principal = Principal.make("bench");
+const threadId = ThreadId.make("main");
+
+const submitAndWait = Effect.fnUntraced(function* (input: Turn) {
+  const client = yield* CloudflareThreadClient;
+
+  const receipt = yield* client.submit(agent, input.text, {
+    threadId,
+    principal,
+    idempotencyKey: IdempotencyKey.make(input.id),
+    definitions: yield* definitionDigests,
+  });
+
+  const settlement = yield* client.awaitSettlement(receipt);
+
+  if (settlement.outcome !== "completed") {
+    return yield* Effect.die(`turn ${input.id} did not complete: ${JSON.stringify(settlement)}`);
+  }
+});
 
 const recover = Effect.gen(function* () {
   const agentRuntime = yield* DurableAgentRuntime;
@@ -208,8 +234,8 @@ export class YieldedDO
     );
   }
 
-  /** Cold open: construct this isolate, then repair from the canonical log. */
-  wake(): Promise<void> {
+  /** Inline baseline only: open the runtime and explicitly repair the canonical log. */
+  open(): Promise<void> {
     return this.run(recover);
   }
 
@@ -231,6 +257,38 @@ export class YieldedDO
   }
 }
 
-export default serve<{ THREADS: DurableObjectNamespace<YieldedDO> }>((env) =>
-  env.THREADS.getByName("main"),
+type Env = { THREADS: DurableObjectNamespace<YieldedDO> };
+
+let clientRuntime: ManagedRuntime.ManagedRuntime<CloudflareThreadClient, never> | undefined;
+
+const getClientRuntime = (env: Env) =>
+  (clientRuntime ??= ManagedRuntime.make(
+    CloudflareThreadClient.layerFromBinding({ namespace: env.THREADS }),
+  ));
+
+export const inlineWorker = serve<Env>((env) => {
+  const stub = env.THREADS.getByName(threadId);
+
+  return {
+    wake: () => stub.open(),
+    turn: (input) => stub.turn(input),
+    seed: (turns) => stub.seed(turns),
+    stats: () => stub.stats(),
+  };
+});
+
+export default serve<Env>(
+  (env) => {
+    const stub = env.THREADS.getByName(threadId);
+    const client = getClientRuntime(env);
+
+    return {
+      // The first public submission includes Object construction in the cold measurement.
+      wake: () => Promise.resolve(),
+      turn: (input) => client.runPromise(submitAndWait(input)),
+      seed: (turns) => stub.seed(turns),
+      stats: () => stub.stats(),
+    };
+  },
+  (env) => getClientRuntime(env).runPromise(Effect.asVoid(definitionDigests)),
 );

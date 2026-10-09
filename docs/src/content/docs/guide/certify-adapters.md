@@ -90,8 +90,8 @@ these recovery boundaries.
 ## Run the certification
 
 ```ts
-import { Effect } from "effect";
 import { certifyDurableAdapters } from "@yielded/agent-testing/certification";
+import { Effect } from "effect";
 
 const certificate = Effect.gen(function* () {
   return yield* certifyDurableAdapters({

@@ -31,9 +31,10 @@ in the parent's toolkit. The host supplies durability; no different subagent con
 ## Start the host
 
 ```ts twoslash
-import { NodeDurableHost } from "@yielded/agent-platform-node";
 import { NodeRuntime } from "@effect/platform-node";
+import { NodeDurableHost } from "@yielded/agent-platform-node";
 import { Effect } from "effect";
+
 import { HostLive } from "./durable-delegation-host.ts";
 
 NodeRuntime.runMain(NodeDurableHost.run.pipe(Effect.provide(HostLive)));

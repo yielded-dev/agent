@@ -559,8 +559,8 @@ effort and does not authorize sharing or guarantee privacy.
 For a local persistent source, install the optional SQLite adapter:
 
 ```ts twoslash
-import { memoryStoreLayer } from "@yielded/agent/sql-memory-store";
 import { SqliteClient } from "@effect/sql-sqlite-node";
+import { memoryStoreLayer } from "@yielded/agent/sql-memory-store";
 import { Layer } from "effect";
 
 export const MemoryLive = memoryStoreLayer.pipe(
@@ -703,11 +703,11 @@ the original `originId` instead of assigning independent evidence identity.
 
 ```ts twoslash
 import { MemoryNamespace } from "@yielded/agent";
+import { ActivityProcessorKey, type PreparedActivity } from "@yielded/agent/activity-store";
+import { ActivityPassLimits, processCommittedActivity } from "@yielded/agent/committed-activity";
+import { ThreadId } from "@yielded/agent/identifiers";
 import { MemoryContent } from "@yielded/agent/memory-reference";
 import { MemoryKey, MemoryScope, MemoryWrite, MemoryWriter } from "@yielded/agent/memory-store";
-import { ThreadId } from "@yielded/agent/identifiers";
-import { ActivityPassLimits, processCommittedActivity } from "@yielded/agent/committed-activity";
-import { ActivityProcessorKey, type PreparedActivity } from "@yielded/agent/activity-store";
 import { type CanonicalRecordEnvelope } from "@yielded/agent/records";
 import { Clock, DateTime, Effect, Schema } from "effect";
 
@@ -793,9 +793,9 @@ host's existing `ThreadStore` and `Crypto` Layer to the pass as well; the proces
 Thread ownership epochs, `SubmissionLedger`, or engine checkpoints for its own progress.
 
 ```ts twoslash
+import { SqliteClient } from "@effect/sql-sqlite-node";
 import { activityProcessorStoreLayer } from "@yielded/agent-storage-sqlite/sqlite-activity-store";
 import { memoryStoreLayer } from "@yielded/agent/sql-memory-store";
-import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Layer } from "effect";
 
 const MemoryProcessing = Layer.mergeAll(activityProcessorStoreLayer, memoryStoreLayer).pipe(
@@ -843,18 +843,18 @@ implement `MemoryReader` without a writer; sources with unknown revisions should
 passage retrieval instead of this index.
 
 ```ts twoslash
+import { Memory, MemoryNamespace } from "@yielded/agent";
+import { inMemorySemanticIndexLayer } from "@yielded/agent-storage-memory/memory-semantic-index";
+import { MemoryRecallLimits } from "@yielded/agent/memory-reference";
+import { MemoryAccess } from "@yielded/agent/memory-revalidation";
+import { MemoryKey, MemoryScope } from "@yielded/agent/memory-store";
 import {
   SemanticIndexLimits,
   SemanticQueryLimits,
   indexMemorySource,
   querySemanticMemory,
 } from "@yielded/agent/semantic-memory";
-import { Memory, MemoryNamespace } from "@yielded/agent";
-import { MemoryAccess } from "@yielded/agent/memory-revalidation";
-import { MemoryKey, MemoryScope } from "@yielded/agent/memory-store";
-import { MemoryRecallLimits } from "@yielded/agent/memory-reference";
 import { SemanticMemoryProfile } from "@yielded/agent/semantic-memory-index";
-import { inMemorySemanticIndexLayer } from "@yielded/agent-storage-memory/memory-semantic-index";
 import { Effect, Schema } from "effect";
 
 // Keep this Layer alive across refreshes and queries. A new instance starts empty.
@@ -1127,8 +1127,8 @@ Provide `ContextCompactor` directly to the durable host Layer. In this example, 
 application's assembled host Layer:
 
 ```ts
-import { ContextCompactor } from "@yielded/agent/context-compactor";
 import { OpenAiLanguageModel } from "@effect/ai-openai";
+import { ContextCompactor } from "@yielded/agent/context-compactor";
 import { Layer } from "effect";
 
 export const CompactorLive = ContextCompactor.layerWithModel(
@@ -1162,8 +1162,8 @@ For model-directed control, include the native `ContextTools.toolkit` and its ha
 
 ```ts
 import { ContextTools } from "@yielded/agent";
-import { ContextCompactor } from "@yielded/agent/context-compactor";
 import { ThreadContextHistory } from "@yielded/agent";
+import { ContextCompactor } from "@yielded/agent/context-compactor";
 import { Layer } from "effect";
 
 const tools = ContextTools.toolkit;

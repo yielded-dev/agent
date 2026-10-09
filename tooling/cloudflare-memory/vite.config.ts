@@ -5,33 +5,40 @@ export default defineConfig({
     tasks: {
       build: {
         command: "wrangler deploy --dry-run",
-        // Wrangler reads its own temporary bundle during validation.
-        input: [
-          { auto: true },
-          "*",
-          // Excluding the workspace root (".") would drop every file input.
-          { pattern: "!tooling/cloudflare-memory", base: "workspace" },
-          "!.wrangler",
-          "!.wrangler/**",
-          { pattern: "bun.lock", base: "workspace" },
-          { pattern: "!**/node_modules", base: "workspace" },
-          { pattern: "!**/node_modules/.vite*", base: "workspace" },
-          { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
-        ],
-        output: [],
+        cache: {
+          // Wrangler reads its own temporary bundle during validation.
+          input: [
+            { auto: true },
+            "*",
+            // Excluding the workspace root (".") would drop every file input.
+            { pattern: "!tooling/cloudflare-memory", base: "workspace" },
+            "!.wrangler",
+            "!.wrangler/**",
+            { pattern: "bun.lock", base: "workspace" },
+            { pattern: "!**/node_modules", base: "workspace" },
+            { pattern: "!**/node_modules/.vite*", base: "workspace" },
+            { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
+          ],
+          output: [],
+        },
       },
       test: {
         command: "vp test --passWithNoTests",
-        input: [
-          { auto: true },
-          { pattern: "bun.lock", base: "workspace" },
-          { pattern: "!**/node_modules", base: "workspace" },
-          { pattern: "!**/node_modules/.vite*", base: "workspace" },
-          { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
-        ],
-        output: [],
+        cache: {
+          input: [
+            { auto: true },
+            { pattern: "bun.lock", base: "workspace" },
+            { pattern: "!**/node_modules", base: "workspace" },
+            { pattern: "!**/node_modules/.vite*", base: "workspace" },
+            { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
+          ],
+          output: [],
+        },
       },
     },
   },
-  test: { cache: false, silent: "passed-only" },
+  test: {
+    cache: false,
+    silent: "passed-only",
+  },
 });

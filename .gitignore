@@ -34,3 +34,4 @@ oxlint/plugin-exports.d.ts
 .performance-report/
 .release-build/
 .checkout-proof/
+.vitest/
