@@ -1,0 +1,18 @@
+{
+  "checkedAt": "2026-10-09T09:46:06.206Z",
+  "verified": true,
+  "workers": [],
+  "namespaces": [],
+  "prefix": "tail-latency",
+  "method": "Alchemy teardown followed by independent Cloudflare API listings of Workers and all pages of Durable Object namespaces",
+  "privateAlchemyStateRemoved": true,
+  "local": {
+    "checkedAt": "2026-10-09T09:36:32.963863+00:00",
+    "postgresStopped": true,
+    "postmasterPidFileAbsent": true,
+    "loopbackTestPortClosed": true,
+    "scope": "Temporary PostgreSQL instance created only for tail-latency validation",
+    "recheckedAt": "2026-10-09T09:46:33.205889+00:00",
+    "dataDirectoryRemoved": true
+  }
+}

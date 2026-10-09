@@ -1,0 +1,6168 @@
+{
+  "run": "tail-latency-mv0rdtk0-58a3e4ae",
+  "complete": true,
+  "interpretation": "Diagnostic instrumentation only. syncClockMs uses the Object I/O clock and can include a stale starting timestamp, alarm precommit scheduling and resumption. It does not isolate disk or replication cost. Caller RPC and driver spans are separate clock domains; overlapping spans are not summed.",
+  "integrity": {
+    "warm": 800,
+    "buildsVerified": 800,
+    "fingerprintsVerified": 800,
+    "residentVerified": 800
+  },
+  "cells": [
+    {
+      "cell": "250/0",
+      "n": 200,
+      "admission": {
+        "n": 200,
+        "p50": 271.5,
+        "p90": 375.9,
+        "p99": 494.069999999999,
+        "max": 957
+      },
+      "submitClock": {
+        "n": 200,
+        "p50": 0,
+        "p90": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "syncClock": {
+        "n": 200,
+        "p50": 83,
+        "p90": 178,
+        "p99": 270.26999999999975,
+        "max": 318
+      },
+      "admissionSpikes": 1,
+      "turnSpikes": 3,
+      "admissionSpikesWithSyncExcess250": 0,
+      "admissionSpikesWithSyncAtMost10": 0,
+      "alarmBeforeSyncReturn": 191
+    },
+    {
+      "cell": "250/400",
+      "n": 200,
+      "admission": {
+        "n": 200,
+        "p50": 252,
+        "p90": 410,
+        "p99": 474.6899999999994,
+        "max": 689
+      },
+      "submitClock": {
+        "n": 200,
+        "p50": 0,
+        "p90": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "syncClock": {
+        "n": 200,
+        "p50": 62,
+        "p90": 101,
+        "p99": 122.08999999999992,
+        "max": 290
+      },
+      "admissionSpikes": 2,
+      "turnSpikes": 5,
+      "admissionSpikesWithSyncExcess250": 0,
+      "admissionSpikesWithSyncAtMost10": 0,
+      "alarmBeforeSyncReturn": 131
+    },
+    {
+      "cell": "50/0",
+      "n": 200,
+      "admission": {
+        "n": 200,
+        "p50": 216,
+        "p90": 262.29999999999995,
+        "p99": 354.25999999999976,
+        "max": 485
+      },
+      "submitClock": {
+        "n": 200,
+        "p50": 0,
+        "p90": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "syncClock": {
+        "n": 200,
+        "p50": 73,
+        "p90": 118.1,
+        "p99": 169.79999999999927,
+        "max": 353
+      },
+      "admissionSpikes": 1,
+      "turnSpikes": 3,
+      "admissionSpikesWithSyncExcess250": 1,
+      "admissionSpikesWithSyncAtMost10": 0,
+      "alarmBeforeSyncReturn": 198
+    },
+    {
+      "cell": "50/400",
+      "n": 200,
+      "admission": {
+        "n": 200,
+        "p50": 208,
+        "p90": 284,
+        "p99": 394.01,
+        "max": 405
+      },
+      "submitClock": {
+        "n": 200,
+        "p50": 0,
+        "p90": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "syncClock": {
+        "n": 200,
+        "p50": 59,
+        "p90": 74,
+        "p99": 102.00999999999999,
+        "max": 212
+      },
+      "admissionSpikes": 1,
+      "turnSpikes": 0,
+      "admissionSpikesWithSyncExcess250": 0,
+      "admissionSpikesWithSyncAtMost10": 0,
+      "alarmBeforeSyncReturn": 161
+    }
+  ],
+  "pairs": [
+    {
+      "cell": "250/0",
+      "selection": "largest admissionMs in condition, paired with the same Object's typical warm turn",
+      "baseline": {
+        "admission": 371.5,
+        "driver": 1134,
+        "sync": 128.5
+      },
+      "typical": {
+        "target": "yielded",
+        "history": 250,
+        "ttftMs": 0,
+        "object": 3,
+        "sample": "e0-t4",
+        "driverMs": 1130,
+        "admissionMs": 368,
+        "driverStartedMs": 1791538337081,
+        "observedMs": 1791538338211,
+        "submitClockMs": 0,
+        "syncClockMs": 114,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "sql": 257,
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 64,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538336220,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538336220,
+            "value": 1791538336270
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538336294,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538336294
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538336294,
+            "value": 1791538337294
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538336294
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538336294
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538336294
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538336294
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538336296
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538336296
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538336296,
+            "value": 1791538336346
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538336296
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538336296
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538336296
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538336296
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538336334
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538336418
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538336420
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538336508
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538336609
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538336714
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538336810
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538336907
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538336998
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538337080
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538337164,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538336296,
+            "objectEndMs": 1791538336418,
+            "providerArrivalMs": 1791538337447,
+            "providerFirstByteMs": 1791538337449,
+            "providerEndMs": 1791538337449,
+            "providerColo": "LAX",
+            "bytes": 131695
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538336418,
+            "objectEndMs": 1791538336508,
+            "providerArrivalMs": 1791538337521,
+            "providerFirstByteMs": 1791538337524,
+            "providerEndMs": 1791538337524,
+            "providerColo": "LAX",
+            "bytes": 132148
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538336508,
+            "objectEndMs": 1791538336609,
+            "providerArrivalMs": 1791538337601,
+            "providerFirstByteMs": 1791538337603,
+            "providerEndMs": 1791538337603,
+            "providerColo": "LAX",
+            "bytes": 132601
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538336609,
+            "objectEndMs": 1791538336714,
+            "providerArrivalMs": 1791538337700,
+            "providerFirstByteMs": 1791538337703,
+            "providerEndMs": 1791538337703,
+            "providerColo": "LAX",
+            "bytes": 133054
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538336714,
+            "objectEndMs": 1791538336810,
+            "providerArrivalMs": 1791538337787,
+            "providerFirstByteMs": 1791538337789,
+            "providerEndMs": 1791538337789,
+            "providerColo": "LAX",
+            "bytes": 133507
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538336810,
+            "objectEndMs": 1791538336907,
+            "providerArrivalMs": 1791538337867,
+            "providerFirstByteMs": 1791538337870,
+            "providerEndMs": 1791538337870,
+            "providerColo": "LAX",
+            "bytes": 133960
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538336907,
+            "objectEndMs": 1791538336998,
+            "providerArrivalMs": 1791538337950,
+            "providerFirstByteMs": 1791538337952,
+            "providerEndMs": 1791538337952,
+            "providerColo": "LAX",
+            "bytes": 134413
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538336998,
+            "objectEndMs": 1791538337080,
+            "providerArrivalMs": 1791538338043,
+            "providerFirstByteMs": 1791538338045,
+            "providerEndMs": 1791538338045,
+            "providerColo": "LAX",
+            "bytes": 134866
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538337080,
+            "objectEndMs": 1791538337164,
+            "providerArrivalMs": 1791538338127,
+            "providerFirstByteMs": 1791538338129,
+            "providerEndMs": 1791538338129,
+            "providerColo": "LAX",
+            "bytes": 135319
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 20,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 750,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 353,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 2,
+            "wallMs": 3,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 322,
+            "wallMs": 733,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 262,
+            "wallMs": 1056,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 14,
+            "wallMs": 346,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 39,
+          "collectedByMetrics": 50,
+          "delta": 11
+        }
+      },
+      "slow": {
+        "target": "yielded",
+        "history": 250,
+        "ttftMs": 0,
+        "object": 3,
+        "sample": "e0-t15",
+        "driverMs": 1676,
+        "admissionMs": 957,
+        "driverStartedMs": 1791538350687,
+        "observedMs": 1791538352363,
+        "submitClockMs": 0,
+        "syncClockMs": 97,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "sql": 259,
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 66,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538350749,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538350749,
+            "value": 1791538350799
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538350809,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538350809
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538350809,
+            "value": 1791538351809
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538350809
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538350809
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538350809
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538350809
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538350810
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538350810
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538350810,
+            "value": 1791538350860
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538350810
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538350810
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538350810
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538350810
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538350846
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538350915
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538350920
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538350983
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538351062
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538351140
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538351216
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538351287
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538351345
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538351403
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538351465,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538350810,
+            "objectEndMs": 1791538350915,
+            "providerArrivalMs": 1791538351642,
+            "providerFirstByteMs": 1791538351644,
+            "providerEndMs": 1791538351644,
+            "providerColo": "LAX",
+            "bytes": 172676
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538350915,
+            "objectEndMs": 1791538350983,
+            "providerArrivalMs": 1791538351715,
+            "providerFirstByteMs": 1791538351717,
+            "providerEndMs": 1791538351717,
+            "providerColo": "LAX",
+            "bytes": 173129
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538350983,
+            "objectEndMs": 1791538351062,
+            "providerArrivalMs": 1791538351795,
+            "providerFirstByteMs": 1791538351797,
+            "providerEndMs": 1791538351797,
+            "providerColo": "LAX",
+            "bytes": 173582
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538351062,
+            "objectEndMs": 1791538351140,
+            "providerArrivalMs": 1791538351872,
+            "providerFirstByteMs": 1791538351875,
+            "providerEndMs": 1791538351875,
+            "providerColo": "LAX",
+            "bytes": 174035
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538351140,
+            "objectEndMs": 1791538351216,
+            "providerArrivalMs": 1791538351953,
+            "providerFirstByteMs": 1791538351955,
+            "providerEndMs": 1791538351955,
+            "providerColo": "LAX",
+            "bytes": 182424
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538351216,
+            "objectEndMs": 1791538351287,
+            "providerArrivalMs": 1791538352028,
+            "providerFirstByteMs": 1791538352030,
+            "providerEndMs": 1791538352030,
+            "providerColo": "LAX",
+            "bytes": 182877
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538351287,
+            "objectEndMs": 1791538351345,
+            "providerArrivalMs": 1791538352103,
+            "providerFirstByteMs": 1791538352104,
+            "providerEndMs": 1791538352105,
+            "providerColo": "LAX",
+            "bytes": 183330
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538351345,
+            "objectEndMs": 1791538351403,
+            "providerArrivalMs": 1791538352190,
+            "providerFirstByteMs": 1791538352193,
+            "providerEndMs": 1791538352193,
+            "providerColo": "LAX",
+            "bytes": 183783
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538351403,
+            "objectEndMs": 1791538351465,
+            "providerArrivalMs": 1791538352277,
+            "providerFirstByteMs": 1791538352279,
+            "providerEndMs": 1791538352279,
+            "providerColo": "LAX",
+            "bytes": 184236
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 23,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 6,
+            "wallMs": 711,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 15,
+            "wallMs": 355,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 3,
+            "wallMs": 3,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 333,
+            "wallMs": 685,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 255,
+            "wallMs": 992,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 11,
+            "wallMs": 368,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 149,
+          "collectedByMetrics": 158,
+          "delta": 9
+        }
+      }
+    },
+    {
+      "cell": "250/0",
+      "selection": "largest driverMs in condition, paired with the same Object's typical warm turn",
+      "baseline": {
+        "admission": 371.5,
+        "driver": 1134,
+        "sync": 128.5
+      },
+      "typical": {
+        "target": "yielded",
+        "history": 250,
+        "ttftMs": 0,
+        "object": 3,
+        "sample": "e0-t4",
+        "driverMs": 1130,
+        "admissionMs": 368,
+        "driverStartedMs": 1791538337081,
+        "observedMs": 1791538338211,
+        "submitClockMs": 0,
+        "syncClockMs": 114,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "sql": 257,
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 64,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538336220,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538336220,
+            "value": 1791538336270
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538336220
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538336294,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538336294
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538336294,
+            "value": 1791538337294
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538336294
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538336294
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538336294
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538336294
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538336296
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538336296
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538336296,
+            "value": 1791538336346
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538336296
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538336296
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538336296
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538336296
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538336334
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538336418
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538336420
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538336508
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538336609
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538336714
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538336810
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538336907
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538336998
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538337080
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538337164
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538337164,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538336296,
+            "objectEndMs": 1791538336418,
+            "providerArrivalMs": 1791538337447,
+            "providerFirstByteMs": 1791538337449,
+            "providerEndMs": 1791538337449,
+            "providerColo": "LAX",
+            "bytes": 131695
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538336418,
+            "objectEndMs": 1791538336508,
+            "providerArrivalMs": 1791538337521,
+            "providerFirstByteMs": 1791538337524,
+            "providerEndMs": 1791538337524,
+            "providerColo": "LAX",
+            "bytes": 132148
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538336508,
+            "objectEndMs": 1791538336609,
+            "providerArrivalMs": 1791538337601,
+            "providerFirstByteMs": 1791538337603,
+            "providerEndMs": 1791538337603,
+            "providerColo": "LAX",
+            "bytes": 132601
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538336609,
+            "objectEndMs": 1791538336714,
+            "providerArrivalMs": 1791538337700,
+            "providerFirstByteMs": 1791538337703,
+            "providerEndMs": 1791538337703,
+            "providerColo": "LAX",
+            "bytes": 133054
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538336714,
+            "objectEndMs": 1791538336810,
+            "providerArrivalMs": 1791538337787,
+            "providerFirstByteMs": 1791538337789,
+            "providerEndMs": 1791538337789,
+            "providerColo": "LAX",
+            "bytes": 133507
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538336810,
+            "objectEndMs": 1791538336907,
+            "providerArrivalMs": 1791538337867,
+            "providerFirstByteMs": 1791538337870,
+            "providerEndMs": 1791538337870,
+            "providerColo": "LAX",
+            "bytes": 133960
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538336907,
+            "objectEndMs": 1791538336998,
+            "providerArrivalMs": 1791538337950,
+            "providerFirstByteMs": 1791538337952,
+            "providerEndMs": 1791538337952,
+            "providerColo": "LAX",
+            "bytes": 134413
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538336998,
+            "objectEndMs": 1791538337080,
+            "providerArrivalMs": 1791538338043,
+            "providerFirstByteMs": 1791538338045,
+            "providerEndMs": 1791538338045,
+            "providerColo": "LAX",
+            "bytes": 134866
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538337080,
+            "objectEndMs": 1791538337164,
+            "providerArrivalMs": 1791538338127,
+            "providerFirstByteMs": 1791538338129,
+            "providerEndMs": 1791538338129,
+            "providerColo": "LAX",
+            "bytes": 135319
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 20,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 750,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 353,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 2,
+            "wallMs": 3,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 322,
+            "wallMs": 733,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 262,
+            "wallMs": 1056,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 14,
+            "wallMs": 346,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 39,
+          "collectedByMetrics": 50,
+          "delta": 11
+        }
+      },
+      "slow": {
+        "target": "yielded",
+        "history": 250,
+        "ttftMs": 0,
+        "object": 3,
+        "sample": "e0-t15",
+        "driverMs": 1676,
+        "admissionMs": 957,
+        "driverStartedMs": 1791538350687,
+        "observedMs": 1791538352363,
+        "submitClockMs": 0,
+        "syncClockMs": 97,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "sql": 259,
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 66,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538350749,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538350749,
+            "value": 1791538350799
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538350749
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538350809,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538350809
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538350809,
+            "value": 1791538351809
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538350809
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538350809
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538350809
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538350809
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538350810
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538350810
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538350810,
+            "value": 1791538350860
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538350810
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538350810
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538350810
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538350810
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538350846
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538350915
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538350920
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538350983
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538351062
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538351140
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538351216
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538351287
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538351345
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538351403
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538351465
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538351465,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538350810,
+            "objectEndMs": 1791538350915,
+            "providerArrivalMs": 1791538351642,
+            "providerFirstByteMs": 1791538351644,
+            "providerEndMs": 1791538351644,
+            "providerColo": "LAX",
+            "bytes": 172676
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538350915,
+            "objectEndMs": 1791538350983,
+            "providerArrivalMs": 1791538351715,
+            "providerFirstByteMs": 1791538351717,
+            "providerEndMs": 1791538351717,
+            "providerColo": "LAX",
+            "bytes": 173129
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538350983,
+            "objectEndMs": 1791538351062,
+            "providerArrivalMs": 1791538351795,
+            "providerFirstByteMs": 1791538351797,
+            "providerEndMs": 1791538351797,
+            "providerColo": "LAX",
+            "bytes": 173582
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538351062,
+            "objectEndMs": 1791538351140,
+            "providerArrivalMs": 1791538351872,
+            "providerFirstByteMs": 1791538351875,
+            "providerEndMs": 1791538351875,
+            "providerColo": "LAX",
+            "bytes": 174035
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538351140,
+            "objectEndMs": 1791538351216,
+            "providerArrivalMs": 1791538351953,
+            "providerFirstByteMs": 1791538351955,
+            "providerEndMs": 1791538351955,
+            "providerColo": "LAX",
+            "bytes": 182424
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538351216,
+            "objectEndMs": 1791538351287,
+            "providerArrivalMs": 1791538352028,
+            "providerFirstByteMs": 1791538352030,
+            "providerEndMs": 1791538352030,
+            "providerColo": "LAX",
+            "bytes": 182877
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538351287,
+            "objectEndMs": 1791538351345,
+            "providerArrivalMs": 1791538352103,
+            "providerFirstByteMs": 1791538352104,
+            "providerEndMs": 1791538352105,
+            "providerColo": "LAX",
+            "bytes": 183330
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538351345,
+            "objectEndMs": 1791538351403,
+            "providerArrivalMs": 1791538352190,
+            "providerFirstByteMs": 1791538352193,
+            "providerEndMs": 1791538352193,
+            "providerColo": "LAX",
+            "bytes": 183783
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538351403,
+            "objectEndMs": 1791538351465,
+            "providerArrivalMs": 1791538352277,
+            "providerFirstByteMs": 1791538352279,
+            "providerEndMs": 1791538352279,
+            "providerColo": "LAX",
+            "bytes": 184236
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 23,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 6,
+            "wallMs": 711,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 15,
+            "wallMs": 355,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 3,
+            "wallMs": 3,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 333,
+            "wallMs": 685,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 255,
+            "wallMs": 992,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 11,
+            "wallMs": 368,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 149,
+          "collectedByMetrics": 158,
+          "delta": 9
+        }
+      }
+    },
+    {
+      "cell": "250/400",
+      "selection": "largest admissionMs in condition, paired with the same Object's typical warm turn",
+      "baseline": {
+        "admission": 412,
+        "driver": 5337,
+        "sync": 100
+      },
+      "typical": {
+        "target": "yielded",
+        "history": 250,
+        "ttftMs": 400,
+        "object": 3,
+        "sample": "e0-t9",
+        "driverMs": 5325,
+        "admissionMs": 438,
+        "driverStartedMs": 1791538413256,
+        "observedMs": 1791538418581,
+        "submitClockMs": 0,
+        "syncClockMs": 101,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "sql": 257,
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 64,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538413201,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538413201
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538413201,
+            "value": 1791538413251
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538413201
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538413201
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538413201
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538413201
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538413201
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538413201
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538413201
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538413270,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538413270
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538413270,
+            "value": 1791538414270
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538413270
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538413270
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538413270
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538413270
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538413271
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538413271
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538413271,
+            "value": 1791538413321
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538413271
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538413271
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538413271
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538413271
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538413302
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538413387
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538413934
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538414569
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538415140
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538415701
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538416255
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538416795
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538417341
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538417889
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538418428
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538418428
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538418428
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538418428
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538418428
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538418428
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538418428
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538418428
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538418428
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538418428
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538418428
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538418428,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538413271,
+            "objectEndMs": 1791538413934,
+            "providerArrivalMs": 1791538413690,
+            "providerFirstByteMs": 1791538414090,
+            "providerEndMs": 1791538414150,
+            "providerColo": "SEA",
+            "bytes": 150320
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538413934,
+            "objectEndMs": 1791538414569,
+            "providerArrivalMs": 1791538414254,
+            "providerFirstByteMs": 1791538414654,
+            "providerEndMs": 1791538414714,
+            "providerColo": "SEA",
+            "bytes": 150773
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538414569,
+            "objectEndMs": 1791538415140,
+            "providerArrivalMs": 1791538414791,
+            "providerFirstByteMs": 1791538415191,
+            "providerEndMs": 1791538415251,
+            "providerColo": "SEA",
+            "bytes": 151226
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538415140,
+            "objectEndMs": 1791538415701,
+            "providerArrivalMs": 1791538415328,
+            "providerFirstByteMs": 1791538415728,
+            "providerEndMs": 1791538415788,
+            "providerColo": "SEA",
+            "bytes": 151679
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538415701,
+            "objectEndMs": 1791538416255,
+            "providerArrivalMs": 1791538415867,
+            "providerFirstByteMs": 1791538416267,
+            "providerEndMs": 1791538416327,
+            "providerColo": "SEA",
+            "bytes": 152132
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538416255,
+            "objectEndMs": 1791538416795,
+            "providerArrivalMs": 1791538416403,
+            "providerFirstByteMs": 1791538416803,
+            "providerEndMs": 1791538416863,
+            "providerColo": "SEA",
+            "bytes": 152585
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538416795,
+            "objectEndMs": 1791538417341,
+            "providerArrivalMs": 1791538416944,
+            "providerFirstByteMs": 1791538417344,
+            "providerEndMs": 1791538417404,
+            "providerColo": "SEA",
+            "bytes": 153038
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538417341,
+            "objectEndMs": 1791538417889,
+            "providerArrivalMs": 1791538417494,
+            "providerFirstByteMs": 1791538417894,
+            "providerEndMs": 1791538417954,
+            "providerColo": "SEA",
+            "bytes": 153491
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538417889,
+            "objectEndMs": 1791538418428,
+            "providerArrivalMs": 1791538418038,
+            "providerFirstByteMs": 1791538418438,
+            "providerEndMs": 1791538418488,
+            "providerColo": "SEA",
+            "bytes": 153944
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 38,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 4882,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 2,
+            "wallMs": 3,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 319,
+            "wallMs": 4878,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 252,
+            "wallMs": 5196,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 430,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 13,
+            "wallMs": 409,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 88,
+          "collectedByMetrics": 99,
+          "delta": 11
+        }
+      },
+      "slow": {
+        "target": "yielded",
+        "history": 250,
+        "ttftMs": 400,
+        "object": 3,
+        "sample": "e0-t13",
+        "driverMs": 5567,
+        "admissionMs": 689,
+        "driverStartedMs": 1791538434862,
+        "observedMs": 1791538440429,
+        "submitClockMs": 0,
+        "syncClockMs": 290,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "sql": 259,
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 66,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538434791,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538434791
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538434791,
+            "value": 1791538434841
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538434791
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538434791
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538434791
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538434791
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538434791
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538434791
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538434791
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538434845,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538434845
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538434845,
+            "value": 1791538435845
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538434845
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538434845
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538434845
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538434845
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538434845
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538434845
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538434845,
+            "value": 1791538434895
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538434845
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538434845
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538434845
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538434845
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538435081
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538435183
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538435742
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538436357
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538436941
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538437509
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538438085
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538438634
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538439184
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538439730
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538440274
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538440274
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538440274
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538440274
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538440274
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538440274
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538440274
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538440274
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538440274
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538440274
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538440274
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538440274,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538434845,
+            "objectEndMs": 1791538435742,
+            "providerArrivalMs": 1791538435543,
+            "providerFirstByteMs": 1791538435943,
+            "providerEndMs": 1791538436003,
+            "providerColo": "SEA",
+            "bytes": 165224
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538435742,
+            "objectEndMs": 1791538436357,
+            "providerArrivalMs": 1791538436082,
+            "providerFirstByteMs": 1791538436482,
+            "providerEndMs": 1791538436542,
+            "providerColo": "SEA",
+            "bytes": 165677
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538436357,
+            "objectEndMs": 1791538436941,
+            "providerArrivalMs": 1791538436619,
+            "providerFirstByteMs": 1791538437019,
+            "providerEndMs": 1791538437079,
+            "providerColo": "SEA",
+            "bytes": 166130
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538436941,
+            "objectEndMs": 1791538437509,
+            "providerArrivalMs": 1791538437161,
+            "providerFirstByteMs": 1791538437561,
+            "providerEndMs": 1791538437621,
+            "providerColo": "SEA",
+            "bytes": 166583
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538437509,
+            "objectEndMs": 1791538438085,
+            "providerArrivalMs": 1791538437718,
+            "providerFirstByteMs": 1791538438118,
+            "providerEndMs": 1791538438178,
+            "providerColo": "SEA",
+            "bytes": 167036
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538438085,
+            "objectEndMs": 1791538438634,
+            "providerArrivalMs": 1791538438256,
+            "providerFirstByteMs": 1791538438656,
+            "providerEndMs": 1791538438716,
+            "providerColo": "SEA",
+            "bytes": 167489
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538438634,
+            "objectEndMs": 1791538439184,
+            "providerArrivalMs": 1791538438796,
+            "providerFirstByteMs": 1791538439196,
+            "providerEndMs": 1791538439256,
+            "providerColo": "SEA",
+            "bytes": 167942
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538439184,
+            "objectEndMs": 1791538439730,
+            "providerArrivalMs": 1791538439338,
+            "providerFirstByteMs": 1791538439738,
+            "providerEndMs": 1791538439798,
+            "providerColo": "SEA",
+            "bytes": 168395
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538439730,
+            "objectEndMs": 1791538440274,
+            "providerArrivalMs": 1791538439887,
+            "providerFirstByteMs": 1791538440287,
+            "providerEndMs": 1791538440337,
+            "providerColo": "SEA",
+            "bytes": 168848
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 32,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 4871,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 3,
+            "wallMs": 3,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 359,
+            "wallMs": 4865,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 398,
+            "wallMs": 5480,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 2,
+            "wallMs": 683,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 10,
+            "wallMs": 681,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 129,
+          "collectedByMetrics": 139,
+          "delta": 10
+        }
+      }
+    },
+    {
+      "cell": "250/400",
+      "selection": "largest driverMs in condition, paired with the same Object's typical warm turn",
+      "baseline": {
+        "admission": 380,
+        "driver": 5193,
+        "sync": 96.5
+      },
+      "typical": {
+        "target": "yielded",
+        "history": 250,
+        "ttftMs": 400,
+        "object": 6,
+        "sample": "e0-t3",
+        "driverMs": 5174,
+        "admissionMs": 424,
+        "driverStartedMs": 1791538503154,
+        "observedMs": 1791538508328,
+        "submitClockMs": 0,
+        "syncClockMs": 115,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "sql": 257,
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 64,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538503054,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538503054
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538503054,
+            "value": 1791538503104
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538503054
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538503054
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538503054
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538503054
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538503054
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538503054
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538503054
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538503104,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538503104
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538503104,
+            "value": 1791538504104
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538503104
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538503104
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538503104
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538503104
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538503104
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538503104
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538503104,
+            "value": 1791538503154
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538503104
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538503104
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538503104
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538503104
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538503169
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538503232
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538503797
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538504404
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538504966
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538505524
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538506076
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538506607
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538507132
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538507664
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538508185
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538508185
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538508185
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538508185
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538508185
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538508185
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538508185
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538508185
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538508185
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538508185
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538508185
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538508185,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538503104,
+            "objectEndMs": 1791538503797,
+            "providerArrivalMs": 1791538503582,
+            "providerFirstByteMs": 1791538503982,
+            "providerEndMs": 1791538504042,
+            "providerColo": "SJC",
+            "bytes": 120034
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538503797,
+            "objectEndMs": 1791538504404,
+            "providerArrivalMs": 1791538504131,
+            "providerFirstByteMs": 1791538504531,
+            "providerEndMs": 1791538504591,
+            "providerColo": "SJC",
+            "bytes": 120487
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538504404,
+            "objectEndMs": 1791538504966,
+            "providerArrivalMs": 1791538504657,
+            "providerFirstByteMs": 1791538505057,
+            "providerEndMs": 1791538505117,
+            "providerColo": "SJC",
+            "bytes": 120940
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538504966,
+            "objectEndMs": 1791538505524,
+            "providerArrivalMs": 1791538505185,
+            "providerFirstByteMs": 1791538505585,
+            "providerEndMs": 1791538505645,
+            "providerColo": "SJC",
+            "bytes": 129329
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538505524,
+            "objectEndMs": 1791538506076,
+            "providerArrivalMs": 1791538505713,
+            "providerFirstByteMs": 1791538506113,
+            "providerEndMs": 1791538506173,
+            "providerColo": "SJC",
+            "bytes": 129782
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538506076,
+            "objectEndMs": 1791538506607,
+            "providerArrivalMs": 1791538506232,
+            "providerFirstByteMs": 1791538506632,
+            "providerEndMs": 1791538506692,
+            "providerColo": "SJC",
+            "bytes": 130235
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538506607,
+            "objectEndMs": 1791538507132,
+            "providerArrivalMs": 1791538506758,
+            "providerFirstByteMs": 1791538507158,
+            "providerEndMs": 1791538507218,
+            "providerColo": "SJC",
+            "bytes": 130688
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538507132,
+            "objectEndMs": 1791538507664,
+            "providerArrivalMs": 1791538507282,
+            "providerFirstByteMs": 1791538507682,
+            "providerEndMs": 1791538507742,
+            "providerColo": "SJC",
+            "bytes": 131141
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538507664,
+            "objectEndMs": 1791538508185,
+            "providerArrivalMs": 1791538507807,
+            "providerFirstByteMs": 1791538508207,
+            "providerEndMs": 1791538508257,
+            "providerColo": "SJC",
+            "bytes": 131594
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 10,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 4732,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 2,
+            "wallMs": 3,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 273,
+            "wallMs": 5104,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 402,
+            "wallMs": 4727,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 409,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 11,
+            "wallMs": 400,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 29,
+          "collectedByMetrics": 40,
+          "delta": 11
+        }
+      },
+      "slow": {
+        "target": "yielded",
+        "history": 250,
+        "ttftMs": 400,
+        "object": 6,
+        "sample": "e0-t16",
+        "driverMs": 6617,
+        "admissionMs": 427,
+        "driverStartedMs": 1791538571385,
+        "observedMs": 1791538578002,
+        "submitClockMs": 0,
+        "syncClockMs": 120,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "sql": 259,
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 66,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538571293,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538571293
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538571293,
+            "value": 1791538571343
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538571293
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538571293
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538571293
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538571293
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538571293
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538571293
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538571293
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538571343,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538571343
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538571343,
+            "value": 1791538572343
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538571343
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538571343
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538571343
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538571343
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538571350
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538571350
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538571350,
+            "value": 1791538571400
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538571350
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538571350
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538571350
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538571350
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538571413
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538571471
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538572037
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538572629
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538573192
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538573739
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538574283
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538576180
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538576686
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538577199
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538577682
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538577682
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538577682
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538577682
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538577682
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538577682
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538577682
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538577682
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538577682
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538577682
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538577682
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538577682,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538571350,
+            "objectEndMs": 1791538572037,
+            "providerArrivalMs": 1791538571816,
+            "providerFirstByteMs": 1791538572216,
+            "providerEndMs": 1791538572276,
+            "providerColo": "SJC",
+            "bytes": 184338
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538572037,
+            "objectEndMs": 1791538572629,
+            "providerArrivalMs": 1791538572340,
+            "providerFirstByteMs": 1791538572740,
+            "providerEndMs": 1791538572800,
+            "providerColo": "SJC",
+            "bytes": 184791
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538572629,
+            "objectEndMs": 1791538573192,
+            "providerArrivalMs": 1791538572863,
+            "providerFirstByteMs": 1791538573263,
+            "providerEndMs": 1791538573323,
+            "providerColo": "SJC",
+            "bytes": 185244
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538573192,
+            "objectEndMs": 1791538573739,
+            "providerArrivalMs": 1791538573388,
+            "providerFirstByteMs": 1791538573788,
+            "providerEndMs": 1791538573848,
+            "providerColo": "SJC",
+            "bytes": 185697
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538573739,
+            "objectEndMs": 1791538574283,
+            "providerArrivalMs": 1791538573914,
+            "providerFirstByteMs": 1791538574314,
+            "providerEndMs": 1791538574374,
+            "providerColo": "SJC",
+            "bytes": 186150
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538574283,
+            "objectEndMs": 1791538576180,
+            "providerArrivalMs": 1791538575745,
+            "providerFirstByteMs": 1791538576145,
+            "providerEndMs": 1791538576205,
+            "providerColo": "SJC",
+            "bytes": 186603
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538576180,
+            "objectEndMs": 1791538576686,
+            "providerArrivalMs": 1791538576264,
+            "providerFirstByteMs": 1791538576664,
+            "providerEndMs": 1791538576724,
+            "providerColo": "SJC",
+            "bytes": 187056
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538576686,
+            "objectEndMs": 1791538577199,
+            "providerArrivalMs": 1791538576787,
+            "providerFirstByteMs": 1791538577187,
+            "providerEndMs": 1791538577247,
+            "providerColo": "SJC",
+            "bytes": 187509
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538577199,
+            "objectEndMs": 1791538577682,
+            "providerArrivalMs": 1791538577321,
+            "providerFirstByteMs": 1791538577721,
+            "providerEndMs": 1791538577771,
+            "providerColo": "SJC",
+            "bytes": 187962
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 13,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 2,
+            "wallMs": 6175,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 4,
+            "wallMs": 4,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 277,
+            "wallMs": 6546,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 455,
+            "wallMs": 6168,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 415,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 12,
+            "wallMs": 410,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 158,
+          "collectedByMetrics": 170,
+          "delta": 12
+        }
+      }
+    },
+    {
+      "cell": "50/0",
+      "selection": "largest admissionMs in condition, paired with the same Object's typical warm turn",
+      "baseline": {
+        "admission": 225,
+        "driver": 857.5,
+        "sync": 101
+      },
+      "typical": {
+        "target": "yielded",
+        "history": 50,
+        "ttftMs": 0,
+        "object": 4,
+        "sample": "e0-t4",
+        "driverMs": 864,
+        "admissionMs": 252,
+        "driverStartedMs": 1791538334959,
+        "observedMs": 1791538335823,
+        "submitClockMs": 0,
+        "syncClockMs": 74,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "sql": 220,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 56,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538334277,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538334277
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538334277,
+            "value": 1791538334327
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538334277
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538334277
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538334277
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538334277
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538334277
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538334277
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538334277
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538334340,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538334340
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538334340,
+            "value": 1791538335340
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538334340
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538334340
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538334340
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538334340
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538334341
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538334341
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538334341,
+            "value": 1791538334391
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538334341
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538334341
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538334341
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538334341
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538334351
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538334418
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538334429
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538334490
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538334558
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538334628
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538334699
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538334761
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538334827
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538334898
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538334963
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538334963
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538334963
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538334963
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538334963
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538334963
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538334963
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538334963
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538334963
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538334963
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538334963
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538334963,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538334341,
+            "objectEndMs": 1791538334418,
+            "providerArrivalMs": 1791538335213,
+            "providerFirstByteMs": 1791538335213,
+            "providerEndMs": 1791538335213,
+            "providerColo": "SJC",
+            "bytes": 35723
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538334418,
+            "objectEndMs": 1791538334490,
+            "providerArrivalMs": 1791538335292,
+            "providerFirstByteMs": 1791538335292,
+            "providerEndMs": 1791538335292,
+            "providerColo": "SJC",
+            "bytes": 36173
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538334490,
+            "objectEndMs": 1791538334558,
+            "providerArrivalMs": 1791538335361,
+            "providerFirstByteMs": 1791538335361,
+            "providerEndMs": 1791538335361,
+            "providerColo": "SJC",
+            "bytes": 36623
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538334558,
+            "objectEndMs": 1791538334628,
+            "providerArrivalMs": 1791538335424,
+            "providerFirstByteMs": 1791538335424,
+            "providerEndMs": 1791538335424,
+            "providerColo": "SJC",
+            "bytes": 37073
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538334628,
+            "objectEndMs": 1791538334699,
+            "providerArrivalMs": 1791538335492,
+            "providerFirstByteMs": 1791538335492,
+            "providerEndMs": 1791538335492,
+            "providerColo": "SJC",
+            "bytes": 37523
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538334699,
+            "objectEndMs": 1791538334761,
+            "providerArrivalMs": 1791538335550,
+            "providerFirstByteMs": 1791538335550,
+            "providerEndMs": 1791538335550,
+            "providerColo": "SJC",
+            "bytes": 37973
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538334761,
+            "objectEndMs": 1791538334827,
+            "providerArrivalMs": 1791538335618,
+            "providerFirstByteMs": 1791538335618,
+            "providerEndMs": 1791538335618,
+            "providerColo": "SJC",
+            "bytes": 38423
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538334827,
+            "objectEndMs": 1791538334898,
+            "providerArrivalMs": 1791538335681,
+            "providerFirstByteMs": 1791538335681,
+            "providerEndMs": 1791538335681,
+            "providerColo": "SJC",
+            "bytes": 38873
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538334898,
+            "objectEndMs": 1791538334963,
+            "providerArrivalMs": 1791538335752,
+            "providerFirstByteMs": 1791538335752,
+            "providerEndMs": 1791538335752,
+            "providerColo": "SJC",
+            "bytes": 39323
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 13,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 598,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 241,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 2,
+            "wallMs": 2,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 186,
+            "wallMs": 807,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 243,
+            "wallMs": 563,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 12,
+            "wallMs": 237,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 38,
+          "collectedByMetrics": 50,
+          "delta": 12
+        }
+      },
+      "slow": {
+        "target": "yielded",
+        "history": 50,
+        "ttftMs": 0,
+        "object": 4,
+        "sample": "e0-t17",
+        "driverMs": 1171,
+        "admissionMs": 485,
+        "driverStartedMs": 1791538346702,
+        "observedMs": 1791538347873,
+        "submitClockMs": 0,
+        "syncClockMs": 353,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "sql": 222,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 58,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538345967,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538345967
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538345967,
+            "value": 1791538346017
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538345967
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538345967
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538345967
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538345967
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538345967
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538345967
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538345967
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538346304,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538346304
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538346304,
+            "value": 1791538347304
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538346304
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538346304
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538346304
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538346304
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538346305
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538346305
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538346305,
+            "value": 1791538346355
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538346305
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538346305
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538346305
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538346305
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538346320
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538346380
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538346383
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538346437
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538346500
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538346562
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538346641
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538346710
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538346783
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538346845
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538346964
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538346964
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538346964
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538346964
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538346964
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538346964
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538346964
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538346964
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538346964
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538346964
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538346964
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538346964,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538346305,
+            "objectEndMs": 1791538346380,
+            "providerArrivalMs": 1791538347190,
+            "providerFirstByteMs": 1791538347192,
+            "providerEndMs": 1791538347192,
+            "providerColo": "SJC",
+            "bytes": 91993
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538346380,
+            "objectEndMs": 1791538346437,
+            "providerArrivalMs": 1791538347258,
+            "providerFirstByteMs": 1791538347259,
+            "providerEndMs": 1791538347259,
+            "providerColo": "SJC",
+            "bytes": 92446
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538346437,
+            "objectEndMs": 1791538346500,
+            "providerArrivalMs": 1791538347323,
+            "providerFirstByteMs": 1791538347325,
+            "providerEndMs": 1791538347325,
+            "providerColo": "SJC",
+            "bytes": 92899
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538346500,
+            "objectEndMs": 1791538346562,
+            "providerArrivalMs": 1791538347397,
+            "providerFirstByteMs": 1791538347398,
+            "providerEndMs": 1791538347398,
+            "providerColo": "SJC",
+            "bytes": 93352
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538346562,
+            "objectEndMs": 1791538346641,
+            "providerArrivalMs": 1791538347469,
+            "providerFirstByteMs": 1791538347471,
+            "providerEndMs": 1791538347471,
+            "providerColo": "SJC",
+            "bytes": 93805
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538346641,
+            "objectEndMs": 1791538346710,
+            "providerArrivalMs": 1791538347534,
+            "providerFirstByteMs": 1791538347536,
+            "providerEndMs": 1791538347536,
+            "providerColo": "SJC",
+            "bytes": 94258
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538346710,
+            "objectEndMs": 1791538346783,
+            "providerArrivalMs": 1791538347600,
+            "providerFirstByteMs": 1791538347601,
+            "providerEndMs": 1791538347601,
+            "providerColo": "SJC",
+            "bytes": 94711
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538346783,
+            "objectEndMs": 1791538346845,
+            "providerArrivalMs": 1791538347673,
+            "providerFirstByteMs": 1791538347675,
+            "providerEndMs": 1791538347675,
+            "providerColo": "SJC",
+            "bytes": 95164
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538346845,
+            "objectEndMs": 1791538346964,
+            "providerArrivalMs": 1791538347770,
+            "providerFirstByteMs": 1791538347771,
+            "providerEndMs": 1791538347771,
+            "providerColo": "SJC",
+            "bytes": 95617
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 12,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 678,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 479,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 3,
+            "wallMs": 3,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 150,
+            "wallMs": 841,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 270,
+            "wallMs": 642,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 137,
+            "wallMs": 475,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 170,
+          "collectedByMetrics": 179,
+          "delta": 9
+        }
+      }
+    },
+    {
+      "cell": "50/0",
+      "selection": "largest driverMs in condition, paired with the same Object's typical warm turn",
+      "baseline": {
+        "admission": 217.5,
+        "driver": 840.5,
+        "sync": 81
+      },
+      "typical": {
+        "target": "yielded",
+        "history": 50,
+        "ttftMs": 0,
+        "object": 2,
+        "sample": "e0-t17",
+        "driverMs": 836,
+        "admissionMs": 227,
+        "driverStartedMs": 1791538569970,
+        "observedMs": 1791538570806,
+        "submitClockMs": 0,
+        "syncClockMs": 90,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "sql": 222,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 58,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538569297,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538569297
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538569297,
+            "value": 1791538569347
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538569297
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538569297
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538569297
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538569297
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538569297
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538569297
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538569297
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538569361,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538569361
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538569361,
+            "value": 1791538570361
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538569361
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538569361
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538569361
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538569361
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538569362
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538569362
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538569362,
+            "value": 1791538569412
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538569362
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538569362
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538569362
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538569362
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538569387
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538569448
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538569450
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538569510
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538569582
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538569658
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538569734
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538569799
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538569862
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538569937
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538570012
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538570012
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538570012
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538570012
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538570012
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538570012
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538570012
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538570012
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538570012
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538570012
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538570012
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538570012,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538569362,
+            "objectEndMs": 1791538569448,
+            "providerArrivalMs": 1791538570197,
+            "providerFirstByteMs": 1791538570198,
+            "providerEndMs": 1791538570198,
+            "providerColo": "LAX",
+            "bytes": 91993
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538569448,
+            "objectEndMs": 1791538569510,
+            "providerArrivalMs": 1791538570260,
+            "providerFirstByteMs": 1791538570262,
+            "providerEndMs": 1791538570262,
+            "providerColo": "LAX",
+            "bytes": 92446
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538569510,
+            "objectEndMs": 1791538569582,
+            "providerArrivalMs": 1791538570330,
+            "providerFirstByteMs": 1791538570331,
+            "providerEndMs": 1791538570331,
+            "providerColo": "LAX",
+            "bytes": 92899
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538569582,
+            "objectEndMs": 1791538569658,
+            "providerArrivalMs": 1791538570392,
+            "providerFirstByteMs": 1791538570394,
+            "providerEndMs": 1791538570394,
+            "providerColo": "LAX",
+            "bytes": 93352
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538569658,
+            "objectEndMs": 1791538569734,
+            "providerArrivalMs": 1791538570463,
+            "providerFirstByteMs": 1791538570464,
+            "providerEndMs": 1791538570464,
+            "providerColo": "LAX",
+            "bytes": 93805
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538569734,
+            "objectEndMs": 1791538569799,
+            "providerArrivalMs": 1791538570524,
+            "providerFirstByteMs": 1791538570526,
+            "providerEndMs": 1791538570526,
+            "providerColo": "LAX",
+            "bytes": 94258
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538569799,
+            "objectEndMs": 1791538569862,
+            "providerArrivalMs": 1791538570590,
+            "providerFirstByteMs": 1791538570592,
+            "providerEndMs": 1791538570592,
+            "providerColo": "LAX",
+            "bytes": 94711
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538569862,
+            "objectEndMs": 1791538569937,
+            "providerArrivalMs": 1791538570662,
+            "providerFirstByteMs": 1791538570663,
+            "providerEndMs": 1791538570663,
+            "providerColo": "LAX",
+            "bytes": 95164
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538569937,
+            "objectEndMs": 1791538570012,
+            "providerArrivalMs": 1791538570728,
+            "providerFirstByteMs": 1791538570729,
+            "providerEndMs": 1791538570729,
+            "providerColo": "LAX",
+            "bytes": 95617
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 17,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 601,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 219,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 2,
+            "wallMs": 2,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 222,
+            "wallMs": 580,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 141,
+            "wallMs": 767,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 12,
+            "wallMs": 241,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 168,
+          "collectedByMetrics": 178,
+          "delta": 10
+        }
+      },
+      "slow": {
+        "target": "yielded",
+        "history": 50,
+        "ttftMs": 0,
+        "object": 2,
+        "sample": "e0-t8",
+        "driverMs": 1229,
+        "admissionMs": 230,
+        "driverStartedMs": 1791538561006,
+        "observedMs": 1791538562235,
+        "submitClockMs": 0,
+        "syncClockMs": 99,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "sql": 220,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 56,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538560356,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538560356
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538560356,
+            "value": 1791538560406
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538560356
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538560356
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538560356
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538560356
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538560356
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538560356
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538560356
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538560428,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538560428
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538560428,
+            "value": 1791538561428
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538560428
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538560428
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538560428
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538560428
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538560430
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538560430
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538560430,
+            "value": 1791538560480
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538560430
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538560430
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538560430
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538560430
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538560455
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538560521
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538560523
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538560591
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538560662
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538560740
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538560810
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538560879
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538560948
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538561611
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538561675
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538561675
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538561675
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538561675
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538561675
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538561675
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538561675
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538561675
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538561675
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538561675
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538561675
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538561675,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538560430,
+            "objectEndMs": 1791538560521,
+            "providerArrivalMs": 1791538561232,
+            "providerFirstByteMs": 1791538561232,
+            "providerEndMs": 1791538561233,
+            "providerColo": "LAX",
+            "bytes": 58463
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538560521,
+            "objectEndMs": 1791538560591,
+            "providerArrivalMs": 1791538561300,
+            "providerFirstByteMs": 1791538561300,
+            "providerEndMs": 1791538561300,
+            "providerColo": "LAX",
+            "bytes": 58913
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538560591,
+            "objectEndMs": 1791538560662,
+            "providerArrivalMs": 1791538561367,
+            "providerFirstByteMs": 1791538561367,
+            "providerEndMs": 1791538561367,
+            "providerColo": "LAX",
+            "bytes": 59366
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538560662,
+            "objectEndMs": 1791538560740,
+            "providerArrivalMs": 1791538561452,
+            "providerFirstByteMs": 1791538561452,
+            "providerEndMs": 1791538561452,
+            "providerColo": "LAX",
+            "bytes": 59819
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538560740,
+            "objectEndMs": 1791538560810,
+            "providerArrivalMs": 1791538561515,
+            "providerFirstByteMs": 1791538561515,
+            "providerEndMs": 1791538561515,
+            "providerColo": "LAX",
+            "bytes": 60272
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538560810,
+            "objectEndMs": 1791538560879,
+            "providerArrivalMs": 1791538561582,
+            "providerFirstByteMs": 1791538561582,
+            "providerEndMs": 1791538561582,
+            "providerColo": "LAX",
+            "bytes": 60725
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538560879,
+            "objectEndMs": 1791538560948,
+            "providerArrivalMs": 1791538561654,
+            "providerFirstByteMs": 1791538561654,
+            "providerEndMs": 1791538561654,
+            "providerColo": "LAX",
+            "bytes": 61178
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538560948,
+            "objectEndMs": 1791538561611,
+            "providerArrivalMs": 1791538562098,
+            "providerFirstByteMs": 1791538562098,
+            "providerEndMs": 1791538562100,
+            "providerColo": "LAX",
+            "bytes": 61631
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538561611,
+            "objectEndMs": 1791538561675,
+            "providerArrivalMs": 1791538562163,
+            "providerFirstByteMs": 1791538562163,
+            "providerEndMs": 1791538562163,
+            "providerColo": "LAX",
+            "bytes": 62084
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 18,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 988,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 2,
+            "wallMs": 2,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 236,
+            "wallMs": 976,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 125,
+            "wallMs": 1149,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 2,
+            "wallMs": 218,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 9,
+            "wallMs": 232,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 78,
+          "collectedByMetrics": 87,
+          "delta": 9
+        }
+      }
+    },
+    {
+      "cell": "50/400",
+      "selection": "largest admissionMs in condition, paired with the same Object's typical warm turn",
+      "baseline": {
+        "admission": 247.5,
+        "driver": 4972,
+        "sync": 60
+      },
+      "typical": {
+        "target": "yielded",
+        "history": 50,
+        "ttftMs": 400,
+        "object": 3,
+        "sample": "e0-t16",
+        "driverMs": 4972,
+        "admissionMs": 280,
+        "driverStartedMs": 1791538613478,
+        "observedMs": 1791538618450,
+        "submitClockMs": 0,
+        "syncClockMs": 62,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "sql": 222,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 58,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538613428,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538613428
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538613428,
+            "value": 1791538613478
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538613428
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538613428
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538613428
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538613428
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538613428
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538613428
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538613428
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538613478,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538613478
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538613478,
+            "value": 1791538614478
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538613478
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538613478
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538613478
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538613478
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538613478
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538613478
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538613478,
+            "value": 1791538613528
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538613478
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538613478
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538613478
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538613478
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538613490
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538613598
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538614064
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538614624
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538615167
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538615697
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538616227
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538616758
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538617282
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538617806
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538618319
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538618319
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538618319
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538618319
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538618319
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538618319
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538618319
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538618319
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538618319
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538618319
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538618319
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538618319,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538613478,
+            "objectEndMs": 1791538614064,
+            "providerArrivalMs": 1791538613737,
+            "providerFirstByteMs": 1791538614137,
+            "providerEndMs": 1791538614197,
+            "providerColo": "DFW",
+            "bytes": 88267
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538614064,
+            "objectEndMs": 1791538614624,
+            "providerArrivalMs": 1791538614261,
+            "providerFirstByteMs": 1791538614661,
+            "providerEndMs": 1791538614721,
+            "providerColo": "DFW",
+            "bytes": 88720
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538614624,
+            "objectEndMs": 1791538615167,
+            "providerArrivalMs": 1791538614781,
+            "providerFirstByteMs": 1791538615181,
+            "providerEndMs": 1791538615241,
+            "providerColo": "DFW",
+            "bytes": 89173
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538615167,
+            "objectEndMs": 1791538615697,
+            "providerArrivalMs": 1791538615304,
+            "providerFirstByteMs": 1791538615704,
+            "providerEndMs": 1791538615764,
+            "providerColo": "DFW",
+            "bytes": 89626
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538615697,
+            "objectEndMs": 1791538616227,
+            "providerArrivalMs": 1791538615827,
+            "providerFirstByteMs": 1791538616227,
+            "providerEndMs": 1791538616287,
+            "providerColo": "DFW",
+            "bytes": 90079
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538616227,
+            "objectEndMs": 1791538616758,
+            "providerArrivalMs": 1791538616352,
+            "providerFirstByteMs": 1791538616752,
+            "providerEndMs": 1791538616812,
+            "providerColo": "DFW",
+            "bytes": 90532
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538616758,
+            "objectEndMs": 1791538617282,
+            "providerArrivalMs": 1791538616869,
+            "providerFirstByteMs": 1791538617269,
+            "providerEndMs": 1791538617329,
+            "providerColo": "DFW",
+            "bytes": 90985
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538617282,
+            "objectEndMs": 1791538617806,
+            "providerArrivalMs": 1791538617391,
+            "providerFirstByteMs": 1791538617791,
+            "providerEndMs": 1791538617851,
+            "providerColo": "DFW",
+            "bytes": 91438
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538617806,
+            "objectEndMs": 1791538618319,
+            "providerArrivalMs": 1791538617910,
+            "providerFirstByteMs": 1791538618310,
+            "providerEndMs": 1791538618360,
+            "providerColo": "DFW",
+            "bytes": 91891
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 54,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 4685,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 1,
+            "wallMs": 2,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 237,
+            "wallMs": 4680,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 131,
+            "wallMs": 4873,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 275,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 5,
+            "wallMs": 271,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 158,
+          "collectedByMetrics": 170,
+          "delta": 12
+        }
+      },
+      "slow": {
+        "target": "yielded",
+        "history": 50,
+        "ttftMs": 400,
+        "object": 3,
+        "sample": "e0-t19",
+        "driverMs": 5138,
+        "admissionMs": 405,
+        "driverStartedMs": 1791538628719,
+        "observedMs": 1791538633857,
+        "submitClockMs": 0,
+        "syncClockMs": 64,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "sql": 222,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 58,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538628676,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538628676
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538628676,
+            "value": 1791538628726
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538628676
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538628676
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538628676
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538628676
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538628676
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538628676
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538628676
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538628726,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538628726
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538628726,
+            "value": 1791538629726
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538628726
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538628726
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538628726
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538628726
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538628726
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538628726
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538628726,
+            "value": 1791538628776
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538628726
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538628726
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538628726
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538628726
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538628740
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538628849
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538629353
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538629939
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538630497
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538631039
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538631574
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538632109
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538632635
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538633165
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538633685
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538633685
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538633685
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538633685
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538633685
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538633685
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538633685
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538633685
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538633685
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538633685
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538633685
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538633685,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538628726,
+            "objectEndMs": 1791538629353,
+            "providerArrivalMs": 1791538629102,
+            "providerFirstByteMs": 1791538629502,
+            "providerEndMs": 1791538629562,
+            "providerColo": "DFW",
+            "bytes": 99445
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538629353,
+            "objectEndMs": 1791538629939,
+            "providerArrivalMs": 1791538629628,
+            "providerFirstByteMs": 1791538630028,
+            "providerEndMs": 1791538630088,
+            "providerColo": "DFW",
+            "bytes": 99898
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538629939,
+            "objectEndMs": 1791538630497,
+            "providerArrivalMs": 1791538630147,
+            "providerFirstByteMs": 1791538630547,
+            "providerEndMs": 1791538630607,
+            "providerColo": "DFW",
+            "bytes": 100351
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538630497,
+            "objectEndMs": 1791538631039,
+            "providerArrivalMs": 1791538630666,
+            "providerFirstByteMs": 1791538631066,
+            "providerEndMs": 1791538631126,
+            "providerColo": "DFW",
+            "bytes": 100804
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538631039,
+            "objectEndMs": 1791538631574,
+            "providerArrivalMs": 1791538631187,
+            "providerFirstByteMs": 1791538631587,
+            "providerEndMs": 1791538631647,
+            "providerColo": "DFW",
+            "bytes": 101257
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538631574,
+            "objectEndMs": 1791538632109,
+            "providerArrivalMs": 1791538631712,
+            "providerFirstByteMs": 1791538632112,
+            "providerEndMs": 1791538632172,
+            "providerColo": "DFW",
+            "bytes": 101710
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538632109,
+            "objectEndMs": 1791538632635,
+            "providerArrivalMs": 1791538632237,
+            "providerFirstByteMs": 1791538632637,
+            "providerEndMs": 1791538632697,
+            "providerColo": "DFW",
+            "bytes": 102163
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538632635,
+            "objectEndMs": 1791538633165,
+            "providerArrivalMs": 1791538632764,
+            "providerFirstByteMs": 1791538633164,
+            "providerEndMs": 1791538633224,
+            "providerColo": "DFW",
+            "bytes": 102616
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538633165,
+            "objectEndMs": 1791538633685,
+            "providerArrivalMs": 1791538633290,
+            "providerFirstByteMs": 1791538633690,
+            "providerEndMs": 1791538633740,
+            "providerColo": "DFW",
+            "bytes": 111005
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 53,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 3,
+            "wallMs": 4727,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 2,
+            "wallMs": 2,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 287,
+            "wallMs": 4724,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 255,
+            "wallMs": 5037,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 9,
+            "wallMs": 396,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 189,
+          "collectedByMetrics": 198,
+          "delta": 9
+        }
+      }
+    },
+    {
+      "cell": "50/400",
+      "selection": "largest driverMs in condition, paired with the same Object's typical warm turn",
+      "baseline": {
+        "admission": 284,
+        "driver": 5113.5,
+        "sync": 69.5
+      },
+      "typical": {
+        "target": "yielded",
+        "history": 50,
+        "ttftMs": 400,
+        "object": 0,
+        "sample": "e0-t14",
+        "driverMs": 5123,
+        "admissionMs": 302,
+        "driverStartedMs": 1791538514781,
+        "observedMs": 1791538519904,
+        "submitClockMs": 0,
+        "syncClockMs": 70,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "sql": 222,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 58,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538514729,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538514729
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538514729,
+            "value": 1791538514779
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538514729
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538514729
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538514729
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538514729
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538514729
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538514729
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538514729
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538514786,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538514786
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538514786,
+            "value": 1791538515786
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538514786
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538514786
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538514786
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538514786
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538514787
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538514787
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538514787,
+            "value": 1791538514837
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538514787
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538514787
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538514787
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538514787
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538514799
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538514921
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538515388
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538515956
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538516509
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538517060
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538517606
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538518142
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538518683
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538519219
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538519755
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538519755
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538519755
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538519755
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538519755
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538519755
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538519755
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538519755
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538519755
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538519755
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538519755
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538519755,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538514787,
+            "objectEndMs": 1791538515388,
+            "providerArrivalMs": 1791538515061,
+            "providerFirstByteMs": 1791538515461,
+            "providerEndMs": 1791538515521,
+            "providerColo": "DFW",
+            "bytes": 80815
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538515388,
+            "objectEndMs": 1791538515956,
+            "providerArrivalMs": 1791538515595,
+            "providerFirstByteMs": 1791538515995,
+            "providerEndMs": 1791538516055,
+            "providerColo": "DFW",
+            "bytes": 81268
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538515956,
+            "objectEndMs": 1791538516509,
+            "providerArrivalMs": 1791538516127,
+            "providerFirstByteMs": 1791538516527,
+            "providerEndMs": 1791538516587,
+            "providerColo": "DFW",
+            "bytes": 81721
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538516509,
+            "objectEndMs": 1791538517060,
+            "providerArrivalMs": 1791538516672,
+            "providerFirstByteMs": 1791538517072,
+            "providerEndMs": 1791538517132,
+            "providerColo": "DFW",
+            "bytes": 82174
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538517060,
+            "objectEndMs": 1791538517606,
+            "providerArrivalMs": 1791538517206,
+            "providerFirstByteMs": 1791538517606,
+            "providerEndMs": 1791538517666,
+            "providerColo": "DFW",
+            "bytes": 82627
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538517606,
+            "objectEndMs": 1791538518142,
+            "providerArrivalMs": 1791538517737,
+            "providerFirstByteMs": 1791538518137,
+            "providerEndMs": 1791538518197,
+            "providerColo": "DFW",
+            "bytes": 83080
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538518142,
+            "objectEndMs": 1791538518683,
+            "providerArrivalMs": 1791538518275,
+            "providerFirstByteMs": 1791538518675,
+            "providerEndMs": 1791538518735,
+            "providerColo": "DFW",
+            "bytes": 83533
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538518683,
+            "objectEndMs": 1791538519219,
+            "providerArrivalMs": 1791538518810,
+            "providerFirstByteMs": 1791538519210,
+            "providerEndMs": 1791538519270,
+            "providerColo": "DFW",
+            "bytes": 83986
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538519219,
+            "objectEndMs": 1791538519755,
+            "providerArrivalMs": 1791538519355,
+            "providerFirstByteMs": 1791538519755,
+            "providerEndMs": 1791538519805,
+            "providerColo": "DFW",
+            "bytes": 84439
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 53,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 4813,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 2,
+            "wallMs": 2,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 285,
+            "wallMs": 4809,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 135,
+            "wallMs": 5018,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 297,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 6,
+            "wallMs": 294,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 139,
+          "collectedByMetrics": 150,
+          "delta": 11
+        }
+      },
+      "slow": {
+        "target": "yielded",
+        "history": 50,
+        "ttftMs": 400,
+        "object": 0,
+        "sample": "e0-t9",
+        "driverMs": 5226,
+        "admissionMs": 395,
+        "driverStartedMs": 1791538488440,
+        "observedMs": 1791538493666,
+        "submitClockMs": 0,
+        "syncClockMs": 74,
+        "alarmBeforeSyncReturn": true,
+        "buildVerified": true,
+        "residentVerified": true,
+        "fingerprintVerified": true,
+        "counts": {
+          "transaction": 34,
+          "transaction:get": 7,
+          "transaction:put": 3,
+          "transaction:getAlarm": 1,
+          "transaction:setAlarm": 2,
+          "sql": 220,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "sync": 1,
+          "sql:ranges": 56,
+          "delete": 1,
+          "setAlarm": 1,
+          "transaction:deleteAlarm": 1
+        },
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 1791538488397,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 1791538488397
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538488397,
+            "value": 1791538488447
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 1791538488397
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 1791538488397
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 1791538488397
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 1791538488397
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 1791538488397
+          },
+          {
+            "name": "submit:return",
+            "atMs": 1791538488397
+          },
+          {
+            "name": "submit:sync:before",
+            "atMs": 1791538488397
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 1791538488464,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 1791538488464
+          },
+          {
+            "name": "transaction:setAlarm",
+            "atMs": 1791538488464,
+            "value": 1791538489464
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 1791538488464
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538488464
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538488464
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 1791538488464
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 1791538488465
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 1791538488465
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 1791538488465,
+            "value": 1791538488515
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 1791538488465
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 1791538488465
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 1791538488465
+          },
+          {
+            "name": "provider:first",
+            "atMs": 1791538488465
+          },
+          {
+            "name": "submit:sync:after",
+            "atMs": 1791538488471
+          },
+          {
+            "name": "await:start",
+            "atMs": 1791538488594
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538489085
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538489672
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538490245
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538490803
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538491352
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538491899
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538492439
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538492980
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1791538493508
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 1791538493508
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 1791538493508
+          },
+          {
+            "name": "await:return",
+            "atMs": 1791538493508
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 1791538493508
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 1791538493508
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 1791538493508
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 1791538493508
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 1791538493508
+          },
+          {
+            "name": "transaction:deleteAlarm",
+            "atMs": 1791538493508
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 1791538493508
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 1791538493508,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 1791538488465,
+            "objectEndMs": 1791538489085,
+            "providerArrivalMs": 1791538488814,
+            "providerFirstByteMs": 1791538489214,
+            "providerEndMs": 1791538489274,
+            "providerColo": "DFW",
+            "bytes": 62185
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1791538489085,
+            "objectEndMs": 1791538489672,
+            "providerArrivalMs": 1791538489354,
+            "providerFirstByteMs": 1791538489754,
+            "providerEndMs": 1791538489814,
+            "providerColo": "DFW",
+            "bytes": 62638
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1791538489672,
+            "objectEndMs": 1791538490245,
+            "providerArrivalMs": 1791538489895,
+            "providerFirstByteMs": 1791538490295,
+            "providerEndMs": 1791538490355,
+            "providerColo": "DFW",
+            "bytes": 63091
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1791538490245,
+            "objectEndMs": 1791538490803,
+            "providerArrivalMs": 1791538490433,
+            "providerFirstByteMs": 1791538490833,
+            "providerEndMs": 1791538490893,
+            "providerColo": "DFW",
+            "bytes": 63544
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1791538490803,
+            "objectEndMs": 1791538491352,
+            "providerArrivalMs": 1791538490966,
+            "providerFirstByteMs": 1791538491366,
+            "providerEndMs": 1791538491426,
+            "providerColo": "DFW",
+            "bytes": 63997
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1791538491352,
+            "objectEndMs": 1791538491899,
+            "providerArrivalMs": 1791538491501,
+            "providerFirstByteMs": 1791538491901,
+            "providerEndMs": 1791538491961,
+            "providerColo": "DFW",
+            "bytes": 64450
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1791538491899,
+            "objectEndMs": 1791538492439,
+            "providerArrivalMs": 1791538492036,
+            "providerFirstByteMs": 1791538492436,
+            "providerEndMs": 1791538492496,
+            "providerColo": "DFW",
+            "bytes": 64903
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1791538492439,
+            "objectEndMs": 1791538492980,
+            "providerArrivalMs": 1791538492570,
+            "providerFirstByteMs": 1791538492970,
+            "providerEndMs": 1791538493030,
+            "providerColo": "DFW",
+            "bytes": 65356
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1791538492980,
+            "objectEndMs": 1791538493508,
+            "providerArrivalMs": 1791538493105,
+            "providerFirstByteMs": 1791538493505,
+            "providerEndMs": 1791538493555,
+            "providerColo": "DFW",
+            "bytes": 65809
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "worker/metrics",
+            "scope": "worker",
+            "cpuMs": 0,
+            "wallMs": 51,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/await",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 4824,
+            "outcome": "ok"
+          },
+          {
+            "kind": "object/metrics",
+            "scope": "object",
+            "cpuMs": 1,
+            "wallMs": 1,
+            "outcome": "ok"
+          },
+          {
+            "kind": "await",
+            "scope": "object",
+            "cpuMs": 297,
+            "wallMs": 4820,
+            "outcome": "ok"
+          },
+          {
+            "kind": "alarm",
+            "scope": "object",
+            "cpuMs": 127,
+            "wallMs": 5002,
+            "outcome": "ok"
+          },
+          {
+            "kind": "worker/submit",
+            "scope": "worker",
+            "cpuMs": 1,
+            "wallMs": 389,
+            "outcome": "ok"
+          },
+          {
+            "kind": "submit",
+            "scope": "object",
+            "cpuMs": 110,
+            "wallMs": 388,
+            "outcome": "ok"
+          }
+        ],
+        "gcSentinels": {
+          "atBegin": 90,
+          "collectedByMetrics": 100,
+          "delta": 10
+        }
+      }
+    }
+  ]
+}

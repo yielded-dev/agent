@@ -1,0 +1,2523 @@
+{
+  "run": "tail-latency-mv0rdtk0-58a3e4ae",
+  "interpretation": "Invocation CPU/wall and caller RPC spans overlap; do not add them. Console event metadata is not an independent wall clock. Missing spans remain null.",
+  "rows": [
+    {
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "object": 3,
+      "sample": "e0-t4",
+      "driverMs": 1130,
+      "admissionMs": 368,
+      "syncClockMs": 114,
+      "callerRpcMs": 353,
+      "rpcEvents": [
+        {
+          "phase": "submit:rpc:after",
+          "atMs": 1791538337447
+        },
+        {
+          "phase": "submit:rpc:before",
+          "atMs": 1791538337094
+        }
+      ],
+      "invocations": [
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "worker",
+          "timestamp": 1791538338248,
+          "cpuMs": 0,
+          "wallMs": 20,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/await",
+          "scope": "worker",
+          "timestamp": 1791538338211,
+          "cpuMs": 1,
+          "wallMs": 750,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/submit",
+          "scope": "worker",
+          "timestamp": 1791538337447,
+          "cpuMs": 1,
+          "wallMs": 353,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "object",
+          "timestamp": 1791538337289,
+          "cpuMs": 2,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "await",
+          "scope": "object",
+          "timestamp": 1791538337244,
+          "cpuMs": 322,
+          "wallMs": 733,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "alarm",
+          "scope": "object",
+          "timestamp": 1791538337179,
+          "cpuMs": 262,
+          "wallMs": 1056,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "submit",
+          "scope": "object",
+          "timestamp": 1791538336412,
+          "cpuMs": 14,
+          "wallMs": 346,
+          "outcome": "ok"
+        },
+        {
+          "role": "driver",
+          "kind": "driver",
+          "scope": "worker",
+          "timestamp": 1791538338211,
+          "cpuMs": 6,
+          "wallMs": 1133,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 8,
+          "timestamp": 1791538338129,
+          "cpuMs": 2,
+          "wallMs": 5,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 7,
+          "timestamp": 1791538338045,
+          "cpuMs": 2,
+          "wallMs": 4,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 6,
+          "timestamp": 1791538337952,
+          "cpuMs": 3,
+          "wallMs": 5,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 5,
+          "timestamp": 1791538337870,
+          "cpuMs": 4,
+          "wallMs": 7,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 4,
+          "timestamp": 1791538337789,
+          "cpuMs": 2,
+          "wallMs": 5,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 3,
+          "timestamp": 1791538337703,
+          "cpuMs": 3,
+          "wallMs": 6,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 2,
+          "timestamp": 1791538337603,
+          "cpuMs": 3,
+          "wallMs": 5,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 1,
+          "timestamp": 1791538337524,
+          "cpuMs": 3,
+          "wallMs": 5,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 0,
+          "timestamp": 1791538337449,
+          "cpuMs": 2,
+          "wallMs": 5,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "object": 3,
+      "sample": "e0-t15",
+      "driverMs": 1676,
+      "admissionMs": 957,
+      "syncClockMs": 97,
+      "callerRpcMs": 344,
+      "rpcEvents": [
+        {
+          "phase": "submit:rpc:after",
+          "atMs": 1791538351631
+        },
+        {
+          "phase": "submit:rpc:before",
+          "atMs": 1791538351287
+        }
+      ],
+      "invocations": [
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "worker",
+          "timestamp": 1791538352399,
+          "cpuMs": 0,
+          "wallMs": 23,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/await",
+          "scope": "worker",
+          "timestamp": 1791538352355,
+          "cpuMs": 6,
+          "wallMs": 711,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/submit",
+          "scope": "worker",
+          "timestamp": 1791538351631,
+          "cpuMs": 15,
+          "wallMs": 355,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "object",
+          "timestamp": 1791538351578,
+          "cpuMs": 3,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "await",
+          "scope": "object",
+          "timestamp": 1791538351529,
+          "cpuMs": 333,
+          "wallMs": 685,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "alarm",
+          "scope": "object",
+          "timestamp": 1791538351468,
+          "cpuMs": 255,
+          "wallMs": 992,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "submit",
+          "scope": "object",
+          "timestamp": 1791538350915,
+          "cpuMs": 11,
+          "wallMs": 368,
+          "outcome": "ok"
+        },
+        {
+          "role": "driver",
+          "kind": "driver",
+          "scope": "worker",
+          "timestamp": 1791538352363,
+          "cpuMs": 2,
+          "wallMs": 1676,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 8,
+          "timestamp": 1791538352279,
+          "cpuMs": 2,
+          "wallMs": 5,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 7,
+          "timestamp": 1791538352193,
+          "cpuMs": 3,
+          "wallMs": 6,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 6,
+          "timestamp": 1791538352105,
+          "cpuMs": 3,
+          "wallMs": 6,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 5,
+          "timestamp": 1791538352030,
+          "cpuMs": 4,
+          "wallMs": 6,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 3,
+          "timestamp": 1791538351875,
+          "cpuMs": 2,
+          "wallMs": 4,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 2,
+          "timestamp": 1791538351797,
+          "cpuMs": 3,
+          "wallMs": 6,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 1,
+          "timestamp": 1791538351717,
+          "cpuMs": 2,
+          "wallMs": 4,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 0,
+          "timestamp": 1791538351644,
+          "cpuMs": 3,
+          "wallMs": 5,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "object": 3,
+      "sample": "e0-t9",
+      "driverMs": 5325,
+      "admissionMs": 438,
+      "syncClockMs": 101,
+      "callerRpcMs": 430,
+      "rpcEvents": [
+        {
+          "phase": "submit:rpc:after",
+          "atMs": 1791538413692
+        },
+        {
+          "phase": "submit:rpc:before",
+          "atMs": 1791538413262
+        }
+      ],
+      "invocations": [
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "worker",
+          "timestamp": 1791538418635,
+          "cpuMs": 1,
+          "wallMs": 38,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/await",
+          "scope": "worker",
+          "timestamp": 1791538418580,
+          "cpuMs": 1,
+          "wallMs": 4882,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "object",
+          "timestamp": 1791538418535,
+          "cpuMs": 2,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "await",
+          "scope": "object",
+          "timestamp": 1791538418480,
+          "cpuMs": 319,
+          "wallMs": 4878,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "alarm",
+          "scope": "object",
+          "timestamp": 1791538418432,
+          "cpuMs": 252,
+          "wallMs": 5196,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/submit",
+          "scope": "worker",
+          "timestamp": 1791538413692,
+          "cpuMs": 1,
+          "wallMs": 430,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "submit",
+          "scope": "object",
+          "timestamp": 1791538413366,
+          "cpuMs": 13,
+          "wallMs": 409,
+          "outcome": "ok"
+        },
+        {
+          "role": "driver",
+          "kind": "driver",
+          "scope": "worker",
+          "timestamp": 1791538418581,
+          "cpuMs": 1,
+          "wallMs": 5326,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 8,
+          "timestamp": 1791538418488,
+          "cpuMs": 2,
+          "wallMs": 452,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 7,
+          "timestamp": 1791538417954,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 6,
+          "timestamp": 1791538417404,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 5,
+          "timestamp": 1791538416863,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 4,
+          "timestamp": 1791538416327,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 3,
+          "timestamp": 1791538415788,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 2,
+          "timestamp": 1791538415252,
+          "cpuMs": 4,
+          "wallMs": 463,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 1,
+          "timestamp": 1791538414714,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 0,
+          "timestamp": 1791538414150,
+          "cpuMs": 3,
+          "wallMs": 463,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "object": 3,
+      "sample": "e0-t13",
+      "driverMs": 5567,
+      "admissionMs": 689,
+      "syncClockMs": 290,
+      "callerRpcMs": 682,
+      "rpcEvents": [
+        {
+          "phase": "submit:rpc:after",
+          "atMs": 1791538435548
+        },
+        {
+          "phase": "submit:rpc:before",
+          "atMs": 1791538434866
+        }
+      ],
+      "invocations": [
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "worker",
+          "timestamp": 1791538440475,
+          "cpuMs": 0,
+          "wallMs": 32,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/await",
+          "scope": "worker",
+          "timestamp": 1791538440428,
+          "cpuMs": 1,
+          "wallMs": 4871,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "object",
+          "timestamp": 1791538440367,
+          "cpuMs": 3,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "await",
+          "scope": "object",
+          "timestamp": 1791538440324,
+          "cpuMs": 359,
+          "wallMs": 4865,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "alarm",
+          "scope": "object",
+          "timestamp": 1791538440276,
+          "cpuMs": 398,
+          "wallMs": 5480,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/submit",
+          "scope": "worker",
+          "timestamp": 1791538435548,
+          "cpuMs": 2,
+          "wallMs": 683,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "submit",
+          "scope": "object",
+          "timestamp": 1791538435150,
+          "cpuMs": 10,
+          "wallMs": 681,
+          "outcome": "ok"
+        },
+        {
+          "role": "driver",
+          "kind": "driver",
+          "scope": "worker",
+          "timestamp": 1791538440429,
+          "cpuMs": 1,
+          "wallMs": 5568,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 8,
+          "timestamp": 1791538440337,
+          "cpuMs": 3,
+          "wallMs": 453,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 7,
+          "timestamp": 1791538439798,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 6,
+          "timestamp": 1791538439256,
+          "cpuMs": 4,
+          "wallMs": 463,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 5,
+          "timestamp": 1791538438716,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 4,
+          "timestamp": 1791538438178,
+          "cpuMs": 3,
+          "wallMs": 463,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 3,
+          "timestamp": 1791538437621,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 2,
+          "timestamp": 1791538437079,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 1,
+          "timestamp": 1791538436542,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 0,
+          "timestamp": 1791538436003,
+          "cpuMs": 4,
+          "wallMs": 463,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "object": 6,
+      "sample": "e0-t3",
+      "driverMs": 5174,
+      "admissionMs": 424,
+      "syncClockMs": 115,
+      "callerRpcMs": 407,
+      "rpcEvents": [
+        {
+          "phase": "submit:rpc:after",
+          "atMs": 1791538503575
+        },
+        {
+          "phase": "submit:rpc:before",
+          "atMs": 1791538503168
+        }
+      ],
+      "invocations": [
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "worker",
+          "timestamp": 1791538508353,
+          "cpuMs": 0,
+          "wallMs": 10,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/await",
+          "scope": "worker",
+          "timestamp": 1791538508325,
+          "cpuMs": 1,
+          "wallMs": 4732,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "object",
+          "timestamp": 1791538508243,
+          "cpuMs": 2,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "alarm",
+          "scope": "object",
+          "timestamp": 1791538508191,
+          "cpuMs": 273,
+          "wallMs": 5104,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "await",
+          "scope": "object",
+          "timestamp": 1791538508191,
+          "cpuMs": 402,
+          "wallMs": 4727,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/submit",
+          "scope": "worker",
+          "timestamp": 1791538503575,
+          "cpuMs": 1,
+          "wallMs": 409,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "submit",
+          "scope": "object",
+          "timestamp": 1791538503196,
+          "cpuMs": 11,
+          "wallMs": 400,
+          "outcome": "ok"
+        },
+        {
+          "role": "driver",
+          "kind": "driver",
+          "scope": "worker",
+          "timestamp": 1791538508328,
+          "cpuMs": 2,
+          "wallMs": 5173,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 8,
+          "timestamp": 1791538508257,
+          "cpuMs": 2,
+          "wallMs": 452,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 7,
+          "timestamp": 1791538507742,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 6,
+          "timestamp": 1791538507218,
+          "cpuMs": 6,
+          "wallMs": 465,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 5,
+          "timestamp": 1791538506692,
+          "cpuMs": 3,
+          "wallMs": 461,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 4,
+          "timestamp": 1791538506173,
+          "cpuMs": 3,
+          "wallMs": 463,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 3,
+          "timestamp": 1791538505645,
+          "cpuMs": 3,
+          "wallMs": 463,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 2,
+          "timestamp": 1791538505117,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 1,
+          "timestamp": 1791538504591,
+          "cpuMs": 4,
+          "wallMs": 464,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 0,
+          "timestamp": 1791538504042,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "object": 6,
+      "sample": "e0-t16",
+      "driverMs": 6617,
+      "admissionMs": 427,
+      "syncClockMs": 120,
+      "callerRpcMs": 414,
+      "rpcEvents": [
+        {
+          "phase": "submit:rpc:after",
+          "atMs": 1791538571809
+        },
+        {
+          "phase": "submit:rpc:before",
+          "atMs": 1791538571395
+        }
+      ],
+      "invocations": [
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "worker",
+          "timestamp": 1791538578040,
+          "cpuMs": 0,
+          "wallMs": 13,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/await",
+          "scope": "worker",
+          "timestamp": 1791538577999,
+          "cpuMs": 2,
+          "wallMs": 6175,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "object",
+          "timestamp": 1791538577863,
+          "cpuMs": 4,
+          "wallMs": 4,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "alarm",
+          "scope": "object",
+          "timestamp": 1791538577791,
+          "cpuMs": 277,
+          "wallMs": 6546,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "await",
+          "scope": "object",
+          "timestamp": 1791538577791,
+          "cpuMs": 455,
+          "wallMs": 6168,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/submit",
+          "scope": "worker",
+          "timestamp": 1791538571809,
+          "cpuMs": 1,
+          "wallMs": 415,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "submit",
+          "scope": "object",
+          "timestamp": 1791538571438,
+          "cpuMs": 12,
+          "wallMs": 410,
+          "outcome": "ok"
+        },
+        {
+          "role": "driver",
+          "kind": "driver",
+          "scope": "worker",
+          "timestamp": 1791538578002,
+          "cpuMs": 2,
+          "wallMs": 6616,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 8,
+          "timestamp": 1791538577771,
+          "cpuMs": 4,
+          "wallMs": 453,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 7,
+          "timestamp": 1791538577247,
+          "cpuMs": 3,
+          "wallMs": 463,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 6,
+          "timestamp": 1791538576724,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 5,
+          "timestamp": 1791538576205,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 4,
+          "timestamp": 1791538574374,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 3,
+          "timestamp": 1791538573848,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 2,
+          "timestamp": 1791538573323,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 1,
+          "timestamp": 1791538572800,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 0,
+          "timestamp": 1791538572276,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "object": 4,
+      "sample": "e0-t4",
+      "driverMs": 864,
+      "admissionMs": 252,
+      "syncClockMs": 74,
+      "callerRpcMs": 239,
+      "rpcEvents": [
+        {
+          "phase": "submit:rpc:after",
+          "atMs": 1791538335208
+        },
+        {
+          "phase": "submit:rpc:before",
+          "atMs": 1791538334969
+        }
+      ],
+      "invocations": [
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "worker",
+          "timestamp": 1791538335849,
+          "cpuMs": 1,
+          "wallMs": 13,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/await",
+          "scope": "worker",
+          "timestamp": 1791538335820,
+          "cpuMs": 1,
+          "wallMs": 598,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/submit",
+          "scope": "worker",
+          "timestamp": 1791538335208,
+          "cpuMs": 1,
+          "wallMs": 241,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "object",
+          "timestamp": 1791538335049,
+          "cpuMs": 2,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "alarm",
+          "scope": "object",
+          "timestamp": 1791538334974,
+          "cpuMs": 186,
+          "wallMs": 807,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "await",
+          "scope": "object",
+          "timestamp": 1791538334974,
+          "cpuMs": 243,
+          "wallMs": 563,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "submit",
+          "scope": "object",
+          "timestamp": 1791538334401,
+          "cpuMs": 12,
+          "wallMs": 237,
+          "outcome": "ok"
+        },
+        {
+          "role": "driver",
+          "kind": "driver",
+          "scope": "worker",
+          "timestamp": 1791538335823,
+          "cpuMs": 2,
+          "wallMs": 865,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 8,
+          "timestamp": 1791538335752,
+          "cpuMs": 1,
+          "wallMs": 1,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 6,
+          "timestamp": 1791538335618,
+          "cpuMs": 1,
+          "wallMs": 1,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 5,
+          "timestamp": 1791538335550,
+          "cpuMs": 0,
+          "wallMs": 1,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 4,
+          "timestamp": 1791538335492,
+          "cpuMs": 0,
+          "wallMs": 1,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 3,
+          "timestamp": 1791538335424,
+          "cpuMs": 1,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 2,
+          "timestamp": 1791538335361,
+          "cpuMs": 1,
+          "wallMs": 1,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 1,
+          "timestamp": 1791538335292,
+          "cpuMs": 1,
+          "wallMs": 1,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 0,
+          "timestamp": 1791538335213,
+          "cpuMs": 1,
+          "wallMs": 2,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "object": 4,
+      "sample": "e0-t17",
+      "driverMs": 1171,
+      "admissionMs": 485,
+      "syncClockMs": 353,
+      "callerRpcMs": 479,
+      "rpcEvents": [
+        {
+          "phase": "submit:rpc:after",
+          "atMs": 1791538347186
+        },
+        {
+          "phase": "submit:rpc:before",
+          "atMs": 1791538346707
+        }
+      ],
+      "invocations": [
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "worker",
+          "timestamp": 1791538347901,
+          "cpuMs": 0,
+          "wallMs": 12,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/await",
+          "scope": "worker",
+          "timestamp": 1791538347871,
+          "cpuMs": 1,
+          "wallMs": 678,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/submit",
+          "scope": "worker",
+          "timestamp": 1791538347186,
+          "cpuMs": 1,
+          "wallMs": 479,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "object",
+          "timestamp": 1791538347109,
+          "cpuMs": 3,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "alarm",
+          "scope": "object",
+          "timestamp": 1791538347027,
+          "cpuMs": 150,
+          "wallMs": 841,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "await",
+          "scope": "object",
+          "timestamp": 1791538347027,
+          "cpuMs": 270,
+          "wallMs": 642,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "submit",
+          "scope": "object",
+          "timestamp": 1791538346358,
+          "cpuMs": 137,
+          "wallMs": 475,
+          "outcome": "ok"
+        },
+        {
+          "role": "driver",
+          "kind": "driver",
+          "scope": "worker",
+          "timestamp": 1791538347873,
+          "cpuMs": 1,
+          "wallMs": 1171,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 8,
+          "timestamp": 1791538347771,
+          "cpuMs": 2,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 7,
+          "timestamp": 1791538347675,
+          "cpuMs": 1,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 6,
+          "timestamp": 1791538347601,
+          "cpuMs": 1,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 5,
+          "timestamp": 1791538347536,
+          "cpuMs": 2,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 4,
+          "timestamp": 1791538347471,
+          "cpuMs": 2,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 3,
+          "timestamp": 1791538347398,
+          "cpuMs": 1,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 2,
+          "timestamp": 1791538347325,
+          "cpuMs": 1,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 1,
+          "timestamp": 1791538347259,
+          "cpuMs": 1,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 0,
+          "timestamp": 1791538347192,
+          "cpuMs": 3,
+          "wallMs": 4,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "object": 2,
+      "sample": "e0-t17",
+      "driverMs": 836,
+      "admissionMs": 227,
+      "syncClockMs": 90,
+      "callerRpcMs": 219,
+      "rpcEvents": [
+        {
+          "phase": "submit:rpc:after",
+          "atMs": 1791538570195
+        },
+        {
+          "phase": "submit:rpc:before",
+          "atMs": 1791538569976
+        }
+      ],
+      "invocations": [
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "worker",
+          "timestamp": 1791538570835,
+          "cpuMs": 0,
+          "wallMs": 17,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/await",
+          "scope": "worker",
+          "timestamp": 1791538570803,
+          "cpuMs": 1,
+          "wallMs": 601,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/submit",
+          "scope": "worker",
+          "timestamp": 1791538570195,
+          "cpuMs": 1,
+          "wallMs": 219,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "object",
+          "timestamp": 1791538570105,
+          "cpuMs": 2,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "await",
+          "scope": "object",
+          "timestamp": 1791538570068,
+          "cpuMs": 222,
+          "wallMs": 580,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "alarm",
+          "scope": "object",
+          "timestamp": 1791538570015,
+          "cpuMs": 141,
+          "wallMs": 767,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "submit",
+          "scope": "object",
+          "timestamp": 1791538569448,
+          "cpuMs": 12,
+          "wallMs": 241,
+          "outcome": "ok"
+        },
+        {
+          "role": "driver",
+          "kind": "driver",
+          "scope": "worker",
+          "timestamp": 1791538570806,
+          "cpuMs": 2,
+          "wallMs": 837,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 8,
+          "timestamp": 1791538570729,
+          "cpuMs": 2,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 7,
+          "timestamp": 1791538570663,
+          "cpuMs": 1,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 6,
+          "timestamp": 1791538570592,
+          "cpuMs": 1,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 5,
+          "timestamp": 1791538570526,
+          "cpuMs": 1,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 4,
+          "timestamp": 1791538570464,
+          "cpuMs": 1,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 3,
+          "timestamp": 1791538570394,
+          "cpuMs": 2,
+          "wallMs": 4,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 2,
+          "timestamp": 1791538570331,
+          "cpuMs": 1,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 1,
+          "timestamp": 1791538570262,
+          "cpuMs": 1,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 0,
+          "timestamp": 1791538570198,
+          "cpuMs": 1,
+          "wallMs": 2,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "object": 2,
+      "sample": "e0-t8",
+      "driverMs": 1229,
+      "admissionMs": 230,
+      "syncClockMs": 99,
+      "callerRpcMs": 216,
+      "rpcEvents": [
+        {
+          "phase": "submit:rpc:after",
+          "atMs": 1791538561233
+        },
+        {
+          "phase": "submit:rpc:before",
+          "atMs": 1791538561017
+        }
+      ],
+      "invocations": [
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "worker",
+          "timestamp": 1791538562263,
+          "cpuMs": 0,
+          "wallMs": 18,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/await",
+          "scope": "worker",
+          "timestamp": 1791538562232,
+          "cpuMs": 1,
+          "wallMs": 988,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "object",
+          "timestamp": 1791538561758,
+          "cpuMs": 2,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "await",
+          "scope": "object",
+          "timestamp": 1791538561725,
+          "cpuMs": 236,
+          "wallMs": 976,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "alarm",
+          "scope": "object",
+          "timestamp": 1791538561678,
+          "cpuMs": 125,
+          "wallMs": 1149,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/submit",
+          "scope": "worker",
+          "timestamp": 1791538561233,
+          "cpuMs": 2,
+          "wallMs": 218,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "submit",
+          "scope": "object",
+          "timestamp": 1791538560521,
+          "cpuMs": 9,
+          "wallMs": 232,
+          "outcome": "ok"
+        },
+        {
+          "role": "driver",
+          "kind": "driver",
+          "scope": "worker",
+          "timestamp": 1791538562235,
+          "cpuMs": 2,
+          "wallMs": 1229,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 8,
+          "timestamp": 1791538562163,
+          "cpuMs": 1,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 7,
+          "timestamp": 1791538562100,
+          "cpuMs": 1,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 6,
+          "timestamp": 1791538561654,
+          "cpuMs": 1,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 5,
+          "timestamp": 1791538561582,
+          "cpuMs": 1,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 4,
+          "timestamp": 1791538561515,
+          "cpuMs": 2,
+          "wallMs": 3,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 3,
+          "timestamp": 1791538561452,
+          "cpuMs": 1,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 2,
+          "timestamp": 1791538561367,
+          "cpuMs": 1,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 1,
+          "timestamp": 1791538561300,
+          "cpuMs": 1,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 0,
+          "timestamp": 1791538561233,
+          "cpuMs": 1,
+          "wallMs": 3,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 3,
+      "sample": "e0-t16",
+      "driverMs": 4972,
+      "admissionMs": 280,
+      "syncClockMs": 62,
+      "callerRpcMs": 275,
+      "rpcEvents": [
+        {
+          "phase": "submit:rpc:after",
+          "atMs": 1791538613757
+        },
+        {
+          "phase": "submit:rpc:before",
+          "atMs": 1791538613482
+        }
+      ],
+      "invocations": [
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "worker",
+          "timestamp": 1791538618515,
+          "cpuMs": 0,
+          "wallMs": 54,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/await",
+          "scope": "worker",
+          "timestamp": 1791538618448,
+          "cpuMs": 1,
+          "wallMs": 4685,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "object",
+          "timestamp": 1791538618427,
+          "cpuMs": 1,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "await",
+          "scope": "object",
+          "timestamp": 1791538618359,
+          "cpuMs": 237,
+          "wallMs": 4680,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "alarm",
+          "scope": "object",
+          "timestamp": 1791538618320,
+          "cpuMs": 131,
+          "wallMs": 4873,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/submit",
+          "scope": "worker",
+          "timestamp": 1791538613757,
+          "cpuMs": 0,
+          "wallMs": 275,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "submit",
+          "scope": "object",
+          "timestamp": 1791538613540,
+          "cpuMs": 5,
+          "wallMs": 271,
+          "outcome": "ok"
+        },
+        {
+          "role": "driver",
+          "kind": "driver",
+          "scope": "worker",
+          "timestamp": 1791538618450,
+          "cpuMs": 1,
+          "wallMs": 4971,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 8,
+          "timestamp": 1791538618360,
+          "cpuMs": 2,
+          "wallMs": 451,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 7,
+          "timestamp": 1791538617851,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 6,
+          "timestamp": 1791538617329,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 5,
+          "timestamp": 1791538616812,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 4,
+          "timestamp": 1791538616287,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 3,
+          "timestamp": 1791538615764,
+          "cpuMs": 3,
+          "wallMs": 461,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 2,
+          "timestamp": 1791538615241,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 1,
+          "timestamp": 1791538614721,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 0,
+          "timestamp": 1791538614197,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 3,
+      "sample": "e0-t19",
+      "driverMs": 5138,
+      "admissionMs": 405,
+      "syncClockMs": 64,
+      "callerRpcMs": null,
+      "rpcEvents": [
+        {
+          "phase": "submit:rpc:before",
+          "atMs": 1791538628724
+        }
+      ],
+      "invocations": [
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "worker",
+          "timestamp": 1791538633929,
+          "cpuMs": 0,
+          "wallMs": 53,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/await",
+          "scope": "worker",
+          "timestamp": 1791538633853,
+          "cpuMs": 3,
+          "wallMs": 4727,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "object",
+          "timestamp": 1791538633821,
+          "cpuMs": 2,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "await",
+          "scope": "object",
+          "timestamp": 1791538633748,
+          "cpuMs": 287,
+          "wallMs": 4724,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "alarm",
+          "scope": "object",
+          "timestamp": 1791538633712,
+          "cpuMs": 255,
+          "wallMs": 5037,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "submit",
+          "scope": "object",
+          "timestamp": 1791538628790,
+          "cpuMs": 9,
+          "wallMs": 396,
+          "outcome": "ok"
+        },
+        {
+          "role": "driver",
+          "kind": "driver",
+          "scope": "worker",
+          "timestamp": 1791538633857,
+          "cpuMs": 2,
+          "wallMs": 5138,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 8,
+          "timestamp": 1791538633740,
+          "cpuMs": 2,
+          "wallMs": 452,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 7,
+          "timestamp": 1791538633224,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 5,
+          "timestamp": 1791538632172,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 4,
+          "timestamp": 1791538631647,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 3,
+          "timestamp": 1791538631126,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 2,
+          "timestamp": 1791538630607,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 1,
+          "timestamp": 1791538630088,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 0,
+          "timestamp": 1791538629562,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 0,
+      "sample": "e0-t14",
+      "driverMs": 5123,
+      "admissionMs": 302,
+      "syncClockMs": 70,
+      "callerRpcMs": 296,
+      "rpcEvents": [
+        {
+          "phase": "submit:rpc:after",
+          "atMs": 1791538515081
+        },
+        {
+          "phase": "submit:rpc:before",
+          "atMs": 1791538514785
+        }
+      ],
+      "invocations": [
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "worker",
+          "timestamp": 1791538519975,
+          "cpuMs": 0,
+          "wallMs": 53,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/await",
+          "scope": "worker",
+          "timestamp": 1791538519903,
+          "cpuMs": 1,
+          "wallMs": 4813,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "object",
+          "timestamp": 1791538519874,
+          "cpuMs": 2,
+          "wallMs": 2,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "await",
+          "scope": "object",
+          "timestamp": 1791538519805,
+          "cpuMs": 285,
+          "wallMs": 4809,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "alarm",
+          "scope": "object",
+          "timestamp": 1791538519760,
+          "cpuMs": 135,
+          "wallMs": 5018,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/submit",
+          "scope": "worker",
+          "timestamp": 1791538515081,
+          "cpuMs": 0,
+          "wallMs": 297,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "submit",
+          "scope": "object",
+          "timestamp": 1791538514861,
+          "cpuMs": 6,
+          "wallMs": 294,
+          "outcome": "ok"
+        },
+        {
+          "role": "driver",
+          "kind": "driver",
+          "scope": "worker",
+          "timestamp": 1791538519904,
+          "cpuMs": 1,
+          "wallMs": 5123,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 5,
+          "timestamp": 1791538518197,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 4,
+          "timestamp": 1791538517666,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 3,
+          "timestamp": 1791538517132,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 2,
+          "timestamp": 1791538516587,
+          "cpuMs": 4,
+          "wallMs": 463,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 1,
+          "timestamp": 1791538516055,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 0,
+          "timestamp": 1791538515521,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 0,
+      "sample": "e0-t9",
+      "driverMs": 5226,
+      "admissionMs": 395,
+      "syncClockMs": 74,
+      "callerRpcMs": 389,
+      "rpcEvents": [
+        {
+          "phase": "submit:rpc:after",
+          "atMs": 1791538488834
+        },
+        {
+          "phase": "submit:rpc:before",
+          "atMs": 1791538488445
+        }
+      ],
+      "invocations": [
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "worker",
+          "timestamp": 1791538493733,
+          "cpuMs": 0,
+          "wallMs": 51,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/await",
+          "scope": "worker",
+          "timestamp": 1791538493665,
+          "cpuMs": 1,
+          "wallMs": 4824,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/metrics",
+          "scope": "object",
+          "timestamp": 1791538493633,
+          "cpuMs": 1,
+          "wallMs": 1,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "await",
+          "scope": "object",
+          "timestamp": 1791538493559,
+          "cpuMs": 297,
+          "wallMs": 4820,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "alarm",
+          "scope": "object",
+          "timestamp": 1791538493512,
+          "cpuMs": 127,
+          "wallMs": 5002,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "/submit",
+          "scope": "worker",
+          "timestamp": 1791538488834,
+          "cpuMs": 1,
+          "wallMs": 389,
+          "outcome": "ok"
+        },
+        {
+          "role": "target",
+          "kind": "submit",
+          "scope": "object",
+          "timestamp": 1791538488533,
+          "cpuMs": 110,
+          "wallMs": 388,
+          "outcome": "ok"
+        },
+        {
+          "role": "driver",
+          "kind": "driver",
+          "scope": "worker",
+          "timestamp": 1791538493666,
+          "cpuMs": 1,
+          "wallMs": 5226,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 8,
+          "timestamp": 1791538493555,
+          "cpuMs": 1,
+          "wallMs": 451,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 7,
+          "timestamp": 1791538493030,
+          "cpuMs": 3,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 6,
+          "timestamp": 1791538492496,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 5,
+          "timestamp": 1791538491961,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 4,
+          "timestamp": 1791538491426,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 3,
+          "timestamp": 1791538490893,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 2,
+          "timestamp": 1791538490355,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 1,
+          "timestamp": 1791538489814,
+          "cpuMs": 2,
+          "wallMs": 462,
+          "outcome": "ok"
+        },
+        {
+          "role": "provider",
+          "kind": "/v1/chat/completions",
+          "scope": "worker",
+          "call": 0,
+          "timestamp": 1791538489274,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok"
+        }
+      ]
+    }
+  ]
+}

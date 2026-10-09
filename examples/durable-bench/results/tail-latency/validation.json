@@ -71,11 +71,59 @@
         "cacheHits": 65,
         "note": "Final handoff gate including the consumer changeset; no vendored third-party/node_modules"
       }
-    ]
+    ],
+    "publication": {
+      "url": "https://github.com/yielded-dev/agent/pull/831",
+      "head": "6706b14b",
+      "measuredCodeRevision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+      "difference": "Only the one-sentence consumer changeset was added after the measured revision",
+      "base": "main",
+      "merged": false
+    },
+    "ci": {
+      "checkedAt": "2026-10-09T09:33:22.907879+00:00",
+      "head": "6706b14b",
+      "ready": "SUCCESS",
+      "requiredChecks": "All completed successfully; release-only jobs skipped by the workflow",
+      "automatedReview": "No actionable findings in the full two-file diff",
+      "url": "https://github.com/yielded-dev/agent/pull/831"
+    }
   },
   "newCommittedTests": 0,
   "testOrTimeoutChanges": 0,
   "distributionRecomputation": "All eight percentile, spike-count and maximum within-Object range rows reproduced exactly from the compact latency file",
-  "cleanup": "Pending final remote teardown and local Postgres shutdown",
-  "maintenanceRecomputation": "All 16 percentile, spike-count and maximum within-Object range rows reproduced exactly from the compact latency file"
+  "cleanup": {
+    "verified": true,
+    "artifact": "cleanup.json",
+    "cloudflarePrefixEmpty": true,
+    "privateAlchemyStateRemoved": true,
+    "localPostgresStopped": true
+  },
+  "maintenanceRecomputation": "All 16 percentile, spike-count and maximum within-Object range rows reproduced exactly from the compact latency file",
+  "admissionDiagnostic": {
+    "run": "tail-latency-mv0rdtk0-58a3e4ae",
+    "inputs": 1680,
+    "warmInputs": 1600,
+    "result": "All inputs and build/transcript checks passed; all warm residency checks passed",
+    "recomputation": "All eight quantile, spike-count and Object-range rows exactly reproduced",
+    "scope": "Diagnostic instrumentation only; no product improvement claimed",
+    "targetCleanup": {
+      "verified": true,
+      "workers": [],
+      "namespaces": []
+    },
+    "narrowTelemetry": {
+      "selectedSamples": 14,
+      "callerRpcSpans": 13,
+      "driverInvocations": 14,
+      "providerInvocations": 120,
+      "expectedProviderInvocations": 126
+    }
+  },
+  "privacyScan": {
+    "filesBeforeCleanupArtifact": 47,
+    "sensitiveValues": 0,
+    "emailAddresses": 0,
+    "note": "Scanned against actual scoped credential/account values before destroying private Alchemy state; cleanup artifact contains only verified empty resource lists and local shutdown booleans"
+  }
 }
