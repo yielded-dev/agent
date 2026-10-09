@@ -1,0 +1,41 @@
+{
+  "benchmarkRevision": "78cb4eb7589984c1cd194e0cb01a5a0055a6d3f3",
+  "harnessPatchSha256": "9e5b7b56ed4c2ae4fc31945184f03b441ccbc4035733773620eae1499c56c209",
+  "harnessPatchBytes": 133350,
+  "patchVerifiedAgainstCurrentTree": true,
+  "sourceAnnotations": [
+    {
+      "file": "packages/effect-agent/src/core/AgentError.ts",
+      "beforeSha256": "647cc4b4b0543f6ebed7662fa7636523542b4487f0bae7e16d4279b21121f915",
+      "afterSha256": "01810f951c3117faf29512167127c9544cab1aaf0f805c2a07475b1f1a13eb6d"
+    },
+    {
+      "file": "packages/effect-agent/src/core/RunEvent.ts",
+      "beforeSha256": "e529c7db3257d9fa5d306c0313645ac1c9988de8270c91d73451f94ce8e890ba",
+      "afterSha256": "ddcb39ddbcd3b25d0c6e037bfa6edc79c60cd9419a2d75f65f683c33bd0b9ed4"
+    }
+  ],
+  "pureUnionsCounts": [
+    {
+      "label": "baseline",
+      "bundleSha256": "7e20729fa563b82137382cd4ddd01ccde43e866b415184d34aa6e57c9852f3d5",
+      "selectedFunctionEntries": 82675,
+      "selectedFunctionFamilies": {
+        "Schema": 16634,
+        "SchemaAST": 62281,
+        "internal/schema/toEquivalence": 3760
+      }
+    },
+    {
+      "label": "candidate",
+      "bundleSha256": "77ae4e79a384ae9f0ccdddcdebbbc50421b71ee11843d2c38c1cde30fe7edc4d",
+      "selectedFunctionEntries": 80608,
+      "selectedFunctionFamilies": {
+        "Schema": 16388,
+        "SchemaAST": 60460,
+        "internal/schema/toEquivalence": 3760
+      }
+    }
+  ],
+  "counterPortabilityVerified": "Portable counter reproduces exact deployed counts: 82675 baseline and 81467 imports candidate."
+}

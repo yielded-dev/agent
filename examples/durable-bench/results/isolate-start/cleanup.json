@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "prefix": "isolate-start",
+  "checkedAt": "2026-10-09T06:53:55.398Z",
+  "verified": true,
+  "workers": [],
+  "namespaces": [],
+  "method": {
+    "deployment": "Alchemy destroy for every owned target and shared infrastructure stack",
+    "workerCheck": "Cloudflare GET workers/scripts; filter Worker IDs by prefix",
+    "namespaceCheck": "Cloudflare GET workers/durable_objects/namespaces, paginated at 100 rows; filter namespace name or script by prefix",
+    "stateRemoval": "Private state removed only after both API lists were empty"
+  },
+  "privateStateDirectoryRemoved": true,
+  "productAlchemyVersionCacheRemoved": true,
+  "taskPostgres": {
+    "version": "18.6",
+    "stopped": true,
+    "statusEvidence": "pg_ctl status: no server running",
+    "temporaryDataDirectoryRemoved": true
+  }
+}

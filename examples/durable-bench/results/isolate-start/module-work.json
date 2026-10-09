@@ -1,0 +1,891 @@
+{
+  "version": 1,
+  "benchmark": "78cb4eb7589984c1cd194e0cb01a5a0055a6d3f3 with the task-local harness.patch",
+  "compiler": {
+    "esbuild": "0.28.1",
+    "target": "es2024",
+    "format": "esm",
+    "platform": "neutral",
+    "conditions": [
+      "workerd",
+      "worker",
+      "browser",
+      "import"
+    ],
+    "minified": false
+  },
+  "dependencies": {
+    "effect": "4.0.0",
+    "miniflare": "5.20260811.1-alpha",
+    "lockfileSha256": "28662c58655b25b7698e6a84440cf61d68050d3dfbb52dcc2ff8f7d0330a4a7f"
+  },
+  "semantics": [
+    "Static call/new sites include module initializers, class heritage, computed/static members and literal IIFEs; ordinary function and instance-initializer bodies are excluded. Branch/loop sites count once. These are syntactic sites, not expanded calls or CPU.",
+    "Selected dynamic entries count Schema, SchemaAST and internal/schema/toEquivalence function bodies through the end of module evaluation in instrumented bundle copies. Nested functions/getters are included; generated namespace-export thunks are excluded. This is deterministic construction evidence, never local timing evidence.",
+    "Both deployed Yielded revisions use the same consumer harness with direct upstream Effect imports. Pi uses native HTTP SDKs and carries no Effect or Yielded runtime modules.",
+    "Original-entry comparison preserves main's scripted-provider consumer and its root Effect imports; it demonstrates the smaller benefit when a caller keeps shared namespaces reachable.",
+    "Byte counts include esbuild source comments. Exact hashes belong to the saved run's build paths; numeric counts can be reproduced from another checkout."
+  ],
+  "deployed": [
+    {
+      "label": "baseline",
+      "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "bundleBytes": 3587775,
+      "bundleSha256": "2a2e33ae51f2b324955b188c3bd3dc9e07286cd873521afc91b33df41702a810",
+      "metafileSha256": "95f83a45ee94318a9a1a559a2f0b38044d0b3ef5450145f4a1b81897483be8af",
+      "parsedModules": 831,
+      "retainedModules": 351,
+      "staticClassDefinitions": 766,
+      "staticCallAndNewSites": 6158,
+      "staticSiteFamilies": {
+        "Context": 320,
+        "Layer": 69,
+        "Other": 1785,
+        "Schema": 3917,
+        "SchemaAST": 67
+      },
+      "selectedFunctionEntries": 82675,
+      "selectedFunctionFamilies": {
+        "Schema": 16634,
+        "SchemaAST": 62281,
+        "internal/schema/toEquivalence": 3760
+      },
+      "schemaConstructors": {
+        "Schema:Struct": 924,
+        "Schema:makeClass": 507,
+        "SchemaAST:Declaration/constructor": 780,
+        "SchemaAST:Objects/constructor": 1275,
+        "SchemaAST:PropertySignature/constructor": 4685
+      },
+      "composition": [
+        {
+          "package": "@effect/ai-openai-compat",
+          "bytes": 55132,
+          "retainedModules": 6,
+          "staticClassDefinitions": 3,
+          "staticCallAndNewSites": 118
+        },
+        {
+          "package": "@effect/platform-browser",
+          "bytes": 1391,
+          "retainedModules": 1,
+          "staticClassDefinitions": 0,
+          "staticCallAndNewSites": 4
+        },
+        {
+          "package": "@effect/sql-sqlite-do",
+          "bytes": 6568,
+          "retainedModules": 1,
+          "staticClassDefinitions": 0,
+          "staticCallAndNewSites": 3
+        },
+        {
+          "package": "effect",
+          "bytes": 1194368,
+          "retainedModules": 174,
+          "staticClassDefinitions": 178,
+          "staticCallAndNewSites": 1952
+        },
+        {
+          "package": "effect-cf",
+          "bytes": 66485,
+          "retainedModules": 23,
+          "staticClassDefinitions": 29,
+          "staticCallAndNewSites": 94
+        },
+        {
+          "package": "examples/durable-bench",
+          "bytes": 40075,
+          "retainedModules": 11,
+          "staticClassDefinitions": 4,
+          "staticCallAndNewSites": 131
+        },
+        {
+          "package": "packages/effect-agent",
+          "bytes": 1385323,
+          "retainedModules": 95,
+          "staticClassDefinitions": 398,
+          "staticCallAndNewSites": 2896
+        },
+        {
+          "package": "packages/platform-cloudflare",
+          "bytes": 202040,
+          "retainedModules": 14,
+          "staticClassDefinitions": 53,
+          "staticCallAndNewSites": 322
+        },
+        {
+          "package": "packages/storage-cloudflare",
+          "bytes": 303282,
+          "retainedModules": 13,
+          "staticClassDefinitions": 92,
+          "staticCallAndNewSites": 395
+        },
+        {
+          "package": "packages/storage-sql",
+          "bytes": 294317,
+          "retainedModules": 13,
+          "staticClassDefinitions": 9,
+          "staticCallAndNewSites": 243
+        }
+      ],
+      "largestModules": [
+        {
+          "module": "packages/effect-agent/src/durable/DurableAgentRuntime.ts",
+          "bytes": 338127
+        },
+        {
+          "module": "packages/effect-agent/src/engine/internal/agent-runtime.ts",
+          "bytes": 260353
+        },
+        {
+          "module": "effect/dist/Schema.js",
+          "bytes": 135880
+        },
+        {
+          "module": "packages/storage-cloudflare/src/DoSubmissionLedger.ts",
+          "bytes": 131833
+        },
+        {
+          "module": "packages/effect-agent/src/durable/internal/worker-host.ts",
+          "bytes": 124930
+        },
+        {
+          "module": "effect/dist/internal/effect.js",
+          "bytes": 102270
+        },
+        {
+          "module": "packages/platform-cloudflare/src/Alarm.ts",
+          "bytes": 91012
+        },
+        {
+          "module": "packages/storage-sql/src/SqlThreadImport.ts",
+          "bytes": 78754
+        },
+        {
+          "module": "effect/dist/SchemaAST.js",
+          "bytes": 73033
+        },
+        {
+          "module": "effect/dist/Stream.js",
+          "bytes": 72973
+        },
+        {
+          "module": "packages/storage-sql/src/SqlThreadNativeReads.ts",
+          "bytes": 52877
+        },
+        {
+          "module": "packages/effect-agent/src/durable/RunContinuation.ts",
+          "bytes": 51770
+        },
+        {
+          "module": "packages/storage-cloudflare/src/PortRouting.ts",
+          "bytes": 50615
+        },
+        {
+          "module": "packages/effect-agent/src/durable/RunJournal.ts",
+          "bytes": 48870
+        },
+        {
+          "module": "packages/storage-cloudflare/src/internal/do-journal.ts",
+          "bytes": 42636
+        },
+        {
+          "module": "packages/effect-agent/src/durable/Records.ts",
+          "bytes": 38626
+        },
+        {
+          "module": "effect/dist/Channel.js",
+          "bytes": 38331
+        },
+        {
+          "module": "effect/dist/PubSub.js",
+          "bytes": 38086
+        },
+        {
+          "module": "@effect/ai-openai-compat/dist/OpenAiLanguageModel.js",
+          "bytes": 37822
+        },
+        {
+          "module": "effect/dist/ai/LanguageModel.js",
+          "bytes": 36818
+        }
+      ],
+      "retainedEffectModules": [
+        "effect/dist/Array.js",
+        "effect/dist/BigDecimal.js",
+        "effect/dist/BigInt.js",
+        "effect/dist/Brand.js",
+        "effect/dist/ByteSize.js",
+        "effect/dist/Cause.js",
+        "effect/dist/Channel.js",
+        "effect/dist/Chunk.js",
+        "effect/dist/Clock.js",
+        "effect/dist/Combiner.js",
+        "effect/dist/Config.js",
+        "effect/dist/ConfigProvider.js",
+        "effect/dist/Context.js",
+        "effect/dist/Crypto.js",
+        "effect/dist/Data.js",
+        "effect/dist/DateTime.js",
+        "effect/dist/Deferred.js",
+        "effect/dist/Duration.js",
+        "effect/dist/Effect.js",
+        "effect/dist/Effectable.js",
+        "effect/dist/Equal.js",
+        "effect/dist/Equivalence.js",
+        "effect/dist/ErrorReporter.js",
+        "effect/dist/ExecutionPlan.js",
+        "effect/dist/Exit.js",
+        "effect/dist/Fiber.js",
+        "effect/dist/FiberSet.js",
+        "effect/dist/Filter.js",
+        "effect/dist/Formatter.js",
+        "effect/dist/Function.js",
+        "effect/dist/Hash.js",
+        "effect/dist/HashMap.js",
+        "effect/dist/HashSet.js",
+        "effect/dist/Inspectable.js",
+        "effect/dist/Iterable.js",
+        "effect/dist/JsonPatch.js",
+        "effect/dist/JsonPointer.js",
+        "effect/dist/JsonSchema.js",
+        "effect/dist/Latch.js",
+        "effect/dist/Layer.js",
+        "effect/dist/LogLevel.js",
+        "effect/dist/ManagedRuntime.js",
+        "effect/dist/Match.js",
+        "effect/dist/Metric.js",
+        "effect/dist/MutableHashMap.js",
+        "effect/dist/MutableList.js",
+        "effect/dist/MutableRef.js",
+        "effect/dist/Number.js",
+        "effect/dist/Optic.js",
+        "effect/dist/Option.js",
+        "effect/dist/Order.js",
+        "effect/dist/Pipeable.js",
+        "effect/dist/PlatformError.js",
+        "effect/dist/Predicate.js",
+        "effect/dist/PubSub.js",
+        "effect/dist/Pull.js",
+        "effect/dist/Queue.js",
+        "effect/dist/Random.js",
+        "effect/dist/RcMap.js",
+        "effect/dist/RcRef.js",
+        "effect/dist/Record.js",
+        "effect/dist/Redactable.js",
+        "effect/dist/Redacted.js",
+        "effect/dist/Reducer.js",
+        "effect/dist/Ref.js",
+        "effect/dist/References.js",
+        "effect/dist/RegExp.js",
+        "effect/dist/Request.js",
+        "effect/dist/Result.js",
+        "effect/dist/Schedule.js",
+        "effect/dist/Scheduler.js",
+        "effect/dist/Schema.js",
+        "effect/dist/SchemaAST.js",
+        "effect/dist/SchemaGetter.js",
+        "effect/dist/SchemaIssue.js",
+        "effect/dist/SchemaParser.js",
+        "effect/dist/SchemaTransformation.js",
+        "effect/dist/Scope.js",
+        "effect/dist/Semaphore.js",
+        "effect/dist/Sink.js",
+        "effect/dist/Stream.js",
+        "effect/dist/String.js",
+        "effect/dist/Struct.js",
+        "effect/dist/SynchronizedRef.js",
+        "effect/dist/Take.js",
+        "effect/dist/Tracer.js",
+        "effect/dist/Tuple.js",
+        "effect/dist/Utils.js",
+        "effect/dist/ai/AiError.js",
+        "effect/dist/ai/IdGenerator.js",
+        "effect/dist/ai/LanguageModel.js",
+        "effect/dist/ai/Model.js",
+        "effect/dist/ai/OpenAiStructuredOutput.js",
+        "effect/dist/ai/Prompt.js",
+        "effect/dist/ai/Response.js",
+        "effect/dist/ai/ResponseIdTracker.js",
+        "effect/dist/ai/Telemetry.js",
+        "effect/dist/ai/Tool.js",
+        "effect/dist/ai/Toolkit.js",
+        "effect/dist/ai/internal/codec-transformer.js",
+        "effect/dist/ai/internal/structured-output.js",
+        "effect/dist/encoding/Base64.js",
+        "effect/dist/encoding/Base64Url.js",
+        "effect/dist/encoding/EncodingError.js",
+        "effect/dist/encoding/Hex.js",
+        "effect/dist/encoding/Sse.js",
+        "effect/dist/http/Cookies.js",
+        "effect/dist/http/FetchHttpClient.js",
+        "effect/dist/http/Headers.js",
+        "effect/dist/http/HttpBody.js",
+        "effect/dist/http/HttpClient.js",
+        "effect/dist/http/HttpClientError.js",
+        "effect/dist/http/HttpClientRequest.js",
+        "effect/dist/http/HttpClientResponse.js",
+        "effect/dist/http/HttpIncomingMessage.js",
+        "effect/dist/http/HttpMethod.js",
+        "effect/dist/http/HttpTraceContext.js",
+        "effect/dist/http/Url.js",
+        "effect/dist/http/UrlParams.js",
+        "effect/dist/http/internal/httpBody.js",
+        "effect/dist/internal/array.js",
+        "effect/dist/internal/core.js",
+        "effect/dist/internal/count.js",
+        "effect/dist/internal/dateTime.js",
+        "effect/dist/internal/doNotation.js",
+        "effect/dist/internal/effect.js",
+        "effect/dist/internal/equal.js",
+        "effect/dist/internal/errors.js",
+        "effect/dist/internal/executionPlan.js",
+        "effect/dist/internal/graph.js",
+        "effect/dist/internal/hash.js",
+        "effect/dist/internal/hashMap.js",
+        "effect/dist/internal/hashSet.js",
+        "effect/dist/internal/layer.js",
+        "effect/dist/internal/matcher.js",
+        "effect/dist/internal/metric.js",
+        "effect/dist/internal/option.js",
+        "effect/dist/internal/random.js",
+        "effect/dist/internal/rcRef.js",
+        "effect/dist/internal/record.js",
+        "effect/dist/internal/redacted.js",
+        "effect/dist/internal/references.js",
+        "effect/dist/internal/request.js",
+        "effect/dist/internal/result.js",
+        "effect/dist/internal/schedule.js",
+        "effect/dist/internal/schema/annotations.js",
+        "effect/dist/internal/schema/cause.js",
+        "effect/dist/internal/schema/compilerRegistry.js",
+        "effect/dist/internal/schema/interpreter.js",
+        "effect/dist/internal/schema/make.js",
+        "effect/dist/internal/schema/parser.js",
+        "effect/dist/internal/schema/standardSchema.js",
+        "effect/dist/internal/schema/toCodec.js",
+        "effect/dist/internal/schema/toDifferJsonPatch.js",
+        "effect/dist/internal/schema/toEncoderXml.js",
+        "effect/dist/internal/schema/toEquivalence.js",
+        "effect/dist/internal/schema/toFormatter.js",
+        "effect/dist/internal/schema/toIso.js",
+        "effect/dist/internal/schema/toJsonSchemaDocument.js",
+        "effect/dist/internal/schema/toRepresentation.js",
+        "effect/dist/internal/schemaError.js",
+        "effect/dist/internal/stackTraceLimit.js",
+        "effect/dist/internal/stream.js",
+        "effect/dist/internal/tracer.js",
+        "effect/dist/internal/ulid.js",
+        "effect/dist/internal/uuid.js",
+        "effect/dist/net/IpInterface.js",
+        "effect/dist/net/IpNetwork.js",
+        "effect/dist/net/NetAddress.js",
+        "effect/dist/observability/OtlpExporter.js",
+        "effect/dist/reactivity/Reactivity.js",
+        "effect/dist/sql/SqlClient.js",
+        "effect/dist/sql/SqlError.js",
+        "effect/dist/sql/Statement.js"
+      ],
+      "retainedYieldedModules": 135
+    },
+    {
+      "label": "candidate",
+      "revision": "e63e577b52f4038d37e5321359e81230a01c85b5",
+      "bundleBytes": 2977669,
+      "bundleSha256": "d6da39d0a5e42833447c91685fcf1f9e427f926e40a720bd3afb91fde5caf19f",
+      "metafileSha256": "03134dd358682d1a5fedb6d4f2d66becc7760fd58ff1b0ba91d4b32c61ef5d08",
+      "parsedModules": 831,
+      "retainedModules": 319,
+      "staticClassDefinitions": 736,
+      "staticCallAndNewSites": 5275,
+      "staticSiteFamilies": {
+        "Context": 303,
+        "Layer": 65,
+        "Other": 1106,
+        "Schema": 3742,
+        "SchemaAST": 59
+      },
+      "selectedFunctionEntries": 81467,
+      "selectedFunctionFamilies": {
+        "Schema": 16333,
+        "SchemaAST": 61374,
+        "internal/schema/toEquivalence": 3760
+      },
+      "schemaConstructors": {
+        "Schema:Struct": 920,
+        "Schema:makeClass": 507,
+        "SchemaAST:Declaration/constructor": 754,
+        "SchemaAST:Objects/constructor": 1268,
+        "SchemaAST:PropertySignature/constructor": 4677
+      },
+      "composition": [
+        {
+          "package": "@effect/ai-openai-compat",
+          "bytes": 55020,
+          "retainedModules": 6,
+          "staticClassDefinitions": 3,
+          "staticCallAndNewSites": 118
+        },
+        {
+          "package": "@effect/platform-browser",
+          "bytes": 1388,
+          "retainedModules": 1,
+          "staticClassDefinitions": 0,
+          "staticCallAndNewSites": 4
+        },
+        {
+          "package": "@effect/sql-sqlite-do",
+          "bytes": 6568,
+          "retainedModules": 1,
+          "staticClassDefinitions": 0,
+          "staticCallAndNewSites": 3
+        },
+        {
+          "package": "effect",
+          "bytes": 691744,
+          "retainedModules": 142,
+          "staticClassDefinitions": 148,
+          "staticCallAndNewSites": 1069
+        },
+        {
+          "package": "effect-cf",
+          "bytes": 66424,
+          "retainedModules": 23,
+          "staticClassDefinitions": 29,
+          "staticCallAndNewSites": 94
+        },
+        {
+          "package": "examples/durable-bench",
+          "bytes": 39973,
+          "retainedModules": 11,
+          "staticClassDefinitions": 4,
+          "staticCallAndNewSites": 131
+        },
+        {
+          "package": "packages/effect-agent",
+          "bytes": 1328353,
+          "retainedModules": 95,
+          "staticClassDefinitions": 398,
+          "staticCallAndNewSites": 2896
+        },
+        {
+          "package": "packages/platform-cloudflare",
+          "bytes": 187846,
+          "retainedModules": 14,
+          "staticClassDefinitions": 53,
+          "staticCallAndNewSites": 322
+        },
+        {
+          "package": "packages/storage-cloudflare",
+          "bytes": 285183,
+          "retainedModules": 13,
+          "staticClassDefinitions": 92,
+          "staticCallAndNewSites": 395
+        },
+        {
+          "package": "packages/storage-sql",
+          "bytes": 279832,
+          "retainedModules": 13,
+          "staticClassDefinitions": 9,
+          "staticCallAndNewSites": 243
+        }
+      ],
+      "largestModules": [
+        {
+          "module": "packages/effect-agent/src/durable/DurableAgentRuntime.ts",
+          "bytes": 324781
+        },
+        {
+          "module": "packages/effect-agent/src/engine/internal/agent-runtime.ts",
+          "bytes": 260134
+        },
+        {
+          "module": "packages/storage-cloudflare/src/DoSubmissionLedger.ts",
+          "bytes": 124567
+        },
+        {
+          "module": "packages/effect-agent/src/durable/internal/worker-host.ts",
+          "bytes": 119131
+        },
+        {
+          "module": "packages/platform-cloudflare/src/Alarm.ts",
+          "bytes": 85626
+        },
+        {
+          "module": "effect/dist/internal/effect.js",
+          "bytes": 83016
+        },
+        {
+          "module": "packages/storage-sql/src/SqlThreadImport.ts",
+          "bytes": 75204
+        },
+        {
+          "module": "effect/dist/SchemaAST.js",
+          "bytes": 61376
+        },
+        {
+          "module": "packages/storage-sql/src/SqlThreadNativeReads.ts",
+          "bytes": 51543
+        },
+        {
+          "module": "packages/effect-agent/src/durable/RunContinuation.ts",
+          "bytes": 50462
+        },
+        {
+          "module": "packages/effect-agent/src/durable/RunJournal.ts",
+          "bytes": 47587
+        },
+        {
+          "module": "packages/storage-cloudflare/src/PortRouting.ts",
+          "bytes": 46748
+        },
+        {
+          "module": "effect/dist/Schema.js",
+          "bytes": 46701
+        },
+        {
+          "module": "packages/storage-cloudflare/src/internal/do-journal.ts",
+          "bytes": 40469
+        },
+        {
+          "module": "@effect/ai-openai-compat/dist/OpenAiLanguageModel.js",
+          "bytes": 37770
+        },
+        {
+          "module": "effect/dist/ai/LanguageModel.js",
+          "bytes": 36771
+        },
+        {
+          "module": "packages/effect-agent/src/durable/Records.ts",
+          "bytes": 34496
+        },
+        {
+          "module": "effect/dist/PubSub.js",
+          "bytes": 30579
+        },
+        {
+          "module": "packages/effect-agent/src/durable/SqlMemoryStore.ts",
+          "bytes": 30559
+        },
+        {
+          "module": "packages/storage-sql/src/SqlThreadWork.ts",
+          "bytes": 29423
+        }
+      ],
+      "retainedEffectModules": [
+        "effect/dist/Array.js",
+        "effect/dist/Brand.js",
+        "effect/dist/Cause.js",
+        "effect/dist/Channel.js",
+        "effect/dist/Clock.js",
+        "effect/dist/Config.js",
+        "effect/dist/ConfigProvider.js",
+        "effect/dist/Context.js",
+        "effect/dist/Crypto.js",
+        "effect/dist/Data.js",
+        "effect/dist/DateTime.js",
+        "effect/dist/Deferred.js",
+        "effect/dist/Duration.js",
+        "effect/dist/Effect.js",
+        "effect/dist/Effectable.js",
+        "effect/dist/Equal.js",
+        "effect/dist/Equivalence.js",
+        "effect/dist/ErrorReporter.js",
+        "effect/dist/Exit.js",
+        "effect/dist/Fiber.js",
+        "effect/dist/FiberSet.js",
+        "effect/dist/Filter.js",
+        "effect/dist/Formatter.js",
+        "effect/dist/Function.js",
+        "effect/dist/Hash.js",
+        "effect/dist/Inspectable.js",
+        "effect/dist/Iterable.js",
+        "effect/dist/JsonPointer.js",
+        "effect/dist/JsonSchema.js",
+        "effect/dist/Latch.js",
+        "effect/dist/Layer.js",
+        "effect/dist/ManagedRuntime.js",
+        "effect/dist/Match.js",
+        "effect/dist/Metric.js",
+        "effect/dist/MutableList.js",
+        "effect/dist/MutableRef.js",
+        "effect/dist/Number.js",
+        "effect/dist/Option.js",
+        "effect/dist/Order.js",
+        "effect/dist/Pipeable.js",
+        "effect/dist/PlatformError.js",
+        "effect/dist/Predicate.js",
+        "effect/dist/PubSub.js",
+        "effect/dist/Pull.js",
+        "effect/dist/Queue.js",
+        "effect/dist/Random.js",
+        "effect/dist/Record.js",
+        "effect/dist/Redactable.js",
+        "effect/dist/Redacted.js",
+        "effect/dist/Ref.js",
+        "effect/dist/References.js",
+        "effect/dist/RegExp.js",
+        "effect/dist/Result.js",
+        "effect/dist/Schedule.js",
+        "effect/dist/Scheduler.js",
+        "effect/dist/Schema.js",
+        "effect/dist/SchemaAST.js",
+        "effect/dist/SchemaGetter.js",
+        "effect/dist/SchemaIssue.js",
+        "effect/dist/SchemaParser.js",
+        "effect/dist/SchemaTransformation.js",
+        "effect/dist/Scope.js",
+        "effect/dist/Semaphore.js",
+        "effect/dist/Sink.js",
+        "effect/dist/Stream.js",
+        "effect/dist/String.js",
+        "effect/dist/Struct.js",
+        "effect/dist/SynchronizedRef.js",
+        "effect/dist/Take.js",
+        "effect/dist/Tracer.js",
+        "effect/dist/Tuple.js",
+        "effect/dist/Utils.js",
+        "effect/dist/ai/AiError.js",
+        "effect/dist/ai/IdGenerator.js",
+        "effect/dist/ai/LanguageModel.js",
+        "effect/dist/ai/Model.js",
+        "effect/dist/ai/OpenAiStructuredOutput.js",
+        "effect/dist/ai/Prompt.js",
+        "effect/dist/ai/Response.js",
+        "effect/dist/ai/ResponseIdTracker.js",
+        "effect/dist/ai/Telemetry.js",
+        "effect/dist/ai/Tool.js",
+        "effect/dist/ai/Toolkit.js",
+        "effect/dist/ai/internal/codec-transformer.js",
+        "effect/dist/ai/internal/structured-output.js",
+        "effect/dist/encoding/Base64.js",
+        "effect/dist/encoding/EncodingError.js",
+        "effect/dist/encoding/Hex.js",
+        "effect/dist/encoding/Sse.js",
+        "effect/dist/http/Cookies.js",
+        "effect/dist/http/FetchHttpClient.js",
+        "effect/dist/http/Headers.js",
+        "effect/dist/http/HttpBody.js",
+        "effect/dist/http/HttpClient.js",
+        "effect/dist/http/HttpClientError.js",
+        "effect/dist/http/HttpClientRequest.js",
+        "effect/dist/http/HttpClientResponse.js",
+        "effect/dist/http/HttpIncomingMessage.js",
+        "effect/dist/http/HttpMethod.js",
+        "effect/dist/http/HttpTraceContext.js",
+        "effect/dist/http/Url.js",
+        "effect/dist/http/UrlParams.js",
+        "effect/dist/http/internal/httpBody.js",
+        "effect/dist/internal/array.js",
+        "effect/dist/internal/core.js",
+        "effect/dist/internal/count.js",
+        "effect/dist/internal/dateTime.js",
+        "effect/dist/internal/effect.js",
+        "effect/dist/internal/equal.js",
+        "effect/dist/internal/errors.js",
+        "effect/dist/internal/hash.js",
+        "effect/dist/internal/layer.js",
+        "effect/dist/internal/matcher.js",
+        "effect/dist/internal/metric.js",
+        "effect/dist/internal/option.js",
+        "effect/dist/internal/random.js",
+        "effect/dist/internal/record.js",
+        "effect/dist/internal/redacted.js",
+        "effect/dist/internal/references.js",
+        "effect/dist/internal/result.js",
+        "effect/dist/internal/schedule.js",
+        "effect/dist/internal/schema/annotations.js",
+        "effect/dist/internal/schema/cause.js",
+        "effect/dist/internal/schema/compilerRegistry.js",
+        "effect/dist/internal/schema/interpreter.js",
+        "effect/dist/internal/schema/make.js",
+        "effect/dist/internal/schema/parser.js",
+        "effect/dist/internal/schema/toCodec.js",
+        "effect/dist/internal/schema/toEquivalence.js",
+        "effect/dist/internal/schema/toJsonSchemaDocument.js",
+        "effect/dist/internal/schema/toRepresentation.js",
+        "effect/dist/internal/schemaError.js",
+        "effect/dist/internal/stackTraceLimit.js",
+        "effect/dist/internal/stream.js",
+        "effect/dist/internal/tracer.js",
+        "effect/dist/internal/ulid.js",
+        "effect/dist/internal/uuid.js",
+        "effect/dist/observability/OtlpExporter.js",
+        "effect/dist/reactivity/Reactivity.js",
+        "effect/dist/sql/SqlClient.js",
+        "effect/dist/sql/SqlError.js",
+        "effect/dist/sql/Statement.js"
+      ],
+      "retainedYieldedModules": 135
+    },
+    {
+      "label": "pi",
+      "revision": "unchanged native pi from benchmark 78cb4eb7589984c1cd194e0cb01a5a0055a6d3f3",
+      "bundleBytes": 1706273,
+      "bundleSha256": "a5a985cfe239a49c3d86f407e7156c84a8860c0a6e0e18aec1702349b562c1ed",
+      "metafileSha256": "e87ab16afb831dd1a79ff38fb449149c66a0844a3a7ae846b7a916e04f7aa7ff",
+      "parsedModules": 976,
+      "retainedModules": 811,
+      "staticClassDefinitions": 224,
+      "staticCallAndNewSites": 295,
+      "staticSiteFamilies": {
+        "Other": 295
+      },
+      "selectedFunctionEntries": 0,
+      "selectedFunctionFamilies": {},
+      "schemaConstructors": {},
+      "composition": [
+        {
+          "package": "@earendil-works/chord",
+          "bytes": 96773,
+          "retainedModules": 8,
+          "staticClassDefinitions": 12,
+          "staticCallAndNewSites": 9
+        },
+        {
+          "package": "@earendil-works/pi-ai",
+          "bytes": 140949,
+          "retainedModules": 32,
+          "staticClassDefinitions": 8,
+          "staticCallAndNewSites": 8
+        },
+        {
+          "package": "@earendil-works/pi-durable",
+          "bytes": 248533,
+          "retainedModules": 33,
+          "staticClassDefinitions": 21,
+          "staticCallAndNewSites": 22
+        },
+        {
+          "package": "examples/durable-bench",
+          "bytes": 25445,
+          "retainedModules": 9,
+          "staticClassDefinitions": 3,
+          "staticCallAndNewSites": 8
+        },
+        {
+          "package": "openai",
+          "bytes": 697433,
+          "retainedModules": 189,
+          "staticClassDefinitions": 164,
+          "staticCallAndNewSites": 184
+        },
+        {
+          "package": "partial-json",
+          "bytes": 9168,
+          "retainedModules": 2,
+          "staticClassDefinitions": 0,
+          "staticCallAndNewSites": 2
+        },
+        {
+          "package": "typebox",
+          "bytes": 408503,
+          "retainedModules": 538,
+          "staticClassDefinitions": 16,
+          "staticCallAndNewSites": 60
+        }
+      ],
+      "largestModules": [
+        {
+          "module": "openai/lib/ChatCompletionStream.mjs",
+          "bytes": 73882
+        },
+        {
+          "module": "@earendil-works/chord/dist/delta/tracker.js",
+          "bytes": 69805
+        },
+        {
+          "module": "openai/client.mjs",
+          "bytes": 56975
+        },
+        {
+          "module": "openai/lib/EventStream.mjs",
+          "bytes": 55991
+        },
+        {
+          "module": "@earendil-works/pi-ai/dist/api/openai-completions.js",
+          "bytes": 47935
+        },
+        {
+          "module": "@earendil-works/pi-durable/dist/harness/scheduler.js",
+          "bytes": 44459
+        },
+        {
+          "module": "openai/internal/auth/x509-workload-identity-auth.mjs",
+          "bytes": 42007
+        },
+        {
+          "module": "openai/lib/AssistantStream.mjs",
+          "bytes": 38819
+        },
+        {
+          "module": "typebox/build/type/script/parser.mjs",
+          "bytes": 37081
+        },
+        {
+          "module": "openai/internal/responses/response-accumulator.mjs",
+          "bytes": 34653
+        },
+        {
+          "module": "@earendil-works/pi-durable/dist/session/transaction.js",
+          "bytes": 29229
+        },
+        {
+          "module": "@earendil-works/pi-durable/dist/storage/sqlite/storage.js",
+          "bytes": 25971
+        },
+        {
+          "module": "@earendil-works/pi-ai/dist/models.js",
+          "bytes": 25760
+        },
+        {
+          "module": "@earendil-works/pi-durable/dist/harness/generation.js",
+          "bytes": 21274
+        },
+        {
+          "module": "openai/lib/AbstractChatCompletionRunner.mjs",
+          "bytes": 19091
+        },
+        {
+          "module": "openai/core/streaming.mjs",
+          "bytes": 17811
+        },
+        {
+          "module": "typebox/build/schema/engine/schema.mjs",
+          "bytes": 16784
+        },
+        {
+          "module": "typebox/build/type/script/mapping.mjs",
+          "bytes": 16091
+        },
+        {
+          "module": "@earendil-works/pi-durable/dist/harness/compaction.js",
+          "bytes": 14594
+        },
+        {
+          "module": "@earendil-works/pi-durable/dist/harness/tool.js",
+          "bytes": 14334
+        }
+      ],
+      "retainedEffectModules": [],
+      "retainedYieldedModules": 0
+    }
+  ],
+  "originalScriptedEntry": [
+    {
+      "label": "baseline",
+      "bytes": 3436622,
+      "sha256": "8aaa5903b638be0d3cec24c0c5639f4027878cc300a2b95601ca9fe8146c9213",
+      "parsedModules": 815,
+      "retainedModules": 324
+    },
+    {
+      "label": "candidate",
+      "bytes": 3214844,
+      "sha256": "1f485ecb2b724652caf0d9653ef70b4f72a5fe55eaaf97e328e27b67007fcb77",
+      "parsedModules": 815,
+      "retainedModules": 321
+    }
+  ]
+}

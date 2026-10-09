@@ -1,0 +1,24 @@
+diff --git a/packages/effect-agent/src/core/AgentError.ts b/packages/effect-agent/src/core/AgentError.ts
+--- a/packages/effect-agent/src/core/AgentError.ts
++++ b/packages/effect-agent/src/core/AgentError.ts
+@@ -166,7 +166,7 @@
+ ) {}
+ 
+ /** Schema for framework-owned agent errors; application and Effect AI failures remain separate. */
+-export const AgentError = Schema.Union([
++export const AgentError = /* @__PURE__ */ Schema.Union([
+   AgentInputDecodeError,
+   AgentPersistenceCapacityError,
+   AgentInputError,
+diff --git a/packages/effect-agent/src/core/RunEvent.ts b/packages/effect-agent/src/core/RunEvent.ts
+--- a/packages/effect-agent/src/core/RunEvent.ts
++++ b/packages/effect-agent/src/core/RunEvent.ts
+@@ -342,7 +342,7 @@
+ }) {}
+ 
+ /** Versioned union of stable semantic run events, excluding raw provider chunks. */
+-export const RunEvent = Schema.Union([
++export const RunEvent = /* @__PURE__ */ Schema.Union([
+   AgentUpdateEmitted,
+   RunStarted,
+   TurnStarted,

@@ -1,0 +1,3523 @@
+diff --git a/examples/durable-bench/deployed/build.ts b/examples/durable-bench/deployed/build.ts
+index f7ebf2d0..9c164900 100644
+--- a/examples/durable-bench/deployed/build.ts
++++ b/examples/durable-bench/deployed/build.ts
+@@ -23,6 +23,9 @@ const entries = {
+   driver: "driver.ts",
+   provider: "provider.ts",
+   target: "../third-party/src/deployed/index.ts",
++  production: "../src/yielded.ts",
++  yielded: "isolate/yielded.ts",
++  pi: "../third-party/src/deployed/isolate-pi.ts",
+ };
+ 
+ /** A ref supplies framework sources; both builds use this checkout's harness and pinned dependencies. */
+@@ -30,6 +33,7 @@ export const build = Effect.fnUntraced(function* (
+   output: string,
+   entry: keyof typeof entries,
+   ref?: string,
++  extraPlugins: readonly Plugin[] = [],
+ ) {
+   const fs = yield* FileSystem.FileSystem;
+   let revision = yield* git(["rev-parse", "HEAD"]);
+@@ -95,7 +99,7 @@ export const build = Effect.fnUntraced(function* (
+ 
+   const outfile = join(output, `${entry}.mjs`);
+ 
+-  yield* Effect.tryPromise({
++  const compiled = yield* Effect.tryPromise({
+     try: () =>
+       bundle({
+         entryPoints: [join(directory, entries[entry])],
+@@ -108,7 +112,8 @@ export const build = Effect.fnUntraced(function* (
+         mainFields: ["module", "main"],
+         external: ["cloudflare:*", "node:*", ...builtinModules],
+         logLevel: "silent",
+-        plugins: [resolver],
++        plugins: [resolver, ...extraPlugins],
++        metafile: true,
+       }),
+     catch: (cause) =>
+       new BenchError({
+@@ -116,6 +121,8 @@ export const build = Effect.fnUntraced(function* (
+       }),
+   });
+ 
++  yield* fs.writeFileString(join(output, `${entry}-meta.json`), JSON.stringify(compiled.metafile));
++
+   return { file: outfile, revision, sha256: hash(yield* fs.readFile(outfile)) };
+ }, Effect.scoped);
+ 
+diff --git a/examples/durable-bench/deployed/cloudflare.ts b/examples/durable-bench/deployed/cloudflare.ts
+index ba55e9e6..3178b538 100644
+--- a/examples/durable-bench/deployed/cloudflare.ts
++++ b/examples/durable-bench/deployed/cloudflare.ts
+@@ -65,7 +65,7 @@ const connect = Effect.gen(function* () {
+     Schema.Struct({ subdomain: Schema.NonEmptyString }),
+   );
+ 
+-  const resources = Effect.fnUntraced(function* (prefix = "durable-bench") {
++  const resources = Effect.fnUntraced(function* (prefix = "isolate-start") {
+     const workers = (yield* api("workers/scripts", Workers))
+       .filter((w) => w.id.startsWith(prefix))
+       .map((w) => w.id);
+@@ -115,6 +115,7 @@ export const request = <S extends Schema.Top & { readonly DecodingServices: neve
+   schema: S,
+   body?: unknown,
+   timeout: Duration.Input = "3 minutes",
++  expectedBuild?: string,
+ ) =>
+   Effect.gen(function* () {
+     const response = yield* Effect.tryPromise({
+@@ -127,6 +128,7 @@ export const request = <S extends Schema.Top & { readonly DecodingServices: neve
+             authorization: `Bearer ${token}`,
+             "content-type": "application/json",
+             "cache-control": "no-store",
++            ...(expectedBuild === undefined ? {} : { "x-isolate-start-build": expectedBuild }),
+           },
+           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+         }),
+diff --git a/examples/durable-bench/deployed/command.ts b/examples/durable-bench/deployed/command.ts
+index 3c8ce0e3..c4802d10 100644
+--- a/examples/durable-bench/deployed/command.ts
++++ b/examples/durable-bench/deployed/command.ts
+@@ -11,8 +11,8 @@ export const command = Command.make(
+   "deployed",
+   {
+     targets: Flag.String("targets").pipe(
+-      Flag.withDefault("yielded,pi,tardie"),
+-      Flag.withDescription("Comma-separated targets"),
++      Flag.optional,
++      Flag.withDescription("Comma-separated targets (isolated: yielded,pi; otherwise all three)"),
+     ),
+     sizes: Flag.String("sizes").pipe(
+       Flag.withDefault("50,250"),
+@@ -50,6 +50,15 @@ export const command = Command.make(
+       Flag.withDefault(false),
+       Flag.withDescription("Cold + CPU + same-Object balanced A/B; requires both refs"),
+     ),
++    isolate: Flag.Boolean("isolate").pipe(
++      Flag.withDefault(false),
++      Flag.withDescription("Separate Yielded/pi Workers; reset old code before each fresh upload"),
++    ),
++    order: Flag.String("order").pipe(
++      Flag.withSchema(Schema.Literals(["ABBA", "BAAB"])),
++      Flag.optional,
++      Flag.withDescription("Isolated rigorous pass order (default: randomly choose ABBA or BAAB)"),
++    ),
+     baseline: Flag.String("baseline").pipe(Flag.optional),
+     candidate: Flag.String("candidate").pipe(Flag.optional),
+     teardown: Flag.Boolean("teardown").pipe(
+@@ -63,6 +72,10 @@ export const command = Command.make(
+     if (flags.teardown) return yield* teardown;
+     const baseline = Option.getOrUndefined(flags.baseline);
+     const candidate = Option.getOrUndefined(flags.candidate);
++    const order = Option.getOrUndefined(flags.order);
++
++    if (order !== undefined && !(flags.isolate && flags.rigorous))
++      return yield* new BenchError({ message: "--order requires --isolate --rigorous." });
+ 
+     if (
+       flags.rigorous ? !baseline || !candidate : baseline !== undefined || candidate !== undefined
+@@ -72,7 +85,7 @@ export const command = Command.make(
+       });
+ 
+     const targets = yield* Schema.decodeUnknownEffect(Schema.NonEmptyArray(Target))(
+-      flags.targets.split(","),
++      Option.getOrElse(flags.targets, () => (flags.isolate ? "yielded,pi" : "yielded,pi,tardie")).split(","),
+     );
+ 
+     const sizes = yield* Schema.decodeUnknownEffect(Schema.NonEmptyArray(History))(
+@@ -85,6 +98,10 @@ export const command = Command.make(
+ 
+     if (flags.rigorous && !targets.includes("yielded"))
+       return yield* new BenchError({ message: "Rigorous A/B requires the yielded target." });
++    if (flags.isolate && targets.includes("tardie"))
++      return yield* new BenchError({ message: "Isolated mode supports only yielded and pi." });
++    if (flags.isolate && sizes.some((size) => size !== 50 && size !== 250))
++      return yield* new BenchError({ message: "Isolated mode uses the verified 50/250 fixtures." });
+ 
+     return yield* run({
+       targets: [...new Set(targets)],
+@@ -93,10 +110,12 @@ export const command = Command.make(
+       objects: flags.objects,
+       repeats: Option.getOrElse(flags.repeats, () => (flags.rigorous ? 6 : 4)),
+       concurrency: flags.concurrency,
+-      cold: flags.cold || flags.rigorous,
++      cold: flags.cold || flags.rigorous || flags.isolate,
+       cpu: flags.cpu || flags.rigorous,
+       keep: flags.keep,
+       rigorous: flags.rigorous,
++      isolate: flags.isolate,
++      ...(order === undefined ? {} : { order }),
+       ...(baseline === undefined ? {} : { baseline }),
+       ...(candidate === undefined ? {} : { candidate }),
+     });
+diff --git a/examples/durable-bench/deployed/deploy.ts b/examples/durable-bench/deployed/deploy.ts
+index e24bc0e8..7af0f501 100644
+--- a/examples/durable-bench/deployed/deploy.ts
++++ b/examples/durable-bench/deployed/deploy.ts
+@@ -19,8 +19,8 @@ import {
+ } from "./platform.ts";
+ 
+ const Stack = Schema.Struct({
+-  name: Schema.String.check(Schema.isPattern(/^durable-bench-[a-z0-9-]+$/)),
+-  kind: Schema.Literals(["infrastructure", "target"]),
++  name: Schema.String.check(Schema.isPattern(/^isolate-start-[a-z0-9-]+$/)),
++  kind: Schema.Literals(["infrastructure", "target", "yielded", "pi", "startup-yielded", "startup-pi"]),
+   bundle: Schema.String,
+   build: Schema.String,
+   cpu: Schema.Boolean,
+@@ -32,7 +32,7 @@ const State = Schema.Struct({
+   version: Schema.Literal(1),
+   accountId: Schema.String,
+   token: Schema.String,
+-  infrastructurePrefix: Schema.String.check(Schema.isPattern(/^durable-bench-shared-[a-f0-9]{8}$/)),
++  infrastructurePrefix: Schema.String.check(Schema.isPattern(/^isolate-start-shared-[a-f0-9]{8}$/)),
+   infrastructure: Schema.optionalKey(Stack),
+   infrastructureDeployed: Schema.optionalKey(Schema.Boolean),
+   targets: Schema.Record(Schema.String, Stack),
+@@ -63,7 +63,7 @@ export const deployments = Effect.gen(function* () {
+       version: 1,
+       accountId: cloud.accountId,
+       token: nonce() + nonce(),
+-      infrastructurePrefix: "durable-bench-shared-" + nonce().slice(0, 8),
++      infrastructurePrefix: "isolate-start-shared-" + nonce().slice(0, 8),
+       targets: {},
+     };
+   }
+@@ -90,7 +90,11 @@ export const deployments = Effect.gen(function* () {
+     const result = yield* execute(
+       [
+         "exec",
+-        "alchemy",
++        "bun",
++        "--preload",
++        join(directory, "upload-observer.mjs"),
++        "--tsconfig-override=" + join(repository, "node_modules/alchemy/bin/tsconfig.json"),
++        join(repository, "node_modules/alchemy/bin/alchemy.js"),
+         action,
+         join(directory, "stack.ts"),
+         "--stage",
+@@ -114,6 +118,7 @@ export const deployments = Effect.gen(function* () {
+         DURABLE_BENCH_CPU: String(stack.cpu),
+         DURABLE_BENCH_PROVIDER: provider,
+         DURABLE_BENCH_SUBDOMAIN: cloud.subdomain,
++        ISOLATE_START_UPLOADS: join(privateDirectory, "uploads.jsonl"),
+       },
+     );
+ 
+@@ -164,7 +169,7 @@ export const deployments = Effect.gen(function* () {
+     let reused = state.infrastructure?.build === revision && state.infrastructureDeployed === true;
+ 
+     const infrastructure: Stack = {
+-      name: "durable-bench-infrastructure",
++      name: "isolate-start-infrastructure",
+       kind: "infrastructure",
+       bundle: output,
+       build: revision,
+@@ -210,13 +215,16 @@ export const deployments = Effect.gen(function* () {
+     bundle: string,
+     revision: string,
+     cpu: boolean,
++    kind: Exclude<Stack["kind"], "infrastructure"> = "target",
++    readiness = true,
+   ) {
+-    const stack: Stack = { name, kind: "target", bundle, build: revision, cpu };
++    const stack: Stack = { name, kind, bundle, build: revision, cpu };
+ 
+     state = { ...state, targets: { ...state.targets, [name]: stack } };
+     yield* save(stateFile, state);
+     yield* Console.error("Deploying target Worker…");
+     yield* alchemy(stack, "deploy");
++    if (!readiness) return url(name);
+ 
+     const health = Effect.gen(function* () {
+       yield* ready(url(name), revision);
+diff --git a/examples/durable-bench/deployed/driver.ts b/examples/durable-bench/deployed/driver.ts
+index 3a4aa6e5..f3750a18 100644
+--- a/examples/durable-bench/deployed/driver.ts
++++ b/examples/durable-bench/deployed/driver.ts
+@@ -18,9 +18,12 @@ export default {
+     try {
+       const input: unknown = await request.json();
+ 
+-      const { targetUrl } = Schema.decodeUnknownSync(Schema.Struct({ targetUrl: Schema.String }))(
+-        input,
+-      );
++      const { targetUrl, expectedBuild } = Schema.decodeUnknownSync(
++        Schema.Struct({
++          targetUrl: Schema.String,
++          expectedBuild: Schema.optionalKey(Schema.NonEmptyString),
++        }),
++      )(input);
+ 
+       const target = new URL(targetUrl);
+ 
+@@ -28,13 +31,17 @@ export default {
+         target.protocol !== "https:" ||
+         target.username ||
+         target.password ||
+-        !target.hostname.startsWith("durable-bench-") ||
++        !target.hostname.startsWith("isolate-start-") ||
+         !target.hostname.endsWith(`.${env.WORKERS_SUBDOMAIN}.workers.dev`)
+       )
+         return new Response("invalid target", { status: 400 });
+       if (new URL(request.url).pathname === "/ready")
+         return fetch(new URL("/health?probe=" + Date.now(), target), {
+-          headers: { authorization: `Bearer ${env.BENCH_TOKEN}`, "cache-control": "no-store" },
++          headers: {
++            authorization: `Bearer ${env.BENCH_TOKEN}`,
++            "cache-control": "no-store",
++            ...(expectedBuild === undefined ? {} : { "x-isolate-start-build": expectedBuild }),
++          },
+         });
+       const { query } = Schema.decodeUnknownSync(MeasureRequest)(input);
+ 
+@@ -48,15 +55,21 @@ export default {
+           headers: {
+             authorization: `Bearer ${env.BENCH_TOKEN}`,
+             "content-type": "application/json",
++            ...(expectedBuild === undefined ? {} : { "x-isolate-start-build": expectedBuild }),
+           },
+           body: JSON.stringify(body ?? {}),
+           signal: AbortSignal.timeout(180_000),
+         });
+ 
+-        if (!response.ok)
++        if (!response.ok) {
++          const detail = (await response.text())
++            .replaceAll(env.BENCH_TOKEN, "[redacted]")
++            .slice(0, 1200);
++
+           throw new Error(
+-            `Target ${path} returned HTTP ${response.status}; turn outcome may be unknown.`,
++            `Target ${path} returned HTTP ${response.status}; turn outcome may be unknown. ${detail}`,
+           );
++        }
+ 
+         return response.json();
+       };
+diff --git a/examples/durable-bench/deployed/model.ts b/examples/durable-bench/deployed/model.ts
+index a8e4debf..9dd01a66 100644
+--- a/examples/durable-bench/deployed/model.ts
++++ b/examples/durable-bench/deployed/model.ts
+@@ -1,6 +1,11 @@
+ import { Schema } from "effect";
+ 
+-import { Query, Target } from "./worker/protocol.ts";
++import { ColdResult, Identity, IsolateState, Query, Target } from "./worker/protocol.ts";
++
++export const BuildLabel = Schema.Literals(["working", "baseline", "candidate"]);
++export type BuildLabel = typeof BuildLabel.Type;
++export const IsolatedTarget = Schema.Literals(["yielded", "pi"]);
++export type IsolatedTarget = typeof IsolatedTarget.Type;
+ 
+ export interface Options {
+   readonly targets: readonly (typeof Target.Type)[];
+@@ -13,6 +18,8 @@ export interface Options {
+   readonly cpu: boolean;
+   readonly keep: boolean;
+   readonly rigorous: boolean;
++  readonly isolate?: boolean;
++  readonly order?: "ABBA" | "BAAB";
+   readonly baseline?: string;
+   readonly candidate?: string;
+ }
+@@ -25,17 +32,27 @@ export const Invocation = Schema.Struct({
+   target: Schema.optionalKey(Target),
+   object: Schema.optionalKey(Schema.String),
+   sample: Schema.optionalKey(Schema.String),
++  worker: Schema.optionalKey(Schema.String),
+ });
+ 
+ export type Invocation = typeof Invocation.Type;
+ 
+ export const Sample = Schema.Struct({
+   ...Query.fields,
+-  build: Schema.Literals(["working", "baseline", "candidate"]),
++  build: BuildLabel,
+   epoch: Schema.Natural,
+   repeat: Schema.Natural,
+-  state: Schema.Literals(["cold", "warmup", "warm"]),
+-  status: Schema.Literals(["running", "ok", "failed"]),
++  state: Schema.Literals(["cold", "fresh-first-turn", "warmup", "warm"]),
++  status: Schema.Literals(["running", "ok", "excluded", "failed", "skipped"]),
++  outcome: Schema.optionalKey(Schema.Literals(["completed", "unknown", "not-sent"])),
++  worker: Schema.optionalKey(Schema.String),
++  expectedBuild: Schema.optionalKey(Schema.String),
++  resetBuild: Schema.optionalKey(Schema.String),
++  resetBefore: Schema.optionalKey(Identity),
++  identity: Schema.optionalKey(Identity),
++  buildVerified: Schema.optionalKey(Schema.Boolean),
++  freshVerified: Schema.optionalKey(Schema.Boolean),
++  exclusionReasons: Schema.optionalKey(Schema.Array(Schema.String)),
+   driverMs: Schema.optionalKey(Schema.Number),
+   admissionMs: Schema.optionalKey(Schema.Number),
+   gapMs: Schema.optionalKey(Schema.Number),
+@@ -52,6 +69,50 @@ export const Sample = Schema.Struct({
+ 
+ export type Sample = typeof Sample.Type;
+ 
++export const Health = Schema.Struct({
++  ok: Schema.Literal(true),
++  build: Schema.String,
++  workerIsolate: Schema.optionalKey(IsolateState),
++});
++
++export const Upload = Schema.Struct({
++  target: IsolatedTarget,
++  worker: Schema.String,
++  phase: Schema.Literals(["seed", "epoch"]),
++  label: BuildLabel,
++  epoch: Schema.optionalKey(Schema.Natural),
++  expectedBuild: Schema.String,
++  previousBuild: Schema.optionalKey(Schema.String),
++  sourceSha256: Schema.String,
++  uploadedSha256: Schema.String,
++  resetCount: Schema.Natural,
++  status: Schema.Literals(["uploading", "ready", "failed"]),
++  health: Schema.optionalKey(Health),
++  readinessFailures: Schema.optionalKey(
++    Schema.Array(
++      Schema.Struct({
++        ingress: Schema.Literals(["controller", "driver", "object"]),
++        attempt: Schema.Natural,
++        error: Schema.String,
++      }),
++    ),
++  ),
++  error: Schema.optionalKey(Schema.String),
++});
++
++export type Upload = typeof Upload.Type;
++
++export const Reset = Schema.Struct({
++  ...Query.fields,
++  epoch: Schema.Natural,
++  expectedBuild: Schema.String,
++  status: Schema.Literals(["running", "ok", "failed"]),
++  response: Schema.optionalKey(ColdResult),
++  error: Schema.optionalKey(Schema.String),
++});
++
++export type Reset = typeof Reset.Type;
++
+ export const Cleanup = Schema.Struct({
+   verified: Schema.Boolean,
+   workers: Schema.Array(Schema.String),
+@@ -70,8 +131,16 @@ export const Result = Schema.Struct({
+   infrastructureReused: Schema.Boolean,
+   options: Schema.Json,
+   builds: Schema.Array(
+-    Schema.Struct({ label: Schema.String, revision: Schema.String, sha256: Schema.String }),
++    Schema.Struct({
++      label: Schema.String,
++      revision: Schema.String,
++      sha256: Schema.String,
++      target: Schema.optionalKey(IsolatedTarget),
++    }),
+   ),
++  sequence: Schema.optionalKey(Schema.Array(BuildLabel)),
++  uploads: Schema.optionalKey(Schema.Array(Upload)),
++  resets: Schema.optionalKey(Schema.Array(Reset)),
+   fixtures: Schema.Array(
+     Schema.Struct({
+       target: Target,
+@@ -93,7 +162,11 @@ export const Result = Schema.Struct({
+ 
+ export type Result = typeof Result.Type;
+ 
+-export const MeasureRequest = Schema.Struct({ query: Query, targetUrl: Schema.String });
++export const MeasureRequest = Schema.Struct({
++  query: Query,
++  targetUrl: Schema.String,
++  expectedBuild: Schema.optionalKey(Schema.NonEmptyString),
++});
+ 
+ export const MeasureResponse = Schema.Struct({
+   ok: Schema.Literal(true),
+@@ -102,5 +175,3 @@ export const MeasureResponse = Schema.Struct({
+   admissionMs: Schema.optionalKey(Schema.Number),
+   colo: Schema.NullOr(Schema.String),
+ });
+-
+-export const Health = Schema.Struct({ ok: Schema.Literal(true), build: Schema.String });
+diff --git a/examples/durable-bench/deployed/platform.ts b/examples/durable-bench/deployed/platform.ts
+index c456592a..cdd3093c 100644
+--- a/examples/durable-bench/deployed/platform.ts
++++ b/examples/durable-bench/deployed/platform.ts
+@@ -1,5 +1,4 @@
+ import { createHash, randomBytes } from "node:crypto";
+-import { homedir } from "node:os";
+ import { dirname, resolve } from "node:path";
+ import { fileURLToPath } from "node:url";
+ 
+@@ -13,7 +12,7 @@ export class BenchError extends Schema.TaggedError<BenchError>()("BenchError", {
+ export const directory = dirname(fileURLToPath(import.meta.url));
+ export const workspace = resolve(directory, "..");
+ export const repository = resolve(workspace, "../..");
+-export const privateDirectory = resolve(homedir(), ".local/state/durable-bench");
++export const privateDirectory = "/private/tmp/isolate-start-private";
+ 
+ export const hash = (value: string | Uint8Array) =>
+   createHash("sha256").update(value).digest("hex");
+diff --git a/examples/durable-bench/deployed/report.ts b/examples/durable-bench/deployed/report.ts
+index 8d78b01a..803179fb 100644
+--- a/examples/durable-bench/deployed/report.ts
++++ b/examples/durable-bench/deployed/report.ts
+@@ -35,9 +35,19 @@ export const objectMedians = (rows: readonly Sample[]) =>
+     median(items.flatMap((item) => (item.driverMs === undefined ? [] : [item.driverMs]))),
+   );
+ 
++const eligible = (row: Sample) =>
++  row.status === "ok" &&
++  row.state !== "warmup" &&
++  (row.expectedBuild === undefined ||
++    (row.fingerprintVerified === true &&
++      row.buildVerified === true &&
++      (row.state === "fresh-first-turn"
++        ? row.freshVerified === true
++        : row.residentVerified === true)));
++
+ export const table = (result: Result): string => {
+   const rows = result.samples
+-    .filter((row) => row.status === "ok" && row.state !== "warmup")
++    .filter(eligible)
+     .sort(
+       (a, b) =>
+         a.history - b.history ||
+@@ -53,6 +63,28 @@ export const table = (result: Result): string => {
+     "",
+   ];
+ 
++  if (result.sequence)
++    lines.push(
++      `Upload order: ${result.sequence.join(" → ")}. Each pass follows acknowledged old-build resets and distinct uploaded code bytes.`,
++      "Fresh-first-turn requires matching Worker/Object builds, changed Object isolate and incarnation, one Object constructor, zero prior stateless fetches, first entry, and no prior alarms. Routing Worker health probes are recorded separately.",
++      "Warm turns require the same Object incarnation and isolate throughout that epoch; non-fresh first turns do not disqualify otherwise valid warm turns.",
++      "",
++      "| Target / history / TTFT / build | Verified fresh | Attempted | Excluded | Failed / skipped |",
++      "|---|---:|---:|---:|---:|",
++    );
++  if (result.sequence) {
++    for (const [cell, samples] of group(
++      result.samples.filter((row) => row.state === "fresh-first-turn"),
++      (row) => `${row.target}/${row.history}/${row.ttftMs}/${row.build}`,
++    ))
++      lines.push(
++        `| ${cell} | ${samples.filter(eligible).length} | ${samples.length} | ${samples.filter((row) => row.status === "excluded").length} | ${samples.filter((row) => row.status === "failed").length} / ${samples.filter((row) => row.status === "skipped").length} |`,
++      );
++    lines.push("");
++    if (!rows.some((row) => row.state === "fresh-first-turn"))
++      lines.push("No verified fresh-first-turn samples; no fresh-start ratio can be reported.", "");
++  }
++
+   for (const [cell, samples] of group(
+     rows,
+     (row) => `${row.history} history · ${row.ttftMs} ms TTFT · ${row.state} · ${row.build}`,
+@@ -97,19 +129,50 @@ export const table = (result: Result): string => {
+   }
+   if (rows.some((row) => row.build === "baseline")) {
+     lines.push(
+-      "Same-Object Yielded A/B (candidate ÷ baseline; <1 is faster):",
++      "Same-Object A/B and pi control (candidate-position ÷ baseline-position; <1 is faster):",
+       "",
+-      "| Cell | Paired ratio, median | Baseline repeat drift, median / max |",
+-      "|---|---:|---:|",
++      "| Target / cell | Paired ratio, median | Baseline repeat drift, median / max | Complete four-pass pairs |",
++      "|---|---:|---:|---:|",
+     );
+     for (const [cell, samples] of group(
+-      rows.filter((row) => row.target === "yielded"),
+-      (row) => `${row.history}/${row.ttftMs}/${row.state}`,
++      rows,
++      (row) => `${row.target}/${row.history}/${row.ttftMs}/${row.state}`,
+     )) {
+       const ratios: number[] = [];
+       const drifts: number[] = [];
+ 
+       for (const turns of group(samples, (row) => row.object).values()) {
++        const first = turns[0];
++
++        if (!first) continue;
++
++        const planned = result.samples.filter(
++          (row) =>
++            row.target === first.target && row.object === first.object && row.state === first.state,
++        );
++
++        const repeats =
++          typeof result.options === "object" &&
++          result.options !== null &&
++          "repeats" in result.options &&
++          typeof result.options.repeats === "number"
++            ? result.options.repeats
++            : undefined;
++
++        const expected = first.state === "warm" ? repeats : 1;
++        const passes = group(planned, (row) => String(row.epoch));
++
++        if (
++          expected === undefined ||
++          passes.size !== 4 ||
++          planned.some((row) => !eligible(row)) ||
++          [...passes.values()].some((pass) => pass.length !== expected) ||
++          new Set(turns.filter((row) => row.build === "baseline").map((row) => row.epoch)).size !==
++            2 ||
++          new Set(turns.filter((row) => row.build === "candidate").map((row) => row.epoch)).size !==
++            2
++        )
++          continue;
+         const a = turns.filter((row) => row.build === "baseline");
+         const b = turns.filter((row) => row.build === "candidate");
+ 
+@@ -121,26 +184,45 @@ export const table = (result: Result): string => {
+         drifts.push(Math.max(...epochs) / Math.min(...epochs) - 1);
+       }
+       lines.push(
+-        `| ${cell} | ${median(ratios).toFixed(3)}× | ${(median(drifts) * 100).toFixed(1)}% / ${(Math.max(...drifts) * 100).toFixed(1)}% |`,
++        ratios.length === 0
++          ? `| ${cell} | — | — | 0 |`
++          : `| ${cell} | ${median(ratios).toFixed(3)}× | ${(median(drifts) * 100).toFixed(1)}% / ${(Math.max(...drifts) * 100).toFixed(1)}% | ${ratios.length} |`,
+       );
+     }
+     lines.push(
+       "",
+       "Do not claim gains smaller than the repeat/control spread. Histories grow across the balanced build sequence.",
++      "Pairs with any excluded, failed, skipped, or missing measured turn are omitted; the original rows remain in JSON.",
++      "",
++    );
++  }
++  const excluded = result.samples.filter((row) => row.status === "excluded");
++
++  if (excluded.length > 0) {
++    lines.push(
++      `Excluded completed turns: ${excluded.length} (including warmup). Reasons may overlap:`,
+       "",
++      "| Reason | Samples |",
++      "|---|---:|",
+     );
++    for (const [reason, entries] of group(
++      excluded.flatMap((row) => row.exclusionReasons ?? []),
++      (reason) => reason,
++    ))
++      lines.push(`| ${reason} | ${entries.length} |`);
++    lines.push("");
+   }
+   if (result.cpu) {
+     lines.push(
+       "Observed invocation CPU (telemetry may be sampled or delayed):",
+       "",
+-      "| Target / invocation | CPU ms | Observed | Non-ok outcomes |",
++      "| Worker / target / invocation | CPU ms | Observed | Non-ok outcomes |",
+       "|---|---:|---:|---:|",
+     );
+     for (const [kind, calls] of group(
+       result.cpu,
+       (row) =>
+-        `${row.target ?? "unattributed"}/${row.sample?.match(/^h\d+$/) ? "seed-" : ""}${row.kind}`,
++        `${row.worker ?? "combined"}/${row.target ?? "unattributed"}/${row.sample?.match(/^h\d+$/) ? "seed-" : ""}${row.kind}`,
+     ))
+       lines.push(
+         `| ${kind} | ${interval(calls.flatMap((row) => (row.cpuMs === null ? [] : [row.cpuMs])))} | ${calls.length} | ${calls.filter((row) => row.outcome !== "ok").length} |`,
+@@ -148,11 +230,12 @@ export const table = (result: Result): string => {
+     lines.push(
+       "",
+       `Unmatched invocation markers: ${result.unmatchedCpuMarkers ?? "unknown"}. CPU totals are not inferred from missing rows.`,
++      "All non-ok invocation outcomes remain included, including intentional cold-abort exceptions.",
+       "",
+     );
+   }
+   lines.push(
+-    `Failures: ${result.failures.length}. Target cleanup: ${result.kept ? "kept (--keep)" : result.cleanup?.verified ? "verified" : "NOT VERIFIED"}.`,
++    `Failures: ${result.failures.length}; failed samples: ${result.samples.filter((row) => row.status === "failed").length}; skipped samples: ${result.samples.filter((row) => row.status === "skipped").length}. Target cleanup: ${result.kept ? "kept (--keep)" : result.cleanup?.verified ? "verified" : "NOT VERIFIED"}.`,
+   );
+ 
+   return lines.join("\n") + "\n";
+diff --git a/examples/durable-bench/deployed/run.ts b/examples/durable-bench/deployed/run.ts
+index 09e7a96c..a1dd5d15 100644
+--- a/examples/durable-bench/deployed/run.ts
++++ b/examples/durable-bench/deployed/run.ts
+@@ -16,6 +16,7 @@ import { Cloudflare, request } from "./cloudflare.ts";
+ import { cpu } from "./cpu.ts";
+ import { deployments } from "./deploy.ts";
+ import { prepareFixtures } from "./fixtures.ts";
++import { run as runIsolated } from "./isolate/run.ts";
+ import { MeasureResponse, type Options, type Result, type Sample } from "./model.ts";
+ import {
+   BenchError,
+@@ -64,11 +65,12 @@ const shuffle = <A>(values: readonly A[]): A[] =>
+     .map(({ value }) => value);
+ 
+ export const run = Effect.fnUntraced(function* (options: Options) {
++  if (options.isolate) return yield* runIsolated(options);
+   const started = yield* Clock.currentTimeMillis;
+   const cloud = yield* Cloudflare;
+   const deploy = yield* deployments;
+   const fs = yield* FileSystem.FileSystem;
+-  const runName = `durable-bench-${started.toString(36)}-${nonce().slice(0, 8)}`;
++  const runName = `isolate-start-${started.toString(36)}-${nonce().slice(0, 8)}`;
+   const output = join(workspace, "results", runName);
+   const lock = yield* Semaphore.make(1);
+ 
+@@ -113,7 +115,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+   let targetStarted = false;
+   let telemetryFrom = started;
+ 
+-  yield* Console.error(`Account: ${cloud.accountName}. Preparing fixtures…`);
++  yield* Console.error("Preparing fixtures in the verified benchmark account…");
+   yield* update((value) => value);
+ 
+   const finish = (exit: Exit.Exit<unknown, unknown>) =>
+@@ -498,7 +500,6 @@ export const run = Effect.fnUntraced(function* (options: Options) {
+ }, Effect.scoped);
+ 
+ export const teardown = Effect.gen(function* () {
+-  const cloud = yield* Cloudflare;
+   const deploy = yield* deployments;
+   const cleanup = yield* deploy.teardown;
+ 
+@@ -509,6 +510,6 @@ export const teardown = Effect.gen(function* () {
+ 
+   yield* save(join(workspace, "results", "cleanup.json"), result);
+   yield* Console.log(
+-    `Cleanup verified in ${cloud.accountName}: no durable-bench Workers or Durable Object namespaces remain.`,
++    "Cleanup verified: no isolate-start Workers or Durable Object namespaces remain.",
+   );
+ });
+diff --git a/examples/durable-bench/deployed/stack.ts b/examples/durable-bench/deployed/stack.ts
+index 9a2ca2e2..bba309fa 100644
+--- a/examples/durable-bench/deployed/stack.ts
++++ b/examples/durable-bench/deployed/stack.ts
+@@ -3,7 +3,7 @@ import * as Cloudflare from "alchemy/Cloudflare";
+ import { Config, Effect } from "effect";
+ 
+ export default Alchemy.Stack(
+-  "durable-bench",
++  "isolate-start",
+   {
+     providers: Cloudflare.providers(),
+     state: Alchemy.localState(),
+@@ -37,14 +37,14 @@ export default Alchemy.Stack(
+     if (kind === "infrastructure") {
+       const prefix = yield* Config.NonEmptyString("DURABLE_BENCH_INFRA_PREFIX");
+ 
+-      const provider = yield* Cloudflare.Worker("durable-bench-provider", {
++      const provider = yield* Cloudflare.Worker("isolate-start-provider", {
+         ...options,
+         name: prefix + "-provider",
+         main: bundle + "/provider.mjs",
+         env,
+       });
+ 
+-      const driver = yield* Cloudflare.Worker("durable-bench-driver", {
++      const driver = yield* Cloudflare.Worker("isolate-start-driver", {
+         ...options,
+         name: prefix + "-driver",
+         main: bundle + "/driver.mjs",
+@@ -55,7 +55,7 @@ export default Alchemy.Stack(
+       return { driver: driver.url, provider: provider.url };
+     }
+ 
+-    const worker = yield* Cloudflare.Worker("durable-bench-target", {
++    const worker = yield* Cloudflare.Worker("isolate-start-target", {
+       ...options,
+       name,
+       main: bundle,
+@@ -64,10 +64,22 @@ export default Alchemy.Stack(
+         ...env,
+         CPU: cpu,
+         PROVIDER_URL: yield* Config.NonEmptyString("DURABLE_BENCH_PROVIDER"),
+-        YIELDED: Cloudflare.DurableObject("durable-bench-yielded", { className: "YieldedDO" }),
+-        PI: Cloudflare.DurableObject("durable-bench-pi", { className: "PiDO" }),
+-        ACTORS: Cloudflare.DurableObject("durable-bench-actors", { className: "ActorDO" }),
+-        THREADS: Cloudflare.DurableObject("durable-bench-threads", { className: "ThreadDO" }),
++        ...(kind === "startup-yielded" ? {
++          THREADS: Cloudflare.DurableObject("isolate-start-yielded", { className: "YieldedDO" }),
++        } : kind === "startup-pi" ? {
++          THREADS: Cloudflare.DurableObject("isolate-start-pi", { className: "PiDO" }),
++        } : {
++          ...(kind === "target" || kind === "yielded" ? {
++            YIELDED: Cloudflare.DurableObject("isolate-start-yielded", { className: "YieldedDO" }),
++          } : {}),
++          ...(kind === "target" || kind === "pi" ? {
++            PI: Cloudflare.DurableObject("isolate-start-pi", { className: "PiDO" }),
++          } : {}),
++          ...(kind === "target" ? {
++            ACTORS: Cloudflare.DurableObject("isolate-start-actors", { className: "ActorDO" }),
++            THREADS: Cloudflare.DurableObject("isolate-start-threads", { className: "ThreadDO" }),
++          } : {}),
++        }),
+       },
+     });
+ 
+diff --git a/examples/durable-bench/deployed/worker/host.ts b/examples/durable-bench/deployed/worker/host.ts
+index 5ca1a14c..2511d865 100644
+--- a/examples/durable-bench/deployed/worker/host.ts
++++ b/examples/durable-bench/deployed/worker/host.ts
+@@ -1,4 +1,5 @@
+-import { Effect, Schema } from "effect";
++import * as Effect from "effect/Effect";
++import * as Schema from "effect/Schema";
+ 
+ import { MEASURED_TOOLS, turn } from "../../src/plan.ts";
+ import { tables } from "../../src/serve.ts";
+@@ -51,6 +52,7 @@ export class Host {
+     if (url.pathname === "/identity") return Response.json(this.meter.identity());
+     if (url.pathname === "/cold") {
+       await this.ctx.storage.sync();
++      this.meter.marker("cold-abort", query);
+       this.ctx.abort(COLD_ABORT);
+     }
+     try {
+diff --git a/examples/durable-bench/deployed/worker/observe.ts b/examples/durable-bench/deployed/worker/observe.ts
+index f802283f..a1e8bcf9 100644
+--- a/examples/durable-bench/deployed/worker/observe.ts
++++ b/examples/durable-bench/deployed/worker/observe.ts
+@@ -1,16 +1,7 @@
+-import { Schema } from "effect";
+-
+ import { fingerprint } from "../../src/plan.ts";
+-import {
+-  chatTranscript,
+-  decodeChat,
+-  errorText,
+-  ProviderReceipt,
+-  type Env,
+-  type Identity,
+-  type ProviderCall,
+-  type Query,
+-} from "./protocol.ts";
++import { chatTranscript, errorText, parseReceipt } from "../isolate/native-protocol.ts";
++import { observeConstructor, isolateObservation } from "../isolate/observation.ts";
++import type { Env, Identity, ProviderCall, IsolateState, Query } from "../isolate/protocol.ts";
+ 
+ const meters = new WeakMap<DurableObjectStorage, Observation>();
+ 
+@@ -38,17 +29,23 @@ export class Observation {
+   query?: Query;
+   entry?: Identity;
+   calls: Array<{ -readonly [K in keyof ProviderCall]: ProviderCall[K] }> = [];
+-  constructor(readonly env: Env) {}
++  constructor(readonly env: Env) {
++    observeConstructor(env);
++  }
+   identity(): Identity {
+     return {
+       incarnation: this.incarnation,
+       constructedMs: this.constructedMs,
+       firstEntry: this.entries === 0,
+       priorAlarms: this.alarms,
++      isolate: isolateObservation(this.env),
+     };
+   }
+-  begin(query: Query) {
+-    this.entry = this.identity();
++  begin(query: Query, workerIsolate?: IsolateState) {
++    this.entry = {
++      ...this.identity(),
++      ...(workerIsolate === undefined ? {} : { workerIsolate }),
++    };
+     this.entries++;
+     this.query = query;
+     this.calls = [];
+@@ -56,12 +53,12 @@ export class Observation {
+   alarm() {
+     this.alarms++;
+   }
+-  marker(kind: string) {
++  marker(kind: string, query = this.query) {
+     if (this.env.CPU !== true && this.env.CPU !== "true") return;
+     console.log({
+-      target: this.query?.target,
+-      object: this.query?.object,
+-      sample: this.query?.sample,
++      target: query?.target,
++      object: query?.object,
++      sample: query?.sample,
+       kind,
+     });
+   }
+@@ -78,7 +75,7 @@ export class Observation {
+       url.pathname !== `${base.pathname.replace(/\/$/, "")}/chat/completions`
+     )
+       throw new Error("Unexpected provider destination");
+-    const transcript = chatTranscript(decodeChat(await original.clone().json()));
++    const transcript = chatTranscript(await original.clone().json());
+ 
+     const call: (typeof this.calls)[number] = {
+       call: this.calls.length,
+@@ -133,9 +130,7 @@ export class Observation {
+                 if (line === "data: [DONE]") done = true;
+                 if (line.startsWith(": rebench-receipt ")) {
+                   if (call.receipt) throw new Error("Duplicate provider receipt");
+-                  call.receipt = Schema.decodeUnknownSync(ProviderReceipt)(
+-                    JSON.parse(line.slice(": rebench-receipt ".length)),
+-                  );
++                  call.receipt = parseReceipt(JSON.parse(line.slice(": rebench-receipt ".length)));
+                   if (
+                     call.receipt.call !== call.call ||
+                     call.receipt.requestId !== requestId ||
+diff --git a/examples/durable-bench/deployed/worker/protocol.ts b/examples/durable-bench/deployed/worker/protocol.ts
+index 281e4dcb..b4d996f1 100644
+--- a/examples/durable-bench/deployed/worker/protocol.ts
++++ b/examples/durable-bench/deployed/worker/protocol.ts
+@@ -1,112 +1,9 @@
+ import { Receipt } from "@yielded/agent/receipt";
+ import { Settlement } from "@yielded/agent/submission-ledger";
+-import { Schema } from "effect";
++import * as Schema from "effect/Schema";
+ 
+-export const TARGETS = ["yielded", "pi", "tardie"] as const;
+-export const Target = Schema.Literals(TARGETS);
+-export type Target = typeof Target.Type;
+-export const History = Schema.Int.check(Schema.isGreaterThan(0));
+-
+-export const Query = Schema.Struct({
+-  target: Target,
+-  object: Schema.NonEmptyString,
+-  history: History,
+-  sample: Schema.NonEmptyString,
+-  ttftMs: Schema.Literals([0, 400]),
+-  chunkDelayMs: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1000 })),
+-});
+-
+-export type Query = typeof Query.Type;
+-
+-export const readQuery = (url: URL): Query =>
+-  Schema.decodeUnknownSync(Query)({
+-    target: url.searchParams.get("target"),
+-    object: url.searchParams.get("object"),
+-    history: Number(url.searchParams.get("history")),
+-    sample: url.searchParams.get("sample") ?? "import",
+-    ttftMs: Number(url.searchParams.get("ttftMs") ?? 0),
+-    chunkDelayMs: Number(url.searchParams.get("chunkDelayMs") ?? 0),
+-  });
+-
+-export const expectedSeed: Readonly<Record<number, string>> = {
+-  50: "b017b487524e44a4",
+-  250: "dcea9f30b0917245",
+-};
+-
+-export const Counts = Schema.Record(Schema.String, Schema.Natural);
+-
+-export const SqlValue = Schema.Union([
+-  Schema.Null,
+-  Schema.String,
+-  Schema.Number,
+-  Schema.Struct({ blob: Schema.String }),
+-]);
+-
+-export const SqlTable = Schema.Struct({
+-  name: Schema.NonEmptyString,
+-  sql: Schema.NonEmptyString,
+-  columns: Schema.Array(Schema.String),
+-  rows: Schema.Array(Schema.Array(SqlValue)),
+-});
+-
+-export const SqlDump = Schema.Struct({
+-  tables: Schema.Array(SqlTable),
+-  indexes: Schema.Array(Schema.String),
+-});
+-
+-export type SqlDump = typeof SqlDump.Type;
+-
+-export const FixtureMode = Schema.Literals(["import", "replay"]);
+-
+-export const BulkFixture = Schema.Struct({
+-  version: Schema.Literal(1),
+-  target: Target,
+-  history: History,
+-  fingerprint: Schema.NonEmptyString,
+-  sourceVersion: Schema.NonEmptyString,
+-  tables: Counts,
+-  mode: FixtureMode,
+-  fallbackReason: Schema.optionalKey(Schema.NonEmptyString),
+-  // Canonical pages stay encoded until the storage importer decodes their schema.
+-  archive: Schema.optionalKey(Schema.Array(Schema.Json)),
+-  thread: Schema.optionalKey(SqlDump),
+-  actor: Schema.optionalKey(SqlDump),
+-});
+-
+-export type BulkFixture = typeof BulkFixture.Type;
+-
+-export const Identity = Schema.Struct({
+-  incarnation: Schema.NonEmptyString,
+-  constructedMs: Schema.Number,
+-  firstEntry: Schema.Boolean,
+-  priorAlarms: Schema.Natural,
+-});
+-
+-export type Identity = typeof Identity.Type;
+-
+-export const ImportResult = Schema.Struct({
+-  ok: Schema.Literal(true),
+-  target: Target,
+-  history: History,
+-  fingerprint: Schema.String,
+-  tables: Counts,
+-  mode: FixtureMode,
+-  fallbackReason: Schema.optionalKey(Schema.NonEmptyString),
+-  directoryTables: Schema.optionalKey(Counts),
+-  identity: Identity,
+-});
+-
+-export type ImportResult = typeof ImportResult.Type;
+-
+-export const ColdResult = Schema.Struct({
+-  ok: Schema.Boolean,
+-  before: Identity,
+-  directoryBefore: Schema.optionalKey(Identity),
+-  threadAborted: Schema.Boolean,
+-  directoryAborted: Schema.optionalKey(Schema.Boolean),
+-});
+-
+-export type ColdResult = typeof ColdResult.Type;
++// Keep receipt schemas on the Yielded edge; shared Worker helpers use the neutral protocol.
++export * from "../isolate/protocol.ts";
+ 
+ export const SubmitResult = Schema.Struct({
+   ok: Schema.Literal(true),
+@@ -121,116 +18,3 @@ export const AwaitResult = Schema.Struct({
+ });
+ 
+ export type AwaitResult = typeof AwaitResult.Type;
+-
+-export const RunResult = Schema.Struct({
+-  ok: Schema.Literal(true),
+-  outcome: Schema.Literal("completed"),
+-  identity: Identity,
+-});
+-
+-export type RunResult = typeof RunResult.Type;
+-
+-export const ProviderReceipt = Schema.Struct({
+-  ...Query.fields,
+-  call: Schema.Natural,
+-  requestId: Schema.NonEmptyString,
+-  arrivalMs: Schema.Number,
+-  firstByteMs: Schema.Number,
+-  endMs: Schema.Number,
+-  fingerprint: Schema.String,
+-  rawWireFingerprint: Schema.String,
+-  requestBytes: Schema.Natural,
+-  colo: Schema.NullOr(Schema.String),
+-  error: Schema.Null,
+-});
+-
+-export type ProviderReceipt = typeof ProviderReceipt.Type;
+-
+-export const ProviderCall = Schema.Struct({
+-  call: Schema.Natural,
+-  fingerprint: Schema.String,
+-  startMs: Schema.Number,
+-  endMs: Schema.optionalKey(Schema.Number),
+-  status: Schema.optionalKey(Schema.Int),
+-  receipt: Schema.optionalKey(ProviderReceipt),
+-  error: Schema.optionalKey(Schema.String),
+-});
+-
+-export type ProviderCall = typeof ProviderCall.Type;
+-
+-export const Metrics = Schema.Struct({
+-  ok: Schema.Literal(true),
+-  query: Query,
+-  identity: Identity,
+-  directory: Schema.optionalKey(Identity),
+-  calls: Schema.Array(ProviderCall),
+-  tables: Counts,
+-  bytes: Schema.Natural,
+-});
+-
+-export type Metrics = typeof Metrics.Type;
+-
+-export const Failure = Schema.Struct({
+-  ok: Schema.Literal(false),
+-  error: Schema.String,
+-  sample: Schema.NullOr(Schema.String),
+-});
+-
+-export type Failure = typeof Failure.Type;
+-
+-export interface Env {
+-  BUILD: string;
+-  BENCH_TOKEN: string;
+-  PROVIDER_URL: string;
+-  CPU?: string | boolean;
+-  VERSION?: { id: string };
+-}
+-
+-export const errorText = (cause: unknown): string =>
+-  cause instanceof Error ? cause.message : String(cause);
+-
+-const Chat = Schema.Struct({
+-  messages: Schema.Array(
+-    Schema.Struct({
+-      role: Schema.Literals(["system", "developer", "user", "assistant", "tool"]),
+-      content: Schema.optionalKey(
+-        Schema.Union([
+-          Schema.String,
+-          Schema.Null,
+-          Schema.Array(
+-            Schema.Struct({ type: Schema.String, text: Schema.optionalKey(Schema.String) }),
+-          ),
+-        ]),
+-      ),
+-      tool_calls: Schema.optionalKey(
+-        Schema.Array(
+-          Schema.Struct({
+-            function: Schema.Struct({ arguments: Schema.String }),
+-          }),
+-        ),
+-      ),
+-    }),
+-  ),
+-});
+-
+-export const decodeChat = Schema.decodeUnknownSync(Chat);
+-const argument = Schema.decodeUnknownSync(Schema.Struct({ n: Schema.Int }));
+-
+-export const chatTranscript = (chat: typeof Chat.Type) =>
+-  chat.messages.flatMap((message) => {
+-    if (message.role === "system" || message.role === "developer") return [];
+-
+-    let text =
+-      typeof message.content === "string"
+-        ? message.content
+-        : (message.content ?? []).map((part) => part.text ?? "").join("");
+-
+-    if (message.role === "tool" && text.startsWith('"'))
+-      text = Schema.decodeUnknownSync(Schema.String)(JSON.parse(text));
+-
+-    const calls = message.tool_calls?.map(
+-      (call) => argument(JSON.parse(call.function.arguments)).n,
+-    );
+-
+-    return [{ role: message.role, text, ...(calls?.length ? { calls } : {}) }];
+-  });
+diff --git a/examples/durable-bench/deployed/worker/storage.ts b/examples/durable-bench/deployed/worker/storage.ts
+index b3053419..bc59d61b 100644
+--- a/examples/durable-bench/deployed/worker/storage.ts
++++ b/examples/durable-bench/deployed/worker/storage.ts
+@@ -5,8 +5,10 @@ import { ThreadId } from "@yielded/agent/identifiers";
+ import { RecordEnvelope } from "@yielded/agent/records";
+ import { ThreadArchive, ThreadImport } from "@yielded/agent/thread-import";
+ import { ThreadAdmission, ThreadExport, ThreadExportRequest } from "@yielded/agent/thread-store";
+-import { Effect, Schema, Stream } from "effect";
+-import { Prompt } from "effect/ai";
++import * as Prompt from "effect/ai/Prompt";
++import * as Effect from "effect/Effect";
++import * as Schema from "effect/Schema";
++import * as Stream from "effect/Stream";
+ 
+ import { fingerprint, type Message } from "../../src/plan.ts";
+ import { tables } from "../../src/serve.ts";
+diff --git a/examples/durable-bench/deployed/worker/yielded.ts b/examples/durable-bench/deployed/worker/yielded.ts
+index 2c41e29c..54d60dcf 100644
+--- a/examples/durable-bench/deployed/worker/yielded.ts
++++ b/examples/durable-bench/deployed/worker/yielded.ts
+@@ -4,15 +4,19 @@ import * as Agent from "@yielded/agent/agent";
+ import { ToolExecutionClass } from "@yielded/agent/durable-step";
+ import { text } from "@yielded/agent/output";
+ import { DefinitionDigestInput } from "@yielded/agent/records";
+-import { Effect, Layer, Schema } from "effect";
+ import { DurableObjectState } from "effect-cf";
+-import { Model, Tool, Toolkit } from "effect/ai";
+-import { FetchHttpClient } from "effect/http";
++import * as Model from "effect/ai/Model";
++import * as Tool from "effect/ai/Tool";
++import * as Toolkit from "effect/ai/Toolkit";
++import * as Effect from "effect/Effect";
++import * as FetchHttpClient from "effect/http/FetchHttpClient";
++import * as Layer from "effect/Layer";
++import * as Schema from "effect/Schema";
+ 
+ import { payload } from "../../src/plan.ts";
+ import { Host } from "./host.ts";
+ import { observation } from "./observe.ts";
+-import { type Env, type Query } from "./protocol.ts";
++import { type Env, type Query, type IsolateState } from "./protocol.ts";
+ import { importCanonical } from "./storage.ts";
+ 
+ const tools = Toolkit.make(
+@@ -87,8 +91,12 @@ export class YieldedDO extends ThreadObject.make(application, {
+       await this.ctx.storage.put(replayStarted, true);
+     });
+   }
+-  async benchSubmit(encoded: unknown, query: Query): Promise<unknown> {
+-    this.host.meter.begin(query);
++  async benchSubmit(
++    encoded: unknown,
++    query: Query,
++    workerIsolate?: IsolateState,
++  ): Promise<unknown> {
++    this.host.meter.begin(query, workerIsolate);
+     this.host.meter.marker("submit");
+ 
+     return super.submitEncoded(encoded);
+diff --git a/examples/durable-bench/src/yielded.ts b/examples/durable-bench/src/yielded.ts
+index 07c91e9b..d2f7eb5f 100644
+--- a/examples/durable-bench/src/yielded.ts
++++ b/examples/durable-bench/src/yielded.ts
+@@ -10,9 +10,17 @@ import { ThreadId } from "@yielded/agent/identifiers";
+ import { text as textOutput } from "@yielded/agent/output";
+ import { IdempotencyKey, Principal } from "@yielded/agent/receipt";
+ import { DefinitionDigestInput } from "@yielded/agent/records";
+-import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect";
+ import { DurableObject } from "effect-cf";
+-import { LanguageModel, Model, Tool, Toolkit, type Prompt, type Response } from "effect/ai";
++import { type Prompt, type Response } from "effect/ai";
++import * as LanguageModel from "effect/ai/LanguageModel";
++import * as Model from "effect/ai/Model";
++import * as Tool from "effect/ai/Tool";
++import * as Toolkit from "effect/ai/Toolkit";
++import * as Effect from "effect/Effect";
++import * as Layer from "effect/Layer";
++import * as ManagedRuntime from "effect/ManagedRuntime";
++import * as Schema from "effect/Schema";
++import * as Stream from "effect/Stream";
+ 
+ import { fingerprint, next, payload, type Message, type Turn } from "./plan.ts";
+ import { serve, tables, type Bench } from "./serve.ts";
+diff --git a/examples/durable-bench/third-party/src/deployed/pi.ts b/examples/durable-bench/third-party/src/deployed/pi.ts
+index ec9e9347..05cb794b 100644
+--- a/examples/durable-bench/third-party/src/deployed/pi.ts
++++ b/examples/durable-bench/third-party/src/deployed/pi.ts
+@@ -26,10 +26,10 @@ import {
+   type SqliteExecutor,
+   type SqliteValue,
+ } from "../../node_modules/@earendil-works/pi-durable/dist/storage/sqlite/index.js";
+-import { Host } from "../../../deployed/worker/host.ts";
+-import { type Observation } from "../../../deployed/worker/observe.ts";
++import { Host } from "../../../deployed/isolate/pi-host.ts";
++import type { Observation } from "../../../deployed/worker/observe.ts";
+ import type { Env } from "../../../deployed/worker/protocol.ts";
+-import { importRows } from "../../../deployed/worker/storage.ts";
++import { importRows } from "../../../deployed/isolate/pi-storage.ts";
+ 
+ const SYSTEM = "You are a benchmark agent. Call lookup as instructed, then answer briefly.";
+ 
+diff --git a/examples/durable-bench/deployed/build-pure-unions.ts b/examples/durable-bench/deployed/build-pure-unions.ts
+new file mode 100644
+--- /dev/null
++++ b/examples/durable-bench/deployed/build-pure-unions.ts
+@@ -0,0 +1,65 @@
++import { readFile } from "node:fs/promises";
++import { dirname } from "node:path";
++
++import { BunRuntime, BunServices } from "@effect/platform-bun";
++import { Console, Effect, FileSystem } from "effect";
++import type { Plugin } from "esbuild";
++
++import { build } from "./build.ts";
++import { hash, save } from "./platform.ts";
++
++const edits: { file: string; beforeSha256: string; afterSha256: string }[] = [];
++
++const annotate: Plugin = {
++  name: "isolate-start-two-pure-unions",
++  setup(bundler) {
++    bundler.onLoad(
++      { filter: /packages\/effect-agent\/src\/core\/(AgentError|RunEvent)\.ts$/ },
++      async ({ path }) => {
++        const name = path.endsWith("AgentError.ts") ? "AgentError" : "RunEvent";
++        const before = await readFile(path, "utf8");
++        const needle = `export const ${name} = Schema.Union([`;
++
++        if (before.split(needle).length !== 2)
++          throw new Error("Expected exactly one native schema union");
++
++        const after = before.replace(
++          needle,
++          `export const ${name} = /* @__PURE__ */ Schema.Union([`,
++        );
++
++        edits.push({
++          file: `packages/effect-agent/src/core/${name}.ts`,
++          beforeSha256: hash(before),
++          afterSha256: hash(after),
++        });
++
++        return { contents: after, loader: "ts", resolveDir: dirname(path) };
++      },
++    );
++  },
++};
++
++const program = Effect.gen(function* () {
++  const fs = yield* FileSystem.FileSystem;
++  const directory = "/private/tmp/isolate-start-analysis/pure-unions-deployed";
++  const baseline = yield* build(`${directory}/baseline`, "yielded", "07f0272e");
++  const candidate = yield* build(`${directory}/candidate`, "yielded", "07f0272e", [annotate]);
++
++  if (edits.length !== 2) return yield* Effect.die("Both source annotations must be applied");
++  for (const [label, source] of [
++    ["baseline", baseline],
++    ["candidate", candidate],
++  ] as const)
++    yield* fs.copyFile(source.file, `/private/tmp/isolate-start-analysis/pure-unions-${label}.mjs`);
++  yield* save(`${directory}/manifest.json`, {
++    baseline,
++    candidate,
++    edits,
++    sourceRevision: "07f0272e",
++    virtualSourceOnly: true,
++  });
++  yield* Console.log(JSON.stringify({ baseline, candidate, edits }));
++});
++
++BunRuntime.runMain(program.pipe(Effect.provide(BunServices.layer)));
+diff --git a/examples/durable-bench/deployed/destroy-targets.ts b/examples/durable-bench/deployed/destroy-targets.ts
+new file mode 100644
+--- /dev/null
++++ b/examples/durable-bench/deployed/destroy-targets.ts
+@@ -0,0 +1,18 @@
++import { BunRuntime, BunServices } from "@effect/platform-bun";
++import { Console, Effect, Schema } from "effect";
++
++import { Cloudflare } from "./cloudflare.ts";
++import { deployments } from "./deploy.ts";
++
++const program = Effect.gen(function* () {
++  const names = yield* Schema.decodeUnknownEffect(
++    Schema.NonEmptyArray(Schema.String.check(Schema.isPattern(/^isolate-start-[a-z0-9-]+$/))),
++  )(process.argv.slice(2));
++  const deploy = yield* deployments;
++  for (const name of names)
++    yield* Console.log(JSON.stringify({ name, cleanup: yield* deploy.destroy(name) }));
++});
++
++BunRuntime.runMain(
++  program.pipe(Effect.provide(Cloudflare.layer), Effect.provide(BunServices.layer)),
++);
+diff --git a/examples/durable-bench/deployed/isolate/cleanup-run.ts b/examples/durable-bench/deployed/isolate/cleanup-run.ts
+new file mode 100644
+--- /dev/null
++++ b/examples/durable-bench/deployed/isolate/cleanup-run.ts
+@@ -0,0 +1,43 @@
++import { BunRuntime, BunServices } from "@effect/platform-bun";
++import { Clock, Console, Effect, Schema } from "effect";
++
++import { Cloudflare } from "../cloudflare.ts";
++import { deployments } from "../deploy.ts";
++import { Result } from "../model.ts";
++import { read, save, workspace } from "../platform.ts";
++
++const program = Effect.gen(function* () {
++  const runName = yield* Schema.decodeUnknownEffect(
++    Schema.String.check(Schema.isPattern(/^isolate-start-m[a-z0-9]+-[a-f0-9]{8}$/)),
++  )(process.argv[2]);
++
++  const file = `${workspace}/results/${runName}.json`;
++  const result = yield* read(file, Result);
++  const deploy = yield* deployments;
++  const outcomes = [];
++
++  for (const target of ["yielded", "pi"] as const)
++    outcomes.push(yield* deploy.destroy(`${runName}-${target}`));
++
++  const cleanup = {
++    verified: outcomes.every((outcome) => outcome.verified),
++    workers: outcomes.flatMap((outcome) => outcome.workers),
++    namespaces: outcomes.flatMap((outcome) => outcome.namespaces),
++  };
++
++  yield* save(file, {
++    ...result,
++    complete: false,
++    wallMs: (yield* Clock.currentTimeMillis) - Date.parse(result.startedAt),
++    failures: [
++      ...result.failures,
++      `Controller stopped during fixture setup after ${result.failures.length} recorded setup failures. In-flight fixture outcomes are unknown; none are retried. No measured epoch or turn was sent. Invocation CPU was not collected for this interrupted setup.`,
++    ],
++    cleanup,
++  });
++  yield* Console.log(JSON.stringify({ run: runName, cleanup }));
++});
++
++BunRuntime.runMain(
++  program.pipe(Effect.provide(Cloudflare.layer), Effect.provide(BunServices.layer)),
++);
+diff --git a/examples/durable-bench/deployed/isolate/native-protocol.ts b/examples/durable-bench/deployed/isolate/native-protocol.ts
+new file mode 100644
+--- /dev/null
++++ b/examples/durable-bench/deployed/isolate/native-protocol.ts
+@@ -0,0 +1,246 @@
++// Task-local transport checks: the pi control must not load Effect just for instrumentation.
++// The controller still validates every returned value against the shared Effect Schemas.
++import type { Message } from "../../src/plan.ts";
++import type {
++  BulkFixture,
++  Identity,
++  IsolateState,
++  ProviderReceipt,
++  Query,
++  SqlDump,
++  Target,
++} from "./protocol.ts";
++
++export const object = (input: unknown): Record<string, unknown> => {
++  if (typeof input !== "object" || input === null || Array.isArray(input))
++    throw new Error("Expected an object");
++
++  return Object.fromEntries(Object.entries(input));
++};
++
++export const array = (input: unknown): unknown[] => {
++  if (!Array.isArray(input)) throw new Error("Expected an array");
++
++  return input;
++};
++
++export const string = (input: unknown): string => {
++  if (typeof input !== "string") throw new Error("Expected a string");
++
++  return input;
++};
++
++const nonempty = (input: unknown): string => {
++  const value = string(input);
++
++  if (!value) throw new Error("Expected a nonempty string");
++
++  return value;
++};
++
++const finite = (input: unknown): number => {
++  if (typeof input !== "number" || !Number.isFinite(input))
++    throw new Error("Expected a finite number");
++
++  return input;
++};
++
++export const integer = (input: unknown): number => {
++  const value = finite(input);
++
++  if (!Number.isSafeInteger(value)) throw new Error("Expected an integer");
++
++  return value;
++};
++
++const natural = (input: unknown): number => {
++  const value = integer(input);
++
++  if (value < 0) throw new Error("Expected a natural number");
++
++  return value;
++};
++
++const boolean = (input: unknown): boolean => {
++  if (typeof input !== "boolean") throw new Error("Expected a boolean");
++
++  return input;
++};
++
++const target = (input: unknown): Target => {
++  if (input !== "yielded" && input !== "pi" && input !== "tardie")
++    throw new Error("Unknown target");
++
++  return input;
++};
++
++const query = (input: unknown): Query => {
++  const value = object(input);
++  const history = natural(value.history);
++  const ttftMs = integer(value.ttftMs);
++  const chunkDelayMs = natural(value.chunkDelayMs);
++
++  if (!history || (ttftMs !== 0 && ttftMs !== 400) || chunkDelayMs > 1000)
++    throw new Error("Invalid query limits");
++
++  return {
++    target: target(value.target),
++    object: nonempty(value.object),
++    history,
++    sample: nonempty(value.sample),
++    ttftMs,
++    chunkDelayMs,
++  };
++};
++
++export const readQuery = (url: URL): Query =>
++  query({
++    target: url.searchParams.get("target"),
++    object: url.searchParams.get("object"),
++    history: Number(url.searchParams.get("history")),
++    sample: url.searchParams.get("sample") ?? "import",
++    ttftMs: Number(url.searchParams.get("ttftMs") ?? 0),
++    chunkDelayMs: Number(url.searchParams.get("chunkDelayMs") ?? 0),
++  });
++
++export const parseIsolate = (input: unknown): IsolateState => {
++  const value = object(input);
++
++  return {
++    id: nonempty(value.id),
++    build: string(value.build),
++    statelessFetches: natural(value.statelessFetches),
++    durableObjectConstructors: natural(value.durableObjectConstructors),
++  };
++};
++
++export const parseIdentity = (input: unknown): Identity => {
++  const value = object(input);
++
++  return {
++    incarnation: nonempty(value.incarnation),
++    constructedMs: finite(value.constructedMs),
++    firstEntry: boolean(value.firstEntry),
++    priorAlarms: natural(value.priorAlarms),
++    ...(value.isolate === undefined ? {} : { isolate: parseIsolate(value.isolate) }),
++    ...(value.workerIsolate === undefined
++      ? {}
++      : { workerIsolate: parseIsolate(value.workerIsolate) }),
++  };
++};
++
++const dump = (input: unknown): SqlDump => {
++  const value = object(input);
++
++  return {
++    tables: array(value.tables).map((input) => {
++      const table = object(input);
++
++      return {
++        name: nonempty(table.name),
++        sql: nonempty(table.sql),
++        columns: array(table.columns).map(string),
++        rows: array(table.rows).map((row) =>
++          array(row).map((cell) => {
++            if (cell === null || typeof cell === "string") return cell;
++            if (typeof cell === "number") return finite(cell);
++
++            return { blob: string(object(cell).blob) };
++          }),
++        ),
++      };
++    }),
++    indexes: array(value.indexes).map(string),
++  };
++};
++
++export const parseFixture = (input: unknown): BulkFixture => {
++  const value = object(input);
++
++  if (value.version !== 1 || value.target !== "pi" || value.mode !== "import")
++    throw new Error("Expected a native pi import fixture");
++  const history = natural(value.history);
++
++  if (!history) throw new Error("Empty fixture history");
++
++  return {
++    version: 1,
++    target: "pi",
++    history,
++    fingerprint: nonempty(value.fingerprint),
++    sourceVersion: nonempty(value.sourceVersion),
++    mode: "import",
++    tables: Object.fromEntries(
++      Object.entries(object(value.tables)).map(([key, count]) => [key, natural(count)]),
++    ),
++    ...(value.thread === undefined ? {} : { thread: dump(value.thread) }),
++    ...(value.fallbackReason === undefined
++      ? {}
++      : { fallbackReason: nonempty(value.fallbackReason) }),
++  };
++};
++
++export const parseReceipt = (input: unknown): ProviderReceipt => {
++  const value = object(input);
++
++  if (value.error !== null) throw new Error("Provider receipt failed");
++
++  return {
++    ...query(value),
++    call: natural(value.call),
++    requestId: nonempty(value.requestId),
++    arrivalMs: finite(value.arrivalMs),
++    firstByteMs: finite(value.firstByteMs),
++    endMs: finite(value.endMs),
++    fingerprint: string(value.fingerprint),
++    rawWireFingerprint: string(value.rawWireFingerprint),
++    requestBytes: natural(value.requestBytes),
++    colo: value.colo === null ? null : string(value.colo),
++    error: null,
++  };
++};
++
++export const argument = (input: unknown): number => integer(object(input).n);
++
++export const chatTranscript = (input: unknown): Message[] =>
++  array(object(input).messages).flatMap((input) => {
++    const message = object(input);
++
++    if (message.role === "system" || message.role === "developer") return [];
++    if (message.role !== "user" && message.role !== "assistant" && message.role !== "tool")
++      throw new Error("Unknown chat role");
++
++    let text =
++      typeof message.content === "string"
++        ? message.content
++        : message.content === null || message.content === undefined
++          ? ""
++          : array(message.content)
++              .map((input) => {
++                const part = object(input);
++
++                string(part.type);
++
++                return part.text === undefined ? "" : string(part.text);
++              })
++              .join("");
++
++    if (message.role === "tool" && text.startsWith('"')) text = string(JSON.parse(text));
++
++    const calls =
++      message.tool_calls === undefined
++        ? []
++        : array(message.tool_calls).map((input) =>
++            argument(JSON.parse(string(object(object(input).function).arguments))),
++          );
++
++    return [{ role: message.role, text, ...(calls.length ? { calls } : {}) }];
++  });
++
++export const errorText = (cause: unknown): string =>
++  cause instanceof Error ? cause.message : String(cause);
++
++export const expectedSeed: Readonly<Record<number, string>> = {
++  50: "b017b487524e44a4",
++  250: "dcea9f30b0917245",
++};
+diff --git a/examples/durable-bench/deployed/isolate/observation.ts b/examples/durable-bench/deployed/isolate/observation.ts
+new file mode 100644
+--- /dev/null
++++ b/examples/durable-bench/deployed/isolate/observation.ts
+@@ -0,0 +1,44 @@
++import type { Env, IsolateState } from "./protocol.ts";
++
++export const BUILD_HEADER = "x-isolate-start-build";
++export const INGRESS_HEADER = "x-isolate-start-ingress";
++
++let id: string | undefined;
++let statelessFetches = 0;
++let durableObjectConstructors = 0;
++
++/** Called only from a request or Object constructor; no random work at module evaluation. */
++export const isolateObservation = (env: Env): IsolateState => ({
++  id: (id ??= crypto.randomUUID()),
++  build: env.BUILD,
++  statelessFetches,
++  durableObjectConstructors,
++});
++
++/** The routing snapshot excludes this request and includes earlier health/import/metrics calls. */
++export const observeFetch = (env: Env): IsolateState => {
++  const before = isolateObservation(env);
++
++  statelessFetches++;
++
++  return before;
++};
++
++/** Entry snapshots include the measured Object's own constructor. */
++export const observeConstructor = (env: Env): void => {
++  durableObjectConstructors++;
++  isolateObservation(env);
++};
++
++/** Run before getByName or any RPC; only /health is allowed without an expected version. */
++export const buildMismatch = (request: Request, env: Env): Response | undefined =>
++  request.headers.get(BUILD_HEADER) === env.BUILD
++    ? undefined
++    : Response.json(
++        {
++          ok: false,
++          error: `Worker build ${env.BUILD} does not match ${BUILD_HEADER}: ${request.headers.get(BUILD_HEADER) ?? "missing"}`,
++          sample: new URL(request.url).searchParams.get("sample"),
++        },
++        { status: 409 },
++      );
+diff --git a/examples/durable-bench/deployed/isolate/pi-host.ts b/examples/durable-bench/deployed/isolate/pi-host.ts
+new file mode 100644
+--- /dev/null
++++ b/examples/durable-bench/deployed/isolate/pi-host.ts
+@@ -0,0 +1,92 @@
++import { MEASURED_TOOLS, turn } from "../../src/plan.ts";
++import { tables } from "../../src/serve.ts";
++import { attach, type Observation } from "../worker/observe.ts";
++import { parseFixture, parseIsolate, errorText, readQuery } from "./native-protocol.ts";
++import { INGRESS_HEADER } from "./observation.ts";
++import { verifyFixture } from "./pi-storage.ts";
++import type { BulkFixture, Env, Query } from "./protocol.ts";
++
++export const COLD_ABORT = "durable-bench explicit cold";
++
++/** The existing deployed Host contract, with only pi's native fixture reader reachable. */
++export class Host {
++  readonly meter: Observation;
++  constructor(
++    readonly ctx: DurableObjectState,
++    readonly env: Env,
++    readonly target: "pi",
++  ) {
++    this.meter = attach(ctx, env);
++  }
++  async fetch(
++    request: Request,
++    handlers: {
++      import: (fixture: BulkFixture, query: Query) => Promise<void>;
++      run: (input: { id: string; text: string }) => Promise<void>;
++    },
++  ): Promise<Response> {
++    const url = new URL(request.url);
++    const query = readQuery(url);
++
++    if (query.target !== this.target) throw new Error("Target mismatch");
++    if (url.pathname === "/identity") return Response.json(this.meter.identity());
++    if (url.pathname === "/cold") {
++      await this.ctx.storage.sync();
++      this.meter.marker("cold-abort", query);
++      this.ctx.abort(COLD_ABORT);
++    }
++    try {
++      if (url.pathname === "/import") {
++        const fixture = parseFixture(await request.json());
++
++        if (fixture.target !== query.target || fixture.history !== query.history)
++          throw new Error("Fixture/query mismatch");
++        if (fixture.mode === "replay")
++          throw new Error("Only Yielded supports the fixture replay fallback");
++        await handlers.import(fixture, query);
++        const verified = await verifyFixture(this.ctx.storage, fixture);
++
++        return Response.json({
++          ok: true,
++          target: query.target,
++          history: query.history,
++          ...verified,
++          mode: fixture.mode,
++          ...(fixture.fallbackReason === undefined
++            ? {}
++            : { fallbackReason: fixture.fallbackReason }),
++          identity: this.meter.identity(),
++        });
++      }
++      if (url.pathname === "/run") {
++        const ingress = request.headers.get(INGRESS_HEADER);
++
++        this.meter.begin(query, ingress === null ? undefined : parseIsolate(JSON.parse(ingress)));
++        this.meter.marker("run");
++        await handlers.run(turn(query.sample, MEASURED_TOOLS));
++
++        return Response.json({ ok: true, outcome: "completed", identity: this.meter.entry });
++      }
++      if (url.pathname === "/metrics") {
++        if (!this.meter.query || this.meter.query.sample !== query.sample)
++          throw new Error("No metrics for this sample/incarnation");
++
++        return Response.json({
++          ok: true,
++          query: this.meter.query,
++          identity: this.meter.entry,
++          calls: this.meter.calls,
++          tables: tables(this.ctx.storage.sql),
++          bytes: this.ctx.storage.sql.databaseSize,
++        });
++      }
++
++      return new Response("not found", { status: 404 });
++    } catch (cause) {
++      return Response.json(
++        { ok: false, error: errorText(cause), sample: query.sample },
++        { status: 500 },
++      );
++    }
++  }
++}
+diff --git a/examples/durable-bench/deployed/isolate/pi-storage.ts b/examples/durable-bench/deployed/isolate/pi-storage.ts
+new file mode 100644
+--- /dev/null
++++ b/examples/durable-bench/deployed/isolate/pi-storage.ts
+@@ -0,0 +1,97 @@
++import { fingerprint, type Message } from "../../src/plan.ts";
++import { tables } from "../../src/serve.ts";
++import { expectedSeed, argument, array, object, string } from "./native-protocol.ts";
++import type { BulkFixture, SqlDump } from "./protocol.ts";
++
++const fail = (message: string) => new Error(message);
++const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
++
++export const importRows = (storage: DurableObjectStorage, dump: SqlDump): void => {
++  storage.transactionSync(() => {
++    for (const table of dump.tables) {
++      if (table.name.startsWith("_cf_") || table.name.startsWith("sqlite_"))
++        throw fail("Platform tables cannot be imported");
++      storage.sql.exec(table.sql.replace(/^CREATE TABLE /i, "CREATE TABLE IF NOT EXISTS "));
++      if (
++        storage.sql.exec<{ n: number }>(`SELECT COUNT(*) n FROM ${quote(table.name)}`).one().n !== 0
++      )
++        throw fail(`Import destination table ${table.name} is not empty`);
++      for (const row of table.rows) {
++        const values = row.map((value) =>
++          typeof value === "object" && value !== null
++            ? Uint8Array.from(atob(value.blob), (char) => char.charCodeAt(0)).buffer
++            : value,
++        );
++
++        storage.sql.exec(
++          `INSERT INTO ${quote(table.name)} (${table.columns.map(quote).join(",")}) VALUES (${values.map(() => "?").join(",")})`,
++          ...values,
++        );
++      }
++    }
++    for (const index of dump.indexes)
++      storage.sql.exec(index.replace(/^CREATE (UNIQUE )?INDEX /i, "CREATE $1INDEX IF NOT EXISTS "));
++  });
++};
++
++/** Same pi fixture projection as worker/storage.ts, without another framework's decoders. */
++export const transcript = (sql: SqlStorage): readonly Message[] => {
++  const result: Message[] = [];
++
++  for (const row of sql
++    .exec<{ record: string }>("SELECT record FROM entries ORDER BY commit_seq")
++    .toArray()) {
++    for (const input of array(object(JSON.parse(row.record)).model)) {
++      const message = object(input);
++
++      if (message.role !== "user" && message.role !== "assistant" && message.role !== "toolResult")
++        continue;
++
++      const parts = typeof message.content === "string" ? [] : array(message.content).map(object);
++
++      const calls = parts.flatMap((part) =>
++        part.type === "toolCall" ? [argument(part.arguments)] : [],
++      );
++
++      const text =
++        typeof message.content === "string"
++          ? message.content
++          : parts
++              .flatMap((part) =>
++                part.type === "text" ? [part.text === undefined ? "" : string(part.text)] : [],
++              )
++              .join("");
++
++      result.push({
++        role: message.role === "toolResult" ? "tool" : message.role,
++        text,
++        ...(calls.length ? { calls } : {}),
++      });
++    }
++  }
++  if (result.at(-1)?.role !== "assistant" || result.at(-1)?.calls?.length)
++    throw fail("Fixture is not settled");
++
++  return result.slice(0, -1);
++};
++
++export const verifyFixture = async (storage: DurableObjectStorage, fixture: BulkFixture) => {
++  const digest = await fingerprint(transcript(storage.sql));
++
++  if (
++    digest !== fixture.fingerprint ||
++    (expectedSeed[fixture.history] !== undefined && digest !== expectedSeed[fixture.history])
++  )
++    throw fail("Imported transcript fingerprint differs from local fixture");
++  const counts = tables(storage.sql);
++
++  if (Object.keys(counts).sort().join("\n") !== Object.keys(fixture.tables).sort().join("\n"))
++    throw fail("Initialized table inventory differs from local source fixture");
++
++  for (const [table, expected] of Object.entries(fixture.tables)) {
++    if (counts[table] !== expected)
++      throw fail(`Initialized ${table} count ${counts[table]} differs from source ${expected}`);
++  }
++
++  return { fingerprint: digest, tables: counts };
++};
+diff --git a/examples/durable-bench/deployed/isolate/protocol.ts b/examples/durable-bench/deployed/isolate/protocol.ts
+new file mode 100644
+--- /dev/null
++++ b/examples/durable-bench/deployed/isolate/protocol.ts
+@@ -0,0 +1,232 @@
++import * as Schema from "effect/Schema";
++
++export const TARGETS = ["yielded", "pi", "tardie"] as const;
++export const Target = Schema.Literals(TARGETS);
++export type Target = typeof Target.Type;
++export const History = Schema.Int.check(Schema.isGreaterThan(0));
++
++export const Query = Schema.Struct({
++  target: Target,
++  object: Schema.NonEmptyString,
++  history: History,
++  sample: Schema.NonEmptyString,
++  ttftMs: Schema.Literals([0, 400]),
++  chunkDelayMs: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1000 })),
++});
++
++export type Query = typeof Query.Type;
++
++export const readQuery = (url: URL): Query =>
++  Schema.decodeUnknownSync(Query)({
++    target: url.searchParams.get("target"),
++    object: url.searchParams.get("object"),
++    history: Number(url.searchParams.get("history")),
++    sample: url.searchParams.get("sample") ?? "import",
++    ttftMs: Number(url.searchParams.get("ttftMs") ?? 0),
++    chunkDelayMs: Number(url.searchParams.get("chunkDelayMs") ?? 0),
++  });
++
++export const expectedSeed: Readonly<Record<number, string>> = {
++  50: "b017b487524e44a4",
++  250: "dcea9f30b0917245",
++};
++
++export const Counts = Schema.Record(Schema.String, Schema.Natural);
++
++export const SqlValue = Schema.Union([
++  Schema.Null,
++  Schema.String,
++  Schema.Number,
++  Schema.Struct({ blob: Schema.String }),
++]);
++
++export const SqlTable = Schema.Struct({
++  name: Schema.NonEmptyString,
++  sql: Schema.NonEmptyString,
++  columns: Schema.Array(Schema.String),
++  rows: Schema.Array(Schema.Array(SqlValue)),
++});
++
++export const SqlDump = Schema.Struct({
++  tables: Schema.Array(SqlTable),
++  indexes: Schema.Array(Schema.String),
++});
++
++export type SqlDump = typeof SqlDump.Type;
++
++export const FixtureMode = Schema.Literals(["import", "replay"]);
++
++export const BulkFixture = Schema.Struct({
++  version: Schema.Literal(1),
++  target: Target,
++  history: History,
++  fingerprint: Schema.NonEmptyString,
++  sourceVersion: Schema.NonEmptyString,
++  tables: Counts,
++  mode: FixtureMode,
++  fallbackReason: Schema.optionalKey(Schema.NonEmptyString),
++  // Canonical pages stay encoded until the storage importer decodes their schema.
++  archive: Schema.optionalKey(Schema.Array(Schema.Json)),
++  thread: Schema.optionalKey(SqlDump),
++  actor: Schema.optionalKey(SqlDump),
++});
++
++export type BulkFixture = typeof BulkFixture.Type;
++
++/** Snapshots are captured at measured entry, not when /metrics is fetched. */
++export const IsolateState = Schema.Struct({
++  id: Schema.NonEmptyString,
++  build: Schema.String,
++  statelessFetches: Schema.Natural,
++  durableObjectConstructors: Schema.Natural,
++});
++
++export type IsolateState = typeof IsolateState.Type;
++
++export const Identity = Schema.Struct({
++  incarnation: Schema.NonEmptyString,
++  constructedMs: Schema.Number,
++  firstEntry: Schema.Boolean,
++  priorAlarms: Schema.Natural,
++  isolate: Schema.optionalKey(IsolateState),
++  workerIsolate: Schema.optionalKey(IsolateState),
++});
++
++export type Identity = typeof Identity.Type;
++
++export const ImportResult = Schema.Struct({
++  ok: Schema.Literal(true),
++  target: Target,
++  history: History,
++  fingerprint: Schema.String,
++  tables: Counts,
++  mode: FixtureMode,
++  fallbackReason: Schema.optionalKey(Schema.NonEmptyString),
++  directoryTables: Schema.optionalKey(Counts),
++  identity: Identity,
++});
++
++export type ImportResult = typeof ImportResult.Type;
++
++export const ColdResult = Schema.Struct({
++  ok: Schema.Boolean,
++  before: Identity,
++  directoryBefore: Schema.optionalKey(Identity),
++  threadAborted: Schema.Boolean,
++  directoryAborted: Schema.optionalKey(Schema.Boolean),
++});
++
++export type ColdResult = typeof ColdResult.Type;
++
++export const RunResult = Schema.Struct({
++  ok: Schema.Literal(true),
++  outcome: Schema.Literal("completed"),
++  identity: Identity,
++});
++
++export type RunResult = typeof RunResult.Type;
++
++export const ProviderReceipt = Schema.Struct({
++  ...Query.fields,
++  call: Schema.Natural,
++  requestId: Schema.NonEmptyString,
++  arrivalMs: Schema.Number,
++  firstByteMs: Schema.Number,
++  endMs: Schema.Number,
++  fingerprint: Schema.String,
++  rawWireFingerprint: Schema.String,
++  requestBytes: Schema.Natural,
++  colo: Schema.NullOr(Schema.String),
++  error: Schema.Null,
++});
++
++export type ProviderReceipt = typeof ProviderReceipt.Type;
++
++export const ProviderCall = Schema.Struct({
++  call: Schema.Natural,
++  fingerprint: Schema.String,
++  startMs: Schema.Number,
++  endMs: Schema.optionalKey(Schema.Number),
++  status: Schema.optionalKey(Schema.Int),
++  receipt: Schema.optionalKey(ProviderReceipt),
++  error: Schema.optionalKey(Schema.String),
++});
++
++export type ProviderCall = typeof ProviderCall.Type;
++
++export const Metrics = Schema.Struct({
++  ok: Schema.Literal(true),
++  query: Query,
++  identity: Identity,
++  directory: Schema.optionalKey(Identity),
++  calls: Schema.Array(ProviderCall),
++  tables: Counts,
++  bytes: Schema.Natural,
++});
++
++export type Metrics = typeof Metrics.Type;
++
++export const Failure = Schema.Struct({
++  ok: Schema.Literal(false),
++  error: Schema.String,
++  sample: Schema.NullOr(Schema.String),
++});
++
++export type Failure = typeof Failure.Type;
++
++export interface Env {
++  BUILD: string;
++  BENCH_TOKEN: string;
++  PROVIDER_URL: string;
++  CPU?: string | boolean;
++  VERSION?: { id: string };
++}
++
++export const errorText = (cause: unknown): string =>
++  cause instanceof Error ? cause.message : String(cause);
++
++const Chat = Schema.Struct({
++  messages: Schema.Array(
++    Schema.Struct({
++      role: Schema.Literals(["system", "developer", "user", "assistant", "tool"]),
++      content: Schema.optionalKey(
++        Schema.Union([
++          Schema.String,
++          Schema.Null,
++          Schema.Array(
++            Schema.Struct({ type: Schema.String, text: Schema.optionalKey(Schema.String) }),
++          ),
++        ]),
++      ),
++      tool_calls: Schema.optionalKey(
++        Schema.Array(
++          Schema.Struct({
++            function: Schema.Struct({ arguments: Schema.String }),
++          }),
++        ),
++      ),
++    }),
++  ),
++});
++
++export const decodeChat = Schema.decodeUnknownSync(Chat);
++const argument = Schema.decodeUnknownSync(Schema.Struct({ n: Schema.Int }));
++
++export const chatTranscript = (chat: typeof Chat.Type) =>
++  chat.messages.flatMap((message) => {
++    if (message.role === "system" || message.role === "developer") return [];
++
++    let text =
++      typeof message.content === "string"
++        ? message.content
++        : (message.content ?? []).map((part) => part.text ?? "").join("");
++
++    if (message.role === "tool" && text.startsWith('"'))
++      text = Schema.decodeUnknownSync(Schema.String)(JSON.parse(text));
++
++    const calls = message.tool_calls?.map(
++      (call) => argument(JSON.parse(call.function.arguments)).n,
++    );
++
++    return [{ role: message.role, text, ...(calls?.length ? { calls } : {}) }];
++  });
+diff --git a/examples/durable-bench/deployed/isolate/run.ts b/examples/durable-bench/deployed/isolate/run.ts
+new file mode 100644
+--- /dev/null
++++ b/examples/durable-bench/deployed/isolate/run.ts
+@@ -0,0 +1,942 @@
++import { dirname, join } from "node:path";
++
++import {
++  Cause,
++  Clock,
++  Console,
++  DateTime,
++  Effect,
++  Exit,
++  FileSystem,
++  Schema,
++  Semaphore,
++} from "effect";
++
++import {
++  history,
++  MEASURED_TOOLS,
++  next,
++  payload,
++  turn,
++  type Message,
++  type Turn,
++} from "../../src/plan.ts";
++import { build, ensureVendor } from "../build.ts";
++import { Cloudflare, request } from "../cloudflare.ts";
++import { cpu } from "../cpu.ts";
++import { deployments } from "../deploy.ts";
++import { prepareFixtures } from "../fixtures.ts";
++import {
++  Health,
++  IsolatedTarget,
++  MeasureResponse,
++  type BuildLabel,
++  type Options,
++  type Result,
++  type Sample,
++  type Upload,
++} from "../model.ts";
++import {
++  BenchError,
++  git,
++  hash,
++  nonce,
++  privateDirectory,
++  redact,
++  save,
++  workspace,
++} from "../platform.ts";
++import { median, table } from "../report.ts";
++import { ColdResult, Identity, ImportResult, Metrics, type Query } from "./protocol.ts";
++
++type Built = Effect.Success<ReturnType<typeof build>>;
++type Live = { readonly worker: string; readonly endpoint: string; readonly expectedBuild: string };
++
++const key = (query: Query) => `${query.target}/${query.object}`;
++
++const address = (live: Live, path: string, query: Query) => {
++  const url = new URL(path, live.endpoint);
++
++  for (const [name, value] of Object.entries(query)) url.searchParams.set(name, String(value));
++
++  return url;
++};
++
++const equalCounts = (a: Readonly<Record<string, number>>, b: Readonly<Record<string, number>>) =>
++  Object.keys(a).length === Object.keys(b).length &&
++  Object.keys(a).every((name) => a[name] === b[name]);
++
++// Same framework-independent transcript as the original controller; no measured turn is replayed.
++const append = (messages: Message[], input: Turn): string[] => {
++  const hashes: string[] = [];
++
++  messages.push({ role: "user", text: input.text });
++  for (;;) {
++    hashes.push(
++      hash(JSON.stringify(messages.map((m) => [m.role, m.text, m.calls ?? []]))).slice(0, 16),
++    );
++    const step = next(messages);
++
++    if ("answer" in step) {
++      messages.push({ role: "assistant", text: step.answer });
++
++      return hashes;
++    }
++    messages.push(
++      { role: "assistant", text: "", calls: [step.call] },
++      { role: "tool", text: payload(step.call) },
++    );
++  }
++};
++
++const shuffle = <A>(values: readonly A[]): A[] =>
++  values
++    .map((value) => ({ value, order: nonce() }))
++    .sort((a, b) => a.order.localeCompare(b.order))
++    .map(({ value }) => value);
++
++/** Task-local controller: old-code reset -> new code bytes -> health-only readiness -> turns. */
++export const run = Effect.fnUntraced(function* (options: Options) {
++  const targets = yield* Schema.decodeUnknownEffect(Schema.NonEmptyArray(IsolatedTarget))(
++    options.targets,
++  ).pipe(
++    Effect.mapError(
++      () => new BenchError({ message: "Isolated mode supports only yielded and pi." }),
++    ),
++  );
++
++  if (options.rigorous && (!options.baseline || !options.candidate))
++    return yield* new BenchError({
++      message: "Rigorous isolated runs require both framework refs.",
++    });
++
++  const started = yield* Clock.currentTimeMillis;
++  const cloud = yield* Cloudflare;
++  const deploy = yield* deployments;
++  const fs = yield* FileSystem.FileSystem;
++  const lock = yield* Semaphore.make(1);
++  const runName = `isolate-start-${started.toString(36)}-${nonce().slice(0, 8)}`;
++  const output = join(workspace, "results", runName);
++  const labels: readonly BuildLabel[] = options.rigorous ? ["baseline", "candidate"] : ["working"];
++  const order = options.order ?? (nonce().charAt(0) < "8" ? "ABBA" : "BAAB");
++
++  const sequence: readonly BuildLabel[] = options.rigorous
++    ? order === "ABBA"
++      ? ["baseline", "candidate", "candidate", "baseline"]
++      : ["candidate", "baseline", "baseline", "candidate"]
++    : ["working"];
++
++  let result: Result = {
++    version: 1,
++    run: runName,
++    revision: yield* git(["rev-parse", "HEAD"]),
++    dirty: (yield* git(["status", "--porcelain"])).length > 0,
++    startedAt: DateTime.formatIso(DateTime.makeUnsafe(started)),
++    wallMs: 0,
++    infrastructureReused: false,
++    options: {
++      ...options,
++      isolate: true,
++      order,
++      targets: [...targets],
++      sizes: [...options.sizes],
++      ttft: [...options.ttft],
++      initialNamespaceReadiness: {
++        propagationWaitMs: 30000,
++        probesPerRound: options.concurrency,
++        consecutiveRounds: 3,
++        measuredObjectsTouched: false,
++      },
++    },
++    sequence: [...sequence],
++    builds: [],
++    fixtures: [],
++    uploads: [],
++    resets: [],
++    samples: [],
++    failures: [],
++    kept: options.keep,
++    complete: false,
++  };
++
++  const message = (cause: Cause.Cause<unknown>) =>
++    redact(
++      Cause.prettyErrors(cause)
++        .map((error) => error.message)
++        .join("; "),
++      [cloud.accountId, cloud.apiToken, cloud.accountName, cloud.subdomain, deploy.token],
++    );
++
++  const update = (change: (value: Result) => Result) =>
++    lock.withPermit(
++      Effect.gen(function* () {
++        result = change(result);
++        yield* save(output + ".json", result);
++      }),
++    );
++
++  const failure = (text: string) =>
++    update((value) => ({ ...value, failures: [...value.failures, text] }));
++
++  const attempted = new Map<IsolatedTarget, string>();
++  const live = new Map<string, Live>();
++  const poisoned = new Set<string>();
++
++  const finish = (exit: Exit.Exit<unknown, unknown>) =>
++    Effect.gen(function* () {
++      if (Exit.isFailure(exit)) {
++        const error = message(exit.cause);
++
++        result = {
++          ...result,
++          failures: result.failures.includes(error) ? result.failures : [...result.failures, error],
++          samples: result.samples.map((row) =>
++            row.status === "running"
++              ? {
++                  ...row,
++                  status: "failed",
++                  outcome: row.outcome ?? "unknown",
++                  error: "Controller interrupted; input will not be replayed.",
++                }
++              : row,
++          ),
++          resets: result.resets?.map((row) =>
++            row.status === "running"
++              ? { ...row, status: "failed", error: "Reset acknowledgement unavailable." }
++              : row,
++          ),
++          uploads: result.uploads?.map((row) =>
++            row.status === "uploading"
++              ? { ...row, status: "failed", error: "Upload/readiness did not complete." }
++              : row,
++          ),
++        };
++      }
++      if (options.cpu && attempted.size > 0) {
++        yield* Console.error(
++          "Collecting invocation CPU for both isolated Workers, including aborts…",
++        );
++        yield* Effect.sleep("15 seconds");
++        const upper = yield* Clock.currentTimeMillis;
++
++        for (const [target, worker] of attempted) {
++          const collected = yield* cpu(worker, started, upper).pipe(Effect.exit);
++
++          if (collected._tag === "Failure")
++            result = { ...result, failures: [...result.failures, message(collected.cause)] };
++          else
++            result = {
++              ...result,
++              cpu: [
++                ...(result.cpu ?? []),
++                ...collected.value.invocations.map((row) => ({
++                  ...row,
++                  worker,
++                  target: row.target ?? target,
++                })),
++              ],
++              unmatchedCpuMarkers:
++                (result.unmatchedCpuMarkers ?? 0) + collected.value.unmatchedMarkers,
++            };
++        }
++      }
++      if (!options.keep && attempted.size > 0) {
++        yield* Console.error("Destroying this run's isolated target stacks and verifying both…");
++        let verified = true;
++        const workers: string[] = [];
++        const namespaces: string[] = [];
++
++        // Sequential writes preserve the shared deployment state; never call global teardown here.
++        for (const worker of attempted.values()) {
++          const removed = yield* deploy.destroy(worker).pipe(Effect.exit);
++
++          if (removed._tag === "Failure") {
++            verified = false;
++            workers.push(worker);
++            result = { ...result, failures: [...result.failures, message(removed.cause)] };
++          } else {
++            verified &&= removed.value.verified;
++            workers.push(...removed.value.workers);
++            namespaces.push(...removed.value.namespaces);
++          }
++        }
++        result = { ...result, cleanup: { verified, workers, namespaces } };
++      }
++      result = {
++        ...result,
++        wallMs: (yield* Clock.currentTimeMillis) - started,
++        complete:
++          result.failures.length === 0 && (options.keep || result.cleanup?.verified === true),
++      };
++      yield* save(output + ".json", result);
++      yield* fs.writeFileString(output + ".md", table(result));
++      yield* Console.log(table(result));
++      yield* Console.error(
++        `Results: results/${runName}.json; wall ${(result.wallMs / 1000).toFixed(1)} s.`,
++      );
++      if (!result.complete)
++        return yield* new BenchError({
++          message:
++            "Isolated run incomplete; failures and cleanup evidence are retained in its result JSON.",
++        });
++    });
++
++  yield* update((value) => value);
++  yield* Effect.gen(function* () {
++    yield* Console.error(
++      "Preparing the verified 50/250 fixtures; measured turns have not started…",
++    );
++    yield* ensureVendor;
++
++    const fixtures = (yield* prepareFixtures({ targets, sizes: options.sizes })).map((fixture) => {
++      if (fixture.target !== "yielded") return fixture;
++      const { archive: _archive, ...source } = fixture;
++
++      return {
++        ...source,
++        mode: "replay" as const,
++        fallbackReason:
++          fixture.fallbackReason ?? "Isolate-start seeds through public submit/await replay.",
++      };
++    });
++
++    yield* update((value) => ({
++      ...value,
++      fixtures: fixtures.map(({ target, history, fingerprint, tables, mode, fallbackReason }) => ({
++        target,
++        history,
++        fingerprint,
++        tables,
++        mode,
++        ...(fallbackReason === undefined ? {} : { fallbackReason }),
++      })),
++    }));
++    const infrastructureReused = yield* deploy.infrastructure;
++
++    yield* update((value) => ({ ...value, infrastructureReused }));
++    const yieldedBuilds = new Map<BuildLabel, Built>();
++    let piBuild: Built | undefined;
++
++    if (targets.includes("yielded"))
++      for (const label of labels) {
++        const ref =
++          label === "baseline"
++            ? options.baseline
++            : label === "candidate"
++              ? options.candidate
++              : undefined;
++
++        const compiled = yield* build(
++          join(privateDirectory, runName, "build", "yielded", label),
++          "yielded",
++          ref,
++        );
++
++        yieldedBuilds.set(label, compiled);
++        yield* update((value) => ({
++          ...value,
++          builds: [
++            ...value.builds,
++            { label, target: "yielded", revision: compiled.revision, sha256: compiled.sha256 },
++          ],
++        }));
++      }
++    if (targets.includes("pi")) {
++      const compiled = yield* build(join(privateDirectory, runName, "build", "pi"), "pi");
++
++      piBuild = compiled;
++      yield* update((value) => ({
++        ...value,
++        builds: [
++          ...value.builds,
++          { label: "control", target: "pi", revision: compiled.revision, sha256: compiled.sha256 },
++        ],
++      }));
++    }
++
++    const cohorts: Query[] = options.sizes.flatMap((size) =>
++      options.ttft.flatMap((ttftMs) =>
++        Array.from({ length: options.objects }, (_, object) =>
++          targets.map((target): Query => ({
++            target,
++            object: `${runName}-h${size}-d${ttftMs}-o${object}`,
++            history: size,
++            ttftMs,
++            chunkDelayMs: ttftMs === 400 ? 10 : 0,
++            sample: "import",
++          })),
++        ).flat(),
++      ),
++    );
++
++    const turnsPerEpoch = options.repeats + 2;
++    const references = new Map<number, Map<string, string[]>>();
++
++    for (const size of options.sizes) {
++      const messages: Message[] = [];
++
++      for (const input of history(0, size)) append(messages, input);
++      const expected = new Map<string, string[]>();
++
++      for (let epoch = 0; epoch < sequence.length; epoch++)
++        for (let index = 0; index < turnsPerEpoch; index++) {
++          const sample = `e${epoch}-t${index}`;
++
++          expected.set(sample, append(messages, turn(sample, MEASURED_TOOLS)));
++        }
++      references.set(size, expected);
++    }
++
++    const upload = Effect.fnUntraced(function* (
++      target: IsolatedTarget,
++      label: BuildLabel,
++      phase: "seed" | "epoch",
++      epoch?: number,
++    ) {
++      const compiled = target === "pi" ? piBuild : yieldedBuilds.get(label);
++
++      if (!compiled) return yield* new BenchError({ message: "Missing isolated target build." });
++      const worker = `${runName}-${target}`;
++      const suffix = epoch === undefined ? "seed" : `e${epoch}`;
++      const expectedBuild = `${runName}-${target}-${label}-${suffix}-${compiled.sha256}`;
++      const file = join(privateDirectory, runName, "uploads", target, suffix, "worker.mjs");
++      // Different module bytes even for the adjacent B/B (or A/A) pass, with no global random work.
++      const code = `// isolate-start code version: ${expectedBuild}\n${yield* fs.readFileString(compiled.file)}`;
++
++      yield* fs.makeDirectory(dirname(file), { recursive: true, mode: 0o700 });
++      yield* fs.writeFileString(file, code, { mode: 0o600 });
++      const previousBuild = live.get(target)?.expectedBuild;
++
++      const row: Upload = {
++        target,
++        worker,
++        phase,
++        label,
++        ...(epoch === undefined ? {} : { epoch }),
++        expectedBuild,
++        ...(previousBuild === undefined ? {} : { previousBuild }),
++        sourceSha256: compiled.sha256,
++        uploadedSha256: hash(code),
++        resetCount:
++          phase === "seed" ? 0 : cohorts.filter((cohort) => cohort.target === target).length,
++        status: "uploading",
++      };
++
++      attempted.set(target, worker);
++      yield* update((value) => ({ ...value, uploads: [...(value.uploads ?? []), row] }));
++      yield* Effect.gen(function* () {
++        const endpoint = yield* deploy.target(
++          worker,
++          file,
++          expectedBuild,
++          options.cpu,
++          target,
++          false,
++        );
++
++        let consecutive = 0;
++        let health: typeof Health.Type | undefined;
++        let last = "No matching health response.";
++        const readinessFailures: NonNullable<Upload["readinessFailures"]>[number][] = [];
++
++        // New Worker routes and their Object bindings propagate separately. These disposable
++        // identity probes are used only for the untimed seed version, never a measured epoch.
++        if (phase === "seed") yield* Effect.sleep("30 seconds");
++
++        for (let attempt = 0; attempt < 30; attempt++) {
++          const [controller, probe] = yield* Effect.all(
++            [
++              request(
++                endpoint + `/health?probe=${attempt}`,
++                deploy.token,
++                Health,
++                undefined,
++                "10 seconds",
++                expectedBuild,
++              ).pipe(Effect.exit),
++              request(
++                deploy.driver + "/ready",
++                deploy.token,
++                Health,
++                { targetUrl: endpoint, expectedBuild },
++                "10 seconds",
++                expectedBuild,
++              ).pipe(Effect.exit),
++            ],
++            { concurrency: 2 },
++          );
++
++          const objectProbes =
++            phase === "seed"
++              ? yield* Effect.forEach(
++                  Array.from({ length: options.concurrency }, (_, index) => index),
++                  (index) =>
++                    request(
++                      address({ worker, endpoint, expectedBuild }, "/identity", {
++                        target,
++                        object: `${runName}-readiness-${target}-${attempt}-${index}`,
++                        sample: "readiness",
++                        history: 50,
++                        ttftMs: 0,
++                        chunkDelayMs: 0,
++                      }),
++                      deploy.token,
++                      Identity,
++                      undefined,
++                      "10 seconds",
++                      expectedBuild,
++                    ).pipe(Effect.exit),
++                  { concurrency: options.concurrency },
++                )
++              : [];
++
++          const objectsReady = objectProbes.every(
++            (outcome) =>
++              outcome._tag === "Success" && outcome.value.value.isolate?.build === expectedBuild,
++          );
++
++          for (const outcome of objectProbes) {
++            if (
++              outcome._tag === "Failure" ||
++              outcome.value.value.isolate?.build !== expectedBuild
++            ) {
++              readinessFailures.push({
++                ingress: "object",
++                attempt,
++                error:
++                  outcome._tag === "Failure"
++                    ? message(outcome.cause)
++                    : "Probe Object still reports an older build.",
++              });
++              yield* update((value) => ({
++                ...value,
++                uploads: value.uploads?.map((item) =>
++                  item.expectedBuild === expectedBuild
++                    ? { ...item, readinessFailures: [...readinessFailures] }
++                    : item,
++                ),
++              }));
++            }
++          }
++
++          for (const [ingress, outcome] of [
++            ["controller", controller],
++            ["driver", probe],
++          ] as const) {
++            if (outcome._tag === "Failure" || outcome.value.value.build !== expectedBuild) {
++              readinessFailures.push({
++                ingress,
++                attempt,
++                error:
++                  outcome._tag === "Failure"
++                    ? message(outcome.cause)
++                    : "Health still reports an older build.",
++              });
++              yield* update((value) => ({
++                ...value,
++                uploads: value.uploads?.map((item) =>
++                  item.expectedBuild === expectedBuild
++                    ? { ...item, readinessFailures: [...readinessFailures] }
++                    : item,
++                ),
++              }));
++            }
++          }
++
++          if (
++            controller._tag === "Success" &&
++            controller.value.value.build === expectedBuild &&
++            probe._tag === "Success" &&
++            probe.value.value.build === expectedBuild &&
++            objectsReady
++          ) {
++            health = probe.value.value;
++            consecutive++;
++            if (consecutive === 3) break;
++          } else {
++            consecutive = 0;
++            last =
++              probe._tag === "Failure"
++                ? message(probe.cause)
++                : "Health still reports an older build.";
++          }
++          yield* Effect.sleep("1 second");
++        }
++        if (consecutive !== 3 || health === undefined)
++          return yield* new BenchError({
++            message: `Target build readiness failed; no Object lookup was requested. ${last}`,
++          });
++
++        live.set(target, { worker, endpoint, expectedBuild });
++        yield* update((value) => ({
++          ...value,
++          uploads: value.uploads?.map((item) =>
++            item.expectedBuild === expectedBuild ? { ...item, status: "ready", health } : item,
++          ),
++        }));
++      }).pipe(
++        Effect.tapCause((cause) =>
++          update((value) => ({
++            ...value,
++            uploads: value.uploads?.map((item) =>
++              item.expectedBuild === expectedBuild
++                ? { ...item, status: "failed", error: message(cause) }
++                : item,
++            ),
++          })),
++        ),
++      );
++    });
++
++    // The seed upload is never measured. Yielded uses its public replay path; pi imports native rows.
++    for (const target of targets)
++      yield* upload(target, options.rigorous ? "baseline" : "working", "seed");
++    yield* Console.error(
++      `Seeding and checking complete fixture counts on ${cohorts.length} Objects…`,
++    );
++    let seedFailed = false;
++    let seededCount = 0;
++
++    yield* Effect.forEach(
++      shuffle(cohorts),
++      (cohort) =>
++        Effect.gen(function* () {
++          if (seedFailed)
++            return yield* failure(
++              `${key(cohort)} seed: not sent after an earlier fixture setup failure.`,
++            );
++          const current = live.get(cohort.target);
++
++          const fixture = fixtures.find(
++            (item) => item.target === cohort.target && item.history === cohort.history,
++          );
++
++          if (!current || !fixture)
++            return yield* new BenchError({ message: "Missing seed deployment or fixture." });
++
++          const seeded = (yield* request(
++            address(current, "/import", cohort),
++            deploy.token,
++            ImportResult,
++            fixture,
++            "10 minutes",
++            current.expectedBuild,
++          )).value;
++
++          if (
++            seeded.target !== cohort.target ||
++            seeded.history !== cohort.history ||
++            seeded.mode !== fixture.mode ||
++            seeded.identity.isolate?.build !== current.expectedBuild ||
++            seeded.fingerprint !== fixture.fingerprint ||
++            !equalCounts(seeded.tables, fixture.tables)
++          )
++            return yield* new BenchError({
++              message:
++                "Seed build, replay mode, transcript fingerprint, or complete table counts differ from the fixture.",
++            });
++          seededCount++;
++          if (seededCount % 10 === 0 || seededCount === cohorts.length)
++            yield* Console.error(
++              `Verified fixture setup on ${seededCount}/${cohorts.length} Objects.`,
++            );
++        }).pipe(
++          Effect.catchCause((cause) => {
++            seedFailed = true;
++
++            return failure(`${key(cohort)} seed: ${message(cause)}`);
++          }),
++        ),
++      { concurrency: options.concurrency, discard: true },
++    );
++    if (seedFailed)
++      return yield* new BenchError({ message: "Seeding failed; no measured epoch was uploaded." });
++
++    for (const [epoch, label] of sequence.entries()) {
++      const resets = new Map<string, { readonly build: string; readonly response: ColdResult }>();
++      let resetFailed = false;
++
++      yield* Console.error(
++        `Pass ${epoch + 1}/${sequence.length}: acknowledging all resets on OLD builds…`,
++      );
++      yield* Effect.forEach(
++        shuffle(cohorts),
++        (cohort) =>
++          Effect.gen(function* () {
++            const current = live.get(cohort.target);
++            const query = { ...cohort, sample: `reset-e${epoch}` };
++
++            if (!current)
++              return yield* new BenchError({ message: "Missing old deployment for reset." });
++            yield* update((value) => ({
++              ...value,
++              resets: [
++                ...(value.resets ?? []),
++                { ...query, epoch, expectedBuild: current.expectedBuild, status: "running" },
++              ],
++            }));
++            yield* Effect.gen(function* () {
++              const response = (yield* request(
++                address(current, "/cold", query),
++                deploy.token,
++                ColdResult,
++                {},
++                "3 minutes",
++                current.expectedBuild,
++              )).value;
++
++              yield* update((value) => ({
++                ...value,
++                resets: value.resets?.map((row) =>
++                  row.epoch === epoch && key(row) === key(query) ? { ...row, response } : row,
++                ),
++              }));
++              if (
++                !response.ok ||
++                !response.threadAborted ||
++                response.directoryAborted === false ||
++                response.before.isolate?.build !== current.expectedBuild
++              )
++                return yield* new BenchError({
++                  message:
++                    "Old-build Object abort or Object build was not acknowledged; refusing the next upload.",
++                });
++              resets.set(key(cohort), { build: current.expectedBuild, response });
++              yield* update((value) => ({
++                ...value,
++                resets: value.resets?.map((row) =>
++                  row.epoch === epoch && key(row) === key(query) ? { ...row, status: "ok" } : row,
++                ),
++              }));
++            }).pipe(
++              Effect.tapCause((cause) =>
++                update((value) => ({
++                  ...value,
++                  resets: value.resets?.map((row) =>
++                    row.epoch === epoch && key(row) === key(query)
++                      ? { ...row, status: "failed", error: message(cause) }
++                      : row,
++                  ),
++                })),
++              ),
++            );
++          }).pipe(
++            Effect.catchCause((cause) => {
++              resetFailed = true;
++
++              return failure(`${key(cohort)} reset e${epoch}: ${message(cause)}`);
++            }),
++          ),
++        { concurrency: options.concurrency, discard: true },
++      );
++      if (resetFailed || resets.size !== cohorts.length)
++        return yield* new BenchError({
++          message:
++            "Not every old-build Object reset was acknowledged; no next-epoch upload was attempted.",
++        });
++
++      // No /cold request occurs after either new upload. All subsequent Object work is measured.
++      for (const target of targets) yield* upload(target, label, "epoch", epoch);
++      yield* Console.error(
++        `Measuring ${label} pass ${epoch + 1}: ${cohorts.length} Objects, concurrency ${options.concurrency}…`,
++      );
++      yield* Effect.forEach(
++        shuffle(cohorts),
++        (cohort) =>
++          Effect.gen(function* () {
++            const current = live.get(cohort.target);
++            const reset = resets.get(key(cohort));
++
++            if (!current || !reset)
++              return yield* new BenchError({ message: "Missing upload/reset evidence." });
++            let anchor: Identity | undefined;
++
++            for (let index = 0; index < turnsPerEpoch; index++) {
++              const query = { ...cohort, sample: `e${epoch}-t${index}` };
++
++              const sample: Sample = {
++                ...query,
++                build: label,
++                epoch,
++                repeat: index,
++                state: index === 0 ? "fresh-first-turn" : index === 1 ? "warmup" : "warm",
++                status: poisoned.has(key(cohort)) ? "skipped" : "running",
++                ...(poisoned.has(key(cohort))
++                  ? {
++                      outcome: "not-sent" as const,
++                      error:
++                        "An earlier turn failed; later inputs to this Object are not sent or replayed.",
++                    }
++                  : {}),
++                worker: current.worker,
++                expectedBuild: current.expectedBuild,
++                resetBuild: reset.build,
++                resetBefore: reset.response.before,
++              };
++
++              const amend = (change: Partial<Sample>) =>
++                update((value) => ({
++                  ...value,
++                  samples: value.samples.map((row) =>
++                    key(row) === key(query) && row.sample === query.sample
++                      ? { ...row, ...change }
++                      : row,
++                  ),
++                }));
++
++              yield* update((value) => ({ ...value, samples: [...value.samples, sample] }));
++              if (sample.status === "skipped") continue;
++
++              yield* Effect.gen(function* () {
++                const before = yield* Clock.currentTimeMillis;
++
++                const measured = yield* request(
++                  deploy.driver + "/measure",
++                  deploy.token,
++                  MeasureResponse,
++                  { query, targetUrl: current.endpoint, expectedBuild: current.expectedBuild },
++                  "3 minutes",
++                  current.expectedBuild,
++                );
++
++                const after = yield* Clock.currentTimeMillis;
++
++                yield* amend({
++                  outcome: "completed",
++                  driverMs: measured.value.driverMs,
++                  ...(measured.value.admissionMs === undefined
++                    ? {}
++                    : { admissionMs: measured.value.admissionMs }),
++                  controllerMs: after - before,
++                  controllerColo: measured.colo,
++                  colo: measured.value.colo,
++                });
++
++                const metrics = (yield* request(
++                  address(current, "/metrics", query),
++                  deploy.token,
++                  Metrics,
++                  undefined,
++                  "3 minutes",
++                  current.expectedBuild,
++                )).value;
++
++                yield* amend({
++                  identity: metrics.identity,
++                  fingerprints: metrics.calls.map((call) => call.fingerprint),
++                });
++                const expected = references.get(query.history)?.get(query.sample);
++                const actual = metrics.query;
++
++                if (
++                  actual.target !== query.target ||
++                  actual.object !== query.object ||
++                  actual.sample !== query.sample ||
++                  actual.history !== query.history ||
++                  actual.ttftMs !== query.ttftMs ||
++                  actual.chunkDelayMs !== query.chunkDelayMs ||
++                  !expected ||
++                  metrics.calls.length !== MEASURED_TOOLS + 1 ||
++                  metrics.calls.some(
++                    (call, i) =>
++                      call.call !== i ||
++                      call.status !== 200 ||
++                      call.error !== undefined ||
++                      call.endMs === undefined ||
++                      call.fingerprint !== expected[i] ||
++                      call.receipt === undefined ||
++                      call.receipt.fingerprint !== expected[i] ||
++                      call.receipt.sample !== query.sample ||
++                      call.receipt.object !== query.object ||
++                      call.receipt.call !== i,
++                  )
++                )
++                  return yield* new BenchError({
++                    message:
++                      "Model-visible transcript, provider receipt/completion, or metrics query differed from the reference.",
++                  });
++
++                const identity = metrics.identity;
++                const objectIsolate = identity.isolate;
++
++                const buildVerified =
++                  objectIsolate?.build === current.expectedBuild &&
++                  identity.workerIsolate?.build === current.expectedBuild;
++
++                const reasons: string[] = [];
++
++                if (objectIsolate?.build !== current.expectedBuild)
++                  reasons.push("Object build mismatch or missing");
++                if (identity.workerIsolate?.build !== current.expectedBuild)
++                  reasons.push("Routing Worker build mismatch or missing");
++
++                const residentVerified =
++                  index > 0 &&
++                  anchor !== undefined &&
++                  identity.incarnation === anchor.incarnation &&
++                  objectIsolate !== undefined &&
++                  objectIsolate.id === anchor.isolate?.id &&
++                  !identity.firstEntry;
++
++                if (index === 0) {
++                  anchor = identity;
++                  if (reset.build === current.expectedBuild)
++                    reasons.push("Epoch build did not change after reset");
++                  if (identity.incarnation === reset.response.before.incarnation)
++                    reasons.push("Object incarnation unchanged after old-build reset");
++                  if (!identity.firstEntry)
++                    reasons.push("Object already entered before measured turn");
++                  if (identity.priorAlarms !== 0)
++                    reasons.push("Object alarm preceded measured turn");
++                  if (!objectIsolate || objectIsolate.id === reset.response.before.isolate?.id)
++                    reasons.push("Object isolate UUID unchanged or missing");
++                  if (objectIsolate?.durableObjectConstructors !== 1)
++                    reasons.push("Object isolate constructor count is not one");
++                  if (objectIsolate?.statelessFetches !== 0)
++                    reasons.push("Object isolate had earlier stateless fetches");
++                } else if (!residentVerified)
++                  reasons.push("Object incarnation or isolate changed within the epoch");
++
++                const lastEnd = metrics.calls.at(-1)?.endMs;
++
++                const gaps = metrics.calls
++                  .slice(1)
++                  .map((call, i) => call.startMs - (metrics.calls[i]?.endMs ?? NaN));
++
++                yield* amend({
++                  status: reasons.length === 0 ? "ok" : "excluded",
++                  fingerprintVerified: true,
++                  buildVerified,
++                  freshVerified: index === 0 && reasons.length === 0,
++                  residentVerified,
++                  exclusionReasons: reasons,
++                  gapMs: median(gaps),
++                  ...(lastEnd === undefined
++                    ? {}
++                    : { lastResponseToClientMs: measured.value.observedMs - lastEnd }),
++                });
++              }).pipe(
++                Effect.catchCause((cause) =>
++                  Effect.gen(function* () {
++                    poisoned.add(key(cohort));
++                    const error = message(cause);
++
++                    yield* update((value) => ({
++                      ...value,
++                      samples: value.samples.map((row) =>
++                        key(row) === key(query) && row.sample === query.sample
++                          ? { ...row, status: "failed", outcome: row.outcome ?? "unknown", error }
++                          : row,
++                      ),
++                      failures: [...value.failures, `${key(query)}/${query.sample}: ${error}`],
++                    }));
++                  }),
++                ),
++              );
++            }
++          }),
++        { concurrency: options.concurrency, discard: true },
++      );
++    }
++  }).pipe(Effect.onExit(finish));
++}, Effect.scoped);
+diff --git a/examples/durable-bench/deployed/isolate/yielded.ts b/examples/durable-bench/deployed/isolate/yielded.ts
+new file mode 100644
+--- /dev/null
++++ b/examples/durable-bench/deployed/isolate/yielded.ts
+@@ -0,0 +1,245 @@
++import { BrowserCrypto } from "@effect/platform-browser";
++import { ThreadObjectNamespace } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
++import { CloudflareThreadClient } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
++import { digestDefinitions } from "@yielded/agent/digest";
++import { ThreadId } from "@yielded/agent/identifiers";
++import { IdempotencyKey, Principal, Receipt } from "@yielded/agent/receipt";
++import { Settlement } from "@yielded/agent/submission-ledger";
++import * as Effect from "effect/Effect";
++import * as Layer from "effect/Layer";
++import * as ManagedRuntime from "effect/ManagedRuntime";
++import * as Schema from "effect/Schema";
++
++import { history, MEASURED_TOOLS, turn } from "../../src/plan.ts";
++import { COLD_ABORT } from "../worker/host.ts";
++import { FixtureError } from "../worker/storage.ts";
++import { agent, definitions, YieldedDO } from "../worker/yielded.ts";
++import { buildMismatch, observeFetch } from "./observation.ts";
++import {
++  BulkFixture,
++  Identity,
++  errorText,
++  readQuery,
++  type Env,
++  type Query,
++  type IsolateState,
++} from "./protocol.ts";
++
++export { YieldedDO };
++
++type Bindings = Env & { YIELDED: DurableObjectNamespace<YieldedDO> };
++
++const clients = new WeakMap<Bindings, ReturnType<typeof makeClient>>();
++
++const makeClient = (env: Bindings) => {
++  const queries = new Map<string, { query: Query; workerIsolate: IsolateState }>();
++
++  const namespace = Layer.succeed(ThreadObjectNamespace, {
++    get: (threadId) => {
++      const stub = env.YIELDED.getByName(threadId, { locationHint: "wnam" });
++
++      return new Proxy(stub, {
++        get(target, method) {
++          if (method === "submitEncoded")
++            return (encoded: unknown) => {
++              const entry = queries.get(threadId);
++
++              if (!entry) throw new Error("Missing submission query");
++
++              return target.benchSubmit(encoded, entry.query, entry.workerIsolate);
++            };
++          const value = Reflect.get(target, method, target);
++
++          return typeof value === "function"
++            ? (...args: unknown[]) => Reflect.apply(value, target, args)
++            : value;
++        },
++      });
++    },
++  });
++
++  const runtime = ManagedRuntime.make(
++    CloudflareThreadClient.layer.pipe(
++      Layer.provide(namespace),
++      Layer.provideMerge(BrowserCrypto.layer),
++    ),
++  );
++
++  // Acquisition and definition hashing happen only on the routing Worker's request path.
++  const ready = runtime.runPromise(
++    Effect.gen(function* () {
++      return {
++        client: yield* CloudflareThreadClient,
++        digests: yield* digestDefinitions(definitions),
++      };
++    }),
++  );
++
++  return { runtime, queries, ready };
++};
++
++const getClient = (env: Bindings) => {
++  const cached = clients.get(env);
++
++  if (cached) return cached;
++  const client = makeClient(env);
++
++  clients.set(env, client);
++
++  return client;
++};
++
++const expectedAbort = async (abort: () => Promise<unknown>) => {
++  try {
++    const result = await abort();
++
++    return (
++      result instanceof Response &&
++      result.status === 500 &&
++      (await result.text()).includes(COLD_ABORT)
++    );
++  } catch (cause) {
++    return errorText(cause).includes(COLD_ABORT);
++  }
++};
++
++export default {
++  async fetch(request: Request, env: Bindings): Promise<Response> {
++    const ingress = observeFetch(env);
++
++    if (!env.BENCH_TOKEN || request.headers.get("authorization") !== `Bearer ${env.BENCH_TOKEN}`)
++      return new Response("unauthorized", { status: 401 });
++    const url = new URL(request.url);
++
++    try {
++      if (url.pathname === "/health")
++        return Response.json({ ok: true, build: env.BUILD, workerIsolate: ingress });
++      const mismatch = buildMismatch(request, env);
++
++      if (mismatch) return mismatch;
++      const query = readQuery(url);
++
++      if (query.target !== "yielded") throw new Error("Target mismatch");
++      const mutating = ["/import", "/cold", "/submit", "/await", "/run"].includes(url.pathname);
++
++      if (mutating && request.method !== "POST")
++        return new Response("POST required", { status: 405 });
++      if (
++        !["/import", "/cold", "/submit", "/await", "/run", "/metrics", "/identity"].includes(
++          url.pathname,
++        )
++      )
++        return new Response("not found", { status: 404 });
++
++      const stub = env.YIELDED.getByName(query.object, { locationHint: "wnam" });
++
++      if (url.pathname === "/cold") {
++        const identityUrl = new URL(url);
++
++        identityUrl.pathname = "/identity";
++        const response = await stub.fetch(new Request(identityUrl, { headers: request.headers }));
++
++        if (!response.ok) throw new Error("Pre-cold identity failed");
++        const before = Schema.decodeUnknownSync(Identity)(await response.json());
++        const threadAborted = await expectedAbort(() => stub.fetch(request));
++
++        return Response.json(
++          { ok: threadAborted, before, threadAborted },
++          { status: threadAborted ? 200 : 502 },
++        );
++      }
++      if (url.pathname === "/submit" || url.pathname === "/await") {
++        const receiptWire = url.pathname === "/await" ? await request.json() : undefined;
++        const cached = getClient(env);
++        const { client, digests } = await cached.ready;
++        const submitting = url.pathname === "/submit";
++
++        if (submitting && cached.queries.has(query.object))
++          throw new Error("Concurrent submission to one benchmark Object");
++        if (submitting) cached.queries.set(query.object, { query, workerIsolate: ingress });
++        try {
++          const result = await cached.runtime.runPromise(
++            Effect.gen(function* () {
++              if (submitting) {
++                const input = turn(query.sample, MEASURED_TOOLS);
++
++                const receipt = yield* client.submit(agent, input.text, {
++                  threadId: ThreadId.make(query.object),
++                  principal: Principal.make("bench"),
++                  idempotencyKey: IdempotencyKey.make(input.id),
++                  definitions: digests,
++                });
++
++                return { ok: true, receipt: yield* Schema.encodeEffect(Receipt)(receipt) };
++              }
++              const receipt = yield* Schema.decodeUnknownEffect(Receipt)(receiptWire);
++
++              if (receipt.threadId !== query.object)
++                return yield* Effect.die("Receipt belongs to another Object");
++              const settlement = yield* client.awaitSettlement(receipt);
++
++              return { ok: true, settlement: yield* Schema.encodeEffect(Settlement)(settlement) };
++            }),
++          );
++
++          return Response.json(result);
++        } finally {
++          if (submitting) cached.queries.delete(query.object);
++        }
++      }
++      if (url.pathname === "/run") throw new Error("Yielded requires submit followed by await");
++
++      if (url.pathname === "/import") {
++        const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.clone().json());
++
++        if (fixture.target !== query.target || fixture.history !== query.history)
++          throw new Error("Fixture/query mismatch");
++        if (fixture.mode === "replay") {
++          if (!fixture.fallbackReason) throw new Error("Replay requires a fallback reason");
++          const cached = getClient(env);
++          const { client, digests } = await cached.ready;
++
++          if (cached.queries.has(query.object))
++            throw new Error("Concurrent submission to one benchmark Object");
++          cached.queries.set(query.object, { query, workerIsolate: ingress });
++          try {
++            await stub.beginReplay();
++            await cached.runtime.runPromise(
++              Effect.gen(function* () {
++                for (const input of history(0, fixture.history)) {
++                  cached.queries.set(query.object, {
++                    query: { ...query, sample: input.id, ttftMs: 0, chunkDelayMs: 0 },
++                    workerIsolate: ingress,
++                  });
++
++                  const receipt = yield* client.submit(agent, input.text, {
++                    threadId: ThreadId.make(query.object),
++                    principal: Principal.make("bench"),
++                    idempotencyKey: IdempotencyKey.make(input.id),
++                    definitions: digests,
++                  });
++
++                  const settlement = yield* client.awaitSettlement(receipt);
++
++                  if (settlement.outcome !== "completed")
++                    return yield* new FixtureError({
++                      message: `Seed ${input.id} did not complete; initialization will not be retried`,
++                    });
++                }
++              }),
++            );
++          } finally {
++            cached.queries.delete(query.object);
++          }
++        }
++      }
++
++      return await stub.fetch(request);
++    } catch (cause) {
++      return Response.json(
++        { ok: false, error: errorText(cause), sample: url.searchParams.get("sample") },
++        { status: 500 },
++      );
++    }
++  },
++};
+diff --git a/examples/durable-bench/deployed/startup-compare.ts b/examples/durable-bench/deployed/startup-compare.ts
+new file mode 100644
+--- /dev/null
++++ b/examples/durable-bench/deployed/startup-compare.ts
+@@ -0,0 +1,73 @@
++import { join } from "node:path";
++
++import { BunRuntime, BunServices } from "@effect/platform-bun";
++import { Console, Effect, FileSystem, Schema } from "effect";
++
++import { Cloudflare } from "./cloudflare.ts";
++import { deployments } from "./deploy.ts";
++import { hash, nonce, privateDirectory, save, workspace } from "./platform.ts";
++
++const program = Effect.gen(function* () {
++  const { label, file, baseline, pi, blocks, namespaceMode } = yield* Schema.decodeUnknownEffect(
++    Schema.Struct({
++      label: Schema.NonEmptyString,
++      file: Schema.NonEmptyString,
++      baseline: Schema.NonEmptyString,
++      pi: Schema.NonEmptyString,
++      blocks: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 30 })),
++      namespaceMode: Schema.Literals(["startup", "native"]),
++    }),
++  )({
++    label: process.argv[2],
++    file: process.argv[3],
++    baseline: process.argv[4] ?? "/private/tmp/isolate-start-analysis/baseline.mjs",
++    pi: process.argv[5] ?? "/private/tmp/isolate-start-analysis/pi.mjs",
++    blocks: Number(process.argv[6] ?? 4),
++    namespaceMode: process.argv[7] ?? "startup",
++  });
++
++  const fs = yield* FileSystem.FileSystem;
++  const deploy = yield* deployments;
++  const run = nonce().slice(0, 8);
++  const builds = new Map<string, string>();
++
++  for (const source of [baseline, file, pi]) builds.set(source, hash(yield* fs.readFile(source)));
++  yield* save(`${workspace}/results/isolate-start-startup-${run}.json`, {
++    label,
++    run,
++    builds: [...builds].map(([path, sha256]) => ({ file: path.split("/").at(-1), sha256 })),
++    order: `ABBA repeated ${blocks} times; pi after each block`,
++    namespaceMode,
++    distinctCodeBytes: true,
++  });
++  for (let block = 0; block < blocks; block++) {
++    for (const [index, source] of [baseline, file, file, baseline, pi].entries()) {
++      const target = source === pi ? "pi" : "yielded";
++      const name = source === baseline ? "baseline" : source === pi ? "pi" : label;
++      const revision = `compare-${run}-${name}-${builds.get(source)}-${block}-${index}`;
++      const directory = join(privateDirectory, `startup-${run}`, `${block}-${index}`);
++      const uploaded = join(directory, "worker.mjs");
++
++      yield* fs.makeDirectory(directory, { recursive: true, mode: 0o700 });
++      yield* fs.writeFileString(
++        uploaded,
++        `// isolate-start upload: ${revision}\n${yield* fs.readFileString(source)}`,
++        { mode: 0o600 },
++      );
++
++      yield* deploy.target(
++        `isolate-start-upload-${target}`,
++        uploaded,
++        revision,
++        false,
++        namespaceMode === "native" ? target : `startup-${target}`,
++        false,
++      );
++      yield* Console.log(`Uploaded ${name}, block ${block + 1}/${blocks}, position ${index + 1}/5`);
++    }
++  }
++});
++
++BunRuntime.runMain(
++  program.pipe(Effect.provide(Cloudflare.layer), Effect.provide(BunServices.layer)),
++);
+diff --git a/examples/durable-bench/deployed/startup.ts b/examples/durable-bench/deployed/startup.ts
+new file mode 100644
+--- /dev/null
++++ b/examples/durable-bench/deployed/startup.ts
+@@ -0,0 +1,38 @@
++import { BunRuntime, BunServices } from "@effect/platform-bun";
++import { Console, Effect, FileSystem, Schema } from "effect";
++
++import { Cloudflare } from "./cloudflare.ts";
++import { deployments } from "./deploy.ts";
++import { hash, save, workspace } from "./platform.ts";
++
++const program = Effect.gen(function* () {
++  const [label, file, target, count] = yield* Schema.decodeUnknownEffect(
++    Schema.Tuple([
++      Schema.NonEmptyString,
++      Schema.NonEmptyString,
++      Schema.Literals(["yielded", "pi"]),
++      Schema.FiniteFromString,
++    ]),
++  )(process.argv.slice(2));
++
++  const fs = yield* FileSystem.FileSystem;
++  const deploy = yield* deployments;
++  const sha256 = hash(yield* fs.readFile(file));
++
++  yield* save(`${workspace}/results/isolate-start-${label}-build.json`, { label, sha256, target });
++  for (let repeat = 0; repeat < count; repeat++) {
++    yield* deploy.target(
++      `isolate-start-upload-${target}`,
++      file,
++      `${label}-${sha256}-r${repeat}`,
++      false,
++      `startup-${target}`,
++      false,
++    );
++    yield* Console.log(`Uploaded ${label}, repeat ${repeat + 1}/${count}`);
++  }
++});
++
++BunRuntime.runMain(
++  program.pipe(Effect.provide(Cloudflare.layer), Effect.provide(BunServices.layer)),
++);
+diff --git a/examples/durable-bench/deployed/upload-observer.mjs b/examples/durable-bench/deployed/upload-observer.mjs
+new file mode 100644
+--- /dev/null
++++ b/examples/durable-bench/deployed/upload-observer.mjs
+@@ -0,0 +1,33 @@
++import { appendFileSync } from "node:fs";
++
++// Capture only upload evidence; never retain headers, bindings, or account identifiers.
++const original = globalThis.fetch;
++globalThis.fetch = async (input, init) => {
++  const url = new URL(input instanceof Request ? input.url : String(input));
++  const name = url.pathname.match(/\/workers\/scripts\/(isolate-start-[a-z0-9-]+)(?:\/versions)?$/)?.[1];
++  const method = init?.method ?? (input instanceof Request ? input.method : "GET");
++  const observe = name && ["PUT", "POST"].includes(method);
++  const files = observe && init?.body instanceof FormData
++    ? Array.from(init.body.entries()).filter(([field, value]) => field !== "metadata" && value instanceof Blob)
++        .map(([field, value]) => ({ field, bytes: value.size }))
++    : [];
++  try {
++    const response = await original(input, init);
++    if (observe) {
++      const data = await response.clone().json();
++      appendFileSync(process.env.ISOLATE_START_UPLOADS, JSON.stringify({
++        at: new Date().toISOString(), name, build: process.env.DURABLE_BENCH_BUILD,
++        status: response.status, success: data.success, files,
++        startup_time_ms: data.result?.startup_time_ms ?? null,
++        errors: (data.errors ?? []).map(({ code }) => code),
++      }) + "\n", { mode: 0o600 });
++    }
++    return response;
++  } catch (error) {
++    if (observe) appendFileSync(process.env.ISOLATE_START_UPLOADS, JSON.stringify({
++      at: new Date().toISOString(), name, build: process.env.DURABLE_BENCH_BUILD,
++      status: null, success: false, startup_time_ms: null, errors: ["transport-or-observer"],
++    }) + "\n", { mode: 0o600 });
++    throw error;
++  }
++};
+diff --git a/examples/durable-bench/third-party/src/deployed/isolate-pi.ts b/examples/durable-bench/third-party/src/deployed/isolate-pi.ts
+new file mode 100644
+--- /dev/null
++++ b/examples/durable-bench/third-party/src/deployed/isolate-pi.ts
+@@ -0,0 +1,85 @@
++import {
++  buildMismatch,
++  INGRESS_HEADER,
++  observeFetch,
++} from "../../../deployed/isolate/observation.ts";
++import { COLD_ABORT } from "../../../deployed/isolate/pi-host.ts";
++import { parseIdentity, errorText, readQuery } from "../../../deployed/isolate/native-protocol.ts";
++import type { Env } from "../../../deployed/isolate/protocol.ts";
++import { PiDO } from "./pi.ts";
++
++export { PiDO };
++
++type Bindings = Env & { PI: DurableObjectNamespace<PiDO> };
++
++const expectedAbort = async (abort: () => Promise<unknown>) => {
++  try {
++    const result = await abort();
++
++    return (
++      result instanceof Response &&
++      result.status === 500 &&
++      (await result.text()).includes(COLD_ABORT)
++    );
++  } catch (cause) {
++    return errorText(cause).includes(COLD_ABORT);
++  }
++};
++
++export default {
++  async fetch(request: Request, env: Bindings): Promise<Response> {
++    const ingress = observeFetch(env);
++
++    if (!env.BENCH_TOKEN || request.headers.get("authorization") !== `Bearer ${env.BENCH_TOKEN}`)
++      return new Response("unauthorized", { status: 401 });
++    const url = new URL(request.url);
++
++    try {
++      if (url.pathname === "/health")
++        return Response.json({ ok: true, build: env.BUILD, workerIsolate: ingress });
++      const mismatch = buildMismatch(request, env);
++
++      if (mismatch) return mismatch;
++      const query = readQuery(url);
++
++      if (query.target !== "pi") throw new Error("Target mismatch");
++      if (
++        ["/import", "/cold", "/submit", "/await", "/run"].includes(url.pathname) &&
++        request.method !== "POST"
++      )
++        return new Response("POST required", { status: 405 });
++      if (!["/import", "/cold", "/submit", "/await", "/run", "/metrics", "/identity"].includes(url.pathname))
++        return new Response("not found", { status: 404 });
++      if (url.pathname === "/submit" || url.pathname === "/await")
++        throw new Error("Only Yielded uses native receipts");
++
++      const stub = env.PI.getByName(query.object, { locationHint: "wnam" });
++
++      if (url.pathname === "/cold") {
++        const identityUrl = new URL(url);
++
++        identityUrl.pathname = "/identity";
++        const response = await stub.fetch(new Request(identityUrl, { headers: request.headers }));
++
++        if (!response.ok) throw new Error("Pre-cold identity failed");
++        const before = parseIdentity(await response.json());
++        const threadAborted = await expectedAbort(() => stub.fetch(request));
++
++        return Response.json(
++          { ok: threadAborted, before, threadAborted },
++          { status: threadAborted ? 200 : 502 },
++        );
++      }
++      const headers = new Headers(request.headers);
++
++      headers.set(INGRESS_HEADER, JSON.stringify(ingress));
++
++      return await stub.fetch(new Request(request, { headers }));
++    } catch (cause) {
++      return Response.json(
++        { ok: false, error: errorText(cause), sample: url.searchParams.get("sample") },
++        { status: 500 },
++      );
++    }
++  },
++};

@@ -1,0 +1,809 @@
+{
+  "version": 1,
+  "runs": [
+    {
+      "run": "isolate-start-mv0jy3bw-8dbb0593",
+      "sourceSha256": "ea51a6aeadcb53db5f2a38d090303a89029d7fb5a5b5e6d0763bfc618770f251",
+      "complete": true,
+      "wallMs": 130003,
+      "plannedObjectsPerCell": 2,
+      "samples": 64,
+      "statuses": {
+        "ok": 64
+      },
+      "independentlyFreshControllerFlags": 16,
+      "returnedSetupFailures": 0,
+      "setupHttpCodes": {},
+      "inFlightSetupOutcomes": "No setup interruption",
+      "measuredInputRetries": 0,
+      "readinessFailures": [],
+      "cleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      },
+      "observedCpuOutcomes": {
+        "yielded/fetch/ok": 143,
+        "yielded/await/ok": 132,
+        "yielded/alarm/ok": 133,
+        "yielded/submit/ok": 129,
+        "yielded/alarm/canceled": 128,
+        "yielded/cold-abort/aborted": 8,
+        "yielded/jsrpc/ok": 2,
+        "pi/fetch/ok": 120,
+        "pi/run/ok": 27,
+        "pi/cold-abort/aborted": 8
+      },
+      "unmatchedCpuMarkers": 5
+    },
+    {
+      "run": "isolate-start-mv0k29wn-c8e57e9e",
+      "sourceSha256": "275bcb117b2f23a096c0b178d1a1870f7471404b47e45dfcf6a1517e4539578e",
+      "complete": false,
+      "wallMs": 653776,
+      "plannedObjectsPerCell": 20,
+      "samples": 0,
+      "statuses": {},
+      "independentlyFreshControllerFlags": 0,
+      "returnedSetupFailures": 5,
+      "setupHttpCodes": {
+        "404": 5
+      },
+      "inFlightSetupOutcomes": "Unknown after controller interruption; per-Object pending setup count was not persisted. No input was retried; all Objects were deleted.",
+      "measuredInputRetries": 0,
+      "readinessFailures": [],
+      "cleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      },
+      "observedCpuOutcomes": {},
+      "unmatchedCpuMarkers": null
+    },
+    {
+      "run": "isolate-start-mv0kizrl-f6752aaa",
+      "sourceSha256": "8dac2eb1d9a3915cfc4ce42639598addb42c6706182899bb7d7ca4b330e9e3be",
+      "complete": false,
+      "wallMs": 157566,
+      "plannedObjectsPerCell": 20,
+      "samples": 0,
+      "statuses": {},
+      "independentlyFreshControllerFlags": 0,
+      "returnedSetupFailures": 9,
+      "setupHttpCodes": {
+        "404": 6,
+        "500": 3
+      },
+      "inFlightSetupOutcomes": "Unknown after controller interruption; per-Object pending setup count was not persisted. No input was retried; all Objects were deleted.",
+      "measuredInputRetries": 0,
+      "readinessFailures": [
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "controller",
+          "attempt": 0,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "driver",
+          "attempt": 0,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "controller",
+          "attempt": 1,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "driver",
+          "attempt": 1,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "controller",
+          "attempt": 2,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "driver",
+          "attempt": 2,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "controller",
+          "attempt": 3,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "driver",
+          "attempt": 3,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "controller",
+          "attempt": 4,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "driver",
+          "attempt": 4,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "controller",
+          "attempt": 5,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "controller",
+          "attempt": 6,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "controller",
+          "attempt": 7,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "controller",
+          "attempt": 8,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "controller",
+          "attempt": 9,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "controller",
+          "attempt": 10,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "controller",
+          "attempt": 11,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "ingress": "controller",
+          "attempt": 12,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "pi",
+          "phase": "seed",
+          "ingress": "controller",
+          "attempt": 0,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        },
+        {
+          "target": "pi",
+          "phase": "seed",
+          "ingress": "driver",
+          "attempt": 0,
+          "httpStatus": "404",
+          "category": "transport-or-validation"
+        }
+      ],
+      "cleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      },
+      "observedCpuOutcomes": {},
+      "unmatchedCpuMarkers": null
+    },
+    {
+      "run": "isolate-start-mv0kpi00-e4bf5adb",
+      "sourceSha256": "a23b04d99cd97d4c6862e0acc89b36add7071243952bc75116f3263f9f1efe24",
+      "complete": true,
+      "wallMs": 862400,
+      "plannedObjectsPerCell": 20,
+      "samples": 2560,
+      "statuses": {
+        "ok": 2525,
+        "excluded": 35
+      },
+      "independentlyFreshControllerFlags": 614,
+      "returnedSetupFailures": 0,
+      "setupHttpCodes": {},
+      "inFlightSetupOutcomes": "No setup interruption",
+      "measuredInputRetries": 0,
+      "readinessFailures": [
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 0,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 0,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 1,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 1,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 2,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 2,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 3,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 4,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 0,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 0,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 1,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 1,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 2,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 2,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 3,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 3,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 4,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 4,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 5,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 5,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 6,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 6,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 7,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 7,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 8,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 8,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 9,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 9,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 10,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 10,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "controller",
+          "attempt": 11,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 0,
+          "ingress": "driver",
+          "attempt": 11,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "ingress": "controller",
+          "attempt": 0,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "ingress": "controller",
+          "attempt": 1,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "ingress": "controller",
+          "attempt": 2,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "ingress": "controller",
+          "attempt": 3,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "ingress": "controller",
+          "attempt": 4,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "ingress": "controller",
+          "attempt": 5,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "ingress": "controller",
+          "attempt": 6,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "ingress": "controller",
+          "attempt": 7,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "ingress": "controller",
+          "attempt": 8,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "ingress": "controller",
+          "attempt": 9,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "yielded",
+          "phase": "epoch",
+          "epoch": 1,
+          "ingress": "controller",
+          "attempt": 10,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 3,
+          "ingress": "controller",
+          "attempt": 0,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 3,
+          "ingress": "driver",
+          "attempt": 0,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 3,
+          "ingress": "controller",
+          "attempt": 1,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 3,
+          "ingress": "controller",
+          "attempt": 2,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 3,
+          "ingress": "controller",
+          "attempt": 3,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 3,
+          "ingress": "controller",
+          "attempt": 4,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 3,
+          "ingress": "controller",
+          "attempt": 5,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 3,
+          "ingress": "controller",
+          "attempt": 6,
+          "httpStatus": null,
+          "category": "old-build"
+        },
+        {
+          "target": "pi",
+          "phase": "epoch",
+          "epoch": 3,
+          "ingress": "controller",
+          "attempt": 7,
+          "httpStatus": null,
+          "category": "old-build"
+        }
+      ],
+      "cleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      },
+      "observedCpuOutcomes": {
+        "yielded/fetch/ok": 6063,
+        "yielded/alarm/canceled": 11379,
+        "yielded/alarm/ok": 13305,
+        "yielded/await/ok": 12156,
+        "yielded/submit/ok": 11780,
+        "yielded/jsrpc/ok": 1648,
+        "yielded/ambiguous/ok": 445,
+        "yielded/fetch/canceled": 9,
+        "yielded/cold-abort/aborted": 306,
+        "yielded/fetch/aborted": 2,
+        "pi/fetch/ok": 4817,
+        "pi/run/ok": 1255,
+        "pi/fetch/canceled": 9,
+        "pi/cold-abort/aborted": 310
+      },
+      "unmatchedCpuMarkers": 490
+    }
+  ],
+  "uploadResponses": {
+    "total": 198,
+    "nonOk": [
+      {
+        "at": "2026-10-09T06:32:37.168Z",
+        "worker": "isolate-start-upload-yielded",
+        "build": "compare-c022c363-baseline-2a2e33ae51f2b324955b188c3bd3dc9e07286cd873521afc91b33df41702a810-0-0",
+        "status": 400,
+        "success": false,
+        "startupMs": null,
+        "files": [
+          {
+            "field": "worker.mjs",
+            "bytes": 3587895
+          }
+        ],
+        "errorCodes": [
+          10021
+        ]
+      }
+    ]
+  },
+  "controllerSetupFailures": [
+    {
+      "category": "configuration",
+      "count": 1,
+      "detail": "An initial package command ran direnv inside the temporary checkout and unloaded inherited credentials. No resources or measured turns were created; subsequent commands invoked the controller directly from the credential-bearing checkout."
+    },
+    {
+      "category": "diagnostic-binding-migration",
+      "count": 1,
+      "detail": "Alchemy attempted to delete and recreate YieldedDO while changing its diagnostic binding name. Cloudflare rejected the migration. Both diagnostic stacks were deleted and API-verified, then recreated with the native bindings before the successful 50-upload comparison."
+    }
+  ],
+  "verification": {
+    "finalProductRevision": "e63e577b52f4038d37e5321359e81230a01c85b5",
+    "ready": "passed",
+    "command": "vp run ready",
+    "postgres": "task-owned PostgreSQL 18.6; stopped after verification",
+    "productVendorNodeModulesAbsent": true,
+    "sourceImportOnlyFilesVerified": 89,
+    "noNewTests": true,
+    "earlierNonOkGates": [
+      "Sandbox rejected required local workerd sockets; reran with host access.",
+      "Configured shared PostgreSQL database did not exist; a ready run using its maintenance database subsequently passed.",
+      "A later shared PostgreSQL server disappeared; final ready passed against the task-owned server.",
+      "Two help invocations unexpectedly started ready and were stopped; they were not counted as verification."
+    ],
+    "envDoctor": "passed; existing nvm/volta PATH warnings"
+  }
+}

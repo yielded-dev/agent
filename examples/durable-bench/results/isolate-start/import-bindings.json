@@ -1,0 +1,452 @@
+{
+  "base": "07f0272e",
+  "parser": "6.0.3",
+  "semantics": "All changed product files have identical non-import source text. Every import matches the parser-derived transformation of pinned Effect namespace re-exports; local names, utility imports and type-only bindings are preserved. This is a source/binding check, not a runtime behavioral test.",
+  "checked": [
+    {
+      "file": "packages/effect-agent/src/core/MemoryNamespace.ts",
+      "beforeSha256": "61df9ffb362b397deb782d4fc62ac8f20d0fcb0a5f832645e9e844b9c91273ef",
+      "afterSha256": "3854c79fe9673caeca6ac0e1b91516d7fa2ed62df11437b69ed08b895a7faabb"
+    },
+    {
+      "file": "packages/effect-agent/src/core/MemoryReference.ts",
+      "beforeSha256": "5f219cf4a018e7dbefc4534a3ae1eab2ac45c4b0bd3a0fa9ecfec7c4ed012895",
+      "afterSha256": "9d04893e46a204723042528543f15a90dffbc3646ce4a086d7d2bf47f9c68514"
+    },
+    {
+      "file": "packages/effect-agent/src/core/MemoryStore.ts",
+      "beforeSha256": "002d56c9ab48543962b1f42911651467f1e5be1f1d885170cde3e83c0e35a94b",
+      "afterSha256": "bd4b58bdef41cf2697c90f1a72bd16e361d7dd775c8955ad3002a810707e36e9"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/Admin.ts",
+      "beforeSha256": "d5624fbb73f497af3e371914c675feaa3a7a6b812e82544e8e4c53f54ad7c8d5",
+      "afterSha256": "a3480cc75990a617790470fc2d19e13c7c3d6ed98caed63757599eb9b5b49509"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/Digest.ts",
+      "beforeSha256": "a9576e4f7a3bcde95bce1f10c23f37dc55f831e18a8a9a28d596afe63c0cba2a",
+      "afterSha256": "579068c44a17c6abc4d114a86dbb5b5937ac10c221147d4295838187723a51d0"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/DurableAgentRuntime.ts",
+      "beforeSha256": "7e08c50b2f959ba6161ae3f9c1779f4144ceb63857f3816ba96300de99650674",
+      "afterSha256": "5bb7164060e50b5504c0333e9894ad2c701551cb1d4bb4b65bc4a86c858720ba"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/DurableFailpoint.ts",
+      "beforeSha256": "c7c3db2b39046bbc647ef5fc5c136c50c1079992259efefa67d1e7c73512ce4f",
+      "afterSha256": "0bcd9a9dee83e976c5c29ba8146d78ae793f29cf4e6fb6d8b46ec6fad41d4cb9"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/LifecyclePublication.ts",
+      "beforeSha256": "74ba1c640bbed4d679c3e4ba2b61bef054b6ccfc972ebc1e0f2310cfee88b7c9",
+      "afterSha256": "284a6d775316044548e27c5667b9877b36459034356d6bda377a1c1117e7dfc4"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/MessageDelivery.ts",
+      "beforeSha256": "5af36fdccd5d1c17467aa08307aec1ce4f642bfa00eac4af1f2a4b8d03ef5a8c",
+      "afterSha256": "17815a29d011256b93b81d89e80c2a17efb07d7ebdbba116ee730aee4b543a51"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/OperationAuthorizer.ts",
+      "beforeSha256": "2988568f14f4b47ebc499a3af70e07545450a8deb15484141aa80ddddc044ad8",
+      "afterSha256": "7c58c08359ccba6668f3658e049f7ef6607a803f473c377b7b1376d98d4e2714"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/PreparedInputAdmission.ts",
+      "beforeSha256": "7d9dac39b3a53ff5a9ac2bfb6f8daba6c47896e8384ddf10e9da4b504132636e",
+      "afterSha256": "f097b2e35faafcc282e40522ef6fe463c6b28f6ee44896dec42c67d5fcf60ba1"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/RecordFormat.ts",
+      "beforeSha256": "53c940661082660f17971d23c09cd117584608be1a31ac67eb2c1d4a45083bc0",
+      "afterSha256": "81fda56107364e1743a30740442d4e9ca1a0a0003b44d46cc291b80f2b882954"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/Records.ts",
+      "beforeSha256": "2e06b93c3d002b394e1dddc62775125dac186a2a979fe8ca1a1387ec0a4a5679",
+      "afterSha256": "42bba209d0e11ca0149c6f0c569f23b1739a40a8351e3ed36440d421c4785bb1"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/Recovery.ts",
+      "beforeSha256": "73de69bfed3959db3cd4a39a1f1b528e9dd1196b966e62597391916890ad3fc9",
+      "afterSha256": "01dcc225dd69a556804312aa7b56aacaa4b3d289a711504687476a4beb8c6b1a"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/RunContinuation.ts",
+      "beforeSha256": "30f959b374e85c8afade95e1edaa7b2cd699c8c295e51dfb6d9964d5f4bf255a",
+      "afterSha256": "3de5a340c10ca1b33bfebfecf3be0cfe609ce282f90007a86cc4bafd27214119"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/RunJournal.ts",
+      "beforeSha256": "7d8abce3a1647e204c59945520a02028b93d356d364bac1fde7988544715bd4a",
+      "afterSha256": "d52924664256b8086945b053160bef96449f48f807f42b1958adef2f92cdf523"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/RunStorage.ts",
+      "beforeSha256": "d25dd321b63ed9bd11b3bd4a0c5268b25498f98147ba37ff47faafb3e3feaecf",
+      "afterSha256": "f95b95a0096e41ab766e32f5f1d304338d83468baf06d385026ec2164319625e"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/Schedule.ts",
+      "beforeSha256": "1a82905f2807ead4fbb5c77868e667184820021380e9342eb1d2880c707d52a8",
+      "afterSha256": "3ede1124558b42ae0f532a4d594d92ab5711a4daa1101ebc84b8f83baf962dbd"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/SettlementPublisher.ts",
+      "beforeSha256": "97f51ee5d8497626f7cd9e576db3b593ac724004cef9954137661d5a977c11ff",
+      "afterSha256": "c97b29af7c4d56def94c8468d68d787ce261b5c0abec770f21235845c611bd7e"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/SqlMemoryStore.ts",
+      "beforeSha256": "fe424a82b9c2eab18c6455e2c59ec7f6c926b04d4d6edd8c93c2fa801e6bfa29",
+      "afterSha256": "f44470dae601f0e84a2ba90bcf7b439941eff223872dce712862a23520198f7b"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/SubmissionLedger.ts",
+      "beforeSha256": "7772a48c3fc1ebdc83c8dfb2a5637a1f647a00f3d14d7dbafbed15b5e3749c82",
+      "afterSha256": "1536f506f030787d14993de69fc8b91f4bb924c79366687894f71b12a704e54b"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/SubmissionStatus.ts",
+      "beforeSha256": "5ae309f7607ce330c2642fe5a3084cc29a5d5390985cb9f5bb02872494b5daa1",
+      "afterSha256": "27a7bfdcc8f94bc56ee777fe5c89cb059d4ddf4cad300f6bc1f4cb0a0214ff10"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/Subscription.ts",
+      "beforeSha256": "bfe269bb32b27ed2f82613da31227e69122644ac1c785539a50d2c2b7b77f6f5",
+      "afterSha256": "9bd210c2230984deaf99e508303408c7ea4a535f8abe7cb5ebaaac6b8af5688b"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/ThreadArchiveRange.ts",
+      "beforeSha256": "df27738eb9a86c02639b7350fb0a936b9776b091df42f8ed7246b029e788a6fd",
+      "afterSha256": "89bea3d789eaeb6d1b7c73a22542ade2105e835484165a2fd10c37ffb3c22876"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/ThreadImport.ts",
+      "beforeSha256": "7c623eb571096f082cb044d7580adfed485b948c71b07d15afb768f7a69c2fae",
+      "afterSha256": "5009b65ba0cd308bb07748d6e9f59a0b9a42473c8261a150e232ea87e2df1d06"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/ThreadInvariants.ts",
+      "beforeSha256": "44b16f3d620650774565e01338d29ef103ea78022442d9e6636bf74e7fb35f3b",
+      "afterSha256": "6c249a5821e970b19e3a7b3a45649ca9599243953529d9aa5a90e9d8b51e1161"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/ThreadProjectionMaintenance.ts",
+      "beforeSha256": "0ee210350ddcdf1a6b052f1fb1deac8026f4e33656bc52ca02eb45c8ed69be44",
+      "afterSha256": "87500a86c760d579e81ae56b57ccde11fd7bcccaecf00dbbbbeb000772217513"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/ThreadStore.ts",
+      "beforeSha256": "e756794caf31ed0c3cf95535b08609c183478555a9bcb70a13d5b00a2ac006ec",
+      "afterSha256": "dd6e3a10209b2cad75ed1390c05fe5226e45ab698be5a3891718d06b610bc914"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/ThreadTransfer.ts",
+      "beforeSha256": "e5b7d22e7053699abfd519359ac2743d6f0e7e090745e396f1f14b117099caf5",
+      "afterSha256": "ed4c607ba200071e09834644d0c076fc398e33c3f5d975ad1cdb9cf0a44c7fac"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/ThreadWork.ts",
+      "beforeSha256": "b60d917980d7968e0da44b7bc0959c358681866677a4864d6c3625d852522a6d",
+      "afterSha256": "f6751fd2000b0227c4743569a6540c95f6f42cfc8fbbaba0cbe2370dadc10696"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/ToolReconciler.ts",
+      "beforeSha256": "edb803898f514c3622be808038bf8263a47374e391673cae87b3549684cec3a1",
+      "afterSha256": "cbb4acb748b9c4af6c7364abeee1ce758f08a216729e0a87a4868d1ccbd0525a"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/WakeScheduler.ts",
+      "beforeSha256": "470615551371031e104c3633b7d1b686b2681909f09aa7eed71d50bfcbd7d714",
+      "afterSha256": "0ce0c714e24e885729b3cac854beb47f599d847ed2f4bc6c2354a6eb8ffe4812"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/WorkerAdmission.ts",
+      "beforeSha256": "10de157349afc4d52cc1ce086969740f3e6427ff04a1da5ec1366e02817a838f",
+      "afterSha256": "a6e95cfdeca1e2394558dc4a81ba2876906607224101c85271717c7037ba064b"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/WorkerHost.ts",
+      "beforeSha256": "5ce366dcaaae407c225dfcea025649921a6f7868829d7b51be0eab6d59b13010",
+      "afterSha256": "db13d96677307fd29fdf7bbcc259d183349a15a21cc6a64de36d795f47a0f1c2"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/agent-registration.ts",
+      "beforeSha256": "90e3d48d7a8f15fba05114551504ba51b948c18936cdc13097584f504cb2f33c",
+      "afterSha256": "c83127e1ea150c1cde052df2b31b23d0f44c16134549e1c5557258d13e328480"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/agent-updates.ts",
+      "beforeSha256": "1e994365bb5d7d3221546f97f149dad41c39b7fad6cc15b7e55cb124d872f459",
+      "afterSha256": "80b7285e84f9ad32b7c6d3d06b239ca4a99a02b0ddd5c0368999c8f5ef1ef5bd"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/canonical-json.ts",
+      "beforeSha256": "952ba966a175a86da8e0cd3200aea2f19fabc6f8183a9d5d34047bd5647ac97c",
+      "afterSha256": "978a15358564fa10dba70c4e1eb8cea9e26130e4ef791818513a0951cf2757be"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/evidence.ts",
+      "beforeSha256": "889e9999c67287530fac540840e50d17595789ab7f5f4bda5151b4a39b15914b",
+      "afterSha256": "b07852b81e506fc2810ba9e1a7bc21bee245fd1fc98f0141882174e280be6a96"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/foreign-diagnostic.ts",
+      "beforeSha256": "11e98e11f9ca49e22dfb96d39788669579adc3ff8c31b4f3d1cc7e63a7bfc05f",
+      "afterSha256": "2f1245e9dceed39c8b46ff1431f389e272d458bfbc8f9f72496469fe013f5d2c"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/initial-context.ts",
+      "beforeSha256": "579f2c4bd3618f0c2bbdb86f4936924c9a91a12483d1bdcf6830cc0439ff2e17",
+      "afterSha256": "d23fb485f535a0a4f33046bfdbf14ce236c53a50c00514b8d9f41ac84f1d6231"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/journal-metadata.ts",
+      "beforeSha256": "ff0c569939cabadf17aa4d7f9fee64e47306bb7a9915f89e237235e090495cd1",
+      "afterSha256": "00cc5863e280d3e74f9a2e1bd71e4f2c4bf02576fa752299ca99403a48557de6"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/message-status.ts",
+      "beforeSha256": "4f2e416d5392b5aeff2f474a6a358dc36b16fcba6531a091f120f563a08fade1",
+      "afterSha256": "c5ae5193de3f0960443437cbf3d9f1b88f43201904824436d9b395dfc0975784"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/messaging-host.ts",
+      "beforeSha256": "ac8c44c2139625c6c5224226904967bf600b72a228b6a1f9fd0ec0045f6099d1",
+      "afterSha256": "97c2eaa99362ae192b7eae99ac5cc03cc575f2e84ce2eb304cde62e8012a86c6"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/record-encoding.ts",
+      "beforeSha256": "c294836643a5925409d32b0c3ba22684798431e10b3d6b1faee9fee631d39661",
+      "afterSha256": "cf3a69d09cb23483c408844b1b5a865f193cf7eb74eaee780eac43d9f454f014"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/run-context-reader.ts",
+      "beforeSha256": "f155cc15c058669b7d7efca48b13150d1761fa28918ff5a48cbdc96b05d844cb",
+      "afterSha256": "a67abb375f52ec7ed44a652c2aa5135f8a7d47c959f771209f47e709145468df"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/run-context.ts",
+      "beforeSha256": "4c15c1b938ed82519be91d078ee663a930216da90c75b425235024c4992f53d9",
+      "afterSha256": "8376733984ffe3bc6fbe15b01008bd7e4924477540666c4bf96dc19fe6ec01e8"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/thread-import-reader.ts",
+      "beforeSha256": "6b3903e5a94f45c176d4e106a90c6f105cc6deda925c5698e368d1bf75c1315e",
+      "afterSha256": "4f375b1ef0dcb94668ecf71f2bce6a4deae709b9327cbf39f22e65ecdf7b597c"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/thread-initialization.ts",
+      "beforeSha256": "54dc95ebf071913a722addb292dcf2b872a833adfa5e3ad81a2cf0772359c3ca",
+      "afterSha256": "b75ed1f40dd7b004d0cea37453f55f84108d32a7ad4d4055efd35cc09d3e9d0f"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/worker-host.ts",
+      "beforeSha256": "6cd11a59370d9699f0dd535564568b0ac348e315b2500ff62a53e4747d49ea76",
+      "afterSha256": "d1a1ac44a12072a9d925e4c0359b9339966f10ccfda04ece5c4a0e88fea069b3"
+    },
+    {
+      "file": "packages/effect-agent/src/durable/internal/worker-runtime.ts",
+      "beforeSha256": "f63fbc474d441ae41a9a8edd68a0b78c7e5e9c2901802918beb016aab14c1d08",
+      "afterSha256": "8b623ed039d2b42a167c6c945383f9b63f9a19c0f2cd52a0c3d33c1f439c4199"
+    },
+    {
+      "file": "packages/platform-cloudflare/src/Alarm.ts",
+      "beforeSha256": "3157b8ab3e7e1cb60f24a9c37e189445553c9d72e5bdd080668915a9f00b2e97",
+      "afterSha256": "d927a77c7bc838a54dd3e28bb74ed9d2d9d7b43f6f86a72bc53680564ed098d8"
+    },
+    {
+      "file": "packages/platform-cloudflare/src/CloudflareBindings.ts",
+      "beforeSha256": "805028569ffd76297d45264ab5c2e3f03c23fe6af5fcfbf3f9b8a7f08e312da1",
+      "afterSha256": "db5c61f46c79eef8818c71400cf24a03a4a2017a5d4ca954ce7bd32855c3d39f"
+    },
+    {
+      "file": "packages/platform-cloudflare/src/CloudflareConfig.ts",
+      "beforeSha256": "ef186a1c515d3fe5af36ea5fe82f480daa2d540fc5da822ba7b1a1e84d6f1d5f",
+      "afterSha256": "4e271111be3e795c64284c1b7421ca59e20a080aa9d14913b2b5ee95864c2d2a"
+    },
+    {
+      "file": "packages/platform-cloudflare/src/CloudflareThreadClient.ts",
+      "beforeSha256": "d83d6a24fc5a8398b7ab5918f5f405279f5d93b709557765ceadf91f07f216a4",
+      "afterSha256": "748343b7dddade66b67c66c9dc756e7f981fabef785503b3a0d17749ec3ee1b9"
+    },
+    {
+      "file": "packages/platform-cloudflare/src/ThreadObject.ts",
+      "beforeSha256": "532f8a06b5fe36bc026a90d44800e41023db7e8ef1d00bcfe60eadf0f003b7d7",
+      "afterSha256": "2edb02e85b6021ca0ba3cc414ee061dba614b042a8491f0621adf4016e34c207"
+    },
+    {
+      "file": "packages/platform-cloudflare/src/WakeScheduler.ts",
+      "beforeSha256": "004f0aa38a6d369a274537d1e037fb9523be267871c7a3fe734c16e1f5dfb551",
+      "afterSha256": "c7f887745376b2c8dba3d365c76617978a6da4fa93d4b33ef0d2046c4d8ca04d"
+    },
+    {
+      "file": "packages/platform-cloudflare/src/internal/boundary.ts",
+      "beforeSha256": "7eb93b70e502a97849c8424e9c347f8cd6c23f3265c3d37340b4867424dd7f9f",
+      "afterSha256": "50bb5d984260d76684b546f653f241df07609f6936a9ae67aa1ac7dbe38cf881"
+    },
+    {
+      "file": "packages/platform-cloudflare/src/internal/crypto.ts",
+      "beforeSha256": "677f987d6f25fa75d4e0aaf4ac2f4c7db52e33de7b5d502dd66a6155175f42bf",
+      "afterSha256": "9126e6c1ab00ee39e5170f10bb76afa38c7107e43d935685eb550b8340c2b6b9"
+    },
+    {
+      "file": "packages/platform-cloudflare/src/internal/due-queue.ts",
+      "beforeSha256": "52c78f499de2857c37b89188d64cb3ed80c483545359e8091da322edcd472987",
+      "afterSha256": "1382cce77d2f4e6fe0a092ade90e6ae5f135cfd44de8684f73be2859d060c2e4"
+    },
+    {
+      "file": "packages/platform-cloudflare/src/internal/layers.ts",
+      "beforeSha256": "20e7c77146724ec1da94919e88729b296c958ba94acb892b46c7a5dc6948d1b3",
+      "afterSha256": "c9659cb9cc8ff8e19acb6051e3dad19f505d31bc1095acc51043d391906944cf"
+    },
+    {
+      "file": "packages/platform-cloudflare/src/internal/message-delivery.ts",
+      "beforeSha256": "61b276d268bb57e876da821318c1c2702d2f4ec6c749770d4094a5ad783b8467",
+      "afterSha256": "3584bc607c86bb1aa482774cc491e9767433df4e1cbbd12ef5ca57494d0576d3"
+    },
+    {
+      "file": "packages/platform-cloudflare/src/internal/prepared-admission.ts",
+      "beforeSha256": "c848ece4dccd6b8da434b2c693aad729966f3fcf1d8863a031ba03cf47d4377e",
+      "afterSha256": "a2a42d5388ca42b3da5235304e3b901bd1b9ef923710bec9601485833d304720"
+    },
+    {
+      "file": "packages/platform-cloudflare/src/internal/progress-wait.ts",
+      "beforeSha256": "45d2a037669f3c1b1f833835158f797e822a11e79ccccc08381fc37cdf3dded6",
+      "afterSha256": "4cf05fd8e08a7d18902cfa8765ed0af30f538b86fb5dbe6a057db6ba5f7dabd8"
+    },
+    {
+      "file": "packages/platform-cloudflare/src/internal/transport.ts",
+      "beforeSha256": "55c9f1d02617634898f72bf01327678565307f53a52cfaa24ae43ba125f55a8f",
+      "afterSha256": "54e6add4fac3a964adac12a0f8bd1fc719068aa499c2be97a8d206fee8c2736d"
+    },
+    {
+      "file": "packages/storage-cloudflare/src/DoMessageDeliveryStore.ts",
+      "beforeSha256": "224116933c6755d62143f49224265da2bd6b729aff90ac7aaad57d0d23b7bb3c",
+      "afterSha256": "2b2f6716a6715e2b538147b11334416723b2c83ec63d7e6f784378c245af1d1f"
+    },
+    {
+      "file": "packages/storage-cloudflare/src/DoStorageConfig.ts",
+      "beforeSha256": "08b7107bb5ce53ac81ce16013d5e7ebd4bb0e1ca59b26c8007bc364bc1bc7538",
+      "afterSha256": "0458da11fecccc42c0a49ed02ba691d71552bca7998fea67a71f6d9b62a11bfd"
+    },
+    {
+      "file": "packages/storage-cloudflare/src/DoStorageError.ts",
+      "beforeSha256": "8db6cb191bd4dfba78658bdf72ae3e24eb08736810eafbc35d28f09a258bdf8a",
+      "afterSha256": "706503bb9caf693e164e38fc5ce4775911dc5ada8b2ebcb7cea5daeff9abfc6c"
+    },
+    {
+      "file": "packages/storage-cloudflare/src/DoStorageFailpoint.ts",
+      "beforeSha256": "ac728904e11fb1ad0f8fa3d5d20f350e60187aa9204b3ce64f00c0f4d73d6de5",
+      "afterSha256": "576fbc7c384dc0a821887d72ee9bad1878f1873424b996b578b04e4acb7314d5"
+    },
+    {
+      "file": "packages/storage-cloudflare/src/DoSubmissionLedger.ts",
+      "beforeSha256": "c2fe588b9dfa02d076af75013945b23e6786f1d77f447fe9e484523cacb4fa0e",
+      "afterSha256": "d52fd9c3a93e4d33e9a6bdb012382e1d13781cdaf25f7e7b3aa2882a6b8794c8"
+    },
+    {
+      "file": "packages/storage-cloudflare/src/DoThreadStore.ts",
+      "beforeSha256": "0b548de219a2a1475ae2a2f5a1f797d58ee78340f4de82bd20f5220f86b637d2",
+      "afterSha256": "cfbd8acab4b195bc062223c6214b79fa437b54407a4af7088ba5adbc40ce7086"
+    },
+    {
+      "file": "packages/storage-cloudflare/src/PortProtocol.ts",
+      "beforeSha256": "47f1bdb9f0ebdd0aa55cd0c6eaa779e5681e898e5df47e72ddfb69c2085c19c5",
+      "afterSha256": "04a9fc444eb591fda7d4de874e0ddf954a3e554b17bb623783002e9a94c6ddfd"
+    },
+    {
+      "file": "packages/storage-cloudflare/src/PortRouting.ts",
+      "beforeSha256": "1b5733c477dcf50c9617edabc269a54e70a39703a6dd41496786ddaea5aba0c0",
+      "afterSha256": "ab644031094389644e7c2521fafe10fdda98d47d77609ba83735a55ead808599"
+    },
+    {
+      "file": "packages/storage-cloudflare/src/internal/canonical-append.ts",
+      "beforeSha256": "c9adb728ce9d726e67bd74612084dbaec069c41e7d5b53a2497d6da10f75e4d5",
+      "afterSha256": "ff5b71c8009a8b0326fe1e04d173159eff46a5b0beba5c72e6db0e0396bfa301"
+    },
+    {
+      "file": "packages/storage-cloudflare/src/internal/do-journal.ts",
+      "beforeSha256": "796a2e3a7939c0ef387b230256d9b76528872b87c1e88bc1c3df89f55778568b",
+      "afterSha256": "d7107dba91e2d1f86c97f86f8f5137cd7bb65630ab2848654180554aa8e22366"
+    },
+    {
+      "file": "packages/storage-cloudflare/src/internal/migrations.ts",
+      "beforeSha256": "208b3472fdc5ca4971768facf7d10f77b6c566e926e0bbf07222a646e3d479b9",
+      "afterSha256": "e888036a98e07745b94095d0d104ad0fe5a35274b32a131f50bcfa0470586b73"
+    },
+    {
+      "file": "packages/storage-cloudflare/src/internal/owned-state.ts",
+      "beforeSha256": "18dcca0913bcef30c08e9f7b0d94660c8ab799ef5a4c897b17b0189d284830ea",
+      "afterSha256": "5dea1a3545be48d480c809c18fd073fc95bf9e201e754af54c44d5fd1d5b37a9"
+    },
+    {
+      "file": "packages/storage-cloudflare/src/internal/storage-span.ts",
+      "beforeSha256": "6f304a27d5fb61ca48b44fff50d06ae16dda487bd5b27b94d477a231eb42076f",
+      "afterSha256": "91e8f48609ce95780789a85ff9c46f4e04db51753424500e562416966265cdf9"
+    },
+    {
+      "file": "packages/storage-sql/src/SqlAdmissionFacts.ts",
+      "beforeSha256": "28208214d864f77ac2ae9ec38004321686e17cbed2fe5de6d355bbd45da083a8",
+      "afterSha256": "a3bd253a7f0ec82410038ea8987452504da9df4d1441f6150cf40f785d087105"
+    },
+    {
+      "file": "packages/storage-sql/src/SqlJournal.ts",
+      "beforeSha256": "803a51376fe80736ec29a3628a6f3fd585d6cd3a9477d9aa6bf9d477abfc218f",
+      "afterSha256": "e7201811c1bcf7335cf0935fac6c7844d02b5e8a77b701e17d465878bc8378fa"
+    },
+    {
+      "file": "packages/storage-sql/src/SqlLifecyclePublication.ts",
+      "beforeSha256": "10c258e02d89f09c9a0afebfa3ee4ba71d1368adbfddc8ec8759e897c2eda7b9",
+      "afterSha256": "53d1f69ce57c5bfcbb40276fc8e098d3256035577e484d12241c60ddfbb3c1b8"
+    },
+    {
+      "file": "packages/storage-sql/src/SqlMessageDeliveryStore.ts",
+      "beforeSha256": "013587a9e6b424aaee3286e2a4db45cac0e196c9dfc944e65367f31e9acf1aa5",
+      "afterSha256": "0a4a85be226e8fdb7ac5689d792c184b7dd6bac78461bbcf9dabc7e36bd90376"
+    },
+    {
+      "file": "packages/storage-sql/src/SqlStorage.ts",
+      "beforeSha256": "88b60dbe9560cfe9943e54b0c84ddbf18ec272c9c0d1aa180680b9a1025e8fb8",
+      "afterSha256": "fa4b9f439c0e4728fefb07de1dc61a71533d0a75b474a0e730334dd0f59dc4f1"
+    },
+    {
+      "file": "packages/storage-sql/src/SqlStorageProgress.ts",
+      "beforeSha256": "a806fe653ac823a3ef53ef81f7389dabfe9a3bb4c4caf9f648e792a76ae5e080",
+      "afterSha256": "d6a72da3109cb7adb03153f3260df6bfee40e13021326b9c32320daa2a432b78"
+    },
+    {
+      "file": "packages/storage-sql/src/SqlThreadArchiveRange.ts",
+      "beforeSha256": "0b22ba24bf5f412c0614b84c21d2cee85d6145fd0379c15b10e60277f7559b3a",
+      "afterSha256": "cb1331fab58d7bacb2acf3a1ffa2354bd7c675bdc13c14382f3be922f6f88f2c"
+    },
+    {
+      "file": "packages/storage-sql/src/SqlThreadImport.ts",
+      "beforeSha256": "3466e38fbb1512a977a3d3e7c05d3ba2853af1fb97b3e26ea589b9409262b70d",
+      "afterSha256": "713926739f4fcf3488610c7fbed3d730f90e69f886bb1467c1fbe0ae895097ed"
+    },
+    {
+      "file": "packages/storage-sql/src/SqlThreadNativeReads.ts",
+      "beforeSha256": "f0bb2755dd5648a5fd010eee158cb7dc43e7e21f02fdccaf681262f38d0b114a",
+      "afterSha256": "a68a393e829cf9e1c9e72673e1910d1ff63a42d9f1674c60e2d8ef59ee63f6ff"
+    },
+    {
+      "file": "packages/storage-sql/src/SqlThreadWork.ts",
+      "beforeSha256": "a31aba019d70dd55cf927d6c42d03cb9e726e79627df85e279c985a4a178f95c",
+      "afterSha256": "024a1fe9bc9cddd3cfbb453228a5b467f833e89956e374eb14f844ae17c912dc"
+    },
+    {
+      "file": "packages/storage-sql/src/SqliteLayoutInspection.ts",
+      "beforeSha256": "d54a226bd0fb39c5c680a6a7ed203d18de310e86c3d6449fbbc52c25c1b8490c",
+      "afterSha256": "19edde4b8c2cdfeaef0a382951c1d0cda6ef13f2f66f4df7de1195f442e98a85"
+    },
+    {
+      "file": "packages/storage-sql/src/internal/settlement-intervals.ts",
+      "beforeSha256": "6d23546c3a49c86f2c8f50df53eaf4e2730b7e74cae6dcc49d0a2e67bc8b18ad",
+      "afterSha256": "cc62dcc61f4e65fa45a4221e6eb241d3fe447a1aae33dc14dd30ef89c7fdd04b"
+    }
+  ]
+}

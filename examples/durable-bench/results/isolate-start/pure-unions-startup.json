@@ -1,0 +1,481 @@
+{
+  "version": 1,
+  "label": "pure-unions",
+  "manifest": "isolate-start-startup-a6a374c8.json",
+  "run": "a6a374c8",
+  "namespaceMode": "native",
+  "distinctCodeBytes": true,
+  "method": "ABBA repeated 4 times; pi after each block",
+  "sourceBuilds": [
+    {
+      "file": "pure-unions-baseline.mjs",
+      "sha256": "7e20729fa563b82137382cd4ddd01ccde43e866b415184d34aa6e57c9852f3d5"
+    },
+    {
+      "file": "pure-unions-candidate.mjs",
+      "sha256": "77ae4e79a384ae9f0ccdddcdebbbc50421b71ee11843d2c38c1cde30fe7edc4d"
+    },
+    {
+      "file": "deployed-native-pi.mjs",
+      "sha256": "a5a985cfe239a49c3d86f407e7156c84a8860c0a6e0e18aec1702349b562c1ed"
+    }
+  ],
+  "semantics": "Cloudflare startup_time_ms returned by successful script uploads. Tiny initial Alchemy placeholder scripts are retained as outcomes and excluded from timing. Each balanced block uploads A/B/B/A to the same Yielded Worker, then unchanged pi. All module bytes are identical apart from a per-upload comment; BUILD also changes. These are global startup measurements, not turn latencies.",
+  "completeBlocks": 4,
+  "labels": {
+    "baseline": {
+      "n": 8,
+      "median": 84.5,
+      "q1": 75,
+      "q3": 96.25,
+      "min": 72,
+      "max": 108,
+      "values": [
+        93,
+        75,
+        106,
+        72,
+        108,
+        84,
+        75,
+        85
+      ]
+    },
+    "candidate": {
+      "n": 8,
+      "median": 80,
+      "q1": 75.75,
+      "q3": 88.5,
+      "min": 73,
+      "max": 112,
+      "values": [
+        112,
+        76,
+        78,
+        99,
+        82,
+        75,
+        85,
+        73
+      ]
+    },
+    "pi": {
+      "n": 4,
+      "median": 17,
+      "q1": 16.25,
+      "q3": 19.75,
+      "min": 14,
+      "max": 28,
+      "values": [
+        28,
+        17,
+        17,
+        14
+      ]
+    }
+  },
+  "yieldedOverPi": {
+    "baseline": 4.970588235294118,
+    "candidate": 4.705882352941177
+  },
+  "pairedBlocks": {
+    "savedMs": {
+      "n": 4,
+      "median": 0.75,
+      "q1": -2.125,
+      "q3": 5.125,
+      "min": -10,
+      "max": 17.5,
+      "values": [
+        -10,
+        0.5,
+        17.5,
+        1
+      ]
+    },
+    "candidateOverBaseline": {
+      "n": 4,
+      "median": 0.9909410112359551,
+      "q1": 0.9450520833333333,
+      "q3": 1.0255484216158373,
+      "min": 0.8177083333333334,
+      "max": 1.119047619047619,
+      "values": [
+        1.119047619047619,
+        0.9943820224719101,
+        0.8177083333333334,
+        0.9875
+      ]
+    },
+    "baselineRepeatSpreadMs": {
+      "n": 4,
+      "median": 21,
+      "q1": 16,
+      "q3": 26.5,
+      "min": 10,
+      "max": 34,
+      "values": [
+        18,
+        34,
+        24,
+        10
+      ]
+    },
+    "candidateRepeatSpreadMs": {
+      "n": 4,
+      "median": 16.5,
+      "q1": 10.75,
+      "q3": 24.75,
+      "min": 7,
+      "max": 36,
+      "values": [
+        36,
+        21,
+        7,
+        12
+      ]
+    }
+  },
+  "outcomes": {
+    "total": 20,
+    "included": 20,
+    "placeholders": 0,
+    "nonOk": 0
+  },
+  "blocks": [
+    {
+      "block": 0,
+      "baseline": [
+        93,
+        75
+      ],
+      "candidate": [
+        112,
+        76
+      ],
+      "pi": 28,
+      "baselineMedianMs": 84,
+      "candidateMedianMs": 94,
+      "savedMs": -10,
+      "candidateOverBaseline": 1.119047619047619,
+      "baselineRepeatSpreadMs": 18,
+      "candidateRepeatSpreadMs": 36
+    },
+    {
+      "block": 1,
+      "baseline": [
+        106,
+        72
+      ],
+      "candidate": [
+        78,
+        99
+      ],
+      "pi": 17,
+      "baselineMedianMs": 89,
+      "candidateMedianMs": 88.5,
+      "savedMs": 0.5,
+      "candidateOverBaseline": 0.9943820224719101,
+      "baselineRepeatSpreadMs": 34,
+      "candidateRepeatSpreadMs": 21
+    },
+    {
+      "block": 2,
+      "baseline": [
+        108,
+        84
+      ],
+      "candidate": [
+        82,
+        75
+      ],
+      "pi": 17,
+      "baselineMedianMs": 96,
+      "candidateMedianMs": 78.5,
+      "savedMs": 17.5,
+      "candidateOverBaseline": 0.8177083333333334,
+      "baselineRepeatSpreadMs": 24,
+      "candidateRepeatSpreadMs": 7
+    },
+    {
+      "block": 3,
+      "baseline": [
+        75,
+        85
+      ],
+      "candidate": [
+        85,
+        73
+      ],
+      "pi": 14,
+      "baselineMedianMs": 80,
+      "candidateMedianMs": 79,
+      "savedMs": 1,
+      "candidateOverBaseline": 0.9875,
+      "baselineRepeatSpreadMs": 10,
+      "candidateRepeatSpreadMs": 12
+    }
+  ],
+  "uploads": [
+    {
+      "at": "2026-10-09T06:43:37.431Z",
+      "label": "baseline",
+      "block": 0,
+      "position": 0,
+      "sourceSha256": "7e20729fa563b82137382cd4ddd01ccde43e866b415184d34aa6e57c9852f3d5",
+      "bundleBytes": 3584631,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 93,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:43:40.228Z",
+      "label": "candidate",
+      "block": 0,
+      "position": 1,
+      "sourceSha256": "77ae4e79a384ae9f0ccdddcdebbbc50421b71ee11843d2c38c1cde30fe7edc4d",
+      "bundleBytes": 3583875,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 112,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:43:43.949Z",
+      "label": "candidate",
+      "block": 0,
+      "position": 2,
+      "sourceSha256": "77ae4e79a384ae9f0ccdddcdebbbc50421b71ee11843d2c38c1cde30fe7edc4d",
+      "bundleBytes": 3583875,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 76,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:43:46.949Z",
+      "label": "baseline",
+      "block": 0,
+      "position": 3,
+      "sourceSha256": "7e20729fa563b82137382cd4ddd01ccde43e866b415184d34aa6e57c9852f3d5",
+      "bundleBytes": 3584631,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 75,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:43:49.245Z",
+      "label": "pi",
+      "block": 0,
+      "position": 4,
+      "sourceSha256": "a5a985cfe239a49c3d86f407e7156c84a8860c0a6e0e18aec1702349b562c1ed",
+      "bundleBytes": 1706387,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 28,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:43:52.406Z",
+      "label": "baseline",
+      "block": 1,
+      "position": 0,
+      "sourceSha256": "7e20729fa563b82137382cd4ddd01ccde43e866b415184d34aa6e57c9852f3d5",
+      "bundleBytes": 3584631,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 106,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:43:55.283Z",
+      "label": "candidate",
+      "block": 1,
+      "position": 1,
+      "sourceSha256": "77ae4e79a384ae9f0ccdddcdebbbc50421b71ee11843d2c38c1cde30fe7edc4d",
+      "bundleBytes": 3583875,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 78,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:43:58.382Z",
+      "label": "candidate",
+      "block": 1,
+      "position": 2,
+      "sourceSha256": "77ae4e79a384ae9f0ccdddcdebbbc50421b71ee11843d2c38c1cde30fe7edc4d",
+      "bundleBytes": 3583875,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 99,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:44:01.469Z",
+      "label": "baseline",
+      "block": 1,
+      "position": 3,
+      "sourceSha256": "7e20729fa563b82137382cd4ddd01ccde43e866b415184d34aa6e57c9852f3d5",
+      "bundleBytes": 3584631,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 72,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:44:04.292Z",
+      "label": "pi",
+      "block": 1,
+      "position": 4,
+      "sourceSha256": "a5a985cfe239a49c3d86f407e7156c84a8860c0a6e0e18aec1702349b562c1ed",
+      "bundleBytes": 1706387,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 17,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:44:07.406Z",
+      "label": "baseline",
+      "block": 2,
+      "position": 0,
+      "sourceSha256": "7e20729fa563b82137382cd4ddd01ccde43e866b415184d34aa6e57c9852f3d5",
+      "bundleBytes": 3584631,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 108,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:44:10.949Z",
+      "label": "candidate",
+      "block": 2,
+      "position": 1,
+      "sourceSha256": "77ae4e79a384ae9f0ccdddcdebbbc50421b71ee11843d2c38c1cde30fe7edc4d",
+      "bundleBytes": 3583875,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 82,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:44:14.246Z",
+      "label": "candidate",
+      "block": 2,
+      "position": 2,
+      "sourceSha256": "77ae4e79a384ae9f0ccdddcdebbbc50421b71ee11843d2c38c1cde30fe7edc4d",
+      "bundleBytes": 3583875,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 75,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:44:17.403Z",
+      "label": "baseline",
+      "block": 2,
+      "position": 3,
+      "sourceSha256": "7e20729fa563b82137382cd4ddd01ccde43e866b415184d34aa6e57c9852f3d5",
+      "bundleBytes": 3584631,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 84,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:44:21.005Z",
+      "label": "pi",
+      "block": 2,
+      "position": 4,
+      "sourceSha256": "a5a985cfe239a49c3d86f407e7156c84a8860c0a6e0e18aec1702349b562c1ed",
+      "bundleBytes": 1706387,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 17,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:44:26.266Z",
+      "label": "baseline",
+      "block": 3,
+      "position": 0,
+      "sourceSha256": "7e20729fa563b82137382cd4ddd01ccde43e866b415184d34aa6e57c9852f3d5",
+      "bundleBytes": 3584631,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 75,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:44:29.995Z",
+      "label": "candidate",
+      "block": 3,
+      "position": 1,
+      "sourceSha256": "77ae4e79a384ae9f0ccdddcdebbbc50421b71ee11843d2c38c1cde30fe7edc4d",
+      "bundleBytes": 3583875,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 85,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:44:33.334Z",
+      "label": "candidate",
+      "block": 3,
+      "position": 2,
+      "sourceSha256": "77ae4e79a384ae9f0ccdddcdebbbc50421b71ee11843d2c38c1cde30fe7edc4d",
+      "bundleBytes": 3583875,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 73,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:44:36.411Z",
+      "label": "baseline",
+      "block": 3,
+      "position": 3,
+      "sourceSha256": "7e20729fa563b82137382cd4ddd01ccde43e866b415184d34aa6e57c9852f3d5",
+      "bundleBytes": 3584631,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 85,
+      "errors": []
+    },
+    {
+      "at": "2026-10-09T06:44:39.459Z",
+      "label": "pi",
+      "block": 3,
+      "position": 4,
+      "sourceSha256": "a5a985cfe239a49c3d86f407e7156c84a8860c0a6e0e18aec1702349b562c1ed",
+      "bundleBytes": 1706387,
+      "placeholder": false,
+      "status": 200,
+      "success": true,
+      "startupMs": 14,
+      "errors": []
+    }
+  ]
+}
