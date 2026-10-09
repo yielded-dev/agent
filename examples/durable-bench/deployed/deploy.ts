@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { Console, Effect, FileSystem, Schema } from "effect";
 
 import { build } from "./build.ts";
-import { type Cloudflare, request } from "./cloudflare.ts";
+import { Cloudflare, request } from "./cloudflare.ts";
 import { Health } from "./model.ts";
 import {
   BenchError,
@@ -39,7 +39,8 @@ const State = Schema.Struct({
 });
 
 /** The only persistent state is private Alchemy state and enough ownership data to destroy it. */
-export const deployments = Effect.fnUntraced(function* (cloud: Cloudflare) {
+export const deployments = Effect.gen(function* () {
+  const cloud = yield* Cloudflare;
   const fs = yield* FileSystem.FileSystem;
   const stateFile = join(privateDirectory, "state.json");
   let state: typeof State.Type;

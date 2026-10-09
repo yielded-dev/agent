@@ -20,20 +20,22 @@ From the repository root:
 vp run -F @yielded/agent-example-durable-bench deployed -- --targets yielded,pi,tardie --sizes 50,250
 ```
 
-Or run `vp run deployed` in this directory. Quick mode defaults to three Objects per
+Or run `vp run deployed` in this directory. Quick mode defaults to six Objects per
 target/cell, four sequential warm turns per Object after an excluded warmup, 0 and 400 ms
-time to first token, and three concurrent Objects. Fixtures are imported in bulk when the
+time to first token, and six concurrent Objects. Fixtures are imported in bulk when the
 native import reproduces their table counts; Yielded currently needs the replay fallback
 described below. All seeding finishes before timing. Increase `--concurrency` to run more Objects
 at once; changing it can also change contention and the numbers being compared.
 
 ```sh
-vp run deployed -- --ttft 0 --objects 3 --repeats 4 --concurrency 3
+vp run deployed -- --ttft 0 --objects 6 --repeats 4 --concurrency 6
 vp run deployed -- --cold --cpu
 ```
 
 The output has one table per cell: median [Q1–Q3] of **Object medians**, the range of
 those medians, each Object's repeat range (median / maximum), and Yielded ÷ pi.
+The ratio includes the observed min(Yielded)/max(pi)–max(Yielded)/min(pi) range of
+Object medians. This unpaired spread is descriptive, not a confidence interval.
 JSON and the printed tables go to gitignored `results/durable-bench-*.{json,md}`. JSON also
 records admission, model-call gaps, the last response-to-client interval, ingress colos,
 fingerprint checks, failures and cleanup. No timing evidence is committed.

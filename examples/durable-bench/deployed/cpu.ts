@@ -1,6 +1,6 @@
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 
-import { type Cloudflare } from "./cloudflare.ts";
+import { Cloudflare } from "./cloudflare.ts";
 import { type Invocation } from "./model.ts";
 import { BenchError } from "./platform.ts";
 import { Target } from "./worker/protocol.ts";
@@ -18,24 +18,22 @@ const Event = Schema.Struct({
     cpuTimeMs: Schema.optionalKey(Schema.Number),
     wallTimeMs: Schema.optionalKey(Schema.Number),
   }),
-  source: Schema.Struct({
-    kind: Schema.optionalKey(Schema.String),
-    target: Schema.optionalKey(Target),
-    object: Schema.optionalKey(Schema.String),
-    sample: Schema.optionalKey(Schema.String),
-  }),
+  source: Schema.Union([Schema.String, Schema.Record(Schema.String, Schema.Unknown)]),
+});
+
+const Marker = Schema.Struct({
+  kind: Schema.NonEmptyString,
+  target: Schema.optionalKey(Target),
+  object: Schema.optionalKey(Schema.String),
+  sample: Schema.optionalKey(Schema.String),
 });
 
 const Page = Schema.Struct({
   events: Schema.Struct({ count: Schema.Natural, events: Schema.Array(Event) }),
 });
 
-export const cpu = Effect.fnUntraced(function* (
-  cloud: Cloudflare,
-  name: string,
-  from: number,
-  to: number,
-) {
+export const cpu = Effect.fnUntraced(function* (name: string, from: number, to: number) {
+  const cloud = yield* Cloudflare;
   const pending = [{ from, to }];
   const events = new Map<string, typeof Event.Type>();
 
@@ -73,13 +71,15 @@ export const cpu = Effect.fnUntraced(function* (
       pending.push({ from: window.from, to: middle }, { from: middle, to: window.to });
     } else for (const event of result.events.events) events.set(event.$metadata.id, event);
   }
-  const markers = new Map<string, (typeof Event.Type)[]>();
+  const markers = new Map<string, (typeof Marker.Type)[]>();
 
   for (const event of events.values()) {
     const id = event.$metadata.requestId;
 
-    if (!id || !event.source.kind || event.$metadata.type === "cf-worker-event") continue;
-    markers.set(id, [...(markers.get(id) ?? []), event]);
+    if (!id || event.$metadata.type === "cf-worker-event") continue;
+    const marker = Schema.decodeUnknownOption(Marker)(event.source);
+
+    if (Option.isSome(marker)) markers.set(id, [...(markers.get(id) ?? []), marker.value]);
   }
   const invocations: Invocation[] = [];
 
@@ -87,7 +87,7 @@ export const cpu = Effect.fnUntraced(function* (
     if (event.$metadata.type !== "cf-worker-event") continue;
     const id = event.$metadata.requestId;
     const matching = id === undefined ? [] : (markers.get(id) ?? []);
-    const marker = matching.length === 1 ? matching[0]?.source : undefined;
+    const marker = matching.length === 1 ? matching[0] : undefined;
 
     invocations.push({
       kind:
