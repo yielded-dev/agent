@@ -180,6 +180,26 @@ it("admits workers in one RPC and reads completions concurrently only at capacit
           }
         }
         delete workerLaunchProbe.current;
+        // Finish factual acknowledgements and their event before the next global RPC probe.
+        try {
+          await drainAlarmsUntil(source, async () => {
+            const records = await readCanonical(source);
+
+            return children.every((child) =>
+              records.some(
+                ({ record: { payload } }) =>
+                  payload._tag === "WorkerInputCompleted" &&
+                  payload.effectsResolved === true &&
+                  payload.messageId === child.delivery.message.messageId,
+              ),
+            );
+          });
+          await runInDurableObject(stubFor(source), (instance) =>
+            Promise.resolve(instance.alarm()),
+          );
+        } catch (cause) {
+          failure ??= cause;
+        }
         independentBudgetGrants.delete(source);
         independentBudgetAuthorityCalls.delete(source);
         backgroundWakeDropPrefixes.delete("worker:");

@@ -91,6 +91,25 @@ export const runClient = <A, E>(
   namespace: TestNamespace = "THREADS",
 ): Promise<A> => Effect.runPromise(effect.pipe(Effect.provide(clientLayer(namespace))));
 
+/** Lose the optional submit hint while a virtual-clock scenario drives durable alarms itself. */
+export const dropSubmittedWake = (thread: string, namespace: TestNamespace = "THREADS") =>
+  Effect.acquireRelease(
+    Effect.promise(() =>
+      runInDurableObject(stubFor(thread, namespace), (instance) => {
+        const alarm = instance.alarm.bind(instance);
+
+        const restore = () => {
+          instance.alarm = alarm;
+        };
+
+        instance.alarm = restore;
+
+        return restore;
+      }),
+    ),
+    (restore) => Effect.sync(restore),
+  );
+
 const scheduleClientLayer = CloudflareSchedulingClient.layer.pipe(
   Layer.provide(Layer.succeed(ScheduleOwnerNamespace)({ namespace: env.SCHEDULES })),
 );

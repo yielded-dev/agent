@@ -40,6 +40,7 @@ import {
   anyInState,
   assertConvergence,
   drainAlarmsUntil,
+  dropSubmittedWake,
   laneRows,
   readCanonical,
   runClient,
@@ -101,6 +102,68 @@ const maintenanceGeneration = (thread: string) =>
   );
 
 describe("DC alarm semantics", () => {
+  it("keeps later input recoverable when an alarm arrives after the pass checkpoint", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const thread = lane("late-alarm-checkpoint");
+
+        yield* TestClock.setTime(Date.now() + 86_400_000);
+        maintenanceClocks.set(thread, yield* Clock.Clock);
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            releaseMaintenancePause(thread);
+            maintenanceClocks.delete(thread);
+          }),
+        );
+        yield* Effect.promise(async () => {
+          armMaintenancePause(thread, "maintenance:finish:after");
+          await submitTo(plannerDefinition, thread);
+
+          const firstPass = runInDurableObject(stubFor(thread), (instance) =>
+            Promise.resolve(instance.alarm()),
+          );
+
+          let resolveEntered!: () => void;
+
+          const entered = new Promise<void>((resolve) => {
+            resolveEntered = resolve;
+          });
+
+          let delivered: Promise<void> | undefined;
+
+          try {
+            await awaitMaintenancePause(thread, "maintenance:finish:after");
+            const later = await submitTo(plannerDefinition, thread, `${thread}-later`);
+
+            // Match runDurableObjectAlarm's delete-then-invoke boundary, with an entry
+            // latch so the completed checkpoint remains paused until delivery begins.
+            delivered = runInDurableObject(stubFor(thread), async (instance, state) => {
+              expect(await state.storage.getAlarm()).not.toBeNull();
+              await state.storage.deleteAlarm();
+              const running = Promise.resolve(instance.alarm());
+
+              resolveEntered();
+              await running;
+            });
+            await entered;
+            releaseMaintenancePause(thread);
+            await Promise.all([firstPass, delivered]);
+            const rows = await laneRows(thread);
+            const completed = rows.find((row) => row.submission_id === later.submissionId);
+
+            expect(completed?.state === "settled" || (await scheduledAlarm(thread)) !== null).toBe(
+              true,
+            );
+          } finally {
+            releaseMaintenancePause(thread);
+            await Promise.allSettled([firstPass, ...(delivered === undefined ? [] : [delivered])]);
+          }
+          await drainAlarmsUntil(thread, allSettled(thread));
+          await assertConvergence(thread);
+        });
+      }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
+    ));
+
   // Regression: https://github.com/yielded-dev/agent/commit/78d05490a
   it("keeps alarm changes independent of an interrupted concurrent SQL transaction", async () => {
     const thread = lane("sql-alarm-isolation");
@@ -316,6 +379,7 @@ describe("DC alarm semantics", () => {
           );
 
           expect(initializedAlarm).toBeGreaterThanOrEqual(yield* Clock.currentTimeMillis);
+          yield* dropSubmittedWake(thread);
           const receipt = yield* Effect.promise(() => submitTo(plannerDefinition, thread));
 
           const pass = yield* Effect.tryPromise({

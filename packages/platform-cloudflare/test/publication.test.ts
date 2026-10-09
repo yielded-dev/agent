@@ -33,6 +33,7 @@ import {
 } from "./fixtures.ts";
 import {
   allSettled,
+  dropSubmittedWake,
   anyInState,
   drainAlarmsUntil,
   laneRows,
@@ -152,6 +153,7 @@ const quiesce = (thread: string, advance: (millis: number) => Promise<void>) =>
 const withThread = (
   test: (thread: string, now: number, advance: (millis: number) => Promise<void>) => Promise<void>,
   lifecycle = false,
+  manualDispatch = false,
 ) =>
   Effect.runPromise(
     Effect.gen(function* () {
@@ -175,11 +177,15 @@ const withThread = (
           releaseMaintenancePause(thread);
         }),
       );
+      if (manualDispatch) yield* dropSubmittedWake(thread, namespace);
       yield* Effect.promise(() =>
         test(thread, now, (millis) => Effect.runPromise(clock.adjust(millis))),
       );
     }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
   );
+
+const withManualThread = (test: Parameters<typeof withThread>[0], lifecycle = false) =>
+  withThread(test, lifecycle, true);
 
 const latch = () => {
   let resolve!: () => void;
@@ -521,7 +527,7 @@ describe("durable host publication", () => {
 
   // Regression: c68edc7a made host publication an execution prerequisite.
   it("runs routed and alarm attempts with publication debt, then publishes bounded ordered batches", () =>
-    withThread(async (thread, _now, advance) => {
+    withManualThread(async (thread, _now, advance) => {
       let providerCalls = 0;
 
       modelRequestHolds.set(
@@ -737,7 +743,7 @@ describe("durable host publication", () => {
   it.each(["failure"] as const)(
     "backs off repeated publication %s across eviction without losing native work",
     (failure) =>
-      withThread(async (thread, now, advance) => {
+      withManualThread(async (thread, now, advance) => {
         await submit(thread);
         publicationControls.set(thread, { failure });
         let current = now;
