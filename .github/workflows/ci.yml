@@ -250,7 +250,7 @@ jobs:
             stateful: true
     services:
       postgres:
-        image: ${{ matrix.postgres && format('postgres:{0}-alpine', matrix.postgres) || '' }}
+        image: ${{ matrix.postgres && format('public.ecr.aws/docker/library/postgres:{0}-alpine', matrix.postgres) || '' }}
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
