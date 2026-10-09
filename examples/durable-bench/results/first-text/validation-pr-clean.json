@@ -1,0 +1,47 @@
+{
+  "verifiedAt": "2026-10-09T06:22:06.490Z",
+  "revision": "a59d51e6a5981f4d520ada7357cd5aa653b9487a",
+  "baseRevision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+  "originalMeasuredEvidenceCommit": "3cb24168acab6b3d9d08971764a29270c0fcf39e",
+  "checkout": {
+    "fresh": true,
+    "trackedTreeClean": true,
+    "vendoredThirdPartyNodeModules": false,
+    "benchmarkEvidenceDirectory": false,
+    "productDiffFiles": 16,
+    "productDiffAdditions": 754,
+    "productDiffDeletions": 9
+  },
+  "setup": [
+    "vp install --frozen-lockfile --ignore-scripts",
+    "vp run patch:tsgo"
+  ],
+  "environment": {
+    "CI": true,
+    "node": "24.20.0",
+    "spawnedNode": "24.20.0",
+    "bun": "1.4.2",
+    "platform": "darwin-arm64",
+    "postgres": "Isolated temporary Postgres 18.6; removed after validation"
+  },
+  "gate": {
+    "command": "vp run ready",
+    "exitCode": 0,
+    "tasks": 71,
+    "cacheHits": 0,
+    "summary": "vp run: 0/71 cache hit (0%).",
+    "logSha256": "689ecede0daa7418d2eade20aee5052b3ec5520e39cdde72e5c7c00798dace46"
+  },
+  "earlierLocalOutcomes": [
+    {
+      "stage": "Postgres initialization",
+      "outcome": "Sandbox blocked shared-memory allocation",
+      "resolution": "Initialized the isolated test service with the required OS permissions"
+    },
+    {
+      "stage": "First clean-checkout gate",
+      "outcome": "Crash-test subprocesses resolved Homebrew Node 26.8.2, which rejected --experimental-transform-types",
+      "resolution": "Set VP_NODE_VERSION=24.20.0 and placed its runtime directory first in PATH; verified parent and child versions, cleared the checkout task cache, and reran the full gate"
+    }
+  ]
+}
