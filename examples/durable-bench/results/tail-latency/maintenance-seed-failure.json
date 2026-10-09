@@ -1,0 +1,26 @@
+{
+  "run": "tail-latency-mv0n4wha-000603af",
+  "build": "baseline",
+  "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+  "timedTurns": 0,
+  "query": {
+    "exceptionInvocations": 0,
+    "errorLevelRows": 1
+  },
+  "rows": [
+    {
+      "timestamp": 1791531017162,
+      "route": "/import",
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "object": 0,
+      "sample": "import",
+      "status": 500,
+      "outcome": "ok",
+      "cpuMs": 198,
+      "wallMs": 73331,
+      "error": "POST [redacted-url]"
+    }
+  ]
+}

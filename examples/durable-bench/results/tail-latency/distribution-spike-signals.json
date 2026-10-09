@@ -1,0 +1,3056 @@
+{
+  "run": "tail-latency-mv0l4yxs-23141551",
+  "method": "Warm turns only. Spike: driver duration exceeds the same-Object, same-build median by 250ms. Signal counts use the same threshold on each duration's own Object median. Categories overlap and are not additive causal attribution. Provider and Object durations stay in their own clock domains. Concurrent invocation CPU is never summed. GC callbacks count sentinels, not pauses or cycles.",
+  "cells": [
+    {
+      "cell": "working/250/0/pi",
+      "n": 240,
+      "spikes": 3,
+      "signalsAbove250ms": {
+        "admissionMs": 0,
+        "afterAdmissionMs": 0,
+        "providerMs": 0,
+        "objectCallsMs": 2,
+        "submitCpuMs": 0,
+        "awaitCpuMs": 0,
+        "alarmCpuMs": 0,
+        "runCpuMs": 0
+      },
+      "cpuCoverage": {
+        "submitCpuMs": {
+          "all": 0,
+          "spikes": 0
+        },
+        "awaitCpuMs": {
+          "all": 0,
+          "spikes": 0
+        },
+        "alarmCpuMs": {
+          "all": 0,
+          "spikes": 0
+        },
+        "runCpuMs": {
+          "all": 236,
+          "spikes": 3
+        }
+      },
+      "medians": {
+        "driverMs": {
+          "typical": 645,
+          "spikes": 1362
+        },
+        "admissionMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "afterAdmissionMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "providerMs": {
+          "typical": 16,
+          "spikes": 0
+        },
+        "objectCallsMs": {
+          "typical": 468,
+          "spikes": 1568
+        },
+        "submitCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "awaitCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "alarmCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "runCpuMs": {
+          "typical": 281,
+          "spikes": 469
+        },
+        "transactions": {
+          "typical": 77,
+          "spikes": 77
+        },
+        "sql": {
+          "typical": 1163,
+          "spikes": 1163
+        },
+        "gcCallbacks": {
+          "typical": 10,
+          "spikes": 10
+        }
+      },
+      "priorAlarmOverlap": 0
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "n": 240,
+      "spikes": 19,
+      "signalsAbove250ms": {
+        "admissionMs": 6,
+        "afterAdmissionMs": 11,
+        "providerMs": 2,
+        "objectCallsMs": 10,
+        "submitCpuMs": 0,
+        "awaitCpuMs": 3,
+        "alarmCpuMs": 5,
+        "runCpuMs": 0
+      },
+      "cpuCoverage": {
+        "submitCpuMs": {
+          "all": 239,
+          "spikes": 19
+        },
+        "awaitCpuMs": {
+          "all": 240,
+          "spikes": 19
+        },
+        "alarmCpuMs": {
+          "all": 240,
+          "spikes": 19
+        },
+        "runCpuMs": {
+          "all": 0,
+          "spikes": 0
+        }
+      },
+      "medians": {
+        "driverMs": {
+          "typical": 1015,
+          "spikes": 1508
+        },
+        "admissionMs": {
+          "typical": 320,
+          "spikes": 444
+        },
+        "afterAdmissionMs": {
+          "typical": 691,
+          "spikes": 1024
+        },
+        "providerMs": {
+          "typical": 20,
+          "spikes": 27
+        },
+        "objectCallsMs": {
+          "typical": 687,
+          "spikes": 990
+        },
+        "submitCpuMs": {
+          "typical": 12.5,
+          "spikes": 16
+        },
+        "awaitCpuMs": {
+          "typical": 337,
+          "spikes": 393
+        },
+        "alarmCpuMs": {
+          "typical": 261,
+          "spikes": 341
+        },
+        "runCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "transactions": {
+          "typical": 34,
+          "spikes": 34
+        },
+        "sql": {
+          "typical": 259,
+          "spikes": 259
+        },
+        "gcCallbacks": {
+          "typical": 10,
+          "spikes": 10
+        }
+      },
+      "priorAlarmOverlap": 0
+    },
+    {
+      "cell": "working/50/0/pi",
+      "n": 240,
+      "spikes": 8,
+      "signalsAbove250ms": {
+        "admissionMs": 0,
+        "afterAdmissionMs": 0,
+        "providerMs": 0,
+        "objectCallsMs": 4,
+        "submitCpuMs": 0,
+        "awaitCpuMs": 0,
+        "alarmCpuMs": 0,
+        "runCpuMs": 0
+      },
+      "cpuCoverage": {
+        "submitCpuMs": {
+          "all": 0,
+          "spikes": 0
+        },
+        "awaitCpuMs": {
+          "all": 0,
+          "spikes": 0
+        },
+        "alarmCpuMs": {
+          "all": 0,
+          "spikes": 0
+        },
+        "runCpuMs": {
+          "all": 238,
+          "spikes": 8
+        }
+      },
+      "medians": {
+        "driverMs": {
+          "typical": 579,
+          "spikes": 874
+        },
+        "admissionMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "afterAdmissionMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "providerMs": {
+          "typical": 4,
+          "spikes": 15.5
+        },
+        "objectCallsMs": {
+          "typical": 434.5,
+          "spikes": 640.5
+        },
+        "submitCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "awaitCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "alarmCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "runCpuMs": {
+          "typical": 201,
+          "spikes": 438
+        },
+        "transactions": {
+          "typical": 77,
+          "spikes": 77
+        },
+        "sql": {
+          "typical": 1055,
+          "spikes": 1055
+        },
+        "gcCallbacks": {
+          "typical": 10,
+          "spikes": 10
+        }
+      },
+      "priorAlarmOverlap": 0
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "n": 240,
+      "spikes": 17,
+      "signalsAbove250ms": {
+        "admissionMs": 6,
+        "afterAdmissionMs": 10,
+        "providerMs": 0,
+        "objectCallsMs": 6,
+        "submitCpuMs": 0,
+        "awaitCpuMs": 1,
+        "alarmCpuMs": 2,
+        "runCpuMs": 0
+      },
+      "cpuCoverage": {
+        "submitCpuMs": {
+          "all": 237,
+          "spikes": 17
+        },
+        "awaitCpuMs": {
+          "all": 236,
+          "spikes": 17
+        },
+        "alarmCpuMs": {
+          "all": 238,
+          "spikes": 17
+        },
+        "runCpuMs": {
+          "all": 0,
+          "spikes": 0
+        }
+      },
+      "medians": {
+        "driverMs": {
+          "typical": 779,
+          "spikes": 1206
+        },
+        "admissionMs": {
+          "typical": 180,
+          "spikes": 372
+        },
+        "afterAdmissionMs": {
+          "typical": 589,
+          "spikes": 1012
+        },
+        "providerMs": {
+          "typical": 2,
+          "spikes": 17
+        },
+        "objectCallsMs": {
+          "typical": 537,
+          "spikes": 778
+        },
+        "submitCpuMs": {
+          "typical": 7,
+          "spikes": 13
+        },
+        "awaitCpuMs": {
+          "typical": 213,
+          "spikes": 410
+        },
+        "alarmCpuMs": {
+          "typical": 118,
+          "spikes": 240
+        },
+        "runCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "transactions": {
+          "typical": 34,
+          "spikes": 34
+        },
+        "sql": {
+          "typical": 222,
+          "spikes": 222
+        },
+        "gcCallbacks": {
+          "typical": 10,
+          "spikes": 9
+        }
+      },
+      "priorAlarmOverlap": 0
+    },
+    {
+      "cell": "working/50/400/pi",
+      "n": 240,
+      "spikes": 5,
+      "signalsAbove250ms": {
+        "admissionMs": 0,
+        "afterAdmissionMs": 0,
+        "providerMs": 0,
+        "objectCallsMs": 5,
+        "submitCpuMs": 0,
+        "awaitCpuMs": 0,
+        "alarmCpuMs": 0,
+        "runCpuMs": 0
+      },
+      "cpuCoverage": {
+        "submitCpuMs": {
+          "all": 0,
+          "spikes": 0
+        },
+        "awaitCpuMs": {
+          "all": 0,
+          "spikes": 0
+        },
+        "alarmCpuMs": {
+          "all": 0,
+          "spikes": 0
+        },
+        "runCpuMs": {
+          "all": 236,
+          "spikes": 5
+        }
+      },
+      "medians": {
+        "driverMs": {
+          "typical": 4746,
+          "spikes": 5180
+        },
+        "admissionMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "afterAdmissionMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "providerMs": {
+          "typical": 4130,
+          "spikes": 4130
+        },
+        "objectCallsMs": {
+          "typical": 4675,
+          "spikes": 5072
+        },
+        "submitCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "awaitCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "alarmCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "runCpuMs": {
+          "typical": 322,
+          "spikes": 195
+        },
+        "transactions": {
+          "typical": 77,
+          "spikes": 77
+        },
+        "sql": {
+          "typical": 1055,
+          "spikes": 1055
+        },
+        "gcCallbacks": {
+          "typical": 10,
+          "spikes": 11
+        }
+      },
+      "priorAlarmOverlap": 0
+    },
+    {
+      "cell": "working/250/400/yielded",
+      "n": 240,
+      "spikes": 12,
+      "signalsAbove250ms": {
+        "admissionMs": 3,
+        "afterAdmissionMs": 7,
+        "providerMs": 0,
+        "objectCallsMs": 9,
+        "submitCpuMs": 0,
+        "awaitCpuMs": 0,
+        "alarmCpuMs": 0,
+        "runCpuMs": 0
+      },
+      "cpuCoverage": {
+        "submitCpuMs": {
+          "all": 233,
+          "spikes": 11
+        },
+        "awaitCpuMs": {
+          "all": 235,
+          "spikes": 11
+        },
+        "alarmCpuMs": {
+          "all": 232,
+          "spikes": 10
+        },
+        "runCpuMs": {
+          "all": 0,
+          "spikes": 0
+        }
+      },
+      "medians": {
+        "driverMs": {
+          "typical": 5060.5,
+          "spikes": 5624
+        },
+        "admissionMs": {
+          "typical": 305,
+          "spikes": 443.5
+        },
+        "afterAdmissionMs": {
+          "typical": 4748,
+          "spikes": 5098.5
+        },
+        "providerMs": {
+          "typical": 4130,
+          "spikes": 4130
+        },
+        "objectCallsMs": {
+          "typical": 4943.5,
+          "spikes": 5374
+        },
+        "submitCpuMs": {
+          "typical": 11,
+          "spikes": 9
+        },
+        "awaitCpuMs": {
+          "typical": 320,
+          "spikes": 298
+        },
+        "alarmCpuMs": {
+          "typical": 206.5,
+          "spikes": 253.5
+        },
+        "runCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "transactions": {
+          "typical": 34,
+          "spikes": 34
+        },
+        "sql": {
+          "typical": 259,
+          "spikes": 257
+        },
+        "gcCallbacks": {
+          "typical": 10,
+          "spikes": 10.5
+        }
+      },
+      "priorAlarmOverlap": 0
+    },
+    {
+      "cell": "working/250/400/pi",
+      "n": 240,
+      "spikes": 1,
+      "signalsAbove250ms": {
+        "admissionMs": 0,
+        "afterAdmissionMs": 0,
+        "providerMs": 0,
+        "objectCallsMs": 1,
+        "submitCpuMs": 0,
+        "awaitCpuMs": 0,
+        "alarmCpuMs": 0,
+        "runCpuMs": 0
+      },
+      "cpuCoverage": {
+        "submitCpuMs": {
+          "all": 0,
+          "spikes": 0
+        },
+        "awaitCpuMs": {
+          "all": 0,
+          "spikes": 0
+        },
+        "alarmCpuMs": {
+          "all": 0,
+          "spikes": 0
+        },
+        "runCpuMs": {
+          "all": 233,
+          "spikes": 1
+        }
+      },
+      "medians": {
+        "driverMs": {
+          "typical": 4817,
+          "spikes": 5385
+        },
+        "admissionMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "afterAdmissionMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "providerMs": {
+          "typical": 4130,
+          "spikes": 4130
+        },
+        "objectCallsMs": {
+          "typical": 4734,
+          "spikes": 5317
+        },
+        "submitCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "awaitCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "alarmCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "runCpuMs": {
+          "typical": 394,
+          "spikes": 439
+        },
+        "transactions": {
+          "typical": 77,
+          "spikes": 77
+        },
+        "sql": {
+          "typical": 1163,
+          "spikes": 1127
+        },
+        "gcCallbacks": {
+          "typical": 10,
+          "spikes": 9
+        }
+      },
+      "priorAlarmOverlap": 0
+    },
+    {
+      "cell": "working/50/400/yielded",
+      "n": 240,
+      "spikes": 7,
+      "signalsAbove250ms": {
+        "admissionMs": 2,
+        "afterAdmissionMs": 4,
+        "providerMs": 0,
+        "objectCallsMs": 2,
+        "submitCpuMs": 0,
+        "awaitCpuMs": 0,
+        "alarmCpuMs": 0,
+        "runCpuMs": 0
+      },
+      "cpuCoverage": {
+        "submitCpuMs": {
+          "all": 239,
+          "spikes": 7
+        },
+        "awaitCpuMs": {
+          "all": 238,
+          "spikes": 7
+        },
+        "alarmCpuMs": {
+          "all": 239,
+          "spikes": 7
+        },
+        "runCpuMs": {
+          "all": 0,
+          "spikes": 0
+        }
+      },
+      "medians": {
+        "driverMs": {
+          "typical": 4890,
+          "spikes": 5322
+        },
+        "admissionMs": {
+          "typical": 185,
+          "spikes": 280
+        },
+        "afterAdmissionMs": {
+          "typical": 4722,
+          "spikes": 5046
+        },
+        "providerMs": {
+          "typical": 4130,
+          "spikes": 4130
+        },
+        "objectCallsMs": {
+          "typical": 4746,
+          "spikes": 4955
+        },
+        "submitCpuMs": {
+          "typical": 7,
+          "spikes": 12
+        },
+        "awaitCpuMs": {
+          "typical": 298,
+          "spikes": 420
+        },
+        "alarmCpuMs": {
+          "typical": 105,
+          "spikes": 189
+        },
+        "runCpuMs": {
+          "typical": null,
+          "spikes": null
+        },
+        "transactions": {
+          "typical": 34,
+          "spikes": 34
+        },
+        "sql": {
+          "typical": 222,
+          "spikes": 222
+        },
+        "gcCallbacks": {
+          "typical": 10,
+          "spikes": 12
+        }
+      },
+      "priorAlarmOverlap": 0
+    }
+  ],
+  "spikes": [
+    {
+      "cell": "working/50/0/pi",
+      "object": 9,
+      "sample": "e0-t2",
+      "driverMs": 961,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 3,
+      "objectCallsMs": 696,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 486,
+      "transactions": 77,
+      "sql": 1019,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 368,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": -12,
+        "objectCallsMs": 300.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": 152,
+        "transactions": 0,
+        "sql": -36,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 3,
+      "sample": "e0-t5",
+      "driverMs": 1314,
+      "admissionMs": 290,
+      "afterAdmissionMs": 1024,
+      "providerMs": 18,
+      "objectCallsMs": 805,
+      "submitCpuMs": 16,
+      "awaitCpuMs": 3,
+      "alarmCpuMs": 524,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 257,
+      "gcCallbacks": 12,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 271,
+        "admissionMs": -34,
+        "afterAdmissionMs": 314.5,
+        "providerMs": 0.5,
+        "objectCallsMs": 59.5,
+        "submitCpuMs": 4,
+        "awaitCpuMs": -266.5,
+        "alarmCpuMs": 316,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": 2
+      }
+    },
+    {
+      "cell": "working/50/0/pi",
+      "object": 1,
+      "sample": "e0-t9",
+      "driverMs": 1319,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 0,
+      "objectCallsMs": 476,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 203,
+      "transactions": 77,
+      "sql": 1055,
+      "gcCallbacks": 12,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 675.5,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": -10,
+        "objectCallsMs": 9.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": -22.5,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 2
+      }
+    },
+    {
+      "cell": "working/50/0/pi",
+      "object": 9,
+      "sample": "e0-t11",
+      "driverMs": 894,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 10,
+      "objectCallsMs": 704,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 430,
+      "transactions": 77,
+      "sql": 1055,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 301,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": -5,
+        "objectCallsMs": 308.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": 96,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/50/0/pi",
+      "object": 9,
+      "sample": "e0-t12",
+      "driverMs": 854,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 37,
+      "objectCallsMs": 663,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 446,
+      "transactions": 77,
+      "sql": 1055,
+      "gcCallbacks": 8,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 261,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": 22,
+        "objectCallsMs": 267.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": 112,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": -2
+      }
+    },
+    {
+      "cell": "working/50/0/pi",
+      "object": 1,
+      "sample": "e0-t14",
+      "driverMs": 1009,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 12,
+      "objectCallsMs": 476,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 223,
+      "transactions": 77,
+      "sql": 1055,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 365.5,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": 2,
+        "objectCallsMs": 9.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": -2.5,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 3,
+      "sample": "e0-t10",
+      "driverMs": 1966,
+      "admissionMs": 1240,
+      "afterAdmissionMs": 726,
+      "providerMs": 18,
+      "objectCallsMs": 643,
+      "submitCpuMs": 11,
+      "awaitCpuMs": 279,
+      "alarmCpuMs": 341,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 257,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 923,
+        "admissionMs": 916,
+        "afterAdmissionMs": 16.5,
+        "providerMs": 0.5,
+        "objectCallsMs": -102.5,
+        "submitCpuMs": -1,
+        "awaitCpuMs": 9.5,
+        "alarmCpuMs": 133,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 1,
+      "sample": "e0-t16",
+      "driverMs": 1363,
+      "admissionMs": 758,
+      "afterAdmissionMs": 605,
+      "providerMs": 20,
+      "objectCallsMs": 521,
+      "submitCpuMs": 7,
+      "awaitCpuMs": 206,
+      "alarmCpuMs": 86,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 565.5,
+        "admissionMs": 574,
+        "afterAdmissionMs": -8.5,
+        "providerMs": 8,
+        "objectCallsMs": -67,
+        "submitCpuMs": 2,
+        "awaitCpuMs": 14,
+        "alarmCpuMs": -0.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 3,
+      "sample": "e0-t12",
+      "driverMs": 1508,
+      "admissionMs": 795,
+      "afterAdmissionMs": 713,
+      "providerMs": 22,
+      "objectCallsMs": 654,
+      "submitCpuMs": 20,
+      "awaitCpuMs": 254,
+      "alarmCpuMs": 197,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 259,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 465,
+        "admissionMs": 471,
+        "afterAdmissionMs": 3.5,
+        "providerMs": 4.5,
+        "objectCallsMs": -91.5,
+        "submitCpuMs": 8,
+        "awaitCpuMs": -15.5,
+        "alarmCpuMs": -11,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/50/0/pi",
+      "object": 9,
+      "sample": "e0-t23",
+      "driverMs": 854,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 32,
+      "objectCallsMs": 550,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 420,
+      "transactions": 77,
+      "sql": 1091,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 261,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": 17,
+        "objectCallsMs": 154.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": 86,
+        "transactions": 0,
+        "sql": 36,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 1,
+      "sample": "e0-t20",
+      "driverMs": 1228,
+      "admissionMs": 185,
+      "afterAdmissionMs": 1043,
+      "providerMs": 23,
+      "objectCallsMs": 1046,
+      "submitCpuMs": 6,
+      "awaitCpuMs": 319,
+      "alarmCpuMs": 88,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 430.5,
+        "admissionMs": 1,
+        "afterAdmissionMs": 429.5,
+        "providerMs": 11,
+        "objectCallsMs": 458,
+        "submitCpuMs": 1,
+        "awaitCpuMs": 127,
+        "alarmCpuMs": 1.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/50/400/pi",
+      "object": 1,
+      "sample": "e0-t11",
+      "driverMs": 5861,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 4130,
+      "objectCallsMs": 5818,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 391,
+      "transactions": 77,
+      "sql": 1055,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 988,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": 0,
+        "objectCallsMs": 1039,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": 16,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/250/400/yielded",
+      "object": 0,
+      "sample": "e0-t3",
+      "driverMs": 5937,
+      "admissionMs": 420,
+      "afterAdmissionMs": 5517,
+      "providerMs": 4130,
+      "objectCallsMs": 5693,
+      "submitCpuMs": 17,
+      "awaitCpuMs": 461,
+      "alarmCpuMs": 280,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 257,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 496.5,
+        "admissionMs": -42.5,
+        "afterAdmissionMs": 565,
+        "providerMs": 0,
+        "objectCallsMs": 406,
+        "submitCpuMs": 0,
+        "awaitCpuMs": -32,
+        "alarmCpuMs": -44.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 7,
+      "sample": "e0-t2",
+      "driverMs": 1113,
+      "admissionMs": 101,
+      "afterAdmissionMs": 1012,
+      "providerMs": 3,
+      "objectCallsMs": 754,
+      "submitCpuMs": 21,
+      "awaitCpuMs": 466,
+      "alarmCpuMs": 207,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 220,
+      "gcCallbacks": 8,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 255.5,
+        "admissionMs": -105,
+        "afterAdmissionMs": 325,
+        "providerMs": -10.5,
+        "objectCallsMs": 174.5,
+        "submitCpuMs": 10,
+        "awaitCpuMs": 114.5,
+        "alarmCpuMs": 21.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": -2
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 7,
+      "sample": "e0-t4",
+      "driverMs": 1184,
+      "admissionMs": 82,
+      "afterAdmissionMs": 1102,
+      "providerMs": 0,
+      "objectCallsMs": 778,
+      "submitCpuMs": 13,
+      "awaitCpuMs": 562,
+      "alarmCpuMs": 204,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 220,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 326.5,
+        "admissionMs": -124,
+        "afterAdmissionMs": 415,
+        "providerMs": -13.5,
+        "objectCallsMs": 198.5,
+        "submitCpuMs": 2,
+        "awaitCpuMs": 210.5,
+        "alarmCpuMs": 18.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 7,
+      "sample": "e0-t11",
+      "driverMs": 1166,
+      "admissionMs": 513,
+      "afterAdmissionMs": 653,
+      "providerMs": 1,
+      "objectCallsMs": 641,
+      "submitCpuMs": 11,
+      "awaitCpuMs": 388,
+      "alarmCpuMs": 472,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 220,
+      "gcCallbacks": 8,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 308.5,
+        "admissionMs": 307,
+        "afterAdmissionMs": -34,
+        "providerMs": -12.5,
+        "objectCallsMs": 61.5,
+        "submitCpuMs": 0,
+        "awaitCpuMs": 36.5,
+        "alarmCpuMs": 286.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": -2
+      }
+    },
+    {
+      "cell": "working/250/400/yielded",
+      "object": 0,
+      "sample": "e0-t5",
+      "driverMs": 5904,
+      "admissionMs": 718,
+      "afterAdmissionMs": 5186,
+      "providerMs": 4130,
+      "objectCallsMs": 5765,
+      "submitCpuMs": 22,
+      "awaitCpuMs": 553,
+      "alarmCpuMs": 496,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 257,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 463.5,
+        "admissionMs": 255.5,
+        "afterAdmissionMs": 234,
+        "providerMs": 0,
+        "objectCallsMs": 478,
+        "submitCpuMs": 5,
+        "awaitCpuMs": 60,
+        "alarmCpuMs": 171.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 7,
+      "sample": "e0-t23",
+      "driverMs": 1172,
+      "admissionMs": 507,
+      "afterAdmissionMs": 665,
+      "providerMs": 20,
+      "objectCallsMs": 585,
+      "submitCpuMs": 202,
+      "awaitCpuMs": 413,
+      "alarmCpuMs": 279,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 314.5,
+        "admissionMs": 301,
+        "afterAdmissionMs": -22,
+        "providerMs": 6.5,
+        "objectCallsMs": 5.5,
+        "submitCpuMs": 191,
+        "awaitCpuMs": 61.5,
+        "alarmCpuMs": 93.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/250/400/yielded",
+      "object": 3,
+      "sample": "e0-t3",
+      "driverMs": 5400,
+      "admissionMs": 286,
+      "afterAdmissionMs": 5114,
+      "providerMs": 4130,
+      "objectCallsMs": 5281,
+      "submitCpuMs": 7,
+      "awaitCpuMs": 269,
+      "alarmCpuMs": 180,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 257,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 340.5,
+        "admissionMs": -15.5,
+        "afterAdmissionMs": 356,
+        "providerMs": 0,
+        "objectCallsMs": 332.5,
+        "submitCpuMs": -2,
+        "awaitCpuMs": -12,
+        "alarmCpuMs": -13,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/250/400/yielded",
+      "object": 3,
+      "sample": "e0-t4",
+      "driverMs": 5419,
+      "admissionMs": 546,
+      "afterAdmissionMs": 4873,
+      "providerMs": 4130,
+      "objectCallsMs": 5148,
+      "submitCpuMs": null,
+      "awaitCpuMs": 286,
+      "alarmCpuMs": null,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 257,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 359.5,
+        "admissionMs": 244.5,
+        "afterAdmissionMs": 115,
+        "providerMs": 0,
+        "objectCallsMs": 199.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": 5,
+        "alarmCpuMs": null,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/250/400/yielded",
+      "object": 0,
+      "sample": "e0-t11",
+      "driverMs": 5868,
+      "admissionMs": 467,
+      "afterAdmissionMs": 5401,
+      "providerMs": 4130,
+      "objectCallsMs": 5603,
+      "submitCpuMs": 20,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 259,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 427.5,
+        "admissionMs": 4.5,
+        "afterAdmissionMs": 449,
+        "providerMs": 0,
+        "objectCallsMs": 316,
+        "submitCpuMs": 3,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/50/400/yielded",
+      "object": 1,
+      "sample": "e0-t24",
+      "driverMs": 5459,
+      "admissionMs": 329,
+      "afterAdmissionMs": 5130,
+      "providerMs": 4130,
+      "objectCallsMs": 5149,
+      "submitCpuMs": 12,
+      "awaitCpuMs": 564,
+      "alarmCpuMs": 203,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 13,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 300,
+        "admissionMs": 36,
+        "afterAdmissionMs": 264,
+        "providerMs": 0,
+        "objectCallsMs": 124,
+        "submitCpuMs": 2.5,
+        "awaitCpuMs": 158.5,
+        "alarmCpuMs": 31.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 3
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 8,
+      "sample": "e0-t7",
+      "driverMs": 1034,
+      "admissionMs": 68,
+      "afterAdmissionMs": 966,
+      "providerMs": 23,
+      "objectCallsMs": 943,
+      "submitCpuMs": 8,
+      "awaitCpuMs": 336,
+      "alarmCpuMs": 154,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 257,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 280.5,
+        "admissionMs": -153,
+        "afterAdmissionMs": 344.5,
+        "providerMs": -2,
+        "objectCallsMs": 397.5,
+        "submitCpuMs": 0,
+        "awaitCpuMs": 113,
+        "alarmCpuMs": -24.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 8,
+      "sample": "e0-t10",
+      "driverMs": 1004,
+      "admissionMs": 281,
+      "afterAdmissionMs": 723,
+      "providerMs": 24,
+      "objectCallsMs": 815,
+      "submitCpuMs": 10,
+      "awaitCpuMs": 297,
+      "alarmCpuMs": 207,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 257,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 250.5,
+        "admissionMs": 60,
+        "afterAdmissionMs": 101.5,
+        "providerMs": -1,
+        "objectCallsMs": 269.5,
+        "submitCpuMs": 2,
+        "awaitCpuMs": 74,
+        "alarmCpuMs": 28.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 9,
+      "sample": "e0-t2",
+      "driverMs": 1376,
+      "admissionMs": 264,
+      "afterAdmissionMs": 1112,
+      "providerMs": 0,
+      "objectCallsMs": 1294,
+      "submitCpuMs": 14,
+      "awaitCpuMs": 423,
+      "alarmCpuMs": 152,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 220,
+      "gcCallbacks": 8,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 358.5,
+        "admissionMs": -6.5,
+        "afterAdmissionMs": 372,
+        "providerMs": 0,
+        "objectCallsMs": 536,
+        "submitCpuMs": 2.5,
+        "awaitCpuMs": 64,
+        "alarmCpuMs": -17.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": -2
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 9,
+      "sample": "e0-t4",
+      "driverMs": 1396,
+      "admissionMs": 382,
+      "afterAdmissionMs": 1014,
+      "providerMs": 0,
+      "objectCallsMs": 908,
+      "submitCpuMs": 13,
+      "awaitCpuMs": 519,
+      "alarmCpuMs": 293,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 220,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 378.5,
+        "admissionMs": 111.5,
+        "afterAdmissionMs": 274,
+        "providerMs": 0,
+        "objectCallsMs": 150,
+        "submitCpuMs": 1.5,
+        "awaitCpuMs": 160,
+        "alarmCpuMs": 123.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 0,
+      "sample": "e0-t9",
+      "driverMs": 1386,
+      "admissionMs": 257,
+      "afterAdmissionMs": 1129,
+      "providerMs": 241,
+      "objectCallsMs": 1186,
+      "submitCpuMs": 8,
+      "awaitCpuMs": 393,
+      "alarmCpuMs": 139,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 257,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 430,
+        "admissionMs": -13.5,
+        "afterAdmissionMs": 472,
+        "providerMs": 217,
+        "objectCallsMs": 446,
+        "submitCpuMs": -1,
+        "awaitCpuMs": 149.5,
+        "alarmCpuMs": -33,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 0,
+      "sample": "e0-t10",
+      "driverMs": 2331,
+      "admissionMs": 267,
+      "afterAdmissionMs": 2064,
+      "providerMs": 802,
+      "objectCallsMs": 2445,
+      "submitCpuMs": 9,
+      "awaitCpuMs": 257,
+      "alarmCpuMs": 158,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 257,
+      "gcCallbacks": 8,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 1375,
+        "admissionMs": -3.5,
+        "afterAdmissionMs": 1407,
+        "providerMs": 778,
+        "objectCallsMs": 1705,
+        "submitCpuMs": 0,
+        "awaitCpuMs": 13.5,
+        "alarmCpuMs": -14,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": -2
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 0,
+      "sample": "e0-t11",
+      "driverMs": 2936,
+      "admissionMs": 250,
+      "afterAdmissionMs": 2686,
+      "providerMs": 801,
+      "objectCallsMs": 2763,
+      "submitCpuMs": 9,
+      "awaitCpuMs": 269,
+      "alarmCpuMs": 132,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 259,
+      "gcCallbacks": 12,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 1980,
+        "admissionMs": -20.5,
+        "afterAdmissionMs": 2029,
+        "providerMs": 777,
+        "objectCallsMs": 2023,
+        "submitCpuMs": 0,
+        "awaitCpuMs": 25.5,
+        "alarmCpuMs": -40,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 2
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 0,
+      "sample": "e0-t12",
+      "driverMs": 1462,
+      "admissionMs": 374,
+      "afterAdmissionMs": 1088,
+      "providerMs": 27,
+      "objectCallsMs": 923,
+      "submitCpuMs": 11,
+      "awaitCpuMs": 395,
+      "alarmCpuMs": 245,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 259,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 506,
+        "admissionMs": 103.5,
+        "afterAdmissionMs": 431,
+        "providerMs": 3,
+        "objectCallsMs": 183,
+        "submitCpuMs": 2,
+        "awaitCpuMs": 151.5,
+        "alarmCpuMs": 73,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 9,
+      "sample": "e0-t24",
+      "driverMs": 1409,
+      "admissionMs": 372,
+      "afterAdmissionMs": 1037,
+      "providerMs": 0,
+      "objectCallsMs": 845,
+      "submitCpuMs": 7,
+      "awaitCpuMs": 600,
+      "alarmCpuMs": 240,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 8,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 391.5,
+        "admissionMs": 101.5,
+        "afterAdmissionMs": 297,
+        "providerMs": 0,
+        "objectCallsMs": 87,
+        "submitCpuMs": -4.5,
+        "awaitCpuMs": 241,
+        "alarmCpuMs": 70.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": -2
+      }
+    },
+    {
+      "cell": "working/250/400/yielded",
+      "object": 3,
+      "sample": "e0-t19",
+      "driverMs": 5403,
+      "admissionMs": 320,
+      "afterAdmissionMs": 5083,
+      "providerMs": 4130,
+      "objectCallsMs": 5316,
+      "submitCpuMs": 9,
+      "awaitCpuMs": 272,
+      "alarmCpuMs": 191,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 259,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 343.5,
+        "admissionMs": 18.5,
+        "afterAdmissionMs": 325,
+        "providerMs": 0,
+        "objectCallsMs": 367.5,
+        "submitCpuMs": 0,
+        "awaitCpuMs": -9,
+        "alarmCpuMs": -2,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 1,
+      "sample": "e0-t24",
+      "driverMs": 1299,
+      "admissionMs": 628,
+      "afterAdmissionMs": 671,
+      "providerMs": 31,
+      "objectCallsMs": 571,
+      "submitCpuMs": 142,
+      "awaitCpuMs": 408,
+      "alarmCpuMs": 413,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 261,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 283,
+        "admissionMs": 292.5,
+        "afterAdmissionMs": -65.5,
+        "providerMs": 9.5,
+        "objectCallsMs": -30,
+        "submitCpuMs": 127,
+        "awaitCpuMs": 25.5,
+        "alarmCpuMs": 107.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 2,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/250/400/yielded",
+      "object": 2,
+      "sample": "e0-t9",
+      "driverMs": 5540,
+      "admissionMs": 571,
+      "afterAdmissionMs": 4969,
+      "providerMs": 4130,
+      "objectCallsMs": 5432,
+      "submitCpuMs": 15,
+      "awaitCpuMs": 508,
+      "alarmCpuMs": 444,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 257,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 316.5,
+        "admissionMs": 189,
+        "afterAdmissionMs": 149.5,
+        "providerMs": 0,
+        "objectCallsMs": 333,
+        "submitCpuMs": 0.5,
+        "awaitCpuMs": 72.5,
+        "alarmCpuMs": 180.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/50/400/yielded",
+      "object": 4,
+      "sample": "e0-t20",
+      "driverMs": 5322,
+      "admissionMs": 74,
+      "afterAdmissionMs": 5248,
+      "providerMs": 4130,
+      "objectCallsMs": 5234,
+      "submitCpuMs": 11,
+      "awaitCpuMs": 422,
+      "alarmCpuMs": 350,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 504.5,
+        "admissionMs": 3.5,
+        "afterAdmissionMs": 510,
+        "providerMs": 0,
+        "objectCallsMs": 514.5,
+        "submitCpuMs": 2,
+        "awaitCpuMs": 78,
+        "alarmCpuMs": 215.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/50/400/yielded",
+      "object": 0,
+      "sample": "e0-t14",
+      "driverMs": 5692,
+      "admissionMs": 1100,
+      "afterAdmissionMs": 4592,
+      "providerMs": 4130,
+      "objectCallsMs": 4659,
+      "submitCpuMs": 12,
+      "awaitCpuMs": 351,
+      "alarmCpuMs": 123,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 12,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 868,
+        "admissionMs": 1029,
+        "afterAdmissionMs": -153.5,
+        "providerMs": 0,
+        "objectCallsMs": -66.5,
+        "submitCpuMs": 3.5,
+        "awaitCpuMs": -3,
+        "alarmCpuMs": -6,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 2
+      }
+    },
+    {
+      "cell": "working/250/400/yielded",
+      "object": 7,
+      "sample": "e0-t3",
+      "driverMs": 6568,
+      "admissionMs": 1193,
+      "afterAdmissionMs": 5375,
+      "providerMs": 4130,
+      "objectCallsMs": 6293,
+      "submitCpuMs": 9,
+      "awaitCpuMs": 296,
+      "alarmCpuMs": 251,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 257,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 1516,
+        "admissionMs": 931,
+        "afterAdmissionMs": 594.5,
+        "providerMs": 0,
+        "objectCallsMs": 1350,
+        "submitCpuMs": 1,
+        "awaitCpuMs": 30,
+        "alarmCpuMs": 98,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/250/400/yielded",
+      "object": 2,
+      "sample": "e0-t20",
+      "driverMs": 5708,
+      "admissionMs": 888,
+      "afterAdmissionMs": 4820,
+      "providerMs": 4130,
+      "objectCallsMs": 5146,
+      "submitCpuMs": 20,
+      "awaitCpuMs": 435,
+      "alarmCpuMs": 350,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 259,
+      "gcCallbacks": 12,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 484.5,
+        "admissionMs": 506,
+        "afterAdmissionMs": 0.5,
+        "providerMs": 0,
+        "objectCallsMs": 47,
+        "submitCpuMs": 5.5,
+        "awaitCpuMs": -0.5,
+        "alarmCpuMs": 86.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 2
+      }
+    },
+    {
+      "cell": "working/250/400/yielded",
+      "object": 7,
+      "sample": "e0-t8",
+      "driverMs": 5379,
+      "admissionMs": 369,
+      "afterAdmissionMs": 5010,
+      "providerMs": 4130,
+      "objectCallsMs": 5026,
+      "submitCpuMs": 8,
+      "awaitCpuMs": 232,
+      "alarmCpuMs": 152,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 257,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 327,
+        "admissionMs": 107,
+        "afterAdmissionMs": 229.5,
+        "providerMs": 0,
+        "objectCallsMs": 83,
+        "submitCpuMs": 0,
+        "awaitCpuMs": -34,
+        "alarmCpuMs": -1,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 5,
+      "sample": "e0-t24",
+      "driverMs": 1600,
+      "admissionMs": 325,
+      "afterAdmissionMs": 1275,
+      "providerMs": 54,
+      "objectCallsMs": 990,
+      "submitCpuMs": 232,
+      "awaitCpuMs": 478,
+      "alarmCpuMs": 446,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 261,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 527.5,
+        "admissionMs": -48,
+        "afterAdmissionMs": 574.5,
+        "providerMs": 25.5,
+        "objectCallsMs": 292,
+        "submitCpuMs": 216.5,
+        "awaitCpuMs": 101,
+        "alarmCpuMs": 142.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 2,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/50/400/pi",
+      "object": 7,
+      "sample": "e0-t9",
+      "driverMs": 5031,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 4130,
+      "objectCallsMs": 4997,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 368,
+      "transactions": 77,
+      "sql": 1055,
+      "gcCallbacks": 12,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 390,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": 0,
+        "objectCallsMs": 398.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": -2.5,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 2
+      }
+    },
+    {
+      "cell": "working/250/0/pi",
+      "object": 9,
+      "sample": "e0-t3",
+      "driverMs": 1321,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 13,
+      "objectCallsMs": 330,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 220,
+      "transactions": 77,
+      "sql": 1127,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 730,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": 0,
+        "objectCallsMs": -68,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": 21.5,
+        "transactions": 0,
+        "sql": -36,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/50/400/yielded",
+      "object": 0,
+      "sample": "e0-t23",
+      "driverMs": 5095,
+      "admissionMs": 275,
+      "afterAdmissionMs": 4820,
+      "providerMs": 4130,
+      "objectCallsMs": 4955,
+      "submitCpuMs": 203,
+      "awaitCpuMs": 420,
+      "alarmCpuMs": 197,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 271,
+        "admissionMs": 204,
+        "afterAdmissionMs": 74.5,
+        "providerMs": 0,
+        "objectCallsMs": 229.5,
+        "submitCpuMs": 194.5,
+        "awaitCpuMs": 66,
+        "alarmCpuMs": 68,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/50/400/pi",
+      "object": 2,
+      "sample": "e0-t11",
+      "driverMs": 5180,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 4130,
+      "objectCallsMs": 5072,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 174,
+      "transactions": 77,
+      "sql": 1055,
+      "gcCallbacks": 12,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 441,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": 0,
+        "objectCallsMs": 442.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": -8,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 2
+      }
+    },
+    {
+      "cell": "working/50/0/pi",
+      "object": 5,
+      "sample": "e0-t19",
+      "driverMs": 804,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 23,
+      "objectCallsMs": 1364,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 516,
+      "transactions": 77,
+      "sql": 1087,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 287.5,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": 12,
+        "objectCallsMs": 1054.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": 197,
+        "transactions": 0,
+        "sql": 32,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 5,
+      "sample": "e0-t11",
+      "driverMs": 1102,
+      "admissionMs": 444,
+      "afterAdmissionMs": 658,
+      "providerMs": 12,
+      "objectCallsMs": 511,
+      "submitCpuMs": 7,
+      "awaitCpuMs": 410,
+      "alarmCpuMs": 408,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 220,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 300.5,
+        "admissionMs": 232,
+        "afterAdmissionMs": 20,
+        "providerMs": -2.5,
+        "objectCallsMs": 14.5,
+        "submitCpuMs": -2.5,
+        "awaitCpuMs": 81.5,
+        "alarmCpuMs": 239,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/250/0/pi",
+      "object": 3,
+      "sample": "e0-t11",
+      "driverMs": 1362,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 0,
+      "objectCallsMs": 1568,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 469,
+      "transactions": 77,
+      "sql": 1163,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 568.5,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": 0,
+        "objectCallsMs": 1042.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": -7,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/250/400/pi",
+      "object": 5,
+      "sample": "e0-t8",
+      "driverMs": 5385,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 4130,
+      "objectCallsMs": 5317,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 439,
+      "transactions": 77,
+      "sql": 1127,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 465,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": 0,
+        "objectCallsMs": 447,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": -56,
+        "transactions": 0,
+        "sql": -36,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 5,
+      "sample": "e0-t14",
+      "driverMs": 1249,
+      "admissionMs": 215,
+      "afterAdmissionMs": 1034,
+      "providerMs": 17,
+      "objectCallsMs": 1500,
+      "submitCpuMs": 8,
+      "awaitCpuMs": 335,
+      "alarmCpuMs": 168,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 447.5,
+        "admissionMs": 3,
+        "afterAdmissionMs": 396,
+        "providerMs": 2.5,
+        "objectCallsMs": 1003.5,
+        "submitCpuMs": -1.5,
+        "awaitCpuMs": 6.5,
+        "alarmCpuMs": -1,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/250/0/pi",
+      "object": 3,
+      "sample": "e0-t16",
+      "driverMs": 1604,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 0,
+      "objectCallsMs": 1880,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 479,
+      "transactions": 77,
+      "sql": 1163,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 810.5,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": 0,
+        "objectCallsMs": 1354.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": 3,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 5,
+      "sample": "e0-t17",
+      "driverMs": 1104,
+      "admissionMs": 491,
+      "afterAdmissionMs": 613,
+      "providerMs": 17,
+      "objectCallsMs": 482,
+      "submitCpuMs": 14,
+      "awaitCpuMs": 364,
+      "alarmCpuMs": 470,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 302.5,
+        "admissionMs": 279,
+        "afterAdmissionMs": -25,
+        "providerMs": 2.5,
+        "objectCallsMs": -14.5,
+        "submitCpuMs": 4.5,
+        "awaitCpuMs": 35.5,
+        "alarmCpuMs": 301,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/250/400/yielded",
+      "object": 7,
+      "sample": "e0-t18",
+      "driverMs": 6792,
+      "admissionMs": 289,
+      "afterAdmissionMs": 6503,
+      "providerMs": 4130,
+      "objectCallsMs": 6664,
+      "submitCpuMs": 7,
+      "awaitCpuMs": 312,
+      "alarmCpuMs": 195,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 259,
+      "gcCallbacks": 12,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 1740,
+        "admissionMs": 27,
+        "afterAdmissionMs": 1722.5,
+        "providerMs": 0,
+        "objectCallsMs": 1721,
+        "submitCpuMs": -1,
+        "awaitCpuMs": 46,
+        "alarmCpuMs": 42,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 2
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 5,
+      "sample": "e0-t23",
+      "driverMs": 1064,
+      "admissionMs": 238,
+      "afterAdmissionMs": 826,
+      "providerMs": 20,
+      "objectCallsMs": 550,
+      "submitCpuMs": 8,
+      "awaitCpuMs": 609,
+      "alarmCpuMs": 168,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 262.5,
+        "admissionMs": 26,
+        "afterAdmissionMs": 188,
+        "providerMs": 5.5,
+        "objectCallsMs": 53.5,
+        "submitCpuMs": -1.5,
+        "awaitCpuMs": 280.5,
+        "alarmCpuMs": -1,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 5,
+      "sample": "e0-t24",
+      "driverMs": 1093,
+      "admissionMs": 62,
+      "afterAdmissionMs": 1031,
+      "providerMs": 37,
+      "objectCallsMs": 1700,
+      "submitCpuMs": 13,
+      "awaitCpuMs": 410,
+      "alarmCpuMs": 268,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 291.5,
+        "admissionMs": -150,
+        "afterAdmissionMs": 393,
+        "providerMs": 22.5,
+        "objectCallsMs": 1203.5,
+        "submitCpuMs": 3.5,
+        "awaitCpuMs": 81.5,
+        "alarmCpuMs": 99,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 4,
+      "sample": "e0-t7",
+      "driverMs": 2820,
+      "admissionMs": 444,
+      "afterAdmissionMs": 2376,
+      "providerMs": 43,
+      "objectCallsMs": 2916,
+      "submitCpuMs": 14,
+      "awaitCpuMs": 829,
+      "alarmCpuMs": 287,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 257,
+      "gcCallbacks": 8,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 1369,
+        "admissionMs": -42,
+        "afterAdmissionMs": 1411,
+        "providerMs": 4.5,
+        "objectCallsMs": 1853,
+        "submitCpuMs": -3,
+        "awaitCpuMs": 366.5,
+        "alarmCpuMs": -42,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": -2
+      }
+    },
+    {
+      "cell": "working/50/400/pi",
+      "object": 2,
+      "sample": "e0-t19",
+      "driverMs": 5273,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 4130,
+      "objectCallsMs": 5170,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 182,
+      "transactions": 77,
+      "sql": 1087,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 534,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": 0,
+        "objectCallsMs": 540.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": 0,
+        "transactions": 0,
+        "sql": 32,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 4,
+      "sample": "e0-t12",
+      "driverMs": 1948,
+      "admissionMs": 690,
+      "afterAdmissionMs": 1258,
+      "providerMs": 43,
+      "objectCallsMs": 1151,
+      "submitCpuMs": 23,
+      "awaitCpuMs": 463,
+      "alarmCpuMs": 571,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 259,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 497,
+        "admissionMs": 204,
+        "afterAdmissionMs": 293,
+        "providerMs": 4.5,
+        "objectCallsMs": 88,
+        "submitCpuMs": 6,
+        "awaitCpuMs": 0.5,
+        "alarmCpuMs": 242,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/250/400/yielded",
+      "object": 7,
+      "sample": "e0-t24",
+      "driverMs": 5407,
+      "admissionMs": 361,
+      "afterAdmissionMs": 5046,
+      "providerMs": 4130,
+      "objectCallsMs": 5310,
+      "submitCpuMs": 7,
+      "awaitCpuMs": 298,
+      "alarmCpuMs": 256,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 261,
+      "gcCallbacks": 8,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 355,
+        "admissionMs": 99,
+        "afterAdmissionMs": 265.5,
+        "providerMs": 0,
+        "objectCallsMs": 367,
+        "submitCpuMs": -1,
+        "awaitCpuMs": 32,
+        "alarmCpuMs": 103,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 2,
+        "gcCallbacks": -2
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 4,
+      "sample": "e0-t17",
+      "driverMs": 1857,
+      "admissionMs": 591,
+      "afterAdmissionMs": 1266,
+      "providerMs": 40,
+      "objectCallsMs": 1363,
+      "submitCpuMs": 28,
+      "awaitCpuMs": 727,
+      "alarmCpuMs": 368,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 259,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 406,
+        "admissionMs": 105,
+        "afterAdmissionMs": 301,
+        "providerMs": 1.5,
+        "objectCallsMs": 300,
+        "submitCpuMs": 11,
+        "awaitCpuMs": 264.5,
+        "alarmCpuMs": 39,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 0
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 4,
+      "sample": "e0-t20",
+      "driverMs": 1711,
+      "admissionMs": 783,
+      "afterAdmissionMs": 928,
+      "providerMs": 29,
+      "objectCallsMs": 1070,
+      "submitCpuMs": 10,
+      "awaitCpuMs": 478,
+      "alarmCpuMs": 698,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 259,
+      "gcCallbacks": 12,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 260,
+        "admissionMs": 297,
+        "afterAdmissionMs": -37,
+        "providerMs": -9.5,
+        "objectCallsMs": 7,
+        "submitCpuMs": -7,
+        "awaitCpuMs": 15.5,
+        "alarmCpuMs": 369,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 2
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 7,
+      "sample": "e0-t17",
+      "driverMs": 1352,
+      "admissionMs": 676,
+      "afterAdmissionMs": 676,
+      "providerMs": 24,
+      "objectCallsMs": 1815,
+      "submitCpuMs": 17,
+      "awaitCpuMs": 395,
+      "alarmCpuMs": 652,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 259,
+      "gcCallbacks": 8,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 391,
+        "admissionMs": 330,
+        "afterAdmissionMs": 56,
+        "providerMs": 1,
+        "objectCallsMs": 1164.5,
+        "submitCpuMs": 3.5,
+        "awaitCpuMs": 40.5,
+        "alarmCpuMs": 370,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": -2.5
+      }
+    },
+    {
+      "cell": "working/50/0/pi",
+      "object": 2,
+      "sample": "e0-t19",
+      "driverMs": 850,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 19,
+      "objectCallsMs": 618,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 545,
+      "transactions": 77,
+      "sql": 1087,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 275.5,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": 8.5,
+        "objectCallsMs": 247.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": 195.5,
+        "transactions": 0,
+        "sql": 32,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/50/400/yielded",
+      "object": 9,
+      "sample": "e0-t16",
+      "driverMs": 5351,
+      "admissionMs": 280,
+      "afterAdmissionMs": 5071,
+      "providerMs": 4130,
+      "objectCallsMs": 5272,
+      "submitCpuMs": 13,
+      "awaitCpuMs": 399,
+      "alarmCpuMs": 189,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 295,
+        "admissionMs": 32.5,
+        "afterAdmissionMs": 256,
+        "providerMs": 0,
+        "objectCallsMs": 329,
+        "submitCpuMs": 3,
+        "awaitCpuMs": 2,
+        "alarmCpuMs": 46,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/50/400/pi",
+      "object": 4,
+      "sample": "e0-t6",
+      "driverMs": 5053,
+      "admissionMs": null,
+      "afterAdmissionMs": null,
+      "providerMs": 4130,
+      "objectCallsMs": 5005,
+      "submitCpuMs": null,
+      "awaitCpuMs": null,
+      "alarmCpuMs": null,
+      "runCpuMs": 195,
+      "transactions": 77,
+      "sql": 1055,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 342,
+        "admissionMs": null,
+        "afterAdmissionMs": null,
+        "providerMs": 0,
+        "objectCallsMs": 350.5,
+        "submitCpuMs": null,
+        "awaitCpuMs": null,
+        "alarmCpuMs": null,
+        "runCpuMs": -24.5,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": -1
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 2,
+      "sample": "e0-t2",
+      "driverMs": 1395,
+      "admissionMs": 636,
+      "afterAdmissionMs": 759,
+      "providerMs": 0,
+      "objectCallsMs": 807,
+      "submitCpuMs": 20,
+      "awaitCpuMs": 374,
+      "alarmCpuMs": 550,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 260,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 265,
+        "admissionMs": 226.5,
+        "afterAdmissionMs": 47.5,
+        "providerMs": 0,
+        "objectCallsMs": 7,
+        "submitCpuMs": 6,
+        "awaitCpuMs": 13.5,
+        "alarmCpuMs": 251.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 1,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/50/400/yielded",
+      "object": 8,
+      "sample": "e0-t17",
+      "driverMs": 5125,
+      "admissionMs": 79,
+      "afterAdmissionMs": 5046,
+      "providerMs": 4130,
+      "objectCallsMs": 4932,
+      "submitCpuMs": 9,
+      "awaitCpuMs": 659,
+      "alarmCpuMs": 146,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 12,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 267.5,
+        "admissionMs": 7.5,
+        "afterAdmissionMs": 279,
+        "providerMs": 0,
+        "objectCallsMs": 173.5,
+        "submitCpuMs": -1,
+        "awaitCpuMs": 241,
+        "alarmCpuMs": 6,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 2
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 9,
+      "sample": "e0-t2",
+      "driverMs": 1543,
+      "admissionMs": 81,
+      "afterAdmissionMs": 1462,
+      "providerMs": 17,
+      "objectCallsMs": 728,
+      "submitCpuMs": 20,
+      "awaitCpuMs": 714,
+      "alarmCpuMs": 109,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 260,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 474,
+        "admissionMs": -5.5,
+        "afterAdmissionMs": 506,
+        "providerMs": 17,
+        "objectCallsMs": 180,
+        "submitCpuMs": 5,
+        "awaitCpuMs": 300,
+        "alarmCpuMs": -225.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 1,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/250/0/yielded",
+      "object": 9,
+      "sample": "e0-t16",
+      "driverMs": 1326,
+      "admissionMs": 698,
+      "afterAdmissionMs": 628,
+      "providerMs": 0,
+      "objectCallsMs": 2174,
+      "submitCpuMs": 21,
+      "awaitCpuMs": 389,
+      "alarmCpuMs": 643,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 259,
+      "gcCallbacks": 11,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 257,
+        "admissionMs": 611.5,
+        "afterAdmissionMs": -328,
+        "providerMs": 0,
+        "objectCallsMs": 1626,
+        "submitCpuMs": 6,
+        "awaitCpuMs": -25,
+        "alarmCpuMs": 308.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 1
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 0,
+      "sample": "e0-t6",
+      "driverMs": 1264,
+      "admissionMs": 237,
+      "afterAdmissionMs": 1027,
+      "providerMs": 1,
+      "objectCallsMs": 1380,
+      "submitCpuMs": 10,
+      "awaitCpuMs": 391,
+      "alarmCpuMs": 148,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 220,
+      "gcCallbacks": 10,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 424.5,
+        "admissionMs": 59.5,
+        "afterAdmissionMs": 347,
+        "providerMs": -12,
+        "objectCallsMs": 787.5,
+        "submitCpuMs": 0,
+        "awaitCpuMs": 59.5,
+        "alarmCpuMs": -6,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": -2,
+        "gcCallbacks": 0.5
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 0,
+      "sample": "e0-t18",
+      "driverMs": 1206,
+      "admissionMs": 555,
+      "afterAdmissionMs": 651,
+      "providerMs": 20,
+      "objectCallsMs": 676,
+      "submitCpuMs": 164,
+      "awaitCpuMs": 425,
+      "alarmCpuMs": 313,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 9,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 366.5,
+        "admissionMs": 377.5,
+        "afterAdmissionMs": -29,
+        "providerMs": 7,
+        "objectCallsMs": 83.5,
+        "submitCpuMs": 154,
+        "awaitCpuMs": 93.5,
+        "alarmCpuMs": 159,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": -0.5
+      }
+    },
+    {
+      "cell": "working/50/0/yielded",
+      "object": 0,
+      "sample": "e0-t23",
+      "driverMs": 2127,
+      "admissionMs": 1148,
+      "afterAdmissionMs": 979,
+      "providerMs": 49,
+      "objectCallsMs": 891,
+      "submitCpuMs": 15,
+      "awaitCpuMs": 386,
+      "alarmCpuMs": 274,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 222,
+      "gcCallbacks": 12,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 1287.5,
+        "admissionMs": 970.5,
+        "afterAdmissionMs": 299,
+        "providerMs": 36,
+        "objectCallsMs": 298.5,
+        "submitCpuMs": 5,
+        "awaitCpuMs": 54.5,
+        "alarmCpuMs": 120,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 0,
+        "gcCallbacks": 2.5
+      }
+    },
+    {
+      "cell": "working/50/400/yielded",
+      "object": 7,
+      "sample": "e0-t12",
+      "driverMs": 5149,
+      "admissionMs": 471,
+      "afterAdmissionMs": 4678,
+      "providerMs": 4130,
+      "objectCallsMs": 4705,
+      "submitCpuMs": 5,
+      "awaitCpuMs": 233,
+      "alarmCpuMs": 71,
+      "runCpuMs": null,
+      "transactions": 34,
+      "sql": 223,
+      "gcCallbacks": 13,
+      "priorActiveAlarms": 0,
+      "spike": true,
+      "deltaFromObjectMedian": {
+        "driverMs": 291,
+        "admissionMs": 303.5,
+        "afterAdmissionMs": 1,
+        "providerMs": 0,
+        "objectCallsMs": -28,
+        "submitCpuMs": 0,
+        "awaitCpuMs": 9.5,
+        "alarmCpuMs": -5.5,
+        "runCpuMs": null,
+        "transactions": 0,
+        "sql": 1,
+        "gcCallbacks": 3
+      }
+    }
+  ]
+}

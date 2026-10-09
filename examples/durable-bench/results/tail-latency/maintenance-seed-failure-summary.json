@@ -1,0 +1,325 @@
+{
+  "run": "tail-latency-mv0n4wha-000603af",
+  "harnessRevision": "78cb4eb7589984c1cd194e0cb01a5a0055a6d3f3",
+  "dirtyHarness": true,
+  "rawSha256": "6d73749fe5e810efe22b78f425adcb880d9a353f69450b1e353dbba554e91c18",
+  "startedAt": "2026-10-09T07:25:22.414Z",
+  "wallMs": 354812,
+  "options": {
+    "targets": [
+      "yielded",
+      "pi"
+    ],
+    "sizes": [
+      50,
+      250
+    ],
+    "ttft": [
+      0,
+      400
+    ],
+    "objects": 16,
+    "repeats": 8,
+    "concurrency": 10,
+    "cold": true,
+    "cpu": true,
+    "keep": false,
+    "rigorous": true,
+    "baseline": "07f0272e",
+    "candidate": "413bb4bc"
+  },
+  "builds": [
+    {
+      "label": "baseline",
+      "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "622153e80f7d2fb9380d4169918a97e46ad0122b28d563515ea50980c6a1df23"
+    },
+    {
+      "label": "candidate",
+      "revision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+      "sha256": "1aad3f8c7e04defb51225ea7663ead1c9fe90be4c1048a4ed7c65fa3ea966b45"
+    }
+  ],
+  "fixtures": [
+    {
+      "target": "yielded",
+      "history": 50,
+      "fingerprint": "b017b487524e44a4",
+      "mode": "replay",
+      "fallbackReason": "Canonical import changes source table counts: effect_agent_attempts 50 -> 0"
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "mode": "replay",
+      "fallbackReason": "Canonical import changes source table counts: effect_agent_attempts 250 -> 0"
+    },
+    {
+      "target": "pi",
+      "history": 50,
+      "fingerprint": "b017b487524e44a4",
+      "mode": "import"
+    },
+    {
+      "target": "pi",
+      "history": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "mode": "import"
+    }
+  ],
+  "complete": false,
+  "failures": [
+    "yielded/250/0 seed: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"submit did not reach the Thread Object: internal error; reference = [redacted-id]\",\"sample\":\"import\"}"
+  ],
+  "integrity": {
+    "warm": 0,
+    "fingerprintsVerified": 0,
+    "residencyVerified": 0,
+    "other": 0
+  },
+  "cells": [],
+  "ratios": [],
+  "outcomes": {
+    "alarm/canceled": {
+      "count": 5041,
+      "cpu": {
+        "n": 5041,
+        "p50": 0,
+        "p90": 0,
+        "p99": 38,
+        "max": 74
+      },
+      "wall": {
+        "n": 5041,
+        "p50": 97,
+        "p90": 131,
+        "p99": 293.60000000000036,
+        "max": 2283
+      },
+      "attributed": 0
+    },
+    "alarm/ok": {
+      "count": 5911,
+      "cpu": {
+        "n": 5911,
+        "p50": 91,
+        "p90": 186,
+        "p99": 368.6999999999989,
+        "max": 697
+      },
+      "wall": {
+        "n": 5911,
+        "p50": 264,
+        "p90": 424,
+        "p99": 714,
+        "max": 1450
+      },
+      "attributed": 5463
+    },
+    "ambiguous/ok": {
+      "count": 285,
+      "cpu": {
+        "n": 285,
+        "p50": 124,
+        "p90": 209.6,
+        "p99": 493.4800000000001,
+        "max": 605
+      },
+      "wall": {
+        "n": 285,
+        "p50": 186,
+        "p90": 281.6,
+        "p99": 539.9200000000021,
+        "max": 771
+      },
+      "attributed": 0
+    },
+    "await/canceled": {
+      "count": 1,
+      "cpu": {
+        "n": 1,
+        "p50": 122,
+        "p90": 122,
+        "p99": 122,
+        "max": 122
+      },
+      "wall": {
+        "n": 1,
+        "p50": 258,
+        "p90": 258,
+        "p99": 258,
+        "max": 258
+      },
+      "attributed": 1
+    },
+    "await/ok": {
+      "count": 5675,
+      "cpu": {
+        "n": 5675,
+        "p50": 51,
+        "p90": 96.60000000000036,
+        "p99": 262.2600000000002,
+        "max": 667
+      },
+      "wall": {
+        "n": 5675,
+        "p50": 135,
+        "p90": 261.60000000000036,
+        "p99": 552.2600000000002,
+        "max": 2179
+      },
+      "attributed": 5675
+    },
+    "fetch/ok": {
+      "count": 6,
+      "cpu": {
+        "n": 6,
+        "p50": 0,
+        "p90": 4,
+        "p99": 4,
+        "max": 4
+      },
+      "wall": {
+        "n": 6,
+        "p50": 0,
+        "p90": 5,
+        "p99": 5,
+        "max": 5
+      },
+      "attributed": 0
+    },
+    "jsrpc/ok": {
+      "count": 337,
+      "cpu": {
+        "n": 337,
+        "p50": 32,
+        "p90": 142.00000000000017,
+        "p99": 229.64,
+        "max": 281
+      },
+      "wall": {
+        "n": 337,
+        "p50": 181,
+        "p90": 303.40000000000003,
+        "p99": 582.4799999999999,
+        "max": 678
+      },
+      "attributed": 0
+    },
+    "object/import/canceled": {
+      "count": 1,
+      "cpu": {
+        "n": 1,
+        "p50": 30,
+        "p90": 30,
+        "p99": 30,
+        "max": 30
+      },
+      "wall": {
+        "n": 1,
+        "p50": 112,
+        "p90": 112,
+        "p99": 112,
+        "max": 112
+      },
+      "attributed": 1
+    },
+    "object/import/ok": {
+      "count": 77,
+      "cpu": {
+        "n": 77,
+        "p50": 85,
+        "p90": 234.4,
+        "p99": 302.87999999999994,
+        "max": 312
+      },
+      "wall": {
+        "n": 77,
+        "p50": 171,
+        "p90": 317,
+        "p99": 429.64,
+        "max": 438
+      },
+      "attributed": 77
+    },
+    "submit/canceled": {
+      "count": 5,
+      "cpu": {
+        "n": 5,
+        "p50": 11,
+        "p90": 15.2,
+        "p99": 17.720000000000002,
+        "max": 18
+      },
+      "wall": {
+        "n": 5,
+        "p50": 205,
+        "p90": 443.20000000000005,
+        "p99": 503.32,
+        "max": 510
+      },
+      "attributed": 5
+    },
+    "submit/ok": {
+      "count": 5445,
+      "cpu": {
+        "n": 5445,
+        "p50": 9,
+        "p90": 14,
+        "p99": 32,
+        "max": 454
+      },
+      "wall": {
+        "n": 5445,
+        "p50": 213,
+        "p90": 315,
+        "p99": 484.1200000000008,
+        "max": 2576
+      },
+      "attributed": 5445
+    },
+    "worker/import/canceled": {
+      "count": 8,
+      "cpu": {
+        "n": 8,
+        "p50": 65,
+        "p90": 312,
+        "p99": 349.8,
+        "max": 354
+      },
+      "wall": {
+        "n": 8,
+        "p50": 21613,
+        "p90": 93052.9,
+        "p99": 130672.08999999998,
+        "max": 134852
+      },
+      "attributed": 8
+    },
+    "worker/import/ok": {
+      "count": 75,
+      "cpu": {
+        "n": 75,
+        "p50": 1,
+        "p90": 422.4000000000003,
+        "p99": 658.3800000000001,
+        "max": 668
+      },
+      "wall": {
+        "n": 75,
+        "p50": 1375,
+        "p90": 91506.00000000003,
+        "p99": 125961.04000000014,
+        "max": 145130
+      },
+      "attributed": 75
+    }
+  },
+  "unmatchedCpuMarkers": 91,
+  "targetCleanup": {
+    "verified": true,
+    "workers": [],
+    "namespaces": []
+  }
+}
