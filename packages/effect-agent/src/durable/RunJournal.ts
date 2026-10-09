@@ -667,7 +667,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
     const collected = makeJournalMetadata(ownerRunId);
 
     yield* Stream.runForEach(records, (envelope) => Effect.sync(() => collected.add(envelope)));
-    metadata = collected.snapshot();
+    metadata = collected.finish();
   }
 
   const {

@@ -48,8 +48,9 @@ export interface JournalMetadata {
 
 /**
  * Attempt-local metadata collector. Feed every validated record exactly once, in canonical order,
- * including records omitted from the control view. A snapshot is independent of later suffix
- * additions and may only accompany a replay stream bounded at that same captured tail.
+ * including records omitted from the control view. Calling finish transfers its collections;
+ * discard the collector afterward. The metadata may only accompany a replay stream bounded at
+ * that same captured tail. A later prefix requires a new collector.
  */
 export const makeJournalMetadata = (ownerRunId: RunId | undefined) => {
   const firstSequenceByRun = new Map<string, number>();
@@ -164,18 +165,16 @@ export const makeJournalMetadata = (ownerRunId: RunId | undefined) => {
           });
       }
     },
-    snapshot: (): JournalMetadata => ({
+    finish: (): JournalMetadata => ({
       ownerRunId,
-      firstSequenceByRun: new Map(firstSequenceByRun),
-      responseSequencesByRun: new Map(
-        [...responseSequencesByRun].map(([runId, sequences]) => [runId, [...sequences]]),
-      ),
-      terminalSequenceByRun: new Map(terminalSequenceByRun),
-      settledSpans: [...settledSpans],
-      settledSequenceById: new Map(settledSequenceById),
-      settledToolCallRecordIds: new Set(settledToolCallRecordIds),
-      settledById: new Map(settledById),
-      compactions: [...compactions],
+      firstSequenceByRun,
+      responseSequencesByRun,
+      terminalSequenceByRun,
+      settledSpans,
+      settledSequenceById,
+      settledToolCallRecordIds,
+      settledById,
+      compactions,
     }),
   };
 };
