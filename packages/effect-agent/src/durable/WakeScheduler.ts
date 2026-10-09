@@ -114,6 +114,17 @@ export class WakeScheduler extends Context.Service<
   WakeScheduler,
   {
     /**
+     * Run a Thread's processing while the host coalesces redundant scheduling hints. The
+     * default is to run `body` unchanged. Execute the body once, preserving its result, errors,
+     * requirements, and interruption. This grants no ownership and must preserve local
+     * waiter notifications, durable recovery deadlines, and progress for work awaited by `body`.
+     * A host that defers hints must arrange a prompt wake for remaining work when `body` exits.
+     */
+    readonly withProcessing?: <A, E, R>(
+      threadId: ThreadId,
+      body: Effect.Effect<A, E, R>,
+    ) => Effect.Effect<A, E, R>;
+    /**
      * Best-effort hint to workers and all Thread waiters. `progress` may omit settlement waiters,
      * but still reaches workers and progress waiters. Never fails.
      */

@@ -1399,6 +1399,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     | undefined;
 
   const wake = yield* WakeScheduler;
+
+  const withProcessing: NonNullable<WakeScheduler["Service"]["withProcessing"]> =
+    wake.withProcessing ?? ((_threadId, body) => body);
+
   const failpoint = yield* DurableRuntimeFailpoint;
   const config = yield* DurableRuntimeConfig;
   const crypto = yield* Crypto.Crypto;
@@ -8980,7 +8984,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         }
         settlements.push(settlement.value);
       }
-    });
+    }).pipe((body) => withProcessing(threadId, body));
 
   const processThreadImpl = <
     InputSchema extends Schema.Top,
@@ -9046,6 +9050,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   ): Effect.Effect<Option.Option<Settlement>, DurableWorkerFailure | DurableBindingFailure> =>
     processThreadHead(resolveCurrentBinding, threadId, options).pipe(
       Effect.map(({ settlement }) => settlement),
+      (body) => withProcessing(threadId, body),
     );
 
   const claimFor = Effect.fnUntraced(function* (
@@ -12307,6 +12312,7 @@ export class DurableAgentRuntime extends Context.Service<
     readonly scanObligations: (
       thresholds: ObligationThresholds,
     ) => Effect.Effect<ObligationReport, DurableObligationFailure>;
+    /** Drain a Thread's claimable heads under the host's WakeScheduler processing boundary. */
     readonly processThread: <
       InputSchema extends Schema.Top,
       OutputSchema extends Schema.Top,
@@ -12361,12 +12367,14 @@ export class DurableAgentRuntime extends Context.Service<
         InstructionRequirements
       >
     >;
+    /** Drain a Thread using registered bindings under the same host processing boundary. */
     readonly processThreadResolved: (
       threadId: ThreadId,
     ) => Effect.Effect<ReadonlyArray<Settlement>, DurableWorkerFailure | DurableBindingFailure>;
     /**
-     * Advance the FIFO head, closing its Attempt resources before returning. With an opted-in
-     * SubmissionScheduling policy, a complete Turn may hand off to the next same-Agent input;
+     * Advance the FIFO head under the host's WakeScheduler processing boundary, closing its
+     * Attempt resources before returning. With an opted-in SubmissionScheduling policy, a complete
+     * Turn may hand off to the next same-Agent input;
      * the returned Settlement identifies the Submission actually completed. Each Attempt closes
      * before the next is claimed, and deferred Runs retain their original obligations. A vacant,
      * owned, unknown, or suspended head returns None and leaves accepted work pending.
