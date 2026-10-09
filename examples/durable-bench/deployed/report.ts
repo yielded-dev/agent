@@ -75,6 +75,7 @@ export const table = (result: Result): string => {
   const lines = [
     ...(result.complete ? [] : ["INCOMPLETE RUN — diagnostic results only.", ""]),
     "Driver-observed milliseconds; median [Q1–Q3] of Object medians.",
+    "Yielded falls back to settled text if no preview arrives; JSON records firstTextSource.",
     "First request crosses Object/driver clocks (approximate). Cold turns exclude observer attachment; first text is n/a for tardie.",
     "Yielded/pi ranges use min(Y)/max(pi)–max(Y)/min(pi) of Object medians; descriptive, unpaired, not confidence intervals.",
     "",

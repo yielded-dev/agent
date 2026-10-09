@@ -111,7 +111,7 @@ export default {
         return Response.json({ ok: true, build: env.BUILD });
       }
       const query = readQuery(url);
-      if (["/import", "/submit", "/await", "/run", "/text", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
+      if (["/import", "/submit", "/await", "/result", "/run", "/text", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
         return Response.json(
           {
             ok: false,
@@ -120,7 +120,7 @@ export default {
           },
           { status: 503 },
         );
-      const mutating = ["/import", "/cold", "/submit", "/await", "/run"].includes(url.pathname);
+      const mutating = ["/import", "/cold", "/submit", "/await", "/result", "/run"].includes(url.pathname);
 
       if (url.pathname === "/profile-target") {
         if (query.target === "tardie") throw new Error("Profiling supports Yielded and pi");
@@ -136,7 +136,7 @@ export default {
 
       if (mutating && request.method !== "POST")
         return new Response("POST required", { status: 405 });
-      if (!["/import", "/cold", "/submit", "/await", "/run", "/text", "/metrics"].includes(url.pathname))
+      if (!["/import", "/cold", "/submit", "/await", "/result", "/run", "/text", "/metrics"].includes(url.pathname))
         return new Response("not found", { status: 404 });
 
       const actor =
@@ -204,9 +204,9 @@ export default {
           { status: threadAborted && directoryAborted !== false ? 200 : 502 },
         );
       }
-      if (url.pathname === "/submit" || url.pathname === "/await") {
+      if (url.pathname === "/submit" || url.pathname === "/await" || url.pathname === "/result") {
         if (query.target !== "yielded") throw new Error("Only Yielded uses native receipts");
-        const receiptWire = url.pathname === "/await" ? await request.json() : undefined;
+        const receiptWire = url.pathname === "/submit" ? undefined : await request.json();
 
         const cached = getClient(env);
         const { client, digests } = await cached.ready;
@@ -234,6 +234,14 @@ export default {
 
               if (receipt.threadId !== query.object)
                 return yield* Effect.die("Receipt belongs to another Object");
+              if (url.pathname === "/result") {
+                const record = yield* client.awaitSettlementRecord(receipt);
+
+                if (record.outcome !== "completed")
+                  return yield* Effect.die("Expected a completed assistant reply");
+
+                return { ok: true, text: yield* Schema.decodeUnknownEffect(Schema.NonEmptyString)(record.result) };
+              }
               const settlement = yield* client.awaitSettlement(receipt);
 
               return { ok: true, settlement: yield* Schema.encodeEffect(Settlement)(settlement) };

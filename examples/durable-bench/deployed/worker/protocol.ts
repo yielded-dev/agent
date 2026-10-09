@@ -149,6 +149,11 @@ export const AwaitResult = Schema.Struct({
 
 export type AwaitResult = typeof AwaitResult.Type;
 
+export const SettledTextResult = Schema.Struct({
+  ok: Schema.Literal(true),
+  text: Schema.NonEmptyString,
+});
+
 export const RunResult = Schema.Struct({
   ok: Schema.Literal(true),
   outcome: Schema.Literal("completed"),

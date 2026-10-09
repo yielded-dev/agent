@@ -118,10 +118,13 @@ pi-durable's public `watchEvents` inside its Object, forwarded over HTTP as text
 It waits for the subscription acknowledgement, then starts both timers at submit. First text
 ends when nonempty assistant text reaches the driver; it includes framework publication and
 transport, rather than the provider's first byte. Yielded drafts are matched to the new
-Receipt. This workload emits text only after the eight tool calls. Tardie shows `n/a`:
+Receipt. If an instant burst retires before its preview arrives, the driver reads the public
+`awaitSettlementRecord` result after recording completion; first text includes that extra read.
+JSON's `firstTextSource` distinguishes preview delivery from this canonical fallback.
+This workload emits text only after the eight tool calls. Tardie shows `n/a`:
 its existing adapter exposes completed method calls, and connecting its separate execution
-stream is outside this small harness change. Missing or failed Yielded/pi observation fails
-the sample. First-model-request time crosses Object/driver clocks and is approximate.
+stream is outside this small harness change. Missing first text or observation failure before
+it invalidates the sample. First-model-request time crosses Object/driver clocks and is approximate.
 
 `--cold` includes the first turn after acknowledged `storage.sync()` + `ctx.abort()`;
 tardie's Actor directory and Thread are both restarted. It verifies a new instance, no

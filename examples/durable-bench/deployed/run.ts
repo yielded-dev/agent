@@ -620,6 +620,9 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                           ...(measured.value.firstText === undefined
                             ? {}
                             : { firstText: measured.value.firstText }),
+                          ...(measured.value.firstTextSource === undefined
+                            ? {}
+                            : { firstTextSource: measured.value.firstTextSource }),
                           observationMs: measured.value.observationMs,
                           ...(firstStart === undefined
                             ? {}

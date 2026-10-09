@@ -47,6 +47,9 @@ export const Invocation = Schema.Struct({
 
 export type Invocation = typeof Invocation.Type;
 
+export const FirstTextSource = Schema.Literals(["watchText", "watchEvents", "settlementRecord"]);
+export type FirstTextSource = typeof FirstTextSource.Type;
+
 export const Sample = Schema.Struct({
   ...Query.fields,
   build: Schema.Literals(["working", "baseline", "candidate"]),
@@ -57,6 +60,7 @@ export const Sample = Schema.Struct({
   driverMs: Schema.optionalKey(Schema.Number),
   firstTextMs: Schema.optionalKey(Schema.NullOr(Schema.Number)),
   firstText: Schema.optionalKey(Schema.String),
+  firstTextSource: Schema.optionalKey(FirstTextSource),
   observationMs: Schema.optionalKey(Schema.NullOr(Schema.Number)),
   firstModelRequestMs: Schema.optionalKey(Schema.Number),
   admissionMs: Schema.optionalKey(Schema.Number),
@@ -140,6 +144,7 @@ export const MeasureResponse = Schema.Struct({
   observedMs: Schema.Number,
   firstTextMs: Schema.NullOr(Schema.Number),
   firstText: Schema.optionalKey(Schema.String),
+  firstTextSource: Schema.optionalKey(FirstTextSource),
   observationMs: Schema.NullOr(Schema.Number),
   admissionMs: Schema.optionalKey(Schema.Number),
   colo: Schema.NullOr(Schema.String),

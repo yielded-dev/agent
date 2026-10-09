@@ -1,8 +1,14 @@
 import { Clock, Deferred, Effect, Schema, Stream } from "effect";
 import { Ndjson } from "effect/encoding";
 
-import { MeasureRequest } from "./model.ts";
-import { AwaitResult, RunResult, SubmitResult, TextObservation } from "./worker/protocol.ts";
+import { MeasureRequest, type FirstTextSource } from "./model.ts";
+import {
+  AwaitResult,
+  RunResult,
+  SettledTextResult,
+  SubmitResult,
+  TextObservation,
+} from "./worker/protocol.ts";
 
 class ObservationError extends Schema.TaggedError<ObservationError>()("ObservationError", {
   message: Schema.String,
@@ -72,7 +78,7 @@ export default {
           Effect.gen(function* () {
             const ready = yield* Deferred.make<void, ObservationError>();
 
-            type Visible = { atMs: number; text: string };
+            type Visible = { atMs: number; text: string; source: FirstTextSource };
             const first = yield* Deferred.make<Visible, ObservationError>();
             const visible = new Map<string, Visible>();
             let input: string | undefined = query.target === "pi" ? query.sample : undefined;
@@ -107,9 +113,10 @@ export default {
                     }
                     if (!frame.text.trim()) return;
 
-                    const seen = visible.get(frame.input) ?? {
+                    const seen: Visible = visible.get(frame.input) ?? {
                       atMs: yield* Clock.currentTimeMillis,
                       text: frame.text,
+                      source: query.target === "yielded" ? "watchText" : "watchEvents",
                     };
 
                     visible.set(frame.input, seen);
@@ -134,6 +141,7 @@ export default {
 
             const startedMs = yield* Clock.currentTimeMillis;
             let admissionMs: number | undefined;
+            let receipt: SubmitResult["receipt"] | undefined;
 
             if (query.target === "yielded") {
               const admission = yield* Effect.tryPromise(async () =>
@@ -141,6 +149,7 @@ export default {
               );
 
               admissionMs = (yield* Clock.currentTimeMillis) - startedMs;
+              receipt = admission.receipt;
               input = admission.receipt.submissionId;
               const seen = visible.get(input);
 
@@ -164,6 +173,23 @@ export default {
 
             // Preserve the completion endpoint even if the independent text transport arrives later.
             const observedMs = yield* Clock.currentTimeMillis;
+
+            // Overflow can replace an instant reply with an empty draft snapshot after settlement.
+            if (receipt !== undefined && !(yield* Deferred.isDone(first))) {
+              const result = yield* Effect.tryPromise(async () =>
+                Schema.decodeUnknownSync(SettledTextResult)(
+                  await (await invoke("/result", receipt)).json(),
+                ),
+              );
+
+              const fallback: Visible = {
+                atMs: yield* Clock.currentTimeMillis,
+                text: result.text,
+                source: "settlementRecord",
+              };
+
+              yield* Deferred.succeed(first, fallback);
+            }
             const text = query.target === "tardie" ? undefined : yield* Deferred.await(first);
 
             return {
@@ -173,7 +199,7 @@ export default {
               observedMs,
               admissionMs,
               firstTextMs: text === undefined ? null : text.atMs - startedMs,
-              ...(text === undefined ? {} : { firstText: text.text }),
+              ...(text === undefined ? {} : { firstText: text.text, firstTextSource: text.source }),
               observationMs,
               colo: typeof request.cf?.colo === "string" ? request.cf.colo : null,
             };
