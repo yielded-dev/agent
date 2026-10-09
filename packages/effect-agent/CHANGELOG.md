@@ -1,5 +1,113 @@
 # @yielded/agent
 
+## 0.1.0-beta.168
+
+### Minor Changes
+
+- [#797](https://github.com/yielded-dev/agent/pull/797) [`8c05714`](https://github.com/yielded-dev/agent/commit/8c05714de84d68961b14e5ab7a3b7d809599563f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Add `BrowserUse.runJev` to drive a page with a native `DecisionModel`, and `act(actions, { observe: false })` for hosts that read the next page themselves. Cloudflare native browser actions are faster and now work through payment frames, navigations and Wrangler-bundled Workers.
+
+  BEHAVIOR CHANGE: `grounding: "decision"`, `mode: "plan"`, `selectTargets`, `TargetAction`, `act_ref` and the optional `BrowserActions.latestObservation` are removed. Use `BrowserUse.make({ mode })` for a model agent or `BrowserUse.runJev` for decision-model control.
+
+- [#768](https://github.com/yielded-dev/agent/pull/768) [`8214498`](https://github.com/yielded-dev/agent/commit/8214498e8dfffde58773837fef3aa0c1fde07e9f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Publish settlement intent atomically in the canonical log and remove the separate settlement reservation protocol. Combine eligible SQL receipt finalization with publication and exclusive-session input markers with their canonical append.
+
+  BEHAVIOR CHANGE: custom durable assemblies must provide a co-owned `SettlementPublisher`; pair Memory ledger and thread layers with `Layer.provideMerge`, and use fresh thread storage or format 16.
+
+- [#768](https://github.com/yielded-dev/agent/pull/768) [`8214498`](https://github.com/yielded-dev/agent/commit/8214498e8dfffde58773837fef3aa0c1fde07e9f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Capture canonical appends before asynchronous work so later caller mutations cannot change the persisted value or invalidate its digest. Reuse captured record JSON across hashing and SQL writes, and commit eligible readonly responses with their completed results.
+
+  BEHAVIOR CHANGE: custom SQL adapters must prepare raw append requests with `prepareSqlAppend`; `RawAppendRequest` is now a typed value instead of a Schema factory, and `RawRecord` is removed.
+
+- [#768](https://github.com/yielded-dev/agent/pull/768) [`8214498`](https://github.com/yielded-dev/agent/commit/8214498e8dfffde58773837fef3aa0c1fde07e9f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Recover unfinished tools from their committed model declarations and remove the separate preparation write and outstanding-operation index.
+
+  BEHAVIOR CHANGE: a crash after declaration can leave a mutating tool outcome unknown; durable Runs require unique tool call IDs and reject responses exceeding 4,096 distinct IDs with `RunJournalError` before commit or dispatch; thread stores require fresh storage or format 16. Use runtime `explain` in place of `readOutstanding`, and `DeclaredToolCallEvidence` in custom reconcilers.
+
+  Supply JSON tool arguments and results in history used by function-based approval hooks.
+
+- [#768](https://github.com/yielded-dev/agent/pull/768) [`8214498`](https://github.com/yielded-dev/agent/commit/8214498e8dfffde58773837fef3aa0c1fde07e9f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Run agents through one scoped Effect owner and adapt public streams with bounded backpressure. Commit validated Turn facts directly, retaining completion-tool results before input draining and declared failure values for siblings retained during child suspension.
+
+  BEHAVIOR CHANGE: Provide services for the whole execution; per-pull Context changes no longer reconfigure streams. Terminal Tool events follow call-local telemetry and failure observation, and `maxRunEvents` bounds observed progress rather than headless execution. Replace `bufferLimits.maxSubagentEventsPerBatch` with `maxBufferedEvents` to bound the public stream queue.
+
+  Custom durability hooks must implement `initialize`, `commitTurn`, and `checkpoint`, retaining exposure and parameter-rejection evidence from `RunTurnResponse` and propagating retained infrastructure failures. Return `"committed"` from `commitTurn`; return `"deferred"` only when the response explicitly permits readonly deferral, and persist that response before any call-scoped durable capability. Keep completion projections pure because recovery may reevaluate persisted results before `RunCompleted` fixes the output. Decode retained sibling failures with the Tool's failure Schema instead of expecting `{ errorTag, message }` diagnostics.
+
+- [#768](https://github.com/yielded-dev/agent/pull/768) [`8214498`](https://github.com/yielded-dev/agent/commit/8214498e8dfffde58773837fef3aa0c1fde07e9f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Prevent recovery from reverting joined input while its host is still processing it. Recheck canonical input after acquiring recovery ownership and fence rollback against the current host.
+
+  BEHAVIOR CHANGE: Custom `SubmissionLedger` adapters must validate a supplied `RevertJoiningRequest.guard` atomically with rollback; requests without a guard retain their existing behavior.
+
+- [#800](https://github.com/yielded-dev/agent/pull/800) [`cd15a98`](https://github.com/yielded-dev/agent/commit/cd15a98fb4c7bd741ac69fcb983492df1a4b4b6e) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Remove cumulative Thread record, worker-input, peer-message, and delivery limits while preserving live capacity and per-Run bounds, and refuse batches whose expanded identities and references cannot fit a complete transfer page. **BEHAVIOR CHANGE:** Use fresh layout-21 stores and `effect-agent/thread@3` records, provide `ThreadExportSource` for `streamExport({ threadId })`, and configure compaction within retained model-context bounds.
+
+- [#770](https://github.com/yielded-dev/agent/pull/770) [`f7652ff`](https://github.com/yielded-dev/agent/commit/f7652ff8197999e0155d6182b13cf8f70f552be2) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Add scoped native browser tools with bounded frame and shadow inspection, guarded inputs, tab and dialog controls, and explicit input receipts. Expose the same operations through ordinary tools and Code Mode with host authorization and separate preparation deadlines.
+
+- [#768](https://github.com/yielded-dev/agent/pull/768) [`8214498`](https://github.com/yielded-dev/agent/commit/8214498e8dfffde58773837fef3aa0c1fde07e9f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Bind durable Attempts to scoped storage sessions and reduce repeated ownership and tail reads in managed Node hosts.
+
+  BEHAVIOR CHANGE: provide `RunStorage` in manual runtime assemblies and provide `ThreadReader` for canonical read helpers (stock adapters include it). Managed Node hosts keep `SqlClient`, `ThreadStore`, and `SubmissionLedger` private and reject custom SQLite triggers; compose application SQL with a separate client.
+
+### Patch Changes
+
+- [#798](https://github.com/yielded-dev/agent/pull/798) [`bdaaf49`](https://github.com/yielded-dev/agent/commit/bdaaf49643e8bfd3a4a72e7bfc7cacc640993486) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Retain every required batch approval before accepting decisions, preserve native readonly approval history, and enforce duration deadlines throughout approval preparation.
+
+- [#801](https://github.com/yielded-dev/agent/pull/801) [`2461681`](https://github.com/yielded-dev/agent/commit/2461681593d911b28900ebe916b1c0d21ad3ebf0) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Keep work and recovery continuations representable for accepted Thread identities and reject oversized fresh admissions before retaining work. Bound fresh Memory identities independently of imported facts and preserve exact receipt replays when UUID generation is unavailable.
+
+- [#803](https://github.com/yielded-dev/agent/pull/803) [`fadafe5`](https://github.com/yielded-dev/agent/commit/fadafe50ea795d8f479723661d1b02153f881c94) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Rebuild up to 256 canonical records per work-index pass while retaining the 32 MiB byte cap. Set the request's `limit` to select smaller passes.
+
+- [#784](https://github.com/yielded-dev/agent/pull/784) [`80deef0`](https://github.com/yielded-dev/agent/commit/80deef0af2af790c68c2fda8701b3fed77c07db9) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reuse structural token estimates within each prepared prompt. Keep public estimators stateless and refresh engine estimates after each context preparation.
+
+- [#802](https://github.com/yielded-dev/agent/pull/802) [`1903e2c`](https://github.com/yielded-dev/agent/commit/1903e2ce0e62f6839e1cb881ef9970d2c5070656) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Validate every Run continuation against its canonical facts during `verify`, even when the Run directory is incomplete.
+
+- [#792](https://github.com/yielded-dev/agent/pull/792) [`d95dbb3`](https://github.com/yielded-dev/agent/commit/d95dbb3c462a28ba92205bc77734f66734c9e491) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Resume durable Runs from canonical continuations and referenced context, expose `@yielded/agent/run-continuation`, and remove `ThreadStore.recoveryCheckpoints`. **BEHAVIOR CHANGE:** use fresh layout-21 storage and `effect-agent/thread@3` archives; predecessor stores and formats are rejected.
+
+- [#815](https://github.com/yielded-dev/agent/pull/815) [`32f8a07`](https://github.com/yielded-dev/agent/commit/32f8a0785ab3f639c86be27ed9ef0ae7a8e184ba) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce durable continuation overhead by capturing each final continuation once while preserving exact canonical byte accounting.
+
+- [#784](https://github.com/yielded-dev/agent/pull/784) [`80deef0`](https://github.com/yielded-dev/agent/commit/80deef0af2af790c68c2fda8701b3fed77c07db9) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reuse model response parsers while validating and publishing each part in order. Preserve earlier progress and reported usage when a later part fails or is interrupted.
+
+- [#815](https://github.com/yielded-dev/agent/pull/815) [`32f8a07`](https://github.com/yielded-dev/agent/commit/32f8a0785ab3f639c86be27ed9ef0ae7a8e184ba) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce durable execution overhead by constructing deterministic nonempty identities without decoding them again.
+
+- [#829](https://github.com/yielded-dev/agent/pull/829) [`9437078`](https://github.com/yielded-dev/agent/commit/9437078991252ae70d835dc192787ab8f479612e) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Preview provisional assistant text from durable Cloudflare Threads with `CloudflareThreadClient.watchText`, including current drafts when connecting or catching up. Reconcile drafts by Attempt and model-call identity to committed history.
+
+- [#803](https://github.com/yielded-dev/agent/pull/803) [`fadafe5`](https://github.com/yielded-dev/agent/commit/fadafe50ea795d8f479723661d1b02153f881c94) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Allow generic Run storage sessions to renew ownership during canonical writes and between settlement retries while coordinating mutations with token rotation. Release the latest renewed token when a session closes.
+
+- [#784](https://github.com/yielded-dev/agent/pull/784) [`80deef0`](https://github.com/yielded-dev/agent/commit/80deef0af2af790c68c2fda8701b3fed77c07db9) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce CPU overhead in model streaming and successful tool calls while preserving validation and operation spans.
+
+- [#804](https://github.com/yielded-dev/agent/pull/804) [`b237c75`](https://github.com/yielded-dev/agent/commit/b237c75373c864895409fbb829ccf67ad3875ee5) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Apply saved-context limits after compaction so new Runs can follow long compacted Runs. Reject unrepresentable queued facts before admission and detect orphan or out-of-range canonical data during Cloudflare startup verification.
+
+- [#834](https://github.com/yielded-dev/agent/pull/834) [`28e922d`](https://github.com/yielded-dev/agent/commit/28e922d68c03c51a40879ae4942c6920fd4c7f1c) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce memory retained while recovering or verifying saved conversation context.
+
+- [#768](https://github.com/yielded-dev/agent/pull/768) [`8214498`](https://github.com/yielded-dev/agent/commit/8214498e8dfffde58773837fef3aa0c1fde07e9f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce nested runtime and SQL tracing overhead while preserving agent, model, tool, storage and recovery operation spans, attributes and typed failures.
+
+  BEHAVIOR CHANGE: If your trace filters target removed private helper spans, use their enclosing operation instead; selected helpers no longer create spans or Effect call frames.
+
+- [#823](https://github.com/yielded-dev/agent/pull/823) [`b246f8a`](https://github.com/yielded-dev/agent/commit/b246f8aaa3a92d5f82934b1fc7a82356d1ad6664) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Coalesce immediate Cloudflare alarm wakes while processing Threads inline and promptly schedule remaining work when processing exits.
+
+- [#784](https://github.com/yielded-dev/agent/pull/784) [`80deef0`](https://github.com/yielded-dev/agent/commit/80deef0af2af790c68c2fda8701b3fed77c07db9) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce tracing overhead by keeping operation spans and removing private helper spans and stack frames. BEHAVIOR CHANGE: Update filters that use private helper span names to use the enclosing agent, model, tool, storage, or recovery operation.
+
+- [#763](https://github.com/yielded-dev/agent/pull/763) [`2f062d4`](https://github.com/yielded-dev/agent/commit/2f062d4ed30afa9b11fb7d24cb3508d10358f3bd) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Read finalized settlements without hydrating recovery state. Add `awaitSettlementRecord` to the durable runtime and Cloudflare client to retrieve a receipt's canonical outcome and encoded result without transferring its Thread history.
+
+- [#768](https://github.com/yielded-dev/agent/pull/768) [`8214498`](https://github.com/yielded-dev/agent/commit/8214498e8dfffde58773837fef3aa0c1fde07e9f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Avoid rereading unfinished submissions on canonical progress by separating progress and settlement wake hints. Preserve broad wake behavior for existing schedulers and external notifications.
+
+- [#810](https://github.com/yielded-dev/agent/pull/810) [`5e3e3a7`](https://github.com/yielded-dev/agent/commit/5e3e3a7aef84807253a1c8b5a0087ff748b1e864) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Store durable context as verified canonical ranges, eliminate duplicate hot SQL batch payloads, and skip unused token estimates. **BEHAVIOR CHANGE:** use fresh stores for the revised unreleased `effect-agent/thread@3` format; custom adapters must provide narrow `readPrompt` and snapshot-bound full history reads.
+
+- [#786](https://github.com/yielded-dev/agent/pull/786) [`8dd7b6a`](https://github.com/yielded-dev/agent/commit/8dd7b6ab18e4f5dd6970b830b5d8aa602f522f52) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Export complete Thread archives and atomically import them into empty Threads with rebuilt ledger state and preserved admission facts.
+
+  BEHAVIOR CHANGE: Quiesce the source and export/import into fresh storage for the layout-16 cutover; import only the current record format and convert archives explicitly for future semantic changes. Keep the source on destination admission conflicts or unsupported external obligations, and re-export older archives that lack batch identities. Decode custom exports through `ThreadExportRecord` to retain their wire, and pair the memory ledger and delivery store with the same `MemoryThreadStoreLive`.
+
+- [#832](https://github.com/yielded-dev/agent/pull/832) [`f38cc1a`](https://github.com/yielded-dev/agent/commit/f38cc1a8582515341b6e255d6b509331b0059a21) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce memory retained by durable Runs after projecting their initial conversation history.
+
+- [#833](https://github.com/yielded-dev/agent/pull/833) [`51bb46c`](https://github.com/yielded-dev/agent/commit/51bb46c6f240c579cf26e72f6127a434c8697a34) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce transient memory during saved Run context reconstruction while preserving canonical history verification.
+
+- [#830](https://github.com/yielded-dev/agent/pull/830) [`a4a1c4b`](https://github.com/yielded-dev/agent/commit/a4a1c4bb50cd037b114fcdaaf595492b775a2ad2) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce the cost of preparing model context from immutable Thread history.
+
+- [#816](https://github.com/yielded-dev/agent/pull/816) [`d449cd5`](https://github.com/yielded-dev/agent/commit/d449cd5efface20b6527f6e11f56fd6987408b5a) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce repeated Schema setup and response Prompt decoding in durable Runs without changing validation or canonical history.
+
+- [#815](https://github.com/yielded-dev/agent/pull/815) [`32f8a07`](https://github.com/yielded-dev/agent/commit/32f8a0785ab3f639c86be27ed9ef0ae7a8e184ba) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce durable readonly tool overhead by reusing the captured model response through capacity reservation and settlement.
+
+- [#792](https://github.com/yielded-dev/agent/pull/792) [`d95dbb3`](https://github.com/yielded-dev/agent/commit/d95dbb3c462a28ba92205bc77734f66734c9e491) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Provide a mutation-scoped `ProgressAppendReader` when validating canonical Run progress. Update custom adapters to call `validateProgressAppend(records)` inside their write boundary.
+
+- [#838](https://github.com/yielded-dev/agent/pull/838) [`45f0eeb`](https://github.com/yielded-dev/agent/commit/45f0eeb8c72835716d4538ef925a649dc02a9734) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce startup memory for conversations whose model responses declare no application tool calls.
+
+- [#798](https://github.com/yielded-dev/agent/pull/798) [`bdaaf49`](https://github.com/yielded-dev/agent/commit/bdaaf49643e8bfd3a4a72e7bfc7cacc640993486) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Discover unfinished Thread work through `@yielded/agent/thread-work`, recover bounded pages, and explicitly rebuild disposable indexes. **BEHAVIOR CHANGE:** follow `runRecovery().cursor` to finish a scan and use fresh layout-21 stores; factual effect closure remains available after execution decisions and Run settlement and must agree with any committed tool result.
+
+- [#835](https://github.com/yielded-dev/agent/pull/835) [`a1fda46`](https://github.com/yielded-dev/agent/commit/a1fda46d689a278beaf60fbbcfe4a19048005ced) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Avoid duplicating durable journal metadata while preparing conversation history.
+
+- [#815](https://github.com/yielded-dev/agent/pull/815) [`32f8a07`](https://github.com/yielded-dev/agent/commit/32f8a0785ab3f639c86be27ed9ef0ae7a8e184ba) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce repeated validation when recording durable progress while retaining canonical byte limits.
+
 ## 0.1.0-beta.167
 
 ### Patch Changes
