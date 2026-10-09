@@ -1,0 +1,47 @@
+diff --git a/bun.lock b/bun.lock
+index 1442418b..4e9b7ade 100644
+--- a/bun.lock
++++ b/bun.lock
+@@ -97,6 +97,7 @@
+       "name": "@yielded/agent-example-durable-bench",
+       "devDependencies": {
+         "@cloudflare/workers-types": "catalog:",
++        "@effect/ai-openai-compat": "catalog:",
+         "@effect/platform-browser": "catalog:",
+         "@types/node": "catalog:",
+         "@yielded/agent": "workspace:*",
+diff --git a/examples/durable-bench/package.json b/examples/durable-bench/package.json
+index dfe53c0f..cda56214 100644
+--- a/examples/durable-bench/package.json
++++ b/examples/durable-bench/package.json
+@@ -11,6 +11,7 @@
+   },
+   "devDependencies": {
+     "@cloudflare/workers-types": "catalog:",
++    "@effect/ai-openai-compat": "catalog:",
+     "@effect/platform-browser": "catalog:",
+     "@types/node": "catalog:",
+     "@yielded/agent": "workspace:*",
+diff --git a/packages/storage-cloudflare/src/internal/owned-state.ts b/packages/storage-cloudflare/src/internal/owned-state.ts
+index 367bd9c5..2478a6dd 100644
+--- a/packages/storage-cloudflare/src/internal/owned-state.ts
++++ b/packages/storage-cloudflare/src/internal/owned-state.ts
+@@ -187,12 +187,17 @@ export const ownedRows = <A, I>(
+       <E, R>(effect: Effect.Effect<ReadonlyArray<unknown>, E, R>) =>
+         Effect.gen(function* () {
+           const rows = yield* decode(yield* effect);
++
++          if (rows.length === 0) return rows;
+           const changed = new Set(rows.map(key));
+ 
+           for (const { id, matches, maxRows, rows: prior } of Array.from(current.values())) {
++            const matchingRows = remove ? [] : rows.filter(matches);
++
++            if (matchingRows.length === 0 && !prior.some((row) => changed.has(key(row)))) continue;
+             const next = prior.filter((row) => !changed.has(key(row)));
+ 
+-            if (!remove) next.push(...rows.filter(matches));
++            next.push(...matchingRows);
+             retain(id, matches, next, maxRows);
+           }
+           // A RETURNING row completely defines its unique-key view, even on a new Thread.

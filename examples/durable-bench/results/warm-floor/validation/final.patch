@@ -1,0 +1,24 @@
+diff --git a/bun.lock b/bun.lock
+index 1442418b..4e9b7ade 100644
+--- a/bun.lock
++++ b/bun.lock
+@@ -97,6 +97,7 @@
+       "name": "@yielded/agent-example-durable-bench",
+       "devDependencies": {
+         "@cloudflare/workers-types": "catalog:",
++        "@effect/ai-openai-compat": "catalog:",
+         "@effect/platform-browser": "catalog:",
+         "@types/node": "catalog:",
+         "@yielded/agent": "workspace:*",
+diff --git a/examples/durable-bench/package.json b/examples/durable-bench/package.json
+index dfe53c0f..cda56214 100644
+--- a/examples/durable-bench/package.json
++++ b/examples/durable-bench/package.json
+@@ -11,6 +11,7 @@
+   },
+   "devDependencies": {
+     "@cloudflare/workers-types": "catalog:",
++    "@effect/ai-openai-compat": "catalog:",
+     "@effect/platform-browser": "catalog:",
+     "@types/node": "catalog:",
+     "@yielded/agent": "workspace:*",

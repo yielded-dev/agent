@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
+    "@effect/ai-openai-compat": "catalog:",
     "@effect/platform-browser": "catalog:",
     "@types/node": "catalog:",
     "@yielded/agent": "workspace:*",

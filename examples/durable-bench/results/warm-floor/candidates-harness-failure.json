@@ -1,0 +1,15 @@
+{
+  "reason": "Provider schema rejected prearm variant; old provider protocol lacks label; deployed primary contains it.",
+  "firstFailedSample": "warm-floor-candidates-h50-d0-o0/m3",
+  "providerEvent": {
+    "warmFloor": "provider-failure",
+    "sample": "m3",
+    "error": "SchemaError",
+    "arrivalMs": 1791513377824,
+    "endMs": 1791513377824
+  },
+  "oldProviderBundle": "be0fd87ba9bb7d4ce5736e6e970f2a781c408723b3dd6a1d437ce92459e9ca30",
+  "correctedProviderBundle": "ea7a2e75e80aa5ac9519f21abea1420a35f88afaa53d4996d0a525f569814632",
+  "failedInputReplayed": false,
+  "diagnosticRead": "/metrics returned 409 No observation for this sample; no submission retry attempted."
+}

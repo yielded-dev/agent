@@ -1,0 +1,23 @@
+diff --git a/packages/platform-cloudflare/src/Alarm.ts b/packages/platform-cloudflare/src/Alarm.ts
+index e400d456..3dbd5778 100644
+--- a/packages/platform-cloudflare/src/Alarm.ts
++++ b/packages/platform-cloudflare/src/Alarm.ts
+@@ -878,15 +878,12 @@ export class ThreadMutationGate extends Context.Service<
+ 
+               if (invalidatesRecovery || !initialized)
+                 await transaction.put(MAINTENANCE_STATE_KEY, encodeMaintenanceState(next));
+-              // The earliest configured retry bounds a newly actionable mutation without relying
+-              // on its best-effort immediate wake hint.
++              // Prearm actionable work immediately; the mutation gate protects unfinished work.
++              // Retained due-queue deadlines still bound retries.
+               const deadline = DueQueue.next(dueQueue.read());
+ 
+               if (Number.isFinite(deadline))
+-                await ensureTransactionAlarmBy(
+-                  transaction,
+-                  Math.max(deadline, now + minimumAlarmDelay),
+-                );
++                await ensureTransactionAlarmBy(transaction, Math.max(deadline, now));
+             }),
+           );
+         yield* failpoint.hit("maintenance:dirty:after");

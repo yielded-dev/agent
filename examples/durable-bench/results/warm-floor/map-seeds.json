@@ -1,0 +1,26 @@
+[
+  {
+    "key": "yielded/warm-floor-map-h50-d0-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791512743631,
+    "databaseBytes": 2707456
+  },
+  {
+    "key": "yielded/warm-floor-map-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791512744407,
+    "databaseBytes": 2727936
+  },
+  {
+    "key": "yielded/warm-floor-map-h250-d0-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791512777083,
+    "databaseBytes": 10567680
+  },
+  {
+    "key": "yielded/warm-floor-map-h250-d400-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791512802865,
+    "databaseBytes": 10665984
+  }
+]

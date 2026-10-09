@@ -1,0 +1,68 @@
+{
+  "baseline": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+  "fullGate": {
+    "command": "EFFECT_AGENT_TEST_POSTGRES_URL=postgres://dan@localhost:5432/postgres vp run --concurrency-limit 1 ready",
+    "exitCode": 0,
+    "log": "ready-views.log.gz",
+    "time": "2026-10-09T02:54:55Z",
+    "scope": "All three proposed changes together; exact tracked diff is tested.patch. No deployed performance inference from this local gate."
+  },
+  "focused": {
+    "cloudflareStorage": {
+      "files": 9,
+      "passed": 111
+    },
+    "ledgerAtomicity": {
+      "passed": 50
+    },
+    "projection": {
+      "passed": 6
+    },
+    "crossObjectChildLineage": "Passed in isolation after one full-gate timeout"
+  },
+  "nonOk": [
+    {
+      "log": "failure-first.log.gz",
+      "reason": "Expected failure against unchanged baseline for the new atomic boundary before implementation."
+    },
+    {
+      "log": "platform-proof.log.gz",
+      "reason": "Existing projection test depended on an optional checkpoint now skipped after atomic settlement. Baseline and prearm-only pass; cofinalization-only reproduces. Kept recovery assertions, moved fault to existing final acknowledgement boundary."
+    },
+    {
+      "log": "ready-combined.log.gz",
+      "reason": "Default local PostgreSQL port 55432 refused connections; three concurrent tasks then exited 137. Retried with available local PostgreSQL 18.6 at 5432."
+    },
+    {
+      "log": "ready-combined-postgres.log.gz",
+      "reason": "One cross-DO child-lineage test timed out; its isolated retry passed."
+    },
+    {
+      "log": "ready-combined-serial.log.gz",
+      "reason": "All tests passed; concurrency option after task name was forwarded to build-action and rejected. Corrected the vp option position and reran the full gate."
+    }
+  ],
+  "fullGateViewsOnly": {
+    "command": "EFFECT_AGENT_TEST_POSTGRES_URL=postgres://dan@localhost:5432/postgres vp run --concurrency-limit 1 ready",
+    "exitCode": 0,
+    "finishedAt": "2026-10-09T03:18:15.426Z",
+    "log": "ready-views-only.log.gz",
+    "scope": "Only unchanged-view implementation on measured main, plus the evidence harness development dependency; exact diff in tested-views-only.patch."
+  },
+  "finalGate": {
+    "command": "EFFECT_AGENT_TEST_POSTGRES_URL=postgres://dan@localhost:5432/postgres vp run --concurrency-limit 1 ready",
+    "exitCode": 0,
+    "finishedAt": "2026-10-09T03:31:39.977Z",
+    "log": "ready-final.log.gz",
+    "scope": "No framework or product-documentation changes; benchmark evidence development dependency only. Exact tracked diff in final.patch."
+  },
+  "artifactVerification": {
+    "checkedAt": "2026-10-09T03:51:11.923Z",
+    "inputDigestsChecked": 46,
+    "archivedBundleDigestsChecked": 9,
+    "missingFiles": 0,
+    "hashMismatches": 0,
+    "brokenMarkdownLinks": 0,
+    "scope": "Final compressed inputs against every reducer input digest; decompressed deployed/rejected module bytes against their recorded SHA-256; local Markdown links. No local latency evidence."
+  }
+}

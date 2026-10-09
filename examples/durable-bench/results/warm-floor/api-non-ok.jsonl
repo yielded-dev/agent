@@ -1,0 +1,11 @@
+{"at":"2026-10-09T02:25:22.422Z","route":"workers/workers/[redacted-worker-id]/versions/a020dfb1-1104-4d4f-b9c0-26e3ff17e2b5","status":500,"detail":"non-JSON gateway response; ray a479ef310c4debe3-SJC"}
+{"at":"2026-10-09T02:27:06.986Z","route":"workers/workers/[redacted-worker-id]/versions/a798c447-cdb0-4d00-8990-59b78c90c9e8","status":500,"detail":"non-JSON gateway response; ray a479f1bf6b5b49fc-SJC"}
+{"at":"2026-10-09T02:31:07.784Z","route":"workers/workers/[redacted-worker-id]/versions/6d1db15c-71f4-4866-a3af-1146f2da9697","status":500,"detail":"non-JSON gateway response; ray a479f7a00807c710-SJC"}
+{"at":"2026-10-09T02:35:43.720Z","route":"workers/workers/[redacted-worker-id]/versions/2190c886-e286-4f82-8771-c0dbacfd836b","status":500,"detail":"non-JSON gateway response; ray a479fe5c397afa56-SJC"}
+{"at":"2026-10-09T02:38:39.712Z","route":"workers/workers/[redacted-worker-id]/versions/517e4b92-14b8-4026-8dbe-220aa429cfc9","status":500,"detail":"non-JSON gateway response; ray a47a02a8dbb717ea-SJC"}
+{"at":"2026-10-09T02:39:49.767Z","route":"workers/workers/[redacted-worker-id]/versions/a29611bf-7e88-4485-bf07-62c3e28c8459","status":500,"detail":"non-JSON gateway response; ray a47a045ed918c52e-SJC"}
+{"at":"2026-10-09T02:58:09.604Z","route":"workers/workers/[redacted-worker-id]/versions/63d55d96-99d9-4942-a2b6-5eb66584ed1b","status":500,"detail":"non-JSON gateway response; ray a47a1f37b9e85527-SJC"}
+{"at":"2026-10-09T02:59:36.828Z","route":"workers/workers/[redacted-worker-id]/versions/32b1a9b1-d4b1-4811-b681-35b5e3b360e8","status":500,"detail":"non-JSON gateway response; ray a47a2159db6d7a73-SJC"}
+{"at":"2026-10-09T03:10:56.484Z","route":"workers/workers/[redacted-worker-id]/versions/d6131a34-0156-4a39-8fb9-5e23afc15456","status":500,"detail":"non-JSON gateway response; ray a47a31f01e522fe9-SJC"}
+{"at":"2026-10-09T03:13:27.288Z","route":"workers/workers/[redacted-worker-id]/versions/d900249f-6b9e-4fc7-ad03-7caaebd746ed","status":500,"detail":"non-JSON gateway response; ray a47a35a00c75c710-SJC"}
+{"at":"2026-10-09T03:41:39.140Z","route":"workers/workers/[redacted-worker-id]/versions/4a1956e2-95b0-49e5-a66f-78e5419d5179","status":500,"detail":"non-JSON gateway response; ray a47a5eecfbf13023-SJC"}

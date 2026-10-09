@@ -1,0 +1,26 @@
+{
+  "complete": true,
+  "accountName": "Danieljmerwe@gmail.com's Account",
+  "accountDigest": "3e8f88a45f1480a607b6192f4f156c5630072d175f6d49cc61160be5384837bd",
+  "checkedAt": "2026-10-09T03:47:49.882Z",
+  "checks": [
+    {
+      "worker": "warm-floor-166de406-primary",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-09T03:47:45.192Z"
+    },
+    {
+      "worker": "warm-floor-166de406-provider",
+      "workerGetStatus": 404,
+      "remainingNamespaces": [],
+      "checkedAt": "2026-10-09T03:47:47.519Z"
+    }
+  ],
+  "remaining": {
+    "workers": [],
+    "namespaces": []
+  },
+  "finalTelemetryTailCollected": true,
+  "secretStateRemoved": true
+}

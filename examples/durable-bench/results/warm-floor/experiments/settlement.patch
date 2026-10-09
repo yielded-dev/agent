@@ -1,0 +1,560 @@
+diff --git a/packages/platform-cloudflare/src/internal/layers.ts b/packages/platform-cloudflare/src/internal/layers.ts
+index 77d692a9..cbc7ec51 100644
+--- a/packages/platform-cloudflare/src/internal/layers.ts
++++ b/packages/platform-cloudflare/src/internal/layers.ts
+@@ -79,7 +79,7 @@ import {
+   SubmissionLedger,
+   type SubmissionSnapshot,
+   type AdmissionRequest,
+-  type SettlementFinalization,
++  SettlementFinalization,
+   type WorkerStopCommand,
+ } from "@yielded/agent/submission-ledger";
+ import { ThreadProjectionMaintenance } from "@yielded/agent/thread-projection-maintenance";
+@@ -454,7 +454,8 @@ export type ThreadHostMutation =
+ 
+ export interface ThreadPublicationOptions<E = never, R = never, P = never> {
+   /** Pure, bounded selection of affected host lane IDs. The native owner prearms and guards
+-   * these lanes through the source mutation, including replay and recovery-only finalization.
++   * these lanes through publication (which may finalize atomically), replay and recovery-only
++   * finalization.
+    * Return only registered host IDs; do not perform I/O or acquire maintenance services here.
+    * Delivery is independent of lifecycle publication and remains at least once.
+    */
+@@ -869,11 +870,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
+                       ),
+                     );
+ 
+-                const observeMutation = <A, Failure>(
+-                  mutation: ThreadHostMutation,
+-                  body: Effect.Effect<A, Failure>,
+-                  invalidatesRecovery: boolean,
+-                ) =>
++                const selectHostLanes = (mutation: ThreadHostMutation) =>
+                   Effect.suspend(() =>
+                     Schema.decodeEffect(Schema.Array(DueQueue.HostLaneId))([
+                       ...new Set(options.hostLanesForMutation?.(mutation) ?? []),
+@@ -886,6 +883,14 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
+                         cause,
+                       }),
+                     ),
++                  );
++
++                const observeMutation = <A, Failure>(
++                  mutation: ThreadHostMutation,
++                  body: Effect.Effect<A, Failure>,
++                  invalidatesRecovery: boolean,
++                ) =>
++                  selectHostLanes(mutation).pipe(
+                     Effect.flatMap((lanes) => observeIntent(body, invalidatesRecovery, lanes)),
+                   );
+ 
+@@ -895,7 +900,17 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
+                   Context.add(SettlementPublisher, {
+                     publish: (input) =>
+                       Effect.gen(function* () {
+-                        const { request } = yield* validatePublication(input);
++                        const { request, settlement } = yield* validatePublication(input);
++
++                        // Publication can finalize before the runtime's later acknowledgement.
++                        // Prearm host work here so eviction cannot strand it behind a settled row.
++                        const hostLanes = yield* selectHostLanes({
++                          _tag: "Settlement",
++                          request: SettlementFinalization.make({
++                            submissionId: request.submissionId,
++                            settlementId: settlement.settlementId,
++                          }),
++                        });
+ 
+                         return yield* mutations
+                           .withMutation(
+@@ -931,6 +946,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
+                               .pipe(Effect.tap(() => afterCommit)),
+                             {
+                               lanes: [
++                                ...hostLanes,
+                                 ...(options.projection === undefined ? [] : [DueQueue.Projection]),
+                                 ...(options.lifecyclePublication === undefined
+                                   ? []
+diff --git a/packages/platform-cloudflare/test/chaos.test.ts b/packages/platform-cloudflare/test/chaos.test.ts
+index 0ad87789..17e22b91 100644
+--- a/packages/platform-cloudflare/test/chaos.test.ts
++++ b/packages/platform-cloudflare/test/chaos.test.ts
+@@ -25,8 +25,8 @@ import {
+ /**
+  * No important in-memory state (exit gate; plan §3): a run whose Durable Object is aborted
+  * between EVERY pair of host operations produces the same normalized canonical evidence as
+- * an unchaosed control run — everything that matters was in storage. Plus the startup-
+- * reconciliation ordering gate: an armed repair executes BEFORE the pass claims new work.
++ * an unchaosed control run — everything that matters was in storage. Terminal publication
++ * also remains ordered before the next input after the publishing incarnation is lost.
+  *
+  * The P7 WP4 seeded variant below randomizes the abort/alarm interleaving ACROSS two lanes
+  * from one root seed (`CHAOS_SEED` env override; the failure output prints it), so the
+@@ -53,16 +53,16 @@ const submitTo = (
+   );
+ 
+ describe("DC chaos-abort evidence equivalence", () => {
+-  it("startup reconciliation ordering: the armed repair executes before the pass claims new work", async () => {
++  it("publication eviction preserves terminal ordering before the pass claims new work", async () => {
+     const thread = lane("reconcile-first");
+ 
+-    // Strand S1 mid-terminalization: the settlement is canonical but not finalized.
++    // Evict S1 after canonical publication and atomic ledger finalization.
+     armRuntimeEviction(thread, "terminalize:after-canonical-append");
+     const receipt1 = await submitTo(plannerDefinition, thread);
+ 
+     await drainAlarmsUntil(thread, () => Promise.resolve(armedEvictionsRemaining(thread) === 0));
+ 
+-    // New work arrives while the lane still owes S1's repair.
++    // New work arrives after the publishing incarnation was lost.
+     const receipt2 = await runClient(
+       Effect.gen(function* () {
+         const client = yield* CloudflareThreadClient;
+@@ -78,8 +78,7 @@ describe("DC chaos-abort evidence equivalence", () => {
+     await drainAlarmsUntil(thread, allSettled(thread));
+     await assertConvergence(thread);
+ 
+-    // The repaired settlement of S1 was appended BEFORE S2's canonical input: every pass
+-    // runs `runRecovery` before `processThreadResolved` claims anything (plan §1.4).
++    // S1's terminal fact remains before S2's canonical input after reopening the Object.
+     const recordIds = (await readCanonical(thread)).map((envelope) => envelope.record.recordId);
+     const s1Settlement = recordIds.indexOf(submissionSettlementRecordId(receipt1.submissionId));
+     const s2Input = recordIds.indexOf(submissionInputRecordId(receipt2.submissionId));
+diff --git a/packages/platform-cloudflare/test/projection.test.ts b/packages/platform-cloudflare/test/projection.test.ts
+index 35566dcb..0ad909ef 100644
+--- a/packages/platform-cloudflare/test/projection.test.ts
++++ b/packages/platform-cloudflare/test/projection.test.ts
+@@ -43,6 +43,8 @@ import {
+   armMaintenancePause,
+   awaitMaintenancePause,
+   releaseMaintenancePause,
++  armRuntimeEviction,
++  armedEvictionsRemaining,
+ } from "./fixtures.ts";
+ import {
+   allSettled,
+@@ -173,7 +175,8 @@ const append = (thread: string, request: FencedAppendRequest) =>
+ 
+ describe("live Thread projection and alarm backfill", () => {
+   // Regression: https://github.com/yielded-dev/agent/commit/0e83011e
+-  it("enrolls native admission, replayed finalization and stop without another append", () =>
++  // Post-publication eviction must leave host settlement work durably enrolled before replay.
++  it("retains settlement host enrollment across publication eviction and finalization replay", () =>
+     withThread(async (thread) => {
+       let admission: AdmissionRequest | undefined;
+       let settlement: SettlementFinalization | undefined;
+@@ -202,16 +205,40 @@ describe("live Thread projection and alarm backfill", () => {
+         instance[DurableObject.RunSymbol](
+           Effect.gen(function* () {
+             const ledger = yield* SubmissionLedger;
+-            const runtime = yield* DurableAgentRuntime;
+ 
+             expect(admission).toBeDefined();
+             if (admission === undefined) return;
+             const replay = yield* ledger.admit(admission);
+ 
+             expect(replay.submissionId).toBe(receipt.submissionId);
+-            yield* runtime.processThreadHead(decodeThreadId(thread));
++          }),
++        ),
++      );
++      armRuntimeEviction(thread, "terminalize:after-canonical-append");
++      await expect(
++        runInDurableObject(stub(thread), (instance) =>
++          instance[DurableObject.RunSymbol](
++            Effect.flatMap(DurableAgentRuntime, (runtime) =>
++              runtime.processThreadHead(decodeThreadId(thread)),
++            ),
++          ),
++        ),
++      ).rejects.toThrow("armed runtime eviction failpoint");
++      expect(armedEvictionsRemaining(thread)).toBe(0);
++      const enrolled = await rows();
++
++      expect(enrolled).toEqual([
++        { id: "test:Admission", revision: 2, dueAt: expect.any(Number) },
++        { id: "test:Settlement", revision: expect.any(Number), dueAt: expect.any(Number) },
++      ]);
++      expect((await laneRows(thread, namespace))[0]?.state).toBe("settled");
++      await runInDurableObject(stub(thread), (instance) =>
++        instance[DurableObject.RunSymbol](
++          Effect.gen(function* () {
++            const ledger = yield* SubmissionLedger;
++
+             expect(settlement).toBeDefined();
+-            if (settlement === undefined) return;
++            if (settlement === undefined || admission === undefined) return;
+             yield* ledger.finalizeSettlement(settlement);
+             yield* ledger.stopWorker!({
+               threadId: decodeThreadId(thread),
+@@ -221,8 +248,7 @@ describe("live Thread projection and alarm backfill", () => {
+         ),
+       );
+       expect(await rows()).toEqual([
+-        { id: "test:Admission", revision: 2, dueAt: expect.any(Number) },
+-        { id: "test:Settlement", revision: 2, dueAt: expect.any(Number) },
++        ...enrolled,
+         { id: "test:WorkerStop", revision: 2, dueAt: expect.any(Number) },
+       ]);
+       expect(await scheduledAlarm(thread, namespace)).not.toBeNull();
+@@ -596,11 +622,11 @@ describe("live Thread projection and alarm backfill", () => {
+   });
+ 
+   // Regression: https://github.com/yielded-dev/agent/commit/0fe79ac5
+-  it.each(["maintenance:checkpoint:after"] as const)(
++  it.each(["maintenance:finish:before"] as const)(
+     "recovers native progress and pending projection after eviction at %s",
+     (location) =>
+-      withThread(async (thread, _now, advance) => {
+-        projectionControls.set(thread, { skipLive: true });
++      withThread(async (thread, now, advance) => {
++        projectionControls.set(thread, { skipLive: true, retryAt: now + 1_000 });
+         await submit(thread, plannerDefinition);
+ 
+         const outcome = await runInDurableObject(stub(thread), (instance, state) =>
+diff --git a/packages/platform-cloudflare/test/restart/travel-planner-restart.test.ts b/packages/platform-cloudflare/test/restart/travel-planner-restart.test.ts
+index 29f9e727..93517da5 100644
+--- a/packages/platform-cloudflare/test/restart/travel-planner-restart.test.ts
++++ b/packages/platform-cloudflare/test/restart/travel-planner-restart.test.ts
+@@ -87,7 +87,7 @@ interface RestartRow {
+ /**
+  * The representative subset (distinct recovery classes across the restart): a lane stranded
+  * before its claim ever sticks, a lane stranded between canonical input and its marker, and a
+- * lane stranded between canonical settlement publication and its ledger finalization. Every armed
++ * lane whose atomic settlement publication/finalization rolls back. Every armed
+  * location is re-crossed by each retry in runtime 1, so runtime 1 can never converge; the
+  * reopened runtime starts unarmed and finishes the work from storage alone.
+  */
+@@ -103,12 +103,9 @@ const rows: ReadonlyArray<RestartRow> = [
+     blockedAtRemaining: 48,
+   },
+   {
+-    name: "terminalize:after-canonical-append then ledger:finalize-settlement:before strand the canonical settlement; the reopened runtime finalizes from history",
+-    arms: [
+-      { kind: "runtime", location: "terminalize:after-canonical-append", count: 1 },
+-      { kind: "storage", location: "ledger:finalize-settlement:before", count: 50 },
+-    ],
+-    blockedAtRemaining: 49,
++    name: "ledger:finalize-settlement:before rolls back ordinary settlement publication; the reopened runtime publishes and finalizes",
++    arms: [{ kind: "storage", location: "ledger:finalize-settlement:before", count: 50 }],
++    blockedAtRemaining: 48,
+   },
+ ];
+ 
+diff --git a/packages/storage-cloudflare/src/DoSubmissionLedger.ts b/packages/storage-cloudflare/src/DoSubmissionLedger.ts
+index 55e21074..35426ea9 100644
+--- a/packages/storage-cloudflare/src/DoSubmissionLedger.ts
++++ b/packages/storage-cloudflare/src/DoSubmissionLedger.ts
+@@ -27,6 +27,7 @@ import {
+ } from "@yielded/agent/records";
+ import { runIdForSubmission } from "@yielded/agent/run-journal";
+ import {
++  type SettlementPublication,
+   SettlementPublicationResult,
+   SettlementPublisher,
+   validatePublication,
+@@ -2106,12 +2107,15 @@ const makeServices = Effect.fnUntraced(function* () {
+               });
+           }
+           if (existing !== undefined)
+-            return SettlementPublicationResult.make({
+-              record: existing.record,
+-              tailSequence: thread.tail_sequence,
+-              tailDigest,
+-              replayed: true,
+-            });
++            return {
++              finalized: yield* finalizePublication(request, submission, existing),
++              publication: SettlementPublicationResult.make({
++                record: existing.record,
++                tailSequence: thread.tail_sequence,
++                tailDigest,
++                replayed: true,
++              }),
++            };
+           if (submission.state === "settled")
+             return yield* LedgerError.make({
+               operation,
+@@ -2123,12 +2127,15 @@ const makeServices = Effect.fnUntraced(function* () {
+             Effect.mapError(internalFailure(operation)),
+           );
+ 
+-          return SettlementPublicationResult.make({
+-            record,
+-            tailSequence: appended.lastSequence,
+-            tailDigest: committedTailDigest,
+-            replayed: appended.replayed,
+-          });
++          return {
++            finalized: yield* finalizePublication(request, submission, { record, settlement }),
++            publication: SettlementPublicationResult.make({
++              record,
++              tailSequence: appended.lastSequence,
++              tailDigest: committedTailDigest,
++              replayed: appended.replayed,
++            }),
++          };
+         }),
+       )
+       .pipe(
+@@ -2163,8 +2170,10 @@ const makeServices = Effect.fnUntraced(function* () {
+       );
+ 
+     yield* hitFailpoint("append:after", operation);
++    if (result.finalized)
++      yield* hitFailpoint("ledger:finalize-settlement:after", "ledger finalize settlement");
+ 
+-    return result;
++    return result.publication;
+   });
+ 
+   const validateFinalization = Effect.fnUntraced(function* (
+@@ -2221,6 +2230,123 @@ const makeServices = Effect.fnUntraced(function* () {
+     }).pipe(Effect.mapError(internalFailure(operation)));
+   });
+ 
++  /** Caller owns the journal transaction and has validated the canonical winner. */
++  const finalizeInTransaction = Effect.fnUntraced(function* (
++    validated: SettlementFinalization,
++    submission: SubmissionRow,
++    state: Effect.Success<ReturnType<typeof validateFinalization>>,
++  ) {
++    const operation = "ledger finalize settlement";
++
++    const { settlement: canonicalSettlement, record: canonicalRecord, settlementFailure } = state;
++
++    if (submission.state === "settled")
++      return yield* replayFinalization(validated, submission, state);
++    const now = yield* currentInstant;
++
++    const terminal =
++      submission.worker_admission_json === null
++        ? undefined
++        : workerTerminalFromRecord(
++            yield* decodeSubmissionSnapshot(operation, submission),
++            canonicalRecord,
++          );
++
++    let sealedTerminal: typeof terminal;
++
++    if (terminal !== undefined) {
++      // Admission and finalization serialize here. An accepted correction that this Run
++      // has not applied vetoes its completion, including admission after RunCompleted.
++      const pending =
++        terminal === "completed"
++          ? yield* sql`SELECT submission_id FROM effect_agent_submissions
++            WHERE thread_id = ${submission.thread_id} AND queue_sequence > ${submission.queue_sequence}
++            AND queue_sequence = (SELECT MAX(queue_sequence) FROM effect_agent_submissions WHERE thread_id = ${submission.thread_id})
++            AND (joined_host_submission_id IS NULL OR joined_host_submission_id <> ${submission.submission_id}
++              OR input_applied_record_id IS NULL) LIMIT 1`.pipe(
++              Effect.mapError(sqlFailure(operation)),
++            )
++          : [];
++
++      if (pending.length === 0) {
++        const sealed =
++          yield* sql`INSERT OR IGNORE INTO effect_agent_worker_stops (thread_id, terminal)
++          VALUES (${submission.thread_id}, ${terminal}) RETURNING *`.pipe(
++            rows.workerStops.write,
++            Effect.mapError(internalFailure(operation)),
++          );
++
++        yield* sql`INSERT OR IGNORE INTO effect_agent_abort_intents (submission_id, author, reason, requested_at)
++          SELECT submission_id, ${submission.principal}, ${`Worker assignment ${terminal}`}, ${now.iso}
++          FROM effect_agent_submissions WHERE thread_id = ${submission.thread_id} AND state <> 'settled'
++          AND submission_id <> ${submission.submission_id}
++          AND (joined_host_submission_id IS NULL OR joined_host_submission_id <> ${submission.submission_id}
++            OR input_applied_record_id IS NULL) RETURNING *`.pipe(
++          rows.aborts.write,
++          Effect.mapError(internalFailure(operation)),
++        );
++        if (sealed.length > 0) sealedTerminal = terminal;
++      }
++    }
++
++    yield* sql`
++      UPDATE effect_agent_submissions
++      SET state = 'settled', settled_outcome = ${canonicalSettlement.outcome},
++          settled_record_id = ${canonicalRecord.recordId}, finalized_at = ${now.iso}
++      WHERE submission_id = ${validated.submissionId}
++     RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
++    yield* sql`
++      DELETE FROM effect_agent_submission_ownership
++      WHERE submission_id = ${validated.submissionId}
++     RETURNING *`.pipe(rows.ownership.remove, Effect.mapError(internalFailure(operation)));
++
++    yield* recordProgress("submission", operation);
++
++    if (sealedTerminal !== undefined) yield* retainWorkerSeal(submission.thread_id, sealedTerminal);
++
++    return yield* decodeSettlement({
++      submissionId: validated.submissionId,
++      settlementId: validated.settlementId,
++      receiptId: submission.receipt_id,
++      outcome: canonicalSettlement.outcome,
++      ...(settlementFailure === undefined ? {} : { failure: settlementFailure }),
++      settledAt: now.iso,
++    }).pipe(Effect.mapError(internalFailure(operation)));
++  });
++
++  const finalizePublication = Effect.fnUntraced(function* (
++    request: SettlementPublication,
++    submission: SubmissionRow,
++    canonical: Pick<
++      Effect.Success<ReturnType<typeof validateFinalization>>,
++      "record" | "settlement"
++    >,
++  ) {
++    // Settled rows leave recovery scans. Retain external notification/delivery obligations
++    // until the runtime completes them before its separate finalization call, as in SQL.
++    if (
++      request.authority._tag === "Joined" ||
++      submission.joined_host_submission_id !== null ||
++      submission.parent_submission_id !== null ||
++      submission.parent_tool_call_id !== null ||
++      submission.worker_admission_json !== null ||
++      submission.message_admission_json !== null
++    )
++      return false;
++
++    yield* hitFailpoint("ledger:finalize-settlement:before", "ledger finalize settlement");
++    yield* finalizeInTransaction(
++      SettlementFinalization.make({
++        submissionId: request.submissionId,
++        settlementId: canonical.settlement.settlementId,
++      }),
++      submission,
++      { ...canonical, settlementFailure: settlementFailureFromRecord(canonical.record) },
++    );
++
++    return true;
++  });
++
+   const finalizeSettlement: SubmissionLedger["Service"]["finalizeSettlement"] = Effect.fn(
+     "DoSubmissionLedger.finalizeSettlement",
+   )(function* (request: SettlementFinalization) {
+@@ -2257,85 +2383,7 @@ const makeServices = Effect.fnUntraced(function* () {
+         const submission = yield* requireSubmission(operation, validated.submissionId);
+         const state = yield* validateFinalization(validated, submission);
+ 
+-        const {
+-          settlement: canonicalSettlement,
+-          record: canonicalRecord,
+-          settlementFailure,
+-        } = state;
+-
+-        if (submission.state === "settled")
+-          return yield* replayFinalization(validated, submission, state);
+-        const now = yield* currentInstant;
+-
+-        const terminal =
+-          submission.worker_admission_json === null
+-            ? undefined
+-            : workerTerminalFromRecord(
+-                yield* decodeSubmissionSnapshot(operation, submission),
+-                canonicalRecord,
+-              );
+-
+-        let sealedTerminal: typeof terminal;
+-
+-        if (terminal !== undefined) {
+-          // Admission and finalization serialize here. An accepted correction that this Run
+-          // has not applied vetoes its completion, including admission after RunCompleted.
+-          const pending =
+-            terminal === "completed"
+-              ? yield* sql`SELECT submission_id FROM effect_agent_submissions
+-                WHERE thread_id = ${submission.thread_id} AND queue_sequence > ${submission.queue_sequence}
+-                AND queue_sequence = (SELECT MAX(queue_sequence) FROM effect_agent_submissions WHERE thread_id = ${submission.thread_id})
+-                AND (joined_host_submission_id IS NULL OR joined_host_submission_id <> ${submission.submission_id}
+-                  OR input_applied_record_id IS NULL) LIMIT 1`.pipe(
+-                  Effect.mapError(sqlFailure(operation)),
+-                )
+-              : [];
+-
+-          if (pending.length === 0) {
+-            const sealed =
+-              yield* sql`INSERT OR IGNORE INTO effect_agent_worker_stops (thread_id, terminal)
+-              VALUES (${submission.thread_id}, ${terminal}) RETURNING *`.pipe(
+-                rows.workerStops.write,
+-                Effect.mapError(internalFailure(operation)),
+-              );
+-
+-            yield* sql`INSERT OR IGNORE INTO effect_agent_abort_intents (submission_id, author, reason, requested_at)
+-              SELECT submission_id, ${submission.principal}, ${`Worker assignment ${terminal}`}, ${now.iso}
+-              FROM effect_agent_submissions WHERE thread_id = ${submission.thread_id} AND state <> 'settled'
+-              AND submission_id <> ${submission.submission_id}
+-              AND (joined_host_submission_id IS NULL OR joined_host_submission_id <> ${submission.submission_id}
+-                OR input_applied_record_id IS NULL) RETURNING *`.pipe(
+-              rows.aborts.write,
+-              Effect.mapError(internalFailure(operation)),
+-            );
+-            if (sealed.length > 0) sealedTerminal = terminal;
+-          }
+-        }
+-
+-        yield* sql`
+-          UPDATE effect_agent_submissions
+-          SET state = 'settled', settled_outcome = ${canonicalSettlement.outcome},
+-              settled_record_id = ${canonicalRecord.recordId}, finalized_at = ${now.iso}
+-          WHERE submission_id = ${validated.submissionId}
+-         RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+-        yield* sql`
+-          DELETE FROM effect_agent_submission_ownership
+-          WHERE submission_id = ${validated.submissionId}
+-         RETURNING *`.pipe(rows.ownership.remove, Effect.mapError(internalFailure(operation)));
+-
+-        yield* recordProgress("submission", operation);
+-
+-        if (sealedTerminal !== undefined)
+-          yield* retainWorkerSeal(submission.thread_id, sealedTerminal);
+-
+-        return yield* decodeSettlement({
+-          submissionId: validated.submissionId,
+-          settlementId: validated.settlementId,
+-          receiptId: submission.receipt_id,
+-          outcome: canonicalSettlement.outcome,
+-          ...(settlementFailure === undefined ? {} : { failure: settlementFailure }),
+-          settledAt: now.iso,
+-        }).pipe(Effect.mapError(internalFailure(operation)));
++        return yield* finalizeInTransaction(validated, submission, state);
+       }),
+     );
+ 
+diff --git a/packages/storage-cloudflare/test/do-ledger-failpoints.test.ts b/packages/storage-cloudflare/test/do-ledger-failpoints.test.ts
+index 66525e42..3af0dea2 100644
+--- a/packages/storage-cloudflare/test/do-ledger-failpoints.test.ts
++++ b/packages/storage-cloudflare/test/do-ledger-failpoints.test.ts
+@@ -286,15 +286,28 @@ describe("DoSubmissionLedger failpoints", () => {
+           }),
+         );
+ 
++        // Canonical publication and ledger finalization must roll back together on failure.
++        yield* select("ledger:finalize-settlement:before");
++        expectInjectedFailure(
++          yield* reserveOnce.pipe(Effect.exit),
++          "ledger:finalize-settlement:before",
++        );
++        expect(yield* publicationRows).toHaveLength(0);
++        expect((yield* submissionStates)[0]?.state).toBe("input-applied");
++        expect(yield* ownershipRows).toHaveLength(1);
++
+         yield* select("append:after");
+         expectInjectedFailure(yield* reserveOnce.pipe(Effect.exit), "append:after");
+         expect(yield* publicationRows).toHaveLength(1);
+-        expect((yield* submissionStates)[0]?.finalized_at).toBeNull();
+-        expect((yield* submissionStates)[0]?.state).toBe("input-applied");
++        expect((yield* submissionStates)[0]?.finalized_at).not.toBeNull();
++        expect((yield* submissionStates)[0]?.state).toBe("settled");
++        expect(yield* ownershipRows).toEqual([]);
+         yield* select(undefined);
+-        const replayedPublication = yield* reserveOnce;
++        const replayedPublication = yield* reserveOnce.pipe(Effect.exit);
+ 
+-        expect(replayedPublication.replayed).toBe(true);
++        expect(Exit.isFailure(replayedPublication)).toBe(true);
++        if (Exit.isFailure(replayedPublication))
++          expect(Cause.squash(replayedPublication.cause)).toBeInstanceOf(OwnershipLost);
+ 
+         const finalizeOnce = failingLedger(
+           Effect.gen(function* () {

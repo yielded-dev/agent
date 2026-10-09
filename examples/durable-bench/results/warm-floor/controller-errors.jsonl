@@ -1,0 +1,4 @@
+{"action":"init","at":1791512638473,"message":"TypeError: fetch failed"}
+{"action":"measure-candidates","at":1791513377900,"message":"Error: Worker primary /run returned 500"}
+{"action":"inspect-failure","at":1791513438207,"message":"Error: Worker primary /metrics returned 409"}
+{"action":"measure-candidates-resume","at":1791514415984,"message":"Error: Warm incarnation changed"}

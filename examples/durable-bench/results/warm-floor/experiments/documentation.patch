@@ -1,0 +1,46 @@
+diff --git a/docs/src/content/docs/platforms/cloudflare.md b/docs/src/content/docs/platforms/cloudflare.md
+index 1abaeaff..caf2ca5f 100644
+--- a/docs/src/content/docs/platforms/cloudflare.md
++++ b/docs/src/content/docs/platforms/cloudflare.md
+@@ -213,9 +213,9 @@ custom Crypto or namespace composition, and `threadNamespaceLayer` for untyped e
+ In an authenticated handler, call `client.submit(agent, input, options)` with the thread ID,
+ principal, idempotency key, and definition digests. Return its receipt after admission.
+ Admission relies on its pre-armed maintenance alarm and returns the receipt after Cloudflare
+-confirms the writes. The pre-arm delay is half `alarmBackoffBase`, rounded up to at least 1 ms
+-(50 ms by default); larger custom values can delay healthy work. Earlier alarms and retained
+-retry deadlines still apply, and the configured delay is not a delivery-time guarantee.
++confirms the writes. Newly actionable work prearms for now; retained retry deadlines still
++apply. The mutation gate preserves unfinished work if an alarm overlaps admission. Alarm
++delivery time remains controlled by Cloudflare.
+ 
+ Use `client.awaitSettlement(receipt)` for completion metadata. When you also need the output,
+ use `client.awaitSettlementRecord(receipt)` to wait for finalization and retrieve that receipt's
+@@ -442,8 +442,10 @@ const RuntimeLive = ThreadObject.layer(registrations, {
+ ```
+ 
+ This pure, bounded selector receives the native request. The owner prearms the selected IDs and
+-guards them through the source mutation, including replay and recovery finalization without a new
+-canonical append. Delivery does not depend on lifecycle publication reaching an external database.
++guards them through the source mutation. Settlement publication can finalize the ledger in the
++same transaction, so settlement lanes are enrolled before publication as well as during replay
++and recovery finalization. Delivery does not depend on lifecycle publication reaching an external
++database.
+ 
+ Lanes run concurrently by default. Set `phase: "after-native"` on a lane such as memory delivery
+ to give it one due wave after native Attempts and their scoped cleanup finish, including on native
+diff --git a/docs/src/content/docs/storage/cloudflare.md b/docs/src/content/docs/storage/cloudflare.md
+index feadc3be..8f642e55 100644
+--- a/docs/src/content/docs/storage/cloudflare.md
++++ b/docs/src/content/docs/storage/cloudflare.md
+@@ -16,6 +16,11 @@ Memory stores
+ over the same owner share its transaction gate and document, receipt, and usage views.
+ Failed transactions discard cached state.
+ 
++Ordinary root submissions publish their canonical settlement and finalize the ledger in one
++transaction. Joined inputs, child runs, workers and message deliveries retain separate
++finalization until their notification obligations are complete. Repeated finalization validates
++the canonical record and preserves the original receipt timestamp.
++
+ ## Run durable agents
+ 
+ Use [`@yielded/agent-platform-cloudflare`](/platforms/cloudflare/) for the complete

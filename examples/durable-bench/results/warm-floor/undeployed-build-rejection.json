@@ -1,0 +1,8 @@
+{
+  "bundleSha256": "5aa348eab672a459c21ec712688fc97d344b591d088485569d0370cc228efce3",
+  "deployed": false,
+  "reason": "The formatter collapsed the pre-arm call. Its build-only selector anchor included a trailing comma and stopped matching, which would have made every variant use the candidate deadline. Rejected during pre-deployment inspection.",
+  "currentlyDeployedComparisonBundle": "a8095cdcafbe5a81f25b2269c5fa7c80be82dc6368295eda8d11633464357246",
+  "currentComparisonSelectorVerified": true,
+  "correction": "Anchor the expression itself; require all three per-turn variant selectors in every future comparison bundle. Rebuild before deployment."
+}

@@ -1,0 +1,867 @@
+{
+  "run": "166de406",
+  "accountName": "Danieljmerwe@gmail.com's Account",
+  "accountDigest": "3e8f88a45f1480a607b6192f4f156c5630072d175f6d49cc61160be5384837bd",
+  "privateDirectory": "/private/tmp/warm-floor-t5DB9h",
+  "startedAt": 1791512658954,
+  "targets": [
+    {
+      "role": "provider",
+      "kind": "provider",
+      "name": "warm-floor-166de406-provider",
+      "bundle": "/private/tmp/warm-floor-t5DB9h/bundles/provider/worker.mjs",
+      "build": {
+        "name": "provider",
+        "repositoryCommit": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+        "dirty": true,
+        "bundleSha256": "fa0dc29afba8c2150cfd042ed317b1a5aa84e87f7b3a59f2531f963d8925cbf6",
+        "bundleBytes": 558573,
+        "gzipBytes": 113867,
+        "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+        "fixtureFiles": [
+          {
+            "path": "src/plan.ts",
+            "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+          },
+          {
+            "path": "src/yielded.ts",
+            "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+          },
+          {
+            "path": "third-party/src/pi.ts",
+            "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+          },
+          {
+            "path": "third-party/src/tardie.ts",
+            "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+          }
+        ],
+        "inputsSha256": "e34d57c961967c96483c6155d8d00b73da02a70ea41ea8933c52484bba2831e7",
+        "buildControls": [
+          {
+            "path": "build.mjs",
+            "sha256": "a76356ee5487c873bdabd38db29d73ea66e5f3f94d64b118488eeb559e5c254e"
+          },
+          {
+            "path": "probes.mjs",
+            "sha256": "9e13aa9b74ff4d48cb19ef6e59fb42ad488cedc0b466f0bf99b96e75f2b2a83f"
+          }
+        ],
+        "esbuildVersion": "0.28.1",
+        "minify": false,
+        "target": "es2024",
+        "output": "/private/tmp/warm-floor-t5DB9h/bundles/provider",
+        "effectVersion": "4.0.0"
+      },
+      "phase": "seed",
+      "provider": "",
+      "url": "https://warm-floor-166de406-provider.danieljmerwe.workers.dev",
+      "deployedAt": 1791512705303,
+      "cleanupRequired": true,
+      "cleanupComplete": true,
+      "expectedVersion": "84562a56-94ea-4242-9936-9136fb0f9694",
+      "startupTimeMs": 11,
+      "startupEvidence": {
+        "version": "84562a56-94ea-4242-9936-9136fb0f9694",
+        "number": 4,
+        "startupTimeMs": 11,
+        "compatibilityDate": "2026-08-18",
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "uploadRevision": "",
+        "capturedAt": 1791515450423
+      },
+      "uploadedModuleSha256": "fa0dc29afba8c2150cfd042ed317b1a5aa84e87f7b3a59f2531f963d8925cbf6",
+      "observedUploadRevision": "",
+      "settings": {
+        "placement": {},
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat",
+          "global_fetch_strictly_public"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": [],
+      "deployments": [
+        {
+          "build": {
+            "name": "provider",
+            "repositoryCommit": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+            "dirty": true,
+            "bundleSha256": "be0fd87ba9bb7d4ce5736e6e970f2a781c408723b3dd6a1d437ce92459e9ca30",
+            "bundleBytes": 558599,
+            "gzipBytes": 113882,
+            "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "062404e4aeb06abb8e85c8cfa202ca78cf49d35e9f6e1dd8c6256c48e13a972c",
+            "buildControls": [
+              {
+                "path": "build.mjs",
+                "sha256": "23358c3eaf928dace7aa426843eea3d466ba9c18b85f56fbc18a7a3bd17f84b0"
+              },
+              {
+                "path": "probes.mjs",
+                "sha256": "6d162c771a89da84228f1b449b4b2df3530d018d93128acba466f29c656c4150"
+              }
+            ],
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/warm-floor-t5DB9h/bundles/provider",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "seed",
+          "version": "48d1ec64-5032-440c-9da7-adf4f3d94e97",
+          "replacedAt": 1791513509486
+        },
+        {
+          "build": {
+            "name": "provider",
+            "repositoryCommit": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+            "dirty": true,
+            "bundleSha256": "ea7a2e75e80aa5ac9519f21abea1420a35f88afaa53d4996d0a525f569814632",
+            "bundleBytes": 558564,
+            "gzipBytes": 113861,
+            "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "7bcaa1e28aac02fea838cf1778e7d28d4932e454a9856df6e9a9103b37242aa4",
+            "buildControls": [
+              {
+                "path": "build.mjs",
+                "sha256": "23358c3eaf928dace7aa426843eea3d466ba9c18b85f56fbc18a7a3bd17f84b0"
+              },
+              {
+                "path": "probes.mjs",
+                "sha256": "87ec2b9f512c2b93f49d5f9eb19a6271711f71e4e13856e35aea0e33465b56f1"
+              }
+            ],
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/warm-floor-t5DB9h/bundles/provider",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "seed",
+          "version": "3edfc5dd-8d20-4c06-9db5-0821ff62124c",
+          "replacedAt": 1791515444064
+        }
+      ]
+    },
+    {
+      "role": "primary",
+      "kind": "network",
+      "name": "warm-floor-166de406-primary",
+      "bundle": "/private/tmp/warm-floor-t5DB9h/bundles/network/worker.mjs",
+      "build": {
+        "name": "network",
+        "repositoryCommit": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+        "dirty": true,
+        "bundleSha256": "a8f99b87f5478e61b30a01bcddd9feffd82d54bf5027c0ba366ad62d14a02bb5",
+        "bundleBytes": 5326684,
+        "gzipBytes": 1001942,
+        "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+        "fixtureFiles": [
+          {
+            "path": "src/plan.ts",
+            "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+          },
+          {
+            "path": "src/yielded.ts",
+            "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+          },
+          {
+            "path": "third-party/src/pi.ts",
+            "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+          },
+          {
+            "path": "third-party/src/tardie.ts",
+            "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+          }
+        ],
+        "inputsSha256": "13c6ce8da3868cd3022b9948a9aaca566d69dfea7d2ca0863d8d3a90d29cc9c8",
+        "buildControls": [
+          {
+            "path": "build.mjs",
+            "sha256": "a76356ee5487c873bdabd38db29d73ea66e5f3f94d64b118488eeb559e5c254e"
+          },
+          {
+            "path": "probes.mjs",
+            "sha256": "9e13aa9b74ff4d48cb19ef6e59fb42ad488cedc0b466f0bf99b96e75f2b2a83f"
+          }
+        ],
+        "esbuildVersion": "0.28.1",
+        "minify": false,
+        "target": "es2024",
+        "output": "/private/tmp/warm-floor-t5DB9h/bundles/network",
+        "effectVersion": "4.0.0"
+      },
+      "phase": "measure",
+      "provider": "https://warm-floor-166de406-provider.danieljmerwe.workers.dev/v1",
+      "url": "https://warm-floor-166de406-primary.danieljmerwe.workers.dev",
+      "deployedAt": 1791512713544,
+      "cleanupRequired": true,
+      "cleanupComplete": true,
+      "expectedVersion": "4a1956e2-95b0-49e5-a66f-78e5419d5179",
+      "startupMetadataFailure": "Error: Cloudflare workers/workers/[redacted-worker-id]/versions/4a1956e2-95b0-49e5-a66f-78e5419d5179: 500 non-JSON gateway response; ray a47a5eecfbf13023-SJC",
+      "startupTimeMs": null,
+      "startupEvidence": {
+        "version": "4a1956e2-95b0-49e5-a66f-78e5419d5179",
+        "number": 12,
+        "startupTimeMs": null,
+        "uploadRevision": null,
+        "capturedAt": 1791517299311
+      },
+      "uploadedModuleSha256": "a8f99b87f5478e61b30a01bcddd9feffd82d54bf5027c0ba366ad62d14a02bb5",
+      "observedUploadRevision": null,
+      "settings": {
+        "placement": {
+          "mode": "targeted",
+          "target": [
+            50
+          ]
+        },
+        "limits": {
+          "cpu_ms": 300000
+        },
+        "compatibilityDate": "2026-08-18",
+        "compatibilityFlags": [
+          "nodejs_compat",
+          "global_fetch_strictly_public"
+        ],
+        "observability": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "redact_query_string": false,
+          "logs": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "persist": true,
+            "invocation_logs": true
+          },
+          "traces": {
+            "enabled": false,
+            "persist": true,
+            "head_sampling_rate": 1
+          }
+        }
+      },
+      "namespaces": [
+        {
+          "name": "warm-floor-166de406-primary_NetworkPiDO",
+          "script": "warm-floor-166de406-primary"
+        },
+        {
+          "name": "warm-floor-166de406-primary_NetworkYieldedDO",
+          "script": "warm-floor-166de406-primary"
+        }
+      ],
+      "deployments": [
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+            "dirty": true,
+            "bundleSha256": "9c92c09e823666c38c1206fd7a43c68ffeb9207432e18fa2d2d98e99ec34450a",
+            "bundleBytes": 5308156,
+            "gzipBytes": 1000215,
+            "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "33dfd9e576a1a28c9c033b9f21789d5f254f0b6e81fca37c810646d99196ec8e",
+            "buildControls": [
+              {
+                "path": "build.mjs",
+                "sha256": "23358c3eaf928dace7aa426843eea3d466ba9c18b85f56fbc18a7a3bd17f84b0"
+              },
+              {
+                "path": "probes.mjs",
+                "sha256": "6d162c771a89da84228f1b449b4b2df3530d018d93128acba466f29c656c4150"
+              }
+            ],
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/warm-floor-t5DB9h/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "seed",
+          "version": "a020dfb1-1104-4d4f-b9c0-26e3ff17e2b5",
+          "startupEvidence": {
+            "version": "a020dfb1-1104-4d4f-b9c0-26e3ff17e2b5",
+            "number": 2,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791512722590
+          },
+          "replacedAt": 1791512821155
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+            "dirty": true,
+            "bundleSha256": "9c92c09e823666c38c1206fd7a43c68ffeb9207432e18fa2d2d98e99ec34450a",
+            "bundleBytes": 5308156,
+            "gzipBytes": 1000215,
+            "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "33dfd9e576a1a28c9c033b9f21789d5f254f0b6e81fca37c810646d99196ec8e",
+            "buildControls": [
+              {
+                "path": "build.mjs",
+                "sha256": "23358c3eaf928dace7aa426843eea3d466ba9c18b85f56fbc18a7a3bd17f84b0"
+              },
+              {
+                "path": "probes.mjs",
+                "sha256": "6d162c771a89da84228f1b449b4b2df3530d018d93128acba466f29c656c4150"
+              }
+            ],
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/warm-floor-t5DB9h/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "measure",
+          "version": "a798c447-cdb0-4d00-8990-59b78c90c9e8",
+          "startupEvidence": {
+            "version": "a798c447-cdb0-4d00-8990-59b78c90c9e8",
+            "number": 3,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791512827166
+          },
+          "replacedAt": 1791513060555
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+            "dirty": true,
+            "bundleSha256": "9c92c09e823666c38c1206fd7a43c68ffeb9207432e18fa2d2d98e99ec34450a",
+            "bundleBytes": 5308156,
+            "gzipBytes": 1000215,
+            "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "33dfd9e576a1a28c9c033b9f21789d5f254f0b6e81fca37c810646d99196ec8e",
+            "buildControls": [
+              {
+                "path": "build.mjs",
+                "sha256": "23358c3eaf928dace7aa426843eea3d466ba9c18b85f56fbc18a7a3bd17f84b0"
+              },
+              {
+                "path": "probes.mjs",
+                "sha256": "6d162c771a89da84228f1b449b4b2df3530d018d93128acba466f29c656c4150"
+              }
+            ],
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/warm-floor-t5DB9h/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "seed",
+          "version": "6d1db15c-71f4-4866-a3af-1146f2da9697",
+          "startupEvidence": {
+            "version": "6d1db15c-71f4-4866-a3af-1146f2da9697",
+            "number": 4,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791513067904
+          },
+          "replacedAt": 1791513337422
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+            "dirty": true,
+            "bundleSha256": "a8095cdcafbe5a81f25b2269c5fa7c80be82dc6368295eda8d11633464357246",
+            "bundleBytes": 5323143,
+            "gzipBytes": 1001272,
+            "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "dc8a975ed16386fc2f25925161da57e8c4ad4b5720aac1abf8198cc83ff4901a",
+            "buildControls": [
+              {
+                "path": "build.mjs",
+                "sha256": "23358c3eaf928dace7aa426843eea3d466ba9c18b85f56fbc18a7a3bd17f84b0"
+              },
+              {
+                "path": "probes.mjs",
+                "sha256": "87ec2b9f512c2b93f49d5f9eb19a6271711f71e4e13856e35aea0e33465b56f1"
+              }
+            ],
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/warm-floor-t5DB9h/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "measure",
+          "version": "2190c886-e286-4f82-8771-c0dbacfd836b",
+          "startupEvidence": {
+            "version": "2190c886-e286-4f82-8771-c0dbacfd836b",
+            "number": 5,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791513343847
+          },
+          "replacedAt": 1791513513792
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+            "dirty": true,
+            "bundleSha256": "a8095cdcafbe5a81f25b2269c5fa7c80be82dc6368295eda8d11633464357246",
+            "bundleBytes": 5323143,
+            "gzipBytes": 1001272,
+            "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "dc8a975ed16386fc2f25925161da57e8c4ad4b5720aac1abf8198cc83ff4901a",
+            "buildControls": [
+              {
+                "path": "build.mjs",
+                "sha256": "23358c3eaf928dace7aa426843eea3d466ba9c18b85f56fbc18a7a3bd17f84b0"
+              },
+              {
+                "path": "probes.mjs",
+                "sha256": "87ec2b9f512c2b93f49d5f9eb19a6271711f71e4e13856e35aea0e33465b56f1"
+              }
+            ],
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/warm-floor-t5DB9h/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "seed",
+          "version": "517e4b92-14b8-4026-8dbe-220aa429cfc9",
+          "startupEvidence": {
+            "version": "517e4b92-14b8-4026-8dbe-220aa429cfc9",
+            "number": 6,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791513519875
+          },
+          "replacedAt": 1791513584261
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+            "dirty": true,
+            "bundleSha256": "a8095cdcafbe5a81f25b2269c5fa7c80be82dc6368295eda8d11633464357246",
+            "bundleBytes": 5323143,
+            "gzipBytes": 1001272,
+            "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "dc8a975ed16386fc2f25925161da57e8c4ad4b5720aac1abf8198cc83ff4901a",
+            "buildControls": [
+              {
+                "path": "build.mjs",
+                "sha256": "23358c3eaf928dace7aa426843eea3d466ba9c18b85f56fbc18a7a3bd17f84b0"
+              },
+              {
+                "path": "probes.mjs",
+                "sha256": "87ec2b9f512c2b93f49d5f9eb19a6271711f71e4e13856e35aea0e33465b56f1"
+              }
+            ],
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/warm-floor-t5DB9h/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "measure",
+          "version": "a29611bf-7e88-4485-bf07-62c3e28c8459",
+          "startupEvidence": {
+            "version": "a29611bf-7e88-4485-bf07-62c3e28c8459",
+            "number": 7,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791513589900
+          },
+          "replacedAt": 1791514683026
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+            "dirty": true,
+            "bundleSha256": "a8095cdcafbe5a81f25b2269c5fa7c80be82dc6368295eda8d11633464357246",
+            "bundleBytes": 5323143,
+            "gzipBytes": 1001272,
+            "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "dc8a975ed16386fc2f25925161da57e8c4ad4b5720aac1abf8198cc83ff4901a",
+            "buildControls": [
+              {
+                "path": "build.mjs",
+                "sha256": "23358c3eaf928dace7aa426843eea3d466ba9c18b85f56fbc18a7a3bd17f84b0"
+              },
+              {
+                "path": "probes.mjs",
+                "sha256": "87ec2b9f512c2b93f49d5f9eb19a6271711f71e4e13856e35aea0e33465b56f1"
+              }
+            ],
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/warm-floor-t5DB9h/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "seed",
+          "version": "63d55d96-99d9-4942-a2b6-5eb66584ed1b",
+          "startupEvidence": {
+            "version": "63d55d96-99d9-4942-a2b6-5eb66584ed1b",
+            "number": 8,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791514689726
+          },
+          "replacedAt": 1791514771018
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+            "dirty": true,
+            "bundleSha256": "a8095cdcafbe5a81f25b2269c5fa7c80be82dc6368295eda8d11633464357246",
+            "bundleBytes": 5323143,
+            "gzipBytes": 1001272,
+            "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "dc8a975ed16386fc2f25925161da57e8c4ad4b5720aac1abf8198cc83ff4901a",
+            "buildControls": [
+              {
+                "path": "build.mjs",
+                "sha256": "23358c3eaf928dace7aa426843eea3d466ba9c18b85f56fbc18a7a3bd17f84b0"
+              },
+              {
+                "path": "probes.mjs",
+                "sha256": "87ec2b9f512c2b93f49d5f9eb19a6271711f71e4e13856e35aea0e33465b56f1"
+              }
+            ],
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/warm-floor-t5DB9h/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "measure",
+          "version": "32b1a9b1-d4b1-4811-b681-35b5e3b360e8",
+          "startupEvidence": {
+            "version": "32b1a9b1-d4b1-4811-b681-35b5e3b360e8",
+            "number": 9,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791514776946
+          },
+          "replacedAt": 1791515450812
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+            "dirty": true,
+            "bundleSha256": "b365fff53b9ad2a805e54f9dbb92c55f0da983e70556bfaf2368f910dc1e2c76",
+            "bundleBytes": 5325967,
+            "gzipBytes": 1001758,
+            "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "e887827460a30e91cffe4ad1b4f180f6aa91e6f434672f1023706cc0bd6ae1d8",
+            "buildControls": [
+              {
+                "path": "build.mjs",
+                "sha256": "a76356ee5487c873bdabd38db29d73ea66e5f3f94d64b118488eeb559e5c254e"
+              },
+              {
+                "path": "probes.mjs",
+                "sha256": "9e13aa9b74ff4d48cb19ef6e59fb42ad488cedc0b466f0bf99b96e75f2b2a83f"
+              }
+            ],
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/warm-floor-t5DB9h/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "seed",
+          "version": "d6131a34-0156-4a39-8fb9-5e23afc15456",
+          "startupEvidence": {
+            "version": "d6131a34-0156-4a39-8fb9-5e23afc15456",
+            "number": 10,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791515456627
+          },
+          "replacedAt": 1791515600149
+        },
+        {
+          "build": {
+            "name": "network",
+            "repositoryCommit": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664",
+            "dirty": true,
+            "bundleSha256": "b365fff53b9ad2a805e54f9dbb92c55f0da983e70556bfaf2368f910dc1e2c76",
+            "bundleBytes": 5325967,
+            "gzipBytes": 1001758,
+            "fixtureSha256": "4d781648cf5870b9c9f5fbbbf72cd4103cf680e9b7a4b3776834c8675eca7461",
+            "fixtureFiles": [
+              {
+                "path": "src/plan.ts",
+                "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+              },
+              {
+                "path": "src/yielded.ts",
+                "sha256": "083ba2170ffe82befcf573dd26484e3307d76d815508c1ac4c9293360075ed68"
+              },
+              {
+                "path": "third-party/src/pi.ts",
+                "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+              },
+              {
+                "path": "third-party/src/tardie.ts",
+                "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+              }
+            ],
+            "inputsSha256": "e887827460a30e91cffe4ad1b4f180f6aa91e6f434672f1023706cc0bd6ae1d8",
+            "buildControls": [
+              {
+                "path": "build.mjs",
+                "sha256": "a76356ee5487c873bdabd38db29d73ea66e5f3f94d64b118488eeb559e5c254e"
+              },
+              {
+                "path": "probes.mjs",
+                "sha256": "9e13aa9b74ff4d48cb19ef6e59fb42ad488cedc0b466f0bf99b96e75f2b2a83f"
+              }
+            ],
+            "esbuildVersion": "0.28.1",
+            "minify": false,
+            "target": "es2024",
+            "output": "/private/tmp/warm-floor-t5DB9h/bundles/network",
+            "effectVersion": "4.0.0"
+          },
+          "phase": "measure",
+          "version": "d900249f-6b9e-4fc7-ad03-7caaebd746ed",
+          "startupEvidence": {
+            "version": "d900249f-6b9e-4fc7-ad03-7caaebd746ed",
+            "number": 11,
+            "startupTimeMs": null,
+            "uploadRevision": null,
+            "capturedAt": 1791515607498
+          },
+          "replacedAt": 1791517291250
+        }
+      ]
+    }
+  ],
+  "baselineRevision": "b246f8aaa3a92d5f82934b1fc7a82356d1ad6664"
+}

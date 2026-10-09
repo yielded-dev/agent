@@ -1,0 +1,122 @@
+[
+  {
+    "key": "pi/warm-floor-candidates-h50-d0-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791513088858,
+    "databaseBytes": 245760
+  },
+  {
+    "key": "pi/warm-floor-candidates-h50-d0-o1",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791513091052,
+    "databaseBytes": 245760
+  },
+  {
+    "key": "yielded/warm-floor-candidates-h50-d0-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791513093354,
+    "databaseBytes": 2801664
+  },
+  {
+    "key": "pi/warm-floor-candidates-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791513095217,
+    "databaseBytes": 245760
+  },
+  {
+    "key": "yielded/warm-floor-candidates-h50-d0-o1",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791513095715,
+    "databaseBytes": 2805760
+  },
+  {
+    "key": "yielded/warm-floor-candidates-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791513096977,
+    "databaseBytes": 2826240
+  },
+  {
+    "key": "pi/warm-floor-candidates-h50-d400-o1",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791513098198,
+    "databaseBytes": 245760
+  },
+  {
+    "key": "yielded/warm-floor-candidates-h50-d400-o1",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791513101437,
+    "databaseBytes": 2822144
+  },
+  {
+    "key": "pi/warm-floor-candidates-h250-d0-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791513112773,
+    "databaseBytes": 761856
+  },
+  {
+    "key": "pi/warm-floor-candidates-h250-d0-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791513121625,
+    "databaseBytes": 761856
+  },
+  {
+    "key": "yielded/warm-floor-candidates-h250-d0-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791513131970,
+    "databaseBytes": 11067392
+  },
+  {
+    "key": "pi/warm-floor-candidates-h250-d400-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791513141283,
+    "databaseBytes": 761856
+  },
+  {
+    "key": "yielded/warm-floor-candidates-h250-d400-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791513152609,
+    "databaseBytes": 11206656
+  },
+  {
+    "key": "pi/warm-floor-candidates-h250-d400-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791513160535,
+    "databaseBytes": 761856
+  },
+  {
+    "key": "yielded/warm-floor-candidates-h250-d0-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791513167302,
+    "databaseBytes": 11071488
+  },
+  {
+    "key": "yielded/warm-floor-candidates-h250-d400-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791513184009,
+    "databaseBytes": 11218944
+  },
+  {
+    "key": "yielded/warm-floor-candidates-r1-h50-d0-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791513561244,
+    "databaseBytes": 2842624
+  },
+  {
+    "key": "pi/warm-floor-candidates-r1-h50-d0-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791513563178,
+    "databaseBytes": 245760
+  },
+  {
+    "key": "yielded/warm-floor-candidates-r2-h250-d0-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791514750382,
+    "databaseBytes": 11268096
+  },
+  {
+    "key": "pi/warm-floor-candidates-r2-h250-d0-o1",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791514759812,
+    "databaseBytes": 761856
+  }
+]

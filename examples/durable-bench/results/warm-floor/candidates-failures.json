@@ -1,0 +1,28 @@
+[
+  {
+    "framework": "yielded",
+    "history": 50,
+    "ttftMs": 0,
+    "index": 0,
+    "object": "warm-floor-candidates-h50-d0-o0",
+    "sample": "m3",
+    "variant": "prearm",
+    "state": "cold",
+    "at": 1791513377900,
+    "error": "Error: Worker primary /run returned 500",
+    "noRetry": true
+  },
+  {
+    "framework": "pi",
+    "history": 250,
+    "ttftMs": 0,
+    "index": 1,
+    "object": "warm-floor-candidates-h250-d0-o1",
+    "sample": "m21",
+    "variant": "inline",
+    "state": "warm",
+    "at": 1791514415983,
+    "error": "Error: Warm incarnation changed",
+    "noRetry": true
+  }
+]
