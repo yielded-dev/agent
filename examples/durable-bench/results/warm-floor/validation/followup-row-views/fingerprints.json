@@ -1,0 +1,21 @@
+{
+  "command": "vp run -F @yielded/agent-example-durable-bench seed -- yielded 50 250",
+  "boundary": "Existing local Miniflare seeder using the candidate Cloudflare storage adapter; correctness only, no latency or CPU inference.",
+  "candidateSourceSha256": "18dcca0913bcef30c08e9f7b0d94660c8ab799ef5a4c897b17b0189d284830ea",
+  "samples": [
+    {
+      "target": "yielded",
+      "turns": 50,
+      "fingerprint": "b017b487524e44a4",
+      "expected": "b017b487524e44a4",
+      "matches": true
+    },
+    {
+      "target": "yielded",
+      "turns": 250,
+      "fingerprint": "dcea9f30b0917245",
+      "expected": "dcea9f30b0917245",
+      "matches": true
+    }
+  ]
+}

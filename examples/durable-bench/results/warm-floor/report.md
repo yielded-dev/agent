@@ -1,8 +1,9 @@
 # Warm-floor: no demonstrated fixed-cost saving
 
 **None of the three candidates established a warm-turn latency saving above the
-repeated-baseline spread. No performance PR was opened; product code was restored
-to main.** The immediate pre-arm often moved time into receipt delivery instead of
+repeated-baseline spread.** The approved follow-up [PR #827](https://github.com/yielded-dev/agent/pull/827)
+removes repeated row-view work only, with no resolved latency or CPU benefit.
+It is open and unmerged. The immediate pre-arm often moved time into receipt delivery instead of
 advancing the first model request. Atomic settlement removed one transaction, but
 did not establish a tail-latency saving. Skipping unchanged row views removed repeated
 work without a resolved latency or CPU benefit.
@@ -51,8 +52,8 @@ experiment to infer a gain.
 main-minus-pi medians are 195.25 / 100.5 ms at 50 / 250 instant in the first cohort,
 and −154 / 383.75 ms in the second. At 400 ms they are 118.75 / 322.5 ms and
 210.25 / 127.5 ms respectively. These are alongside comparisons with placement
-variation, not causal estimates. No change was retained, so this work establishes
-no reduction in that gap. It does not add effects from earlier PR measurements.
+variation, not causal estimates. This work establishes no reduction in that gap.
+It does not add effects from earlier PR measurements.
 
 ## What remains at the two ends
 
@@ -162,6 +163,15 @@ evidence-only diff. Existing atomicity/recovery assertions were adapted and firs
 failed against the old boundary before implementing the atomic candidate; those
 test edits were discarded with it. No new test suite or production mode remains.
 
+The approved row-view follow-up was recreated from current main `c53cd159` as
+`a3cc654e`, with only the row-view helper changed. Its [validation record](validation/followup-row-views/results.json)
+retains the fresh durable and Cloudflare suite results, SQL type checks, both
+matching transcript fingerprints, and a passing `vp run ready`. It also retains
+the unrelated process-interruption assertion and direct-invocation Node flag
+failure encountered before the successful gate. No tests or tooling were changed
+to resolve them. No changeset was added because public behavior is unchanged;
+the two other candidates remain discarded. This follow-up created no Cloudflare resources.
+
 ## Evidence and limits
 
 Two task-prefixed Workers and task-prefixed namespaces were deployed through
@@ -197,7 +207,7 @@ Local gate failures and their resolutions are recorded separately in validation.
 
 `resources.json` records exact deployed bundle hashes, version/namespace continuity
 proof and account name. `build-identities/` retains exact compressed module bytes,
-input hashes and source snapshots. `experiments/` retains the rejected patches;
+input hashes and source snapshots. `experiments/` retains the evaluated patches;
 `requests.jsonl.gz`, `attempted.jsonl.gz` and telemetry preserve the observations.
 Large JSON/JSONL/log artifacts use `.gz`; [the reducer](analyze.mjs) reads either form.
 

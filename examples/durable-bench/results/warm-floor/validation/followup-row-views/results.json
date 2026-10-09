@@ -1,0 +1,121 @@
+{
+  "verifiedAt": "2026-10-09T04:08:26.453300+00:00",
+  "pullRequest": "https://github.com/yielded-dev/agent/pull/827",
+  "base": "c53cd159208c16c794739da2e35c82df17e6366c",
+  "candidate": "a3cc654ec5119ab25f8ec2208dd96d35c703c678",
+  "candidateSourceSha256": "18dcca0913bcef30c08e9f7b0d94660c8ab799ef5a4c897b17b0189d284830ea",
+  "scope": "Only skip rebuilding retained row views that cannot change. No mode, cache, flag, submission-kind case, pre-arm change or atomic-settlement change.",
+  "changeset": "None: no public behavior change or measured consumer-visible latency/CPU change.",
+  "checks": [
+    {
+      "command": "vp install --frozen-lockfile",
+      "exitCode": 0
+    },
+    {
+      "command": "vp test test/durable",
+      "cwd": "packages/effect-agent",
+      "exitCode": 0,
+      "files": 10,
+      "tests": 61,
+      "log": "durable.log.gz"
+    },
+    {
+      "command": "vp test",
+      "cwd": "packages/storage-cloudflare",
+      "exitCode": 0,
+      "files": 9,
+      "tests": 111,
+      "log": "storage-cloudflare.log.gz"
+    },
+    {
+      "command": "vp test --passWithNoTests",
+      "cwd": "packages/storage-sql",
+      "exitCode": 0,
+      "note": "No runtime test files; test/sql-factories.types.ts is included in the package type check passed by ready.",
+      "log": "storage-sql.log.gz"
+    },
+    {
+      "command": "vp run -F @yielded/agent-example-durable-bench seed -- yielded 50 250",
+      "exitCode": 0,
+      "proof": "fingerprints.json",
+      "log": "fingerprints.log.gz",
+      "note": "Existing local Miniflare seeder; transcript correctness only. Its timings are not performance evidence."
+    },
+    {
+      "command": "EFFECT_AGENT_TEST_POSTGRES_URL=postgres://dan@localhost:5432/postgres vp run ready",
+      "exitCode": 0,
+      "log": "ready-retry.log.gz",
+      "taskDetails": "ready-details.log.gz",
+      "note": "Normal task cache reuse for unchanged successful inputs; the failed and canceled tasks ran again."
+    },
+    {
+      "command": "vp check --fix",
+      "exitCode": 0,
+      "note": "Pre-commit hook; source SHA-256 unchanged after hook."
+    }
+  ],
+  "nonOkAttempts": [
+    {
+      "command": "EFFECT_AGENT_TEST_POSTGRES_URL=postgres://dan@localhost:5432/postgres vp run --concurrency-limit 1 ready",
+      "exitCode": 1,
+      "log": "ready.log.gz",
+      "failure": "Context-continuity process-interruption assertion observed running=true. The supervisor fixture has no Cloudflare row-view dependency. Three concurrent suites were canceled with exit 137.",
+      "resolution": "Both process tests passed through the workspace task, then the full ready gate passed without changing implementation or tests."
+    },
+    {
+      "command": "vp test test/process.test.ts",
+      "cwd": "tooling/context-continuity-eval",
+      "exitCode": 1,
+      "log": "process-isolated.log.gz",
+      "failure": "The direct test invocation selected a child Node runtime that rejected --experimental-transform-types; both tests failed before completing their fixture.",
+      "resolution": "Use the existing workspace task, matching ready."
+    }
+  ],
+  "failureCheck": {
+    "command": "vp run -F @yielded/agent-example-context-continuity-eval --no-cache test test/process.test.ts",
+    "exitCode": 0,
+    "files": 1,
+    "tests": 2,
+    "log": "process-task.log.gz"
+  },
+  "performance": "No new timing or CPU claim. Retain the same-Object deployed comparison and its repeated-baseline limits in ../../report.md.",
+  "infrastructure": "No Cloudflare resources created for this follow-up; the original same-account cleanup proof remains unchanged.",
+  "logs": [
+    {
+      "file": "durable.log.gz",
+      "sha256": "7e9a468735a61694d3e668f1a6ae40d161aeeb50a421191d4dac5792dc57130d"
+    },
+    {
+      "file": "fingerprints.log.gz",
+      "sha256": "92bcf39704eab78722be8489b5fb8aa894b9bb6d84ebae8388d1583e816c96ca"
+    },
+    {
+      "file": "process-isolated.log.gz",
+      "sha256": "ee972bcb7b417ab5d352cde8cd9a9aa2d9ae3be5babe5f99c13b9b2a9936a0a1"
+    },
+    {
+      "file": "process-task.log.gz",
+      "sha256": "b11d518a4d9440f75ece0ed20ce0354e48f673b462f4977eed78df084ff1d277"
+    },
+    {
+      "file": "ready-details.log.gz",
+      "sha256": "7d5601dd65e1b581e67f73b1fc21681909d889afc248254f9df6a132d3e3467a"
+    },
+    {
+      "file": "ready-retry.log.gz",
+      "sha256": "23079bbc4f57fd9c2fd7a12f1a7cb315f982b58986015c868ccaf08d2546b652"
+    },
+    {
+      "file": "ready.log.gz",
+      "sha256": "58133566322749e730b756ef3e4f881d801ee3db5341934f804c8c5cf9d088d1"
+    },
+    {
+      "file": "storage-cloudflare.log.gz",
+      "sha256": "b71737f206acbaac28d63ea1c7935643425d7107d3a4afd144fa0d547c90a10e"
+    },
+    {
+      "file": "storage-sql.log.gz",
+      "sha256": "fe2f23da5e4b9e742df73150fd7b04892fb8df0fa4a0ab9739655211862e665d"
+    }
+  ]
+}
