@@ -1,6 +1,7 @@
 import type { Phase } from "./protocol.ts";
 
 const traces = new WeakMap<DurableObjectStorage, Timeline>();
+let profileInitialization = false;
 
 /** Frozen I/O-clock events, not a wall/CPU stopwatch. No extra storage reads. */
 export class Timeline {
@@ -29,10 +30,17 @@ export class Timeline {
 export const timeline = (storage: DurableObjectStorage) => traces.get(storage);
 
 export const instrumentTimeline = (ctx: DurableObjectState): void => {
+  let profileMarker: number | undefined;
+
+  if (profileInitialization) {
+    profileMarker = coldBisectBeforeInit(7);
+    profileInitialization = false;
+  }
   const trace = new Timeline();
 
   traces.set(ctx.storage, trace);
   trace.point("constructor.entry");
+  if (profileMarker !== undefined) trace.point("profile.open:" + profileMarker);
   const gate = ctx.blockConcurrencyWhile.bind(ctx);
 
   Object.defineProperty(ctx, "blockConcurrencyWhile", {
@@ -138,6 +146,7 @@ export const instrumentTimeline = (ctx: DurableObjectState): void => {
 
 // These are deliberately recognizable sampled frames in profiling-only requests.
 export function coldBisectBeforeInit(seed: number): number {
+  profileInitialization = true;
   for (let index = 0; index < 5_000_000; index++) seed = Math.imul(seed ^ index, 0x45d9f3b);
 
   return seed;
@@ -145,6 +154,18 @@ export function coldBisectBeforeInit(seed: number): number {
 
 export function coldBisectAfterInit(seed: number): number {
   for (let index = 0; index < 5_000_000; index++) seed = Math.imul(seed + index, 0x45d9f3b);
+
+  return seed;
+}
+
+export function coldBisectAdmissionEntry(seed: number): number {
+  for (let index = 0; index < 1_000_000; index++) seed = Math.imul(seed ^ index, 0x27d4eb2d);
+
+  return seed;
+}
+
+export function coldBisectAdmissionReturn(seed: number): number {
+  for (let index = 0; index < 1_000_000; index++) seed = Math.imul(seed + index, 0x27d4eb2d);
 
   return seed;
 }

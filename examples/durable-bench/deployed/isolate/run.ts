@@ -168,7 +168,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       },
       measuredBuildReadiness: {
         propagationWaitMs: 60000,
-        ingresses: ["controller", "driver"],
+        ingresses: ["controller", "driver", "disposable-object"],
         consecutiveRounds: 10,
         measuredObjectsTouched: false,
       },

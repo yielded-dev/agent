@@ -15,7 +15,12 @@ import * as Schema from "effect/Schema";
 
 import { payload } from "../../src/plan.ts";
 import { instrumentStorage, storageProbe } from "../isolate/cold-storage.ts";
-import { instrumentTimeline, timeline } from "../isolate/timeline.ts";
+import {
+  coldBisectAdmissionEntry,
+  coldBisectAdmissionReturn,
+  instrumentTimeline,
+  timeline,
+} from "../isolate/timeline.ts";
 import { Host } from "./host.ts";
 import { observation } from "./observe.ts";
 import { type Env, type Query, type IsolateState } from "./protocol.ts";
@@ -103,8 +108,13 @@ export class YieldedDO extends ThreadObject.make(application, {
   ): Promise<unknown> {
     this.host.meter.begin(query, workerIsolate);
     this.host.meter.marker("submit");
+    if (query.sample.startsWith("profile-"))
+      timeline(this.ctx.storage)?.point("profile.admission.entry:" + coldBisectAdmissionEntry(7));
 
     const receipt = await super.submitEncoded(encoded);
+
+    if (query.sample.startsWith("profile-"))
+      timeline(this.ctx.storage)?.point("profile.admission.return:" + coldBisectAdmissionReturn(7));
 
     storageProbe(this.ctx.storage)?.point("admitted");
     timeline(this.ctx.storage)?.point("submit.complete");
