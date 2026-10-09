@@ -1,0 +1,295 @@
+{
+  "run": "tail-latency-mv0nd0fk-d3d97d79",
+  "versions": [
+    {
+      "arm": "baseline",
+      "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "epoch": "1"
+    },
+    {
+      "arm": "candidate",
+      "revision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+      "epoch": "0"
+    },
+    {
+      "arm": "unknown",
+      "revision": null,
+      "epoch": null
+    }
+  ],
+  "rows": [
+    {
+      "labeledBuild": "candidate",
+      "epoch": 0,
+      "history": 250,
+      "ttftMs": 0,
+      "object": 4,
+      "sample": "e0-t2",
+      "directPuts": 2,
+      "invocations": [
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "deployed": {
+            "arm": "candidate",
+            "revision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+            "epoch": "0"
+          },
+          "outcome": "ok",
+          "cpuMs": 0,
+          "wallMs": 15
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "deployed": {
+            "arm": "candidate",
+            "revision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+            "epoch": "0"
+          },
+          "outcome": "ok",
+          "cpuMs": 2,
+          "wallMs": 704
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "deployed": {
+            "arm": "candidate",
+            "revision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+            "epoch": "0"
+          },
+          "outcome": "ok",
+          "cpuMs": 4,
+          "wallMs": 4
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "deployed": {
+            "arm": "candidate",
+            "revision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+            "epoch": "0"
+          },
+          "outcome": "ok",
+          "cpuMs": 340,
+          "wallMs": 1113
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "deployed": {
+            "arm": "candidate",
+            "revision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+            "epoch": "0"
+          },
+          "outcome": "ok",
+          "cpuMs": 412,
+          "wallMs": 700
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "deployed": {
+            "arm": "candidate",
+            "revision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+            "epoch": "0"
+          },
+          "outcome": "ok",
+          "cpuMs": 2,
+          "wallMs": 472
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "deployed": {
+            "arm": "candidate",
+            "revision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+            "epoch": "0"
+          },
+          "outcome": "ok",
+          "cpuMs": 15,
+          "wallMs": 467
+        }
+      ]
+    },
+    {
+      "labeledBuild": "baseline",
+      "epoch": 1,
+      "history": 50,
+      "ttftMs": 0,
+      "object": 5,
+      "sample": "e1-t2",
+      "directPuts": 15,
+      "invocations": [
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "deployed": {
+            "arm": "baseline",
+            "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+            "epoch": "1"
+          },
+          "outcome": "ok",
+          "cpuMs": 0,
+          "wallMs": 12
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "deployed": {
+            "arm": "baseline",
+            "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+            "epoch": "1"
+          },
+          "outcome": "ok",
+          "cpuMs": 3,
+          "wallMs": 457
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "deployed": {
+            "arm": "baseline",
+            "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+            "epoch": "1"
+          },
+          "outcome": "ok",
+          "cpuMs": 1,
+          "wallMs": 1
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "deployed": {
+            "arm": "baseline",
+            "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+            "epoch": "1"
+          },
+          "outcome": "ok",
+          "cpuMs": 185,
+          "wallMs": 370
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "deployed": {
+            "arm": "baseline",
+            "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+            "epoch": "1"
+          },
+          "outcome": "ok",
+          "cpuMs": 90,
+          "wallMs": 480
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "deployed": {
+            "arm": "baseline",
+            "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+            "epoch": "1"
+          },
+          "outcome": "ok",
+          "cpuMs": 6,
+          "wallMs": 42
+        }
+      ]
+    },
+    {
+      "labeledBuild": "baseline",
+      "epoch": 1,
+      "history": 50,
+      "ttftMs": 400,
+      "object": 14,
+      "sample": "e1-t2",
+      "directPuts": 2,
+      "invocations": [
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "deployed": {
+            "arm": "baseline",
+            "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+            "epoch": "1"
+          },
+          "outcome": "ok",
+          "cpuMs": 0,
+          "wallMs": 22
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "deployed": {
+            "arm": "baseline",
+            "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+            "epoch": "1"
+          },
+          "outcome": "ok",
+          "cpuMs": 2,
+          "wallMs": 4911
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "deployed": {
+            "arm": "candidate",
+            "revision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+            "epoch": "0"
+          },
+          "outcome": "ok",
+          "cpuMs": 2,
+          "wallMs": 2
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "deployed": {
+            "arm": "candidate",
+            "revision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+            "epoch": "0"
+          },
+          "outcome": "ok",
+          "cpuMs": 120,
+          "wallMs": 4945
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "deployed": {
+            "arm": "candidate",
+            "revision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+            "epoch": "0"
+          },
+          "outcome": "ok",
+          "cpuMs": 451,
+          "wallMs": 4782
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "deployed": {
+            "arm": "baseline",
+            "revision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+            "epoch": "1"
+          },
+          "outcome": "ok",
+          "cpuMs": 1,
+          "wallMs": 57
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "deployed": {
+            "arm": "candidate",
+            "revision": "413bb4bcb87352260b81ef647b6e3b89412b4220",
+            "epoch": "0"
+          },
+          "outcome": "ok",
+          "cpuMs": 8,
+          "wallMs": 49
+        }
+      ]
+    }
+  ]
+}
