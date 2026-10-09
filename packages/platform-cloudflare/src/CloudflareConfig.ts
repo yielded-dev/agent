@@ -90,7 +90,11 @@ export class CloudflareDurableRuntimeConfigValue extends Schema.Class<Cloudflare
   producerPrefix: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
   /** Submission ownership lease duration (D5); fences work across Object incarnations. */
   ownershipLeaseDuration: PositiveMillis,
-  /** Base delay of exponential backoff when a pass fails or makes no progress. */
+  /**
+   * Base delay of exponential backoff when a pass fails or makes no progress.
+   * Half this delay (rounded up, at least 1ms) also pre-arms mutations, including
+   * healthy admissions. `alarmBackoffCap` does not cap that pre-arm delay.
+   */
   alarmBackoffBase: PositiveMillis,
   /** Ceiling of exponential backoff after failed or no-progress maintenance passes. */
   alarmBackoffCap: PositiveMillis,

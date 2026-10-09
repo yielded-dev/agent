@@ -148,7 +148,7 @@ export class DurableAlarmService extends Context.Service<
      */
     readonly scheduleNow: Effect.Effect<void, DurableAlarmError>;
     /**
-     * Run one maintenance pass with wake deferral (see `scheduleNow`). Calls made while `body`
+     * Run pre-armed work with wake deferral (see `scheduleNow`). Calls made while `body`
      * executes are droppable promptness hints; correctness rests on the durable generation.
      */
     readonly withWakesDeferred: <A, E, R>(body: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
