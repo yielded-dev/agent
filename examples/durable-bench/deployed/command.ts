@@ -23,8 +23,8 @@ export const command = Command.make(
       Flag.withDescription("Provider time to first token, in ms: 0,400"),
     ),
     objects: positive("objects").pipe(
-      Flag.withDefault(6),
-      Flag.withDescription("Objects per target/cell (default: 6)"),
+      Flag.withDefault(7),
+      Flag.withDescription("Objects per target/cell (default: 7)"),
     ),
     repeats: positive("repeats").pipe(
       Flag.optional,
