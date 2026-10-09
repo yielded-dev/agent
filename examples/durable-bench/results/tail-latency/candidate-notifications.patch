@@ -1,0 +1,15 @@
+diff --git a/packages/platform-cloudflare/src/Alarm.ts b/packages/platform-cloudflare/src/Alarm.ts
+index e400d456..3911c043 100644
+--- a/packages/platform-cloudflare/src/Alarm.ts
++++ b/packages/platform-cloudflare/src/Alarm.ts
+@@ -1001,7 +1001,9 @@ export class ThreadMutationGate extends Context.Service<
+           }
+           await ensureTransactionAlarmBy(ctx.storage, now + minimumAlarmDelay);
+         });
+-        yield* notify;
++        // The active native Attempt already owns this progress. Its completion wakes
++        // dispatch; external mutations and independently scheduled lanes still notify.
++        if (!nativeSource || affected.size !== 1 || !affected.has(DueQueue.Native)) yield* notify;
+       });
+ 
+       return ThreadMutationGate.of({

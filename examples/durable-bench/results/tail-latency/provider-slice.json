@@ -1,0 +1,458 @@
+{
+  "run": "tail-latency-mv0l4yxs-23141551",
+  "history": 250,
+  "ttftMs": 0,
+  "target": "yielded",
+  "rows": [
+    {
+      "object": 3,
+      "sample": "e0-t9",
+      "driverMs": 1021,
+      "admissionMs": 324,
+      "providerTotalMs": 18,
+      "firstRequestBytes": 150320,
+      "providerColo": "DEN"
+    },
+    {
+      "object": 3,
+      "sample": "e0-t10",
+      "driverMs": 1966,
+      "admissionMs": 1240,
+      "providerTotalMs": 18,
+      "firstRequestBytes": 154046,
+      "providerColo": "DEN"
+    },
+    {
+      "object": 3,
+      "sample": "e0-t11",
+      "driverMs": 1119,
+      "admissionMs": 388,
+      "providerTotalMs": 17,
+      "firstRequestBytes": 157772,
+      "providerColo": "DEN"
+    },
+    {
+      "object": 3,
+      "sample": "e0-t12",
+      "driverMs": 1508,
+      "admissionMs": 795,
+      "providerTotalMs": 22,
+      "firstRequestBytes": 161498,
+      "providerColo": "DEN"
+    },
+    {
+      "object": 3,
+      "sample": "e0-t13",
+      "driverMs": 968,
+      "admissionMs": 284,
+      "providerTotalMs": 20,
+      "firstRequestBytes": 165224,
+      "providerColo": "DEN"
+    },
+    {
+      "object": 6,
+      "sample": "e0-t9",
+      "driverMs": 856,
+      "admissionMs": 237,
+      "providerTotalMs": 16,
+      "firstRequestBytes": 150320,
+      "providerColo": "DFW"
+    },
+    {
+      "object": 6,
+      "sample": "e0-t10",
+      "driverMs": 1011,
+      "admissionMs": 263,
+      "providerTotalMs": 18,
+      "firstRequestBytes": 154046,
+      "providerColo": "DFW"
+    },
+    {
+      "object": 6,
+      "sample": "e0-t11",
+      "driverMs": 903,
+      "admissionMs": 290,
+      "providerTotalMs": 12,
+      "firstRequestBytes": 157772,
+      "providerColo": "DFW"
+    },
+    {
+      "object": 6,
+      "sample": "e0-t12",
+      "driverMs": 878,
+      "admissionMs": 260,
+      "providerTotalMs": 19,
+      "firstRequestBytes": 161498,
+      "providerColo": "DFW"
+    },
+    {
+      "object": 6,
+      "sample": "e0-t13",
+      "driverMs": 892,
+      "admissionMs": 322,
+      "providerTotalMs": 13,
+      "firstRequestBytes": 165224,
+      "providerColo": "DFW"
+    },
+    {
+      "object": 8,
+      "sample": "e0-t9",
+      "driverMs": 702,
+      "admissionMs": 218,
+      "providerTotalMs": 30,
+      "firstRequestBytes": 150320,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 8,
+      "sample": "e0-t10",
+      "driverMs": 1004,
+      "admissionMs": 281,
+      "providerTotalMs": 24,
+      "firstRequestBytes": 154046,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 8,
+      "sample": "e0-t11",
+      "driverMs": 699,
+      "admissionMs": 69,
+      "providerTotalMs": 23,
+      "firstRequestBytes": 157772,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 8,
+      "sample": "e0-t12",
+      "driverMs": 715,
+      "admissionMs": 264,
+      "providerTotalMs": 20,
+      "firstRequestBytes": 161498,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 8,
+      "sample": "e0-t13",
+      "driverMs": 687,
+      "admissionMs": 74,
+      "providerTotalMs": 20,
+      "firstRequestBytes": 165224,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 0,
+      "sample": "e0-t9",
+      "driverMs": 1386,
+      "admissionMs": 257,
+      "providerTotalMs": 241,
+      "firstRequestBytes": 150320,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 0,
+      "sample": "e0-t10",
+      "driverMs": 2331,
+      "admissionMs": 267,
+      "providerTotalMs": 802,
+      "firstRequestBytes": 154046,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 0,
+      "sample": "e0-t11",
+      "driverMs": 2936,
+      "admissionMs": 250,
+      "providerTotalMs": 801,
+      "firstRequestBytes": 157772,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 0,
+      "sample": "e0-t12",
+      "driverMs": 1462,
+      "admissionMs": 374,
+      "providerTotalMs": 27,
+      "firstRequestBytes": 161498,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 0,
+      "sample": "e0-t13",
+      "driverMs": 1059,
+      "admissionMs": 311,
+      "providerTotalMs": 32,
+      "firstRequestBytes": 165224,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 1,
+      "sample": "e0-t9",
+      "driverMs": 972,
+      "admissionMs": 386,
+      "providerTotalMs": 20,
+      "firstRequestBytes": 150320,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 1,
+      "sample": "e0-t10",
+      "driverMs": 899,
+      "admissionMs": 332,
+      "providerTotalMs": 28,
+      "firstRequestBytes": 154046,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 1,
+      "sample": "e0-t11",
+      "driverMs": 1130,
+      "admissionMs": 397,
+      "providerTotalMs": 25,
+      "firstRequestBytes": 157772,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 1,
+      "sample": "e0-t12",
+      "driverMs": 870,
+      "admissionMs": 81,
+      "providerTotalMs": 18,
+      "firstRequestBytes": 161498,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 1,
+      "sample": "e0-t13",
+      "driverMs": 994,
+      "admissionMs": 76,
+      "providerTotalMs": 23,
+      "firstRequestBytes": 165224,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 5,
+      "sample": "e0-t9",
+      "driverMs": 1009,
+      "admissionMs": 70,
+      "providerTotalMs": 42,
+      "firstRequestBytes": 150320,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 5,
+      "sample": "e0-t10",
+      "driverMs": 958,
+      "admissionMs": 73,
+      "providerTotalMs": 26,
+      "firstRequestBytes": 154046,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 5,
+      "sample": "e0-t11",
+      "driverMs": 1170,
+      "admissionMs": 364,
+      "providerTotalMs": 30,
+      "firstRequestBytes": 157772,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 5,
+      "sample": "e0-t12",
+      "driverMs": 1082,
+      "admissionMs": 383,
+      "providerTotalMs": 38,
+      "firstRequestBytes": 161498,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 5,
+      "sample": "e0-t13",
+      "driverMs": 1237,
+      "admissionMs": 466,
+      "providerTotalMs": 29,
+      "firstRequestBytes": 165224,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 4,
+      "sample": "e0-t9",
+      "driverMs": 1569,
+      "admissionMs": 592,
+      "providerTotalMs": 40,
+      "firstRequestBytes": 150320,
+      "providerColo": "LAX"
+    },
+    {
+      "object": 4,
+      "sample": "e0-t10",
+      "driverMs": 1553,
+      "admissionMs": 632,
+      "providerTotalMs": 44,
+      "firstRequestBytes": 154046,
+      "providerColo": "LAX"
+    },
+    {
+      "object": 4,
+      "sample": "e0-t11",
+      "driverMs": 1540,
+      "admissionMs": 561,
+      "providerTotalMs": 49,
+      "firstRequestBytes": 157772,
+      "providerColo": "LAX"
+    },
+    {
+      "object": 4,
+      "sample": "e0-t12",
+      "driverMs": 1948,
+      "admissionMs": 690,
+      "providerTotalMs": 43,
+      "firstRequestBytes": 161498,
+      "providerColo": "LAX"
+    },
+    {
+      "object": 4,
+      "sample": "e0-t13",
+      "driverMs": 1620,
+      "admissionMs": 593,
+      "providerTotalMs": 52,
+      "firstRequestBytes": 165224,
+      "providerColo": "LAX"
+    },
+    {
+      "object": 7,
+      "sample": "e0-t9",
+      "driverMs": 831,
+      "admissionMs": 290,
+      "providerTotalMs": 23,
+      "firstRequestBytes": 150320,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 7,
+      "sample": "e0-t10",
+      "driverMs": 874,
+      "admissionMs": 315,
+      "providerTotalMs": 20,
+      "firstRequestBytes": 154046,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 7,
+      "sample": "e0-t11",
+      "driverMs": 998,
+      "admissionMs": 293,
+      "providerTotalMs": 24,
+      "firstRequestBytes": 157772,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 7,
+      "sample": "e0-t12",
+      "driverMs": 1016,
+      "admissionMs": 343,
+      "providerTotalMs": 32,
+      "firstRequestBytes": 161498,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 7,
+      "sample": "e0-t13",
+      "driverMs": 1056,
+      "admissionMs": 424,
+      "providerTotalMs": 25,
+      "firstRequestBytes": 165224,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 2,
+      "sample": "e0-t9",
+      "driverMs": 1139,
+      "admissionMs": 425,
+      "providerTotalMs": 0,
+      "firstRequestBytes": 150320,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 2,
+      "sample": "e0-t10",
+      "driverMs": 1036,
+      "admissionMs": 370,
+      "providerTotalMs": 0,
+      "firstRequestBytes": 154046,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 2,
+      "sample": "e0-t11",
+      "driverMs": 1158,
+      "admissionMs": 326,
+      "providerTotalMs": 0,
+      "firstRequestBytes": 157772,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 2,
+      "sample": "e0-t12",
+      "driverMs": 1087,
+      "admissionMs": 408,
+      "providerTotalMs": 0,
+      "firstRequestBytes": 161498,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 2,
+      "sample": "e0-t13",
+      "driverMs": 1011,
+      "admissionMs": 347,
+      "providerTotalMs": 0,
+      "firstRequestBytes": 165224,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 9,
+      "sample": "e0-t9",
+      "driverMs": 1106,
+      "admissionMs": 88,
+      "providerTotalMs": 0,
+      "firstRequestBytes": 150320,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 9,
+      "sample": "e0-t10",
+      "driverMs": 1067,
+      "admissionMs": 73,
+      "providerTotalMs": 0,
+      "firstRequestBytes": 154046,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 9,
+      "sample": "e0-t11",
+      "driverMs": 1258,
+      "admissionMs": 107,
+      "providerTotalMs": 0,
+      "firstRequestBytes": 157772,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 9,
+      "sample": "e0-t12",
+      "driverMs": 1067,
+      "admissionMs": 71,
+      "providerTotalMs": 0,
+      "firstRequestBytes": 161498,
+      "providerColo": "SJC"
+    },
+    {
+      "object": 9,
+      "sample": "e0-t13",
+      "driverMs": 911,
+      "admissionMs": 75,
+      "providerTotalMs": 0,
+      "firstRequestBytes": 165224,
+      "providerColo": "SJC"
+    }
+  ]
+}

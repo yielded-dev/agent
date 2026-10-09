@@ -1,0 +1,1863 @@
+{
+  "run": "tail-latency-mv0l4yxs-23141551",
+  "rows": [
+    {
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "object": 0,
+      "sample": "e0-t2",
+      "driverMs": 956,
+      "admissionMs": 157,
+      "driverStartedMs": 1791527870428,
+      "invocations": [
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 96,
+          "outcome": "canceled",
+          "timestamp": 1791527872662
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 183,
+          "wallMs": 814,
+          "outcome": "ok",
+          "timestamp": 1791527872477
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 98,
+          "outcome": "canceled",
+          "timestamp": 1791527871760
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 145,
+          "wallMs": 784,
+          "outcome": "ok",
+          "timestamp": 1791527871566
+        },
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 10,
+          "outcome": "ok",
+          "timestamp": 1791527871408
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 791,
+          "outcome": "ok",
+          "timestamp": 1791527871382
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 109,
+          "outcome": "canceled",
+          "timestamp": 1791527870705
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 2,
+          "wallMs": 2,
+          "outcome": "ok",
+          "timestamp": 1791527870636
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 150,
+          "outcome": "ok",
+          "timestamp": 1791527870582
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 228,
+          "wallMs": 876,
+          "outcome": "ok",
+          "timestamp": 1791527870552
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 242,
+          "wallMs": 625,
+          "outcome": "ok",
+          "timestamp": 1791527870552
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 9,
+          "wallMs": 312,
+          "outcome": "ok",
+          "timestamp": 1791527869872
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 96,
+          "outcome": "canceled",
+          "timestamp": 1791527869780
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 158,
+          "wallMs": 781,
+          "outcome": "ok",
+          "timestamp": 1791527869613
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 95,
+          "outcome": "canceled",
+          "timestamp": 1791527868902
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 484,
+          "wallMs": 1351,
+          "outcome": "ok",
+          "timestamp": 1791527868731
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "object": 0,
+      "sample": "e0-t11",
+      "driverMs": 2936,
+      "admissionMs": 250,
+      "driverStartedMs": 1791527881375,
+      "invocations": [
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 101,
+          "outcome": "canceled",
+          "timestamp": 1791527885496
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 245,
+          "wallMs": 1351,
+          "outcome": "ok",
+          "timestamp": 1791527885305
+        },
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 31,
+          "outcome": "ok",
+          "timestamp": 1791527884358
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 2679,
+          "outcome": "ok",
+          "timestamp": 1791527884309
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 129,
+          "outcome": "canceled",
+          "timestamp": 1791527884296
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 2,
+          "outcome": "ok",
+          "timestamp": 1791527884212
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 269,
+          "wallMs": 2663,
+          "outcome": "ok",
+          "timestamp": 1791527884166
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 132,
+          "wallMs": 2853,
+          "outcome": "ok",
+          "timestamp": 1791527884009
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 241,
+          "outcome": "ok",
+          "timestamp": 1791527881622
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 9,
+          "wallMs": 221,
+          "outcome": "ok",
+          "timestamp": 1791527881237
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 99,
+          "outcome": "canceled",
+          "timestamp": 1791527881109
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 158,
+          "wallMs": 2250,
+          "outcome": "ok",
+          "timestamp": 1791527880919
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "object": 4,
+      "sample": "e0-t6",
+      "driverMs": 1452,
+      "admissionMs": 475,
+      "driverStartedMs": 1791528097357,
+      "invocations": [
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 33,
+          "outcome": "ok",
+          "timestamp": 1791528098868
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 968,
+          "outcome": "ok",
+          "timestamp": 1791528098807
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 2,
+          "wallMs": 461,
+          "outcome": "ok",
+          "timestamp": 1791528097828
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 4,
+          "wallMs": 5,
+          "outcome": "ok",
+          "timestamp": 1791528097713
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 104,
+          "outcome": "canceled",
+          "timestamp": 1791528097713
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 386,
+          "wallMs": 1375,
+          "outcome": "ok",
+          "timestamp": 1791528097571
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 441,
+          "wallMs": 917,
+          "outcome": "ok",
+          "timestamp": 1791528097571
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 17,
+          "wallMs": 453,
+          "outcome": "ok",
+          "timestamp": 1791528096515
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 129,
+          "outcome": "canceled",
+          "timestamp": 1791528096338
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 290,
+          "wallMs": 1245,
+          "outcome": "ok",
+          "timestamp": 1791528096037
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 0,
+      "object": 4,
+      "sample": "e0-t7",
+      "driverMs": 2820,
+      "admissionMs": 444,
+      "driverStartedMs": 1791528098944,
+      "invocations": [
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 113,
+          "outcome": "canceled",
+          "timestamp": 1791528102508
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 328,
+          "wallMs": 1355,
+          "outcome": "ok",
+          "timestamp": 1791528102379
+        },
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 35,
+          "outcome": "ok",
+          "timestamp": 1791528101820
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 2358,
+          "outcome": "ok",
+          "timestamp": 1791528101761
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 6,
+          "wallMs": 12,
+          "outcome": "ok",
+          "timestamp": 1791528101115
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 102,
+          "outcome": "canceled",
+          "timestamp": 1791528101115
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 287,
+          "wallMs": 2742,
+          "outcome": "ok",
+          "timestamp": 1791528101023
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 829,
+          "wallMs": 2351,
+          "outcome": "ok",
+          "timestamp": 1791528101023
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 423,
+          "outcome": "ok",
+          "timestamp": 1791528099385
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 14,
+          "wallMs": 418,
+          "outcome": "ok",
+          "timestamp": 1791528098181
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 104,
+          "outcome": "canceled",
+          "timestamp": 1791528097713
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 386,
+          "wallMs": 1375,
+          "outcome": "ok",
+          "timestamp": 1791528097571
+        }
+      ]
+    },
+    {
+      "target": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "object": 1,
+      "sample": "e0-t4",
+      "driverMs": 643,
+      "driverStartedMs": 1791527719280,
+      "invocations": [
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 37,
+          "outcome": "ok",
+          "timestamp": 1791527719975
+        },
+        {
+          "kind": "/run",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 629,
+          "outcome": "ok",
+          "timestamp": 1791527719921
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 1,
+          "outcome": "ok",
+          "timestamp": 1791527719562
+        },
+        {
+          "kind": "run",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 223,
+          "wallMs": 593,
+          "outcome": "ok",
+          "timestamp": 1791527719487
+        }
+      ]
+    },
+    {
+      "target": "pi",
+      "history": 50,
+      "ttftMs": 0,
+      "object": 1,
+      "sample": "e0-t9",
+      "driverMs": 1319,
+      "driverStartedMs": 1791527722758,
+      "invocations": [
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 192,
+          "outcome": "ok",
+          "timestamp": 1791527724282
+        },
+        {
+          "kind": "/run",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 1310,
+          "outcome": "ok",
+          "timestamp": 1791527724076
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 1,
+          "outcome": "ok",
+          "timestamp": 1791527723995
+        },
+        {
+          "kind": "run",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 203,
+          "wallMs": 573,
+          "outcome": "ok",
+          "timestamp": 1791527722941
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "object": 0,
+      "sample": "e0-t14",
+      "driverMs": 846,
+      "admissionMs": 225,
+      "driverStartedMs": 1791528291749,
+      "invocations": [
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 48,
+          "outcome": "canceled",
+          "timestamp": 1791528294034
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 139,
+          "wallMs": 790,
+          "outcome": "ok",
+          "timestamp": 1791528293946
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 48,
+          "outcome": "canceled",
+          "timestamp": 1791528293057
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 184,
+          "wallMs": 807,
+          "outcome": "ok",
+          "timestamp": 1791528292980
+        },
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 12,
+          "outcome": "ok",
+          "timestamp": 1791528292618
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 612,
+          "outcome": "ok",
+          "timestamp": 1791528292593
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 48,
+          "outcome": "canceled",
+          "timestamp": 1791528292036
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 219,
+          "outcome": "ok",
+          "timestamp": 1791528291972
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 206,
+          "wallMs": 814,
+          "outcome": "ok",
+          "timestamp": 1791528291957
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 2,
+          "wallMs": 3,
+          "outcome": "ok",
+          "timestamp": 1791528291119
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 46,
+          "outcome": "canceled",
+          "timestamp": 1791528291119
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 191,
+          "wallMs": 804,
+          "outcome": "ok",
+          "timestamp": 1791528291067
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 327,
+          "wallMs": 573,
+          "outcome": "ok",
+          "timestamp": 1791528291067
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 11,
+          "wallMs": 214,
+          "outcome": "ok",
+          "timestamp": 1791528290412
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 47,
+          "outcome": "canceled",
+          "timestamp": 1791528290150
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 166,
+          "wallMs": 742,
+          "outcome": "ok",
+          "timestamp": 1791528290055
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 48,
+          "outcome": "canceled",
+          "timestamp": 1791528289232
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 146,
+          "wallMs": 940,
+          "outcome": "ok",
+          "timestamp": 1791528289158
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "object": 0,
+      "sample": "e0-t23",
+      "driverMs": 2127,
+      "admissionMs": 1148,
+      "driverStartedMs": 1791528300393,
+      "invocations": [
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 49,
+          "outcome": "canceled",
+          "timestamp": 1791528302731
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 196,
+          "wallMs": 1004,
+          "outcome": "ok",
+          "timestamp": 1791528302660
+        },
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 3,
+          "wallMs": 19,
+          "outcome": "ok",
+          "timestamp": 1791528302560
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 974,
+          "outcome": "ok",
+          "timestamp": 1791528302518
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 3,
+          "wallMs": 3,
+          "outcome": "ok",
+          "timestamp": 1791528301853
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 51,
+          "outcome": "canceled",
+          "timestamp": 1791528301853
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 386,
+          "wallMs": 958,
+          "outcome": "ok",
+          "timestamp": 1791528301790
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 1130,
+          "outcome": "ok",
+          "timestamp": 1791528301538
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 274,
+          "wallMs": 1337,
+          "outcome": "ok",
+          "timestamp": 1791528301448
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 15,
+          "wallMs": 441,
+          "outcome": "ok",
+          "timestamp": 1791528300680
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "object": 9,
+      "sample": "e0-t20",
+      "driverMs": 1016,
+      "admissionMs": 297,
+      "driverStartedMs": 1791527890802,
+      "invocations": [
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 99,
+          "outcome": "canceled",
+          "timestamp": 1791527893052
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 150,
+          "wallMs": 936,
+          "outcome": "ok",
+          "timestamp": 1791527892931
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 98,
+          "outcome": "canceled",
+          "timestamp": 1791527891912
+        },
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 16,
+          "outcome": "ok",
+          "timestamp": 1791527891856
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 3,
+          "wallMs": 703,
+          "outcome": "ok",
+          "timestamp": 1791527891813
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 231,
+          "wallMs": 924,
+          "outcome": "ok",
+          "timestamp": 1791527891801
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 15,
+          "wallMs": 283,
+          "outcome": "ok",
+          "timestamp": 1791527891085
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 100,
+          "outcome": "canceled",
+          "timestamp": 1791527890934
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 2,
+          "wallMs": 3,
+          "outcome": "ok",
+          "timestamp": 1791527890830
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 170,
+          "wallMs": 920,
+          "outcome": "ok",
+          "timestamp": 1791527890712
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 350,
+          "wallMs": 696,
+          "outcome": "ok",
+          "timestamp": 1791527890712
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 7,
+          "wallMs": 242,
+          "outcome": "ok",
+          "timestamp": 1791527889951
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 96,
+          "outcome": "canceled",
+          "timestamp": 1791527889704
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 199,
+          "wallMs": 952,
+          "outcome": "ok",
+          "timestamp": 1791527889586
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 95,
+          "outcome": "canceled",
+          "timestamp": 1791527888583
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 138,
+          "wallMs": 1029,
+          "outcome": "ok",
+          "timestamp": 1791527888474
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 0,
+      "object": 9,
+      "sample": "e0-t24",
+      "driverMs": 1409,
+      "admissionMs": 372,
+      "driverStartedMs": 1791527895119,
+      "invocations": [
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 13,
+          "outcome": "ok",
+          "timestamp": 1791527896560
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 3,
+          "wallMs": 1021,
+          "outcome": "ok",
+          "timestamp": 1791527896522
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 4,
+          "wallMs": 356,
+          "outcome": "ok",
+          "timestamp": 1791527895482
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 2,
+          "wallMs": 221,
+          "outcome": "ok",
+          "timestamp": 1791527895374
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 600,
+          "wallMs": 1216,
+          "outcome": "ok",
+          "timestamp": 1791527895374
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 93,
+          "outcome": "canceled",
+          "timestamp": 1791527895374
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 240,
+          "wallMs": 1292,
+          "outcome": "ok",
+          "timestamp": 1791527895298
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 7,
+          "wallMs": 343,
+          "outcome": "ok",
+          "timestamp": 1791527894438
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 93,
+          "outcome": "canceled",
+          "timestamp": 1791527894115
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 257,
+          "wallMs": 928,
+          "outcome": "ok",
+          "timestamp": 1791527894013
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 99,
+          "outcome": "canceled",
+          "timestamp": 1791527893052
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 150,
+          "wallMs": 936,
+          "outcome": "ok",
+          "timestamp": 1791527892931
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "object": 7,
+      "sample": "e0-t1",
+      "driverMs": 5055,
+      "admissionMs": 275,
+      "driverStartedMs": 1791527990073,
+      "invocations": [
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 16,
+          "outcome": "ok",
+          "timestamp": 1791527995678
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 2,
+          "wallMs": 6,
+          "outcome": "ok",
+          "timestamp": 1791527995587
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 2,
+          "wallMs": 4762,
+          "outcome": "ok",
+          "timestamp": 1791527995123
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 96,
+          "outcome": "canceled",
+          "timestamp": 1791527995010
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 163,
+          "wallMs": 5011,
+          "outcome": "ok",
+          "timestamp": 1791527994975
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 334,
+          "wallMs": 4754,
+          "outcome": "ok",
+          "timestamp": 1791527994975
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 266,
+          "outcome": "ok",
+          "timestamp": 1791527990344
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 9,
+          "wallMs": 257,
+          "outcome": "ok",
+          "timestamp": 1791527990047
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 95,
+          "outcome": "canceled",
+          "timestamp": 1791527989932
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 514,
+          "wallMs": 5465,
+          "outcome": "ok",
+          "timestamp": 1791527989842
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "object": 7,
+      "sample": "e0-t18",
+      "driverMs": 6792,
+      "admissionMs": 289,
+      "driverStartedMs": 1791528080148,
+      "invocations": [
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 12,
+          "outcome": "ok",
+          "timestamp": 1791528086970
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 6491,
+          "outcome": "ok",
+          "timestamp": 1791528086939
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 2,
+          "wallMs": 2,
+          "outcome": "ok",
+          "timestamp": 1791528086896
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 97,
+          "outcome": "canceled",
+          "timestamp": 1791528086896
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 195,
+          "wallMs": 6724,
+          "outcome": "ok",
+          "timestamp": 1791528086842
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 312,
+          "wallMs": 6486,
+          "outcome": "ok",
+          "timestamp": 1791528086842
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 279,
+          "outcome": "ok",
+          "timestamp": 1791528080433
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 7,
+          "wallMs": 267,
+          "outcome": "ok",
+          "timestamp": 1791528080173
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 96,
+          "outcome": "canceled",
+          "timestamp": 1791528080010
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 121,
+          "wallMs": 5168,
+          "outcome": "ok",
+          "timestamp": 1791528079949
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 250,
+      "ttftMs": 400,
+      "object": 7,
+      "sample": "e0-t3",
+      "driverMs": 6568,
+      "admissionMs": 1193,
+      "driverStartedMs": 1791528001111,
+      "invocations": [
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 16,
+          "outcome": "ok",
+          "timestamp": 1791528007714
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 107,
+          "outcome": "canceled",
+          "timestamp": 1791528007701
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 2,
+          "wallMs": 5364,
+          "outcome": "ok",
+          "timestamp": 1791528007676
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 2,
+          "wallMs": 4,
+          "outcome": "ok",
+          "timestamp": 1791528007631
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 296,
+          "wallMs": 5248,
+          "outcome": "ok",
+          "timestamp": 1791528007602
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 251,
+          "wallMs": 6346,
+          "outcome": "ok",
+          "timestamp": 1791528007570
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 1182,
+          "outcome": "ok",
+          "timestamp": 1791528002301
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 9,
+          "wallMs": 1293,
+          "outcome": "ok",
+          "timestamp": 1791528002296
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 325,
+          "outcome": "canceled",
+          "timestamp": 1791528001071
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 214,
+          "wallMs": 5044,
+          "outcome": "ok",
+          "timestamp": 1791528000698
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 0,
+      "sample": "e0-t7",
+      "driverMs": 4822,
+      "admissionMs": 80,
+      "driverStartedMs": 1791527965818,
+      "invocations": [
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 14,
+          "outcome": "ok",
+          "timestamp": 1791527970670
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 2,
+          "wallMs": 4716,
+          "outcome": "ok",
+          "timestamp": 1791527970637
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 2,
+          "wallMs": 2,
+          "outcome": "ok",
+          "timestamp": 1791527970545
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 44,
+          "outcome": "canceled",
+          "timestamp": 1791527970545
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 139,
+          "wallMs": 4770,
+          "outcome": "ok",
+          "timestamp": 1791527970506
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 390,
+          "wallMs": 4581,
+          "outcome": "ok",
+          "timestamp": 1791527970506
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 3,
+          "wallMs": 61,
+          "outcome": "ok",
+          "timestamp": 1791527965886
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 7,
+          "wallMs": 61,
+          "outcome": "ok",
+          "timestamp": 1791527965803
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 54,
+          "outcome": "canceled",
+          "timestamp": 1791527965676
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 87,
+          "wallMs": 4683,
+          "outcome": "ok",
+          "timestamp": 1791527965636
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 0,
+      "sample": "e0-t14",
+      "driverMs": 5692,
+      "admissionMs": 1100,
+      "driverStartedMs": 1791528000618,
+      "invocations": [
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 18,
+          "outcome": "ok",
+          "timestamp": 1791528006357
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 4576,
+          "outcome": "ok",
+          "timestamp": 1791528006304
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 2,
+          "wallMs": 2,
+          "outcome": "ok",
+          "timestamp": 1791528006246
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 51,
+          "outcome": "canceled",
+          "timestamp": 1791528006246
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 123,
+          "wallMs": 4747,
+          "outcome": "ok",
+          "timestamp": 1791528006193
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 351,
+          "wallMs": 4568,
+          "outcome": "ok",
+          "timestamp": 1791528006193
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 6,
+          "wallMs": 1079,
+          "outcome": "ok",
+          "timestamp": 1791528001711
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 12,
+          "wallMs": 1064,
+          "outcome": "ok",
+          "timestamp": 1791528001525
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 953,
+          "outcome": "canceled",
+          "timestamp": 1791528000561
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 129,
+          "wallMs": 4733,
+          "outcome": "ok",
+          "timestamp": 1791528000425
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 1,
+      "sample": "e0-t1",
+      "driverMs": 5160,
+      "admissionMs": 296,
+      "driverStartedMs": 1791527723009,
+      "invocations": [
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 34,
+          "outcome": "ok",
+          "timestamp": 1791527728221
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 4858,
+          "outcome": "ok",
+          "timestamp": 1791527728167
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 3,
+          "wallMs": 4,
+          "outcome": "ok",
+          "timestamp": 1791527728092
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 89,
+          "outcome": "canceled",
+          "timestamp": 1791527728092
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 401,
+          "wallMs": 4852,
+          "outcome": "ok",
+          "timestamp": 1791527728051
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 175,
+          "wallMs": 5071,
+          "outcome": "ok",
+          "timestamp": 1791527728019
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 290,
+          "outcome": "ok",
+          "timestamp": 1791527723302
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 21,
+          "wallMs": 286,
+          "outcome": "ok",
+          "timestamp": 1791527723045
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 89,
+          "outcome": "canceled",
+          "timestamp": 1791527722312
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 443,
+          "wallMs": 5472,
+          "outcome": "ok",
+          "timestamp": 1791527722280
+        }
+      ]
+    },
+    {
+      "target": "yielded",
+      "history": 50,
+      "ttftMs": 400,
+      "object": 1,
+      "sample": "e0-t24",
+      "driverMs": 5459,
+      "admissionMs": 329,
+      "driverStartedMs": 1791527844445,
+      "invocations": [
+        {
+          "kind": "/metrics",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 0,
+          "wallMs": 32,
+          "outcome": "ok",
+          "timestamp": 1791527849950
+        },
+        {
+          "kind": "/await",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 5123,
+          "outcome": "ok",
+          "timestamp": 1791527849902
+        },
+        {
+          "kind": "/metrics",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 4,
+          "wallMs": 4,
+          "outcome": "ok",
+          "timestamp": 1791527849635
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 93,
+          "outcome": "canceled",
+          "timestamp": 1791527849635
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 203,
+          "wallMs": 5393,
+          "outcome": "ok",
+          "timestamp": 1791527849579
+        },
+        {
+          "kind": "await",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 564,
+          "wallMs": 5116,
+          "outcome": "ok",
+          "timestamp": 1791527849579
+        },
+        {
+          "kind": "/submit",
+          "scope": "worker",
+          "sameSample": true,
+          "cpuMs": 1,
+          "wallMs": 323,
+          "outcome": "ok",
+          "timestamp": 1791527844772
+        },
+        {
+          "kind": "submit",
+          "scope": "object",
+          "sameSample": true,
+          "cpuMs": 12,
+          "wallMs": 318,
+          "outcome": "ok",
+          "timestamp": 1791527844422
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 0,
+          "wallMs": 97,
+          "outcome": "canceled",
+          "timestamp": 1791527844293
+        },
+        {
+          "kind": "alarm",
+          "scope": "object",
+          "sameSample": false,
+          "cpuMs": 232,
+          "wallMs": 5078,
+          "outcome": "ok",
+          "timestamp": 1791527844215
+        }
+      ]
+    }
+  ]
+}

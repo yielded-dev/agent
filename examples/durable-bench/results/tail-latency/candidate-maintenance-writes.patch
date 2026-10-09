@@ -1,0 +1,59 @@
+diff --git a/packages/platform-cloudflare/src/Alarm.ts b/packages/platform-cloudflare/src/Alarm.ts
+index e400d456..ab9a7238 100644
+--- a/packages/platform-cloudflare/src/Alarm.ts
++++ b/packages/platform-cloudflare/src/Alarm.ts
+@@ -871,13 +871,16 @@ export class ThreadMutationGate extends Context.Service<
+               // Enrollment is a crash fallback, not evidence that the body committed.
+               for (const id of lanes) dueQueue.dirty(id, now, false);
+ 
+-              const next = ThreadMaintenanceState.make({
+-                ...state,
+-                dirty: state.dirty + (invalidatesRecovery && !nativeSource ? 1n : 0n),
+-              });
+-
+-              if (invalidatesRecovery || !initialized)
+-                await transaction.put(MAINTENANCE_STATE_KEY, encodeMaintenanceState(next));
++              if (!initialized || (invalidatesRecovery && !nativeSource))
++                await transaction.put(
++                  MAINTENANCE_STATE_KEY,
++                  encodeMaintenanceState(
++                    ThreadMaintenanceState.make({
++                      ...state,
++                      dirty: state.dirty + (invalidatesRecovery && !nativeSource ? 1n : 0n),
++                    }),
++                  ),
++                );
+               // The earliest configured retry bounds a newly actionable mutation without relying
+               // on its best-effort immediate wake hint.
+               const deadline = DueQueue.next(dueQueue.read());
+@@ -987,17 +990,20 @@ export class ThreadMutationGate extends Context.Service<
+         yield* runTransaction("record maintenance producer progress", async () => {
+           for (const id of affected) dueQueue.dirty(id, now, true);
+           if (affected.has(DueQueue.Native)) {
+-            const { state } = await readMaintenanceState(ctx.storage);
++            const { state, initialized } = await readMaintenanceState(ctx.storage);
+ 
+-            await ctx.storage.put(
+-              MAINTENANCE_STATE_KEY,
+-              encodeMaintenanceState(
+-                ThreadMaintenanceState.make({
+-                  ...Struct.omit(state, ["retry"]),
+-                  dirty: state.dirty + (nativeSource ? 0n : 1n),
+-                }),
+-              ),
+-            );
++            // Native progress already belongs to this generation. Persist only
++            // initialization, external progress, or the removal of a retry budget.
++            if (!initialized || !nativeSource || state.retry !== undefined)
++              await ctx.storage.put(
++                MAINTENANCE_STATE_KEY,
++                encodeMaintenanceState(
++                  ThreadMaintenanceState.make({
++                    ...Struct.omit(state, ["retry"]),
++                    dirty: state.dirty + (nativeSource ? 0n : 1n),
++                  }),
++                ),
++              );
+           }
+           await ensureTransactionAlarmBy(ctx.storage, now + minimumAlarmDelay);
+         });

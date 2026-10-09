@@ -1,0 +1,92 @@
+[
+  {
+    "object": "250/0/o3",
+    "sample": "e0-t3",
+    "driverMs": 1048,
+    "admissionMs": 320,
+    "http": 200,
+    "queryCount": 706,
+    "received": 706,
+    "invocations": [
+      {
+        "kind": "await",
+        "events": [
+          {
+            "cpuMs": 250,
+            "wallMs": 686,
+            "outcome": "ok",
+            "timestamp": 1791527719654
+          }
+        ]
+      },
+      {
+        "kind": "alarm",
+        "events": [
+          {
+            "cpuMs": 192,
+            "wallMs": 913,
+            "outcome": "ok",
+            "timestamp": 1791527719594
+          }
+        ]
+      },
+      {
+        "kind": "submit",
+        "events": [
+          {
+            "cpuMs": 15,
+            "wallMs": 274,
+            "outcome": "ok",
+            "timestamp": 1791527718915
+          }
+        ]
+      }
+    ],
+    "missing": 0
+  },
+  {
+    "object": "250/0/o3",
+    "sample": "e0-t10",
+    "driverMs": 1966,
+    "admissionMs": 1240,
+    "http": 200,
+    "queryCount": 659,
+    "received": 659,
+    "invocations": [
+      {
+        "kind": "await",
+        "events": [
+          {
+            "cpuMs": 279,
+            "wallMs": 689,
+            "outcome": "ok",
+            "timestamp": 1791527728612
+          }
+        ]
+      },
+      {
+        "kind": "alarm",
+        "events": [
+          {
+            "cpuMs": 341,
+            "wallMs": 1049,
+            "outcome": "ok",
+            "timestamp": 1791527728558
+          }
+        ]
+      },
+      {
+        "kind": "submit",
+        "events": [
+          {
+            "cpuMs": 11,
+            "wallMs": 409,
+            "outcome": "ok",
+            "timestamp": 1791527727977
+          }
+        ]
+      }
+    ],
+    "missing": 0
+  }
+]

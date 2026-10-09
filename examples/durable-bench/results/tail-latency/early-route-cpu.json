@@ -1,0 +1,80 @@
+[
+  {
+    "sample": "e0-t3",
+    "driverMs": 1048,
+    "admissionMs": 320,
+    "routes": [
+      {
+        "scope": "worker",
+        "path": "/metrics",
+        "cpuMs": 0,
+        "wallMs": 38,
+        "outcome": "ok",
+        "timestamp": 1791527720495
+      },
+      {
+        "scope": "worker",
+        "path": "/await",
+        "cpuMs": 8,
+        "wallMs": 708,
+        "outcome": "ok",
+        "timestamp": 1791527720417
+      },
+      {
+        "scope": "object",
+        "path": "/metrics",
+        "cpuMs": 2,
+        "wallMs": 2,
+        "outcome": "ok",
+        "timestamp": 1791527719778
+      },
+      {
+        "scope": "worker",
+        "path": "/submit",
+        "cpuMs": 23,
+        "wallMs": 297,
+        "outcome": "ok",
+        "timestamp": 1791527719676
+      }
+    ]
+  },
+  {
+    "sample": "e0-t10",
+    "driverMs": 1966,
+    "admissionMs": 1240,
+    "routes": [
+      {
+        "scope": "worker",
+        "path": "/metrics",
+        "cpuMs": 0,
+        "wallMs": 40,
+        "outcome": "ok",
+        "timestamp": 1791527729345
+      },
+      {
+        "scope": "worker",
+        "path": "/await",
+        "cpuMs": 8,
+        "wallMs": 715,
+        "outcome": "ok",
+        "timestamp": 1791527729276
+      },
+      {
+        "scope": "object",
+        "path": "/metrics",
+        "cpuMs": 2,
+        "wallMs": 3,
+        "outcome": "ok",
+        "timestamp": 1791527728710
+      },
+      {
+        "scope": "worker",
+        "path": "/submit",
+        "cpuMs": 22,
+        "wallMs": 434,
+        "outcome": "ok",
+        "timestamp": 1791527728542
+      }
+    ]
+  }
+]

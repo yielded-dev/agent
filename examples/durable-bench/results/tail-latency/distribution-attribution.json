@@ -1,0 +1,3851 @@
+{
+  "run": "tail-latency-mv0l4yxs-23141551",
+  "pairs": [
+    {
+      "slow": {
+        "target": "yielded",
+        "history": 50,
+        "ttftMs": 400,
+        "object": 0,
+        "sample": "e0-t14",
+        "driverMs": 5692,
+        "admissionMs": 1100,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791528000618,
+        "counts": {
+          "transaction": 34,
+          "sql": 222,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "delete": 1,
+          "setAlarm": 1
+        },
+        "gcCollected": 12,
+        "rangeCount": 2,
+        "storageBytes": 5267456,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 0
+          },
+          {
+            "name": "submit:return",
+            "atMs": 0
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 961,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 961
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 961
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 961
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 961
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 961
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 964
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 964
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 964,
+            "value": 1791528001575
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 964
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 964
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 964
+          },
+          {
+            "name": "await:start",
+            "atMs": 1022
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1521
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 2047
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 2564
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 3085
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 3601
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 4112
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 4619
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 5129
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 5623
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 5623
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 5623
+          },
+          {
+            "name": "await:return",
+            "atMs": 5623
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 5623
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 5623
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 5623
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 5623
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 5623
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 5623
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 5623,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 964,
+            "objectEndMs": 1521,
+            "providerArrivalFromDriverStartMs": 1109,
+            "providerEndFromDriverStartMs": 1569,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 80815,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 1521,
+            "objectEndMs": 2047,
+            "providerArrivalFromDriverStartMs": 1623,
+            "providerEndFromDriverStartMs": 2083,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 81268,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 2047,
+            "objectEndMs": 2564,
+            "providerArrivalFromDriverStartMs": 2129,
+            "providerEndFromDriverStartMs": 2589,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 81721,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 2564,
+            "objectEndMs": 3085,
+            "providerArrivalFromDriverStartMs": 2654,
+            "providerEndFromDriverStartMs": 3114,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 82174,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 3085,
+            "objectEndMs": 3601,
+            "providerArrivalFromDriverStartMs": 3160,
+            "providerEndFromDriverStartMs": 3620,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 82627,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 3601,
+            "objectEndMs": 4112,
+            "providerArrivalFromDriverStartMs": 3667,
+            "providerEndFromDriverStartMs": 4127,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 83080,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 4112,
+            "objectEndMs": 4619,
+            "providerArrivalFromDriverStartMs": 4167,
+            "providerEndFromDriverStartMs": 4627,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 83533,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 4619,
+            "objectEndMs": 5129,
+            "providerArrivalFromDriverStartMs": 4669,
+            "providerEndFromDriverStartMs": 5129,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 83986,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 5129,
+            "objectEndMs": 5623,
+            "providerArrivalFromDriverStartMs": 5178,
+            "providerEndFromDriverStartMs": 5628,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 450,
+            "requestBytes": 84439,
+            "providerColo": "SJC"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "alarm",
+            "outcome": "ok",
+            "cpuMs": 123,
+            "wallMs": 4747
+          },
+          {
+            "kind": "await",
+            "outcome": "ok",
+            "cpuMs": 351,
+            "wallMs": 4568
+          },
+          {
+            "kind": "submit",
+            "outcome": "ok",
+            "cpuMs": 12,
+            "wallMs": 1064
+          }
+        ]
+      },
+      "typical": {
+        "target": "yielded",
+        "history": 50,
+        "ttftMs": 400,
+        "object": 0,
+        "sample": "e0-t7",
+        "driverMs": 4822,
+        "admissionMs": 80,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791527965818,
+        "counts": {
+          "transaction": 34,
+          "sql": 220,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "delete": 1,
+          "setAlarm": 1
+        },
+        "gcCollected": 10,
+        "rangeCount": 1,
+        "storageBytes": 4276224,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 0
+          },
+          {
+            "name": "submit:return",
+            "atMs": 0
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 50,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 51
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 51
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 51,
+            "value": 1791527965854
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 51
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 51
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 51
+          },
+          {
+            "name": "await:start",
+            "atMs": 73
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 625
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1159
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1688
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 2209
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 2716
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 3234
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 3746
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 4253
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 4751
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 4751
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 4751
+          },
+          {
+            "name": "await:return",
+            "atMs": 4751
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 4751
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 4751
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 4751
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 4751
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 4751
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 4751
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 4751,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 51,
+            "objectEndMs": 625,
+            "providerArrivalFromDriverStartMs": 252,
+            "providerEndFromDriverStartMs": 712,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 46826,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 625,
+            "objectEndMs": 1159,
+            "providerArrivalFromDriverStartMs": 766,
+            "providerEndFromDriverStartMs": 1226,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 47276,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1159,
+            "objectEndMs": 1688,
+            "providerArrivalFromDriverStartMs": 1270,
+            "providerEndFromDriverStartMs": 1730,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 47726,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1688,
+            "objectEndMs": 2209,
+            "providerArrivalFromDriverStartMs": 1774,
+            "providerEndFromDriverStartMs": 2234,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 48176,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 2209,
+            "objectEndMs": 2716,
+            "providerArrivalFromDriverStartMs": 2276,
+            "providerEndFromDriverStartMs": 2736,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 48626,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 2716,
+            "objectEndMs": 3234,
+            "providerArrivalFromDriverStartMs": 2790,
+            "providerEndFromDriverStartMs": 3250,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 49076,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 3234,
+            "objectEndMs": 3746,
+            "providerArrivalFromDriverStartMs": 3301,
+            "providerEndFromDriverStartMs": 3761,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 49526,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 3746,
+            "objectEndMs": 4253,
+            "providerArrivalFromDriverStartMs": 3800,
+            "providerEndFromDriverStartMs": 4260,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 57912,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 4253,
+            "objectEndMs": 4751,
+            "providerArrivalFromDriverStartMs": 4306,
+            "providerEndFromDriverStartMs": 4756,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 450,
+            "requestBytes": 58362,
+            "providerColo": "SJC"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "alarm",
+            "outcome": "ok",
+            "cpuMs": 139,
+            "wallMs": 4770
+          },
+          {
+            "kind": "await",
+            "outcome": "ok",
+            "cpuMs": 390,
+            "wallMs": 4581
+          },
+          {
+            "kind": "submit",
+            "outcome": "ok",
+            "cpuMs": 7,
+            "wallMs": 61
+          }
+        ]
+      }
+    },
+    {
+      "slow": {
+        "target": "pi",
+        "history": 250,
+        "ttftMs": 400,
+        "object": 5,
+        "sample": "e0-t8",
+        "driverMs": 5385,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791528073407,
+        "counts": {
+          "sql": 1127,
+          "transaction": 77
+        },
+        "gcCollected": 9,
+        "storageBytes": 909312,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "run:return",
+            "atMs": 5317
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 0,
+            "objectEndMs": 529,
+            "providerArrivalFromDriverStartMs": 80,
+            "providerEndFromDriverStartMs": 540,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 146343,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 529,
+            "objectEndMs": 1065,
+            "providerArrivalFromDriverStartMs": 617,
+            "providerEndFromDriverStartMs": 1077,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 146796,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1065,
+            "objectEndMs": 1596,
+            "providerArrivalFromDriverStartMs": 1146,
+            "providerEndFromDriverStartMs": 1606,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 147249,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1596,
+            "objectEndMs": 2128,
+            "providerArrivalFromDriverStartMs": 1685,
+            "providerEndFromDriverStartMs": 2145,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 147702,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 2128,
+            "objectEndMs": 3219,
+            "providerArrivalFromDriverStartMs": 2743,
+            "providerEndFromDriverStartMs": 3203,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 148155,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 3219,
+            "objectEndMs": 3737,
+            "providerArrivalFromDriverStartMs": 3273,
+            "providerEndFromDriverStartMs": 3733,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 148608,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 3737,
+            "objectEndMs": 4270,
+            "providerArrivalFromDriverStartMs": 3817,
+            "providerEndFromDriverStartMs": 4277,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 149061,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 4270,
+            "objectEndMs": 4801,
+            "providerArrivalFromDriverStartMs": 4353,
+            "providerEndFromDriverStartMs": 4813,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 149514,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 4801,
+            "objectEndMs": 5317,
+            "providerArrivalFromDriverStartMs": 4887,
+            "providerEndFromDriverStartMs": 5337,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 450,
+            "requestBytes": 149967,
+            "providerColo": "SJC"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "run",
+            "outcome": "ok",
+            "cpuMs": 439,
+            "wallMs": 5361
+          }
+        ]
+      },
+      "typical": {
+        "target": "pi",
+        "history": 250,
+        "ttftMs": 400,
+        "object": 5,
+        "sample": "e0-t17",
+        "driverMs": 4920,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791528119062,
+        "counts": {
+          "sql": 1163,
+          "transaction": 77
+        },
+        "gcCollected": 10,
+        "storageBytes": 1077248,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "run:return",
+            "atMs": 4880
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 0,
+            "objectEndMs": 541,
+            "providerArrivalFromDriverStartMs": 71,
+            "providerEndFromDriverStartMs": 531,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 187812,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 541,
+            "objectEndMs": 1080,
+            "providerArrivalFromDriverStartMs": 620,
+            "providerEndFromDriverStartMs": 1080,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 188265,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1080,
+            "objectEndMs": 1620,
+            "providerArrivalFromDriverStartMs": 1165,
+            "providerEndFromDriverStartMs": 1625,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 188718,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1620,
+            "objectEndMs": 2163,
+            "providerArrivalFromDriverStartMs": 1704,
+            "providerEndFromDriverStartMs": 2164,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 189171,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 2163,
+            "objectEndMs": 2715,
+            "providerArrivalFromDriverStartMs": 2253,
+            "providerEndFromDriverStartMs": 2713,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 189624,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 2715,
+            "objectEndMs": 3258,
+            "providerArrivalFromDriverStartMs": 2792,
+            "providerEndFromDriverStartMs": 3252,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 190077,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 3258,
+            "objectEndMs": 3797,
+            "providerArrivalFromDriverStartMs": 3332,
+            "providerEndFromDriverStartMs": 3792,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 190530,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 3797,
+            "objectEndMs": 4347,
+            "providerArrivalFromDriverStartMs": 3888,
+            "providerEndFromDriverStartMs": 4348,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 190983,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 4347,
+            "objectEndMs": 4880,
+            "providerArrivalFromDriverStartMs": 4420,
+            "providerEndFromDriverStartMs": 4870,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 450,
+            "requestBytes": 191436,
+            "providerColo": "SJC"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "run",
+            "outcome": "ok",
+            "cpuMs": 537,
+            "wallMs": 4904
+          }
+        ]
+      }
+    },
+    {
+      "slow": {
+        "target": "yielded",
+        "history": 250,
+        "ttftMs": 400,
+        "object": 7,
+        "sample": "e0-t18",
+        "driverMs": 6792,
+        "admissionMs": 289,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791528080148,
+        "counts": {
+          "sql": 259,
+          "transaction": 34,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "delete": 1,
+          "setAlarm": 1
+        },
+        "gcCollected": 12,
+        "rangeCount": 4,
+        "storageBytes": 15421440,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 0
+          },
+          {
+            "name": "submit:return",
+            "atMs": 0
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 50,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 50
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 50
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 50,
+            "value": 1791528080223
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 50
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 50
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 50
+          },
+          {
+            "name": "await:start",
+            "atMs": 91
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 645
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1209
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1758
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 2292
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 2820
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 3348
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 3865
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 6219
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 6714
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 6714
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 6714
+          },
+          {
+            "name": "await:return",
+            "atMs": 6714
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 6714
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 6714
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 6714
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 6714
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 6714
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 6714
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 6714,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 50,
+            "objectEndMs": 645,
+            "providerArrivalFromDriverStartMs": 314,
+            "providerEndFromDriverStartMs": 774,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 191790,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 645,
+            "objectEndMs": 1209,
+            "providerArrivalFromDriverStartMs": 836,
+            "providerEndFromDriverStartMs": 1296,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 192243,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1209,
+            "objectEndMs": 1758,
+            "providerArrivalFromDriverStartMs": 1359,
+            "providerEndFromDriverStartMs": 1819,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 192696,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1758,
+            "objectEndMs": 2292,
+            "providerArrivalFromDriverStartMs": 1881,
+            "providerEndFromDriverStartMs": 2341,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 193149,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 2292,
+            "objectEndMs": 2820,
+            "providerArrivalFromDriverStartMs": 2402,
+            "providerEndFromDriverStartMs": 2862,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 193602,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 2820,
+            "objectEndMs": 3348,
+            "providerArrivalFromDriverStartMs": 2923,
+            "providerEndFromDriverStartMs": 3383,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 194055,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 3348,
+            "objectEndMs": 3865,
+            "providerArrivalFromDriverStartMs": 3441,
+            "providerEndFromDriverStartMs": 3901,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 194508,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 3865,
+            "objectEndMs": 6219,
+            "providerArrivalFromDriverStartMs": 5741,
+            "providerEndFromDriverStartMs": 6201,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 194961,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 6219,
+            "objectEndMs": 6714,
+            "providerArrivalFromDriverStartMs": 6260,
+            "providerEndFromDriverStartMs": 6710,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 450,
+            "requestBytes": 195414,
+            "providerColo": "SJC"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "alarm",
+            "outcome": "ok",
+            "cpuMs": 195,
+            "wallMs": 6724
+          },
+          {
+            "kind": "await",
+            "outcome": "ok",
+            "cpuMs": 312,
+            "wallMs": 6486
+          },
+          {
+            "kind": "submit",
+            "outcome": "ok",
+            "cpuMs": 7,
+            "wallMs": 267
+          }
+        ]
+      },
+      "typical": {
+        "target": "yielded",
+        "history": 250,
+        "ttftMs": 400,
+        "object": 7,
+        "sample": "e0-t1",
+        "driverMs": 5055,
+        "admissionMs": 275,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791527990073,
+        "counts": {
+          "sql": 257,
+          "transaction": 34,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "delete": 1,
+          "setAlarm": 1
+        },
+        "gcCollected": 10,
+        "rangeCount": 3,
+        "storageBytes": 12963840,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 0
+          },
+          {
+            "name": "submit:return",
+            "atMs": 0
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 50,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 50
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 50
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 50,
+            "value": 1791527990097
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 50
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 50
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 50
+          },
+          {
+            "name": "await:start",
+            "atMs": 127
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 680
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1253
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1799
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 2342
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 2876
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 3404
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 3930
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 4456
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 4974
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 4974
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 4974
+          },
+          {
+            "name": "await:return",
+            "atMs": 4974
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 4974
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 4974
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 4974
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 4974
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 4974
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 4974
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 4974,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 50,
+            "objectEndMs": 680,
+            "providerArrivalFromDriverStartMs": 303,
+            "providerEndFromDriverStartMs": 763,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 112584,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 680,
+            "objectEndMs": 1253,
+            "providerArrivalFromDriverStartMs": 828,
+            "providerEndFromDriverStartMs": 1288,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 113037,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1253,
+            "objectEndMs": 1799,
+            "providerArrivalFromDriverStartMs": 1349,
+            "providerEndFromDriverStartMs": 1809,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 113490,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1799,
+            "objectEndMs": 2342,
+            "providerArrivalFromDriverStartMs": 1873,
+            "providerEndFromDriverStartMs": 2333,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 113943,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 2342,
+            "objectEndMs": 2876,
+            "providerArrivalFromDriverStartMs": 2397,
+            "providerEndFromDriverStartMs": 2857,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 114396,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 2876,
+            "objectEndMs": 3404,
+            "providerArrivalFromDriverStartMs": 2919,
+            "providerEndFromDriverStartMs": 3379,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 114849,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 3404,
+            "objectEndMs": 3930,
+            "providerArrivalFromDriverStartMs": 3447,
+            "providerEndFromDriverStartMs": 3907,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 115302,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 3930,
+            "objectEndMs": 4456,
+            "providerArrivalFromDriverStartMs": 3972,
+            "providerEndFromDriverStartMs": 4432,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 115755,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 4456,
+            "objectEndMs": 4974,
+            "providerArrivalFromDriverStartMs": 4494,
+            "providerEndFromDriverStartMs": 4944,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 450,
+            "requestBytes": 116208,
+            "providerColo": "SJC"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "alarm",
+            "outcome": "ok",
+            "cpuMs": 163,
+            "wallMs": 5011
+          },
+          {
+            "kind": "await",
+            "outcome": "ok",
+            "cpuMs": 334,
+            "wallMs": 4754
+          },
+          {
+            "kind": "submit",
+            "outcome": "ok",
+            "cpuMs": 9,
+            "wallMs": 257
+          }
+        ]
+      }
+    },
+    {
+      "slow": {
+        "target": "pi",
+        "history": 50,
+        "ttftMs": 400,
+        "object": 1,
+        "sample": "e0-t11",
+        "driverMs": 5861,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791527770550,
+        "counts": {
+          "sql": 1055,
+          "transaction": 77
+        },
+        "gcCollected": 11,
+        "storageBytes": 450560,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "run:return",
+            "atMs": 5818
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 0,
+            "objectEndMs": 512,
+            "providerArrivalFromDriverStartMs": 67,
+            "providerEndFromDriverStartMs": 527,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 69385,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 512,
+            "objectEndMs": 1032,
+            "providerArrivalFromDriverStartMs": 587,
+            "providerEndFromDriverStartMs": 1047,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 69838,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1032,
+            "objectEndMs": 1554,
+            "providerArrivalFromDriverStartMs": 1108,
+            "providerEndFromDriverStartMs": 1568,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 70291,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1554,
+            "objectEndMs": 2080,
+            "providerArrivalFromDriverStartMs": 1634,
+            "providerEndFromDriverStartMs": 2094,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 70744,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 2080,
+            "objectEndMs": 2603,
+            "providerArrivalFromDriverStartMs": 2156,
+            "providerEndFromDriverStartMs": 2616,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 71197,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 2603,
+            "objectEndMs": 3135,
+            "providerArrivalFromDriverStartMs": 2703,
+            "providerEndFromDriverStartMs": 3163,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 71650,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 3135,
+            "objectEndMs": 3655,
+            "providerArrivalFromDriverStartMs": 3223,
+            "providerEndFromDriverStartMs": 3683,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 72103,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 3655,
+            "objectEndMs": 4212,
+            "providerArrivalFromDriverStartMs": 3814,
+            "providerEndFromDriverStartMs": 4274,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 72556,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 4212,
+            "objectEndMs": 5818,
+            "providerArrivalFromDriverStartMs": 5363,
+            "providerEndFromDriverStartMs": 5813,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 450,
+            "requestBytes": 73009,
+            "providerColo": "SJC"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "run",
+            "outcome": "ok",
+            "cpuMs": 391,
+            "wallMs": 5834
+          }
+        ]
+      },
+      "typical": {
+        "target": "pi",
+        "history": 50,
+        "ttftMs": 400,
+        "object": 1,
+        "sample": "e0-t4",
+        "driverMs": 4891,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791527736103,
+        "counts": {
+          "sql": 1023,
+          "transaction": 77
+        },
+        "gcCollected": 11,
+        "storageBytes": 323584,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "run:return",
+            "atMs": 4815
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 0,
+            "objectEndMs": 524,
+            "providerArrivalFromDriverStartMs": 71,
+            "providerEndFromDriverStartMs": 531,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 35471,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 524,
+            "objectEndMs": 1050,
+            "providerArrivalFromDriverStartMs": 599,
+            "providerEndFromDriverStartMs": 1059,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 35921,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 1050,
+            "objectEndMs": 1577,
+            "providerArrivalFromDriverStartMs": 1128,
+            "providerEndFromDriverStartMs": 1588,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 36371,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1577,
+            "objectEndMs": 2104,
+            "providerArrivalFromDriverStartMs": 1661,
+            "providerEndFromDriverStartMs": 2121,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 36821,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 2104,
+            "objectEndMs": 2636,
+            "providerArrivalFromDriverStartMs": 2191,
+            "providerEndFromDriverStartMs": 2651,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 37271,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 2636,
+            "objectEndMs": 3158,
+            "providerArrivalFromDriverStartMs": 2712,
+            "providerEndFromDriverStartMs": 3172,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 37721,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 3158,
+            "objectEndMs": 3693,
+            "providerArrivalFromDriverStartMs": 3252,
+            "providerEndFromDriverStartMs": 3712,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 38171,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 3693,
+            "objectEndMs": 4299,
+            "providerArrivalFromDriverStartMs": 3850,
+            "providerEndFromDriverStartMs": 4310,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 460,
+            "requestBytes": 38621,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 4299,
+            "objectEndMs": 4815,
+            "providerArrivalFromDriverStartMs": 4383,
+            "providerEndFromDriverStartMs": 4833,
+            "providerFirstByteMs": 400,
+            "providerTotalMs": 450,
+            "requestBytes": 39071,
+            "providerColo": "SJC"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "run",
+            "outcome": "ok",
+            "cpuMs": 361,
+            "wallMs": 4861
+          }
+        ]
+      }
+    },
+    {
+      "slow": {
+        "target": "yielded",
+        "history": 50,
+        "ttftMs": 0,
+        "object": 0,
+        "sample": "e0-t23",
+        "driverMs": 2127,
+        "admissionMs": 1148,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791528300393,
+        "counts": {
+          "transaction": 34,
+          "sql": 222,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "delete": 1,
+          "setAlarm": 1
+        },
+        "gcCollected": 12,
+        "rangeCount": 2,
+        "storageBytes": 6524928,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 0
+          },
+          {
+            "name": "submit:return",
+            "atMs": 0
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 103,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 103
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 103
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 103
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 103
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 103
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 105
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 105
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 105,
+            "value": 1791528300593
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 105
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 105
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 105
+          },
+          {
+            "name": "await:start",
+            "atMs": 307
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 322
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 417
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 523
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 603
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 658
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 725
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 844
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 918
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 996
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 996
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 996
+          },
+          {
+            "name": "await:return",
+            "atMs": 996
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 996
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 996
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 996
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 996
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 996
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 996
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 996,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 105,
+            "objectEndMs": 322,
+            "providerArrivalFromDriverStartMs": 1154,
+            "providerEndFromDriverStartMs": 1167,
+            "providerFirstByteMs": 13,
+            "providerTotalMs": 13,
+            "requestBytes": 122285,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 322,
+            "objectEndMs": 417,
+            "providerArrivalFromDriverStartMs": 1283,
+            "providerEndFromDriverStartMs": 1286,
+            "providerFirstByteMs": 3,
+            "providerTotalMs": 3,
+            "requestBytes": 122738,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 417,
+            "objectEndMs": 523,
+            "providerArrivalFromDriverStartMs": 1364,
+            "providerEndFromDriverStartMs": 1368,
+            "providerFirstByteMs": 4,
+            "providerTotalMs": 4,
+            "requestBytes": 123191,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 523,
+            "objectEndMs": 603,
+            "providerArrivalFromDriverStartMs": 1457,
+            "providerEndFromDriverStartMs": 1462,
+            "providerFirstByteMs": 5,
+            "providerTotalMs": 5,
+            "requestBytes": 123644,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 603,
+            "objectEndMs": 658,
+            "providerArrivalFromDriverStartMs": 1522,
+            "providerEndFromDriverStartMs": 1524,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 124097,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 658,
+            "objectEndMs": 725,
+            "providerArrivalFromDriverStartMs": 1592,
+            "providerEndFromDriverStartMs": 1596,
+            "providerFirstByteMs": 4,
+            "providerTotalMs": 4,
+            "requestBytes": 124550,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 725,
+            "objectEndMs": 844,
+            "providerArrivalFromDriverStartMs": 1693,
+            "providerEndFromDriverStartMs": 1704,
+            "providerFirstByteMs": 11,
+            "providerTotalMs": 11,
+            "requestBytes": 125003,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 844,
+            "objectEndMs": 918,
+            "providerArrivalFromDriverStartMs": 1794,
+            "providerEndFromDriverStartMs": 1799,
+            "providerFirstByteMs": 5,
+            "providerTotalMs": 5,
+            "requestBytes": 125456,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 918,
+            "objectEndMs": 996,
+            "providerArrivalFromDriverStartMs": 1869,
+            "providerEndFromDriverStartMs": 1871,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 125909,
+            "providerColo": "SJC"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "await",
+            "outcome": "ok",
+            "cpuMs": 386,
+            "wallMs": 958
+          },
+          {
+            "kind": "alarm",
+            "outcome": "ok",
+            "cpuMs": 274,
+            "wallMs": 1337
+          },
+          {
+            "kind": "submit",
+            "outcome": "ok",
+            "cpuMs": 15,
+            "wallMs": 441
+          }
+        ]
+      },
+      "typical": {
+        "target": "yielded",
+        "history": 50,
+        "ttftMs": 0,
+        "object": 0,
+        "sample": "e0-t14",
+        "driverMs": 846,
+        "admissionMs": 225,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791528291749,
+        "counts": {
+          "transaction": 34,
+          "sql": 222,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "delete": 1,
+          "setAlarm": 1
+        },
+        "gcCollected": 12,
+        "rangeCount": 2,
+        "storageBytes": 5255168,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 0
+          },
+          {
+            "name": "submit:return",
+            "atMs": 0
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 62,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 62
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 62
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 62
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 62
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 62
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 65
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 65
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 65,
+            "value": 1791528290426
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 65
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 65
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 65
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 139
+          },
+          {
+            "name": "await:start",
+            "atMs": 144
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 206
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 263
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 328
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 411
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 588
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 645
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 700
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 749
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 749
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 749
+          },
+          {
+            "name": "await:return",
+            "atMs": 749
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 749
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 749
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 749
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 749
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 749
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 749
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 749,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 65,
+            "objectEndMs": 139,
+            "providerArrivalFromDriverStartMs": 230,
+            "providerEndFromDriverStartMs": 232,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 80815,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 139,
+            "objectEndMs": 206,
+            "providerArrivalFromDriverStartMs": 293,
+            "providerEndFromDriverStartMs": 295,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 81268,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 206,
+            "objectEndMs": 263,
+            "providerArrivalFromDriverStartMs": 347,
+            "providerEndFromDriverStartMs": 349,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 81721,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 263,
+            "objectEndMs": 328,
+            "providerArrivalFromDriverStartMs": 405,
+            "providerEndFromDriverStartMs": 407,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 82174,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 328,
+            "objectEndMs": 411,
+            "providerArrivalFromDriverStartMs": 486,
+            "providerEndFromDriverStartMs": 489,
+            "providerFirstByteMs": 3,
+            "providerTotalMs": 3,
+            "requestBytes": 82627,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 411,
+            "objectEndMs": 588,
+            "providerArrivalFromDriverStartMs": 602,
+            "providerEndFromDriverStartMs": 604,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 83080,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 588,
+            "objectEndMs": 645,
+            "providerArrivalFromDriverStartMs": 669,
+            "providerEndFromDriverStartMs": 671,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 83533,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 645,
+            "objectEndMs": 700,
+            "providerArrivalFromDriverStartMs": 733,
+            "providerEndFromDriverStartMs": 736,
+            "providerFirstByteMs": 3,
+            "providerTotalMs": 3,
+            "requestBytes": 83986,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 700,
+            "objectEndMs": 749,
+            "providerArrivalFromDriverStartMs": 785,
+            "providerEndFromDriverStartMs": 787,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 84439,
+            "providerColo": "SJC"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "alarm",
+            "outcome": "ok",
+            "cpuMs": 191,
+            "wallMs": 804
+          },
+          {
+            "kind": "await",
+            "outcome": "ok",
+            "cpuMs": 327,
+            "wallMs": 573
+          },
+          {
+            "kind": "submit",
+            "outcome": "ok",
+            "cpuMs": 11,
+            "wallMs": 214
+          }
+        ]
+      }
+    },
+    {
+      "slow": {
+        "target": "pi",
+        "history": 50,
+        "ttftMs": 0,
+        "object": 1,
+        "sample": "e0-t9",
+        "driverMs": 1319,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791527722758,
+        "counts": {
+          "sql": 1055,
+          "transaction": 77
+        },
+        "gcCollected": 12,
+        "storageBytes": 417792,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "run:return",
+            "atMs": 476
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 0,
+            "objectEndMs": 50,
+            "providerArrivalFromDriverStartMs": 76,
+            "providerEndFromDriverStartMs": 76,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 61933,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 50,
+            "objectEndMs": 112,
+            "providerArrivalFromDriverStartMs": 140,
+            "providerEndFromDriverStartMs": 140,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 62386,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 112,
+            "objectEndMs": 172,
+            "providerArrivalFromDriverStartMs": 204,
+            "providerEndFromDriverStartMs": 204,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 62839,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 172,
+            "objectEndMs": 225,
+            "providerArrivalFromDriverStartMs": 269,
+            "providerEndFromDriverStartMs": 269,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 63292,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 225,
+            "objectEndMs": 273,
+            "providerArrivalFromDriverStartMs": 329,
+            "providerEndFromDriverStartMs": 329,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 63745,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 273,
+            "objectEndMs": 322,
+            "providerArrivalFromDriverStartMs": 384,
+            "providerEndFromDriverStartMs": 384,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 64198,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 322,
+            "objectEndMs": 374,
+            "providerArrivalFromDriverStartMs": 442,
+            "providerEndFromDriverStartMs": 442,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 64651,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 374,
+            "objectEndMs": 429,
+            "providerArrivalFromDriverStartMs": 507,
+            "providerEndFromDriverStartMs": 507,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 65104,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 429,
+            "objectEndMs": 476,
+            "providerArrivalFromDriverStartMs": 563,
+            "providerEndFromDriverStartMs": 563,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 65557,
+            "providerColo": "DEN"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "run",
+            "outcome": "ok",
+            "cpuMs": 203,
+            "wallMs": 573
+          }
+        ]
+      },
+      "typical": {
+        "target": "pi",
+        "history": 50,
+        "ttftMs": 0,
+        "object": 1,
+        "sample": "e0-t4",
+        "driverMs": 643,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791527719280,
+        "counts": {
+          "sql": 1023,
+          "transaction": 77
+        },
+        "gcCollected": 11,
+        "storageBytes": 323584,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "run:return",
+            "atMs": 472
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 0,
+            "objectEndMs": 46,
+            "providerArrivalFromDriverStartMs": 83,
+            "providerEndFromDriverStartMs": 83,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 35471,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 46,
+            "objectEndMs": 97,
+            "providerArrivalFromDriverStartMs": 139,
+            "providerEndFromDriverStartMs": 139,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 35921,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 97,
+            "objectEndMs": 151,
+            "providerArrivalFromDriverStartMs": 200,
+            "providerEndFromDriverStartMs": 200,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 36371,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 151,
+            "objectEndMs": 207,
+            "providerArrivalFromDriverStartMs": 263,
+            "providerEndFromDriverStartMs": 263,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 36821,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 207,
+            "objectEndMs": 260,
+            "providerArrivalFromDriverStartMs": 330,
+            "providerEndFromDriverStartMs": 330,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 37271,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 260,
+            "objectEndMs": 316,
+            "providerArrivalFromDriverStartMs": 392,
+            "providerEndFromDriverStartMs": 392,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 37721,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 316,
+            "objectEndMs": 367,
+            "providerArrivalFromDriverStartMs": 453,
+            "providerEndFromDriverStartMs": 453,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 38171,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 367,
+            "objectEndMs": 417,
+            "providerArrivalFromDriverStartMs": 513,
+            "providerEndFromDriverStartMs": 513,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 38621,
+            "providerColo": "DEN"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 417,
+            "objectEndMs": 472,
+            "providerArrivalFromDriverStartMs": 586,
+            "providerEndFromDriverStartMs": 586,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 39071,
+            "providerColo": "DEN"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "run",
+            "outcome": "ok",
+            "cpuMs": 223,
+            "wallMs": 593
+          }
+        ]
+      }
+    },
+    {
+      "slow": {
+        "target": "yielded",
+        "history": 250,
+        "ttftMs": 0,
+        "object": 0,
+        "sample": "e0-t11",
+        "driverMs": 2936,
+        "admissionMs": 250,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791527881375,
+        "counts": {
+          "sql": 259,
+          "transaction": 34,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "delete": 1,
+          "setAlarm": 1
+        },
+        "gcCollected": 12,
+        "rangeCount": 4,
+        "storageBytes": 14225408,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 0
+          },
+          {
+            "name": "submit:return",
+            "atMs": 0
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 50,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 50
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 50
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 50
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 50,
+            "value": 1791527881287
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 50
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 50
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 50
+          },
+          {
+            "name": "await:start",
+            "atMs": 131
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 228
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 566
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 968
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1327
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 1754
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 2215
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 2399
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 2581
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 2813
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 2813
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 2813
+          },
+          {
+            "name": "await:return",
+            "atMs": 2813
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 2813
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 2813
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 2813
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 2813
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 2813
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 2813
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 2813,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 50,
+            "objectEndMs": 228,
+            "providerArrivalFromDriverStartMs": 341,
+            "providerEndFromDriverStartMs": 343,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 157772,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 228,
+            "objectEndMs": 566,
+            "providerArrivalFromDriverStartMs": 498,
+            "providerEndFromDriverStartMs": 644,
+            "providerFirstByteMs": 146,
+            "providerTotalMs": 146,
+            "requestBytes": 158225,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 566,
+            "objectEndMs": 968,
+            "providerArrivalFromDriverStartMs": 878,
+            "providerEndFromDriverStartMs": 986,
+            "providerFirstByteMs": 108,
+            "providerTotalMs": 108,
+            "requestBytes": 158678,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 968,
+            "objectEndMs": 1327,
+            "providerArrivalFromDriverStartMs": 1188,
+            "providerEndFromDriverStartMs": 1314,
+            "providerFirstByteMs": 126,
+            "providerTotalMs": 126,
+            "requestBytes": 159131,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1327,
+            "objectEndMs": 1754,
+            "providerArrivalFromDriverStartMs": 1574,
+            "providerEndFromDriverStartMs": 1702,
+            "providerFirstByteMs": 128,
+            "providerTotalMs": 128,
+            "requestBytes": 159584,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1754,
+            "objectEndMs": 2215,
+            "providerArrivalFromDriverStartMs": 1932,
+            "providerEndFromDriverStartMs": 2133,
+            "providerFirstByteMs": 201,
+            "providerTotalMs": 201,
+            "requestBytes": 160037,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 2215,
+            "objectEndMs": 2399,
+            "providerArrivalFromDriverStartMs": 2314,
+            "providerEndFromDriverStartMs": 2327,
+            "providerFirstByteMs": 13,
+            "providerTotalMs": 13,
+            "requestBytes": 160490,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 2399,
+            "objectEndMs": 2581,
+            "providerArrivalFromDriverStartMs": 2509,
+            "providerEndFromDriverStartMs": 2513,
+            "providerFirstByteMs": 4,
+            "providerTotalMs": 4,
+            "requestBytes": 160943,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 2581,
+            "objectEndMs": 2813,
+            "providerArrivalFromDriverStartMs": 2674,
+            "providerEndFromDriverStartMs": 2747,
+            "providerFirstByteMs": 73,
+            "providerTotalMs": 73,
+            "requestBytes": 161396,
+            "providerColo": "SJC"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "await",
+            "outcome": "ok",
+            "cpuMs": 269,
+            "wallMs": 2663
+          },
+          {
+            "kind": "alarm",
+            "outcome": "ok",
+            "cpuMs": 132,
+            "wallMs": 2853
+          },
+          {
+            "kind": "submit",
+            "outcome": "ok",
+            "cpuMs": 9,
+            "wallMs": 221
+          }
+        ]
+      },
+      "typical": {
+        "target": "yielded",
+        "history": 250,
+        "ttftMs": 0,
+        "object": 0,
+        "sample": "e0-t2",
+        "driverMs": 956,
+        "admissionMs": 157,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791527870428,
+        "counts": {
+          "sql": 260,
+          "transaction": 34,
+          "get": 22,
+          "put": 15,
+          "getAlarm": 15,
+          "delete": 1,
+          "setAlarm": 1
+        },
+        "gcCollected": 11,
+        "rangeCount": 4,
+        "storageBytes": 12906496,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "maintenance:dirty:before",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:dirty:after",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:armed",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-admit",
+            "atMs": 0
+          },
+          {
+            "name": "submit:after-materialize",
+            "atMs": 0
+          },
+          {
+            "name": "maintenance:mutation:finished",
+            "atMs": 0
+          },
+          {
+            "name": "submit:return",
+            "atMs": 0
+          },
+          {
+            "name": "alarm:start",
+            "atMs": 87,
+            "value": 1
+          },
+          {
+            "name": "maintenance:begin:before",
+            "atMs": 87
+          },
+          {
+            "name": "maintenance:begin:after",
+            "atMs": 87
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 87
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 87
+          },
+          {
+            "name": "maintenance:recovery-status:before",
+            "atMs": 87
+          },
+          {
+            "name": "maintenance:recovery-status:after",
+            "atMs": 92
+          },
+          {
+            "name": "claim:after-claim",
+            "atMs": 92
+          },
+          {
+            "name": "setAlarm",
+            "atMs": 92,
+            "value": 1791527869922
+          },
+          {
+            "name": "input:after-canonical-append",
+            "atMs": 92
+          },
+          {
+            "name": "run:before-start-append",
+            "atMs": 92
+          },
+          {
+            "name": "run:after-start-append",
+            "atMs": 92
+          },
+          {
+            "name": "await:start",
+            "atMs": 125
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 188
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 255
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 322
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 398
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 490
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 552
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 617
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 690
+          },
+          {
+            "name": "turn:after-canonical-append",
+            "atMs": 770
+          },
+          {
+            "name": "terminalize:before-publication",
+            "atMs": 770
+          },
+          {
+            "name": "terminalize:after-canonical-append",
+            "atMs": 770
+          },
+          {
+            "name": "await:return",
+            "atMs": 770
+          },
+          {
+            "name": "maintenance:select:before",
+            "atMs": 770
+          },
+          {
+            "name": "maintenance:select:after",
+            "atMs": 770
+          },
+          {
+            "name": "maintenance:checkpoint:before",
+            "atMs": 770
+          },
+          {
+            "name": "maintenance:checkpoint:after",
+            "atMs": 770
+          },
+          {
+            "name": "maintenance:finish:before",
+            "atMs": 770
+          },
+          {
+            "name": "maintenance:finish:after",
+            "atMs": 770
+          },
+          {
+            "name": "alarm:end",
+            "atMs": 770,
+            "value": 0
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 92,
+            "objectEndMs": 188,
+            "providerArrivalFromDriverStartMs": 360,
+            "providerEndFromDriverStartMs": 362,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 116309,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 188,
+            "objectEndMs": 255,
+            "providerArrivalFromDriverStartMs": 426,
+            "providerEndFromDriverStartMs": 429,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 3,
+            "requestBytes": 116762,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 255,
+            "objectEndMs": 322,
+            "providerArrivalFromDriverStartMs": 483,
+            "providerEndFromDriverStartMs": 484,
+            "providerFirstByteMs": 1,
+            "providerTotalMs": 1,
+            "requestBytes": 117215,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 322,
+            "objectEndMs": 398,
+            "providerArrivalFromDriverStartMs": 554,
+            "providerEndFromDriverStartMs": 556,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 117668,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 398,
+            "objectEndMs": 490,
+            "providerArrivalFromDriverStartMs": 639,
+            "providerEndFromDriverStartMs": 641,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 118121,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 490,
+            "objectEndMs": 552,
+            "providerArrivalFromDriverStartMs": 704,
+            "providerEndFromDriverStartMs": 706,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 118574,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 552,
+            "objectEndMs": 617,
+            "providerArrivalFromDriverStartMs": 761,
+            "providerEndFromDriverStartMs": 762,
+            "providerFirstByteMs": 1,
+            "providerTotalMs": 1,
+            "requestBytes": 119027,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 617,
+            "objectEndMs": 690,
+            "providerArrivalFromDriverStartMs": 827,
+            "providerEndFromDriverStartMs": 829,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 119480,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 690,
+            "objectEndMs": 770,
+            "providerArrivalFromDriverStartMs": 889,
+            "providerEndFromDriverStartMs": 891,
+            "providerFirstByteMs": 2,
+            "providerTotalMs": 2,
+            "requestBytes": 119933,
+            "providerColo": "SJC"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "alarm",
+            "outcome": "ok",
+            "cpuMs": 228,
+            "wallMs": 876
+          },
+          {
+            "kind": "await",
+            "outcome": "ok",
+            "cpuMs": 242,
+            "wallMs": 625
+          },
+          {
+            "kind": "submit",
+            "outcome": "ok",
+            "cpuMs": 9,
+            "wallMs": 312
+          }
+        ]
+      }
+    },
+    {
+      "slow": {
+        "target": "pi",
+        "history": 250,
+        "ttftMs": 0,
+        "object": 3,
+        "sample": "e0-t16",
+        "driverMs": 1604,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791528077570,
+        "counts": {
+          "sql": 1163,
+          "transaction": 77
+        },
+        "gcCollected": 10,
+        "storageBytes": 1060864,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "run:return",
+            "atMs": 1880
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 0,
+            "objectEndMs": 61,
+            "providerArrivalFromDriverStartMs": 82,
+            "providerEndFromDriverStartMs": 82,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 184086,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 61,
+            "objectEndMs": 131,
+            "providerArrivalFromDriverStartMs": 156,
+            "providerEndFromDriverStartMs": 156,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 184539,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 131,
+            "objectEndMs": 1631,
+            "providerArrivalFromDriverStartMs": 1073,
+            "providerEndFromDriverStartMs": 1073,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 184992,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 1631,
+            "objectEndMs": 1678,
+            "providerArrivalFromDriverStartMs": 1153,
+            "providerEndFromDriverStartMs": 1153,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 185445,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 1678,
+            "objectEndMs": 1715,
+            "providerArrivalFromDriverStartMs": 1232,
+            "providerEndFromDriverStartMs": 1232,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 185898,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 1715,
+            "objectEndMs": 1770,
+            "providerArrivalFromDriverStartMs": 1318,
+            "providerEndFromDriverStartMs": 1318,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 186351,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 1770,
+            "objectEndMs": 1803,
+            "providerArrivalFromDriverStartMs": 1396,
+            "providerEndFromDriverStartMs": 1396,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 186804,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 1803,
+            "objectEndMs": 1839,
+            "providerArrivalFromDriverStartMs": 1482,
+            "providerEndFromDriverStartMs": 1482,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 187257,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 1839,
+            "objectEndMs": 1880,
+            "providerArrivalFromDriverStartMs": 1555,
+            "providerEndFromDriverStartMs": 1555,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 187710,
+            "providerColo": "SJC"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "run",
+            "outcome": "ok",
+            "cpuMs": 479,
+            "wallMs": 1576
+          }
+        ]
+      },
+      "typical": {
+        "target": "pi",
+        "history": 250,
+        "ttftMs": 0,
+        "object": 3,
+        "sample": "e0-t5",
+        "driverMs": 792,
+        "driverColo": "SJC",
+        "driverStartedMs": 1791528067319,
+        "counts": {
+          "sql": 1127,
+          "transaction": 77
+        },
+        "gcCollected": 10,
+        "storageBytes": 860160,
+        "events": [
+          {
+            "name": "begin",
+            "atMs": 0,
+            "value": 0
+          },
+          {
+            "name": "run:return",
+            "atMs": 618
+          }
+        ],
+        "calls": [
+          {
+            "call": 0,
+            "objectStartMs": 0,
+            "objectEndMs": 63,
+            "providerArrivalFromDriverStartMs": 90,
+            "providerEndFromDriverStartMs": 90,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 135168,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 1,
+            "objectStartMs": 63,
+            "objectEndMs": 115,
+            "providerArrivalFromDriverStartMs": 157,
+            "providerEndFromDriverStartMs": 157,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 135621,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 2,
+            "objectStartMs": 115,
+            "objectEndMs": 157,
+            "providerArrivalFromDriverStartMs": 238,
+            "providerEndFromDriverStartMs": 238,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 136074,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 3,
+            "objectStartMs": 157,
+            "objectEndMs": 214,
+            "providerArrivalFromDriverStartMs": 315,
+            "providerEndFromDriverStartMs": 315,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 136527,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 4,
+            "objectStartMs": 214,
+            "objectEndMs": 339,
+            "providerArrivalFromDriverStartMs": 412,
+            "providerEndFromDriverStartMs": 412,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 136980,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 5,
+            "objectStartMs": 339,
+            "objectEndMs": 403,
+            "providerArrivalFromDriverStartMs": 502,
+            "providerEndFromDriverStartMs": 502,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 137433,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 6,
+            "objectStartMs": 403,
+            "objectEndMs": 492,
+            "providerArrivalFromDriverStartMs": 595,
+            "providerEndFromDriverStartMs": 595,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 137886,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 7,
+            "objectStartMs": 492,
+            "objectEndMs": 556,
+            "providerArrivalFromDriverStartMs": 673,
+            "providerEndFromDriverStartMs": 673,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 138339,
+            "providerColo": "SJC"
+          },
+          {
+            "call": 8,
+            "objectStartMs": 556,
+            "objectEndMs": 618,
+            "providerArrivalFromDriverStartMs": 742,
+            "providerEndFromDriverStartMs": 742,
+            "providerFirstByteMs": 0,
+            "providerTotalMs": 0,
+            "requestBytes": 138792,
+            "providerColo": "SJC"
+          }
+        ],
+        "cpu": [
+          {
+            "kind": "run",
+            "outcome": "ok",
+            "cpuMs": 433,
+            "wallMs": 753
+          }
+        ]
+      }
+    }
+  ],
+  "rotations": [
+    {
+      "cell": "yielded/250/0",
+      "rotations": [
+        {
+          "object": 3,
+          "sample": "e0-t2",
+          "driverMs": 1038,
+          "excessMs": -5
+        },
+        {
+          "object": 6,
+          "sample": "e0-t2",
+          "driverMs": 931,
+          "excessMs": 50
+        },
+        {
+          "object": 8,
+          "sample": "e0-t2",
+          "driverMs": 757,
+          "excessMs": 3.5
+        },
+        {
+          "object": 0,
+          "sample": "e0-t2",
+          "driverMs": 956,
+          "excessMs": 0
+        },
+        {
+          "object": 1,
+          "sample": "e0-t2",
+          "driverMs": 1151,
+          "excessMs": 135
+        },
+        {
+          "object": 5,
+          "sample": "e0-t2",
+          "driverMs": 930,
+          "excessMs": -142.5
+        },
+        {
+          "object": 4,
+          "sample": "e0-t2",
+          "driverMs": 1386,
+          "excessMs": -65
+        },
+        {
+          "object": 7,
+          "sample": "e0-t2",
+          "driverMs": 1139,
+          "excessMs": 178
+        },
+        {
+          "object": 2,
+          "sample": "e0-t2",
+          "driverMs": 1395,
+          "excessMs": 265
+        },
+        {
+          "object": 9,
+          "sample": "e0-t2",
+          "driverMs": 1543,
+          "excessMs": 474
+        }
+      ]
+    },
+    {
+      "cell": "yielded/50/0",
+      "rotations": [
+        {
+          "object": 1,
+          "sample": "e0-t12",
+          "driverMs": 865,
+          "excessMs": 67.5
+        },
+        {
+          "object": 7,
+          "sample": "e0-t12",
+          "driverMs": 859,
+          "excessMs": 1.5
+        },
+        {
+          "object": 9,
+          "sample": "e0-t12",
+          "driverMs": 995,
+          "excessMs": -22.5
+        },
+        {
+          "object": 4,
+          "sample": "e0-t12",
+          "driverMs": 505,
+          "excessMs": -30.5
+        },
+        {
+          "object": 8,
+          "sample": "e0-t12",
+          "driverMs": 761,
+          "excessMs": 42.5
+        },
+        {
+          "object": 5,
+          "sample": "e0-t12",
+          "driverMs": 832,
+          "excessMs": 30.5
+        },
+        {
+          "object": 2,
+          "sample": "e0-t12",
+          "driverMs": 776,
+          "excessMs": 18.5
+        },
+        {
+          "object": 6,
+          "sample": "e0-t12",
+          "driverMs": 587,
+          "excessMs": 44
+        },
+        {
+          "object": 3,
+          "sample": "e0-t12",
+          "driverMs": 911,
+          "excessMs": 63.5
+        },
+        {
+          "object": 0,
+          "sample": "e0-t12",
+          "driverMs": 977,
+          "excessMs": 137.5
+        }
+      ]
+    },
+    {
+      "cell": "yielded/250/400",
+      "rotations": [
+        {
+          "object": 8,
+          "sample": "e0-t2",
+          "driverMs": 4969,
+          "excessMs": 38
+        },
+        {
+          "object": 5,
+          "sample": "e0-t2",
+          "driverMs": 4959,
+          "excessMs": -68.5
+        },
+        {
+          "object": 0,
+          "sample": "e0-t2",
+          "driverMs": 5556,
+          "excessMs": 115.5
+        },
+        {
+          "object": 3,
+          "sample": "e0-t2",
+          "driverMs": 5014,
+          "excessMs": -45.5
+        },
+        {
+          "object": 6,
+          "sample": "e0-t2",
+          "driverMs": 5402,
+          "excessMs": 83.5
+        },
+        {
+          "object": 2,
+          "sample": "e0-t2",
+          "driverMs": 5380,
+          "excessMs": 156.5
+        },
+        {
+          "object": 1,
+          "sample": "e0-t2",
+          "driverMs": 5187,
+          "excessMs": 124
+        },
+        {
+          "object": 7,
+          "sample": "e0-t2",
+          "driverMs": 5120,
+          "excessMs": 68
+        },
+        {
+          "object": 9,
+          "sample": "e0-t2",
+          "driverMs": 5003,
+          "excessMs": 100.5
+        },
+        {
+          "object": 4,
+          "sample": "e0-t2",
+          "driverMs": 5086,
+          "excessMs": 88
+        }
+      ]
+    },
+    {
+      "cell": "yielded/50/400",
+      "rotations": [
+        {
+          "object": 1,
+          "sample": "e0-t12",
+          "driverMs": 5084,
+          "excessMs": -75
+        },
+        {
+          "object": 6,
+          "sample": "e0-t12",
+          "driverMs": 4876,
+          "excessMs": -18.5
+        },
+        {
+          "object": 4,
+          "sample": "e0-t12",
+          "driverMs": 4714,
+          "excessMs": -103.5
+        },
+        {
+          "object": 5,
+          "sample": "e0-t12",
+          "driverMs": 4961,
+          "excessMs": 38.5
+        },
+        {
+          "object": 0,
+          "sample": "e0-t12",
+          "driverMs": 4798,
+          "excessMs": -26
+        },
+        {
+          "object": 9,
+          "sample": "e0-t12",
+          "driverMs": 5092,
+          "excessMs": 36
+        },
+        {
+          "object": 2,
+          "sample": "e0-t12",
+          "driverMs": 4913,
+          "excessMs": 18.5
+        },
+        {
+          "object": 8,
+          "sample": "e0-t12",
+          "driverMs": 4816,
+          "excessMs": -41.5
+        },
+        {
+          "object": 3,
+          "sample": "e0-t12",
+          "driverMs": 4783,
+          "excessMs": -58.5
+        },
+        {
+          "object": 7,
+          "sample": "e0-t12",
+          "driverMs": 5149,
+          "excessMs": 291
+        }
+      ]
+    }
+  ]
+}
