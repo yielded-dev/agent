@@ -1,0 +1,1931 @@
+{
+  "method": "All controller runs, including setup failures, rejected diagnostic captures and excluded completed inputs. Non-ok invocation telemetry is counted by target, event and outcome. Intentional Object aborts are not failed inputs. No input is retried.",
+  "runs": [
+    {
+      "run": "cold-bisect-mv0qznxj-2a2dd45e",
+      "sourceSha256": "c2ad5d405b6bab2c7f5cf94348f434988555b3c3aa62dd726724a8db11fa4414",
+      "revision": "f579db4f2e295df9110b8dadcaf186b985d3432b",
+      "dirty": true,
+      "startedAt": "2026-10-09T09:13:16.519Z",
+      "wallMs": 67691,
+      "complete": false,
+      "kept": true,
+      "options": {
+        "targets": [
+          "bare"
+        ],
+        "sizes": [
+          0
+        ],
+        "objects": 3,
+        "repeats": 1,
+        "concurrency": 3,
+        "ttft": [
+          0
+        ],
+        "coldMode": "object",
+        "storageProbe": "none"
+      },
+      "stateStatus": [
+        {
+          "key": "cold/failed",
+          "count": 3
+        },
+        {
+          "key": "warmup/skipped",
+          "count": 3
+        },
+        {
+          "key": "warm/skipped",
+          "count": 3
+        }
+      ],
+      "failures": [
+        "bare/cold-bisect-mv0qznxj-2a2dd45e-h0-d0-o2/e0-t0: Worker returned HTTP 502; the input will not be retried. {\"ok\":false,\"error\":\"Target /await returned HTTP 500; turn outcome may be unknown. {\\\"ok\\\":false,\\\"error\\\":\\\"Bare provider probe failed\\\",\\\"sample\\\":\\\"e0-t0\\\"}\"}",
+        "bare/cold-bisect-mv0qznxj-2a2dd45e-h0-d0-o1/e0-t0: Worker returned HTTP 502; the input will not be retried. {\"ok\":false,\"error\":\"Target /await returned HTTP 500; turn outcome may be unknown. {\\\"ok\\\":false,\\\"error\\\":\\\"Bare provider probe failed\\\",\\\"sample\\\":\\\"e0-t0\\\"}\"}",
+        "bare/cold-bisect-mv0qznxj-2a2dd45e-h0-d0-o0/e0-t0: Worker returned HTTP 502; the input will not be retried. {\"ok\":false,\"error\":\"Target /await returned HTTP 500; turn outcome may be unknown. {\\\"ok\\\":false,\\\"error\\\":\\\"Bare provider probe failed\\\",\\\"sample\\\":\\\"e0-t0\\\"}\"}"
+      ],
+      "setupReadiness": [],
+      "setupResets": {
+        "statuses": [
+          {
+            "key": "ok",
+            "count": 3
+          }
+        ],
+        "recordedAttempts": 0,
+        "attemptsNotRecorded": 3,
+        "nonOkAttempts": []
+      },
+      "nonOkInputs": [
+        {
+          "object": 2,
+          "target": "bare",
+          "history": 0,
+          "state": "cold",
+          "sample": "e0-t0",
+          "status": "failed",
+          "outcome": "unknown",
+          "error": "Worker returned HTTP 502; the input will not be retried. {\"ok\":false,\"error\":\"Target /await returned HTTP 500; turn outcome may be unknown. {\\\"ok\\\":false,\\\"error\\\":\\\"Bare provider probe failed\\\",\\\"sample\\\":\\\"e0-t0\\\"}\"}"
+        },
+        {
+          "object": 0,
+          "target": "bare",
+          "history": 0,
+          "state": "cold",
+          "sample": "e0-t0",
+          "status": "failed",
+          "outcome": "unknown",
+          "error": "Worker returned HTTP 502; the input will not be retried. {\"ok\":false,\"error\":\"Target /await returned HTTP 500; turn outcome may be unknown. {\\\"ok\\\":false,\\\"error\\\":\\\"Bare provider probe failed\\\",\\\"sample\\\":\\\"e0-t0\\\"}\"}"
+        },
+        {
+          "object": 1,
+          "target": "bare",
+          "history": 0,
+          "state": "cold",
+          "sample": "e0-t0",
+          "status": "failed",
+          "outcome": "unknown",
+          "error": "Worker returned HTTP 502; the input will not be retried. {\"ok\":false,\"error\":\"Target /await returned HTTP 500; turn outcome may be unknown. {\\\"ok\\\":false,\\\"error\\\":\\\"Bare provider probe failed\\\",\\\"sample\\\":\\\"e0-t0\\\"}\"}"
+        },
+        {
+          "object": 2,
+          "target": "bare",
+          "history": 0,
+          "state": "warmup",
+          "sample": "e0-t1",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "error": "An earlier turn failed; later inputs to this Object are not sent or replayed."
+        },
+        {
+          "object": 2,
+          "target": "bare",
+          "history": 0,
+          "state": "warm",
+          "sample": "e0-t2",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "error": "An earlier turn failed; later inputs to this Object are not sent or replayed."
+        },
+        {
+          "object": 1,
+          "target": "bare",
+          "history": 0,
+          "state": "warmup",
+          "sample": "e0-t1",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "error": "An earlier turn failed; later inputs to this Object are not sent or replayed."
+        },
+        {
+          "object": 1,
+          "target": "bare",
+          "history": 0,
+          "state": "warm",
+          "sample": "e0-t2",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "error": "An earlier turn failed; later inputs to this Object are not sent or replayed."
+        },
+        {
+          "object": 0,
+          "target": "bare",
+          "history": 0,
+          "state": "warmup",
+          "sample": "e0-t1",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "error": "An earlier turn failed; later inputs to this Object are not sent or replayed."
+        },
+        {
+          "object": 0,
+          "target": "bare",
+          "history": 0,
+          "state": "warm",
+          "sample": "e0-t2",
+          "status": "skipped",
+          "outcome": "not-sent",
+          "error": "An earlier turn failed; later inputs to this Object are not sent or replayed."
+        }
+      ],
+      "cpu": {
+        "invocations": 26,
+        "unmatchedMarkers": 1,
+        "nonOk": [
+          {
+            "key": "bare/fetch/exception",
+            "count": 2,
+            "totalCpuMs": 4
+          },
+          {
+            "key": "bare/fetch/aborted",
+            "count": 2,
+            "totalCpuMs": 1
+          }
+        ]
+      },
+      "profiles": [],
+      "cleanup": null
+    },
+    {
+      "run": "cold-bisect-mv0r3810-1598b88c",
+      "sourceSha256": "8da4417eba9aee63bc2661559d11c11972419888e2c7d8076551f2e77ddb330d",
+      "revision": "7f7c5fdd44c542f9f58a7e31c0f20efc46014e7f",
+      "dirty": false,
+      "startedAt": "2026-10-09T09:16:02.532Z",
+      "wallMs": 182189,
+      "complete": false,
+      "kept": false,
+      "options": {
+        "targets": [
+          "bare",
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          0,
+          50
+        ],
+        "objects": 2,
+        "repeats": 1,
+        "concurrency": 6,
+        "ttft": [
+          0
+        ],
+        "coldMode": "object",
+        "storageProbe": "none"
+      },
+      "stateStatus": [
+        {
+          "key": "cold/ok",
+          "count": 10
+        },
+        {
+          "key": "warmup/ok",
+          "count": 10
+        },
+        {
+          "key": "warm/ok",
+          "count": 10
+        }
+      ],
+      "failures": [
+        "Target cleanup could not be verified. Keep private state and run --teardown."
+      ],
+      "setupReadiness": [],
+      "setupResets": {
+        "statuses": [
+          {
+            "key": "ok",
+            "count": 10
+          }
+        ],
+        "recordedAttempts": 0,
+        "attemptsNotRecorded": 10,
+        "nonOkAttempts": []
+      },
+      "nonOkInputs": [],
+      "cpu": {
+        "invocations": 754,
+        "unmatchedMarkers": 12,
+        "nonOk": [
+          {
+            "key": "bare/fetch/aborted",
+            "count": 2,
+            "totalCpuMs": 1
+          },
+          {
+            "key": "yielded/alarm/canceled",
+            "count": 113,
+            "totalCpuMs": 56
+          },
+          {
+            "key": "yielded/cold-abort/aborted",
+            "count": 4,
+            "totalCpuMs": 0
+          },
+          {
+            "key": "pi/cold-abort/aborted",
+            "count": 3,
+            "totalCpuMs": 1
+          }
+        ]
+      },
+      "profiles": [],
+      "cleanup": {
+        "verified": false,
+        "workers": [
+          "cold-bisect-mv0r3810-1598b88c-bare"
+        ],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-bisect-mv0ri8w6-e7b78ad8",
+      "sourceSha256": "c9ad0942dd754258ca76dfa1a78dc8482a079273dc5e6214d8728274f48f144e",
+      "revision": "eb64d39c5b3ad33917979cc44ee93799412d6761",
+      "dirty": false,
+      "startedAt": "2026-10-09T09:27:43.494Z",
+      "wallMs": 367743,
+      "complete": false,
+      "kept": false,
+      "options": {
+        "targets": [
+          "yielded"
+        ],
+        "sizes": [
+          250
+        ],
+        "objects": 1,
+        "repeats": 1,
+        "concurrency": 4,
+        "ttft": [
+          0
+        ],
+        "coldMode": "fresh",
+        "profile": true,
+        "storageProbe": "none"
+      },
+      "stateStatus": [
+        {
+          "key": "profile/failed",
+          "count": 1
+        }
+      ],
+      "failures": [
+        "yielded/cold-bisect-mv0ri8w6-e7b78ad8-h250-d0-o0/profile-e0-t0: Profile target was not discoverable after eight preflights"
+      ],
+      "setupReadiness": [],
+      "setupResets": {
+        "statuses": [
+          {
+            "key": "ok",
+            "count": 1
+          }
+        ],
+        "recordedAttempts": 0,
+        "attemptsNotRecorded": 1,
+        "nonOkAttempts": []
+      },
+      "nonOkInputs": [
+        {
+          "object": 0,
+          "target": "yielded",
+          "history": 250,
+          "state": "profile",
+          "sample": "profile-e0-t0",
+          "status": "failed",
+          "outcome": "unknown",
+          "error": "Profile target was not discoverable after eight preflights"
+        }
+      ],
+      "cpu": {
+        "invocations": 1067,
+        "unmatchedMarkers": 11,
+        "nonOk": [
+          {
+            "key": "yielded/cold-abort/aborted",
+            "count": 1,
+            "totalCpuMs": 0
+          },
+          {
+            "key": "yielded/alarm/canceled",
+            "count": 244,
+            "totalCpuMs": 0
+          }
+        ]
+      },
+      "profiles": [],
+      "cleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-bisect-mv0rta8l-2af70aac",
+      "sourceSha256": "3fea60be76f1f57204a0482d00e7b79327a1748cb408e2c68f5b835ca12d907e",
+      "revision": "53acba11b4aae15ab2803d1c6b1e12925417c861",
+      "dirty": false,
+      "startedAt": "2026-10-09T09:36:18.453Z",
+      "wallMs": 1732293,
+      "complete": false,
+      "kept": false,
+      "options": {
+        "targets": [
+          "bare",
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          0,
+          50,
+          250,
+          1000
+        ],
+        "objects": 20,
+        "repeats": 2,
+        "concurrency": 16,
+        "ttft": [
+          0
+        ],
+        "coldMode": "object",
+        "profile": false,
+        "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+        "storageProbe": "none"
+      },
+      "stateStatus": [],
+      "failures": [
+        "yielded/cold-bisect-mv0rta8l-2af70aac-h1000-d0-o1 seed: Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Seed h877 did not complete; initialization will not be retried\",\"sample\":\"import\"}",
+        "Seeding failed; no measured epoch was uploaded."
+      ],
+      "setupReadiness": [
+        {
+          "target": "bare",
+          "phase": "seed",
+          "status": "ready",
+          "readinessFailures": [
+            {
+              "ingress": "driver",
+              "attempt": 0,
+              "error": "Worker returned HTTP 404; the input will not be retried. error code: 1042\n"
+            },
+            {
+              "ingress": "driver",
+              "attempt": 1,
+              "error": "Worker returned HTTP 404; the input will not be retried. error code: 1042\n"
+            }
+          ]
+        },
+        {
+          "target": "yielded",
+          "phase": "seed",
+          "status": "ready",
+          "readinessFailures": [
+            {
+              "ingress": "object",
+              "attempt": 0,
+              "error": "Worker returned HTTP 404; the input will not be retried. <!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!--<![endif]-->\n  <head>\n    <meta charSet=\"utf-8\"/>\n    <meta http-equiv=\"refresh\" content=\"30\">\n    <title>Page not found</title>\n    <link rel=\"icon\" type=\"image/png\" href=\"https://workers.cloudflare.com/favicon.ico\" sizes=\"48x48\"/>\n    <style>\n      body {\n        font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Roboto\", \"Oxygen\", \"Ubuntu\", \"Cantarell\", \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", sans-serif\n      }\n      body,html {\n        margin: 0;\n        padding: 0;\n      }\n      * {\n        box-sizing: border-box;\n      }\n      .box {\n        display: flex;\n        flex-direction: column;\n        justify-content: center;\n        height: 100vh;\n        background-color: #f8f8f8;\n      }\n      .content {\n        margin: auto;\n      }\n      .content h1 {\n        font-size: 32px;\n        font-weight: 600;\n        margin-bottom: 8px;\n      }\n      .content p {\n        fo"
+            },
+            {
+              "ingress": "object",
+              "attempt": 2,
+              "error": "Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Worker not found.\",\"sample\":\"readiness\"}"
+            },
+            {
+              "ingress": "object",
+              "attempt": 4,
+              "error": "Worker returned HTTP 404; the input will not be retried. <!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!--<![endif]-->\n  <head>\n    <meta charSet=\"utf-8\"/>\n    <meta http-equiv=\"refresh\" content=\"30\">\n    <title>Page not found</title>\n    <link rel=\"icon\" type=\"image/png\" href=\"https://workers.cloudflare.com/favicon.ico\" sizes=\"48x48\"/>\n    <style>\n      body {\n        font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Roboto\", \"Oxygen\", \"Ubuntu\", \"Cantarell\", \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", sans-serif\n      }\n      body,html {\n        margin: 0;\n        padding: 0;\n      }\n      * {\n        box-sizing: border-box;\n      }\n      .box {\n        display: flex;\n        flex-direction: column;\n        justify-content: center;\n        height: 100vh;\n        background-color: #f8f8f8;\n      }\n      .content {\n        margin: auto;\n      }\n      .content h1 {\n        font-size: 32px;\n        font-weight: 600;\n        margin-bottom: 8px;\n      }\n      .content p {\n        fo"
+            }
+          ]
+        }
+      ],
+      "setupResets": {
+        "statuses": [],
+        "recordedAttempts": 0,
+        "attemptsNotRecorded": 0,
+        "nonOkAttempts": []
+      },
+      "nonOkInputs": [],
+      "cpu": {
+        "invocations": 101052,
+        "unmatchedMarkers": 757,
+        "nonOk": [
+          {
+            "key": "bare/fetch/canceled",
+            "count": 1,
+            "totalCpuMs": 0
+          },
+          {
+            "key": "yielded/alarm/canceled",
+            "count": 22997,
+            "totalCpuMs": 6475
+          },
+          {
+            "key": "yielded/fetch/canceled",
+            "count": 3,
+            "totalCpuMs": 0
+          }
+        ]
+      },
+      "profiles": [],
+      "cleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-bisect-mv0sv1gl-31e0204d",
+      "sourceSha256": "96a6e318450f428714f3b5880257bbf6154cccc0c90de956f1777cac23c5d486",
+      "revision": "29a9c7060efb89b2cde9638e63786791b1212a6d",
+      "dirty": false,
+      "startedAt": "2026-10-09T10:05:40.005Z",
+      "wallMs": 346719,
+      "complete": false,
+      "kept": false,
+      "options": {
+        "targets": [
+          "yielded"
+        ],
+        "sizes": [
+          250
+        ],
+        "objects": 1,
+        "repeats": 1,
+        "concurrency": 8,
+        "ttft": [
+          0
+        ],
+        "coldMode": "fresh",
+        "profile": true,
+        "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+        "storageProbe": "none"
+      },
+      "stateStatus": [
+        {
+          "key": "profile/failed",
+          "count": 1
+        }
+      ],
+      "failures": [
+        "yielded/cold-bisect-mv0sv1gl-31e0204d-h250-d0-o0/profile-e0-t0: Profile capture returned HTTP 404"
+      ],
+      "setupReadiness": [],
+      "setupResets": {
+        "statuses": [
+          {
+            "key": "ok",
+            "count": 1
+          }
+        ],
+        "recordedAttempts": 1,
+        "attemptsNotRecorded": 0,
+        "nonOkAttempts": []
+      },
+      "nonOkInputs": [
+        {
+          "object": 0,
+          "target": "yielded",
+          "history": 250,
+          "state": "profile",
+          "sample": "profile-e0-t0",
+          "status": "failed",
+          "outcome": "completed",
+          "error": "Profile capture returned HTTP 404",
+          "exclusionReasons": []
+        }
+      ],
+      "cpu": {
+        "invocations": 1159,
+        "unmatchedMarkers": 5,
+        "nonOk": [
+          {
+            "key": "yielded/alarm/canceled",
+            "count": 254,
+            "totalCpuMs": 0
+          },
+          {
+            "key": "yielded/cold-abort/aborted",
+            "count": 1,
+            "totalCpuMs": 0
+          }
+        ]
+      },
+      "profiles": [
+        {
+          "object": 0,
+          "mode": "fresh",
+          "sample": "profile-e0-t0",
+          "status": 404,
+          "bytes": 198,
+          "sha256": "c94fc34c6f8f14623b943d9140dea3446c3948706b40b210c632bac4211320e8",
+          "preflight": [
+            {
+              "status": 404,
+              "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10393,\n      \"message\": \"No recent executions were found for this Worker.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+            },
+            {
+              "status": 404,
+              "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10393,\n      \"message\": \"No recent executions were found for this Worker.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+            },
+            {
+              "status": 404,
+              "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10393,\n      \"message\": \"No recent executions were found for this Worker.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+            },
+            {
+              "status": 404,
+              "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10393,\n      \"message\": \"No recent executions were found for this Worker.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+            },
+            {
+              "status": 200,
+              "message": "ok"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-bisect-mv0t951y-e71d29e7",
+      "sourceSha256": "e578ef1c8d69052f552b6856234bc649228bab7606b5125bcc99896a2933b011",
+      "revision": "3108af42196c5c51f0109119a19f675138283982",
+      "dirty": false,
+      "startedAt": "2026-10-09T10:16:37.846Z",
+      "wallMs": 328293,
+      "complete": true,
+      "kept": true,
+      "options": {
+        "targets": [
+          "yielded"
+        ],
+        "sizes": [
+          250
+        ],
+        "objects": 1,
+        "repeats": 1,
+        "concurrency": 8,
+        "ttft": [
+          0
+        ],
+        "coldMode": "fresh",
+        "profile": true,
+        "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+        "storageProbe": "none"
+      },
+      "stateStatus": [
+        {
+          "key": "profile/ok",
+          "count": 1
+        }
+      ],
+      "failures": [],
+      "setupReadiness": [],
+      "setupResets": {
+        "statuses": [
+          {
+            "key": "ok",
+            "count": 1
+          }
+        ],
+        "recordedAttempts": 1,
+        "attemptsNotRecorded": 0,
+        "nonOkAttempts": []
+      },
+      "nonOkInputs": [],
+      "cpu": {
+        "invocations": 1215,
+        "unmatchedMarkers": 10,
+        "nonOk": [
+          {
+            "key": "yielded/alarm/canceled",
+            "count": 240,
+            "totalCpuMs": 35
+          },
+          {
+            "key": "yielded/cold-abort/aborted",
+            "count": 1,
+            "totalCpuMs": 0
+          }
+        ]
+      },
+      "profiles": [
+        {
+          "object": 0,
+          "mode": "fresh",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 87882,
+          "sha256": "863c4d8e42809df8ceb766b5a0dfc654dc89a9cff791b7b419419e23ee93624d",
+          "preflight": [
+            {
+              "status": 404,
+              "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10393,\n      \"message\": \"No recent executions were found for this Worker.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+            },
+            {
+              "status": 404,
+              "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10393,\n      \"message\": \"No recent executions were found for this Worker.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+            },
+            {
+              "status": 404,
+              "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10393,\n      \"message\": \"No recent executions were found for this Worker.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+            }
+          ]
+        }
+      ],
+      "cleanup": null
+    },
+    {
+      "run": "cold-bisect-mv0tgu55-2c25e332",
+      "sourceSha256": "f17ff9fd01c1f6ed3b000ca094bf59b3de58cc4fb3c47359b293e7174dbd8bbb",
+      "revision": "3108af42196c5c51f0109119a19f675138283982",
+      "dirty": false,
+      "startedAt": "2026-10-09T10:22:36.953Z",
+      "wallMs": 355086,
+      "complete": true,
+      "kept": false,
+      "options": {
+        "targets": [
+          "bare",
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          0,
+          50,
+          250
+        ],
+        "objects": 15,
+        "repeats": 2,
+        "concurrency": 16,
+        "ttft": [
+          0
+        ],
+        "coldMode": "object",
+        "profile": false,
+        "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+        "storageProbe": "none"
+      },
+      "stateStatus": [
+        {
+          "key": "cold/ok",
+          "count": 105
+        },
+        {
+          "key": "warmup/ok",
+          "count": 105
+        },
+        {
+          "key": "warm/ok",
+          "count": 210
+        }
+      ],
+      "failures": [],
+      "setupReadiness": [
+        {
+          "target": "bare",
+          "phase": "seed",
+          "status": "ready",
+          "readinessFailures": [
+            {
+              "ingress": "object",
+              "attempt": 0,
+              "error": "Worker returned HTTP 404; the input will not be retried. <!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!--<![endif]-->\n  <head>\n    <meta charSet=\"utf-8\"/>\n    <meta http-equiv=\"refresh\" content=\"30\">\n    <title>Page not found</title>\n    <link rel=\"icon\" type=\"image/png\" href=\"https://workers.cloudflare.com/favicon.ico\" sizes=\"48x48\"/>\n    <style>\n      body {\n        font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Roboto\", \"Oxygen\", \"Ubuntu\", \"Cantarell\", \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", sans-serif\n      }\n      body,html {\n        margin: 0;\n        padding: 0;\n      }\n      * {\n        box-sizing: border-box;\n      }\n      .box {\n        display: flex;\n        flex-direction: column;\n        justify-content: center;\n        height: 100vh;\n        background-color: #f8f8f8;\n      }\n      .content {\n        margin: auto;\n      }\n      .content h1 {\n        font-size: 32px;\n        font-weight: 600;\n        margin-bottom: 8px;\n      }\n      .content p {\n        fo"
+            },
+            {
+              "ingress": "object",
+              "attempt": 0,
+              "error": "Worker returned HTTP 404; the input will not be retried. <!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!--<![endif]-->\n  <head>\n    <meta charSet=\"utf-8\"/>\n    <meta http-equiv=\"refresh\" content=\"30\">\n    <title>Page not found</title>\n    <link rel=\"icon\" type=\"image/png\" href=\"https://workers.cloudflare.com/favicon.ico\" sizes=\"48x48\"/>\n    <style>\n      body {\n        font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Roboto\", \"Oxygen\", \"Ubuntu\", \"Cantarell\", \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", sans-serif\n      }\n      body,html {\n        margin: 0;\n        padding: 0;\n      }\n      * {\n        box-sizing: border-box;\n      }\n      .box {\n        display: flex;\n        flex-direction: column;\n        justify-content: center;\n        height: 100vh;\n        background-color: #f8f8f8;\n      }\n      .content {\n        margin: auto;\n      }\n      .content h1 {\n        font-size: 32px;\n        font-weight: 600;\n        margin-bottom: 8px;\n      }\n      .content p {\n        fo"
+            }
+          ]
+        }
+      ],
+      "setupResets": {
+        "statuses": [
+          {
+            "key": "ok",
+            "count": 105
+          }
+        ],
+        "recordedAttempts": 105,
+        "attemptsNotRecorded": 0,
+        "nonOkAttempts": []
+      },
+      "nonOkInputs": [],
+      "cpu": {
+        "invocations": 21085,
+        "unmatchedMarkers": 161,
+        "nonOk": [
+          {
+            "key": "bare/fetch/aborted",
+            "count": 15,
+            "totalCpuMs": 0
+          },
+          {
+            "key": "yielded/alarm/canceled",
+            "count": 4070,
+            "totalCpuMs": 2330
+          },
+          {
+            "key": "yielded/cold-abort/aborted",
+            "count": 44,
+            "totalCpuMs": 1
+          },
+          {
+            "key": "pi/cold-abort/aborted",
+            "count": 44,
+            "totalCpuMs": 7
+          }
+        ]
+      },
+      "profiles": [],
+      "cleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-bisect-mv0toq6p-23455966",
+      "sourceSha256": "b26dbe91a3d0dc4deef235fba17ac3a7c613cc56e0609c49f79408d8913a39e1",
+      "revision": "3108af42196c5c51f0109119a19f675138283982",
+      "dirty": false,
+      "startedAt": "2026-10-09T10:28:45.073Z",
+      "wallMs": 592312,
+      "complete": true,
+      "kept": false,
+      "options": {
+        "targets": [
+          "bare",
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          0,
+          50,
+          250
+        ],
+        "objects": 15,
+        "repeats": 2,
+        "concurrency": 16,
+        "ttft": [
+          0
+        ],
+        "coldMode": "fresh",
+        "profile": false,
+        "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+        "storageProbe": "none"
+      },
+      "stateStatus": [
+        {
+          "key": "fresh-first-turn/ok",
+          "count": 103
+        },
+        {
+          "key": "warmup/ok",
+          "count": 105
+        },
+        {
+          "key": "warm/ok",
+          "count": 210
+        },
+        {
+          "key": "fresh-first-turn/excluded",
+          "count": 2
+        }
+      ],
+      "failures": [],
+      "setupReadiness": [],
+      "setupResets": {
+        "statuses": [
+          {
+            "key": "ok",
+            "count": 105
+          }
+        ],
+        "recordedAttempts": 105,
+        "attemptsNotRecorded": 0,
+        "nonOkAttempts": []
+      },
+      "nonOkInputs": [
+        {
+          "object": 2,
+          "target": "yielded",
+          "history": 50,
+          "state": "fresh-first-turn",
+          "sample": "e0-t0",
+          "status": "excluded",
+          "outcome": "completed",
+          "exclusionReasons": [
+            "Object isolate constructor count is not one"
+          ]
+        },
+        {
+          "object": 13,
+          "target": "pi",
+          "history": 0,
+          "state": "fresh-first-turn",
+          "sample": "e0-t0",
+          "status": "excluded",
+          "outcome": "completed",
+          "exclusionReasons": [
+            "Object isolate constructor count is not one"
+          ]
+        }
+      ],
+      "cpu": {
+        "invocations": 21330,
+        "unmatchedMarkers": 178,
+        "nonOk": [
+          {
+            "key": "bare/fetch/aborted",
+            "count": 15,
+            "totalCpuMs": 0
+          },
+          {
+            "key": "yielded/alarm/canceled",
+            "count": 4238,
+            "totalCpuMs": 1357
+          },
+          {
+            "key": "yielded/cold-abort/aborted",
+            "count": 44,
+            "totalCpuMs": 0
+          },
+          {
+            "key": "pi/cold-abort/aborted",
+            "count": 42,
+            "totalCpuMs": 5
+          }
+        ]
+      },
+      "profiles": [],
+      "cleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-bisect-mv0u2hvo-b66f98ae",
+      "sourceSha256": "b053213dcf7bd403f61512404346f9b00b71c4ba914892f729d25bb092d4b9ad",
+      "revision": "3108af42196c5c51f0109119a19f675138283982",
+      "dirty": false,
+      "startedAt": "2026-10-09T10:39:27.492Z",
+      "wallMs": 745644,
+      "complete": true,
+      "kept": false,
+      "options": {
+        "targets": [
+          "yielded"
+        ],
+        "sizes": [
+          250
+        ],
+        "objects": 10,
+        "repeats": 1,
+        "concurrency": 16,
+        "ttft": [
+          0
+        ],
+        "coldMode": "object",
+        "profile": true,
+        "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+        "storageProbe": "none"
+      },
+      "stateStatus": [
+        {
+          "key": "profile/ok",
+          "count": 10
+        }
+      ],
+      "failures": [],
+      "setupReadiness": [],
+      "setupResets": {
+        "statuses": [
+          {
+            "key": "ok",
+            "count": 10
+          }
+        ],
+        "recordedAttempts": 10,
+        "attemptsNotRecorded": 0,
+        "nonOkAttempts": []
+      },
+      "nonOkInputs": [],
+      "cpu": {
+        "invocations": 10710,
+        "unmatchedMarkers": 79,
+        "nonOk": [
+          {
+            "key": "yielded/alarm/canceled",
+            "count": 2380,
+            "totalCpuMs": 2458
+          },
+          {
+            "key": "yielded/cold-abort/aborted",
+            "count": 20,
+            "totalCpuMs": 0
+          }
+        ]
+      },
+      "profiles": [
+        {
+          "object": 5,
+          "mode": "object",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 38424,
+          "sha256": "11959608f523846ed3068600df8df6bed76f549a223ef45a110bd8cb2ad1e1dc",
+          "preflight": []
+        },
+        {
+          "object": 3,
+          "mode": "object",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 64864,
+          "sha256": "6548de8a7e6a34c8135e52b20af34028d73d5a764efb9bd39dc31c12aaf2dcf1",
+          "preflight": []
+        },
+        {
+          "object": 8,
+          "mode": "object",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 38303,
+          "sha256": "684d8cbae2aea05dcedc37d2f473a59bd91825c00223a32f3525a057e8fcd772",
+          "preflight": []
+        },
+        {
+          "object": 0,
+          "mode": "object",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 69693,
+          "sha256": "fbd2afd74c8c4f8543cb070b0a55381d0f6d8a1cab9acec412d3e55f0f065ea1",
+          "preflight": []
+        },
+        {
+          "object": 4,
+          "mode": "object",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 63825,
+          "sha256": "cfa95d1e7f0548b985a327d2d633c7f1036effbbad15eee983677b49d2b0efbd",
+          "preflight": []
+        },
+        {
+          "object": 9,
+          "mode": "object",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 37553,
+          "sha256": "f122d042120c302afe97121d02b86e7bccc65b8630a7ce0816634924a2d68f14",
+          "preflight": []
+        },
+        {
+          "object": 7,
+          "mode": "object",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 41718,
+          "sha256": "2bc44e6c186fd46d86e1e9884c105fb2028466648cf437f55f7fdcf0666e8704",
+          "preflight": [
+            {
+              "status": 429,
+              "message": ""
+            }
+          ]
+        },
+        {
+          "object": 6,
+          "mode": "object",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 36738,
+          "sha256": "3158aebffecfde162b4597591c32a233154f50b825e4346a186c1b1a1d81004f",
+          "preflight": []
+        },
+        {
+          "object": 2,
+          "mode": "object",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 61523,
+          "sha256": "3d6b966f858de88719380d2084fcbc77fb8beabb08039db03d08585adc40c42a",
+          "preflight": []
+        },
+        {
+          "object": 1,
+          "mode": "object",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 57265,
+          "sha256": "73c39035b5ebe95db85f2fa707f5b107ae8daca40c977bb9aedf4d91dc3cbbfa",
+          "preflight": []
+        }
+      ],
+      "cleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-bisect-mv0uioh1-2cc3821e",
+      "sourceSha256": "39f157fe94ac84690f503ed75178031b41209bd50ba7e37c74b87c6cf8bb4409",
+      "revision": "52db55ffd61ee9f09898753a7557945769859618",
+      "dirty": false,
+      "startedAt": "2026-10-09T10:52:02.533Z",
+      "wallMs": 982148,
+      "complete": true,
+      "kept": false,
+      "options": {
+        "targets": [
+          "yielded"
+        ],
+        "sizes": [
+          250
+        ],
+        "objects": 10,
+        "repeats": 1,
+        "concurrency": 16,
+        "ttft": [
+          0
+        ],
+        "coldMode": "fresh",
+        "profile": true,
+        "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+        "storageProbe": "none"
+      },
+      "stateStatus": [
+        {
+          "key": "profile/ok",
+          "count": 10
+        }
+      ],
+      "failures": [],
+      "setupReadiness": [],
+      "setupResets": {
+        "statuses": [
+          {
+            "key": "ok",
+            "count": 10
+          }
+        ],
+        "recordedAttempts": 10,
+        "attemptsNotRecorded": 0,
+        "nonOkAttempts": []
+      },
+      "nonOkInputs": [],
+      "cpu": {
+        "invocations": 10722,
+        "unmatchedMarkers": 66,
+        "nonOk": [
+          {
+            "key": "yielded/alarm/canceled",
+            "count": 1999,
+            "totalCpuMs": 1080
+          },
+          {
+            "key": "yielded/cold-abort/aborted",
+            "count": 10,
+            "totalCpuMs": 0
+          }
+        ]
+      },
+      "profiles": [
+        {
+          "object": 4,
+          "mode": "fresh",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 92990,
+          "sha256": "ebff4aa35d01931443dccf371c32db7239aef8b51352cef0d9798438e36e0201",
+          "preflight": []
+        },
+        {
+          "object": 2,
+          "mode": "fresh",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 59286,
+          "sha256": "e8b4f5ab1438d907a116aa1f5f6d57a30f71712f5b8cedb7a9bab98330301573",
+          "preflight": []
+        },
+        {
+          "object": 6,
+          "mode": "fresh",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 95381,
+          "sha256": "7003ddb766a003e3e74eea44b7d850b438a8336c58319a4558693115967010ca",
+          "preflight": []
+        },
+        {
+          "object": 9,
+          "mode": "fresh",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 67492,
+          "sha256": "90c1886274e8f24ac255a34def87538baa6865b2052e12bc848bdb98d0b6553d",
+          "preflight": []
+        },
+        {
+          "object": 5,
+          "mode": "fresh",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 69158,
+          "sha256": "bf441d1cb993955e4e06775ac12218c5823072253ccea25f3bea78f29281d1f7",
+          "preflight": []
+        },
+        {
+          "object": 0,
+          "mode": "fresh",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 95807,
+          "sha256": "4037a520c8b63d696d40886bd3873098649361a91834c73197979c7ae7a0dead",
+          "preflight": []
+        },
+        {
+          "object": 3,
+          "mode": "fresh",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 74550,
+          "sha256": "9738bd425093d44421d4712cff130c04936e39c76f03455233fbf70e008159ac",
+          "preflight": []
+        },
+        {
+          "object": 7,
+          "mode": "fresh",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 92672,
+          "sha256": "edda70e89dfd7627570f5403da2e07d9843eaaf36a091ed241ab162aaa5e4c1c",
+          "preflight": []
+        },
+        {
+          "object": 1,
+          "mode": "fresh",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 99668,
+          "sha256": "8c576289757a9984b96caadbda9117a07a39ea1cdfe81315adeeb6e940564318",
+          "preflight": []
+        },
+        {
+          "object": 8,
+          "mode": "fresh",
+          "sample": "profile-e0-t0",
+          "status": 200,
+          "bytes": 86392,
+          "sha256": "e04d06038d8ed1dd4625b7daf52a3d3ce3c8fb28c5999ed0b28d43077c006021",
+          "preflight": []
+        }
+      ],
+      "cleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-bisect-mv0v41nm-19dbe867",
+      "sourceSha256": "cb45ef0509235ce8f2b7f5404e1834344a5e05cbc53158231a2eae2a34413486",
+      "revision": "52db55ffd61ee9f09898753a7557945769859618",
+      "dirty": false,
+      "startedAt": "2026-10-09T11:08:39.394Z",
+      "wallMs": 1098139,
+      "complete": true,
+      "kept": false,
+      "options": {
+        "targets": [
+          "bare",
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          0,
+          1000
+        ],
+        "objects": 15,
+        "repeats": 2,
+        "concurrency": 16,
+        "ttft": [
+          0
+        ],
+        "coldMode": "object",
+        "profile": false,
+        "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+        "storageProbe": "none"
+      },
+      "stateStatus": [
+        {
+          "key": "cold/ok",
+          "count": 75
+        },
+        {
+          "key": "warmup/ok",
+          "count": 75
+        },
+        {
+          "key": "warm/ok",
+          "count": 150
+        }
+      ],
+      "failures": [],
+      "setupReadiness": [],
+      "setupResets": {
+        "statuses": [
+          {
+            "key": "ok",
+            "count": 75
+          }
+        ],
+        "recordedAttempts": 75,
+        "attemptsNotRecorded": 0,
+        "nonOkAttempts": []
+      },
+      "nonOkInputs": [],
+      "cpu": {
+        "invocations": 60512,
+        "unmatchedMarkers": 547,
+        "nonOk": [
+          {
+            "key": "bare/fetch/aborted",
+            "count": 13,
+            "totalCpuMs": 0
+          },
+          {
+            "key": "yielded/alarm/canceled",
+            "count": 13460,
+            "totalCpuMs": 13402
+          },
+          {
+            "key": "yielded/fetch/canceled",
+            "count": 1,
+            "totalCpuMs": 0
+          },
+          {
+            "key": "yielded/cold-abort/aborted",
+            "count": 30,
+            "totalCpuMs": 7
+          },
+          {
+            "key": "pi/fetch/canceled",
+            "count": 1,
+            "totalCpuMs": 0
+          },
+          {
+            "key": "pi/cold-abort/aborted",
+            "count": 28,
+            "totalCpuMs": 3
+          }
+        ]
+      },
+      "profiles": [],
+      "cleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    },
+    {
+      "run": "cold-bisect-mv0vs16x-827f0238",
+      "sourceSha256": "cb50118d40fcd0f789e2a18b2b1b76da1355ae7c2996cd8c05662ad167fd401d",
+      "revision": "52db55ffd61ee9f09898753a7557945769859618",
+      "dirty": false,
+      "startedAt": "2026-10-09T11:27:18.537Z",
+      "wallMs": 1200870,
+      "complete": true,
+      "kept": false,
+      "options": {
+        "targets": [
+          "bare",
+          "yielded",
+          "pi"
+        ],
+        "sizes": [
+          0,
+          1000
+        ],
+        "objects": 15,
+        "repeats": 2,
+        "concurrency": 16,
+        "ttft": [
+          0
+        ],
+        "coldMode": "fresh",
+        "profile": false,
+        "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+        "storageProbe": "none"
+      },
+      "stateStatus": [
+        {
+          "key": "fresh-first-turn/ok",
+          "count": 74
+        },
+        {
+          "key": "warmup/ok",
+          "count": 75
+        },
+        {
+          "key": "warm/ok",
+          "count": 150
+        },
+        {
+          "key": "fresh-first-turn/excluded",
+          "count": 1
+        }
+      ],
+      "failures": [],
+      "setupReadiness": [
+        {
+          "target": "bare",
+          "phase": "seed",
+          "status": "ready",
+          "readinessFailures": [
+            {
+              "ingress": "object",
+              "attempt": 1,
+              "error": "Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Worker not found.\",\"sample\":\"readiness\"}"
+            },
+            {
+              "ingress": "object",
+              "attempt": 2,
+              "error": "Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Worker not found.\",\"sample\":\"readiness\"}"
+            },
+            {
+              "ingress": "object",
+              "attempt": 3,
+              "error": "Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Worker not found.\",\"sample\":\"readiness\"}"
+            },
+            {
+              "ingress": "object",
+              "attempt": 3,
+              "error": "Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Worker not found.\",\"sample\":\"readiness\"}"
+            },
+            {
+              "ingress": "object",
+              "attempt": 4,
+              "error": "Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Worker not found.\",\"sample\":\"readiness\"}"
+            }
+          ]
+        }
+      ],
+      "setupResets": {
+        "statuses": [
+          {
+            "key": "ok",
+            "count": 75
+          }
+        ],
+        "recordedAttempts": 75,
+        "attemptsNotRecorded": 0,
+        "nonOkAttempts": []
+      },
+      "nonOkInputs": [
+        {
+          "object": 5,
+          "target": "yielded",
+          "history": 0,
+          "state": "fresh-first-turn",
+          "sample": "e0-t0",
+          "status": "excluded",
+          "outcome": "completed",
+          "exclusionReasons": [
+            "Object isolate constructor count is not one"
+          ]
+        }
+      ],
+      "cpu": {
+        "invocations": 59963,
+        "unmatchedMarkers": 529,
+        "nonOk": [
+          {
+            "key": "bare/fetch/aborted",
+            "count": 15,
+            "totalCpuMs": 2
+          },
+          {
+            "key": "yielded/alarm/canceled",
+            "count": 12692,
+            "totalCpuMs": 2925
+          },
+          {
+            "key": "yielded/cold-abort/aborted",
+            "count": 29,
+            "totalCpuMs": 4
+          },
+          {
+            "key": "pi/cold-abort/aborted",
+            "count": 29,
+            "totalCpuMs": 5
+          }
+        ]
+      },
+      "profiles": [],
+      "cleanup": {
+        "verified": true,
+        "workers": [],
+        "namespaces": []
+      }
+    }
+  ],
+  "profileApi": {
+    "attempts": [
+      {
+        "cohort": "cold-bisect-mv0sv1gl-31e0204d-h250-d0-o0",
+        "attempt": "cold-first-request.pprof.gz.json",
+        "httpStatus": 404,
+        "bytes": 198,
+        "sha256": "c94fc34c6f8f14623b943d9140dea3446c3948706b40b210c632bac4211320e8",
+        "errorCodes": [
+          10394
+        ],
+        "retryAfterSeconds": 15,
+        "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10394,\n      \"message\": \"The Worker has no loaded isolate in its recent execution locations.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+      },
+      {
+        "cohort": "cold-bisect-mv0sv1gl-31e0204d-h250-d0-o0",
+        "attempt": "preflight-0.bin.json",
+        "httpStatus": 404,
+        "bytes": 179,
+        "sha256": "a789f382f9fb21894180922b9f6681646afc26aa44b4137b7fac144bf32dc53c",
+        "errorCodes": [
+          10393
+        ],
+        "retryAfterSeconds": 15,
+        "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10393,\n      \"message\": \"No recent executions were found for this Worker.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+      },
+      {
+        "cohort": "cold-bisect-mv0sv1gl-31e0204d-h250-d0-o0",
+        "attempt": "preflight-1.bin.json",
+        "httpStatus": 404,
+        "bytes": 179,
+        "sha256": "a789f382f9fb21894180922b9f6681646afc26aa44b4137b7fac144bf32dc53c",
+        "errorCodes": [
+          10393
+        ],
+        "retryAfterSeconds": 15,
+        "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10393,\n      \"message\": \"No recent executions were found for this Worker.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+      },
+      {
+        "cohort": "cold-bisect-mv0sv1gl-31e0204d-h250-d0-o0",
+        "attempt": "preflight-2.bin.json",
+        "httpStatus": 404,
+        "bytes": 179,
+        "sha256": "a789f382f9fb21894180922b9f6681646afc26aa44b4137b7fac144bf32dc53c",
+        "errorCodes": [
+          10393
+        ],
+        "retryAfterSeconds": 15,
+        "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10393,\n      \"message\": \"No recent executions were found for this Worker.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+      },
+      {
+        "cohort": "cold-bisect-mv0sv1gl-31e0204d-h250-d0-o0",
+        "attempt": "preflight-3.bin.json",
+        "httpStatus": 404,
+        "bytes": 179,
+        "sha256": "a789f382f9fb21894180922b9f6681646afc26aa44b4137b7fac144bf32dc53c",
+        "errorCodes": [
+          10393
+        ],
+        "retryAfterSeconds": 15,
+        "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10393,\n      \"message\": \"No recent executions were found for this Worker.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+      },
+      {
+        "cohort": "cold-bisect-mv0sv1gl-31e0204d-h250-d0-o0",
+        "attempt": "preflight-4.bin.json",
+        "httpStatus": 200,
+        "bytes": 101,
+        "sha256": "27fcfc195b4e91f30936857169700ce947ecace9d05114a4cb0bdf9c977cc00d",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0t951y-e71d29e7-h250-d0-o0",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 404,
+        "bytes": 179,
+        "sha256": "a789f382f9fb21894180922b9f6681646afc26aa44b4137b7fac144bf32dc53c",
+        "errorCodes": [
+          10393
+        ],
+        "retryAfterSeconds": 15,
+        "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10393,\n      \"message\": \"No recent executions were found for this Worker.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+      },
+      {
+        "cohort": "cold-bisect-mv0t951y-e71d29e7-h250-d0-o0",
+        "attempt": "attempt-1.pprof.gz.json",
+        "httpStatus": 404,
+        "bytes": 179,
+        "sha256": "a789f382f9fb21894180922b9f6681646afc26aa44b4137b7fac144bf32dc53c",
+        "errorCodes": [
+          10393
+        ],
+        "retryAfterSeconds": 15,
+        "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10393,\n      \"message\": \"No recent executions were found for this Worker.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+      },
+      {
+        "cohort": "cold-bisect-mv0t951y-e71d29e7-h250-d0-o0",
+        "attempt": "attempt-2.pprof.gz.json",
+        "httpStatus": 404,
+        "bytes": 179,
+        "sha256": "a789f382f9fb21894180922b9f6681646afc26aa44b4137b7fac144bf32dc53c",
+        "errorCodes": [
+          10393
+        ],
+        "retryAfterSeconds": 15,
+        "message": "{\n  \"result\": null,\n  \"success\": false,\n  \"errors\": [\n    {\n      \"code\": 10393,\n      \"message\": \"No recent executions were found for this Worker.\"\n    }\n  ],\n  \"messages\": []\n}\n"
+      },
+      {
+        "cohort": "cold-bisect-mv0t951y-e71d29e7-h250-d0-o0",
+        "attempt": "attempt-3.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 87882,
+        "sha256": "863c4d8e42809df8ceb766b5a0dfc654dc89a9cff791b7b419419e23ee93624d",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0u2hvo-b66f98ae-h250-d0-o0",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 69693,
+        "sha256": "fbd2afd74c8c4f8543cb070b0a55381d0f6d8a1cab9acec412d3e55f0f065ea1",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0u2hvo-b66f98ae-h250-d0-o1",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 57265,
+        "sha256": "73c39035b5ebe95db85f2fa707f5b107ae8daca40c977bb9aedf4d91dc3cbbfa",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0u2hvo-b66f98ae-h250-d0-o2",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 61523,
+        "sha256": "3d6b966f858de88719380d2084fcbc77fb8beabb08039db03d08585adc40c42a",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0u2hvo-b66f98ae-h250-d0-o3",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 64864,
+        "sha256": "6548de8a7e6a34c8135e52b20af34028d73d5a764efb9bd39dc31c12aaf2dcf1",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0u2hvo-b66f98ae-h250-d0-o4",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 63825,
+        "sha256": "cfa95d1e7f0548b985a327d2d633c7f1036effbbad15eee983677b49d2b0efbd",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0u2hvo-b66f98ae-h250-d0-o5",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 38424,
+        "sha256": "11959608f523846ed3068600df8df6bed76f549a223ef45a110bd8cb2ad1e1dc",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0u2hvo-b66f98ae-h250-d0-o6",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 36738,
+        "sha256": "3158aebffecfde162b4597591c32a233154f50b825e4346a186c1b1a1d81004f",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0u2hvo-b66f98ae-h250-d0-o7",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 429,
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "errorCodes": [],
+        "retryAfterSeconds": 300,
+        "message": ""
+      },
+      {
+        "cohort": "cold-bisect-mv0u2hvo-b66f98ae-h250-d0-o7",
+        "attempt": "attempt-1.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 41718,
+        "sha256": "2bc44e6c186fd46d86e1e9884c105fb2028466648cf437f55f7fdcf0666e8704",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0u2hvo-b66f98ae-h250-d0-o8",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 38303,
+        "sha256": "684d8cbae2aea05dcedc37d2f473a59bd91825c00223a32f3525a057e8fcd772",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0u2hvo-b66f98ae-h250-d0-o9",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 37553,
+        "sha256": "f122d042120c302afe97121d02b86e7bccc65b8630a7ce0816634924a2d68f14",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0uioh1-2cc3821e-h250-d0-o0",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 95807,
+        "sha256": "4037a520c8b63d696d40886bd3873098649361a91834c73197979c7ae7a0dead",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0uioh1-2cc3821e-h250-d0-o1",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 99668,
+        "sha256": "8c576289757a9984b96caadbda9117a07a39ea1cdfe81315adeeb6e940564318",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0uioh1-2cc3821e-h250-d0-o2",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 59286,
+        "sha256": "e8b4f5ab1438d907a116aa1f5f6d57a30f71712f5b8cedb7a9bab98330301573",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0uioh1-2cc3821e-h250-d0-o3",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 74550,
+        "sha256": "9738bd425093d44421d4712cff130c04936e39c76f03455233fbf70e008159ac",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0uioh1-2cc3821e-h250-d0-o4",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 92990,
+        "sha256": "ebff4aa35d01931443dccf371c32db7239aef8b51352cef0d9798438e36e0201",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0uioh1-2cc3821e-h250-d0-o5",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 69158,
+        "sha256": "bf441d1cb993955e4e06775ac12218c5823072253ccea25f3bea78f29281d1f7",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0uioh1-2cc3821e-h250-d0-o6",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 95381,
+        "sha256": "7003ddb766a003e3e74eea44b7d850b438a8336c58319a4558693115967010ca",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0uioh1-2cc3821e-h250-d0-o7",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 92672,
+        "sha256": "edda70e89dfd7627570f5403da2e07d9843eaaf36a091ed241ab162aaa5e4c1c",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0uioh1-2cc3821e-h250-d0-o8",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 86392,
+        "sha256": "e04d06038d8ed1dd4625b7daf52a3d3ce3c8fb28c5999ed0b28d43077c006021",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0uioh1-2cc3821e-h250-d0-o9",
+        "attempt": "attempt-0.pprof.gz.json",
+        "httpStatus": 200,
+        "bytes": 67492,
+        "sha256": "90c1886274e8f24ac255a34def87538baa6865b2052e12bc848bdb98d0b6553d",
+        "errorCodes": [],
+        "retryAfterSeconds": 15,
+        "message": "ok"
+      },
+      {
+        "cohort": "cold-bisect-mv0ri8w6-e7b78ad8-h250-d0-o0",
+        "attempt": "preflight-0.bin",
+        "httpStatus": null,
+        "bytes": 179,
+        "sha256": "a789f382f9fb21894180922b9f6681646afc26aa44b4137b7fac144bf32dc53c",
+        "errorCodes": [
+          10393
+        ],
+        "message": "Early harness did not persist HTTP status; empty bodies are not relabeled as rate limits."
+      },
+      {
+        "cohort": "cold-bisect-mv0ri8w6-e7b78ad8-h250-d0-o0",
+        "attempt": "preflight-1.bin",
+        "httpStatus": null,
+        "bytes": 179,
+        "sha256": "a789f382f9fb21894180922b9f6681646afc26aa44b4137b7fac144bf32dc53c",
+        "errorCodes": [
+          10393
+        ],
+        "message": "Early harness did not persist HTTP status; empty bodies are not relabeled as rate limits."
+      },
+      {
+        "cohort": "cold-bisect-mv0ri8w6-e7b78ad8-h250-d0-o0",
+        "attempt": "preflight-2.bin",
+        "httpStatus": null,
+        "bytes": 179,
+        "sha256": "a789f382f9fb21894180922b9f6681646afc26aa44b4137b7fac144bf32dc53c",
+        "errorCodes": [
+          10393
+        ],
+        "message": "Early harness did not persist HTTP status; empty bodies are not relabeled as rate limits."
+      },
+      {
+        "cohort": "cold-bisect-mv0ri8w6-e7b78ad8-h250-d0-o0",
+        "attempt": "preflight-3.bin",
+        "httpStatus": null,
+        "bytes": 179,
+        "sha256": "a789f382f9fb21894180922b9f6681646afc26aa44b4137b7fac144bf32dc53c",
+        "errorCodes": [
+          10393
+        ],
+        "message": "Early harness did not persist HTTP status; empty bodies are not relabeled as rate limits."
+      },
+      {
+        "cohort": "cold-bisect-mv0ri8w6-e7b78ad8-h250-d0-o0",
+        "attempt": "preflight-4.bin",
+        "httpStatus": null,
+        "bytes": 179,
+        "sha256": "a789f382f9fb21894180922b9f6681646afc26aa44b4137b7fac144bf32dc53c",
+        "errorCodes": [
+          10393
+        ],
+        "message": "Early harness did not persist HTTP status; empty bodies are not relabeled as rate limits."
+      },
+      {
+        "cohort": "cold-bisect-mv0ri8w6-e7b78ad8-h250-d0-o0",
+        "attempt": "preflight-5.bin",
+        "httpStatus": null,
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "errorCodes": [],
+        "message": "Early harness did not persist HTTP status; empty bodies are not relabeled as rate limits."
+      },
+      {
+        "cohort": "cold-bisect-mv0ri8w6-e7b78ad8-h250-d0-o0",
+        "attempt": "preflight-6.bin",
+        "httpStatus": null,
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "errorCodes": [],
+        "message": "Early harness did not persist HTTP status; empty bodies are not relabeled as rate limits."
+      },
+      {
+        "cohort": "cold-bisect-mv0ri8w6-e7b78ad8-h250-d0-o0",
+        "attempt": "preflight-7.bin",
+        "httpStatus": null,
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "errorCodes": [],
+        "message": "Early harness did not persist HTTP status; empty bodies are not relabeled as rate limits."
+      },
+      {
+        "cohort": "probe-1791537306789",
+        "attempt": "sentinel-calibration",
+        "httpStatus": 404,
+        "bytes": 179,
+        "retryAfterSeconds": null,
+        "errorCodes": [
+          10393
+        ],
+        "message": "Sentinel-only calibration; no framework input."
+      },
+      {
+        "cohort": "probe-1791537380532",
+        "attempt": "sentinel-calibration",
+        "httpStatus": 200,
+        "bytes": 48798,
+        "retryAfterSeconds": null,
+        "errorCodes": [],
+        "message": "Sentinel-only calibration; no framework input.",
+        "sha256": "f53556820ad758edcb159b4de59c33eabb0834a9b4789c1817a35612f6fa467f"
+      }
+    ]
+  },
+  "annotations": [
+    {
+      "run": "cold-bisect-mv0ri8w6-e7b78ad8",
+      "kind": "preflight input classification",
+      "originalOutcome": "unknown",
+      "auditedOutcome": "not-sent",
+      "reason": "All eight discovery attempts failed before the input dispatch branch. The original controller row is retained; no input was sent or retried."
+    },
+    {
+      "run": "cold-bisect-mv0r3810-1598b88c",
+      "kind": "historical cleanup verification",
+      "reason": "The immediate Worker inventory still returned the just-deleted bare Worker. Keep the original failed verification; final prefix-wide verification is recorded in cleanup.json."
+    },
+    {
+      "run": "cold-bisect-mv0qznxj-2a2dd45e",
+      "kind": "bare calibration failure",
+      "reason": "The provider expected the normal tool count for a direct bare probe. Three failed input outcomes remain Unknown and subsequent inputs were not sent. The bare harness contract was corrected before normal timing."
+    },
+    {
+      "run": "cold-bisect-mv0rta8l-2af70aac",
+      "kind": "untimed seed failure",
+      "reason": "A provider transport error left seed h877 failed on one 1,000-turn Object. No measured inputs were admitted and no seed input was replayed."
+    },
+    {
+      "run": "cold-bisect-mv0sv1gl-31e0204d",
+      "kind": "invalid diagnostic capture",
+      "reason": "The turn completed and passed transcript/build checks, but the profile API returned 404. This input is not included in either timing or profile aggregates."
+    },
+    {
+      "run": "cold-bisect-mv0t951y-e71d29e7",
+      "kind": "profile calibration only",
+      "reason": "The single successful fresh initialization capture validates boundaries and is excluded from the primary ten-per-mode aggregate."
+    }
+  ]
+}

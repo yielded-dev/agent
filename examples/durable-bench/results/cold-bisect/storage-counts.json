@@ -1,0 +1,705 @@
+{
+  "method": "SQLite cursor rowsRead/rowsWritten are deterministic logical query-work counters, not physical disk-page I/O. Counters are cumulative within the input, including open work in cold samples.",
+  "cells": [
+    {
+      "run": "cold-bisect-mv0tgu55-2c25e332",
+      "key": "yielded/50/cold",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 12,
+              "rowsRead": 997,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "admitted",
+              "exec": 22,
+              "rowsRead": 1066,
+              "rowsWritten": 15,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 83,
+              "rowsRead": 1878,
+              "rowsWritten": 99,
+              "canonicalRead": 571
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0tgu55-2c25e332",
+      "key": "pi/250/cold",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 0,
+              "rowsRead": 0,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 95,
+              "rowsRead": 1774,
+              "rowsWritten": 38,
+              "canonicalRead": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0tgu55-2c25e332",
+      "key": "yielded/250/cold",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 12,
+              "rowsRead": 997,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "admitted",
+              "exec": 26,
+              "rowsRead": 1404,
+              "rowsWritten": 15,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 100,
+              "rowsRead": 4868,
+              "rowsWritten": 99,
+              "canonicalRead": 2707
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0tgu55-2c25e332",
+      "key": "bare/0/cold",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": []
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0tgu55-2c25e332",
+      "key": "yielded/0/cold",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 12,
+              "rowsRead": 997,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "admitted",
+              "exec": 37,
+              "rowsRead": 1394,
+              "rowsWritten": 37,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 90,
+              "rowsRead": 1479,
+              "rowsWritten": 121,
+              "canonicalRead": 28
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0tgu55-2c25e332",
+      "key": "pi/50/cold",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 0,
+              "rowsRead": 0,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 83,
+              "rowsRead": 430,
+              "rowsWritten": 38,
+              "canonicalRead": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0tgu55-2c25e332",
+      "key": "pi/0/cold",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 0,
+              "rowsRead": 0,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 87,
+              "rowsRead": 96,
+              "rowsWritten": 41,
+              "canonicalRead": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0toq6p-23455966",
+      "key": "yielded/50/fresh-first-turn",
+      "objects": 14,
+      "distinctCounts": [
+        {
+          "objects": 14,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 12,
+              "rowsRead": 997,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "admitted",
+              "exec": 22,
+              "rowsRead": 1066,
+              "rowsWritten": 15,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 83,
+              "rowsRead": 1878,
+              "rowsWritten": 99,
+              "canonicalRead": 571
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0toq6p-23455966",
+      "key": "pi/250/fresh-first-turn",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 0,
+              "rowsRead": 0,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 95,
+              "rowsRead": 1774,
+              "rowsWritten": 38,
+              "canonicalRead": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0toq6p-23455966",
+      "key": "yielded/0/fresh-first-turn",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 12,
+              "rowsRead": 997,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "admitted",
+              "exec": 37,
+              "rowsRead": 1394,
+              "rowsWritten": 37,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 90,
+              "rowsRead": 1479,
+              "rowsWritten": 121,
+              "canonicalRead": 28
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0toq6p-23455966",
+      "key": "bare/0/fresh-first-turn",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": []
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0toq6p-23455966",
+      "key": "yielded/250/fresh-first-turn",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 12,
+              "rowsRead": 997,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "admitted",
+              "exec": 26,
+              "rowsRead": 1404,
+              "rowsWritten": 15,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 100,
+              "rowsRead": 4868,
+              "rowsWritten": 99,
+              "canonicalRead": 2707
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0toq6p-23455966",
+      "key": "pi/50/fresh-first-turn",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 0,
+              "rowsRead": 0,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 83,
+              "rowsRead": 430,
+              "rowsWritten": 38,
+              "canonicalRead": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0toq6p-23455966",
+      "key": "pi/0/fresh-first-turn",
+      "objects": 14,
+      "distinctCounts": [
+        {
+          "objects": 14,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 0,
+              "rowsRead": 0,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 87,
+              "rowsRead": 96,
+              "rowsWritten": 41,
+              "canonicalRead": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0v41nm-19dbe867",
+      "key": "yielded/1000/cold",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 12,
+              "rowsRead": 997,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "admitted",
+              "exec": 26,
+              "rowsRead": 1404,
+              "rowsWritten": 15,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 130,
+              "rowsRead": 13651,
+              "rowsWritten": 99,
+              "canonicalRead": 10722
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0v41nm-19dbe867",
+      "key": "pi/1000/cold",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 0,
+              "rowsRead": 0,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 135,
+              "rowsRead": 6814,
+              "rowsWritten": 38,
+              "canonicalRead": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0v41nm-19dbe867",
+      "key": "pi/0/cold",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 0,
+              "rowsRead": 0,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 87,
+              "rowsRead": 96,
+              "rowsWritten": 41,
+              "canonicalRead": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0v41nm-19dbe867",
+      "key": "yielded/0/cold",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 12,
+              "rowsRead": 997,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "admitted",
+              "exec": 37,
+              "rowsRead": 1394,
+              "rowsWritten": 37,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 90,
+              "rowsRead": 1479,
+              "rowsWritten": 121,
+              "canonicalRead": 28
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0v41nm-19dbe867",
+      "key": "bare/0/cold",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": []
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0vs16x-827f0238",
+      "key": "yielded/1000/fresh-first-turn",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 12,
+              "rowsRead": 997,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "admitted",
+              "exec": 26,
+              "rowsRead": 1404,
+              "rowsWritten": 15,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 130,
+              "rowsRead": 13651,
+              "rowsWritten": 99,
+              "canonicalRead": 10722
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0vs16x-827f0238",
+      "key": "bare/0/fresh-first-turn",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": []
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0vs16x-827f0238",
+      "key": "yielded/0/fresh-first-turn",
+      "objects": 14,
+      "distinctCounts": [
+        {
+          "objects": 14,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 12,
+              "rowsRead": 997,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "admitted",
+              "exec": 37,
+              "rowsRead": 1394,
+              "rowsWritten": 37,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 90,
+              "rowsRead": 1479,
+              "rowsWritten": 121,
+              "canonicalRead": 28
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0vs16x-827f0238",
+      "key": "pi/0/fresh-first-turn",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 0,
+              "rowsRead": 0,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 87,
+              "rowsRead": 96,
+              "rowsWritten": 41,
+              "canonicalRead": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "cold-bisect-mv0vs16x-827f0238",
+      "key": "pi/1000/fresh-first-turn",
+      "objects": 15,
+      "distinctCounts": [
+        {
+          "objects": 15,
+          "phases": [
+            {
+              "phase": "entry",
+              "exec": 0,
+              "rowsRead": 0,
+              "rowsWritten": 0,
+              "canonicalRead": 0
+            },
+            {
+              "phase": "first-provider",
+              "exec": 135,
+              "rowsRead": 6814,
+              "rowsWritten": 38,
+              "canonicalRead": 0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "thousandTurnFirstProviderTopQueries": {
+    "run": "cold-bisect-mv0v41nm-19dbe867",
+    "selection": "First accepted 1,000-turn cold input; aggregate statement counters have the same cumulative total across the cell.",
+    "statements": [
+      {
+        "sql": "SELECT thread_id, sequence, record_id, COALESCE(\"effect_agent_canonical_records\".record_json, ( SELECT a.record_json FROM \"effect_agent_archive_records\" a WHERE a.thread_id=\"effect_agent_canonical_records\".thread_id AND a.sequence=\"effect_agent_canonical_records\".sequence AND (SELECT r.state='archived' AND r.locator IS NOT NULL FROM \"effect_agent_journal_ranges\" r WHERE r.thread_id=a.thread_id AND r.first_sequence=a.range_first_sequence) )) AS record_json FROM \"effect_agent_canonical_records\" INDEXED BY \"effect_agent_records_prompt\" WHERE thread_id=? AND record_tag IN ('UserInputRecorded', 'ModelCompleted', 'ModelResponseRecorded', 'ToolCallSettled', 'CompactionCreated', 'RunCompleted', 'RunFailed', 'SubmissionSettled') AND sequence>=? AND sequence<=? ORDER BY sequence",
+        "count": 21,
+        "read": 5355,
+        "written": 0
+      },
+      {
+        "sql": "SELECT sequence, length(CAST(COALESCE(\"effect_agent_canonical_records\".record_json, ( SELECT a.record_json FROM \"effect_agent_archive_records\" a WHERE a.thread_id=\"effect_agent_canonical_records\".thread_id AND a.sequence=\"effect_agent_canonical_records\".sequence AND (SELECT r.state='archived' AND r.locator IS NOT NULL FROM \"effect_agent_journal_ranges\" r WHERE r.thread_id=a.thread_id AND r.first_sequence=a.range_first_sequence) )) AS BLOB)) AS record_json_bytes FROM \"effect_agent_canonical_records\" INDEXED BY \"effect_agent_records_prompt\" WHERE thread_id=? AND record_tag IN ('UserInputRecorded', 'ModelCompleted', 'ModelResponseRecorded', 'ToolCallSettled', 'CompactionCreated', 'RunCompleted', 'RunFailed', 'SubmissionSettled') AND sequence>? AND sequence<=? ORDER BY sequence LIMIT ?",
+        "count": 21,
+        "read": 5335,
+        "written": 0
+      },
+      {
+        "sql": "SELECT ownership.* FROM effect_agent_submission_ownership AS ownership JOIN effect_agent_submissions AS submission ON submission.submission_id = ownership.submission_id WHERE submission.thread_id = ? ORDER BY ownership.lease_expires_at DESC LIMIT 1",
+        "count": 1,
+        "read": 1002,
+        "written": 0
+      },
+      {
+        "sql": "SELECT name, type, sql FROM sqlite_master WHERE name GLOB 'effect_agent_*' ORDER BY name",
+        "count": 3,
+        "read": 987,
+        "written": 0
+      },
+      {
+        "sql": "SELECT submission_id, thread_id, queue_sequence, principal, idempotency_key, deployment_id, receipt_id, state FROM effect_agent_submissions WHERE thread_id = ? LIMIT 129",
+        "count": 5,
+        "read": 645,
+        "written": 0
+      },
+      {
+        "sql": "SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name IN ('effect_agent_work_index', 'effect_agent_work_entries')",
+        "count": 1,
+        "read": 184,
+        "written": 0
+      },
+      {
+        "sql": "UPDATE \"effect_agent_journal_ranges\" SET last_sequence=?, tail_digest=?, record_count=record_count+?, batch_count=batch_count+1, byte_count=byte_count+? WHERE thread_id=? AND state='open' AND locator IS NULL AND last_sequence=? AND tail_digest=? AND first_sequence>0 AND record_count=last_sequence-first_sequence+1 AND record_count BETWEEN 1 AND ? AND batch_count BETWEEN 1 AND record_count AND byte_count BETWEEN 1 AND ? RETURNING *",
+        "count": 2,
+        "read": 30,
+        "written": 2
+      },
+      {
+        "sql": "WITH changes (id, revision, dueAt, stalls, progressKey, notBefore, state, reported, expected_revision) AS ( VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ) INSERT INTO platform_cloudflare_due_queue (id, revision, dueAt, stalls, progressKey, notBefore, state, reported) SELECT id, revision, dueAt, stalls, progressKey, notBefore, state, reported FROM changes WHERE 1 ON CONFLICT(id) DO UPDATE SET revision = excluded.revision, dueAt = excluded.dueAt, stalls = excluded.stalls, progressKey = excluded.progressKey, notBefore = excluded.notBefore, state = excluded.state, reported = excluded.reported WHERE platform_cloudflare_due_queue.revision = ( SELECT expected_revision FROM changes WHERE changes.id = excluded.id ) RETURNING id, revision, dueAt, stalls, progressKey, notBefore, state, reported",
+        "count": 6,
+        "read": 24,
+        "written": 6
+      },
+      {
+        "sql": "WITH evidence AS MATERIALIZED ( SELECT * FROM (SELECT * FROM ( SELECT sequence FROM \"effect_agent_record_runs\" WHERE thread_id = ? AND run_id = ? AND sequence > ? AND sequence <= ? ORDER BY sequence LIMIT ? ) AS membership UNION SELECT sequence FROM \"effect_agent_canonical_records\" WHERE thread_id = ? AND record_id = ? AND sequence > ? AND sequence <= ? UNION SELECT sequence FROM \"effect_agent_canonical_records\" WHERE thread_id = ? AND record_id = ? AND sequence > ? AND sequence <= ? UNION SELECT sequence FROM \"effect_agent_canonical_records\" WHERE thread_id = ? AND record_id = ? AND sequence > ? AND sequence <= ? ORDER BY sequence LIMIT ?) AS bounded_group ORDER BY sequence LIMIT ? ) SELECT canonical.thread_id, canonical.sequence, canonical.record_id, canonical.batch_id, COALESCE(\"canonical\".record_json, ( SELECT a.record_json FROM \"effect_agent_archive_records\" a WHERE a.thread_id=\"canonical\".thread_id AND a.sequence=\"canonical\".sequence AND (SELECT r.state='archived' AND r.locator IS NOT NULL FROM \"effect_agent_journal_ranges\" r WHERE r.thread_id=a.thread_id AND r.first_sequence=a.range_first_sequence) )) AS record_json FROM evidence LEFT JOIN \"effect_agent_canonical_records\" AS canonical ON canonical.thread_id=? AND canonical.sequence=evidence.sequence ORDER BY evidence.sequence",
+        "count": 5,
+        "read": 17,
+        "written": 0
+      },
+      {
+        "sql": "SELECT thread_id FROM ( SELECT thread_id FROM ( SELECT canonical.thread_id FROM \"effect_agent_threads\" AS canonical LEFT JOIN \"effect_agent_work_index\" AS work ON work.thread_id=canonical.thread_id WHERE (work.thread_id IS NULL OR work.version IS NULL OR work.version<>? OR work.state IS NULL OR work.state<>'ready' OR work.through_sequence IS NULL OR work.through_sequence<>canonical.tail_sequence OR work.entry_count IS NULL OR work.entry_count<>0 OR work.reporting IS NULL OR work.reporting NOT IN (0, 1, 2)) ORDER BY canonical.thread_id LIMIT ? ) AS canonical_owners UNION SELECT thread_id FROM (SELECT DISTINCT thread_id FROM \"effect_agent_submissions\" INDEXED BY effect_agent_submissions_nonterminal WHERE state <> 'settled' ORDER BY thread_id LIMIT ?) AS admission_owners UNION SELECT thread_id FROM (SELECT DISTINCT owner_thread_id AS thread_id FROM \"effect_agent_message_deliveries\" INDEXED BY effect_agent_message_deliveries_pending WHERE state NOT IN ('processed', 'refused') ORDER BY owner_thread_id LIMIT ?) AS delivery_owners UNION SELECT thread_id FROM (SELECT DISTINCT thread_id FROM \"effect_agent_work_entries\" ORDER BY thread_id LIMIT ?) AS canonical_work_owners ) AS owners ORDER BY thread_id LIMIT ?",
+        "count": 1,
+        "read": 10,
+        "written": 0
+      }
+    ]
+  }
+}

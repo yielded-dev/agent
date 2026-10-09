@@ -1,0 +1,2778 @@
+{
+  "method": "Original sample record counts between the last before-initialization sentinel and the first provider-prepared sentinel, before merging. Later lease heartbeats and model responses are excluded. Nominal sample milliseconds are estimates; exported timestamp-delta weights are not CPU. Explicit idle and diagnostic sentinels excluded from self percentages; harness and unresolved frames remain visible.",
+  "profiles": [
+    {
+      "run": "cold-bisect-mv0u2hvo-b66f98ae",
+      "mode": "object",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "11959608f523846ed3068600df8df6bed76f549a223ef45a110bd8cb2ad1e1dc",
+      "sampleRecords": 480,
+      "prefixSampleRecords": 372,
+      "lastBefore": 17,
+      "firstAfter": 390,
+      "admissionEntry": 47,
+      "admissionEntered": 49,
+      "admissionReturn": 111,
+      "admissionReturned": 119,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 355
+        },
+        {
+          "segment": "constructor",
+          "samples": 26
+        },
+        {
+          "segment": "admission",
+          "samples": 61
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 268
+        }
+      ],
+      "beforeSamples": 7,
+      "afterSamples": 36,
+      "magic": "0a04",
+      "longIntervals": 45
+    },
+    {
+      "run": "cold-bisect-mv0u2hvo-b66f98ae",
+      "mode": "object",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "6548de8a7e6a34c8135e52b20af34028d73d5a764efb9bd39dc31c12aaf2dcf1",
+      "sampleRecords": 569,
+      "prefixSampleRecords": 487,
+      "lastBefore": 13,
+      "firstAfter": 501,
+      "admissionEntry": 40,
+      "admissionEntered": 41,
+      "admissionReturn": 78,
+      "admissionReturned": 83,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 477
+        },
+        {
+          "segment": "constructor",
+          "samples": 25
+        },
+        {
+          "segment": "admission",
+          "samples": 36
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 416
+        }
+      ],
+      "beforeSamples": 5,
+      "afterSamples": 26,
+      "magic": "0a04",
+      "longIntervals": 37
+    },
+    {
+      "run": "cold-bisect-mv0u2hvo-b66f98ae",
+      "mode": "object",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "684d8cbae2aea05dcedc37d2f473a59bd91825c00223a32f3525a057e8fcd772",
+      "sampleRecords": 455,
+      "prefixSampleRecords": 298,
+      "lastBefore": 80,
+      "firstAfter": 379,
+      "admissionEntry": 101,
+      "admissionEntered": 102,
+      "admissionReturn": 134,
+      "admissionReturned": 139,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 288
+        },
+        {
+          "segment": "constructor",
+          "samples": 19
+        },
+        {
+          "segment": "admission",
+          "samples": 31
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 238
+        }
+      ],
+      "beforeSamples": 62,
+      "afterSamples": 28,
+      "magic": "0a04",
+      "longIntervals": 43
+    },
+    {
+      "run": "cold-bisect-mv0u2hvo-b66f98ae",
+      "mode": "object",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "fbd2afd74c8c4f8543cb070b0a55381d0f6d8a1cab9acec412d3e55f0f065ea1",
+      "sampleRecords": 613,
+      "prefixSampleRecords": 516,
+      "lastBefore": 18,
+      "firstAfter": 535,
+      "admissionEntry": 53,
+      "admissionEntered": 54,
+      "admissionReturn": 98,
+      "admissionReturned": 104,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 507
+        },
+        {
+          "segment": "constructor",
+          "samples": 34
+        },
+        {
+          "segment": "admission",
+          "samples": 43
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 430
+        }
+      ],
+      "beforeSamples": 6,
+      "afterSamples": 30,
+      "magic": "0a04",
+      "longIntervals": 39
+    },
+    {
+      "run": "cold-bisect-mv0u2hvo-b66f98ae",
+      "mode": "object",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "cfa95d1e7f0548b985a327d2d633c7f1036effbbad15eee983677b49d2b0efbd",
+      "sampleRecords": 612,
+      "prefixSampleRecords": 465,
+      "lastBefore": 80,
+      "firstAfter": 546,
+      "admissionEntry": 107,
+      "admissionEntered": 108,
+      "admissionReturn": 138,
+      "admissionReturned": 142,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 457
+        },
+        {
+          "segment": "constructor",
+          "samples": 25
+        },
+        {
+          "segment": "admission",
+          "samples": 29
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 403
+        }
+      ],
+      "beforeSamples": 61,
+      "afterSamples": 27,
+      "magic": "0a04",
+      "longIntervals": 37
+    },
+    {
+      "run": "cold-bisect-mv0u2hvo-b66f98ae",
+      "mode": "object",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "f122d042120c302afe97121d02b86e7bccc65b8630a7ce0816634924a2d68f14",
+      "sampleRecords": 394,
+      "prefixSampleRecords": 296,
+      "lastBefore": 15,
+      "firstAfter": 312,
+      "admissionEntry": 46,
+      "admissionEntered": 48,
+      "admissionReturn": 67,
+      "admissionReturned": 73,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 286
+        },
+        {
+          "segment": "constructor",
+          "samples": 30
+        },
+        {
+          "segment": "admission",
+          "samples": 18
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 238
+        }
+      ],
+      "beforeSamples": 6,
+      "afterSamples": 31,
+      "magic": "0a04",
+      "longIntervals": 46
+    },
+    {
+      "run": "cold-bisect-mv0u2hvo-b66f98ae",
+      "mode": "object",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "2bc44e6c186fd46d86e1e9884c105fb2028466648cf437f55f7fdcf0666e8704",
+      "sampleRecords": 450,
+      "prefixSampleRecords": 339,
+      "lastBefore": 19,
+      "firstAfter": 359,
+      "admissionEntry": 59,
+      "admissionEntered": 61,
+      "admissionReturn": 90,
+      "admissionReturned": 98,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 324
+        },
+        {
+          "segment": "constructor",
+          "samples": 37
+        },
+        {
+          "segment": "admission",
+          "samples": 28
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 259
+        }
+      ],
+      "beforeSamples": 16,
+      "afterSamples": 33,
+      "magic": "0a04",
+      "longIntervals": 57
+    },
+    {
+      "run": "cold-bisect-mv0u2hvo-b66f98ae",
+      "mode": "object",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "3158aebffecfde162b4597591c32a233154f50b825e4346a186c1b1a1d81004f",
+      "sampleRecords": 441,
+      "prefixSampleRecords": 280,
+      "lastBefore": 81,
+      "firstAfter": 362,
+      "admissionEntry": 103,
+      "admissionEntered": 104,
+      "admissionReturn": 140,
+      "admissionReturned": 145,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 270
+        },
+        {
+          "segment": "constructor",
+          "samples": 20
+        },
+        {
+          "segment": "admission",
+          "samples": 34
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 216
+        }
+      ],
+      "beforeSamples": 68,
+      "afterSamples": 28,
+      "magic": "0a04",
+      "longIntervals": 44
+    },
+    {
+      "run": "cold-bisect-mv0u2hvo-b66f98ae",
+      "mode": "object",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "3d6b966f858de88719380d2084fcbc77fb8beabb08039db03d08585adc40c42a",
+      "sampleRecords": 541,
+      "prefixSampleRecords": 459,
+      "lastBefore": 13,
+      "firstAfter": 473,
+      "admissionEntry": 39,
+      "admissionEntered": 40,
+      "admissionReturn": 75,
+      "admissionReturned": 79,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 452
+        },
+        {
+          "segment": "constructor",
+          "samples": 25
+        },
+        {
+          "segment": "admission",
+          "samples": 34
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 393
+        }
+      ],
+      "beforeSamples": 6,
+      "afterSamples": 28,
+      "magic": "0a04",
+      "longIntervals": 36
+    },
+    {
+      "run": "cold-bisect-mv0u2hvo-b66f98ae",
+      "mode": "object",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "73c39035b5ebe95db85f2fa707f5b107ae8daca40c977bb9aedf4d91dc3cbbfa",
+      "sampleRecords": 539,
+      "prefixSampleRecords": 471,
+      "lastBefore": 14,
+      "firstAfter": 486,
+      "admissionEntry": 43,
+      "admissionEntered": 44,
+      "admissionReturn": 91,
+      "admissionReturned": 97,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 460
+        },
+        {
+          "segment": "constructor",
+          "samples": 28
+        },
+        {
+          "segment": "admission",
+          "samples": 46
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 386
+        }
+      ],
+      "beforeSamples": 6,
+      "afterSamples": 24,
+      "magic": "0a04",
+      "longIntervals": 27
+    },
+    {
+      "run": "cold-bisect-mv0uioh1-2cc3821e",
+      "mode": "fresh",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "ebff4aa35d01931443dccf371c32db7239aef8b51352cef0d9798438e36e0201",
+      "sampleRecords": 1049,
+      "prefixSampleRecords": 755,
+      "lastBefore": 204,
+      "firstAfter": 960,
+      "admissionEntry": 318,
+      "admissionEntered": 320,
+      "admissionReturn": 369,
+      "admissionReturned": 376,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 741
+        },
+        {
+          "segment": "constructor",
+          "samples": 112
+        },
+        {
+          "segment": "admission",
+          "samples": 48
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 581
+        }
+      ],
+      "beforeSamples": 159,
+      "afterSamples": 33,
+      "magic": "0a04",
+      "longIntervals": 38
+    },
+    {
+      "run": "cold-bisect-mv0uioh1-2cc3821e",
+      "mode": "fresh",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "e8b4f5ab1438d907a116aa1f5f6d57a30f71712f5b8cedb7a9bab98330301573",
+      "sampleRecords": 575,
+      "prefixSampleRecords": 378,
+      "lastBefore": 134,
+      "firstAfter": 513,
+      "admissionEntry": 196,
+      "admissionEntered": 197,
+      "admissionReturn": 224,
+      "admissionReturned": 228,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 367
+        },
+        {
+          "segment": "constructor",
+          "samples": 60
+        },
+        {
+          "segment": "admission",
+          "samples": 25
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 282
+        }
+      ],
+      "beforeSamples": 118,
+      "afterSamples": 24,
+      "magic": "0a04",
+      "longIntervals": 36
+    },
+    {
+      "run": "cold-bisect-mv0uioh1-2cc3821e",
+      "mode": "fresh",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "7003ddb766a003e3e74eea44b7d850b438a8336c58319a4558693115967010ca",
+      "sampleRecords": 962,
+      "prefixSampleRecords": 845,
+      "lastBefore": 21,
+      "firstAfter": 867,
+      "admissionEntry": 183,
+      "admissionEntered": 185,
+      "admissionReturn": 242,
+      "admissionReturned": 249,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 830
+        },
+        {
+          "segment": "constructor",
+          "samples": 161
+        },
+        {
+          "segment": "admission",
+          "samples": 55
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 614
+        }
+      ],
+      "beforeSamples": 18,
+      "afterSamples": 35,
+      "magic": "0a04",
+      "longIntervals": 52
+    },
+    {
+      "run": "cold-bisect-mv0uioh1-2cc3821e",
+      "mode": "fresh",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "90c1886274e8f24ac255a34def87538baa6865b2052e12bc848bdb98d0b6553d",
+      "sampleRecords": 592,
+      "prefixSampleRecords": 515,
+      "lastBefore": 12,
+      "firstAfter": 528,
+      "admissionEntry": 92,
+      "admissionEntered": 93,
+      "admissionReturn": 122,
+      "admissionReturned": 126,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 508
+        },
+        {
+          "segment": "constructor",
+          "samples": 79
+        },
+        {
+          "segment": "admission",
+          "samples": 28
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 401
+        }
+      ],
+      "beforeSamples": 11,
+      "afterSamples": 29,
+      "magic": "0a04",
+      "longIntervals": 33
+    },
+    {
+      "run": "cold-bisect-mv0uioh1-2cc3821e",
+      "mode": "fresh",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "bf441d1cb993955e4e06775ac12218c5823072253ccea25f3bea78f29281d1f7",
+      "sampleRecords": 696,
+      "prefixSampleRecords": 478,
+      "lastBefore": 159,
+      "firstAfter": 638,
+      "admissionEntry": 255,
+      "admissionEntered": 257,
+      "admissionReturn": 303,
+      "admissionReturned": 307,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 460
+        },
+        {
+          "segment": "constructor",
+          "samples": 91
+        },
+        {
+          "segment": "admission",
+          "samples": 43
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 326
+        }
+      ],
+      "beforeSamples": 135,
+      "afterSamples": 25,
+      "magic": "0a04",
+      "longIntervals": 31
+    },
+    {
+      "run": "cold-bisect-mv0uioh1-2cc3821e",
+      "mode": "fresh",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "4037a520c8b63d696d40886bd3873098649361a91834c73197979c7ae7a0dead",
+      "sampleRecords": 1123,
+      "prefixSampleRecords": 824,
+      "lastBefore": 219,
+      "firstAfter": 1044,
+      "admissionEntry": 350,
+      "admissionEntered": 352,
+      "admissionReturn": 414,
+      "admissionReturned": 422,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 804
+        },
+        {
+          "segment": "constructor",
+          "samples": 128
+        },
+        {
+          "segment": "admission",
+          "samples": 60
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 616
+        }
+      ],
+      "beforeSamples": 181,
+      "afterSamples": 35,
+      "magic": "0a04",
+      "longIntervals": 33
+    },
+    {
+      "run": "cold-bisect-mv0uioh1-2cc3821e",
+      "mode": "fresh",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "9738bd425093d44421d4712cff130c04936e39c76f03455233fbf70e008159ac",
+      "sampleRecords": 760,
+      "prefixSampleRecords": 538,
+      "lastBefore": 142,
+      "firstAfter": 681,
+      "admissionEntry": 223,
+      "admissionEntered": 224,
+      "admissionReturn": 266,
+      "admissionReturned": 271,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 526
+        },
+        {
+          "segment": "constructor",
+          "samples": 78
+        },
+        {
+          "segment": "admission",
+          "samples": 41
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 407
+        }
+      ],
+      "beforeSamples": 121,
+      "afterSamples": 27,
+      "magic": "0a04",
+      "longIntervals": 46
+    },
+    {
+      "run": "cold-bisect-mv0uioh1-2cc3821e",
+      "mode": "fresh",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "edda70e89dfd7627570f5403da2e07d9843eaaf36a091ed241ab162aaa5e4c1c",
+      "sampleRecords": 1025,
+      "prefixSampleRecords": 712,
+      "lastBefore": 220,
+      "firstAfter": 933,
+      "admissionEntry": 333,
+      "admissionEntered": 335,
+      "admissionReturn": 385,
+      "admissionReturned": 392,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 700
+        },
+        {
+          "segment": "constructor",
+          "samples": 112
+        },
+        {
+          "segment": "admission",
+          "samples": 49
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 539
+        }
+      ],
+      "beforeSamples": 175,
+      "afterSamples": 33,
+      "magic": "0a04",
+      "longIntervals": 37
+    },
+    {
+      "run": "cold-bisect-mv0uioh1-2cc3821e",
+      "mode": "fresh",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "8c576289757a9984b96caadbda9117a07a39ea1cdfe81315adeeb6e940564318",
+      "sampleRecords": 1097,
+      "prefixSampleRecords": 793,
+      "lastBefore": 200,
+      "firstAfter": 994,
+      "admissionEntry": 349,
+      "admissionEntered": 352,
+      "admissionReturn": 418,
+      "admissionReturned": 425,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 778
+        },
+        {
+          "segment": "constructor",
+          "samples": 147
+        },
+        {
+          "segment": "admission",
+          "samples": 65
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 566
+        }
+      ],
+      "beforeSamples": 168,
+      "afterSamples": 35,
+      "magic": "0a04",
+      "longIntervals": 54
+    },
+    {
+      "run": "cold-bisect-mv0uioh1-2cc3821e",
+      "mode": "fresh",
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "sha256": "e04d06038d8ed1dd4625b7daf52a3d3ce3c8fb28c5999ed0b28d43077c006021",
+      "sampleRecords": 781,
+      "prefixSampleRecords": 672,
+      "lastBefore": 17,
+      "firstAfter": 690,
+      "admissionEntry": 139,
+      "admissionEntered": 141,
+      "admissionReturn": 188,
+      "admissionReturned": 195,
+      "regions": [
+        {
+          "segment": "prefix",
+          "samples": 660
+        },
+        {
+          "segment": "constructor",
+          "samples": 121
+        },
+        {
+          "segment": "admission",
+          "samples": 45
+        },
+        {
+          "segment": "before-first-provider",
+          "samples": 494
+        }
+      ],
+      "beforeSamples": 14,
+      "afterSamples": 31,
+      "magic": "0a04",
+      "longIntervals": 52
+    }
+  ],
+  "summaries": [
+    {
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "mode": "object",
+      "segment": "prefix",
+      "starts": 10,
+      "totalSamples": 3983,
+      "nonHarnessSamples": 3818,
+      "harnessSamples": 58,
+      "idleSamples": 17,
+      "markerSamples": 90,
+      "rawWeightNs": 4256417002,
+      "longIntervals": 10,
+      "longIntervalNs": 402862000,
+      "nominalPeriodNs": 1000000,
+      "nominalSampleMsPerStart": 387.6,
+      "categories": [
+        {
+          "category": "other Effect",
+          "samples": 1342,
+          "selfPercent": 34.623
+        },
+        {
+          "category": "Effect Schema",
+          "samples": 869,
+          "selfPercent": 22.42
+        },
+        {
+          "category": "native or unresolved",
+          "samples": 428,
+          "selfPercent": 11.042
+        },
+        {
+          "category": "durable domain",
+          "samples": 390,
+          "selfPercent": 10.062
+        },
+        {
+          "category": "storage adapters",
+          "samples": 268,
+          "selfPercent": 6.914
+        },
+        {
+          "category": "garbage collection",
+          "samples": 222,
+          "selfPercent": 5.728
+        },
+        {
+          "category": "Effect SQL",
+          "samples": 133,
+          "selfPercent": 3.431
+        },
+        {
+          "category": "Cloudflare platform adapter",
+          "samples": 96,
+          "selfPercent": 2.477
+        },
+        {
+          "category": "other",
+          "samples": 70,
+          "selfPercent": 1.806
+        },
+        {
+          "category": "harness and native-call wrappers",
+          "samples": 58,
+          "selfPercent": 1.496
+        }
+      ],
+      "functions": [
+        {
+          "name": "(garbage collector)",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 222,
+          "harness": false,
+          "selfPercent": 5.728,
+          "nominalSampleMsPerStart": 22.2
+        },
+        {
+          "name": "next",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 174,
+          "harness": false,
+          "selfPercent": 4.489,
+          "nominalSampleMsPerStart": 17.4
+        },
+        {
+          "name": "exec",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 171,
+          "harness": false,
+          "selfPercent": 4.412,
+          "nominalSampleMsPerStart": 17.1
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1254,
+          "samples": 126,
+          "harness": false,
+          "selfPercent": 3.251,
+          "nominalSampleMsPerStart": 12.6
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1267,
+          "samples": 112,
+          "harness": false,
+          "selfPercent": 2.89,
+          "nominalSampleMsPerStart": 11.2
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 3668,
+          "samples": 99,
+          "harness": false,
+          "selfPercent": 2.554,
+          "nominalSampleMsPerStart": 9.9
+        },
+        {
+          "name": "runLoop",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 642,
+          "samples": 95,
+          "harness": false,
+          "selfPercent": 2.451,
+          "nominalSampleMsPerStart": 9.5
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 3034,
+          "samples": 92,
+          "harness": false,
+          "selfPercent": 2.374,
+          "nominalSampleMsPerStart": 9.2
+        },
+        {
+          "name": "fromIteratorEagerUnsafe",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1387,
+          "samples": 84,
+          "harness": false,
+          "selfPercent": 2.167,
+          "nominalSampleMsPerStart": 8.4
+        },
+        {
+          "name": "try",
+          "source": "node_modules/effect/src/SchemaGetter.ts",
+          "line": 1388,
+          "samples": 71,
+          "harness": false,
+          "selfPercent": 1.832,
+          "nominalSampleMsPerStart": 7.1
+        },
+        {
+          "name": "makePrimitiveProto",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1432,
+          "samples": 65,
+          "harness": false,
+          "selfPercent": 1.677,
+          "nominalSampleMsPerStart": 6.5
+        },
+        {
+          "name": "evaluate",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 605,
+          "samples": 64,
+          "harness": false,
+          "selfPercent": 1.651,
+          "nominalSampleMsPerStart": 6.4
+        },
+        {
+          "name": "visit",
+          "source": "packages/effect-agent/src/durable/internal/canonical-json.ts",
+          "line": 20,
+          "samples": 54,
+          "harness": false,
+          "selfPercent": 1.393,
+          "nominalSampleMsPerStart": 5.4
+        },
+        {
+          "name": "",
+          "source": "packages/effect-agent/src/durable/RunJournal.ts",
+          "line": 1257,
+          "samples": 51,
+          "harness": false,
+          "selfPercent": 1.316,
+          "nominalSampleMsPerStart": 5.1
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/schema/interpreter.ts",
+          "line": 208,
+          "samples": 49,
+          "harness": false,
+          "selfPercent": 1.264,
+          "nominalSampleMsPerStart": 4.9
+        },
+        {
+          "name": "parseChecks",
+          "source": "node_modules/effect/src/internal/schema/interpreter.ts",
+          "line": 146,
+          "samples": 47,
+          "harness": false,
+          "selfPercent": 1.213,
+          "nominalSampleMsPerStart": 4.7
+        },
+        {
+          "name": "runSequential",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 5040,
+          "samples": 46,
+          "harness": false,
+          "selfPercent": 1.187,
+          "nominalSampleMsPerStart": 4.6
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 2899,
+          "samples": 42,
+          "harness": false,
+          "selfPercent": 1.084,
+          "nominalSampleMsPerStart": 4.2
+        },
+        {
+          "name": "assignProperty",
+          "source": "node_modules/effect/src/internal/record.ts",
+          "line": 2,
+          "samples": 42,
+          "harness": false,
+          "selfPercent": 1.084,
+          "nominalSampleMsPerStart": 4.2
+        },
+        {
+          "name": "",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 40,
+          "harness": false,
+          "selfPercent": 1.032,
+          "nominalSampleMsPerStart": 4
+        }
+      ]
+    },
+    {
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "mode": "object",
+      "segment": "constructor",
+      "starts": 10,
+      "totalSamples": 278,
+      "nonHarnessSamples": 262,
+      "harnessSamples": 7,
+      "idleSamples": 9,
+      "markerSamples": 0,
+      "rawWeightNs": 292193000,
+      "longIntervals": 0,
+      "longIntervalNs": 0,
+      "nominalPeriodNs": 1000000,
+      "nominalSampleMsPerStart": 26.9,
+      "categories": [
+        {
+          "category": "other Effect",
+          "samples": 115,
+          "selfPercent": 42.751
+        },
+        {
+          "category": "storage adapters",
+          "samples": 42,
+          "selfPercent": 15.613
+        },
+        {
+          "category": "native or unresolved",
+          "samples": 26,
+          "selfPercent": 9.665
+        },
+        {
+          "category": "Effect Schema",
+          "samples": 22,
+          "selfPercent": 8.178
+        },
+        {
+          "category": "garbage collection",
+          "samples": 18,
+          "selfPercent": 6.691
+        },
+        {
+          "category": "Effect SQL",
+          "samples": 16,
+          "selfPercent": 5.948
+        },
+        {
+          "category": "Cloudflare platform adapter",
+          "samples": 11,
+          "selfPercent": 4.089
+        },
+        {
+          "category": "durable domain",
+          "samples": 8,
+          "selfPercent": 2.974
+        },
+        {
+          "category": "harness and native-call wrappers",
+          "samples": 7,
+          "selfPercent": 2.602
+        },
+        {
+          "category": "other",
+          "samples": 4,
+          "selfPercent": 1.487
+        }
+      ],
+      "functions": [
+        {
+          "name": "normalize3",
+          "source": "packages/storage-sql/src/SqliteLayoutInspection.ts",
+          "line": 36,
+          "samples": 21,
+          "harness": false,
+          "selfPercent": 7.807,
+          "nominalSampleMsPerStart": 2.1
+        },
+        {
+          "name": "(garbage collector)",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 18,
+          "harness": false,
+          "selfPercent": 6.691,
+          "nominalSampleMsPerStart": 1.8
+        },
+        {
+          "name": "makePrimitiveProto",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1432,
+          "samples": 10,
+          "harness": false,
+          "selfPercent": 3.717,
+          "nominalSampleMsPerStart": 1
+        },
+        {
+          "name": "exec",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 9,
+          "harness": false,
+          "selfPercent": 3.346,
+          "nominalSampleMsPerStart": 0.9
+        },
+        {
+          "name": "runLoop",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 642,
+          "samples": 9,
+          "harness": false,
+          "selfPercent": 3.346,
+          "nominalSampleMsPerStart": 0.9
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 2899,
+          "samples": 8,
+          "harness": false,
+          "selfPercent": 2.974,
+          "nominalSampleMsPerStart": 0.8
+        },
+        {
+          "name": "",
+          "source": "packages/storage-sql/src/SqliteLayoutInspection.ts",
+          "line": 69,
+          "samples": 8,
+          "harness": false,
+          "selfPercent": 2.974,
+          "nominalSampleMsPerStart": 0.8
+        },
+        {
+          "name": "makeExit",
+          "source": "node_modules/effect/src/internal/core.ts",
+          "line": 521,
+          "samples": 8,
+          "harness": false,
+          "selfPercent": 2.974,
+          "nominalSampleMsPerStart": 0.8
+        },
+        {
+          "name": "makePrimitive",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 995,
+          "samples": 7,
+          "harness": false,
+          "selfPercent": 2.602,
+          "nominalSampleMsPerStart": 0.7
+        },
+        {
+          "name": "next",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 7,
+          "harness": false,
+          "selfPercent": 2.602,
+          "nominalSampleMsPerStart": 0.7
+        },
+        {
+          "name": "withFlat",
+          "source": "node_modules/effect/src/Context.ts",
+          "line": 674,
+          "samples": 6,
+          "harness": false,
+          "selfPercent": 2.23,
+          "nominalSampleMsPerStart": 0.6
+        },
+        {
+          "name": "runIterator",
+          "source": "node_modules/@effect/sql-sqlite-do/src/SqliteClient.ts",
+          "line": 207,
+          "samples": 6,
+          "harness": false,
+          "selfPercent": 2.23,
+          "nominalSampleMsPerStart": 0.6
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/Layer.ts",
+          "line": 354,
+          "samples": 4,
+          "harness": false,
+          "selfPercent": 1.487,
+          "nominalSampleMsPerStart": 0.4
+        },
+        {
+          "name": "(program)",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 4,
+          "harness": false,
+          "selfPercent": 1.487,
+          "nominalSampleMsPerStart": 0.4
+        },
+        {
+          "name": "try",
+          "source": "node_modules/@effect/sql-sqlite-do/src/SqliteClient.ts",
+          "line": 228,
+          "samples": 4,
+          "harness": false,
+          "selfPercent": 1.487,
+          "nominalSampleMsPerStart": 0.4
+        },
+        {
+          "name": "evaluate",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 605,
+          "samples": 4,
+          "harness": false,
+          "selfPercent": 1.487,
+          "nominalSampleMsPerStart": 0.4
+        },
+        {
+          "name": "makePrimitive",
+          "source": "node_modules/effect/src/internal/core.ts",
+          "line": 569,
+          "samples": 4,
+          "harness": false,
+          "selfPercent": 1.487,
+          "nominalSampleMsPerStart": 0.4
+        },
+        {
+          "name": "benchSubmit",
+          "source": "examples/durable-bench/deployed/worker/yielded.ts",
+          "line": 104,
+          "samples": 3,
+          "harness": true,
+          "selfPercent": 1.115,
+          "nominalSampleMsPerStart": 0.3
+        },
+        {
+          "name": "fromIteratorEagerUnsafe",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1387,
+          "samples": 3,
+          "harness": false,
+          "selfPercent": 1.115,
+          "nominalSampleMsPerStart": 0.3
+        },
+        {
+          "name": "scopeForkUnsafe",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 4019,
+          "samples": 3,
+          "harness": false,
+          "selfPercent": 1.115,
+          "nominalSampleMsPerStart": 0.3
+        }
+      ]
+    },
+    {
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "mode": "object",
+      "segment": "admission",
+      "starts": 10,
+      "totalSamples": 361,
+      "nonHarnessSamples": 353,
+      "harnessSamples": 7,
+      "idleSamples": 1,
+      "markerSamples": 0,
+      "rawWeightNs": 298738001,
+      "longIntervals": 0,
+      "longIntervalNs": 0,
+      "nominalPeriodNs": 1000000,
+      "nominalSampleMsPerStart": 36,
+      "categories": [
+        {
+          "category": "other Effect",
+          "samples": 123,
+          "selfPercent": 34.167
+        },
+        {
+          "category": "storage adapters",
+          "samples": 62,
+          "selfPercent": 17.222
+        },
+        {
+          "category": "Effect Schema",
+          "samples": 54,
+          "selfPercent": 15
+        },
+        {
+          "category": "native or unresolved",
+          "samples": 44,
+          "selfPercent": 12.222
+        },
+        {
+          "category": "Cloudflare platform adapter",
+          "samples": 44,
+          "selfPercent": 12.222
+        },
+        {
+          "category": "Effect SQL",
+          "samples": 10,
+          "selfPercent": 2.778
+        },
+        {
+          "category": "garbage collection",
+          "samples": 9,
+          "selfPercent": 2.5
+        },
+        {
+          "category": "harness and native-call wrappers",
+          "samples": 7,
+          "selfPercent": 1.944
+        },
+        {
+          "category": "durable domain",
+          "samples": 5,
+          "selfPercent": 1.389
+        },
+        {
+          "category": "other",
+          "samples": 2,
+          "selfPercent": 0.556
+        }
+      ],
+      "functions": [
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1267,
+          "samples": 19,
+          "harness": false,
+          "selfPercent": 5.278,
+          "nominalSampleMsPerStart": 1.9
+        },
+        {
+          "name": "exec",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 18,
+          "harness": false,
+          "selfPercent": 5,
+          "nominalSampleMsPerStart": 1.8
+        },
+        {
+          "name": "next",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 14,
+          "harness": false,
+          "selfPercent": 3.889,
+          "nominalSampleMsPerStart": 1.4
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1254,
+          "samples": 9,
+          "harness": false,
+          "selfPercent": 2.5,
+          "nominalSampleMsPerStart": 0.9
+        },
+        {
+          "name": "(garbage collector)",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 9,
+          "harness": false,
+          "selfPercent": 2.5,
+          "nominalSampleMsPerStart": 0.9
+        },
+        {
+          "name": "makePrimitive",
+          "source": "node_modules/effect/src/internal/core.ts",
+          "line": 569,
+          "samples": 9,
+          "harness": false,
+          "selfPercent": 2.5,
+          "nominalSampleMsPerStart": 0.9
+        },
+        {
+          "name": "retain",
+          "source": "packages/storage-cloudflare/src/internal/owned-state.ts",
+          "line": 123,
+          "samples": 8,
+          "harness": false,
+          "selfPercent": 2.222,
+          "nominalSampleMsPerStart": 0.8
+        },
+        {
+          "name": "notify",
+          "source": "packages/platform-cloudflare/src/WakeScheduler.ts",
+          "line": 95,
+          "samples": 8,
+          "harness": false,
+          "selfPercent": 2.222,
+          "nominalSampleMsPerStart": 0.8
+        },
+        {
+          "name": "runLoop",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 642,
+          "samples": 8,
+          "harness": false,
+          "selfPercent": 2.222,
+          "nominalSampleMsPerStart": 0.8
+        },
+        {
+          "name": "",
+          "source": "packages/storage-cloudflare/src/DoSubmissionLedger.ts",
+          "line": 515,
+          "samples": 7,
+          "harness": false,
+          "selfPercent": 1.944,
+          "nominalSampleMsPerStart": 0.7
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 4119,
+          "samples": 7,
+          "harness": false,
+          "selfPercent": 1.944,
+          "nominalSampleMsPerStart": 0.7
+        },
+        {
+          "name": "onItem",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 2470,
+          "samples": 6,
+          "harness": false,
+          "selfPercent": 1.667,
+          "nominalSampleMsPerStart": 0.6
+        },
+        {
+          "name": "getRuntimeType",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 3408,
+          "samples": 6,
+          "harness": false,
+          "selfPercent": 1.667,
+          "nominalSampleMsPerStart": 0.6
+        },
+        {
+          "name": "withTransaction",
+          "source": "packages/platform-cloudflare/src/Alarm.ts",
+          "line": 1008,
+          "samples": 5,
+          "harness": false,
+          "selfPercent": 1.389,
+          "nominalSampleMsPerStart": 0.5
+        },
+        {
+          "name": "andThenCont",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1536,
+          "samples": 5,
+          "harness": false,
+          "selfPercent": 1.389,
+          "nominalSampleMsPerStart": 0.5
+        },
+        {
+          "name": "compileMembers",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 2812,
+          "samples": 5,
+          "harness": false,
+          "selfPercent": 1.389,
+          "nominalSampleMsPerStart": 0.5
+        },
+        {
+          "name": "runSequential",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 5040,
+          "samples": 5,
+          "harness": false,
+          "selfPercent": 1.389,
+          "nominalSampleMsPerStart": 0.5
+        },
+        {
+          "name": "evaluateCont",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1478,
+          "samples": 5,
+          "harness": false,
+          "selfPercent": 1.389,
+          "nominalSampleMsPerStart": 0.5
+        },
+        {
+          "name": "assignProperty",
+          "source": "node_modules/effect/src/internal/record.ts",
+          "line": 2,
+          "samples": 5,
+          "harness": false,
+          "selfPercent": 1.389,
+          "nominalSampleMsPerStart": 0.5
+        },
+        {
+          "name": "getCont",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 695,
+          "samples": 5,
+          "harness": false,
+          "selfPercent": 1.389,
+          "nominalSampleMsPerStart": 0.5
+        }
+      ]
+    },
+    {
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "mode": "object",
+      "segment": "before-first-provider",
+      "starts": 10,
+      "totalSamples": 3254,
+      "nonHarnessSamples": 3203,
+      "harnessSamples": 44,
+      "idleSamples": 7,
+      "markerSamples": 0,
+      "rawWeightNs": 3570678001,
+      "longIntervals": 10,
+      "longIntervalNs": 402862000,
+      "nominalPeriodNs": 1000000,
+      "nominalSampleMsPerStart": 324.7,
+      "categories": [
+        {
+          "category": "other Effect",
+          "samples": 1104,
+          "selfPercent": 34.001
+        },
+        {
+          "category": "Effect Schema",
+          "samples": 793,
+          "selfPercent": 24.423
+        },
+        {
+          "category": "durable domain",
+          "samples": 377,
+          "selfPercent": 11.611
+        },
+        {
+          "category": "native or unresolved",
+          "samples": 358,
+          "selfPercent": 11.026
+        },
+        {
+          "category": "garbage collection",
+          "samples": 195,
+          "selfPercent": 6.006
+        },
+        {
+          "category": "storage adapters",
+          "samples": 164,
+          "selfPercent": 5.051
+        },
+        {
+          "category": "Effect SQL",
+          "samples": 107,
+          "selfPercent": 3.295
+        },
+        {
+          "category": "other",
+          "samples": 64,
+          "selfPercent": 1.971
+        },
+        {
+          "category": "harness and native-call wrappers",
+          "samples": 44,
+          "selfPercent": 1.355
+        },
+        {
+          "category": "Cloudflare platform adapter",
+          "samples": 41,
+          "selfPercent": 1.263
+        }
+      ],
+      "functions": [
+        {
+          "name": "(garbage collector)",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 195,
+          "harness": false,
+          "selfPercent": 6.006,
+          "nominalSampleMsPerStart": 19.5
+        },
+        {
+          "name": "next",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 153,
+          "harness": false,
+          "selfPercent": 4.712,
+          "nominalSampleMsPerStart": 15.3
+        },
+        {
+          "name": "exec",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 144,
+          "harness": false,
+          "selfPercent": 4.435,
+          "nominalSampleMsPerStart": 14.4
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1254,
+          "samples": 116,
+          "harness": false,
+          "selfPercent": 3.573,
+          "nominalSampleMsPerStart": 11.6
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 3668,
+          "samples": 96,
+          "harness": false,
+          "selfPercent": 2.957,
+          "nominalSampleMsPerStart": 9.6
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1267,
+          "samples": 93,
+          "harness": false,
+          "selfPercent": 2.864,
+          "nominalSampleMsPerStart": 9.3
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 3034,
+          "samples": 88,
+          "harness": false,
+          "selfPercent": 2.71,
+          "nominalSampleMsPerStart": 8.8
+        },
+        {
+          "name": "fromIteratorEagerUnsafe",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1387,
+          "samples": 81,
+          "harness": false,
+          "selfPercent": 2.495,
+          "nominalSampleMsPerStart": 8.1
+        },
+        {
+          "name": "runLoop",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 642,
+          "samples": 78,
+          "harness": false,
+          "selfPercent": 2.402,
+          "nominalSampleMsPerStart": 7.8
+        },
+        {
+          "name": "try",
+          "source": "node_modules/effect/src/SchemaGetter.ts",
+          "line": 1388,
+          "samples": 71,
+          "harness": false,
+          "selfPercent": 2.187,
+          "nominalSampleMsPerStart": 7.1
+        },
+        {
+          "name": "evaluate",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 605,
+          "samples": 60,
+          "harness": false,
+          "selfPercent": 1.848,
+          "nominalSampleMsPerStart": 6
+        },
+        {
+          "name": "visit",
+          "source": "packages/effect-agent/src/durable/internal/canonical-json.ts",
+          "line": 20,
+          "samples": 53,
+          "harness": false,
+          "selfPercent": 1.632,
+          "nominalSampleMsPerStart": 5.3
+        },
+        {
+          "name": "makePrimitiveProto",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1432,
+          "samples": 52,
+          "harness": false,
+          "selfPercent": 1.601,
+          "nominalSampleMsPerStart": 5.2
+        },
+        {
+          "name": "",
+          "source": "packages/effect-agent/src/durable/RunJournal.ts",
+          "line": 1257,
+          "samples": 51,
+          "harness": false,
+          "selfPercent": 1.571,
+          "nominalSampleMsPerStart": 5.1
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/schema/interpreter.ts",
+          "line": 208,
+          "samples": 48,
+          "harness": false,
+          "selfPercent": 1.478,
+          "nominalSampleMsPerStart": 4.8
+        },
+        {
+          "name": "parseChecks",
+          "source": "node_modules/effect/src/internal/schema/interpreter.ts",
+          "line": 146,
+          "samples": 46,
+          "harness": false,
+          "selfPercent": 1.417,
+          "nominalSampleMsPerStart": 4.6
+        },
+        {
+          "name": "runSequential",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 5040,
+          "samples": 39,
+          "harness": false,
+          "selfPercent": 1.201,
+          "nominalSampleMsPerStart": 3.9
+        },
+        {
+          "name": "",
+          "source": "packages/effect-agent/src/durable/internal/initial-context.ts",
+          "line": 15,
+          "samples": 37,
+          "harness": false,
+          "selfPercent": 1.14,
+          "nominalSampleMsPerStart": 3.7
+        },
+        {
+          "name": "assignProperty",
+          "source": "node_modules/effect/src/internal/record.ts",
+          "line": 2,
+          "samples": 35,
+          "harness": false,
+          "selfPercent": 1.078,
+          "nominalSampleMsPerStart": 3.5
+        },
+        {
+          "name": "",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 34,
+          "harness": false,
+          "selfPercent": 1.047,
+          "nominalSampleMsPerStart": 3.4
+        }
+      ]
+    },
+    {
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "mode": "fresh",
+      "segment": "prefix",
+      "starts": 10,
+      "totalSamples": 6510,
+      "nonHarnessSamples": 6090,
+      "harnessSamples": 284,
+      "idleSamples": 38,
+      "markerSamples": 98,
+      "rawWeightNs": 12754951003,
+      "longIntervals": 11,
+      "longIntervalNs": 6282037000,
+      "nominalPeriodNs": 1000000,
+      "nominalSampleMsPerStart": 637.4,
+      "categories": [
+        {
+          "category": "other Effect",
+          "samples": 2409,
+          "selfPercent": 37.794
+        },
+        {
+          "category": "Effect Schema",
+          "samples": 1657,
+          "selfPercent": 25.996
+        },
+        {
+          "category": "durable domain",
+          "samples": 619,
+          "selfPercent": 9.711
+        },
+        {
+          "category": "Effect SQL",
+          "samples": 350,
+          "selfPercent": 5.491
+        },
+        {
+          "category": "garbage collection",
+          "samples": 325,
+          "selfPercent": 5.099
+        },
+        {
+          "category": "storage adapters",
+          "samples": 322,
+          "selfPercent": 5.052
+        },
+        {
+          "category": "harness and native-call wrappers",
+          "samples": 284,
+          "selfPercent": 4.456
+        },
+        {
+          "category": "Cloudflare platform adapter",
+          "samples": 170,
+          "selfPercent": 2.667
+        },
+        {
+          "category": "other",
+          "samples": 157,
+          "selfPercent": 2.463
+        },
+        {
+          "category": "native or unresolved",
+          "samples": 81,
+          "selfPercent": 1.271
+        }
+      ],
+      "functions": [
+        {
+          "name": "(garbage collector)",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 325,
+          "harness": false,
+          "selfPercent": 5.099,
+          "nominalSampleMsPerStart": 32.5
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1254,
+          "samples": 272,
+          "harness": false,
+          "selfPercent": 4.267,
+          "nominalSampleMsPerStart": 27.2
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1267,
+          "samples": 251,
+          "harness": false,
+          "selfPercent": 3.938,
+          "nominalSampleMsPerStart": 25.1
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 3668,
+          "samples": 220,
+          "harness": false,
+          "selfPercent": 3.452,
+          "nominalSampleMsPerStart": 22
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 3034,
+          "samples": 198,
+          "harness": false,
+          "selfPercent": 3.106,
+          "nominalSampleMsPerStart": 19.8
+        },
+        {
+          "name": "value",
+          "source": "examples/durable-bench/deployed/isolate/timeline.ts",
+          "line": 135,
+          "samples": 191,
+          "harness": true,
+          "selfPercent": 2.997,
+          "nominalSampleMsPerStart": 19.1
+        },
+        {
+          "name": "runLoop",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 642,
+          "samples": 167,
+          "harness": false,
+          "selfPercent": 2.62,
+          "nominalSampleMsPerStart": 16.7
+        },
+        {
+          "name": "runIterator",
+          "source": "node_modules/@effect/sql-sqlite-do/src/SqliteClient.ts",
+          "line": 207,
+          "samples": 158,
+          "harness": false,
+          "selfPercent": 2.479,
+          "nominalSampleMsPerStart": 15.8
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/schema/interpreter.ts",
+          "line": 208,
+          "samples": 106,
+          "harness": false,
+          "selfPercent": 1.663,
+          "nominalSampleMsPerStart": 10.6
+        },
+        {
+          "name": "runSequential",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 5040,
+          "samples": 103,
+          "harness": false,
+          "selfPercent": 1.616,
+          "nominalSampleMsPerStart": 10.3
+        },
+        {
+          "name": "makePrimitiveProto",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1432,
+          "samples": 101,
+          "harness": false,
+          "selfPercent": 1.585,
+          "nominalSampleMsPerStart": 10.1
+        },
+        {
+          "name": "evaluate",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 605,
+          "samples": 97,
+          "harness": false,
+          "selfPercent": 1.522,
+          "nominalSampleMsPerStart": 9.7
+        },
+        {
+          "name": "try",
+          "source": "node_modules/effect/src/SchemaGetter.ts",
+          "line": 1388,
+          "samples": 93,
+          "harness": false,
+          "selfPercent": 1.459,
+          "nominalSampleMsPerStart": 9.3
+        },
+        {
+          "name": "assignProperty",
+          "source": "node_modules/effect/src/internal/record.ts",
+          "line": 2,
+          "samples": 83,
+          "harness": false,
+          "selfPercent": 1.302,
+          "nominalSampleMsPerStart": 8.3
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 2899,
+          "samples": 82,
+          "harness": false,
+          "selfPercent": 1.286,
+          "nominalSampleMsPerStart": 8.2
+        },
+        {
+          "name": "visit",
+          "source": "packages/effect-agent/src/durable/internal/canonical-json.ts",
+          "line": 20,
+          "samples": 79,
+          "harness": false,
+          "selfPercent": 1.239,
+          "nominalSampleMsPerStart": 7.9
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/Function.ts",
+          "line": 246,
+          "samples": 78,
+          "harness": false,
+          "selfPercent": 1.224,
+          "nominalSampleMsPerStart": 7.8
+        },
+        {
+          "name": "parseChecks",
+          "source": "node_modules/effect/src/internal/schema/interpreter.ts",
+          "line": 146,
+          "samples": 75,
+          "harness": false,
+          "selfPercent": 1.177,
+          "nominalSampleMsPerStart": 7.5
+        },
+        {
+          "name": "",
+          "source": "packages/effect-agent/src/durable/RunJournal.ts",
+          "line": 1257,
+          "samples": 66,
+          "harness": false,
+          "selfPercent": 1.035,
+          "nominalSampleMsPerStart": 6.6
+        },
+        {
+          "name": "(program)",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 58,
+          "harness": false,
+          "selfPercent": 0.91,
+          "nominalSampleMsPerStart": 5.8
+        }
+      ]
+    },
+    {
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "mode": "fresh",
+      "segment": "constructor",
+      "starts": 10,
+      "totalSamples": 1100,
+      "nonHarnessSamples": 1058,
+      "harnessSamples": 31,
+      "idleSamples": 11,
+      "markerSamples": 0,
+      "rawWeightNs": 1154749000,
+      "longIntervals": 0,
+      "longIntervalNs": 0,
+      "nominalPeriodNs": 1000000,
+      "nominalSampleMsPerStart": 108.9,
+      "categories": [
+        {
+          "category": "other Effect",
+          "samples": 548,
+          "selfPercent": 50.321
+        },
+        {
+          "category": "storage adapters",
+          "samples": 129,
+          "selfPercent": 11.846
+        },
+        {
+          "category": "Effect Schema",
+          "samples": 104,
+          "selfPercent": 9.55
+        },
+        {
+          "category": "Cloudflare platform adapter",
+          "samples": 73,
+          "selfPercent": 6.703
+        },
+        {
+          "category": "garbage collection",
+          "samples": 60,
+          "selfPercent": 5.51
+        },
+        {
+          "category": "Effect SQL",
+          "samples": 48,
+          "selfPercent": 4.408
+        },
+        {
+          "category": "durable domain",
+          "samples": 47,
+          "selfPercent": 4.316
+        },
+        {
+          "category": "other",
+          "samples": 31,
+          "selfPercent": 2.847
+        },
+        {
+          "category": "harness and native-call wrappers",
+          "samples": 31,
+          "selfPercent": 2.847
+        },
+        {
+          "category": "native or unresolved",
+          "samples": 18,
+          "selfPercent": 1.653
+        }
+      ],
+      "functions": [
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1254,
+          "samples": 62,
+          "harness": false,
+          "selfPercent": 5.693,
+          "nominalSampleMsPerStart": 6.2
+        },
+        {
+          "name": "(garbage collector)",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 60,
+          "harness": false,
+          "selfPercent": 5.51,
+          "nominalSampleMsPerStart": 6
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1267,
+          "samples": 59,
+          "harness": false,
+          "selfPercent": 5.418,
+          "nominalSampleMsPerStart": 5.9
+        },
+        {
+          "name": "runLoop",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 642,
+          "samples": 34,
+          "harness": false,
+          "selfPercent": 3.122,
+          "nominalSampleMsPerStart": 3.4
+        },
+        {
+          "name": "normalize3",
+          "source": "packages/storage-sql/src/SqliteLayoutInspection.ts",
+          "line": 36,
+          "samples": 30,
+          "harness": false,
+          "selfPercent": 2.755,
+          "nominalSampleMsPerStart": 3
+        },
+        {
+          "name": "getCont",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 695,
+          "samples": 28,
+          "harness": false,
+          "selfPercent": 2.571,
+          "nominalSampleMsPerStart": 2.8
+        },
+        {
+          "name": "evaluate",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 605,
+          "samples": 22,
+          "harness": false,
+          "selfPercent": 2.02,
+          "nominalSampleMsPerStart": 2.2
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/Function.ts",
+          "line": 246,
+          "samples": 18,
+          "harness": false,
+          "selfPercent": 1.653,
+          "nominalSampleMsPerStart": 1.8
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1375,
+          "samples": 18,
+          "harness": false,
+          "selfPercent": 1.653,
+          "nominalSampleMsPerStart": 1.8
+        },
+        {
+          "name": "",
+          "source": "packages/storage-sql/src/SqliteLayoutInspection.ts",
+          "line": 69,
+          "samples": 18,
+          "harness": false,
+          "selfPercent": 1.653,
+          "nominalSampleMsPerStart": 1.8
+        },
+        {
+          "name": "",
+          "source": "packages/effect-agent/src/durable/DurableAgentRuntime.ts",
+          "line": 1366,
+          "samples": 17,
+          "harness": false,
+          "selfPercent": 1.561,
+          "nominalSampleMsPerStart": 1.7
+        },
+        {
+          "name": "runIterator",
+          "source": "node_modules/@effect/sql-sqlite-do/src/SqliteClient.ts",
+          "line": 207,
+          "samples": 15,
+          "harness": false,
+          "selfPercent": 1.377,
+          "nominalSampleMsPerStart": 1.5
+        },
+        {
+          "name": "PrimitiveImpl",
+          "source": "node_modules/effect/src/internal/core.ts",
+          "line": 459,
+          "samples": 12,
+          "harness": false,
+          "selfPercent": 1.102,
+          "nominalSampleMsPerStart": 1.2
+        },
+        {
+          "name": "value",
+          "source": "examples/durable-bench/deployed/isolate/timeline.ts",
+          "line": 135,
+          "samples": 11,
+          "harness": true,
+          "selfPercent": 1.01,
+          "nominalSampleMsPerStart": 1.1
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 2899,
+          "samples": 11,
+          "harness": false,
+          "selfPercent": 1.01,
+          "nominalSampleMsPerStart": 1.1
+        },
+        {
+          "name": "succeedWith",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 721,
+          "samples": 11,
+          "harness": false,
+          "selfPercent": 1.01,
+          "nominalSampleMsPerStart": 1.1
+        },
+        {
+          "name": "index2",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 3549,
+          "samples": 11,
+          "harness": false,
+          "selfPercent": 1.01,
+          "nominalSampleMsPerStart": 1.1
+        },
+        {
+          "name": "",
+          "source": "packages/storage-cloudflare/src/internal/do-journal.ts",
+          "line": 375,
+          "samples": 10,
+          "harness": false,
+          "selfPercent": 0.918,
+          "nominalSampleMsPerStart": 1
+        },
+        {
+          "name": "",
+          "source": "packages/storage-cloudflare/src/internal/do-journal.ts",
+          "line": 324,
+          "samples": 9,
+          "harness": false,
+          "selfPercent": 0.826,
+          "nominalSampleMsPerStart": 0.9
+        },
+        {
+          "name": "scopeForkUnsafe",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 4019,
+          "samples": 9,
+          "harness": false,
+          "selfPercent": 0.826,
+          "nominalSampleMsPerStart": 0.9
+        }
+      ]
+    },
+    {
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "mode": "fresh",
+      "segment": "admission",
+      "starts": 10,
+      "totalSamples": 465,
+      "nonHarnessSamples": 440,
+      "harnessSamples": 19,
+      "idleSamples": 6,
+      "markerSamples": 0,
+      "rawWeightNs": 459041001,
+      "longIntervals": 0,
+      "longIntervalNs": 0,
+      "nominalPeriodNs": 1000000,
+      "nominalSampleMsPerStart": 45.9,
+      "categories": [
+        {
+          "category": "other Effect",
+          "samples": 180,
+          "selfPercent": 39.216
+        },
+        {
+          "category": "Effect Schema",
+          "samples": 120,
+          "selfPercent": 26.144
+        },
+        {
+          "category": "storage adapters",
+          "samples": 48,
+          "selfPercent": 10.458
+        },
+        {
+          "category": "Cloudflare platform adapter",
+          "samples": 32,
+          "selfPercent": 6.972
+        },
+        {
+          "category": "Effect SQL",
+          "samples": 31,
+          "selfPercent": 6.754
+        },
+        {
+          "category": "harness and native-call wrappers",
+          "samples": 19,
+          "selfPercent": 4.139
+        },
+        {
+          "category": "durable domain",
+          "samples": 16,
+          "selfPercent": 3.486
+        },
+        {
+          "category": "native or unresolved",
+          "samples": 8,
+          "selfPercent": 1.743
+        },
+        {
+          "category": "other",
+          "samples": 4,
+          "selfPercent": 0.871
+        },
+        {
+          "category": "garbage collection",
+          "samples": 1,
+          "selfPercent": 0.218
+        }
+      ],
+      "functions": [
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1267,
+          "samples": 21,
+          "harness": false,
+          "selfPercent": 4.575,
+          "nominalSampleMsPerStart": 2.1
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 3034,
+          "samples": 19,
+          "harness": false,
+          "selfPercent": 4.139,
+          "nominalSampleMsPerStart": 1.9
+        },
+        {
+          "name": "onItem",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 2470,
+          "samples": 17,
+          "harness": false,
+          "selfPercent": 3.704,
+          "nominalSampleMsPerStart": 1.7
+        },
+        {
+          "name": "runSequential",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 5040,
+          "samples": 17,
+          "harness": false,
+          "selfPercent": 3.704,
+          "nominalSampleMsPerStart": 1.7
+        },
+        {
+          "name": "runIterator",
+          "source": "node_modules/@effect/sql-sqlite-do/src/SqliteClient.ts",
+          "line": 207,
+          "samples": 14,
+          "harness": false,
+          "selfPercent": 3.05,
+          "nominalSampleMsPerStart": 1.4
+        },
+        {
+          "name": "value",
+          "source": "examples/durable-bench/deployed/isolate/timeline.ts",
+          "line": 135,
+          "samples": 12,
+          "harness": true,
+          "selfPercent": 2.614,
+          "nominalSampleMsPerStart": 1.2
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1254,
+          "samples": 11,
+          "harness": false,
+          "selfPercent": 2.397,
+          "nominalSampleMsPerStart": 1.1
+        },
+        {
+          "name": "try",
+          "source": "node_modules/@effect/sql-sqlite-do/src/SqliteClient.ts",
+          "line": 228,
+          "samples": 11,
+          "harness": false,
+          "selfPercent": 2.397,
+          "nominalSampleMsPerStart": 1.1
+        },
+        {
+          "name": "compileMembers",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 2812,
+          "samples": 11,
+          "harness": false,
+          "selfPercent": 2.397,
+          "nominalSampleMsPerStart": 1.1
+        },
+        {
+          "name": "evaluateCont",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1478,
+          "samples": 11,
+          "harness": false,
+          "selfPercent": 2.397,
+          "nominalSampleMsPerStart": 1.1
+        },
+        {
+          "name": "getParser",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 2315,
+          "samples": 10,
+          "harness": false,
+          "selfPercent": 2.179,
+          "nominalSampleMsPerStart": 1
+        },
+        {
+          "name": "",
+          "source": "packages/storage-cloudflare/src/DoSubmissionLedger.ts",
+          "line": 1194,
+          "samples": 8,
+          "harness": false,
+          "selfPercent": 1.743,
+          "nominalSampleMsPerStart": 0.8
+        },
+        {
+          "name": "andThenCont",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1536,
+          "samples": 7,
+          "harness": false,
+          "selfPercent": 1.525,
+          "nominalSampleMsPerStart": 0.7
+        },
+        {
+          "name": "",
+          "source": "packages/storage-cloudflare/src/internal/owned-state.ts",
+          "line": 188,
+          "samples": 7,
+          "harness": false,
+          "selfPercent": 1.525,
+          "nominalSampleMsPerStart": 0.7
+        },
+        {
+          "name": "",
+          "source": "packages/effect-agent/src/durable/DurableAgentRuntime.ts",
+          "line": 11028,
+          "samples": 7,
+          "harness": false,
+          "selfPercent": 1.525,
+          "nominalSampleMsPerStart": 0.7
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 4119,
+          "samples": 7,
+          "harness": false,
+          "selfPercent": 1.525,
+          "nominalSampleMsPerStart": 0.7
+        },
+        {
+          "name": "collectIssues",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 4940,
+          "samples": 6,
+          "harness": false,
+          "selfPercent": 1.307,
+          "nominalSampleMsPerStart": 0.6
+        },
+        {
+          "name": "(program)",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 6,
+          "harness": false,
+          "selfPercent": 1.307,
+          "nominalSampleMsPerStart": 0.6
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1270,
+          "samples": 6,
+          "harness": false,
+          "selfPercent": 1.307,
+          "nominalSampleMsPerStart": 0.6
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/Function.ts",
+          "line": 246,
+          "samples": 6,
+          "harness": false,
+          "selfPercent": 1.307,
+          "nominalSampleMsPerStart": 0.6
+        }
+      ]
+    },
+    {
+      "framework": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+      "mode": "fresh",
+      "segment": "before-first-provider",
+      "starts": 10,
+      "totalSamples": 4847,
+      "nonHarnessSamples": 4592,
+      "harnessSamples": 234,
+      "idleSamples": 21,
+      "markerSamples": 0,
+      "rawWeightNs": 11036824002,
+      "longIntervals": 11,
+      "longIntervalNs": 6282037000,
+      "nominalPeriodNs": 1000000,
+      "nominalSampleMsPerStart": 482.6,
+      "categories": [
+        {
+          "category": "other Effect",
+          "samples": 1681,
+          "selfPercent": 34.832
+        },
+        {
+          "category": "Effect Schema",
+          "samples": 1433,
+          "selfPercent": 29.693
+        },
+        {
+          "category": "durable domain",
+          "samples": 556,
+          "selfPercent": 11.521
+        },
+        {
+          "category": "Effect SQL",
+          "samples": 271,
+          "selfPercent": 5.615
+        },
+        {
+          "category": "garbage collection",
+          "samples": 264,
+          "selfPercent": 5.47
+        },
+        {
+          "category": "harness and native-call wrappers",
+          "samples": 234,
+          "selfPercent": 4.849
+        },
+        {
+          "category": "storage adapters",
+          "samples": 145,
+          "selfPercent": 3.005
+        },
+        {
+          "category": "other",
+          "samples": 122,
+          "selfPercent": 2.528
+        },
+        {
+          "category": "Cloudflare platform adapter",
+          "samples": 65,
+          "selfPercent": 1.347
+        },
+        {
+          "category": "native or unresolved",
+          "samples": 55,
+          "selfPercent": 1.14
+        }
+      ],
+      "functions": [
+        {
+          "name": "(garbage collector)",
+          "source": "[native or unresolved]",
+          "line": 0,
+          "samples": 264,
+          "harness": false,
+          "selfPercent": 5.47,
+          "nominalSampleMsPerStart": 26.4
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 3668,
+          "samples": 213,
+          "harness": false,
+          "selfPercent": 4.414,
+          "nominalSampleMsPerStart": 21.3
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1254,
+          "samples": 199,
+          "harness": false,
+          "selfPercent": 4.123,
+          "nominalSampleMsPerStart": 19.9
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 3034,
+          "samples": 177,
+          "harness": false,
+          "selfPercent": 3.668,
+          "nominalSampleMsPerStart": 17.7
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1267,
+          "samples": 171,
+          "harness": false,
+          "selfPercent": 3.543,
+          "nominalSampleMsPerStart": 17.1
+        },
+        {
+          "name": "value",
+          "source": "examples/durable-bench/deployed/isolate/timeline.ts",
+          "line": 135,
+          "samples": 168,
+          "harness": true,
+          "selfPercent": 3.481,
+          "nominalSampleMsPerStart": 16.8
+        },
+        {
+          "name": "runIterator",
+          "source": "node_modules/@effect/sql-sqlite-do/src/SqliteClient.ts",
+          "line": 207,
+          "samples": 129,
+          "harness": false,
+          "selfPercent": 2.673,
+          "nominalSampleMsPerStart": 12.9
+        },
+        {
+          "name": "runLoop",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 642,
+          "samples": 127,
+          "harness": false,
+          "selfPercent": 2.632,
+          "nominalSampleMsPerStart": 12.7
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/internal/schema/interpreter.ts",
+          "line": 208,
+          "samples": 102,
+          "harness": false,
+          "selfPercent": 2.114,
+          "nominalSampleMsPerStart": 10.2
+        },
+        {
+          "name": "try",
+          "source": "node_modules/effect/src/SchemaGetter.ts",
+          "line": 1388,
+          "samples": 93,
+          "harness": false,
+          "selfPercent": 1.927,
+          "nominalSampleMsPerStart": 9.3
+        },
+        {
+          "name": "makePrimitiveProto",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 1432,
+          "samples": 86,
+          "harness": false,
+          "selfPercent": 1.782,
+          "nominalSampleMsPerStart": 8.6
+        },
+        {
+          "name": "visit",
+          "source": "packages/effect-agent/src/durable/internal/canonical-json.ts",
+          "line": 20,
+          "samples": 78,
+          "harness": false,
+          "selfPercent": 1.616,
+          "nominalSampleMsPerStart": 7.8
+        },
+        {
+          "name": "runSequential",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 5040,
+          "samples": 77,
+          "harness": false,
+          "selfPercent": 1.596,
+          "nominalSampleMsPerStart": 7.7
+        },
+        {
+          "name": "assignProperty",
+          "source": "node_modules/effect/src/internal/record.ts",
+          "line": 2,
+          "samples": 75,
+          "harness": false,
+          "selfPercent": 1.554,
+          "nominalSampleMsPerStart": 7.5
+        },
+        {
+          "name": "parseChecks",
+          "source": "node_modules/effect/src/internal/schema/interpreter.ts",
+          "line": 146,
+          "samples": 72,
+          "harness": false,
+          "selfPercent": 1.492,
+          "nominalSampleMsPerStart": 7.2
+        },
+        {
+          "name": "evaluate",
+          "source": "node_modules/effect/src/internal/effect.ts",
+          "line": 605,
+          "samples": 72,
+          "harness": false,
+          "selfPercent": 1.492,
+          "nominalSampleMsPerStart": 7.2
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/SchemaAST.ts",
+          "line": 2899,
+          "samples": 71,
+          "harness": false,
+          "selfPercent": 1.471,
+          "nominalSampleMsPerStart": 7.1
+        },
+        {
+          "name": "",
+          "source": "packages/effect-agent/src/durable/RunJournal.ts",
+          "line": 1257,
+          "samples": 66,
+          "harness": false,
+          "selfPercent": 1.368,
+          "nominalSampleMsPerStart": 6.6
+        },
+        {
+          "name": "",
+          "source": "node_modules/effect/src/Function.ts",
+          "line": 246,
+          "samples": 54,
+          "harness": false,
+          "selfPercent": 1.119,
+          "nominalSampleMsPerStart": 5.4
+        },
+        {
+          "name": "compile",
+          "source": "node_modules/effect/src/sql/Statement.ts",
+          "line": 1474,
+          "samples": 50,
+          "harness": false,
+          "selfPercent": 1.036,
+          "nominalSampleMsPerStart": 5
+        }
+      ]
+    }
+  ],
+  "calibration": {
+    "rawExportedWeightMs": 8351,
+    "originalNonIdleRecords": 4056,
+    "nominalSamplePeriodMs": 1,
+    "deployedInvocationCpuMs": 4328,
+    "longIntervals": 8,
+    "longIntervalWeightMs": 4016,
+    "interpretation": "Raw exported timestamp-delta weights include idle gaps; report original self-sample shares and nominal sample-period estimates instead. Do not call these exact CPU milliseconds."
+  },
+  "scope": {
+    "historyTurns": 250,
+    "coldObjectStarts": 10,
+    "freshInitializationStarts": 10,
+    "freshModuleAndPlatformActivationCaptured": false,
+    "profileLatenciesExcludedFromTimingMatrix": true,
+    "sentinelCpuExcluded": true,
+    "constructorBoundary": "last constructor Before sentinel to endpoint AdmissionEntry sentinel",
+    "admissionBoundary": "AdmissionEntry return to AdmissionReturn entry",
+    "postAdmissionBoundary": "AdmissionReturn return to first provider-prepared After sentinel",
+    "harnessWrappers": "A SQL exec wrapper contains native SQLite self samples; its self samples are not all tracing overhead."
+  },
+  "sourceMaps": [
+    {
+      "run": "cold-bisect-mv0u2hvo-b66f98ae",
+      "mode": "object",
+      "sha256": "ca5ead36d72e341fc4aa7d52277cb76e12a4c70ffc6a568cb7b254446165ebe9",
+      "bytes": 2269985,
+      "mapping": "One upload-comment line is subtracted before mapping esbuild generated positions."
+    },
+    {
+      "run": "cold-bisect-mv0uioh1-2cc3821e",
+      "mode": "fresh",
+      "sha256": "7bb06c86b1001b262fac4f2da7af5a5f38e5633ecefca17824f4d63af676684b",
+      "bytes": 2270606,
+      "mapping": "One upload-comment line is subtracted before mapping esbuild generated positions."
+    }
+  ],
+  "samplingLimitations": {
+    "nominalSampleMsAreExactCpu": false,
+    "longIntervalsCanContainWaitingOrUnsampledNativeWork": true,
+    "freshDiagnosticOutlier": {
+      "run": "cold-bisect-mv0uioh1-2cc3821e",
+      "objectOrdinal": 0,
+      "admissionMs": 6941,
+      "firstModelMs": 7040,
+      "submitCompleteToAlarmEntryIoClockAdvanceMs": 6359,
+      "includedInCpuSampleAggregate": true,
+      "includedInLatencyMatrix": false,
+      "interpretation": "One diagnostic capture has a long pre-alarm interval; raw exported time-delta weights must not be charged as self CPU. The profiling shell can retain an older I/O-clock tick before the input."
+    }
+  }
+}

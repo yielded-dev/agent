@@ -1,0 +1,25 @@
+{
+  "prefix": "cold-bisect",
+  "checkedAt": "2026-10-09T11:50:19.526Z",
+  "verified": true,
+  "workers": [],
+  "namespaces": [],
+  "namespacePages": 1,
+  "accountVerified": true,
+  "privateAlchemyStateRemoved": true,
+  "method": "Independent read-only API verification after Alchemy teardown: complete Worker script inventory and paginated Durable Object namespaces, matched by script/name prefix. No unrelated resource is modified.",
+  "apiResponses": [
+    {
+      "route": "account verification",
+      "status": 200
+    },
+    {
+      "route": "/workers/scripts",
+      "status": 200
+    },
+    {
+      "route": "namespace inventory",
+      "status": 200
+    }
+  ]
+}

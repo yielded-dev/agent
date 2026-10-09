@@ -1,0 +1,708 @@
+{
+  "checkedAt": "2026-10-09T11:48:02.377822+00:00",
+  "frameworkRevision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+  "productChanges": false,
+  "recordFormatChanged": false,
+  "thirdPartyNodeModulesPresent": false,
+  "harness": {
+    "source": "https://github.com/yielded-dev/agent/tree/dan/cold-bisect-bench",
+    "finalRevision": "52db55ffd61ee9f09898753a7557945769859618",
+    "initialSharedBenchRevision": "78cb4eb7",
+    "latestReviewedSharedBenchRevision": "699d163a360f7326dbc34ffb4b5755c10ffda9e5",
+    "relevantSharedFixes": "Own-Object build guards already implemented in the task harness; later shared Tardie directory change does not apply. No measured code was rebased mid-cohort.",
+    "staticChecks": "Changed harness files passed scoped vp check --fix and commit hooks before deployment.",
+    "normalBundleIdentity": {
+      "normalization": "Replace the task run name with cold-bisect-RUN in generated source-path comments. The injected version header is outside these compiled bundle files.",
+      "bundles": [
+        {
+          "run": "cold-bisect-mv0tgu55-2c25e332",
+          "target": "yielded",
+          "bytes": 3615212,
+          "sha256": "d9e89cfa78555ec60a65ce3aecf647b1d7be19faa45d6c61048c4b7e734cba9c",
+          "normalizedSha256": "1268db1baeec5312201bba0a02d404274ceaeb83a6656773aabe9f643ada585e"
+        },
+        {
+          "run": "cold-bisect-mv0tgu55-2c25e332",
+          "target": "pi",
+          "bytes": 1756819,
+          "sha256": "89e72b84274aaa327f99619fd913e0244b539001b448b05e8057f64af036192c",
+          "normalizedSha256": "89e72b84274aaa327f99619fd913e0244b539001b448b05e8057f64af036192c"
+        },
+        {
+          "run": "cold-bisect-mv0tgu55-2c25e332",
+          "target": "bare",
+          "bytes": 21443,
+          "sha256": "55dadde62ae20bffeb56b1d28168a0d9253be01f1a4031b6bbea690a85c133ff",
+          "normalizedSha256": "55dadde62ae20bffeb56b1d28168a0d9253be01f1a4031b6bbea690a85c133ff"
+        },
+        {
+          "run": "cold-bisect-mv0toq6p-23455966",
+          "target": "yielded",
+          "bytes": 3615212,
+          "sha256": "f18a1c26d69196e23380020b5c711f4402d48039fc98289949f48be604340b05",
+          "normalizedSha256": "1268db1baeec5312201bba0a02d404274ceaeb83a6656773aabe9f643ada585e"
+        },
+        {
+          "run": "cold-bisect-mv0toq6p-23455966",
+          "target": "pi",
+          "bytes": 1756819,
+          "sha256": "89e72b84274aaa327f99619fd913e0244b539001b448b05e8057f64af036192c",
+          "normalizedSha256": "89e72b84274aaa327f99619fd913e0244b539001b448b05e8057f64af036192c"
+        },
+        {
+          "run": "cold-bisect-mv0toq6p-23455966",
+          "target": "bare",
+          "bytes": 21443,
+          "sha256": "55dadde62ae20bffeb56b1d28168a0d9253be01f1a4031b6bbea690a85c133ff",
+          "normalizedSha256": "55dadde62ae20bffeb56b1d28168a0d9253be01f1a4031b6bbea690a85c133ff"
+        },
+        {
+          "run": "cold-bisect-mv0v41nm-19dbe867",
+          "target": "yielded",
+          "bytes": 3615212,
+          "sha256": "2a467f9ea199d61eeea0b9862c3abb4d9fb9d45327593eb5b7dcf3733aceb60f",
+          "normalizedSha256": "1268db1baeec5312201bba0a02d404274ceaeb83a6656773aabe9f643ada585e"
+        },
+        {
+          "run": "cold-bisect-mv0v41nm-19dbe867",
+          "target": "pi",
+          "bytes": 1756819,
+          "sha256": "89e72b84274aaa327f99619fd913e0244b539001b448b05e8057f64af036192c",
+          "normalizedSha256": "89e72b84274aaa327f99619fd913e0244b539001b448b05e8057f64af036192c"
+        },
+        {
+          "run": "cold-bisect-mv0v41nm-19dbe867",
+          "target": "bare",
+          "bytes": 21931,
+          "sha256": "969b30cbdf27bfb0e0a2074d2d5ce5e84978bd42115f4f3d7f495be059545cdd",
+          "normalizedSha256": "969b30cbdf27bfb0e0a2074d2d5ce5e84978bd42115f4f3d7f495be059545cdd"
+        },
+        {
+          "run": "cold-bisect-mv0vs16x-827f0238",
+          "target": "yielded",
+          "bytes": 3615212,
+          "sha256": "90d24670bf1ed05882a4ed07f376b45da04bd09e1461830aafbf36a8ec4804bd",
+          "normalizedSha256": "1268db1baeec5312201bba0a02d404274ceaeb83a6656773aabe9f643ada585e"
+        },
+        {
+          "run": "cold-bisect-mv0vs16x-827f0238",
+          "target": "pi",
+          "bytes": 1756819,
+          "sha256": "89e72b84274aaa327f99619fd913e0244b539001b448b05e8057f64af036192c",
+          "normalizedSha256": "89e72b84274aaa327f99619fd913e0244b539001b448b05e8057f64af036192c"
+        },
+        {
+          "run": "cold-bisect-mv0vs16x-827f0238",
+          "target": "bare",
+          "bytes": 21931,
+          "sha256": "969b30cbdf27bfb0e0a2074d2d5ce5e84978bd42115f4f3d7f495be059545cdd",
+          "normalizedSha256": "969b30cbdf27bfb0e0a2074d2d5ce5e84978bd42115f4f3d7f495be059545cdd"
+        }
+      ]
+    },
+    "latestReviewUtcMinute": "2026-10-09 11:43 UTC"
+  },
+  "artifactAudit": {
+    "normalRuns": 4,
+    "normalCompletedInputsIncludingWarmup": 1440,
+    "acceptedNumericRows": 1077,
+    "timingCells": 48,
+    "allCellMediansRecomputedFromCsv": true,
+    "allPrimaryFlagsMatchCsv": true,
+    "primaryProfiles": 20,
+    "profileBoundaryAndBuildChecksPassed": true,
+    "inputRetries": 0,
+    "buildMismatches": 0,
+    "excludedCompletedFirstTurns": 3
+  },
+  "seedTranscriptFingerprints": {
+    "50": "b017b487524e44a4",
+    "250": "dcea9f30b0917245",
+    "1000": "ac520308146f2a8f"
+  },
+  "guards": {
+    "method": "Boolean verification is retained per completed input in private source results. The timed Object checks its own BUILD before admission; completed own BUILD and every provider receipt must match. Warmup inputs are included in these totals.",
+    "runs": [
+      {
+        "run": "cold-bisect-mv0t951y-e71d29e7",
+        "completed": 1,
+        "checks": [
+          {
+            "key": "fingerprintVerified",
+            "passed": 1,
+            "failed": 0,
+            "missing": 0
+          },
+          {
+            "key": "buildVerified",
+            "passed": 1,
+            "failed": 0,
+            "missing": 0
+          },
+          {
+            "key": "providerBuildVerified",
+            "passed": 1,
+            "failed": 0,
+            "missing": 0
+          }
+        ],
+        "fixtures": [
+          {
+            "target": "yielded",
+            "history": 250,
+            "fingerprint": "dcea9f30b0917245",
+            "mode": "replay"
+          }
+        ],
+        "uploads": [
+          {
+            "target": "yielded",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "364f7cfb78c7598c665c91ac35fcbb7a2a6cb4a1234880baa84557ca5102dae7",
+            "uploadedSha256": "05efc9af868d3016082a9dc921d9316bbf0bd5afdb07eda1409ec361fb1376fe",
+            "status": "ready",
+            "resetCount": 0
+          },
+          {
+            "target": "yielded",
+            "phase": "epoch",
+            "label": "working",
+            "sourceSha256": "965553b962a8418c102d6bb09fb198403a79d731411c599950f6f2d7da7e2a1c",
+            "uploadedSha256": "a2eca041f4423460c4cd05e1d40229271dc914bdf4aedaa9c01a22cc19541112",
+            "status": "ready",
+            "resetCount": 1
+          }
+        ]
+      },
+      {
+        "run": "cold-bisect-mv0tgu55-2c25e332",
+        "completed": 420,
+        "checks": [
+          {
+            "key": "fingerprintVerified",
+            "passed": 420,
+            "failed": 0,
+            "missing": 0
+          },
+          {
+            "key": "buildVerified",
+            "passed": 420,
+            "failed": 0,
+            "missing": 0
+          },
+          {
+            "key": "providerBuildVerified",
+            "passed": 420,
+            "failed": 0,
+            "missing": 0
+          }
+        ],
+        "fixtures": [
+          {
+            "target": "yielded",
+            "history": 50,
+            "fingerprint": "b017b487524e44a4",
+            "mode": "replay"
+          },
+          {
+            "target": "yielded",
+            "history": 250,
+            "fingerprint": "dcea9f30b0917245",
+            "mode": "replay"
+          },
+          {
+            "target": "pi",
+            "history": 50,
+            "fingerprint": "b017b487524e44a4",
+            "mode": "import"
+          },
+          {
+            "target": "pi",
+            "history": 250,
+            "fingerprint": "dcea9f30b0917245",
+            "mode": "import"
+          }
+        ],
+        "uploads": [
+          {
+            "target": "bare",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "55dadde62ae20bffeb56b1d28168a0d9253be01f1a4031b6bbea690a85c133ff",
+            "uploadedSha256": "451132d25eb53c4ec6222c8bf30e3a316bd7bdbc6e3c03d08573b4b5bdcef8a9",
+            "status": "ready",
+            "resetCount": 0,
+            "readinessFailures": [
+              {
+                "ingress": "object",
+                "attempt": 0,
+                "error": "Worker returned HTTP 404; the input will not be retried. <!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!--<![endif]-->\n  <head>\n    <meta charSet=\"utf-8\"/>\n    <meta http-equiv=\"refresh\" content=\"30\">\n    <title>Page not found</title>\n    <link rel=\"icon\" type=\"image/png\" href=\"https://workers.cloudflare.com/favicon.ico\" sizes=\"48x48\"/>\n    <style>\n      body {\n        font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Roboto\", \"Oxygen\", \"Ubuntu\", \"Cantarell\", \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", sans-serif\n      }\n      body,html {\n        margin: 0;\n        padding: 0;\n      }\n      * {\n        box-sizing: border-box;\n      }\n      .box {\n        display: flex;\n        flex-direction: column;\n        justify-content: center;\n        height: 100vh;\n        background-color: #f8f8f8;\n      }\n      .content {\n        margin: auto;\n      }\n      .content h1 {\n        font-size: 32px;\n        font-weight: 600;\n        margin-bottom: 8px;\n      }\n      .content p {\n        fo"
+              },
+              {
+                "ingress": "object",
+                "attempt": 0,
+                "error": "Worker returned HTTP 404; the input will not be retried. <!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!--<![endif]-->\n  <head>\n    <meta charSet=\"utf-8\"/>\n    <meta http-equiv=\"refresh\" content=\"30\">\n    <title>Page not found</title>\n    <link rel=\"icon\" type=\"image/png\" href=\"https://workers.cloudflare.com/favicon.ico\" sizes=\"48x48\"/>\n    <style>\n      body {\n        font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Roboto\", \"Oxygen\", \"Ubuntu\", \"Cantarell\", \"Fira Sans\", \"Droid Sans\", \"Helvetica Neue\", sans-serif\n      }\n      body,html {\n        margin: 0;\n        padding: 0;\n      }\n      * {\n        box-sizing: border-box;\n      }\n      .box {\n        display: flex;\n        flex-direction: column;\n        justify-content: center;\n        height: 100vh;\n        background-color: #f8f8f8;\n      }\n      .content {\n        margin: auto;\n      }\n      .content h1 {\n        font-size: 32px;\n        font-weight: 600;\n        margin-bottom: 8px;\n      }\n      .content p {\n        fo"
+              }
+            ]
+          },
+          {
+            "target": "yielded",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "d9e89cfa78555ec60a65ce3aecf647b1d7be19faa45d6c61048c4b7e734cba9c",
+            "uploadedSha256": "22e54f4d51e0380c2f5ddd9fac0bfa9eb0a1952822afb98395cef551190bbefa",
+            "status": "ready",
+            "resetCount": 0
+          },
+          {
+            "target": "pi",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "89e72b84274aaa327f99619fd913e0244b539001b448b05e8057f64af036192c",
+            "uploadedSha256": "4c4c401cee451158e5c4757a10504b7a38bf842041cd10bbd4815d20c6252a81",
+            "status": "ready",
+            "resetCount": 0
+          }
+        ]
+      },
+      {
+        "run": "cold-bisect-mv0toq6p-23455966",
+        "completed": 420,
+        "checks": [
+          {
+            "key": "fingerprintVerified",
+            "passed": 420,
+            "failed": 0,
+            "missing": 0
+          },
+          {
+            "key": "buildVerified",
+            "passed": 420,
+            "failed": 0,
+            "missing": 0
+          },
+          {
+            "key": "providerBuildVerified",
+            "passed": 420,
+            "failed": 0,
+            "missing": 0
+          }
+        ],
+        "fixtures": [
+          {
+            "target": "yielded",
+            "history": 50,
+            "fingerprint": "b017b487524e44a4",
+            "mode": "replay"
+          },
+          {
+            "target": "yielded",
+            "history": 250,
+            "fingerprint": "dcea9f30b0917245",
+            "mode": "replay"
+          },
+          {
+            "target": "pi",
+            "history": 50,
+            "fingerprint": "b017b487524e44a4",
+            "mode": "import"
+          },
+          {
+            "target": "pi",
+            "history": 250,
+            "fingerprint": "dcea9f30b0917245",
+            "mode": "import"
+          }
+        ],
+        "uploads": [
+          {
+            "target": "bare",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "55dadde62ae20bffeb56b1d28168a0d9253be01f1a4031b6bbea690a85c133ff",
+            "uploadedSha256": "a7f6a4dc02adf278f2e49f2784268a2d712c5fcf48bd60fc57933ec18cf22aee",
+            "status": "ready",
+            "resetCount": 0
+          },
+          {
+            "target": "yielded",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "f18a1c26d69196e23380020b5c711f4402d48039fc98289949f48be604340b05",
+            "uploadedSha256": "163fa2653734ad7cb410518f684f78a9230cc7f819db42d9bcd4a468bcadd864",
+            "status": "ready",
+            "resetCount": 0
+          },
+          {
+            "target": "pi",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "89e72b84274aaa327f99619fd913e0244b539001b448b05e8057f64af036192c",
+            "uploadedSha256": "d21e8729f98861ff43f9a2bbe4987edfc67031a0f48f22960548347ff2363db3",
+            "status": "ready",
+            "resetCount": 0
+          },
+          {
+            "target": "bare",
+            "phase": "epoch",
+            "label": "working",
+            "sourceSha256": "55dadde62ae20bffeb56b1d28168a0d9253be01f1a4031b6bbea690a85c133ff",
+            "uploadedSha256": "b54391a2a3b40b86211c3dde3894e0d9b4090a0648c3c23f1a19423ab197b81a",
+            "status": "ready",
+            "resetCount": 15
+          },
+          {
+            "target": "yielded",
+            "phase": "epoch",
+            "label": "working",
+            "sourceSha256": "f18a1c26d69196e23380020b5c711f4402d48039fc98289949f48be604340b05",
+            "uploadedSha256": "b7c71853f6c86dc91a76b5fb69f1e3f31bc19190500b6b32d4535502ccd8ccd5",
+            "status": "ready",
+            "resetCount": 45
+          },
+          {
+            "target": "pi",
+            "phase": "epoch",
+            "label": "working",
+            "sourceSha256": "89e72b84274aaa327f99619fd913e0244b539001b448b05e8057f64af036192c",
+            "uploadedSha256": "ef84709b8168de063db8b74e9006860005b777ba75dfdf838239c5a2adea8db7",
+            "status": "ready",
+            "resetCount": 45
+          }
+        ]
+      },
+      {
+        "run": "cold-bisect-mv0u2hvo-b66f98ae",
+        "completed": 10,
+        "checks": [
+          {
+            "key": "fingerprintVerified",
+            "passed": 10,
+            "failed": 0,
+            "missing": 0
+          },
+          {
+            "key": "buildVerified",
+            "passed": 10,
+            "failed": 0,
+            "missing": 0
+          },
+          {
+            "key": "providerBuildVerified",
+            "passed": 10,
+            "failed": 0,
+            "missing": 0
+          }
+        ],
+        "fixtures": [
+          {
+            "target": "yielded",
+            "history": 250,
+            "fingerprint": "dcea9f30b0917245",
+            "mode": "replay"
+          }
+        ],
+        "uploads": [
+          {
+            "target": "yielded",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "05f0cfd1c3347ee0ce1f6a5bae31bf417bb0eb79b205bf66305db4fcc293a3f4",
+            "uploadedSha256": "9c2f07e9bb2c69cdd0b7f330290e6468190682e0e03eff4ce8b831d4ac3b90e9",
+            "status": "ready",
+            "resetCount": 0
+          }
+        ]
+      },
+      {
+        "run": "cold-bisect-mv0uioh1-2cc3821e",
+        "completed": 10,
+        "checks": [
+          {
+            "key": "fingerprintVerified",
+            "passed": 10,
+            "failed": 0,
+            "missing": 0
+          },
+          {
+            "key": "buildVerified",
+            "passed": 10,
+            "failed": 0,
+            "missing": 0
+          },
+          {
+            "key": "providerBuildVerified",
+            "passed": 10,
+            "failed": 0,
+            "missing": 0
+          }
+        ],
+        "fixtures": [
+          {
+            "target": "yielded",
+            "history": 250,
+            "fingerprint": "dcea9f30b0917245",
+            "mode": "replay"
+          }
+        ],
+        "uploads": [
+          {
+            "target": "yielded",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "45bfdc58b12436da1f3c1ccc3d6d8e80956ea5777a5065823e6aeab4f6bcc56b",
+            "uploadedSha256": "f628d56ce73bf7ffd7a8c482c7f04df3a5b357474d29bf2732b022b1da5a05e0",
+            "status": "ready",
+            "resetCount": 0
+          },
+          {
+            "target": "yielded",
+            "phase": "epoch",
+            "label": "working",
+            "sourceSha256": "dd64a598b37b66978932c8f2e08c31f6ab785419f4af8ed13cb0712e1baf13a4",
+            "uploadedSha256": "169e8f599f9aa04cc1bd7c914e02b5bd97567941565292d7eb14901b98c891ed",
+            "status": "ready",
+            "resetCount": 10
+          }
+        ]
+      },
+      {
+        "run": "cold-bisect-mv0v41nm-19dbe867",
+        "completed": 300,
+        "checks": [
+          {
+            "key": "fingerprintVerified",
+            "passed": 300,
+            "failed": 0,
+            "missing": 0
+          },
+          {
+            "key": "buildVerified",
+            "passed": 300,
+            "failed": 0,
+            "missing": 0
+          },
+          {
+            "key": "providerBuildVerified",
+            "passed": 300,
+            "failed": 0,
+            "missing": 0
+          }
+        ],
+        "fixtures": [
+          {
+            "target": "yielded",
+            "history": 1000,
+            "fingerprint": "ac520308146f2a8f",
+            "mode": "replay"
+          },
+          {
+            "target": "pi",
+            "history": 1000,
+            "fingerprint": "ac520308146f2a8f",
+            "mode": "import"
+          }
+        ],
+        "uploads": [
+          {
+            "target": "bare",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "969b30cbdf27bfb0e0a2074d2d5ce5e84978bd42115f4f3d7f495be059545cdd",
+            "uploadedSha256": "b6508a95136470c091e2f0a321bf8a14566a773e7617dba221059586c0cce18c",
+            "status": "ready",
+            "resetCount": 0
+          },
+          {
+            "target": "yielded",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "2a467f9ea199d61eeea0b9862c3abb4d9fb9d45327593eb5b7dcf3733aceb60f",
+            "uploadedSha256": "79f1c6425dde8f3c3e2100dbb9816f24a5db8547a51555753f7b77abe31491c6",
+            "status": "ready",
+            "resetCount": 0
+          },
+          {
+            "target": "pi",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "89e72b84274aaa327f99619fd913e0244b539001b448b05e8057f64af036192c",
+            "uploadedSha256": "9c34000226b39104ea2bab763e2f8c8e626d078aef0f75ef4a218404aa3ebee0",
+            "status": "ready",
+            "resetCount": 0
+          }
+        ]
+      },
+      {
+        "run": "cold-bisect-mv0vs16x-827f0238",
+        "completed": 300,
+        "checks": [
+          {
+            "key": "fingerprintVerified",
+            "passed": 300,
+            "failed": 0,
+            "missing": 0
+          },
+          {
+            "key": "buildVerified",
+            "passed": 300,
+            "failed": 0,
+            "missing": 0
+          },
+          {
+            "key": "providerBuildVerified",
+            "passed": 300,
+            "failed": 0,
+            "missing": 0
+          }
+        ],
+        "fixtures": [
+          {
+            "target": "yielded",
+            "history": 1000,
+            "fingerprint": "ac520308146f2a8f",
+            "mode": "replay"
+          },
+          {
+            "target": "pi",
+            "history": 1000,
+            "fingerprint": "ac520308146f2a8f",
+            "mode": "import"
+          }
+        ],
+        "uploads": [
+          {
+            "target": "bare",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "969b30cbdf27bfb0e0a2074d2d5ce5e84978bd42115f4f3d7f495be059545cdd",
+            "uploadedSha256": "73edb933f8b8fe0c84bcdff23c68ddf0b504effadbab1c70d687f68877ee7139",
+            "status": "ready",
+            "resetCount": 0,
+            "readinessFailures": [
+              {
+                "ingress": "object",
+                "attempt": 1,
+                "error": "Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Worker not found.\",\"sample\":\"readiness\"}"
+              },
+              {
+                "ingress": "object",
+                "attempt": 2,
+                "error": "Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Worker not found.\",\"sample\":\"readiness\"}"
+              },
+              {
+                "ingress": "object",
+                "attempt": 3,
+                "error": "Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Worker not found.\",\"sample\":\"readiness\"}"
+              },
+              {
+                "ingress": "object",
+                "attempt": 3,
+                "error": "Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Worker not found.\",\"sample\":\"readiness\"}"
+              },
+              {
+                "ingress": "object",
+                "attempt": 4,
+                "error": "Worker returned HTTP 500; the input will not be retried. {\"ok\":false,\"error\":\"Worker not found.\",\"sample\":\"readiness\"}"
+              }
+            ]
+          },
+          {
+            "target": "yielded",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "90d24670bf1ed05882a4ed07f376b45da04bd09e1461830aafbf36a8ec4804bd",
+            "uploadedSha256": "03ea582cca93a8d3cdfabea251c47db50b2295afa8554a179be85f5d33b45447",
+            "status": "ready",
+            "resetCount": 0
+          },
+          {
+            "target": "pi",
+            "phase": "seed",
+            "label": "working",
+            "sourceSha256": "89e72b84274aaa327f99619fd913e0244b539001b448b05e8057f64af036192c",
+            "uploadedSha256": "7ae4634b474bbe6ec969e3bb6f2dde3eb5ea0cf610338fc7b0bc9f22b274ce60",
+            "status": "ready",
+            "resetCount": 0
+          },
+          {
+            "target": "bare",
+            "phase": "epoch",
+            "label": "working",
+            "sourceSha256": "969b30cbdf27bfb0e0a2074d2d5ce5e84978bd42115f4f3d7f495be059545cdd",
+            "uploadedSha256": "41ae2899f3f2107d3d4b38e23bef481b72b00c32fccf51d6d75a62f024824387",
+            "status": "ready",
+            "resetCount": 15
+          },
+          {
+            "target": "yielded",
+            "phase": "epoch",
+            "label": "working",
+            "sourceSha256": "90d24670bf1ed05882a4ed07f376b45da04bd09e1461830aafbf36a8ec4804bd",
+            "uploadedSha256": "77ff4a00fcd5124cb082cd5f772978c36a2023559c212d681af00f58595737eb",
+            "status": "ready",
+            "resetCount": 30
+          },
+          {
+            "target": "pi",
+            "phase": "epoch",
+            "label": "working",
+            "sourceSha256": "89e72b84274aaa327f99619fd913e0244b539001b448b05e8057f64af036192c",
+            "uploadedSha256": "b59949bf0efe89766295cce1572e48357a638a00e15109fdc59421c7c313e36b",
+            "status": "ready",
+            "resetCount": 30
+          }
+        ]
+      }
+    ]
+  },
+  "ready": {
+    "command": "vp run ready",
+    "frameworkRevision": "07f0272e7ba49a494064b6b74c6318b55514ae19",
+    "reusedUnchangedProductSnapshot": true,
+    "attempts": [
+      {
+        "command": "vp run ready",
+        "exitCode": 1,
+        "result": "PostgreSQL certification could not connect to the default local server. Three other tasks ended with exit 137. No product code was changed."
+      },
+      {
+        "command": "EFFECT_AGENT_TEST_POSTGRES_URL=<temporary-local-server> vp run ready",
+        "exitCode": 0,
+        "completedAt": "2026-10-09T06:47:07Z",
+        "tasks": 71,
+        "cacheHits": 32,
+        "result": "Static checks, export and record-format checks, tests, package and documentation builds passed. PostgreSQL 18.6 ran in a task-owned temporary directory."
+      }
+    ],
+    "logSha256": "30028c2b63eca99fc97b68ae598d2253e8afe353117b03897e2ea434d0a59b7c",
+    "temporaryPostgresCleanup": {
+      "stopped": true,
+      "temporaryDataDirectoryRemoved": true
+    }
+  },
+  "samplingAndTimingLimits": [
+    "No product baseline/candidate A/B or improvement claim; these are many-Object diagnostic comparisons of one pinned product.",
+    "Cross-Worker provider and driver clocks are not independently calibrated.",
+    "Whole invocation CPU counters overlap and do not partition receipt latency.",
+    "Production profiles attach after module evaluation; fresh profiles use a deferred native shell for first ThreadObject initialization.",
+    "Raw pprof elapsed weights are not CPU milliseconds; published self shares use original non-idle, non-marker sample records.",
+    "Logical SQLite rowsRead counters are not physical pages."
+  ],
+  "publicationPrivacyCheck": {
+    "checkedAt": "2026-10-09T11:49:15.103Z",
+    "files": 8,
+    "privateCategories": 5,
+    "matches": [],
+    "scope": "Evidence files and task harness diff checked against exact configured account identifier, API token, benchmark token, account name and subdomain, plus email patterns. Checked before private Alchemy-state deletion; the final cleanup record contains only empty resource lists and status booleans.",
+    "postCleanupScan": {
+      "checkedAt": "2026-10-09T11:51:12.239Z",
+      "files": 9,
+      "privateCategories": 4,
+      "matches": [],
+      "note": "The benchmark token no longer exists after state deletion; it was checked by the five-category scan above. This second scan includes the final empty-resource cleanup record."
+    }
+  },
+  "cleanupVerifiedAt": "2026-10-09T11:50:19.526Z"
+}
