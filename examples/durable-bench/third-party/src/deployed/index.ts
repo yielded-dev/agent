@@ -111,6 +111,15 @@ export default {
         return Response.json({ ok: true, build: env.BUILD });
       }
       const query = readQuery(url);
+      if (["/import", "/submit", "/await", "/run"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
+        return Response.json(
+          {
+            ok: false,
+            error: "Benchmark Worker build mismatch; request was not dispatched",
+            sample: query.sample,
+          },
+          { status: 503 },
+        );
       const mutating = ["/import", "/cold", "/submit", "/await", "/run"].includes(url.pathname);
 
       if (mutating && request.method !== "POST")
@@ -219,7 +228,7 @@ export default {
             throw new Error("Concurrent submission to one benchmark Object");
           cached.queries.set(query.object, query);
           try {
-            await env.YIELDED.getByName(query.object, { locationHint: "wnam" }).beginReplay();
+            await env.YIELDED.getByName(query.object, { locationHint: "wnam" }).beginReplay(query);
             await cached.runtime.runPromise(
               Effect.gen(function* () {
                 for (const input of history(0, fixture.history)) {
@@ -256,7 +265,7 @@ export default {
 
         if (!fixture.actor || fixture.target !== "tardie")
           throw new Error("Missing Tardie Actor fixture");
-        directoryTables = await actor.importFixture(fixture.actor, query.object);
+        directoryTables = await actor.importFixture(fixture.actor, query);
       }
       const response = await stub.fetch(request);
 

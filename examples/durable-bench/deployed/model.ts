@@ -46,6 +46,8 @@ export const Sample = Schema.Struct({
   fingerprintVerified: Schema.optionalKey(Schema.Boolean),
   coldVerified: Schema.optionalKey(Schema.Boolean),
   residentVerified: Schema.optionalKey(Schema.Boolean),
+  buildVerified: Schema.optionalKey(Schema.Boolean),
+  objectBuild: Schema.optionalKey(Schema.String),
   fingerprints: Schema.optionalKey(Schema.Array(Schema.String)),
   error: Schema.optionalKey(Schema.String),
 });
@@ -83,6 +85,18 @@ export const Result = Schema.Struct({
     }),
   ),
   samples: Schema.Array(Sample),
+  readiness: Schema.Array(
+    Schema.Struct({
+      target: Target,
+      object: Schema.String,
+      epoch: Schema.Natural,
+      expectedBuild: Schema.String,
+      objectBuild: Schema.String,
+      directoryBuild: Schema.optionalKey(Schema.String),
+      attempt: Schema.Natural,
+      waitMs: Schema.Number,
+    }),
+  ),
   failures: Schema.Array(Schema.String),
   cpu: Schema.optionalKey(Schema.Array(Invocation)),
   unmatchedCpuMarkers: Schema.optionalKey(Schema.Natural),

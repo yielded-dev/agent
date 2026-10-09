@@ -24,6 +24,12 @@ export default {
 
     try {
       const query = readQuery(url);
+
+      const objectBuild = Schema.decodeUnknownSync(Schema.NonEmptyString)(
+        url.searchParams.get("objectBuild"),
+      );
+
+      if (objectBuild !== query.expectedBuild) throw new Error("Object build mismatch");
       const raw = await request.text();
       const json: unknown = JSON.parse(raw);
       const { model } = Schema.decodeUnknownSync(Header)(json);
@@ -131,6 +137,7 @@ export default {
 
             const receipt: ProviderReceipt = {
               ...query,
+              objectBuild,
               call: Number(url.searchParams.get("call")),
               requestId: id,
               arrivalMs,

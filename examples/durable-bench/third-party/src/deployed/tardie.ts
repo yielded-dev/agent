@@ -40,7 +40,7 @@ import {
 } from "../../node_modules/tardie/src/platform/cloudflare/index.ts";
 import { Host, COLD_ABORT } from "../../../deployed/worker/host.ts";
 import { attach, observation } from "../../../deployed/worker/observe.ts";
-import { type SqlDump, type Env } from "../../../deployed/worker/protocol.ts";
+import { type SqlDump, type Env, type Query } from "../../../deployed/worker/protocol.ts";
 
 const SYSTEM = "You are a benchmark agent. Call lookup as instructed, then answer briefly.";
 const MODEL = { provider: "scripted", model_id: "scripted-1" };
@@ -195,16 +195,19 @@ export class ActorDO extends actorWorker.ActorObject {
     return this.meter.identity();
   }
   end() {
-    return this.nativeEntry ?? this.meter.identity();
+    if (!this.nativeEntry) throw new Error("No Actor lookup evidence for this incarnation");
+
+    return this.nativeEntry;
   }
   async abortCold(): Promise<void> {
     await this.ctx.storage.sync();
     this.ctx.abort(COLD_ABORT);
   }
-  async importFixture(dump: SqlDump, object: string) {
-    const counts = await Host.importTardie(this.ctx.storage, dump, object);
+  async importFixture(dump: SqlDump, query: Query) {
+    this.meter.assertBuild(query);
+    const counts = await Host.importTardie(this.ctx.storage, dump, query.object);
 
-    await this.ctx.storage.put("tardie:actor:instance", object);
+    await this.ctx.storage.put("tardie:actor:instance", query.object);
 
     return counts;
   }

@@ -12,6 +12,7 @@ export const Query = Schema.Struct({
   object: Schema.NonEmptyString,
   history: History,
   sample: Schema.NonEmptyString,
+  expectedBuild: Schema.NonEmptyString,
   ttftMs: Schema.Literals([0, 400]),
   chunkDelayMs: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1000 })),
 });
@@ -24,6 +25,7 @@ export const readQuery = (url: URL): Query =>
     object: url.searchParams.get("object"),
     history: Number(url.searchParams.get("history")),
     sample: url.searchParams.get("sample") ?? "import",
+    expectedBuild: url.searchParams.get("expectedBuild"),
     ttftMs: Number(url.searchParams.get("ttftMs") ?? 0),
     chunkDelayMs: Number(url.searchParams.get("chunkDelayMs") ?? 0),
   });
@@ -76,6 +78,7 @@ export const BulkFixture = Schema.Struct({
 export type BulkFixture = typeof BulkFixture.Type;
 
 export const Identity = Schema.Struct({
+  build: Schema.NonEmptyString,
   incarnation: Schema.NonEmptyString,
   constructedMs: Schema.Number,
   firstEntry: Schema.Boolean,
@@ -132,6 +135,7 @@ export type RunResult = typeof RunResult.Type;
 
 export const ProviderReceipt = Schema.Struct({
   ...Query.fields,
+  objectBuild: Schema.NonEmptyString,
   call: Schema.Natural,
   requestId: Schema.NonEmptyString,
   arrivalMs: Schema.Number,

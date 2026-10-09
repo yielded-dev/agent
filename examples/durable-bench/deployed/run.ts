@@ -89,6 +89,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
     builds: [],
     fixtures: [],
     samples: [],
+    readiness: [],
     failures: [],
     kept: options.keep,
     complete: false,
@@ -254,7 +255,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
     const cohorts = options.sizes.flatMap((size) =>
       options.ttft.flatMap((ttftMs) =>
         Array.from({ length: options.objects }, (_, object) =>
-          options.targets.map((target): Query => ({
+          options.targets.map((target): Omit<Query, "expectedBuild"> => ({
             target,
             object: `${runName}-h${size}-d${ttftMs}-o${object}`,
             history: size,
@@ -272,22 +273,73 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       if (!compiled) return yield* new BenchError({ message: "Missing target build." });
       telemetryFrom = Math.min(telemetryFrom, yield* Clock.currentTimeMillis);
       targetStarted = true;
+      const expectedBuild = compiled.sha256 + `-e${epoch}`;
 
-      const endpoint = yield* deploy.target(
-        runName,
-        compiled.file,
-        compiled.sha256 + `-e${epoch}`,
-        options.cpu,
-      );
+      const endpoint = yield* deploy.target(runName, compiled.file, expectedBuild, options.cpu);
 
-      const url = (path: string, query: Query) => {
+      const url = (path: string, query: Omit<Query, "expectedBuild">) => {
         const address = new URL(path, endpoint);
 
         for (const [key, value] of Object.entries(query))
           address.searchParams.set(key, String(value));
+        address.searchParams.set("expectedBuild", expectedBuild);
 
         return address;
       };
+
+      // Worker health does not establish the Object's build. Retry only acknowledged
+      // setup resets while it propagates; imports and inputs always get one attempt.
+      const resetForBuild = Effect.fnUntraced(function* (cohort: Omit<Query, "expectedBuild">) {
+        const started = yield* Clock.currentTimeMillis;
+
+        for (let attempt = 1; attempt <= 90; attempt++) {
+          const remaining = 180_000 - ((yield* Clock.currentTimeMillis) - started);
+
+          if (remaining <= 0) break;
+
+          const reset = (yield* request(
+            url("/cold", cohort),
+            deploy.token,
+            ColdResult,
+            {},
+            remaining,
+          )).value;
+
+          if (!reset.ok || !reset.threadAborted || reset.directoryAborted === false)
+            return yield* new BenchError({ message: "Cold abort was not acknowledged." });
+          const waitMs = (yield* Clock.currentTimeMillis) - started;
+
+          yield* update((value) => ({
+            ...value,
+            readiness: [
+              ...value.readiness,
+              {
+                target: cohort.target,
+                object: cohort.object,
+                epoch,
+                expectedBuild,
+                objectBuild: reset.before.build,
+                ...(reset.directoryBefore === undefined
+                  ? {}
+                  : { directoryBuild: reset.directoryBefore.build }),
+                attempt,
+                waitMs,
+              },
+            ],
+          }));
+          if (
+            reset.before.build === expectedBuild &&
+            (reset.directoryBefore === undefined || reset.directoryBefore.build === expectedBuild)
+          )
+            // /cold observes identity before aborting. The next Object call is timed.
+            return reset;
+          yield* Effect.sleep("2 seconds");
+        }
+
+        return yield* new BenchError({
+          message: "Object build did not propagate before measurement; no input was sent.",
+        });
+      });
 
       // Seeding and its count scans must not contend with timed turns, including the first A/B pass.
       if (epoch === 0) {
@@ -310,6 +362,10 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 "10 minutes",
               )).value;
 
+              if (seeded.identity.build !== expectedBuild)
+                return yield* new BenchError({
+                  message: "Seeded Object reported the wrong build.",
+                });
               if (
                 seeded.fingerprint !== fixture.fingerprint ||
                 !equalCounts(seeded.tables, fixture.tables) ||
@@ -346,16 +402,12 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         (cohort) =>
           Effect.gen(function* () {
             // Discard constructor caches after import, and restart the same stored Object after every build change.
-            const reset = (yield* request(url("/cold", cohort), deploy.token, ColdResult, {}))
-              .value;
-
-            if (!reset.ok || !reset.threadAborted || reset.directoryAborted === false)
-              return yield* new BenchError({ message: "Cold abort was not acknowledged." });
+            const reset = yield* resetForBuild(cohort);
             let incarnation = "";
             let directoryIncarnation: string | undefined;
 
             for (let index = 0; index < turnsPerEpoch; index++) {
-              const query = { ...cohort, sample: `e${epoch}-t${index}` };
+              const query = { ...cohort, sample: `e${epoch}-t${index}`, expectedBuild };
 
               const state =
                 options.cold && index === 0
@@ -396,6 +448,20 @@ export const run = Effect.fnUntraced(function* (options: Options) {
 
                 const expected = references.get(query.history)?.get(query.sample);
 
+                if (
+                  metrics.query.expectedBuild !== expectedBuild ||
+                  metrics.identity.build !== expectedBuild ||
+                  (metrics.directory !== undefined && metrics.directory.build !== expectedBuild) ||
+                  metrics.calls.some(
+                    (call) =>
+                      call.receipt?.expectedBuild !== expectedBuild ||
+                      call.receipt.objectBuild !== expectedBuild,
+                  )
+                )
+                  return yield* new BenchError({
+                    message:
+                      "Object or provider receipt build mismatch; sample is invalid and input will not be replayed.",
+                  });
                 if (
                   !expected ||
                   metrics.calls.length !== 9 ||
@@ -464,6 +530,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                           fingerprintVerified: true,
                           coldVerified,
                           residentVerified,
+                          buildVerified: true,
+                          objectBuild: metrics.identity.build,
                           fingerprints: metrics.calls.map((call) => call.fingerprint),
                         }
                       : row,

@@ -73,7 +73,8 @@ export class YieldedDO extends ThreadObject.make(application, {
     super(ctx, env);
     this.host = new Host(ctx, env, "yielded");
   }
-  async beginReplay(): Promise<void> {
+  async beginReplay(query: Query): Promise<void> {
+    this.host.meter.assertBuild(query);
     await this.ctx.blockConcurrencyWhile(async () => {
       if (
         (await this.ctx.storage.get(replayStarted)) !== undefined ||

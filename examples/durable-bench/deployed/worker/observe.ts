@@ -41,13 +41,19 @@ export class Observation {
   constructor(readonly env: Env) {}
   identity(): Identity {
     return {
+      build: this.env.BUILD,
       incarnation: this.incarnation,
       constructedMs: this.constructedMs,
       firstEntry: this.entries === 0,
       priorAlarms: this.alarms,
     };
   }
+  assertBuild(query: Query) {
+    if (query.expectedBuild !== this.env.BUILD)
+      throw new Error("Benchmark Object build mismatch; input was not admitted");
+  }
   begin(query: Query) {
+    this.assertBuild(query);
     this.entry = this.identity();
     this.entries++;
     this.query = query;
@@ -69,6 +75,8 @@ export class Observation {
     const query = this.query;
 
     if (!query) throw new Error("Provider request without a benchmark sample");
+    this.assertBuild(query);
+    const objectBuild = this.env.BUILD;
     const original = new Request(input, init);
     const url = new URL(original.url);
     const base = new URL(this.env.PROVIDER_URL);
@@ -88,6 +96,7 @@ export class Observation {
 
     this.calls.push(call);
     for (const [key, value] of Object.entries(query)) url.searchParams.set(key, String(value));
+    url.searchParams.set("objectBuild", objectBuild);
     url.searchParams.set("call", String(call.call));
     const headers = new Headers(original.headers);
 
@@ -141,7 +150,9 @@ export class Observation {
                     call.receipt.requestId !== requestId ||
                     call.receipt.fingerprint !== call.fingerprint ||
                     call.receipt.sample !== query.sample ||
-                    call.receipt.object !== query.object
+                    call.receipt.object !== query.object ||
+                    call.receipt.expectedBuild !== query.expectedBuild ||
+                    call.receipt.objectBuild !== objectBuild
                   )
                     throw new Error("Provider receipt mismatch");
                 }

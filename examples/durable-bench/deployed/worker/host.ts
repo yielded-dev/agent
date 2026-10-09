@@ -55,6 +55,7 @@ export class Host {
     }
     try {
       if (url.pathname === "/import") {
+        this.meter.assertBuild(query);
         const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.json());
 
         if (fixture.target !== query.target || fixture.history !== query.history)

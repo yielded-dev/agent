@@ -38,7 +38,7 @@ The ratio includes the observed min(Yielded)/max(pi)–max(Yielded)/min(pi) rang
 Object medians. This unpaired spread is descriptive, not a confidence interval.
 JSON and the printed tables go to gitignored `results/durable-bench-*.{json,md}`. JSON also
 records admission, model-call gaps, the last response-to-client interval, ingress colos,
-fingerprint checks, failures and cleanup. No timing evidence is committed.
+fingerprint/build checks, cold setup attempts, failures and cleanup. No timing evidence is committed.
 
 ## Infrastructure and cleanup
 
@@ -86,6 +86,13 @@ tardie's Actor directory and Thread are both restarted. It verifies a new instan
 earlier alarm entry, and a first request. This is a cold Object over retained storage,
 not a cold isolate, cold disk, or newly seeded conversation. Warm samples require the
 same live instance throughout the Object's sequential repeat batch.
+
+Worker and Object [code updates propagate separately](https://developers.cloudflare.com/durable-objects/platform/known-issues/#code-updates).
+Before each pass, cold setup waits for the Object's own `BUILD` (including tardie's Actor
+directory), retrying acknowledged resets for up to three minutes. Each attempt is recorded;
+setup errors stop the run. The final reset is followed directly by the timed input.
+Each Thread checks its build before admission, and completed metrics and all provider receipts
+must match the expected build. A mismatch invalidates the sample; inputs are never retried.
 
 The gap is measured between outgoing model requests and consumed responses on one Object
 clock. Last-response-to-client crosses Object/driver clocks and is approximate; it is
@@ -138,5 +145,5 @@ the control or within-Object repeat spread; inspect all Objects, not just the me
 
 Refs supply `packages/` sources; both builds use this harness and the checkout's installed
 catalog dependencies. They must support the current fixture and each other's persisted
-state. Import, recovery, transcript or residency failures invalidate the affected Object;
+state. Import, recovery, transcript, build or residency failures invalidate the affected Object;
 the command does not reset history or bypass durability checks to force a comparison.
