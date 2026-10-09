@@ -1,0 +1,94 @@
+Captured command transcript — 2026-10-08
+Provenance: transcribed and concatenated from already completed exec tool output; not a rerun.
+Completed tool session: 70260
+Working directory: /Users/dan/dev/effect-agent/.worktrees/dan-prod-turn-latency/packages/platform-cloudflare
+Command: vp test run --project workerd test/alarm.test.ts test/recovery-faults.test.ts test/registrations.test.ts test/publication.test.ts test/maintenance-retry.test.ts test/projection.test.ts test/message-delivery.test.ts
+Execution: approved local networking for workerd localhost listeners.
+Observed exit code: 1
+Source base: d52ee32a51c7bf93a226272578f13cebcc66f2e1 with shared worktree changes.
+Related patch: rejected-ambient-placement.patch
+Related patch SHA-256: 9e2e6bd80593fe85bfb69759c71469f455d425800cb1e6e7ed541773a4645346
+Note: Related finalized patch includes the formatting-only blank-line correction made during this run.
+
+--- captured stdout/stderr ---
+
+ RUN  v5.0.3 /Users/dan/dev/effect-agent/.worktrees/dan-prod-turn-latency/packages/platform-cloudflare
+
+uncaught exception; source = Uncaught (in promise); exception = external reply lost
+uncaught exception; exception = workerd/jsg/_virtual_includes/iterator/workerd/jsg/value.h:1494: failed: jsg.Error: external reply lost
+stack: 103292314 1032a0348
+uncaught exception; exception = workerd/api/actor-state.c++:1235: failed: broken.outputGateBroken; jsg.Error: armed storage eviction failpoint
+stack: 1030338c3
+uncaught exception; source = Uncaught (in promise); exception = external reply lost
+uncaught exception; exception = workerd/jsg/_virtual_includes/iterator/workerd/jsg/value.h:1494: failed: jsg.Error: external reply lost
+stack: 103292314 1032a0348
+uncaught exception; exception = workerd/api/actor-state.c++:1235: failed: broken.outputGateBroken; jsg.Error: armed runtime eviction failpoint
+stack: 1034c08fb
+ ❯ |workerd| test/recovery-faults.test.ts (8 tests | 2 failed) 3918ms
+   × starts a later independent Thread with two slots and retains same-Thread FIFO work 617ms
+   × releases both native claims on interruption and resumes their original receipts 180ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |workerd| test/recovery-faults.test.ts > starts a later independent Thread with two slots and retains same-Thread FIFO work
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ test/recovery-faults.test.ts:444:35
+    442|             yield* Deferred.succeed(releaseFirst, undefined);
+    443|             yield* Fiber.join(running);
+    444|             expect(secondStarted).toBe(true);
+       |                                   ^
+    445|             expect(thirdStartedAtCapacity).toBe(false);
+    446|             expect(thirdStartedAfterSlotRelease).toBe(true);
+ ❯ IteratorImpl.~effect/Effect/successCont ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:1435:28
+ ❯ ExitPrimitive.~effect/Effect/evaluate ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/core.ts:523:30
+ ❯ FiberImpl.runLoop ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:670:39
+ ❯ FiberImpl.evaluate ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:613:23
+ ❯ Array.<anonymous> ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:1172:17
+ ❯ FiberImpl.evaluate ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:635:21
+ ❯ ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:1172:17
+ ❯ ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:1134:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |workerd| test/recovery-faults.test.ts > releases both native claims on interruption and resumes their original receipts
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ test/recovery-faults.test.ts:521:57
+    519|             yield* Deferred.await(entered[0]!);
+    520|             yield* clock.adjust(1_000);
+    521|             expect(yield* Deferred.isDone(entered[1]!)).toBe(true);
+       |                                                         ^
+    522|             yield* Fiber.interrupt(running);
+    523|             const ledger = yield* SubmissionLedger;
+ ❯ IteratorImpl.~effect/Effect/successCont ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:1435:28
+ ❯ PrimitiveImpl.~effect/Effect/evaluate ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:986:30
+ ❯ FiberImpl.runLoop ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:670:39
+ ❯ FiberImpl.evaluate ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:613:23
+ ❯ Array.<anonymous> ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/internal/effect.ts:1040:13
+ ❯ MixedSchedulerDispatcher.runTasks ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/Scheduler.ts:240:17
+ ❯ afterScheduled ../../node_modules/.bun/effect@4.0.0/node_modules/effect/src/Scheduler.ts:229:10
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 6 passed (7)
+      Tests  2 failed | 54 passed (56)
+   Start at  16:25:14
+   Duration  12.07s (transform 69%, tests 24%, import 7%)
+
+  Transform  |workerd| transforming modules took 43.65s · 69% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns

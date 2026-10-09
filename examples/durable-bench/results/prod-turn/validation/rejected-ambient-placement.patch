@@ -1,0 +1,67 @@
+--- a/packages/platform-cloudflare/src/CloudflareBindings.ts
++++ b/packages/platform-cloudflare/src/CloudflareBindings.ts
+@@ -197,5 +197,9 @@
+ /** Logical Threads whose canonical stores and admission ledger live in this physical Object. */
+ export class ThreadObjectPlacement extends Context.Service<
+   ThreadObjectPlacement,
+-  { readonly ownsThread: (threadId: ThreadId) => boolean }
++  {
++    readonly ownsThread: (threadId: ThreadId) => boolean;
++    /** Present only when this physical Object owns exactly this one Thread. */
++    readonly threadId?: ThreadId;
++  }
+ >()("@effect-agent/platform-cloudflare/ThreadObjectPlacement") {}
+--- a/packages/platform-cloudflare/src/internal/layers.ts
++++ b/packages/platform-cloudflare/src/internal/layers.ts
+@@ -413,7 +413,10 @@
+       return Layer.mergeAll(
+         runtimeConfigLayer(options, producerId),
+         Layer.succeed(ThreadObjectIdentity, { threadId, producerId }),
+-        Layer.succeed(ThreadObjectPlacement, { ownsThread: (target) => target === threadId }),
++        Layer.succeed(ThreadObjectPlacement, {
++          threadId,
++          ownsThread: (target) => target === threadId,
++        }),
+       );
+     }),
+   );
+--- a/packages/platform-cloudflare/src/Alarm.ts
++++ b/packages/platform-cloudflare/src/Alarm.ts
+@@ -46,7 +46,7 @@
+ import { SqlClient } from "effect/sql/SqlClient";
+ import type { SqlError } from "effect/sql/SqlError";
+ 
+-import { DurableObjectContext } from "./CloudflareBindings.ts";
++import { DurableObjectContext, ThreadObjectPlacement } from "./CloudflareBindings.ts";
+ import { AuxiliaryDispatchMillis, CloudflareDurableRuntimeConfig } from "./CloudflareConfig.ts";
+ import { safeCauseMessage } from "./internal/boundary.ts";
+ import * as DueQueue from "./internal/due-queue.ts";
+@@ -543,7 +543,7 @@
+   readonly dispatched?: boolean;
+ }
+ 
+-/** Independent Threads share two bounded native slots; one active head per Thread. */
++/** Independent Threads share bounded native slots; one active head per Thread. */
+ interface NativeDispatch {
+   readonly scope: Scope.Scope;
+   readonly active: Map<ThreadId, Fiber.Fiber<number, MaintenancePassFailure>>;
+@@ -558,7 +558,6 @@
+   scanRevision?: number;
+ }
+ 
+-const nativeDispatchConcurrency = 2;
+ /** Post-native delivery shares a finite connection budget across independent host lanes. */
+ const afterNativeDispatchConcurrency = 2;
+ 
+@@ -1085,6 +1084,11 @@
+       const wakes = yield* WakeScheduler;
+       const alarm = yield* DurableAlarmService;
+       const config = yield* CloudflareDurableRuntimeConfig;
++      const placement = yield* Effect.serviceOption(ThreadObjectPlacement);
++
++      const nativeDispatchConcurrency =
++        Option.isSome(placement) && placement.value.threadId !== undefined ? 1 : 2;
++
+       const { ctx } = yield* DurableObjectContext;
+       const dueQueue = DueQueue.make(ctx.storage);
+       const storage = DurableObjectStorage.fromDurableObjectStorage(ctx.storage);

@@ -1,0 +1,15 @@
+{
+  "rejected": true,
+  "reason": "A replacement multi-Thread runtime inside a standard Object can inherit bootstrap placement; the two existing concurrency/recovery regressions failed when capacity was reduced from that ambient metadata.",
+  "candidateSha256": "9e2e6bd80593fe85bfb69759c71469f455d425800cb1e6e7ed541773a4645346",
+  "focusedRun": {
+    "passed": 54,
+    "failed": 2
+  },
+  "afterRevert": {
+    "passed": 2,
+    "failed": 0
+  },
+  "test": "packages/platform-cloudflare/test/recovery-faults.test.ts",
+  "productChangesRetained": false
+}

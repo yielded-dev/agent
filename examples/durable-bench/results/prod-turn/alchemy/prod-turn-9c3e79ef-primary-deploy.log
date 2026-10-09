@@ -1,0 +1,232 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[15:59:47.583] INFO (#1): Deploy · prod-turn-9c3e79ef-primary
+[15:59:47.583] INFO (#1): Importing stack module
+[15:59:48.410] INFO (#1): Resolving stack services
+[15:59:48.421] INFO (#1): Loading stack state
+[15:59:48.427] INFO (#1): Computing plan
+[15:59:48.430] INFO (#315): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[15:59:48.431] INFO (#315): Cloudflare Worker read: checking prod-turn-9c3e79ef-primary
+[15:59:48.629] INFO (#1): Plan ready (1.0s)
+[15:59:48.630] INFO (#1): Plan: 1 to create, 7 binding changes
+[15:59:48.630] INFO (#1): [prod-turn-worker] create
+[15:59:48.630] INFO (#1): [prod-turn-worker/PHASE] create
+[15:59:48.630] INFO (#1): [prod-turn-worker/PI] create
+[15:59:48.630] INFO (#1): [prod-turn-worker/PROVIDER_URL] create
+[15:59:48.630] INFO (#1): [prod-turn-worker/TOKEN] create
+[15:59:48.630] INFO (#1): [prod-turn-worker/UPLOAD_REVISION] create
+[15:59:48.630] INFO (#1): [prod-turn-worker/VERSION] create
+[15:59:48.630] INFO (#1): [prod-turn-worker/YIELDED] create
+[15:59:48.630] INFO (#1): 
+[15:59:48.635] INFO (#442): [prod-turn-worker] pre-creating
+[15:59:48.636] INFO (#442): Cloudflare Worker precreate: starting prod-turn-9c3e79ef-primary
+[15:59:48.636] INFO (#442): Cloudflare Worker precreate: durable objects [{"logicalId":"PI","bindingName":"PI","className":"NetworkPiDO"},{"logicalId":"YIELDED","bindingName":"YIELDED","className":"NetworkYieldedDO"}]
+[15:59:49.374] INFO (#442): [prod-turn-worker] creating
+[15:59:49.376] INFO (#442): Cloudflare Worker reconcile: starting prod-turn-9c3e79ef-primary
+[15:59:49.376] INFO (#442): Cloudflare Worker reconcile: durable objects [{"logicalId":"PI","className":"NetworkPiDO"},{"logicalId":"YIELDED","className":"NetworkYieldedDO"}]
+[15:59:49.556] INFO (#442): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:PI=NetworkPiDO;YIELDED=NetworkYieldedDO"]
+[15:59:49.556] INFO (#442): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:PI=NetworkPiDO;YIELDED=NetworkYieldedDO"]
+[15:59:49.558] INFO (#442): Cloudflare Worker create: preparing bundle for prod-turn-9c3e79ef-primary
+[15:59:49.565] INFO (#442): Cloudflare Worker create: uploading script for prod-turn-9c3e79ef-primary
+[15:59:49.565] INFO (#442): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"PI":"NetworkPiDO","YIELDED":"NetworkYieldedDO"},"currentDoClassNameByLogicalId":{"PI":"NetworkPiDO","YIELDED":"NetworkYieldedDO"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":[]}
+[15:59:51.922] INFO (#442): [prod-turn-worker] created — Enabling workers.dev subdomain... (3.3s)
+[15:59:51.923] INFO (#578): [prod-turn-worker] created — Enabling workers.dev subdomain... (3.3s)
+[15:59:51.924] INFO (#1): 
+[15:59:51.924] INFO (#1): Done: 1 succeeded (3.3s)
+{
+  workerName: 'prod-turn-9c3e79ef-primary',
+  url: 'https://prod-turn-9c3e79ef-primary.danieljmerwe.workers.dev',
+  namespaces: {
+    NetworkPiDO: '[redacted-namespace-id]',
+    NetworkYieldedDO: '[redacted-namespace-id]'
+  }
+}
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[16:01:27.372] INFO (#1): Deploy · prod-turn-9c3e79ef-primary
+[16:01:27.372] INFO (#1): Importing stack module
+[16:01:28.252] INFO (#1): Resolving stack services
+[16:01:28.263] INFO (#1): Loading stack state
+[16:01:28.268] INFO (#1): Computing plan
+[16:01:28.273] INFO (#316): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[16:01:28.275] INFO (#1): Plan ready (903ms)
+[16:01:28.276] INFO (#1): Plan: 1 to update, 1 binding changes
+[16:01:28.276] INFO (#1): [prod-turn-worker] update
+[16:01:28.276] INFO (#1): [prod-turn-worker/PHASE] update
+[16:01:28.276] INFO (#1): [prod-turn-worker/PI] noop
+[16:01:28.276] INFO (#1): [prod-turn-worker/PROVIDER_URL] noop
+[16:01:28.276] INFO (#1): [prod-turn-worker/TOKEN] noop
+[16:01:28.276] INFO (#1): [prod-turn-worker/UPLOAD_REVISION] noop
+[16:01:28.276] INFO (#1): [prod-turn-worker/VERSION] noop
+[16:01:28.276] INFO (#1): [prod-turn-worker/YIELDED] noop
+[16:01:28.276] INFO (#1): 
+[16:01:28.278] INFO (#548): [prod-turn-worker] updating
+[16:01:28.279] INFO (#548): Cloudflare Worker reconcile: starting prod-turn-9c3e79ef-primary
+[16:01:28.279] INFO (#548): Cloudflare Worker reconcile: durable objects [{"logicalId":"PI","className":"NetworkPiDO"},{"logicalId":"YIELDED","className":"NetworkYieldedDO"}]
+[16:01:28.461] INFO (#548): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:PI=NetworkPiDO;YIELDED=NetworkYieldedDO"]
+[16:01:28.461] INFO (#548): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:PI=NetworkPiDO;YIELDED=NetworkYieldedDO"]
+[16:01:28.462] INFO (#548): Cloudflare Worker update: preparing bundle for prod-turn-9c3e79ef-primary
+[16:01:28.467] INFO (#548): Cloudflare Worker update: uploading script for prod-turn-9c3e79ef-primary
+[16:01:28.467] INFO (#548): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"PI":"NetworkPiDO","YIELDED":"NetworkYieldedDO"},"currentDoClassNameByLogicalId":{"PI":"NetworkPiDO","YIELDED":"NetworkYieldedDO"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":[]}
+[16:01:30.986] INFO (#548): [prod-turn-worker] updated — Uploading worker (5.06 MB) ... (2.7s)
+[16:01:30.987] INFO (#682): [prod-turn-worker] updated — Uploading worker (5.06 MB) ... (2.7s)
+[16:01:30.988] INFO (#1): 
+[16:01:30.988] INFO (#1): Done: 1 succeeded (2.7s)
+{
+  workerName: 'prod-turn-9c3e79ef-primary',
+  url: 'https://prod-turn-9c3e79ef-primary.danieljmerwe.workers.dev',
+  namespaces: {
+    NetworkPiDO: '[redacted-namespace-id]',
+    NetworkYieldedDO: '[redacted-namespace-id]'
+  }
+}
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[16:12:11.531] INFO (#1): Deploy · prod-turn-9c3e79ef-primary
+[16:12:11.531] INFO (#1): Importing stack module
+[16:12:12.371] INFO (#1): Resolving stack services
+[16:12:12.381] INFO (#1): Loading stack state
+[16:12:12.387] INFO (#1): Computing plan
+[16:12:12.391] INFO (#316): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[16:12:12.393] INFO (#1): Plan ready (862ms)
+[16:12:12.393] INFO (#1): Plan: 1 to update, 1 binding changes
+[16:12:12.393] INFO (#1): [prod-turn-worker] update
+[16:12:12.394] INFO (#1): [prod-turn-worker/PHASE] update
+[16:12:12.394] INFO (#1): [prod-turn-worker/PI] noop
+[16:12:12.394] INFO (#1): [prod-turn-worker/PROVIDER_URL] noop
+[16:12:12.394] INFO (#1): [prod-turn-worker/TOKEN] noop
+[16:12:12.394] INFO (#1): [prod-turn-worker/UPLOAD_REVISION] noop
+[16:12:12.394] INFO (#1): [prod-turn-worker/VERSION] noop
+[16:12:12.394] INFO (#1): [prod-turn-worker/YIELDED] noop
+[16:12:12.394] INFO (#1): 
+[16:12:12.396] INFO (#548): [prod-turn-worker] updating
+[16:12:12.397] INFO (#548): Cloudflare Worker reconcile: starting prod-turn-9c3e79ef-primary
+[16:12:12.397] INFO (#548): Cloudflare Worker reconcile: durable objects [{"logicalId":"PI","className":"NetworkPiDO"},{"logicalId":"YIELDED","className":"NetworkYieldedDO"}]
+[16:12:12.603] INFO (#548): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:PI=NetworkPiDO;YIELDED=NetworkYieldedDO"]
+[16:12:12.603] INFO (#548): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:PI=NetworkPiDO;YIELDED=NetworkYieldedDO"]
+[16:12:12.603] INFO (#548): Cloudflare Worker update: preparing bundle for prod-turn-9c3e79ef-primary
+[16:12:12.608] INFO (#548): Cloudflare Worker update: uploading script for prod-turn-9c3e79ef-primary
+[16:12:12.608] INFO (#548): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"PI":"NetworkPiDO","YIELDED":"NetworkYieldedDO"},"currentDoClassNameByLogicalId":{"PI":"NetworkPiDO","YIELDED":"NetworkYieldedDO"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":[]}
+[16:12:15.535] INFO (#548): [prod-turn-worker] updated — Uploading worker (5.07 MB) ... (3.1s)
+[16:12:15.536] INFO (#681): [prod-turn-worker] updated — Uploading worker (5.07 MB) ... (3.1s)
+[16:12:15.537] INFO (#1): 
+[16:12:15.537] INFO (#1): Done: 1 succeeded (3.1s)
+{
+  workerName: 'prod-turn-9c3e79ef-primary',
+  url: 'https://prod-turn-9c3e79ef-primary.danieljmerwe.workers.dev',
+  namespaces: {
+    NetworkPiDO: '[redacted-namespace-id]',
+    NetworkYieldedDO: '[redacted-namespace-id]'
+  }
+}
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[16:16:10.766] INFO (#1): Deploy · prod-turn-9c3e79ef-primary
+[16:16:10.766] INFO (#1): Importing stack module
+[16:16:11.472] INFO (#1): Resolving stack services
+[16:16:11.484] INFO (#1): Loading stack state
+[16:16:11.485] INFO (#1): Computing plan
+[16:16:11.489] INFO (#316): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[16:16:11.491] INFO (#1): Plan ready (725ms)
+[16:16:11.491] INFO (#1): Plan: 1 to update, 1 binding changes
+[16:16:11.491] INFO (#1): [prod-turn-worker] update
+[16:16:11.491] INFO (#1): [prod-turn-worker/PHASE] update
+[16:16:11.491] INFO (#1): [prod-turn-worker/PI] noop
+[16:16:11.491] INFO (#1): [prod-turn-worker/PROVIDER_URL] noop
+[16:16:11.491] INFO (#1): [prod-turn-worker/TOKEN] noop
+[16:16:11.491] INFO (#1): [prod-turn-worker/UPLOAD_REVISION] noop
+[16:16:11.491] INFO (#1): [prod-turn-worker/VERSION] noop
+[16:16:11.491] INFO (#1): [prod-turn-worker/YIELDED] noop
+[16:16:11.491] INFO (#1): 
+[16:16:11.494] INFO (#548): [prod-turn-worker] updating
+[16:16:11.494] INFO (#548): Cloudflare Worker reconcile: starting prod-turn-9c3e79ef-primary
+[16:16:11.494] INFO (#548): Cloudflare Worker reconcile: durable objects [{"logicalId":"PI","className":"NetworkPiDO"},{"logicalId":"YIELDED","className":"NetworkYieldedDO"}]
+[16:16:11.753] INFO (#548): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:PI=NetworkPiDO;YIELDED=NetworkYieldedDO"]
+[16:16:11.753] INFO (#548): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:PI=NetworkPiDO;YIELDED=NetworkYieldedDO"]
+[16:16:11.754] INFO (#548): Cloudflare Worker update: preparing bundle for prod-turn-9c3e79ef-primary
+[16:16:11.767] INFO (#548): Cloudflare Worker update: uploading script for prod-turn-9c3e79ef-primary
+[16:16:11.767] INFO (#548): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"PI":"NetworkPiDO","YIELDED":"NetworkYieldedDO"},"currentDoClassNameByLogicalId":{"PI":"NetworkPiDO","YIELDED":"NetworkYieldedDO"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":[]}
+[16:16:14.944] INFO (#548): [prod-turn-worker] updated — Uploading worker (5.07 MB) ... (3.5s)
+[16:16:14.950] INFO (#682): [prod-turn-worker] updated — Uploading worker (5.07 MB) ... (3.5s)
+[16:16:14.954] INFO (#1): 
+[16:16:14.954] INFO (#1): Done: 1 succeeded (3.5s)
+{
+  workerName: 'prod-turn-9c3e79ef-primary',
+  url: 'https://prod-turn-9c3e79ef-primary.danieljmerwe.workers.dev',
+  namespaces: {
+    NetworkPiDO: '[redacted-namespace-id]',
+    NetworkYieldedDO: '[redacted-namespace-id]'
+  }
+}
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[16:53:43.642] INFO (#1): Deploy · prod-turn-9c3e79ef-primary
+[16:53:43.642] INFO (#1): Importing stack module
+[16:53:44.283] INFO (#1): Resolving stack services
+[16:53:44.293] INFO (#1): Loading stack state
+[16:53:44.298] INFO (#1): Computing plan
+[16:53:44.302] INFO (#316): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[16:53:44.304] INFO (#1): Plan ready (663ms)
+[16:53:44.305] INFO (#1): Plan: 1 to update, 1 binding changes
+[16:53:44.305] INFO (#1): [prod-turn-worker] update
+[16:53:44.305] INFO (#1): [prod-turn-worker/PHASE] update
+[16:53:44.305] INFO (#1): [prod-turn-worker/PI] noop
+[16:53:44.305] INFO (#1): [prod-turn-worker/PROVIDER_URL] noop
+[16:53:44.305] INFO (#1): [prod-turn-worker/TOKEN] noop
+[16:53:44.305] INFO (#1): [prod-turn-worker/UPLOAD_REVISION] noop
+[16:53:44.305] INFO (#1): [prod-turn-worker/VERSION] noop
+[16:53:44.305] INFO (#1): [prod-turn-worker/YIELDED] noop
+[16:53:44.305] INFO (#1): 
+[16:53:44.307] INFO (#548): [prod-turn-worker] updating
+[16:53:44.308] INFO (#548): Cloudflare Worker reconcile: starting prod-turn-9c3e79ef-primary
+[16:53:44.308] INFO (#548): Cloudflare Worker reconcile: durable objects [{"logicalId":"PI","className":"NetworkPiDO"},{"logicalId":"YIELDED","className":"NetworkYieldedDO"}]
+[16:53:44.437] INFO (#548): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:PI=NetworkPiDO;YIELDED=NetworkYieldedDO"]
+[16:53:44.437] INFO (#548): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:PI=NetworkPiDO;YIELDED=NetworkYieldedDO"]
+[16:53:44.438] INFO (#548): Cloudflare Worker update: preparing bundle for prod-turn-9c3e79ef-primary
+[16:53:44.444] INFO (#548): Cloudflare Worker update: uploading script for prod-turn-9c3e79ef-primary
+[16:53:44.444] INFO (#548): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"PI":"NetworkPiDO","YIELDED":"NetworkYieldedDO"},"currentDoClassNameByLogicalId":{"PI":"NetworkPiDO","YIELDED":"NetworkYieldedDO"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":[]}
+[16:53:46.622] INFO (#548): [prod-turn-worker] updated — Uploading worker (5.07 MB) ... (2.3s)
+[16:53:46.628] INFO (#676): [prod-turn-worker] updated — Uploading worker (5.07 MB) ... (2.3s)
+[16:53:46.632] INFO (#1): 
+[16:53:46.632] INFO (#1): Done: 1 succeeded (2.3s)
+{
+  workerName: 'prod-turn-9c3e79ef-primary',
+  url: 'https://prod-turn-9c3e79ef-primary.danieljmerwe.workers.dev',
+  namespaces: {
+    NetworkPiDO: '[redacted]',
+    NetworkYieldedDO: '[redacted]'
+  }
+}
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[16:57:28.867] INFO (#1): Deploy · prod-turn-9c3e79ef-primary
+[16:57:28.867] INFO (#1): Importing stack module
+[16:57:29.501] INFO (#1): Resolving stack services
+[16:57:29.510] INFO (#1): Loading stack state
+[16:57:29.515] INFO (#1): Computing plan
+[16:57:29.519] INFO (#316): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[16:57:29.521] INFO (#1): Plan ready (654ms)
+[16:57:29.522] INFO (#1): Plan: 1 to update, 1 binding changes
+[16:57:29.522] INFO (#1): [prod-turn-worker] update
+[16:57:29.522] INFO (#1): [prod-turn-worker/PHASE] update
+[16:57:29.522] INFO (#1): [prod-turn-worker/PI] noop
+[16:57:29.522] INFO (#1): [prod-turn-worker/PROVIDER_URL] noop
+[16:57:29.522] INFO (#1): [prod-turn-worker/TOKEN] noop
+[16:57:29.522] INFO (#1): [prod-turn-worker/UPLOAD_REVISION] noop
+[16:57:29.522] INFO (#1): [prod-turn-worker/VERSION] noop
+[16:57:29.522] INFO (#1): [prod-turn-worker/YIELDED] noop
+[16:57:29.522] INFO (#1): 
+[16:57:29.524] INFO (#548): [prod-turn-worker] updating
+[16:57:29.524] INFO (#548): Cloudflare Worker reconcile: starting prod-turn-9c3e79ef-primary
+[16:57:29.524] INFO (#548): Cloudflare Worker reconcile: durable objects [{"logicalId":"PI","className":"NetworkPiDO"},{"logicalId":"YIELDED","className":"NetworkYieldedDO"}]
+[16:57:29.724] INFO (#548): Cloudflare Worker reconcile: existing durable object tags ["alchemy:dos:PI=NetworkPiDO;YIELDED=NetworkYieldedDO"]
+[16:57:29.725] INFO (#548): Cloudflare Worker reconcile: previous durable object tags ["alchemy:dos:PI=NetworkPiDO;YIELDED=NetworkYieldedDO"]
+[16:57:29.726] INFO (#548): Cloudflare Worker update: preparing bundle for prod-turn-9c3e79ef-primary
+[16:57:29.734] INFO (#548): Cloudflare Worker update: uploading script for prod-turn-9c3e79ef-primary
+[16:57:29.734] INFO (#548): Cloudflare Worker put: durable object reconciliation {"oldDoClassNameByLogicalId":{"PI":"NetworkPiDO","YIELDED":"NetworkYieldedDO"},"currentDoClassNameByLogicalId":{"PI":"NetworkPiDO","YIELDED":"NetworkYieldedDO"},"deletedClasses":[],"renamedClasses":[],"transferredClasses":[],"newSqliteClasses":[]}
+[16:57:32.622] INFO (#548): [prod-turn-worker] updated — Uploading worker (5.07 MB) ... (3.1s)
+[16:57:32.623] INFO (#679): [prod-turn-worker] updated — Uploading worker (5.07 MB) ... (3.1s)
+[16:57:32.624] INFO (#1): 
+[16:57:32.624] INFO (#1): Done: 1 succeeded (3.1s)
+{
+  workerName: 'prod-turn-9c3e79ef-primary',
+  url: 'https://prod-turn-9c3e79ef-primary.danieljmerwe.workers.dev',
+  namespaces: {
+    NetworkPiDO: '[redacted]',
+    NetworkYieldedDO: '[redacted]'
+  }
+}

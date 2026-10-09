@@ -43,6 +43,8 @@ import {
   armMaintenancePause,
   awaitMaintenancePause,
   releaseMaintenancePause,
+  armRuntimeEviction,
+  armedEvictionsRemaining,
 } from "./fixtures.ts";
 import {
   allSettled,
@@ -173,7 +175,8 @@ const append = (thread: string, request: FencedAppendRequest) =>
 
 describe("live Thread projection and alarm backfill", () => {
   // Regression: https://github.com/yielded-dev/agent/commit/0e83011e
-  it("enrolls native admission, replayed finalization and stop without another append", () =>
+  // Post-publication eviction must leave host settlement work durably enrolled before replay.
+  it("retains settlement host enrollment across publication eviction and finalization replay", () =>
     withThread(async (thread) => {
       let admission: AdmissionRequest | undefined;
       let settlement: SettlementFinalization | undefined;
@@ -202,16 +205,40 @@ describe("live Thread projection and alarm backfill", () => {
         instance[DurableObject.RunSymbol](
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
-            const runtime = yield* DurableAgentRuntime;
 
             expect(admission).toBeDefined();
             if (admission === undefined) return;
             const replay = yield* ledger.admit(admission);
 
             expect(replay.submissionId).toBe(receipt.submissionId);
-            yield* runtime.processThreadHead(decodeThreadId(thread));
+          }),
+        ),
+      );
+      armRuntimeEviction(thread, "terminalize:after-canonical-append");
+      await expect(
+        runInDurableObject(stub(thread), (instance) =>
+          instance[DurableObject.RunSymbol](
+            Effect.flatMap(DurableAgentRuntime, (runtime) =>
+              runtime.processThreadHead(decodeThreadId(thread)),
+            ),
+          ),
+        ),
+      ).rejects.toThrow("armed runtime eviction failpoint");
+      expect(armedEvictionsRemaining(thread)).toBe(0);
+      const enrolled = await rows();
+
+      expect(enrolled).toEqual([
+        { id: "test:Admission", revision: 2, dueAt: expect.any(Number) },
+        { id: "test:Settlement", revision: expect.any(Number), dueAt: expect.any(Number) },
+      ]);
+      expect((await laneRows(thread, namespace))[0]?.state).toBe("settled");
+      await runInDurableObject(stub(thread), (instance) =>
+        instance[DurableObject.RunSymbol](
+          Effect.gen(function* () {
+            const ledger = yield* SubmissionLedger;
+
             expect(settlement).toBeDefined();
-            if (settlement === undefined) return;
+            if (settlement === undefined || admission === undefined) return;
             yield* ledger.finalizeSettlement(settlement);
             yield* ledger.stopWorker!({
               threadId: decodeThreadId(thread),
@@ -221,8 +248,7 @@ describe("live Thread projection and alarm backfill", () => {
         ),
       );
       expect(await rows()).toEqual([
-        { id: "test:Admission", revision: 2, dueAt: expect.any(Number) },
-        { id: "test:Settlement", revision: 2, dueAt: expect.any(Number) },
+        ...enrolled,
         { id: "test:WorkerStop", revision: 2, dueAt: expect.any(Number) },
       ]);
       expect(await scheduledAlarm(thread, namespace)).not.toBeNull();

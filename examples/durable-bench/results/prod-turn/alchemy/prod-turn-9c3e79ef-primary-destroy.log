@@ -1,0 +1,23 @@
+alchemy 2.0.0-beta.81 is available (you're on 2.0.0-beta.80). Run `pnpm add alchemy@2.0.0-beta.81` to upgrade.
+[17:19:14.565] INFO (#1): Destroy · prod-turn-9c3e79ef-primary
+[17:19:14.565] INFO (#1): Importing stack module
+[17:19:15.408] INFO (#1): Resolving stack services
+[17:19:15.417] INFO (#1): Loading stack state
+[17:19:15.422] INFO (#1): Computing plan
+[17:19:15.425] INFO (#1): Plan ready (860ms)
+[17:19:15.426] INFO (#1): Plan: 1 to delete, 7 binding changes
+[17:19:15.426] INFO (#1): [prod-turn-worker] delete
+[17:19:15.426] INFO (#1): [prod-turn-worker/PHASE] unbind
+[17:19:15.426] INFO (#1): [prod-turn-worker/PI] unbind
+[17:19:15.426] INFO (#1): [prod-turn-worker/PROVIDER_URL] unbind
+[17:19:15.426] INFO (#1): [prod-turn-worker/TOKEN] unbind
+[17:19:15.426] INFO (#1): [prod-turn-worker/UPLOAD_REVISION] unbind
+[17:19:15.426] INFO (#1): [prod-turn-worker/VERSION] unbind
+[17:19:15.426] INFO (#1): [prod-turn-worker/YIELDED] unbind
+[17:19:15.426] INFO (#1): 
+[17:19:15.427] INFO (#318): [prod-turn-worker] deleting
+[17:19:15.428] INFO (#318): Cloudflare Worker delete: deleting prod-turn-9c3e79ef-primary
+[17:19:15.429] INFO (#319): Cloudflare: using environment variables (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) instead of the profile.
+[17:19:16.068] INFO (#318): [prod-turn-worker] deleted (641ms)
+[17:19:16.075] INFO (#1): 
+[17:19:16.075] INFO (#1): Done: 1 succeeded (649ms)

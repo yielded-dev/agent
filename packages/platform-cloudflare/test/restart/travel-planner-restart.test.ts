@@ -87,7 +87,7 @@ interface RestartRow {
 /**
  * The representative subset (distinct recovery classes across the restart): a lane stranded
  * before its claim ever sticks, a lane stranded between canonical input and its marker, and a
- * lane stranded between canonical settlement publication and its ledger finalization. Every armed
+ * lane whose atomic settlement publication/finalization rolls back. Every armed
  * location is re-crossed by each retry in runtime 1, so runtime 1 can never converge; the
  * reopened runtime starts unarmed and finishes the work from storage alone.
  */
@@ -103,12 +103,9 @@ const rows: ReadonlyArray<RestartRow> = [
     blockedAtRemaining: 48,
   },
   {
-    name: "terminalize:after-canonical-append then ledger:finalize-settlement:before strand the canonical settlement; the reopened runtime finalizes from history",
-    arms: [
-      { kind: "runtime", location: "terminalize:after-canonical-append", count: 1 },
-      { kind: "storage", location: "ledger:finalize-settlement:before", count: 50 },
-    ],
-    blockedAtRemaining: 49,
+    name: "ledger:finalize-settlement:before rolls back ordinary settlement publication; the reopened runtime publishes and finalizes",
+    arms: [{ kind: "storage", location: "ledger:finalize-settlement:before", count: 50 }],
+    blockedAtRemaining: 48,
   },
 ];
 

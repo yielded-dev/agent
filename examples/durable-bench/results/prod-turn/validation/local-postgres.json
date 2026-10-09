@@ -1,0 +1,15 @@
+{
+  "container": "prod-turn-postgres",
+  "image": "postgres:17-alpine",
+  "host": "127.0.0.1",
+  "port": 55432,
+  "disposable": true,
+  "ready": true,
+  "cleanup": {
+    "verified": true,
+    "at": "2026-10-08T23:49:07.163Z",
+    "activeClientsBeforeStop": 0,
+    "containerName": "prod-turn-postgres",
+    "remainingContainers": []
+  }
+}

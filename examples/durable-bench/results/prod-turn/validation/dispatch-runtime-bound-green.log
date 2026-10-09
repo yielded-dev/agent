@@ -1,0 +1,35 @@
+Captured command transcript — 2026-10-08
+Provenance: transcribed and concatenated from already completed exec tool output; not a rerun.
+Completed tool session: 27637
+Working directory: /Users/dan/dev/effect-agent/.worktrees/dan-prod-turn-latency/packages/platform-cloudflare
+Command: vp test run --project workerd test/alarm.test.ts test/recovery-faults.test.ts test/registrations.test.ts test/publication.test.ts test/maintenance-retry.test.ts test/projection.test.ts test/message-delivery.test.ts
+Execution: approved local networking for workerd localhost listeners.
+Observed exit code: 0
+Source base: d52ee32a51c7bf93a226272578f13cebcc66f2e1 with shared worktree changes.
+Related patch: runtime-bound-dispatch.patch
+Related patch SHA-256: 373977fc0c550c25725b6b12f74e8571d488b3011d24f4c9c926f8a63ee2c4c4
+Note: Both previously failing localRun regressions and all fixture compositions were unchanged. v1 remained present.
+
+--- captured stdout/stderr ---
+
+ RUN  v5.0.3 /Users/dan/dev/effect-agent/.worktrees/dan-prod-turn-latency/packages/platform-cloudflare
+
+uncaught exception; source = Uncaught (in promise); exception = external reply lost
+uncaught exception; exception = workerd/jsg/_virtual_includes/iterator/workerd/jsg/value.h:1494: failed: jsg.Error: external reply lost
+stack: 105e02314 105e10348
+uncaught exception; exception = workerd/api/actor-state.c++:1235: failed: broken.outputGateBroken; jsg.Error: armed storage eviction failpoint
+stack: 105ba38c3
+uncaught exception; source = Uncaught (in promise); exception = external reply lost
+uncaught exception; exception = workerd/jsg/_virtual_includes/iterator/workerd/jsg/value.h:1494: failed: jsg.Error: external reply lost
+stack: 105e02314 105e10348
+uncaught exception; exception = workerd/api/actor-state.c++:1235: failed: broken.outputGateBroken; jsg.Error: armed runtime eviction failpoint
+stack: 1060308fb
+
+ Test Files  7 passed (7)
+      Tests  56 passed (56)
+   Start at  16:30:24
+   Duration  12.78s (transform 68%, tests 25%, import 7%)
+
+  Transform  |workerd| transforming modules took 44.30s · 68% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns

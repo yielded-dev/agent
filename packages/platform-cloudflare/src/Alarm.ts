@@ -379,6 +379,8 @@ export const ThreadHostMaintenance = Context.Reference<{
 /** @internal Framework handlers are separate from host registrations and their namespace. */
 export const ThreadNativeMaintenance = Context.Reference<{
   readonly lanes: ReadonlyArray<ThreadHostMaintenanceLane>;
+  /** Exact runtime built over a single-Thread placement; never apply to a replacement. */
+  readonly singleThreadRuntime?: DurableAgentRuntime["Service"];
 }>("@effect-agent/platform-cloudflare/ThreadNativeMaintenance", {
   defaultValue: () => ({ lanes: [] }),
 });
@@ -543,7 +545,7 @@ interface NativePassResult {
   readonly dispatched?: boolean;
 }
 
-/** Independent Threads share two bounded native slots; one active head per Thread. */
+/** Independent Threads share bounded native slots; one active head per Thread. */
 interface NativeDispatch {
   readonly scope: Scope.Scope;
   readonly active: Map<ThreadId, Fiber.Fiber<number, MaintenancePassFailure>>;
@@ -558,7 +560,6 @@ interface NativeDispatch {
   scanRevision?: number;
 }
 
-const nativeDispatchConcurrency = 2;
 /** Post-native delivery shares a finite connection budget across independent host lanes. */
 const afterNativeDispatchConcurrency = 2;
 
@@ -1032,7 +1033,8 @@ export type MaintenancePassFailure =
  * 2. Reconcile before each head Attempt, then checkpoint only the observed generation. A racing
  *    producer keeps its generation dirty and immediately eligible. Quiescent native retries
  *    retain their durable backoff.
- * 3. Admit at most two independent Thread Attempts, one active head per Thread.
+ * 3. Admit one Attempt for a single-Thread runtime, or at most two independent Thread
+ *    Attempts for a shared host, with one active head per Thread.
  *    Keep native and delivery admission open together while finite waves remain active, so
  *    fresh replies and abort controls can progress during unrelated cleanup. Close atomically
  *    at quiescence, or at the original ten-minute yield deadline, then join admitted waves.
@@ -1102,6 +1104,8 @@ export class ThreadMaintenance extends Context.Service<
       const messages = yield* ThreadMessageDelivery;
       const host = yield* ThreadHostMaintenance;
       const framework = yield* ThreadNativeMaintenance;
+
+      const nativeDispatchConcurrency = () => (framework.singleThreadRuntime === runtime ? 1 : 2);
 
       for (const lane of host.lanes)
         yield* Schema.decodeEffect(DueQueue.HostLaneId)(lane.id).pipe(
@@ -1234,6 +1238,11 @@ export class ThreadMaintenance extends Context.Service<
               .withSnapshot(() =>
                 Effect.gen(function* () {
                   const active = (yield* mutations.activeLanes).has(row.id);
+
+                  // A producer can be between enrollment and its source commit. Never acknowledge
+                  // that observation; its completion will notify the event or retain the alarm.
+                  if (active) return;
+
                   const now = yield* Clock.currentTimeMillis;
                   const failed = Exit.isFailure(exit);
 
@@ -1243,9 +1252,6 @@ export class ThreadMaintenance extends Context.Service<
 
                   const checkpointed = yield* runTransaction("checkpoint maintenance lane", () =>
                     dueQueue.transaction(async () => {
-                      // A producer can be between enrollment and its source commit. Never acknowledge
-                      // that observation; its completion will notify the event or retain the alarm.
-                      if (active) return;
                       const current = dueQueue.read().find((lane) => lane.id === row.id);
 
                       if (current?.revision !== row.revision) return;
@@ -1864,7 +1870,7 @@ export class ThreadMaintenance extends Context.Service<
               const now = yield* Clock.currentTimeMillis;
 
               const { state } = yield* runTransaction("read native maintenance deadline", () =>
-                dueQueue.transaction((transaction) => readMaintenanceState(transaction)),
+                readMaintenanceState(ctx.storage),
               );
 
               const native =
@@ -2082,6 +2088,25 @@ export class ThreadMaintenance extends Context.Service<
           .map((head) => head.threadId)
           .sort();
 
+        // No cursor or recovery wave can change when every candidate is already excluded.
+        if (
+          recovery.started &&
+          native.active.size > 0 &&
+          eligible.every(
+            (threadId) =>
+              reserved.has(threadId) ||
+              native.active.has(threadId) ||
+              native.deferred.has(threadId),
+          )
+        ) {
+          return {
+            phase: "actionable",
+            nonterminal: current.length,
+            nextAttemptAt: undefined,
+            dispatched: false,
+          };
+        }
+
         yield* failpoint.hit("maintenance:select:before");
 
         const selection = yield* runTransaction("select maintenance lane", () =>
@@ -2111,7 +2136,7 @@ export class ThreadMaintenance extends Context.Service<
             const selected = dispatch
               ? [...runnable.slice(pivot), ...runnable.slice(0, pivot)].slice(
                   0,
-                  nativeDispatchConcurrency - reserved.size,
+                  nativeDispatchConcurrency() - reserved.size,
                 )
               : [];
 
@@ -2501,7 +2526,7 @@ export class ThreadMaintenance extends Context.Service<
             native = undefined;
             if (result.phase === "actionable") phase = "actionable";
             observed.nativeOnly = dispatch.active.size > 0;
-            if (result.dispatched === true && dispatch.active.size < nativeDispatchConcurrency) {
+            if (result.dispatched === true && dispatch.active.size < nativeDispatchConcurrency()) {
               dispatch.scanGeneration = undefined;
               nativeCheck = true;
             }
@@ -2652,7 +2677,7 @@ export class ThreadMaintenance extends Context.Service<
           if (
             native === undefined &&
             nativeCheck &&
-            dispatch.active.size < nativeDispatchConcurrency
+            dispatch.active.size < nativeDispatchConcurrency()
           ) {
             nativeCheck = false;
             const nativeCheckpoint = dispatch.needsCheckpoint && dispatch.active.size === 0;

@@ -1,0 +1,88 @@
+[
+  {
+    "name": "provider",
+    "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+    "dirty": true,
+    "bundleSha256": "731b82d4e7c80177362b0452f6f2c5b87d6bd36db9ce66ffe997716e62070467",
+    "bundleBytes": 558589,
+    "gzipBytes": 113882,
+    "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "c962a0a8dbc18a1fa881d84a6b09e8340e512062b2d78b3e4d4760fea7c802db",
+    "buildControls": [
+      {
+        "path": "build.mjs",
+        "sha256": "076fd0a60cc178bec2701be132f26774cfc7980672edc89d4df302b643e1dd9c"
+      },
+      {
+        "path": "probes.mjs",
+        "sha256": "e320e525650567c649d5631ee61f0e6342c066bb1a100d9689930ef2d173fc5c"
+      }
+    ],
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "output": "/private/tmp/prod-turn-0C7YR7/bundles/provider",
+    "effectVersion": "4.0.0"
+  },
+  {
+    "name": "network",
+    "repositoryCommit": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+    "dirty": true,
+    "bundleSha256": "d137bf3269fc15cb8e459b720dc532edd95912438041da9742e584143660b9e6",
+    "bundleBytes": 5320598,
+    "gzipBytes": 1001101,
+    "fixtureSha256": "5e749b4e36a2ab4249404a84fb3f1422395ea431d320624ce71ac6f75d1bc3cf",
+    "fixtureFiles": [
+      {
+        "path": "src/plan.ts",
+        "sha256": "6f57c675d11748ce9ae2b2dd1100beec2d7a4f3e3ed8644627ff47570f0ee39b"
+      },
+      {
+        "path": "src/yielded.ts",
+        "sha256": "f71cbdacb32e6659d868e7911ed5d27b62419ab18564e582970cde25f395ff1d"
+      },
+      {
+        "path": "third-party/src/pi.ts",
+        "sha256": "e7fa76cbd73d4667c8942879147b4064e3092fb9e4c7dc6b729d3d1c6a05cded"
+      },
+      {
+        "path": "third-party/src/tardie.ts",
+        "sha256": "922726002e4a4a71d197aeb7ea47e8797860eb1941ad3d07d21b7865a8dc12a2"
+      }
+    ],
+    "inputsSha256": "f9d25b2fe62c9c2c19350d9f317ac460a869cddb719478d8b993c82bf2482b78",
+    "buildControls": [
+      {
+        "path": "build.mjs",
+        "sha256": "076fd0a60cc178bec2701be132f26774cfc7980672edc89d4df302b643e1dd9c"
+      },
+      {
+        "path": "probes.mjs",
+        "sha256": "e320e525650567c649d5631ee61f0e6342c066bb1a100d9689930ef2d173fc5c"
+      }
+    ],
+    "esbuildVersion": "0.28.1",
+    "minify": false,
+    "target": "es2024",
+    "output": "/private/tmp/prod-turn-0C7YR7/bundles/network",
+    "effectVersion": "4.0.0"
+  }
+]

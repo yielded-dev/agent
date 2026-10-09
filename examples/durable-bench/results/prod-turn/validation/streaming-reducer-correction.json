@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-09T00:03:04.407Z",
+  "oldReducerSha256": "38e953bf9a477832c87a422af94b3e39c50312fb7aef46ba79204fb87575802c",
+  "observed": {
+    "selected": 34,
+    "controllerCompleted": 34,
+    "integrityFailures": 90,
+    "firstFailure": {
+      "kind": "provider-transcript",
+      "key": "streaming/prod-turn-9c3e79ef-primary/yielded/prod-turn-streaming-h50-d400-o0/m2",
+      "call": 0,
+      "expected": "74e91baa79e2ac39",
+      "receipt": {
+        "target": "yielded",
+        "syncBeforeFetch": false,
+        "variant": "burst",
+        "history": 50,
+        "object": "prod-turn-streaming-h50-d400-o0",
+        "sample": "m2",
+        "ttftMs": 400,
+        "chunkDelayMs": 0,
+        "call": 0,
+        "requestId": "chatcmpl-prod-turn-df77d539-0985-48d9-90fe-afaf4de34e43",
+        "arrivalMs": 1791503967030,
+        "firstByteMs": 1791503967430,
+        "endMs": 1791503967430,
+        "fingerprint": "74e91baa79e2ac39",
+        "rawWireFingerprint": "189acd5e04d3bae8",
+        "requestBytes": 28313,
+        "colo": "SJC",
+        "error": null
+      }
+    }
+  },
+  "cause": "Reducer still expected 10 ms chunk spacing for every 400 ms condition, incorrectly rejecting the planned burst variant with 0 ms spacing. All reported fingerprints match. Correct expected workload and scripted-delay subtraction using the planned variant; retain all raw measurements.",
+  "measuredTurnsRetried": 0
+}

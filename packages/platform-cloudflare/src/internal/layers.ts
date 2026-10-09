@@ -79,7 +79,7 @@ import {
   SubmissionLedger,
   type SubmissionSnapshot,
   type AdmissionRequest,
-  type SettlementFinalization,
+  SettlementFinalization,
   type WorkerStopCommand,
 } from "@yielded/agent/submission-ledger";
 import { ThreadProjectionMaintenance } from "@yielded/agent/thread-projection-maintenance";
@@ -413,7 +413,10 @@ export const layerConfig = (
       return Layer.mergeAll(
         runtimeConfigLayer(options, producerId),
         Layer.succeed(ThreadObjectIdentity, { threadId, producerId }),
-        Layer.succeed(ThreadObjectPlacement, { ownsThread: (target) => target === threadId }),
+        Layer.succeed(ThreadObjectPlacement, {
+          threadId,
+          ownsThread: (target) => target === threadId,
+        }),
       );
     }),
   );
@@ -451,7 +454,8 @@ export type ThreadHostMutation =
 
 export interface ThreadPublicationOptions<E = never, R = never, P = never> {
   /** Pure, bounded selection of affected host lane IDs. The native owner prearms and guards
-   * these lanes through the source mutation, including replay and recovery-only finalization.
+   * these lanes through publication (which may finalize atomically), replay and recovery-only
+   * finalization.
    * Return only registered host IDs; do not perform I/O or acquire maintenance services here.
    * Delivery is independent of lifecycle publication and remains at least once.
    */
@@ -617,7 +621,8 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
     Effect.gen(function* () {
       const { ctx } = yield* DurableObjectContext;
       const config = yield* CloudflareDurableRuntimeConfig;
-      const { ownsThread } = yield* ThreadObjectPlacement;
+      const placement = yield* ThreadObjectPlacement;
+      const { ownsThread } = placement;
 
       const storageOptions: DoStorageOptions = {
         storage: ctx.storage,
@@ -865,11 +870,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                       ),
                     );
 
-                const observeMutation = <A, Failure>(
-                  mutation: ThreadHostMutation,
-                  body: Effect.Effect<A, Failure>,
-                  invalidatesRecovery: boolean,
-                ) =>
+                const selectHostLanes = (mutation: ThreadHostMutation) =>
                   Effect.suspend(() =>
                     Schema.decodeEffect(Schema.Array(DueQueue.HostLaneId))([
                       ...new Set(options.hostLanesForMutation?.(mutation) ?? []),
@@ -882,6 +883,14 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                         cause,
                       }),
                     ),
+                  );
+
+                const observeMutation = <A, Failure>(
+                  mutation: ThreadHostMutation,
+                  body: Effect.Effect<A, Failure>,
+                  invalidatesRecovery: boolean,
+                ) =>
+                  selectHostLanes(mutation).pipe(
                     Effect.flatMap((lanes) => observeIntent(body, invalidatesRecovery, lanes)),
                   );
 
@@ -891,7 +900,17 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                   Context.add(SettlementPublisher, {
                     publish: (input) =>
                       Effect.gen(function* () {
-                        const { request } = yield* validatePublication(input);
+                        const { request, settlement } = yield* validatePublication(input);
+
+                        // Publication can finalize before the runtime's later acknowledgement.
+                        // Prearm host work here so eviction cannot strand it behind a settled row.
+                        const hostLanes = yield* selectHostLanes({
+                          _tag: "Settlement",
+                          request: SettlementFinalization.make({
+                            submissionId: request.submissionId,
+                            settlementId: settlement.settlementId,
+                          }),
+                        });
 
                         return yield* mutations
                           .withMutation(
@@ -927,6 +946,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                               .pipe(Effect.tap(() => afterCommit)),
                             {
                               lanes: [
+                                ...hostLanes,
                                 ...(options.projection === undefined ? [] : [DueQueue.Projection]),
                                 ...(options.lifecyclePublication === undefined
                                   ? []
@@ -1119,6 +1139,19 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
         maintenanceRuntime,
         ThreadMaintenance.layer.pipe(
           Layer.provide(options.recoveryEvents ?? Layer.empty),
+          Layer.provide(
+            Layer.effect(ThreadNativeMaintenance)(
+              Effect.gen(function* () {
+                const previous = yield* ThreadNativeMaintenance;
+                const runtime = yield* DurableAgentRuntime;
+
+                return {
+                  lanes: previous.lanes,
+                  ...(placement.threadId === undefined ? {} : { singleThreadRuntime: runtime }),
+                };
+              }),
+            ),
+          ),
           Layer.provide(maintenanceRuntime),
           Layer.provide(messageRecovery),
         ),

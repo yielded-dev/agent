@@ -1,0 +1,49 @@
+{
+  "checkedAt": "2026-10-09T00:25:06.419Z",
+  "archiveManifestSha256": "eecf120eec7f8201ca841920b3bab5d05f8d7a559a509801cd1637e45c5eab61",
+  "archiveHashesVerified": 24,
+  "reportLinksVerified": true,
+  "reanalysisFromCompressedInputs": "exact dispatch comparisons reproduced",
+  "phases": [
+    {
+      "phase": "map",
+      "planned": 32,
+      "measured": 32,
+      "transcriptValid": 32,
+      "failedRequests": 0,
+      "planFailures": 0,
+      "integrityFailures": 0
+    },
+    {
+      "phase": "candidates",
+      "planned": 648,
+      "measured": 648,
+      "transcriptValid": 648,
+      "failedRequests": 0,
+      "planFailures": 0,
+      "integrityFailures": 0
+    },
+    {
+      "phase": "streaming",
+      "planned": 34,
+      "measured": 34,
+      "transcriptValid": 34,
+      "failedRequests": 0,
+      "planFailures": 0,
+      "integrityFailures": 0
+    },
+    {
+      "phase": "dispatch",
+      "planned": 272,
+      "measured": 272,
+      "transcriptValid": 272,
+      "failedRequests": 0,
+      "planFailures": 0,
+      "integrityFailures": 0
+    }
+  ],
+  "cloudflareCleanupVerified": true,
+  "productCommit": "83ac097d23201d7c5ebc8a872f14d34d9dd60fa7",
+  "productGate": "validation/ready-dispatch-isolated.json",
+  "credentialScan": "secret-scan.json; new gzip archives preserve previously scanned uncompressed bytes"
+}

@@ -1,0 +1,56 @@
+Type: cpu
+Duration: 10s, Total samples = 9.76s (97.57%)
+Showing nodes accounting for 6.79s, 69.60% of 9.76s total
+Dropped 644 nodes (cum <= 0.05s)
+Showing top 50 nodes out of 148
+      flat  flat%   sum%        cum   cum%
+     0.99s 10.18% 10.18%      0.99s 10.18%  (idle)
+     0.42s  4.30% 14.47%      6.96s 71.38%  runLoop worker.mjs:5332
+     0.40s  4.07% 18.55%      0.60s  6.10%  worker.mjs:71558
+     0.39s  4.02% 22.57%      2.18s 22.39%  makePrimitiveProto worker.mjs:5824
+     0.30s  3.12% 25.69%      0.35s  3.59%  withFlat worker.mjs:2301
+     0.30s  3.11% 28.80%      0.30s  3.11%  (garbage collector)
+     0.21s  2.15% 30.95%      0.21s  2.15%  (program)
+     0.18s  1.82% 32.77%      0.18s  1.82%  effectIsExit worker.mjs:5981
+     0.17s  1.76% 34.53%      0.21s  2.12%  worker.mjs:6488
+     0.17s  1.73% 36.26%      7.13s 73.11%  evaluate worker.mjs:5299
+     0.17s  1.69% 37.95%      0.81s  8.30%  <unknown>
+     0.15s  1.57% 39.53%      0.15s  1.57%  setImmediate
+     0.15s  1.56% 41.09%      1.98s 20.28%  makeExit worker.mjs:1578
+     0.15s  1.55% 42.64%      1.17s 12.03%  makePrimitiveProto worker.mjs:5655
+     0.14s  1.43% 44.07%      0.14s  1.43%  read
+     0.13s  1.36% 45.43%      0.38s  3.85%  readMaintenanceState worker.mjs:70472
+     0.13s  1.31% 46.74%      0.18s  1.80%  hash worker.mjs:740
+     0.12s  1.27% 48.02%      0.12s  1.27%  get
+     0.11s  1.14% 49.16%      0.11s  1.14%  next
+     0.10s  1.07% 50.23%      0.11s  1.09%  worker.mjs:6492
+     0.10s  1.03% 51.25%      0.20s  2.00%  worker.mjs:20407
+     0.09s  0.94% 52.19%      0.23s  2.31%  pull worker.mjs:40851
+     0.09s   0.9% 53.09%      0.09s   0.9%  worker.mjs:7409
+     0.09s  0.88% 53.98%      0.09s  0.93%  worker.mjs:70216
+     0.09s  0.88% 54.86%      0.18s  1.81%  dedupeReasons worker.mjs:5031
+     0.08s  0.85% 55.71%      0.09s   0.9%  submitEncoded worker.mjs:130479
+     0.08s  0.83% 56.54%      0.08s  0.83%  transaction
+     0.08s  0.81% 57.35%      0.08s  0.81%  setTimeout
+     0.08s  0.81% 58.17%      0.19s  1.99%  worker.mjs:71532
+     0.08s   0.8% 58.97%      0.09s  0.87%  worker.mjs:40370
+     0.08s  0.79% 59.75%      0.11s  1.16%  worker.mjs:6571
+     0.07s  0.69% 60.44%      0.07s  0.69%  exec
+     0.07s  0.68% 61.12%      0.07s  0.68%  worker.mjs:6433
+     0.06s  0.64% 61.76%      0.26s  2.70%  worker.mjs:20011
+     0.06s  0.61% 62.37%      0.50s  5.13%  makePrimitive worker.mjs:5578
+     0.06s  0.59% 62.96%      0.47s  4.80%  worker.mjs:6050
+     0.06s  0.57% 63.53%      0.06s  0.57%  getCont worker.mjs:5378
+     0.05s  0.56% 64.09%      0.05s  0.56%  getStore
+     0.05s  0.51% 64.60%      0.18s  1.82%  transaction worker.mjs:70021
+     0.05s  0.49% 65.09%      0.10s  1.05%  collectIssues worker.mjs:21090
+     0.05s  0.48% 65.57%      0.21s  2.17%  worker.mjs:21337
+     0.05s  0.47% 66.04%      0.67s  6.82%  makeExit worker.mjs:1592
+     0.05s  0.46% 66.51%      0.06s  0.59%  worker.mjs:40096
+     0.05s  0.46% 66.97%      0.13s  1.37%  worker.mjs:41047
+     0.05s  0.46% 67.43%      0.15s  1.56%  worker.mjs:71780
+     0.04s  0.45% 67.88%      0.10s  1.00%  candidateEnabled worker.mjs:40526
+     0.04s  0.44% 68.32%      0.45s  4.58%  worker.mjs:21616
+     0.04s  0.43% 68.75%      0.91s  9.36%  worker.mjs:5555
+     0.04s  0.43% 69.18%      0.20s  2.02%  scheduleTask worker.mjs:4589
+     0.04s  0.42% 69.60%      0.05s  0.54%  worker.mjs:20608

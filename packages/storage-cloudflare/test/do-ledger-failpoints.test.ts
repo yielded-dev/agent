@@ -286,15 +286,28 @@ describe("DoSubmissionLedger failpoints", () => {
           }),
         );
 
+        // Canonical publication and ledger finalization must roll back together on failure.
+        yield* select("ledger:finalize-settlement:before");
+        expectInjectedFailure(
+          yield* reserveOnce.pipe(Effect.exit),
+          "ledger:finalize-settlement:before",
+        );
+        expect(yield* publicationRows).toHaveLength(0);
+        expect((yield* submissionStates)[0]?.state).toBe("input-applied");
+        expect(yield* ownershipRows).toHaveLength(1);
+
         yield* select("append:after");
         expectInjectedFailure(yield* reserveOnce.pipe(Effect.exit), "append:after");
         expect(yield* publicationRows).toHaveLength(1);
-        expect((yield* submissionStates)[0]?.finalized_at).toBeNull();
-        expect((yield* submissionStates)[0]?.state).toBe("input-applied");
+        expect((yield* submissionStates)[0]?.finalized_at).not.toBeNull();
+        expect((yield* submissionStates)[0]?.state).toBe("settled");
+        expect(yield* ownershipRows).toEqual([]);
         yield* select(undefined);
-        const replayedPublication = yield* reserveOnce;
+        const replayedPublication = yield* reserveOnce.pipe(Effect.exit);
 
-        expect(replayedPublication.replayed).toBe(true);
+        expect(Exit.isFailure(replayedPublication)).toBe(true);
+        if (Exit.isFailure(replayedPublication))
+          expect(Cause.squash(replayedPublication.cause)).toBeInstanceOf(OwnershipLost);
 
         const finalizeOnce = failingLedger(
           Effect.gen(function* () {

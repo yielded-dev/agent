@@ -1,0 +1,37 @@
+{
+  "baseline": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+  "preparationFailures": [
+    {
+      "command": "vp install --frozen-lockfile",
+      "error": "sandbox tempdir EPERM",
+      "resolution": "same pinned install passed with approved host access"
+    },
+    {
+      "command": "initial harness build",
+      "error": "missing @effect/ai-openai-compat",
+      "resolution": "copied pinned catalog dependency from source harness; build passed"
+    },
+    {
+      "command": "local-counts attempt 1",
+      "error": "process.chdir received URL",
+      "resolution": "fileURLToPath"
+    },
+    {
+      "command": "local-counts attempt 2",
+      "error": "esbuild source relative to initial cwd",
+      "resolution": "run from owning benchmark directory"
+    },
+    {
+      "command": "initial vp run ready",
+      "error": "PostgreSQL verification environment was not configured",
+      "resolution": "started the task-owned PostgreSQL fixture and supplied EFFECT_AGENT_TEST_POSTGRES_URL; final gates passed",
+      "evidenceLimit": "setup failure recorded from the session; final successful gate logs are archived"
+    },
+    {
+      "command": "initial platform verification",
+      "error": "workerd could not start under the default sandbox",
+      "resolution": "required verification passed with approved host access",
+      "evidenceLimit": "setup failure recorded from the session; final successful gate logs are archived"
+    }
+  ]
+}

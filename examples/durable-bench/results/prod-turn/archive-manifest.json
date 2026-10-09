@@ -1,0 +1,149 @@
+{
+  "method": "lossless gzip; hashes cover uncompressed bytes",
+  "archives": [
+    {
+      "file": "requests.jsonl.gz",
+      "uncompressedSha256": "91db685d442733c6994ad35e54820bb688685237fe6662f6d2272bab395cc12b",
+      "uncompressedBytes": 46483241,
+      "compressedBytes": 3650452
+    },
+    {
+      "file": "attempted.jsonl.gz",
+      "uncompressedSha256": "084fbc59ca6cf412b4eb5f8126db5e2d2882d9d92b4da95664cbf676028f9f6d",
+      "uncompressedBytes": 1141349,
+      "compressedBytes": 36635
+    },
+    {
+      "file": "telemetry-primary.json.gz",
+      "uncompressedSha256": "06e5498756eefcd0dc38f32c1071105124c5a89297b926a1a2a0d649b14143f4",
+      "uncompressedBytes": 34323447,
+      "compressedBytes": 1832553
+    },
+    {
+      "file": "telemetry-provider.json.gz",
+      "uncompressedSha256": "f4f0593be85a94500372e73f68f13106594191b3310ec8b1dd0247055ffd7ffc",
+      "uncompressedBytes": 46165265,
+      "compressedBytes": 2211100
+    },
+    {
+      "file": "map/comparisons.json.gz",
+      "uncompressedSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "uncompressedBytes": 3,
+      "compressedBytes": 23
+    },
+    {
+      "file": "map/counts.json.gz",
+      "uncompressedSha256": "7b95ac2ee12e1e934d7a6a825d676a52a02e7d7d1211da36c41ed61c2fbaeb5d",
+      "uncompressedBytes": 502853,
+      "compressedBytes": 14979
+    },
+    {
+      "file": "map/failed-outcomes.json.gz",
+      "uncompressedSha256": "6e683b53a86f2600aa9eff0cc56b567ace618b048870e502b13860d12b4f932d",
+      "uncompressedBytes": 1201468,
+      "compressedBytes": 83657
+    },
+    {
+      "file": "map/summary.json.gz",
+      "uncompressedSha256": "a878961c3849cdce80de2dd2ba0a21bd763408b7b14a5683400d05295f6d38fe",
+      "uncompressedBytes": 1687033,
+      "compressedBytes": 92480
+    },
+    {
+      "file": "map/turns.jsonl.gz",
+      "uncompressedSha256": "f62e8f36b4f4d525c57f2bba862a1e8cd9aad3e48b0b8ed3c67f15c1737df846",
+      "uncompressedBytes": 1042952,
+      "compressedBytes": 97508
+    },
+    {
+      "file": "candidates/comparisons.json.gz",
+      "uncompressedSha256": "2819973f14e70a04714f5155e455ce6e9270768ccf854b651c2315eaa1fc62d8",
+      "uncompressedBytes": 3039220,
+      "compressedBytes": 179681
+    },
+    {
+      "file": "candidates/counts.json.gz",
+      "uncompressedSha256": "353224fa6c3fc1bee4b5b7dd9c12be8a8fcb0472bdef00101c11753794e2959e",
+      "uncompressedBytes": 6042058,
+      "compressedBytes": 145466
+    },
+    {
+      "file": "candidates/failed-outcomes.json.gz",
+      "uncompressedSha256": "bf29c36d1bcb196a6382973601d675718c877a4a39c6ba07fa1dd6de94b6b2b9",
+      "uncompressedBytes": 1404366,
+      "compressedBytes": 114038
+    },
+    {
+      "file": "candidates/summary.json.gz",
+      "uncompressedSha256": "8b2baeda5f4b85b1dd1a2b144748447bc06726ae0b9b9b9963645ae01bcfb279",
+      "uncompressedBytes": 14356763,
+      "compressedBytes": 773161
+    },
+    {
+      "file": "candidates/turns.jsonl.gz",
+      "uncompressedSha256": "af17dcca519ef2fe6aab8f8f4be78ae218907a5197ce78a620fe295a87799686",
+      "uncompressedBytes": 15409568,
+      "compressedBytes": 1760408
+    },
+    {
+      "file": "streaming/comparisons.json.gz",
+      "uncompressedSha256": "279c66edc3f0b11c2cfff67908335eecc6f546c6457e8d5cea827cdac68151f1",
+      "uncompressedBytes": 364722,
+      "compressedBytes": 20109
+    },
+    {
+      "file": "streaming/counts.json.gz",
+      "uncompressedSha256": "d6a553c6d47a894be6b3901542ab2e4cb50caaa191beff95b14fc40327e956e9",
+      "uncompressedBytes": 318992,
+      "compressedBytes": 8691
+    },
+    {
+      "file": "streaming/failed-outcomes.json.gz",
+      "uncompressedSha256": "e7e82152cef2807057f5b0ac7b7ec3ff97a4d0f3baa8ce8c463ee7153b7aec4d",
+      "uncompressedBytes": 1202594,
+      "compressedBytes": 83785
+    },
+    {
+      "file": "streaming/summary.json.gz",
+      "uncompressedSha256": "98aa64b7c47581731dd001df4f934031dad8c9d0ec9924227aff01ecf5b4592f",
+      "uncompressedBytes": 2034135,
+      "compressedBytes": 96132
+    },
+    {
+      "file": "streaming/turns.jsonl.gz",
+      "uncompressedSha256": "6f1ff7a1015b87ff07e12208547964ff10d7f19ff833892d476368dba90b4aba",
+      "uncompressedBytes": 1218448,
+      "compressedBytes": 145605
+    },
+    {
+      "file": "dispatch/comparisons.json.gz",
+      "uncompressedSha256": "84e877857e8ecd99fe89fb9fb4c98b14174007e89f70f6be526d7a3f66a64dc9",
+      "uncompressedBytes": 875602,
+      "compressedBytes": 55974
+    },
+    {
+      "file": "dispatch/counts.json.gz",
+      "uncompressedSha256": "c9c9b9cb72e88ba5f52029be8a1c81bc2b6435d071df415b30ae95c5c31d4473",
+      "uncompressedBytes": 2533239,
+      "compressedBytes": 61894
+    },
+    {
+      "file": "dispatch/failed-outcomes.json.gz",
+      "uncompressedSha256": "ed1df752784d403b7d4c5212982bbafb5d92f0740a9f1762f33a78c30268fc2a",
+      "uncompressedBytes": 1282574,
+      "compressedBytes": 95338
+    },
+    {
+      "file": "dispatch/summary.json.gz",
+      "uncompressedSha256": "1669a9ee4bfed5223ff5b1febff87cfb312ac953260966f9e9e95424a3e4ac75",
+      "uncompressedBytes": 7406070,
+      "compressedBytes": 398599
+    },
+    {
+      "file": "dispatch/turns.jsonl.gz",
+      "uncompressedSha256": "ea1c0acdf4e23e12aa18fb3eceb23b3d2d0dcba3aaf87038acfd4e3640af0b48",
+      "uncompressedBytes": 6478031,
+      "compressedBytes": 742010
+    }
+  ]
+}

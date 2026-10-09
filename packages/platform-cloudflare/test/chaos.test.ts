@@ -25,8 +25,8 @@ import {
 /**
  * No important in-memory state (exit gate; plan §3): a run whose Durable Object is aborted
  * between EVERY pair of host operations produces the same normalized canonical evidence as
- * an unchaosed control run — everything that matters was in storage. Plus the startup-
- * reconciliation ordering gate: an armed repair executes BEFORE the pass claims new work.
+ * an unchaosed control run — everything that matters was in storage. Terminal publication
+ * also remains ordered before the next input after the publishing incarnation is lost.
  *
  * The P7 WP4 seeded variant below randomizes the abort/alarm interleaving ACROSS two lanes
  * from one root seed (`CHAOS_SEED` env override; the failure output prints it), so the
@@ -53,16 +53,16 @@ const submitTo = (
   );
 
 describe("DC chaos-abort evidence equivalence", () => {
-  it("startup reconciliation ordering: the armed repair executes before the pass claims new work", async () => {
+  it("publication eviction preserves terminal ordering before the pass claims new work", async () => {
     const thread = lane("reconcile-first");
 
-    // Strand S1 mid-terminalization: the settlement is canonical but not finalized.
+    // Evict S1 after canonical publication and atomic ledger finalization.
     armRuntimeEviction(thread, "terminalize:after-canonical-append");
     const receipt1 = await submitTo(plannerDefinition, thread);
 
     await drainAlarmsUntil(thread, () => Promise.resolve(armedEvictionsRemaining(thread) === 0));
 
-    // New work arrives while the lane still owes S1's repair.
+    // New work arrives after the publishing incarnation was lost.
     const receipt2 = await runClient(
       Effect.gen(function* () {
         const client = yield* CloudflareThreadClient;
@@ -78,8 +78,7 @@ describe("DC chaos-abort evidence equivalence", () => {
     await drainAlarmsUntil(thread, allSettled(thread));
     await assertConvergence(thread);
 
-    // The repaired settlement of S1 was appended BEFORE S2's canonical input: every pass
-    // runs `runRecovery` before `processThreadResolved` claims anything (plan §1.4).
+    // S1's terminal fact remains before S2's canonical input after reopening the Object.
     const recordIds = (await readCanonical(thread)).map((envelope) => envelope.record.recordId);
     const s1Settlement = recordIds.indexOf(submissionSettlementRecordId(receipt1.submissionId));
     const s2Input = recordIds.indexOf(submissionInputRecordId(receipt2.submissionId));

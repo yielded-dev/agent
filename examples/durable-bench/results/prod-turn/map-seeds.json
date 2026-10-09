@@ -1,0 +1,26 @@
+[
+  {
+    "key": "yielded/prod-turn-map-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791500411021,
+    "databaseBytes": 2723840
+  },
+  {
+    "key": "yielded/prod-turn-map-h50-d0-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791500412418,
+    "databaseBytes": 2658304
+  },
+  {
+    "key": "yielded/prod-turn-map-h250-d0-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791500462954,
+    "databaseBytes": 10498048
+  },
+  {
+    "key": "yielded/prod-turn-map-h250-d400-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791500475242,
+    "databaseBytes": 10641408
+  }
+]

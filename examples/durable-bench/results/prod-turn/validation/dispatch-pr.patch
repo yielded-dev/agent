@@ -1,0 +1,164 @@
+diff --git a/.changeset/single-thread-maintenance.md b/.changeset/single-thread-maintenance.md
+new file mode 100644
+index 00000000..c605e375
+--- /dev/null
++++ b/.changeset/single-thread-maintenance.md
+@@ -0,0 +1,5 @@
++---
++"@yielded/agent-platform-cloudflare": patch
++---
++
++Skip redundant maintenance refills while a Cloudflare Object's single Thread is running.
+diff --git a/docs/src/content/docs/platforms/cloudflare.md b/docs/src/content/docs/platforms/cloudflare.md
+index 254f167c..660dbe46 100644
+--- a/docs/src/content/docs/platforms/cloudflare.md
++++ b/docs/src/content/docs/platforms/cloudflare.md
+@@ -289,8 +289,9 @@ changing the resolver alone does not move their durable records.
+ Own one `SqlClient`, `ThreadMutationGate` and alarm slot per physical Object. Native migrations use
+ their own migration history, leaving the application's migration rows intact. Call
+ `ThreadMaintenance.ensureAlarm` in the local constructor gate and one bounded
+-`ThreadMaintenance.pass` from `alarm()`. The event runs at most two independent Thread Attempts
+-concurrently, with one active FIFO head per Thread and a durable cursor rotating between Threads.
++`ThreadMaintenance.pass` from `alarm()`. A single-Thread Object reserves one native slot; a shared
++host runs at most two independent Thread Attempts concurrently, with one active FIFO head per
++Thread and a durable cursor rotating between Threads.
+ A free slot admits newly ready Threads while another Attempt is busy. Remaining work retains the
+ alarm; generation acknowledgement waits for admitted Attempts to finish.
+ 
+diff --git a/packages/platform-cloudflare/src/Alarm.ts b/packages/platform-cloudflare/src/Alarm.ts
+index d8792b41..2a9882d9 100644
+--- a/packages/platform-cloudflare/src/Alarm.ts
++++ b/packages/platform-cloudflare/src/Alarm.ts
+@@ -379,6 +379,8 @@ export const ThreadHostMaintenance = Context.Reference<{
+ /** @internal Framework handlers are separate from host registrations and their namespace. */
+ export const ThreadNativeMaintenance = Context.Reference<{
+   readonly lanes: ReadonlyArray<ThreadHostMaintenanceLane>;
++  /** Exact runtime built over a single-Thread placement; never apply to a replacement. */
++  readonly singleThreadRuntime?: DurableAgentRuntime["Service"];
+ }>("@effect-agent/platform-cloudflare/ThreadNativeMaintenance", {
+   defaultValue: () => ({ lanes: [] }),
+ });
+@@ -543,7 +545,7 @@ interface NativePassResult {
+   readonly dispatched?: boolean;
+ }
+ 
+-/** Independent Threads share two bounded native slots; one active head per Thread. */
++/** Independent Threads share bounded native slots; one active head per Thread. */
+ interface NativeDispatch {
+   readonly scope: Scope.Scope;
+   readonly active: Map<ThreadId, Fiber.Fiber<number, MaintenancePassFailure>>;
+@@ -558,7 +560,6 @@ interface NativeDispatch {
+   scanRevision?: number;
+ }
+ 
+-const nativeDispatchConcurrency = 2;
+ /** Post-native delivery shares a finite connection budget across independent host lanes. */
+ const afterNativeDispatchConcurrency = 2;
+ 
+@@ -1032,7 +1033,8 @@ export type MaintenancePassFailure =
+  * 2. Reconcile before each head Attempt, then checkpoint only the observed generation. A racing
+  *    producer keeps its generation dirty and immediately eligible. Quiescent native retries
+  *    retain their durable backoff.
+- * 3. Admit at most two independent Thread Attempts, one active head per Thread.
++ * 3. Admit one Attempt for a single-Thread runtime, or at most two independent Thread
++ *    Attempts for a shared host, with one active head per Thread.
+  *    Keep native and delivery admission open together while finite waves remain active, so
+  *    fresh replies and abort controls can progress during unrelated cleanup. Close atomically
+  *    at quiescence, or at the original ten-minute yield deadline, then join admitted waves.
+@@ -1103,6 +1105,8 @@ export class ThreadMaintenance extends Context.Service<
+       const host = yield* ThreadHostMaintenance;
+       const framework = yield* ThreadNativeMaintenance;
+ 
++      const nativeDispatchConcurrency = () => (framework.singleThreadRuntime === runtime ? 1 : 2);
++
+       for (const lane of host.lanes)
+         yield* Schema.decodeEffect(DueQueue.HostLaneId)(lane.id).pipe(
+           Effect.mapError(alarmFailure("maintenance lane ID")),
+@@ -2111,7 +2115,7 @@ export class ThreadMaintenance extends Context.Service<
+             const selected = dispatch
+               ? [...runnable.slice(pivot), ...runnable.slice(0, pivot)].slice(
+                   0,
+-                  nativeDispatchConcurrency - reserved.size,
++                  nativeDispatchConcurrency() - reserved.size,
+                 )
+               : [];
+ 
+@@ -2501,7 +2505,7 @@ export class ThreadMaintenance extends Context.Service<
+             native = undefined;
+             if (result.phase === "actionable") phase = "actionable";
+             observed.nativeOnly = dispatch.active.size > 0;
+-            if (result.dispatched === true && dispatch.active.size < nativeDispatchConcurrency) {
++            if (result.dispatched === true && dispatch.active.size < nativeDispatchConcurrency()) {
+               dispatch.scanGeneration = undefined;
+               nativeCheck = true;
+             }
+@@ -2652,7 +2656,7 @@ export class ThreadMaintenance extends Context.Service<
+           if (
+             native === undefined &&
+             nativeCheck &&
+-            dispatch.active.size < nativeDispatchConcurrency
++            dispatch.active.size < nativeDispatchConcurrency()
+           ) {
+             nativeCheck = false;
+             const nativeCheckpoint = dispatch.needsCheckpoint && dispatch.active.size === 0;
+diff --git a/packages/platform-cloudflare/src/CloudflareBindings.ts b/packages/platform-cloudflare/src/CloudflareBindings.ts
+index aa7bcf6f..4c28118b 100644
+--- a/packages/platform-cloudflare/src/CloudflareBindings.ts
++++ b/packages/platform-cloudflare/src/CloudflareBindings.ts
+@@ -197,5 +197,9 @@ export class ThreadObjectIdentity extends Context.Service<
+ /** Logical Threads whose canonical stores and admission ledger live in this physical Object. */
+ export class ThreadObjectPlacement extends Context.Service<
+   ThreadObjectPlacement,
+-  { readonly ownsThread: (threadId: ThreadId) => boolean }
++  {
++    readonly ownsThread: (threadId: ThreadId) => boolean;
++    /** Present only when this physical Object owns exactly this one Thread. */
++    readonly threadId?: ThreadId;
++  }
+ >()("@effect-agent/platform-cloudflare/ThreadObjectPlacement") {}
+diff --git a/packages/platform-cloudflare/src/internal/layers.ts b/packages/platform-cloudflare/src/internal/layers.ts
+index 9b3f6a1a..77d692a9 100644
+--- a/packages/platform-cloudflare/src/internal/layers.ts
++++ b/packages/platform-cloudflare/src/internal/layers.ts
+@@ -413,7 +413,10 @@ export const layerConfig = (
+       return Layer.mergeAll(
+         runtimeConfigLayer(options, producerId),
+         Layer.succeed(ThreadObjectIdentity, { threadId, producerId }),
+-        Layer.succeed(ThreadObjectPlacement, { ownsThread: (target) => target === threadId }),
++        Layer.succeed(ThreadObjectPlacement, {
++          threadId,
++          ownsThread: (target) => target === threadId,
++        }),
+       );
+     }),
+   );
+@@ -617,7 +620,8 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
+     Effect.gen(function* () {
+       const { ctx } = yield* DurableObjectContext;
+       const config = yield* CloudflareDurableRuntimeConfig;
+-      const { ownsThread } = yield* ThreadObjectPlacement;
++      const placement = yield* ThreadObjectPlacement;
++      const { ownsThread } = placement;
+ 
+       const storageOptions: DoStorageOptions = {
+         storage: ctx.storage,
+@@ -1119,6 +1123,19 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
+         maintenanceRuntime,
+         ThreadMaintenance.layer.pipe(
+           Layer.provide(options.recoveryEvents ?? Layer.empty),
++          Layer.provide(
++            Layer.effect(ThreadNativeMaintenance)(
++              Effect.gen(function* () {
++                const previous = yield* ThreadNativeMaintenance;
++                const runtime = yield* DurableAgentRuntime;
++
++                return {
++                  lanes: previous.lanes,
++                  ...(placement.threadId === undefined ? {} : { singleThreadRuntime: runtime }),
++                };
++              }),
++            ),
++          ),
+           Layer.provide(maintenanceRuntime),
+           Layer.provide(messageRecovery),
+         ),

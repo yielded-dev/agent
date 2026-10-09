@@ -27,6 +27,7 @@ import {
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
 import {
+  type SettlementPublication,
   SettlementPublicationResult,
   SettlementPublisher,
   validatePublication,
@@ -2106,12 +2107,15 @@ const makeServices = Effect.fnUntraced(function* () {
               });
           }
           if (existing !== undefined)
-            return SettlementPublicationResult.make({
-              record: existing.record,
-              tailSequence: thread.tail_sequence,
-              tailDigest,
-              replayed: true,
-            });
+            return {
+              finalized: yield* finalizePublication(request, submission, existing),
+              publication: SettlementPublicationResult.make({
+                record: existing.record,
+                tailSequence: thread.tail_sequence,
+                tailDigest,
+                replayed: true,
+              }),
+            };
           if (submission.state === "settled")
             return yield* LedgerError.make({
               operation,
@@ -2123,12 +2127,15 @@ const makeServices = Effect.fnUntraced(function* () {
             Effect.mapError(internalFailure(operation)),
           );
 
-          return SettlementPublicationResult.make({
-            record,
-            tailSequence: appended.lastSequence,
-            tailDigest: committedTailDigest,
-            replayed: appended.replayed,
-          });
+          return {
+            finalized: yield* finalizePublication(request, submission, { record, settlement }),
+            publication: SettlementPublicationResult.make({
+              record,
+              tailSequence: appended.lastSequence,
+              tailDigest: committedTailDigest,
+              replayed: appended.replayed,
+            }),
+          };
         }),
       )
       .pipe(
@@ -2163,8 +2170,10 @@ const makeServices = Effect.fnUntraced(function* () {
       );
 
     yield* hitFailpoint("append:after", operation);
+    if (result.finalized)
+      yield* hitFailpoint("ledger:finalize-settlement:after", "ledger finalize settlement");
 
-    return result;
+    return result.publication;
   });
 
   const validateFinalization = Effect.fnUntraced(function* (
@@ -2221,6 +2230,123 @@ const makeServices = Effect.fnUntraced(function* () {
     }).pipe(Effect.mapError(internalFailure(operation)));
   });
 
+  /** Caller owns the journal transaction and has validated the canonical winner. */
+  const finalizeInTransaction = Effect.fnUntraced(function* (
+    validated: SettlementFinalization,
+    submission: SubmissionRow,
+    state: Effect.Success<ReturnType<typeof validateFinalization>>,
+  ) {
+    const operation = "ledger finalize settlement";
+
+    const { settlement: canonicalSettlement, record: canonicalRecord, settlementFailure } = state;
+
+    if (submission.state === "settled")
+      return yield* replayFinalization(validated, submission, state);
+    const now = yield* currentInstant;
+
+    const terminal =
+      submission.worker_admission_json === null
+        ? undefined
+        : workerTerminalFromRecord(
+            yield* decodeSubmissionSnapshot(operation, submission),
+            canonicalRecord,
+          );
+
+    let sealedTerminal: typeof terminal;
+
+    if (terminal !== undefined) {
+      // Admission and finalization serialize here. An accepted correction that this Run
+      // has not applied vetoes its completion, including admission after RunCompleted.
+      const pending =
+        terminal === "completed"
+          ? yield* sql`SELECT submission_id FROM effect_agent_submissions
+            WHERE thread_id = ${submission.thread_id} AND queue_sequence > ${submission.queue_sequence}
+            AND queue_sequence = (SELECT MAX(queue_sequence) FROM effect_agent_submissions WHERE thread_id = ${submission.thread_id})
+            AND (joined_host_submission_id IS NULL OR joined_host_submission_id <> ${submission.submission_id}
+              OR input_applied_record_id IS NULL) LIMIT 1`.pipe(
+              Effect.mapError(sqlFailure(operation)),
+            )
+          : [];
+
+      if (pending.length === 0) {
+        const sealed =
+          yield* sql`INSERT OR IGNORE INTO effect_agent_worker_stops (thread_id, terminal)
+          VALUES (${submission.thread_id}, ${terminal}) RETURNING *`.pipe(
+            rows.workerStops.write,
+            Effect.mapError(internalFailure(operation)),
+          );
+
+        yield* sql`INSERT OR IGNORE INTO effect_agent_abort_intents (submission_id, author, reason, requested_at)
+          SELECT submission_id, ${submission.principal}, ${`Worker assignment ${terminal}`}, ${now.iso}
+          FROM effect_agent_submissions WHERE thread_id = ${submission.thread_id} AND state <> 'settled'
+          AND submission_id <> ${submission.submission_id}
+          AND (joined_host_submission_id IS NULL OR joined_host_submission_id <> ${submission.submission_id}
+            OR input_applied_record_id IS NULL) RETURNING *`.pipe(
+          rows.aborts.write,
+          Effect.mapError(internalFailure(operation)),
+        );
+        if (sealed.length > 0) sealedTerminal = terminal;
+      }
+    }
+
+    yield* sql`
+      UPDATE effect_agent_submissions
+      SET state = 'settled', settled_outcome = ${canonicalSettlement.outcome},
+          settled_record_id = ${canonicalRecord.recordId}, finalized_at = ${now.iso}
+      WHERE submission_id = ${validated.submissionId}
+     RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+    yield* sql`
+      DELETE FROM effect_agent_submission_ownership
+      WHERE submission_id = ${validated.submissionId}
+     RETURNING *`.pipe(rows.ownership.remove, Effect.mapError(internalFailure(operation)));
+
+    yield* recordProgress("submission", operation);
+
+    if (sealedTerminal !== undefined) yield* retainWorkerSeal(submission.thread_id, sealedTerminal);
+
+    return yield* decodeSettlement({
+      submissionId: validated.submissionId,
+      settlementId: validated.settlementId,
+      receiptId: submission.receipt_id,
+      outcome: canonicalSettlement.outcome,
+      ...(settlementFailure === undefined ? {} : { failure: settlementFailure }),
+      settledAt: now.iso,
+    }).pipe(Effect.mapError(internalFailure(operation)));
+  });
+
+  const finalizePublication = Effect.fnUntraced(function* (
+    request: SettlementPublication,
+    submission: SubmissionRow,
+    canonical: Pick<
+      Effect.Success<ReturnType<typeof validateFinalization>>,
+      "record" | "settlement"
+    >,
+  ) {
+    // Settled rows leave recovery scans. Retain external notification/delivery obligations
+    // until the runtime completes them before its separate finalization call, as in SQL.
+    if (
+      request.authority._tag === "Joined" ||
+      submission.joined_host_submission_id !== null ||
+      submission.parent_submission_id !== null ||
+      submission.parent_tool_call_id !== null ||
+      submission.worker_admission_json !== null ||
+      submission.message_admission_json !== null
+    )
+      return false;
+
+    yield* hitFailpoint("ledger:finalize-settlement:before", "ledger finalize settlement");
+    yield* finalizeInTransaction(
+      SettlementFinalization.make({
+        submissionId: request.submissionId,
+        settlementId: canonical.settlement.settlementId,
+      }),
+      submission,
+      { ...canonical, settlementFailure: settlementFailureFromRecord(canonical.record) },
+    );
+
+    return true;
+  });
+
   const finalizeSettlement: SubmissionLedger["Service"]["finalizeSettlement"] = Effect.fn(
     "DoSubmissionLedger.finalizeSettlement",
   )(function* (request: SettlementFinalization) {
@@ -2257,85 +2383,7 @@ const makeServices = Effect.fnUntraced(function* () {
         const submission = yield* requireSubmission(operation, validated.submissionId);
         const state = yield* validateFinalization(validated, submission);
 
-        const {
-          settlement: canonicalSettlement,
-          record: canonicalRecord,
-          settlementFailure,
-        } = state;
-
-        if (submission.state === "settled")
-          return yield* replayFinalization(validated, submission, state);
-        const now = yield* currentInstant;
-
-        const terminal =
-          submission.worker_admission_json === null
-            ? undefined
-            : workerTerminalFromRecord(
-                yield* decodeSubmissionSnapshot(operation, submission),
-                canonicalRecord,
-              );
-
-        let sealedTerminal: typeof terminal;
-
-        if (terminal !== undefined) {
-          // Admission and finalization serialize here. An accepted correction that this Run
-          // has not applied vetoes its completion, including admission after RunCompleted.
-          const pending =
-            terminal === "completed"
-              ? yield* sql`SELECT submission_id FROM effect_agent_submissions
-                WHERE thread_id = ${submission.thread_id} AND queue_sequence > ${submission.queue_sequence}
-                AND queue_sequence = (SELECT MAX(queue_sequence) FROM effect_agent_submissions WHERE thread_id = ${submission.thread_id})
-                AND (joined_host_submission_id IS NULL OR joined_host_submission_id <> ${submission.submission_id}
-                  OR input_applied_record_id IS NULL) LIMIT 1`.pipe(
-                  Effect.mapError(sqlFailure(operation)),
-                )
-              : [];
-
-          if (pending.length === 0) {
-            const sealed =
-              yield* sql`INSERT OR IGNORE INTO effect_agent_worker_stops (thread_id, terminal)
-              VALUES (${submission.thread_id}, ${terminal}) RETURNING *`.pipe(
-                rows.workerStops.write,
-                Effect.mapError(internalFailure(operation)),
-              );
-
-            yield* sql`INSERT OR IGNORE INTO effect_agent_abort_intents (submission_id, author, reason, requested_at)
-              SELECT submission_id, ${submission.principal}, ${`Worker assignment ${terminal}`}, ${now.iso}
-              FROM effect_agent_submissions WHERE thread_id = ${submission.thread_id} AND state <> 'settled'
-              AND submission_id <> ${submission.submission_id}
-              AND (joined_host_submission_id IS NULL OR joined_host_submission_id <> ${submission.submission_id}
-                OR input_applied_record_id IS NULL) RETURNING *`.pipe(
-              rows.aborts.write,
-              Effect.mapError(internalFailure(operation)),
-            );
-            if (sealed.length > 0) sealedTerminal = terminal;
-          }
-        }
-
-        yield* sql`
-          UPDATE effect_agent_submissions
-          SET state = 'settled', settled_outcome = ${canonicalSettlement.outcome},
-              settled_record_id = ${canonicalRecord.recordId}, finalized_at = ${now.iso}
-          WHERE submission_id = ${validated.submissionId}
-         RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
-        yield* sql`
-          DELETE FROM effect_agent_submission_ownership
-          WHERE submission_id = ${validated.submissionId}
-         RETURNING *`.pipe(rows.ownership.remove, Effect.mapError(internalFailure(operation)));
-
-        yield* recordProgress("submission", operation);
-
-        if (sealedTerminal !== undefined)
-          yield* retainWorkerSeal(submission.thread_id, sealedTerminal);
-
-        return yield* decodeSettlement({
-          submissionId: validated.submissionId,
-          settlementId: validated.settlementId,
-          receiptId: submission.receipt_id,
-          outcome: canonicalSettlement.outcome,
-          ...(settlementFailure === undefined ? {} : { failure: settlementFailure }),
-          settledAt: now.iso,
-        }).pipe(Effect.mapError(internalFailure(operation)));
+        return yield* finalizeInTransaction(validated, submission, state);
       }),
     );
 

@@ -1,0 +1,13 @@
+{
+  "command": "vp run ready",
+  "exitCode": 0,
+  "worktree": "isolated candidate-only worktree",
+  "commit": "83ac097d23201d7c5ebc8a872f14d34d9dd60fa7",
+  "base": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+  "nodeVersion": "24.21.0",
+  "nodeResolution": "Vite+ managed binary placed first on process PATH after vp env doctor diagnosed Homebrew Node precedence",
+  "postgresFixture": "task-owned PostgreSQL 17 on localhost:55432",
+  "logSha256": "9f3888aeedb5c83f4cb452fe75fed996e053af0f8a8688379669e66615db51b5",
+  "patchSha256": "09267ef6d98028f2d21272eb21490fbe418a54f739b668200b3a74f020d56919",
+  "checks": "71 repository tasks; 32 cache hits; checks, tests and builds passed"
+}

@@ -1,0 +1,25 @@
+Captured command transcript — 2026-10-08
+Provenance: transcribed and concatenated from already completed exec tool output; not a rerun.
+Completed tool session: 35252
+Working directory: /Users/dan/dev/effect-agent/.worktrees/dan-prod-turn-latency/packages/platform-cloudflare
+Command: vp test run --project workerd test/recovery-faults.test.ts -t 'starts a later independent Thread with two slots|releases both native claims'
+Execution: approved local networking for workerd localhost listeners.
+Observed exit code: 0
+Source base: d52ee32a51c7bf93a226272578f13cebcc66f2e1 with shared worktree changes.
+Related patch: runtime-bound-dispatch-baseline.patch
+Related patch SHA-256: 91f838ad0c105b1953c828cbf7d72e1eee5c5ef0d0b09d0dd2e3d8d20d1689bf
+Note: All three scoped source files had been restored byte-for-byte to their pre-candidate versions; v1 remained present.
+
+--- captured stdout/stderr ---
+
+ RUN  v5.0.3 /Users/dan/dev/effect-agent/.worktrees/dan-prod-turn-latency/packages/platform-cloudflare
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 6 skipped (8)
+   Start at  16:26:08
+   Duration  5.33s (transform 57%, tests 33%, import 10%)
+
+  Transform  |workerd| transforming modules took 2.91s · 57% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns

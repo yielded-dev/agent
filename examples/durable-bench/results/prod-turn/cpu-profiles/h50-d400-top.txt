@@ -1,0 +1,56 @@
+Type: cpu
+Duration: 10s, Total samples = 9.84s (98.43%)
+Showing nodes accounting for 6.87s, 69.83% of 9.84s total
+Dropped 568 nodes (cum <= 0.05s)
+Showing top 50 nodes out of 136
+      flat  flat%   sum%        cum   cum%
+     1.34s 13.66% 13.66%      1.34s 13.66%  (idle)
+     0.56s  5.66% 19.32%      6.74s 68.43%  runLoop worker.mjs:5332
+     0.50s  5.10% 24.42%      1.65s 16.79%  makePrimitiveProto worker.mjs:5824
+     0.23s  2.31% 26.73%      0.46s  4.69%  worker.mjs:71558
+     0.22s  2.27% 29.00%      0.59s  6.02%  <unknown>
+     0.21s  2.15% 31.15%      0.21s  2.15%  (program)
+     0.19s  1.92% 33.07%      0.28s  2.83%  hash worker.mjs:740
+     0.16s  1.58% 34.65%      7.03s 71.39%  evaluate worker.mjs:5299
+     0.15s  1.55% 36.20%      0.15s  1.55%  setTimeout
+     0.15s  1.54% 37.74%      0.15s  1.54%  transaction
+     0.15s  1.47% 39.22%      0.15s  1.47%  read
+     0.14s  1.47% 40.69%      0.57s  5.82%  worker.mjs:5634
+     0.14s  1.37% 42.06%      0.29s  2.97%  setTimeout node-internal:internal_timers:102
+     0.12s  1.21% 43.27%      1.78s 18.12%  makeExit worker.mjs:1578
+     0.12s  1.20% 44.47%      0.12s  1.24%  withFlat worker.mjs:2301
+     0.12s  1.17% 45.65%      0.19s  1.91%  worker.mjs:6666
+     0.10s  1.06% 46.70%      0.18s  1.81%  worker.mjs:5982
+     0.10s  1.03% 47.73%      0.77s  7.85%  worker.mjs:410
+     0.10s     1% 48.73%      0.26s  2.60%  pull worker.mjs:40851
+     0.10s  0.97% 49.70%      0.10s  0.97%  getStore
+     0.09s  0.96% 50.66%      0.09s  0.96%  fetch worker.mjs:114029
+     0.09s  0.93% 51.59%      0.38s  3.86%  worker.mjs:71062
+     0.09s  0.92% 52.51%      0.09s  0.95%  worker.mjs:71780
+     0.09s  0.91% 53.42%      3.18s 32.32%  worker.mjs:5659
+     0.09s  0.89% 54.31%      0.09s  0.91%  compareObjects worker.mjs:888
+     0.08s  0.86% 55.18%      0.08s  0.86%  (garbage collector)
+     0.08s  0.86% 56.04%      0.08s  0.86%  causeFilterInterruptors worker.mjs:5001
+     0.08s  0.86% 56.89%      0.09s  0.94%  worker.mjs:71811
+     0.08s  0.77% 57.67%      0.08s  0.77%  setImmediate
+     0.08s  0.76% 58.43%      0.08s  0.77%  submitEncoded worker.mjs:130479
+     0.07s  0.69% 59.12%      0.11s  1.15%  currentTimeNanosUnsafe worker.mjs:7410
+     0.07s  0.68% 59.81%      0.35s  3.54%  andThenCont worker.mjs:5885
+     0.07s  0.66% 60.47%      1.15s 11.67%  interruptUnsafe worker.mjs:5276
+     0.06s  0.65% 61.12%      0.20s  2.03%  worker.mjs:6050
+     0.06s  0.65% 61.77%      1.59s 16.12%  makePrimitiveProto worker.mjs:5655
+     0.06s  0.63% 62.40%      0.20s  2.00%  worker.mjs:71532
+     0.06s  0.62% 63.02%      0.22s  2.21%  parseChecks worker.mjs:21284
+     0.06s   0.6% 63.62%      0.10s  1.05%  getCont worker.mjs:5378
+     0.05s  0.55% 64.17%      0.10s  0.98%  get headers worker.mjs:29277
+     0.05s  0.54% 64.71%      0.29s  2.93%  run
+     0.05s  0.54% 65.26%      0.06s  0.64%  worker.mjs:65082
+     0.05s  0.54% 65.80%      0.05s  0.54%  makePrimitive worker.mjs:6642
+     0.05s  0.54% 66.33%      0.09s  0.92%  collectIssues worker.mjs:21090
+     0.05s  0.54% 66.87%      0.05s  0.54%  worker.mjs:6117
+     0.05s  0.52% 67.39%      0.05s  0.52%  exec
+     0.05s  0.52% 67.92%      2.17s 22.07%  makePrimitive worker.mjs:1612
+     0.05s   0.5% 68.42%      0.27s  2.72%  transaction worker.mjs:70021
+     0.05s  0.48% 68.89%      0.21s  2.12%  scheduleTask worker.mjs:4589
+     0.05s  0.47% 69.36%      0.09s  0.92%  Interrupt worker.mjs:4966
+     0.05s  0.47% 69.83%      0.05s   0.5%  worker.mjs:11834

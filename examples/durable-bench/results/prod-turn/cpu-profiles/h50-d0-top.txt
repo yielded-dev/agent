@@ -1,0 +1,56 @@
+Type: cpu
+Duration: 10s, Total samples = 2336.61ms (23.38%)
+Showing nodes accounting for 1654.93ms, 70.83% of 2336.61ms total
+Dropped 566 nodes (cum <= 11.68ms)
+Showing top 50 nodes out of 170
+      flat  flat%   sum%        cum   cum%
+  240.76ms 10.30% 10.30%   240.76ms 10.30%  (idle)
+   99.25ms  4.25% 14.55%    99.25ms  4.25%  (program)
+   88.63ms  3.79% 18.34%    90.78ms  3.89%  submitEncoded worker.mjs:130479
+   77.01ms  3.30% 21.64%   196.59ms  8.41%  worker.mjs:21616
+   66.96ms  2.87% 24.51%   514.93ms 22.04%  makePrimitiveProto worker.mjs:5824
+   57.86ms  2.48% 26.98%    57.86ms  2.48%  (garbage collector)
+   55.63ms  2.38% 29.36%    55.63ms  2.38%  exec
+   50.92ms  2.18% 31.54%   262.02ms 11.21%  <unknown>
+   49.55ms  2.12% 33.66%   457.22ms 19.57%  makeExit worker.mjs:1578
+   48.98ms  2.10% 35.76%    48.98ms  2.10%  worker.mjs:7452
+   40.95ms  1.75% 37.51%  1560.73ms 66.79%  evaluate worker.mjs:5299
+   40.62ms  1.74% 39.25%  1539.06ms 65.87%  runLoop worker.mjs:5332
+   39.72ms  1.70% 40.95%    39.72ms  1.70%  getCont worker.mjs:5378
+   37.54ms  1.61% 42.56%    86.45ms  3.70%  fetch worker.mjs:114029
+   36.88ms  1.58% 44.13%    36.88ms  1.58%  transaction
+   32.58ms  1.39% 45.53%    32.58ms  1.39%  setImmediate
+   29.54ms  1.26% 46.79%    29.54ms  1.26%  withFlat worker.mjs:2301
+   27.68ms  1.18% 47.98%    30.01ms  1.28%  dedupeReasons worker.mjs:5031
+   27.62ms  1.18% 49.16%    27.62ms  1.18%  loop worker.mjs:11818
+   27.60ms  1.18% 50.34%    27.60ms  1.18%  append2 worker.mjs:11517
+   27.58ms  1.18% 51.52%    42.94ms  1.84%  worker.mjs:71558
+   26.68ms  1.14% 52.66%    33.04ms  1.41%  runEventPromise worker.mjs:39516
+   26.27ms  1.12% 53.79%    26.27ms  1.12%  worker.mjs:13246
+   26.18ms  1.12% 54.91%    28.40ms  1.22%  worker.mjs:7468
+   25.41ms  1.09% 56.00%    29.76ms  1.27%  pull worker.mjs:40851
+   23.72ms  1.02% 57.01%   140.97ms  6.03%  worker.mjs:20011
+   22.78ms  0.97% 57.99%    22.78ms  0.97%  fromInput2 worker.mjs:10687
+   22.75ms  0.97% 58.96%    22.75ms  0.97%  formatIso worker.mjs:8996
+   20.80ms  0.89% 59.85%    20.80ms  0.89%  Response
+   20.76ms  0.89% 60.74%    21.85ms  0.94%  CauseImpl worker.mjs:1425
+   18.54ms  0.79% 61.53%    24.97ms  1.07%  by worker.mjs:117260
+   17.29ms  0.74% 62.27%   144.71ms  6.19%  worker.mjs:410
+   16.30ms   0.7% 62.97%    48.73ms  2.09%  make worker.mjs:28631
+      15ms  0.64% 63.61%   125.34ms  5.36%  andThenCont worker.mjs:5885
+   14.89ms  0.64% 64.25%    14.89ms  0.64%  worker.mjs:115301
+   14.28ms  0.61% 64.86%    14.28ms  0.61%  fork2 worker.mjs:71578
+   13.24ms  0.57% 65.43%    21.34ms  0.91%  worker.mjs:5710
+   12.04ms  0.52% 65.94%    12.04ms  0.52%  get
+   11.95ms  0.51% 66.45%    11.95ms  0.51%  next
+   11.08ms  0.47% 66.93%    75.39ms  3.23%  worker.mjs:40950
+   11.01ms  0.47% 67.40%   107.84ms  4.62%  worker.mjs:21337
+   10.95ms  0.47% 67.87%   269.21ms 11.52%  run
+    9.67ms  0.41% 68.28%   327.74ms 14.03%  makePrimitive worker.mjs:1612
+    8.95ms  0.38% 68.66%    26.29ms  1.13%  worker.mjs:55625
+    8.93ms  0.38% 69.05%    44.88ms  1.92%  readMaintenanceState worker.mjs:70472
+    8.77ms  0.38% 69.42%    14.36ms  0.61%  sql worker.mjs:30197
+    8.71ms  0.37% 69.79%    89.61ms  3.83%  worker.mjs:20407
+    8.18ms  0.35% 70.14%   241.12ms 10.32%  makePrimitive worker.mjs:5586
+    8.10ms  0.35% 70.49%   109.59ms  4.69%  makePrimitive worker.mjs:5578
+    7.83ms  0.34% 70.83%    25.83ms  1.11%  collectIssues worker.mjs:21090

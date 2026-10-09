@@ -1,0 +1,121 @@
+--- a/packages/platform-cloudflare/src/CloudflareBindings.ts
++++ b/packages/platform-cloudflare/src/CloudflareBindings.ts
+@@ -197,5 +197,9 @@
+ /** Logical Threads whose canonical stores and admission ledger live in this physical Object. */
+ export class ThreadObjectPlacement extends Context.Service<
+   ThreadObjectPlacement,
+-  { readonly ownsThread: (threadId: ThreadId) => boolean }
++  {
++    readonly ownsThread: (threadId: ThreadId) => boolean;
++    /** Present only when this physical Object owns exactly this one Thread. */
++    readonly threadId?: ThreadId;
++  }
+ >()("@effect-agent/platform-cloudflare/ThreadObjectPlacement") {}
+--- a/packages/platform-cloudflare/src/internal/layers.ts
++++ b/packages/platform-cloudflare/src/internal/layers.ts
+@@ -413,7 +413,10 @@
+       return Layer.mergeAll(
+         runtimeConfigLayer(options, producerId),
+         Layer.succeed(ThreadObjectIdentity, { threadId, producerId }),
+-        Layer.succeed(ThreadObjectPlacement, { ownsThread: (target) => target === threadId }),
++        Layer.succeed(ThreadObjectPlacement, {
++          threadId,
++          ownsThread: (target) => target === threadId,
++        }),
+       );
+     }),
+   );
+@@ -618,7 +621,8 @@
+     Effect.gen(function* () {
+       const { ctx } = yield* DurableObjectContext;
+       const config = yield* CloudflareDurableRuntimeConfig;
+-      const { ownsThread } = yield* ThreadObjectPlacement;
++      const placement = yield* ThreadObjectPlacement;
++      const { ownsThread } = placement;
+ 
+       const storageOptions: DoStorageOptions = {
+         storage: ctx.storage,
+@@ -1135,6 +1139,19 @@
+         maintenanceRuntime,
+         ThreadMaintenance.layer.pipe(
+           Layer.provide(options.recoveryEvents ?? Layer.empty),
++          Layer.provide(
++            Layer.effect(ThreadNativeMaintenance)(
++              Effect.gen(function* () {
++                const previous = yield* ThreadNativeMaintenance;
++                const runtime = yield* DurableAgentRuntime;
++
++                return {
++                  lanes: previous.lanes,
++                  ...(placement.threadId === undefined ? {} : { singleThreadRuntime: runtime }),
++                };
++              }),
++            ),
++          ),
+           Layer.provide(maintenanceRuntime),
+           Layer.provide(messageRecovery),
+         ),
+--- a/packages/platform-cloudflare/src/Alarm.ts
++++ b/packages/platform-cloudflare/src/Alarm.ts
+@@ -379,6 +379,8 @@
+ /** @internal Framework handlers are separate from host registrations and their namespace. */
+ export const ThreadNativeMaintenance = Context.Reference<{
+   readonly lanes: ReadonlyArray<ThreadHostMaintenanceLane>;
++  /** Exact runtime built over a single-Thread placement; never apply to a replacement. */
++  readonly singleThreadRuntime?: DurableAgentRuntime["Service"];
+ }>("@effect-agent/platform-cloudflare/ThreadNativeMaintenance", {
+   defaultValue: () => ({ lanes: [] }),
+ });
+@@ -543,7 +545,7 @@
+   readonly dispatched?: boolean;
+ }
+ 
+-/** Independent Threads share two bounded native slots; one active head per Thread. */
++/** Independent Threads share bounded native slots; one active head per Thread. */
+ interface NativeDispatch {
+   readonly scope: Scope.Scope;
+   readonly active: Map<ThreadId, Fiber.Fiber<number, MaintenancePassFailure>>;
+@@ -558,7 +560,6 @@
+   scanRevision?: number;
+ }
+ 
+-const nativeDispatchConcurrency = 2;
+ /** Post-native delivery shares a finite connection budget across independent host lanes. */
+ const afterNativeDispatchConcurrency = 2;
+ 
+@@ -1103,6 +1104,8 @@
+       const host = yield* ThreadHostMaintenance;
+       const framework = yield* ThreadNativeMaintenance;
+ 
++      const nativeDispatchConcurrency = () => (framework.singleThreadRuntime === runtime ? 1 : 2);
++
+       for (const lane of host.lanes)
+         yield* Schema.decodeEffect(DueQueue.HostLaneId)(lane.id).pipe(
+           Effect.mapError(alarmFailure("maintenance lane ID")),
+@@ -2132,7 +2135,7 @@
+             const selected = dispatch
+               ? [...runnable.slice(pivot), ...runnable.slice(0, pivot)].slice(
+                   0,
+-                  nativeDispatchConcurrency - reserved.size,
++                  nativeDispatchConcurrency() - reserved.size,
+                 )
+               : [];
+ 
+@@ -2522,7 +2525,7 @@
+             native = undefined;
+             if (result.phase === "actionable") phase = "actionable";
+             observed.nativeOnly = dispatch.active.size > 0;
+-            if (result.dispatched === true && dispatch.active.size < nativeDispatchConcurrency) {
++            if (result.dispatched === true && dispatch.active.size < nativeDispatchConcurrency()) {
+               dispatch.scanGeneration = undefined;
+               nativeCheck = true;
+             }
+@@ -2673,7 +2676,7 @@
+           if (
+             native === undefined &&
+             nativeCheck &&
+-            dispatch.active.size < nativeDispatchConcurrency
++            dispatch.active.size < nativeDispatchConcurrency()
+           ) {
+             nativeCheck = false;
+             const nativeCheckpoint = dispatch.needsCheckpoint && dispatch.active.size === 0;

@@ -1,0 +1,9 @@
+{
+  "command": "EFFECT_AGENT_TEST_POSTGRES_URL=postgres://postgres:postgres@127.0.0.1:55432/effect_agent vp run ready",
+  "exitCode": 0,
+  "base": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+  "prototypePatchSha256": "01d7634f20d753d579d8acef9db6b96ecb18010af825e027280df43f48c29db0",
+  "logSha256": "3a3fd66eac8e44732c012902dd3dc9124bf56efecf34991c61cfc071c9b02b80",
+  "completedAt": "2026-10-08T23:22:21.913Z",
+  "scope": "Combined maintenance and settlement prototypes plus the reused #821 benchmark target; checks, tests and builds passed"
+}

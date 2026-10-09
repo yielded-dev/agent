@@ -1,0 +1,14 @@
+[
+  {
+    "key": "yielded/prod-turn-streaming-h50-d400-o0",
+    "fingerprint": "b017b487524e44a4",
+    "at": 1791503775800,
+    "databaseBytes": 2797568
+  },
+  {
+    "key": "yielded/prod-turn-streaming-h250-d400-o0",
+    "fingerprint": "dcea9f30b0917245",
+    "at": 1791503836616,
+    "databaseBytes": 11075584
+  }
+]

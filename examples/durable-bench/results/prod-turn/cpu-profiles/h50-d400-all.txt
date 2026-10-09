@@ -1,0 +1,708 @@
+Type: cpu
+Duration: 10s, Total samples = 9842.01ms (98.43%)
+Showing nodes accounting for 9842.01ms, 100% of 9842.01ms total
+      flat  flat%   sum%        cum   cum%
+ 1344.42ms 13.66% 13.66%  1344.42ms 13.66%  (idle)
+  556.90ms  5.66% 19.32%  6735.11ms 68.43%  runLoop worker.mjs:5332
+  502.02ms  5.10% 24.42%  1652.58ms 16.79%  makePrimitiveProto worker.mjs:5824
+  227.15ms  2.31% 26.73%   461.93ms  4.69%  worker.mjs:71558
+  223.57ms  2.27% 29.00%   592.43ms  6.02%  <unknown>
+  211.68ms  2.15% 31.15%   211.68ms  2.15%  (program)
+  188.95ms  1.92% 33.07%   279.01ms  2.83%  hash worker.mjs:740
+  155.63ms  1.58% 34.65%  7026.55ms 71.39%  evaluate worker.mjs:5299
+  152.57ms  1.55% 36.20%   152.57ms  1.55%  setTimeout
+  151.50ms  1.54% 37.74%   151.50ms  1.54%  transaction
+  145.17ms  1.47% 39.22%   145.17ms  1.47%  read
+  144.73ms  1.47% 40.69%   572.41ms  5.82%  worker.mjs:5634
+  135.15ms  1.37% 42.06%   292.33ms  2.97%  setTimeout node-internal:internal_timers:102
+  118.98ms  1.21% 43.27%  1783.60ms 18.12%  makeExit worker.mjs:1578
+  118.54ms  1.20% 44.47%   121.75ms  1.24%  withFlat worker.mjs:2301
+  115.47ms  1.17% 45.65%   187.55ms  1.91%  worker.mjs:6666
+  104.12ms  1.06% 46.70%   177.89ms  1.81%  worker.mjs:5982
+  101.43ms  1.03% 47.73%   772.17ms  7.85%  worker.mjs:410
+   98.38ms     1% 48.73%   256.26ms  2.60%  pull worker.mjs:40851
+   95.14ms  0.97% 49.70%    95.14ms  0.97%  getStore
+   94.45ms  0.96% 50.66%    94.45ms  0.96%  fetch worker.mjs:114029
+   91.99ms  0.93% 51.59%   380.19ms  3.86%  worker.mjs:71062
+   90.48ms  0.92% 52.51%    93.70ms  0.95%  worker.mjs:71780
+   89.48ms  0.91% 53.42%  3180.46ms 32.32%  worker.mjs:5659
+   87.73ms  0.89% 54.31%    89.88ms  0.91%  compareObjects worker.mjs:888
+   84.81ms  0.86% 55.18%    84.81ms  0.86%  (garbage collector)
+   84.57ms  0.86% 56.04%    84.57ms  0.86%  causeFilterInterruptors worker.mjs:5001
+   84.53ms  0.86% 56.89%    92.04ms  0.94%  worker.mjs:71811
+   75.84ms  0.77% 57.67%    75.84ms  0.77%  setImmediate
+   75.14ms  0.76% 58.43%    76.22ms  0.77%  submitEncoded worker.mjs:130479
+   68.33ms  0.69% 59.12%   113.11ms  1.15%  currentTimeNanosUnsafe worker.mjs:7410
+   67.21ms  0.68% 59.81%   348.81ms  3.54%  andThenCont worker.mjs:5885
+   65.02ms  0.66% 60.47%  1148.86ms 11.67%  interruptUnsafe worker.mjs:5276
+   64.40ms  0.65% 61.12%   200.19ms  2.03%  worker.mjs:6050
+   64.15ms  0.65% 61.77%  1586.35ms 16.12%  makePrimitiveProto worker.mjs:5655
+   61.84ms  0.63% 62.40%   196.44ms  2.00%  worker.mjs:71532
+   60.78ms  0.62% 63.02%   217.92ms  2.21%  parseChecks worker.mjs:21284
+   58.73ms   0.6% 63.62%   103.40ms  1.05%  getCont worker.mjs:5378
+   54.22ms  0.55% 64.17%    96.34ms  0.98%  get headers worker.mjs:29277
+   53.63ms  0.54% 64.71%   288.86ms  2.93%  run
+   53.60ms  0.54% 65.26%    63.18ms  0.64%  worker.mjs:65082
+   53.20ms  0.54% 65.80%    53.20ms  0.54%  makePrimitive worker.mjs:6642
+   52.88ms  0.54% 66.33%    90.41ms  0.92%  collectIssues worker.mjs:21090
+   52.80ms  0.54% 66.87%    52.80ms  0.54%  worker.mjs:6117
+   51.65ms  0.52% 67.39%    51.65ms  0.52%  exec
+   51.63ms  0.52% 67.92%  2171.64ms 22.07%  makePrimitive worker.mjs:1612
+   49.04ms   0.5% 68.42%   267.99ms  2.72%  transaction worker.mjs:70021
+   48.09ms  0.49% 68.91%    48.09ms  0.49%  effectIsExit worker.mjs:5981
+   47.94ms  0.49% 69.39%    49.01ms   0.5%  addObserver worker.mjs:5257
+   47.26ms  0.48% 69.87%    48.38ms  0.49%  worker.mjs:5717
+   47.04ms  0.48% 70.35%    47.04ms  0.48%  worker.mjs:71159
+   46.98ms  0.48% 70.83%    46.98ms  0.48%  raceAllFirst worker.mjs:2588
+   46.98ms  0.48% 71.31%   208.69ms  2.12%  scheduleTask worker.mjs:4589
+   46.98ms  0.48% 71.78%    46.98ms  0.48%  assignProperties worker.mjs:1322
+   46.16ms  0.47% 72.25%    90.06ms  0.92%  Interrupt worker.mjs:4966
+   46.05ms  0.47% 72.72%    49.29ms   0.5%  worker.mjs:11834
+   45.85ms  0.47% 73.19%    45.85ms  0.47%  decodeUnknownEffect2 worker.mjs:25278
+   45.85ms  0.47% 73.65%    45.85ms  0.47%  get decodeEffect worker.mjs:21382
+   45.20ms  0.46% 74.11%    48.59ms  0.49%  releaseUnsafe worker.mjs:13219
+   45.11ms  0.46% 74.57%    45.11ms  0.46%  worker.mjs:7861
+   44.90ms  0.46% 75.03%    45.98ms  0.47%  worker.mjs:1571
+   44.83ms  0.46% 75.48%    44.83ms  0.46%  worker.mjs:6634
+   44.78ms  0.45% 75.94%   452.98ms  4.60%  worker.mjs:5048
+   44.78ms  0.45% 76.39%    44.78ms  0.45%  worker.mjs:7452
+   44.77ms  0.45% 76.85%  2839.16ms 28.85%  worker.mjs:7426
+   44.74ms  0.45% 77.30%    44.74ms  0.45%  isReference worker.mjs:2356
+   44.74ms  0.45% 77.76%    44.74ms  0.45%  worker.mjs:70697
+   44.66ms  0.45% 78.21%   129.23ms  1.31%  worker.mjs:6571
+   43.90ms  0.45% 78.66%    43.90ms  0.45%  random worker.mjs:802
+   43.87ms  0.45% 79.10%    43.87ms  0.45%  fiberInterruptChildren worker.mjs:5469
+   43.71ms  0.44% 79.54%    43.71ms  0.44%  yieldWith worker.mjs:5409
+   43.67ms  0.44% 79.99%    43.67ms  0.44%  worker.mjs:70739
+   43.66ms  0.44% 80.43%    43.66ms  0.44%  scopeAddFinalizer worker.mjs:6441
+   43.53ms  0.44% 80.87%   119.37ms  1.21%  setImmediate worker.mjs:4513
+   42.82ms  0.44% 81.31%    42.82ms  0.44%  scopeAddFinalizerUnsafe worker.mjs:6442
+   42.59ms  0.43% 81.74%  2623.68ms 26.66%  worker.mjs:5956
+   42.52ms  0.43% 82.17%    42.52ms  0.43%  worker.mjs:5483
+   42.34ms  0.43% 82.60%    42.34ms  0.43%  scheduleTask worker.mjs:4522
+   42.12ms  0.43% 83.03%    42.12ms  0.43%  fromInput2 worker.mjs:10687
+   42.04ms  0.43% 83.46%  1195.61ms 12.15%  forkUnsafe worker.mjs:7004
+   41.59ms  0.42% 83.88%  1189.43ms 12.09%  worker.mjs:5555
+   41.54ms  0.42% 84.30%    42.62ms  0.43%  millis worker.mjs:3014
+   41.40ms  0.42% 84.72%    41.40ms  0.42%  evaluateCont worker.mjs:5852
+   40.38ms  0.41% 85.14%    41.45ms  0.42%  fork2 worker.mjs:71578
+   39.48ms   0.4% 85.54%    39.48ms   0.4%  assignProperty worker.mjs:1309
+   39.36ms   0.4% 85.94%   316.22ms  3.21%  dedupeReasons worker.mjs:5031
+   38.27ms  0.39% 86.33%    38.27ms  0.39%  causeInterrupt worker.mjs:4971
+   37.81ms  0.38% 86.71%   327.98ms  3.33%  worker.mjs:20011
+   33.23ms  0.34% 87.05%    33.23ms  0.34%  get
+   30.95ms  0.31% 87.36%   124.17ms  1.26%  worker.mjs:20407
+   30.92ms  0.31% 87.68%    30.92ms  0.31%  worker.mjs:3082
+   30.14ms  0.31% 87.98%    33.49ms  0.34%  worker.mjs:19915
+   29.11ms   0.3% 88.28%    29.11ms   0.3%  parseJson3 worker.mjs:114786
+   27.65ms  0.28% 88.56%   225.37ms  2.29%  worker.mjs:41047
+   26.88ms  0.27% 88.83%   149.02ms  1.51%  makePrimitive worker.mjs:5578
+   25.80ms  0.26% 89.09%    66.36ms  0.67%  intrinsicUrlByteLength worker.mjs:41659
+   25.78ms  0.26% 89.36%   140.83ms  1.43%  parse2 worker.mjs:19657
+   25.77ms  0.26% 89.62%    25.77ms  0.26%  intrinsicArrayBufferByteLength worker.mjs:41627
+   23.72ms  0.24% 89.86%    34.46ms  0.35%  worker.mjs:126112
+   23.47ms  0.24% 90.10%    24.55ms  0.25%  worker.mjs:26201
+   22.50ms  0.23% 90.33%    22.50ms  0.23%  worker.mjs:5752
+   20.29ms  0.21% 90.53%    20.29ms  0.21%  worker.mjs:5902
+   20.16ms   0.2% 90.74%    20.16ms   0.2%  makePrimitive worker.mjs:6766
+   19.87ms   0.2% 90.94%    55.26ms  0.56%  try worker.mjs:13408
+   19.38ms   0.2% 91.14%    35.65ms  0.36%  worker.mjs:115317
+   19.34ms   0.2% 91.33%    19.34ms   0.2%  worker.mjs:56470
+   18.80ms  0.19% 91.52%    18.80ms  0.19%  worker.mjs:129717
+   16.33ms  0.17% 91.69%    84.97ms  0.86%  succeedWith worker.mjs:5402
+   16.10ms  0.16% 91.85%   104.38ms  1.06%  worker.mjs:70024
+   15.99ms  0.16% 92.02%   303.61ms  3.08%  worker.mjs:21337
+   15.33ms  0.16% 92.17%    17.54ms  0.18%  buildResponseStream worker.mjs:114657
+   13.89ms  0.14% 92.31%   506.36ms  5.14%  worker.mjs:6403
+   13.83ms  0.14% 92.45%    13.83ms  0.14%  worker.mjs:13405
+   11.84ms  0.12% 92.57%   432.39ms  4.39%  makePrimitive worker.mjs:5586
+   11.84ms  0.12% 92.69%   107.69ms  1.09%  worker.mjs:5710
+   11.78ms  0.12% 92.81%    11.78ms  0.12%  toCodecJson worker.mjs:22185
+   10.92ms  0.11% 92.92%    10.92ms  0.11%  worker.mjs:115467
+   10.90ms  0.11% 93.03%    20.82ms  0.21%  worker.mjs:4279
+   10.86ms  0.11% 93.14%   128.23ms  1.30%  worker.mjs:5620
+   10.80ms  0.11% 93.25%    85.31ms  0.87%  mapCont worker.mjs:5881
+   10.73ms  0.11% 93.36%    10.73ms  0.11%  matching worker.mjs:117251
+   10.67ms  0.11% 93.47%    10.67ms  0.11%  onSuccess worker.mjs:13412
+   10.66ms  0.11% 93.58%    10.66ms  0.11%  Response
+   10.66ms  0.11% 93.69%    10.66ms  0.11%  isOptional worker.mjs:20850
+   10.66ms  0.11% 93.80%    10.66ms  0.11%  parseEventStreamLine worker.mjs:32550
+   10.34ms  0.11% 93.90%    10.34ms  0.11%  worker.mjs:1538
+    9.67ms 0.098% 94.00%    68.87ms   0.7%  runIterator worker.mjs:40309
+    9.63ms 0.098% 94.10%   145.38ms  1.48%  decodeChatCompletionSseData worker.mjs:114794
+    9.63ms 0.098% 94.20%   121.63ms  1.24%  onItem worker.mjs:19744
+    9.62ms 0.098% 94.29%     9.62ms 0.098%  worker.mjs:9120
+    9.62ms 0.098% 94.39%    11.79ms  0.12%  stepArray worker.mjs:19724
+    9.60ms 0.098% 94.49%     9.60ms 0.098%  fail worker.mjs:1973
+    9.59ms 0.097% 94.59%     9.59ms 0.097%  enqueue
+    9.59ms 0.097% 94.68%    43.71ms  0.44%  sleep worker.mjs:7418
+    8.60ms 0.087% 94.77%     9.66ms 0.098%  visit worker.mjs:32632
+    8.57ms 0.087% 94.86%    19.26ms   0.2%  combineFinalizerCause worker.mjs:6403
+    8.57ms 0.087% 94.95%     8.57ms 0.087%  resolve2 worker.mjs:21455
+    8.49ms 0.086% 95.03%     8.49ms 0.086%  filter6 worker.mjs:11649
+    7.55ms 0.077% 95.11%   272.99ms  2.77%  readMaintenanceState worker.mjs:70472
+    7.50ms 0.076% 95.18%     7.50ms 0.076%  callback worker.mjs:5705
+    7.50ms 0.076% 95.26%    63.16ms  0.64%  out worker.mjs:28602
+    7.49ms 0.076% 95.34%     7.49ms 0.076%  worker.mjs:67351
+    7.47ms 0.076% 95.41%   493.45ms  5.01%  worker.mjs:21616
+    7.47ms 0.076% 95.49%    57.95ms  0.59%  note worker.mjs:40635
+    6.52ms 0.066% 95.56%     6.52ms 0.066%  flatten2 worker.mjs:2294
+    6.44ms 0.065% 95.62%   823.35ms  8.37%  makeExit worker.mjs:1592
+    6.42ms 0.065% 95.69%    51.08ms  0.52%  candidateEnabled worker.mjs:40526
+    6.41ms 0.065% 95.75%     6.41ms 0.065%  worker.mjs:13497
+    5.34ms 0.054% 95.81%     5.34ms 0.054%  onExitUnsafe worker.mjs:6548
+    5.34ms 0.054% 95.86%    20.29ms  0.21%  stepProperty worker.mjs:20078
+    4.61ms 0.047% 95.91%   157.18ms  1.60%  Timeout node-internal:internal_timers:44
+    4.41ms 0.045% 95.95%     4.41ms 0.045%  index4 worker.mjs:20337
+    4.35ms 0.044% 96.00%     4.35ms 0.044%  clearTimeout
+    4.32ms 0.044% 96.04%     5.42ms 0.055%  worker.mjs:6488
+    4.31ms 0.044% 96.08%     4.31ms 0.044%  collectToolApprovals worker.mjs:35707
+    4.29ms 0.044% 96.13%     5.37ms 0.055%  worker.mjs:71222
+    4.28ms 0.043% 96.17%     6.42ms 0.065%  worker.mjs:65220
+    4.27ms 0.043% 96.21%     4.27ms 0.043%  next
+    4.20ms 0.043% 96.26%     4.20ms 0.043%  toArray
+    4.11ms 0.042% 96.30%     4.11ms 0.042%  makeFilter.expected worker.mjs:20645
+    3.49ms 0.035% 96.33%    35.31ms  0.36%  worker.mjs:20608
+    3.35ms 0.034% 96.37%    49.17ms   0.5%  worker.mjs:2386
+    3.25ms 0.033% 96.40%     6.49ms 0.066%  addUnsafe worker.mjs:2361
+    3.24ms 0.033% 96.43%     5.40ms 0.055%  worker.mjs:419
+    3.23ms 0.033% 96.47%     3.23ms 0.033%  try worker.mjs:18502
+    3.23ms 0.033% 96.50%    13.89ms  0.14%  feed worker.mjs:32495
+    3.23ms 0.033% 96.53%     3.23ms 0.033%  makeScope worker.mjs:6475
+    3.23ms 0.033% 96.56%     9.68ms 0.098%  worker.mjs:30567
+    3.23ms 0.033% 96.60%     3.23ms 0.033%  worker.mjs:53464
+    3.22ms 0.033% 96.63%    64.10ms  0.65%  transform4 worker.mjs:21226
+    3.22ms 0.033% 96.66%    58.09ms  0.59%  worker.mjs:40950
+    3.22ms 0.033% 96.70%     3.22ms 0.033%  byteLength worker.mjs:40586
+    3.22ms 0.033% 96.73%     3.22ms 0.033%  worker.mjs:37785
+    3.21ms 0.033% 96.76%     3.21ms 0.033%  worker.mjs:2419
+    3.21ms 0.033% 96.79%     5.37ms 0.055%  fits worker.mjs:55574
+    3.21ms 0.033% 96.83%    10.80ms  0.11%  worker.mjs:20003
+    3.21ms 0.033% 96.86%    61.95ms  0.63%  worker.mjs:28672
+    3.21ms 0.033% 96.89%    45.83ms  0.47%  fromInputUnsafe worker.mjs:2768
+    3.21ms 0.033% 96.92%    12.88ms  0.13%  worker.mjs:30633
+    3.20ms 0.033% 96.96%     6.42ms 0.065%  worker.mjs:6492
+    3.20ms 0.033% 96.99%   130.37ms  1.32%  worker.mjs:7334
+    3.19ms 0.032% 97.02%     3.19ms 0.032%  addSpanStackTrace worker.mjs:4912
+    3.19ms 0.032% 97.05%    96.39ms  0.98%  boundedValueFootprint worker.mjs:41679
+    3.19ms 0.032% 97.09%     4.26ms 0.043%  worker.mjs:25542
+    3.17ms 0.032% 97.12%     4.25ms 0.043%  worker.mjs:70216
+    3.14ms 0.032% 97.15%     3.14ms 0.032%  ContImpl worker.mjs:5860
+    3.09ms 0.031% 97.18%   579.69ms  5.89%  makePrimitiveProto worker.mjs:5838
+    2.27ms 0.023% 97.20%   143.09ms  1.45%  worker.mjs:19684
+    2.22ms 0.023% 97.23%    21.70ms  0.22%  makePrimitiveProto worker.mjs:6518
+    2.21ms 0.022% 97.25%    36.79ms  0.37%  make worker.mjs:28631
+    2.20ms 0.022% 97.27%     7.57ms 0.077%  checkFutureShapes worker.mjs:55567
+    2.17ms 0.022% 97.29%     5.39ms 0.055%  worker.mjs:25187
+    2.17ms 0.022% 97.32%     2.17ms 0.022%  struct worker.mjs:20118
+    2.17ms 0.022% 97.34%   274.73ms  2.79%  worker.mjs:25310
+    2.17ms 0.022% 97.36%     3.27ms 0.033%  wrapPropertyKeyIssue worker.mjs:19752
+    2.16ms 0.022% 97.38%   212.18ms  2.16%  worker.mjs:41065
+    2.16ms 0.022% 97.40%     3.24ms 0.033%  compile worker.mjs:30303
+    2.16ms 0.022% 97.43%     2.16ms 0.022%  cancel worker.mjs:40886
+    2.16ms 0.022% 97.45%     2.16ms 0.022%  textBytes2 worker.mjs:55571
+    2.15ms 0.022% 97.47%     3.23ms 0.033%  fromString node-internal:internal_buffer:147
+    2.15ms 0.022% 97.49%    45.81ms  0.47%  tapCont worker.mjs:5889
+    2.15ms 0.022% 97.51%     2.15ms 0.022%  statement worker.mjs:30239
+    2.15ms 0.022% 97.54%   177.56ms  1.80%  makePrimitiveProto worker.mjs:6528
+    2.15ms 0.022% 97.56%     7.43ms 0.076%  pipe worker.mjs:1346
+    2.15ms 0.022% 97.58%   121.67ms  1.24%  makeSpanUnsafe worker.mjs:7252
+    2.15ms 0.022% 97.60%     9.66ms 0.098%  worker.mjs:19157
+    2.15ms 0.022% 97.62%     3.22ms 0.033%  beginNative worker.mjs:71158
+    2.15ms 0.022% 97.64%     2.15ms 0.022%  completePollersUnsafe worker.mjs:12699
+    2.15ms 0.022% 97.67%    31.37ms  0.32%  worker.mjs:21244
+    2.14ms 0.022% 97.69%     2.14ms 0.022%  Request
+    2.14ms 0.022% 97.71%     2.14ms 0.022%  worker.mjs:114965
+    2.14ms 0.022% 97.73%     5.38ms 0.055%  compile worker.mjs:30620
+    2.14ms 0.022% 97.75%     2.14ms 0.022%  compileMembers worker.mjs:19862
+    2.14ms 0.022% 97.78%   134.62ms  1.37%  runSequential worker.mjs:6816
+    2.14ms 0.022% 97.80%     4.51ms 0.046%  worker.mjs:34851
+    2.14ms 0.022% 97.82%     2.14ms 0.022%  worker.mjs:20941
+    2.14ms 0.022% 97.84%     2.14ms 0.022%  runFinalizer worker.mjs:6396
+    2.14ms 0.022% 97.86%     2.14ms 0.022%  PipeableBase worker.mjs:392
+    2.14ms 0.022% 97.88%    53.22ms  0.54%  nativeDispatchConcurrency worker.mjs:70724
+    2.14ms 0.022% 97.91%     2.14ms 0.022%  prepareModelPrompt worker.mjs:41858
+    2.14ms 0.022% 97.93%     4.27ms 0.043%  worker.mjs:117271
+    2.13ms 0.022% 97.95%     2.13ms 0.022%  set
+    2.13ms 0.022% 97.97%     2.13ms 0.022%  structuredClone
+    2.13ms 0.022% 97.99%     4.27ms 0.043%  Transform node-internal:streams_transform:85
+    2.13ms 0.022% 98.01%    19.66ms   0.2%  worker.mjs:71241
+    2.13ms 0.022% 98.04%     2.13ms 0.022%  isFailure worker.mjs:1967
+    2.12ms 0.021% 98.06%    93.04ms  0.95%  equals worker.mjs:864
+    1.87ms 0.019% 98.08%   229.07ms  2.33%  worker.mjs:41055
+    1.40ms 0.014% 98.09%     1.40ms 0.014%  worker.mjs:1449
+    1.38ms 0.014% 98.10%     1.38ms 0.014%  get worker.mjs:41067
+    1.37ms 0.014% 98.12%     1.37ms 0.014%  fromArrayLike node-internal:internal_buffer:161
+    1.33ms 0.014% 98.13%     2.40ms 0.024%  attribute worker.mjs:4858
+    1.20ms 0.012% 98.14%     1.20ms 0.012%  finishIndex worker.mjs:19879
+    1.15ms 0.012% 98.16%     2.24ms 0.023%  get withoutTransform worker.mjs:30578
+    1.15ms 0.012% 98.17%     1.15ms 0.012%  executionRunIds worker.mjs:53937
+    1.14ms 0.012% 98.18%     1.14ms 0.012%  evaluate worker.mjs:2251
+    1.14ms 0.012% 98.19%     1.14ms 0.012%  flattenArray worker.mjs:13557
+    1.14ms 0.012% 98.20%     1.14ms 0.012%  next worker.mjs:1276
+    1.12ms 0.011% 98.21%     7.84ms  0.08%  try worker.mjs:72061
+    1.12ms 0.011% 98.22%     1.12ms 0.011%  decodeProviderUsageTotal worker.mjs:44947
+    1.12ms 0.011% 98.24%     1.12ms 0.011%  worker.mjs:54791
+    1.11ms 0.011% 98.25%     9.61ms 0.098%  remove4 worker.mjs:11673
+    1.11ms 0.011% 98.26%    41.13ms  0.42%  worker.mjs:21703
+    1.10ms 0.011% 98.27%     1.10ms 0.011%  worker.mjs:9920
+    1.10ms 0.011% 98.28%     4.33ms 0.044%  worker.mjs:21467
+    1.10ms 0.011% 98.29%     2.20ms 0.022%  toRepresentations worker.mjs:23050
+    1.10ms 0.011% 98.30%     1.10ms 0.011%  worker.mjs:53940
+    1.10ms 0.011% 98.31%     1.10ms 0.011%  Pointer worker.mjs:17940
+    1.10ms 0.011% 98.33%     1.10ms 0.011%  getCandidate worker.mjs:23111
+    1.10ms 0.011% 98.34%     1.10ms 0.011%  empty worker.mjs:2357
+    1.09ms 0.011% 98.35%     1.09ms 0.011%  withConnection worker.mjs:30561
+    1.09ms 0.011% 98.36%     3.23ms 0.033%  worker.mjs:7327
+    1.09ms 0.011% 98.37%     1.09ms 0.011%  HashHandle
+    1.09ms 0.011% 98.38%     1.09ms 0.011%  outgoingModelPrompt worker.mjs:44902
+    1.08ms 0.011% 98.39%     1.08ms 0.011%  append2 worker.mjs:11517
+    1.08ms 0.011% 98.40%     1.08ms 0.011%  makeFilter.expected worker.mjs:20619
+    1.08ms 0.011% 98.41%     1.08ms 0.011%  ExitPrimitive worker.mjs:1567
+    1.08ms 0.011% 98.42%    10.58ms  0.11%  flush worker.mjs:69957
+    1.08ms 0.011% 98.44%     2.15ms 0.022%  worker.mjs:44219
+    1.08ms 0.011% 98.45%     1.08ms 0.011%  worker.mjs:30485
+    1.08ms 0.011% 98.46%     1.08ms 0.011%  worker.mjs:53364
+    1.08ms 0.011% 98.47%     1.08ms 0.011%  InvalidValue worker.mjs:18001
+    1.08ms 0.011% 98.48%     1.08ms 0.011%  canonicalIdentifier worker.mjs:118871
+    1.08ms 0.011% 98.49%     2.14ms 0.022%  worker.mjs:1799
+    1.08ms 0.011% 98.50%     1.08ms 0.011%  compileCheck worker.mjs:22633
+    1.08ms 0.011% 98.51%     2.14ms 0.022%  fn5 worker.mjs:5718
+    1.08ms 0.011% 98.52%     1.08ms 0.011%  make6 worker.mjs:2921
+    1.08ms 0.011% 98.53%     1.08ms 0.011%  worker.mjs:2039
+    1.08ms 0.011% 98.55%     1.08ms 0.011%  worker.mjs:25651
+    1.08ms 0.011% 98.56%     1.08ms 0.011%  fromIterable5 worker.mjs:14638
+    1.08ms 0.011% 98.57%     1.08ms 0.011%  makePart worker.mjs:34119
+    1.08ms 0.011% 98.58%     1.08ms 0.011%  onExitPrimitive worker.mjs:6547
+    1.08ms 0.011% 98.59%    11.91ms  0.12%  onItem worker.mjs:20101
+    1.08ms 0.011% 98.60%     1.08ms 0.011%  walk worker.mjs:21838
+    1.08ms 0.011% 98.61%     1.08ms 0.011%  worker.mjs:55838
+    1.08ms 0.011% 98.62%     9.70ms 0.099%  worker.mjs:55921
+    1.08ms 0.011% 98.63%     1.08ms 0.011%  Union2 worker.mjs:25583
+    1.08ms 0.011% 98.64%     2.48ms 0.025%  annotate worker.mjs:1446
+    1.08ms 0.011% 98.66%     1.08ms 0.011%  appendJsonSchema worker.mjs:22495
+    1.08ms 0.011% 98.67%     1.08ms 0.011%  make35 worker.mjs:21774
+    1.08ms 0.011% 98.68%     2.23ms 0.023%  progressRecord worker.mjs:53952
+    1.08ms 0.011% 98.69%     1.08ms 0.011%  read3 worker.mjs:125486
+    1.08ms 0.011% 98.70%     2.16ms 0.022%  worker.mjs:54199
+    1.08ms 0.011% 98.71%     1.08ms 0.011%  worker.mjs:7409
+    1.08ms 0.011% 98.72%     1.08ms 0.011%  NativeSpan worker.mjs:4825
+    1.08ms 0.011% 98.73%     2.15ms 0.022%  buildStruct worker.mjs:24207
+    1.08ms 0.011% 98.74%     1.08ms 0.011%  deleteAlarm
+    1.08ms 0.011% 98.75%     1.08ms 0.011%  worker.mjs:29130
+    1.08ms 0.011% 98.76%     1.08ms 0.011%  worker.mjs:5719
+    1.08ms 0.011% 98.78%     1.08ms 0.011%  AbortController
+    1.08ms 0.011% 98.79%     1.08ms 0.011%  alarmEvent worker.mjs:40774
+    1.08ms 0.011% 98.80%     1.08ms 0.011%  pollForItem worker.mjs:11834
+    1.08ms 0.011% 98.81%     2.15ms 0.022%  worker.mjs:38732
+    1.08ms 0.011% 98.82%     1.08ms 0.011%  worker.mjs:60158
+    1.08ms 0.011% 98.83%     1.08ms 0.011%  worker.mjs:70232
+    1.07ms 0.011% 98.84%     1.07ms 0.011%  isEffect worker.mjs:1396
+    1.07ms 0.011% 98.85%     1.07ms 0.011%  lookup worker.mjs:2307
+    1.07ms 0.011% 98.86%    60.30ms  0.61%  makePrimitive worker.mjs:5701
+    1.07ms 0.011% 98.87%     2.14ms 0.022%  makeUnsafe4 worker.mjs:8494
+    1.07ms 0.011% 98.89%     2.16ms 0.022%  normalizeFilterOutput worker.mjs:18075
+    1.07ms 0.011% 98.90%     1.07ms 0.011%  stringify worker.mjs:10085
+    1.07ms 0.011% 98.91%     5.74ms 0.058%  toChatCompletionsRequest worker.mjs:115677
+    1.07ms 0.011% 98.92%     2.15ms 0.022%  worker.mjs:662
+    1.07ms 0.011% 98.93%     1.07ms 0.011%  isDoneFailure worker.mjs:9122
+    1.07ms 0.011% 98.94%     1.07ms 0.011%  isObjectKeyword worker.mjs:659
+    1.07ms 0.011% 98.95%     1.07ms 0.011%  make5 worker.mjs:2359
+    1.07ms 0.011% 98.96%     3.23ms 0.033%  on worker.mjs:22703
+    1.07ms 0.011% 98.97%     1.07ms 0.011%  scopeCloseUnsafe worker.mjs:6376
+    1.07ms 0.011% 98.98%     1.07ms 0.011%  text worker.mjs:28899
+    1.07ms 0.011% 98.99%     1.07ms 0.011%  toolBatchContinuation worker.mjs:47620
+    1.07ms 0.011% 99.01%     3.28ms 0.033%  worker.mjs:402
+    1.07ms 0.011% 99.02%     1.07ms 0.011%  worker.mjs:43457
+    1.07ms 0.011% 99.03%     1.07ms 0.011%  worker.mjs:47340
+    1.07ms 0.011% 99.04%     6.42ms 0.065%  worker.mjs:5945
+    1.07ms 0.011% 99.05%     1.07ms 0.011%  worker.mjs:6175
+    1.07ms 0.011% 99.06%     1.07ms 0.011%  worker.mjs:70659
+    1.07ms 0.011% 99.07%     1.07ms 0.011%  WritableState node-internal:streams_writable:312
+    1.07ms 0.011% 99.08%     1.07ms 0.011%  fromArrayBuffer node-internal:internal_buffer:165
+    1.07ms 0.011% 99.09%     1.07ms 0.011%  isTree worker.mjs:21135
+    1.07ms 0.011% 99.10%     1.07ms 0.011%  retain worker.mjs:56758
+    1.07ms 0.011% 99.11%     1.07ms 0.011%  span worker.mjs:44144
+    1.07ms 0.011% 99.13%     1.07ms 0.011%  toAssistantChatMessageContent worker.mjs:115896
+    1.07ms 0.011% 99.14%    69.94ms  0.71%  try worker.mjs:40322
+    1.07ms 0.011% 99.15%     1.07ms 0.011%  worker.mjs:47621
+    1.07ms 0.011% 99.16%    12.84ms  0.13%  worker.mjs:6133
+    1.07ms 0.011% 99.17%     1.07ms 0.011%  worker.mjs:6797
+    1.07ms 0.011% 99.18%     2.15ms 0.022%  worker.mjs:71237
+    1.07ms 0.011% 99.19%     1.07ms 0.011%  worker.mjs:8001
+    1.07ms 0.011% 99.20%     3.31ms 0.034%  execute2 worker.mjs:117426
+    1.07ms 0.011% 99.21%     1.07ms 0.011%  parser worker.mjs:20405
+    1.07ms 0.011% 99.22%    15.11ms  0.15%  captureRecord worker.mjs:54006
+    1.07ms 0.011% 99.23%     1.07ms 0.011%  flatMap worker.mjs:2517
+    1.07ms 0.011% 99.25%     1.07ms 0.011%  makeProto2 worker.mjs:35037
+    1.07ms 0.011% 99.26%     1.07ms 0.011%  recordCommittedUsage worker.mjs:63122
+    1.07ms 0.011% 99.27%     5.34ms 0.054%  span worker.mjs:40557
+    1.07ms 0.011% 99.28%    93.19ms  0.95%  visit worker.mjs:41697
+    1.07ms 0.011% 99.29%    10.80ms  0.11%  worker.mjs:121470
+    1.07ms 0.011% 99.30%     1.07ms 0.011%  worker.mjs:121626
+    1.07ms 0.011% 99.31%     1.07ms 0.011%  worker.mjs:53077
+    1.07ms 0.011% 99.32%     1.07ms 0.011%  worker.mjs:5851
+    1.07ms 0.011% 99.33%    11.82ms  0.12%  by worker.mjs:117260
+    1.07ms 0.011% 99.34%     1.07ms 0.011%  worker.mjs:13246
+    1.07ms 0.011% 99.35%     1.07ms 0.011%  worker.mjs:30564
+    1.07ms 0.011% 99.36%    21.43ms  0.22%  worker.mjs:67355
+    1.07ms 0.011% 99.38%    17.36ms  0.18%  worker.mjs:6815
+    1.07ms 0.011% 99.39%     1.07ms 0.011%  forkIn worker.mjs:2528
+    1.07ms 0.011% 99.40%     1.07ms 0.011%  get worker.mjs:10801
+    1.07ms 0.011% 99.41%     1.07ms 0.011%  hasPropertyKey worker.mjs:24204
+    1.07ms 0.011% 99.42%     2.14ms 0.022%  jsonUnsafe worker.mjs:28909
+    1.07ms 0.011% 99.43%     2.15ms 0.022%  loop worker.mjs:11818
+    1.07ms 0.011% 99.44%     1.07ms 0.011%  makePart2 worker.mjs:34534
+    1.07ms 0.011% 99.45%    98.87ms  1.00%  worker.mjs:43617
+    1.07ms 0.011% 99.46%     1.07ms 0.011%  worker.mjs:46966
+    1.07ms 0.011% 99.47%     5.38ms 0.055%  worker.mjs:63646
+    1.07ms 0.011% 99.48%     1.07ms 0.011%  fetch
+    1.07ms 0.011% 99.50%     1.07ms 0.011%  formatIso worker.mjs:8996
+    1.07ms 0.011% 99.51%     1.07ms 0.011%  fromDateUnsafe worker.mjs:8487
+    1.07ms 0.011% 99.52%     1.07ms 0.011%  worker.mjs:118972
+    1.07ms 0.011% 99.53%     1.07ms 0.011%  worker.mjs:126116
+    1.07ms 0.011% 99.54%     4.26ms 0.043%  worker.mjs:40272
+    1.07ms 0.011% 99.55%     1.07ms 0.011%  worker.mjs:6662
+    1.07ms 0.011% 99.56%     1.07ms 0.011%  index4 worker.mjs:20381
+    1.07ms 0.011% 99.57%     1.07ms 0.011%  recordEncoding worker.mjs:54039
+    1.07ms 0.011% 99.58%     1.07ms 0.011%  worker.mjs:6526
+    1.07ms 0.011% 99.59%     1.07ms 0.011%  wrapEncoding worker.mjs:21240
+    1.07ms 0.011% 99.60%     1.07ms 0.011%  EventEmitter node-internal:events:42
+    1.07ms 0.011% 99.61%     1.07ms 0.011%  capturePayload worker.mjs:53965
+    1.07ms 0.011% 99.63%     1.07ms 0.011%  get attributes worker.mjs:4844
+    1.07ms 0.011% 99.64%     1.07ms 0.011%  get free worker.mjs:13199
+    1.07ms 0.011% 99.65%     3.21ms 0.033%  makeFiberContextCache worker.mjs:5435
+    1.07ms 0.011% 99.66%     1.07ms 0.011%  publish worker.mjs:12123
+    1.07ms 0.011% 99.67%     2.13ms 0.022%  worker.mjs:41008
+    1.07ms 0.011% 99.68%     2.10ms 0.021%  worker.mjs:43653
+    1.07ms 0.011% 99.69%     3.23ms 0.033%  worker.mjs:6061
+    1.06ms 0.011% 99.70%     1.06ms 0.011%  SubmissionSnapshot worker.mjs:49757
+    1.06ms 0.011% 99.71%    13.96ms  0.14%  worker.mjs:21234
+    1.06ms 0.011% 99.72%     1.06ms 0.011%  worker.mjs:121008
+    1.06ms 0.011% 99.73%     1.06ms 0.011%  worker.mjs:65682
+    1.06ms 0.011% 99.74%     1.06ms 0.011%  retain worker.mjs:117237
+    1.06ms 0.011% 99.75%   148.04ms  1.50%  worker.mjs:21227
+    1.06ms 0.011% 99.77%     4.28ms 0.043%  worker.mjs:55165
+    1.06ms 0.011% 99.78%     1.06ms 0.011%  encode
+    1.06ms 0.011% 99.79%    14.95ms  0.15%  worker.mjs:32450
+    1.06ms 0.011% 99.80%     1.06ms 0.011%  worker.mjs:67035
+    1.06ms 0.011% 99.81%    65.65ms  0.67%  releaseTakers worker.mjs:13037
+    1.06ms 0.011% 99.82%     9.66ms 0.098%  worker.mjs:32652
+    1.06ms 0.011% 99.83%     4.28ms 0.043%  worker.mjs:45864
+    1.06ms 0.011% 99.84%   132.14ms  1.34%  worker.mjs:7467
+    1.06ms 0.011% 99.85%     3.54ms 0.036%  worker.mjs:1516
+    1.06ms 0.011% 99.86%    46.19ms  0.47%  worker.mjs:21362
+    1.06ms 0.011% 99.87%     1.06ms 0.011%  ToolCallSettled worker.mjs:37925
+    1.05ms 0.011% 99.88%     2.12ms 0.022%  canonicalRecordBytes worker.mjs:54950
+    1.05ms 0.011% 99.89%     1.05ms 0.011%  setAlarm
+    1.05ms 0.011% 99.91%    14.18ms  0.14%  worker.mjs:55625
+    1.05ms 0.011% 99.92%    90.92ms  0.92%  compareBoth worker.mjs:870
+    1.04ms 0.011% 99.93%     1.04ms 0.011%  worker.mjs:28691
+    1.04ms 0.011% 99.94%  3203.04ms 32.54%  worker.mjs:5643
+    1.04ms 0.011% 99.95%    34.53ms  0.35%  fromIteratorEagerUnsafe worker.mjs:5790
+    1.04ms 0.011%   100%     1.04ms 0.011%  takeN worker.mjs:11560
+    1.04ms 0.011%   100%     1.04ms 0.011%  capturePrimitiveTextPart worker.mjs:41948
+    1.03ms 0.011%   100%     1.03ms 0.011%  camelToSnake worker.mjs:9079
+    1.02ms  0.01%   100%    14.96ms  0.15%  pipeArguments worker.mjs:355
+       1ms  0.01%   100%     2.07ms 0.021%  worker.mjs:125204
+         0     0%   100%     4.35ms 0.044%  #clearTimeout node-internal:internal_timers:60
+         0     0%   100%   152.57ms  1.55%  #constructTimer node-internal:internal_timers:54
+         0     0%   100%  9842.01ms   100%  (root)
+         0     0%   100%     3.29ms 0.033%  CanonicalBatch worker.mjs:38666
+         0     0%   100%    49.12ms   0.5%  Class3 worker.mjs:4663
+         0     0%   100%     1.08ms 0.011%  DueLane worker.mjs:69847
+         0     0%   100%     2.14ms 0.022%  Duplex node-internal:streams_duplex:89
+         0     0%   100%     1.07ms 0.011%  ExportedRecord worker.mjs:52778
+         0     0%   100%     5.36ms 0.054%  Hash node-internal:crypto_hash:38
+         0     0%   100%     1.37ms 0.014%  Hash.digest node-internal:crypto_hash:95
+         0     0%   100%     1.08ms 0.011%  ModelResponseIdentity worker.mjs:36980
+         0     0%   100%     1.08ms 0.011%  OutputTokenUsage worker.mjs:37016
+         0     0%   100%    23.41ms  0.24%  ReadableStream
+         0     0%   100%     1.08ms 0.011%  RecordEnvelope worker.mjs:38654
+         0     0%   100%     1.11ms 0.011%  RunContinuation worker.mjs:38577
+         0     0%   100%     2.13ms 0.022%  Schema_exports.Struct.check.Schema_exports.makeFilter.title worker.mjs:38004
+         0     0%   100%     1.07ms 0.011%  Stream node-internal:streams_legacy:30
+         0     0%   100%     2.17ms 0.022%  Struct4 worker.mjs:25445
+         0     0%   100%     3.23ms 0.033%  SubmissionLookupById worker.mjs:49729
+         0     0%   100%    49.07ms   0.5%  ThreadMaintenanceState worker.mjs:70439
+         0     0%   100%     1.08ms 0.011%  Usage worker.mjs:34724
+         0     0%   100%   784.35ms  7.97%  afterScheduled worker.mjs:4598
+         0     0%   100%     1.07ms 0.011%  alarm worker.mjs:130296
+         0     0%   100%    43.64ms  0.44%  alarm worker.mjs:130466
+         0     0%   100%     1.07ms 0.011%  alarm worker.mjs:40108
+         0     0%   100%     4.51ms 0.046%  annotateStreamResponse worker.mjs:115543
+         0     0%   100%     1.08ms 0.011%  append worker.mjs:61509
+         0     0%   100%     1.08ms 0.011%  appendBatch worker.mjs:61582
+         0     0%   100%     3.23ms 0.033%  attempt worker.mjs:46864
+         0     0%   100%    22.29ms  0.23%  awaitSettlementEncoded worker.mjs:130518
+         0     0%   100%     2.17ms 0.022%  boundEncodedToolResult worker.mjs:44869
+         0     0%   100%     5.36ms 0.054%  buildHttpResponseDetails worker.mjs:115215
+         0     0%   100%     1.08ms 0.011%  cancel
+         0     0%   100%     1.07ms 0.011%  canonicalBatchHeaderJson worker.mjs:118395
+         0     0%   100%     9.66ms 0.098%  canonicalJson worker.mjs:32625
+         0     0%   100%     5.36ms 0.054%  canonicalJson2 worker.mjs:38731
+         0     0%   100%     3.23ms 0.033%  claim worker.mjs:70127
+         0     0%   100%     4.35ms 0.044%  clearTimeout node-internal:internal_timers:108
+         0     0%   100%     4.35ms 0.044%  clearTimeoutImpl node-internal:internal_timers:97
+         0     0%   100%     1.08ms 0.011%  commit worker.mjs:55862
+         0     0%   100%     1.07ms 0.011%  committed worker.mjs:129230
+         0     0%   100%     2.15ms 0.022%  compareOnPath worker.mjs:900
+         0     0%   100%     2.15ms 0.022%  compareStructure worker.mjs:913
+         0     0%   100%     4.31ms 0.044%  compileJsonSchema worker.mjs:22550
+         0     0%   100%     5.36ms 0.054%  createHash node-internal:crypto_hash:35
+         0     0%   100%     1.08ms 0.011%  currentResponseMessages worker.mjs:47224
+         0     0%   100%     2.14ms 0.022%  decode worker.mjs:27707
+         0     0%   100%     3.21ms 0.033%  decode worker.mjs:34258
+         0     0%   100%     1.07ms 0.011%  decode11 worker.mjs:117228
+         0     0%   100%     1.07ms 0.011%  decode11 worker.mjs:119883
+         0     0%   100%     1.07ms 0.011%  decodeRows2 worker.mjs:121172
+         0     0%   100%     1.07ms 0.011%  decodeSubmissionRows worker.mjs:126109
+         0     0%   100%     1.06ms 0.011%  decodeSubmissionSnapshotType worker.mjs:125916
+         0     0%   100%     1.08ms 0.011%  decodeToolCallParameters worker.mjs:43719
+         0     0%   100%     1.06ms 0.011%  decodeUnknownSync2 worker.mjs:25308
+         0     0%   100%     1.07ms 0.011%  digestRunHistory worker.mjs:54836
+         0     0%   100%     4.29ms 0.044%  dirty worker.mjs:70086
+         0     0%   100%     5.45ms 0.055%  doneUnsafe worker.mjs:7886
+         0     0%   100%     1.07ms 0.011%  encode worker.mjs:27715
+         0     0%   100%     5.41ms 0.055%  encode worker.mjs:34264
+         0     0%   100%     1.05ms 0.011%  ensureTransactionAlarmBy worker.mjs:70476
+         0     0%   100%     1.08ms 0.011%  evaluate worker.mjs:30611
+         0     0%   100%     1.07ms 0.011%  exhaustive worker.mjs:32327
+         0     0%   100%     9.60ms 0.098%  exitFilterCause worker.mjs:6008
+         0     0%   100%     1.08ms 0.011%  failureResultSchema worker.mjs:33686
+         0     0%   100%     7.50ms 0.076%  fiberAwait worker.mjs:5475
+         0     0%   100%     1.07ms 0.011%  filterDone worker.mjs:9123
+         0     0%   100%     1.07ms 0.011%  filterDoneLeftover worker.mjs:9138
+         0     0%   100%     1.08ms 0.011%  finalizeJsonSchema worker.mjs:22612
+         0     0%   100%     4.59ms 0.047%  from node-internal:internal_buffer:101
+         0     0%   100%     4.59ms 0.047%  from node-internal:internal_buffer:144
+         0     0%   100%     1.08ms 0.011%  fromJsonString2 worker.mjs:27266
+         0     0%   100%     1.08ms 0.011%  fromResponseParts worker.mjs:34312
+         0     0%   100%     3.23ms 0.033%  get body worker.mjs:28882
+         0     0%   100%     5.36ms 0.054%  get headers worker.mjs:29551
+         0     0%   100%     3.29ms 0.033%  get mapUnsafe worker.mjs:2323
+         0     0%   100%     6.51ms 0.066%  getJsonSchema worker.mjs:33598
+         0     0%   100%     6.51ms 0.066%  getJsonSchemaFromSchema worker.mjs:33604
+         0     0%   100%     6.51ms 0.066%  getJsonSchemaFromSchemaWith worker.mjs:33607
+         0     0%   100%     5.50ms 0.056%  getRef worker.mjs:5254
+         0     0%   100%     1.08ms 0.011%  getSchemas worker.mjs:34884
+         0     0%   100%     5.44ms 0.055%  go worker.mjs:6848
+         0     0%   100%     2.13ms 0.022%  inWriteTransaction worker.mjs:126090
+         0     0%   100%    21.98ms  0.22%  invokeEntrypointRpcMethod worker.mjs:39471
+         0     0%   100%     1.07ms 0.011%  isProviderDefined worker.mjs:33424
+         0     0%   100%     1.07ms 0.011%  isResult worker.mjs:1966
+         0     0%   100%     1.08ms 0.011%  log2 worker.mjs:130469
+         0     0%   100%     1.07ms 0.011%  make57 worker.mjs:35049
+         0     0%   100%     3.22ms 0.033%  makeEffect worker.mjs:28637
+         0     0%   100%    29.23ms   0.3%  makePrimitive worker.mjs:6337
+         0     0%   100%     1.08ms 0.011%  makeSingle worker.mjs:18066
+         0     0%   100%     1.08ms 0.011%  matchSuccess worker.mjs:6277
+         0     0%   100%    47.98ms  0.49%  normalCompiler worker.mjs:21726
+         0     0%   100%     8.66ms 0.088%  onItem worker.mjs:20504
+         0     0%   100%    90.98ms  0.92%  onSuccess worker.mjs:29464
+         0     0%   100%     3.35ms 0.034%  parseStringIndex worker.mjs:19906
+         0     0%   100%     8.66ms 0.088%  parseUnionCandidates worker.mjs:20479
+         0     0%   100%     1.14ms 0.012%  pipe worker.mjs:13306
+         0     0%   100%     2.21ms 0.022%  pipe worker.mjs:14172
+         0     0%   100%     1.08ms 0.011%  pipe worker.mjs:21758
+         0     0%   100%     3.21ms 0.033%  pipe worker.mjs:29115
+         0     0%   100%     1.07ms 0.011%  pipe worker.mjs:32130
+         0     0%   100%     1.03ms 0.011%  probe worker.mjs:40525
+         0     0%   100%     1.08ms 0.011%  promptFromTurnParts worker.mjs:45822
+         0     0%   100%     2.17ms 0.022%  provideService worker.mjs:6094
+         0     0%   100%     1.07ms 0.011%  query2 worker.mjs:118447
+         0     0%   100%     2.24ms 0.023%  query2 worker.mjs:119873
+         0     0%   100%     1.08ms 0.011%  read worker.mjs:69176
+         0     0%   100%     3.14ms 0.032%  readAbortIntent worker.mjs:68945
+         0     0%   100%    23.50ms  0.24%  readCurrentMaintenanceState worker.mjs:71022
+         0     0%   100%     3.23ms 0.033%  recur2 worker.mjs:22673
+         0     0%   100%     1.10ms 0.011%  recur2 worker.mjs:23172
+         0     0%   100%     1.08ms 0.011%  rewriteRefs worker.mjs:21877
+         0     0%   100%     1.07ms 0.011%  runCollect worker.mjs:15968
+         0     0%   100%    23.05ms  0.23%  runEventPromise worker.mjs:39516
+         0     0%   100%    23.05ms  0.23%  runPromise worker.mjs:32032
+         0     0%   100%    23.05ms  0.23%  runPromise3 worker.mjs:39500
+         0     0%   100%   784.35ms  7.97%  runTasks worker.mjs:4605
+         0     0%   100%     3.23ms 0.033%  scopeForkUnsafe worker.mjs:6423
+         0     0%   100%     1.06ms 0.011%  set8 worker.mjs:70074
+         0     0%   100%     1.06ms 0.011%  span3.end worker.mjs:40573
+         0     0%   100%     2.15ms 0.022%  sql worker.mjs:30197
+         0     0%   100%     1.08ms 0.011%  streamWithNonIncrementalFallback worker.mjs:35446
+         0     0%   100%    15.24ms  0.15%  succeedPayload worker.mjs:5869
+         0     0%   100%     1.04ms 0.011%  takeBetweenUnsafe worker.mjs:13060
+         0     0%   100%     1.10ms 0.011%  terminalUsageCharge worker.mjs:53940
+         0     0%   100%     4.67ms 0.047%  toChatMessages worker.mjs:115822
+         0     0%   100%     3.61ms 0.037%  toChatMessagesFromItem worker.mjs:115855
+         0     0%   100%    11.78ms  0.12%  toCodec worker.mjs:33715
+         0     0%   100%    18.29ms  0.19%  toCodecOpenAI worker.mjs:36027
+         0     0%   100%     4.31ms 0.044%  toJsonSchemaDocument worker.mjs:23022
+         0     0%   100%     6.51ms 0.066%  toJsonSchemaDocument3 worker.mjs:28769
+         0     0%   100%     3.21ms 0.033%  toMillis worker.mjs:3020
+         0     0%   100%     2.20ms 0.022%  toRepresentation worker.mjs:23040
+         0     0%   100%     1.08ms 0.011%  transformSchema worker.mjs:21836
+         0     0%   100%    11.78ms  0.12%  try worker.mjs:115578
+         0     0%   100%     6.51ms 0.066%  try worker.mjs:115588
+         0     0%   100%     5.34ms 0.054%  try worker.mjs:29614
+         0     0%   100%     2.13ms 0.022%  try worker.mjs:43640
+         0     0%   100%     1.07ms 0.011%  try worker.mjs:53371
+         0     0%   100%     1.05ms 0.011%  try worker.mjs:54325
+         0     0%   100%     9.65ms 0.098%  try worker.mjs:54937
+         0     0%   100%     4.15ms 0.042%  try worker.mjs:69994
+         0     0%   100%     1.07ms 0.011%  v7String worker.mjs:10109
+         0     0%   100%    21.98ms  0.22%  value worker.mjs:39490
+         0     0%   100%     2.15ms 0.022%  withParentSpan worker.mjs:7343
+         0     0%   100%     1.07ms 0.011%  withSnapshot worker.mjs:70698
+         0     0%   100%     3.19ms 0.032%  withSpan worker.mjs:7357
+         0     0%   100%    67.01ms  0.68%  within worker.mjs:40524
+         0     0%   100%     1.07ms 0.011%  worker.mjs:10230
+         0     0%   100%    19.34ms   0.2%  worker.mjs:10891
+         0     0%   100%   146.46ms  1.49%  worker.mjs:114658
+         0     0%   100%     4.29ms 0.044%  worker.mjs:114668
+         0     0%   100%     4.51ms 0.046%  worker.mjs:114840
+         0     0%   100%     5.74ms 0.058%  worker.mjs:114869
+         0     0%   100%     4.51ms 0.046%  worker.mjs:114953
+         0     0%   100%     1.06ms 0.011%  worker.mjs:115611
+         0     0%   100%     2.17ms 0.022%  worker.mjs:117186
+         0     0%   100%     1.07ms 0.011%  worker.mjs:11755
+         0     0%   100%     9.61ms 0.098%  worker.mjs:11848
+         0     0%   100%     2.15ms 0.022%  worker.mjs:118498
+         0     0%   100%     1.14ms 0.012%  worker.mjs:118976
+         0     0%   100%     2.14ms 0.022%  worker.mjs:119569
+         0     0%   100%     1.08ms 0.011%  worker.mjs:119901
+         0     0%   100%     2.21ms 0.023%  worker.mjs:119936
+         0     0%   100%     1.09ms 0.011%  worker.mjs:119945
+         0     0%   100%     2.13ms 0.022%  worker.mjs:121298
+         0     0%   100%     2.13ms 0.022%  worker.mjs:125423
+         0     0%   100%     1.07ms 0.011%  worker.mjs:125451
+         0     0%   100%     1.07ms 0.011%  worker.mjs:125471
+         0     0%   100%     1.11ms 0.011%  worker.mjs:125645
+         0     0%   100%     1.06ms 0.011%  worker.mjs:125917
+         0     0%   100%     1.08ms 0.011%  worker.mjs:126126
+         0     0%   100%     2.10ms 0.021%  worker.mjs:126146
+         0     0%   100%     2.13ms 0.022%  worker.mjs:127637
+         0     0%   100%     1.07ms 0.011%  worker.mjs:127645
+         0     0%   100%     2.14ms 0.022%  worker.mjs:128579
+         0     0%   100%     1.07ms 0.011%  worker.mjs:128639
+         0     0%   100%     1.04ms 0.011%  worker.mjs:13014
+         0     0%   100%     2.15ms 0.022%  worker.mjs:130470
+         0     0%   100%     1.08ms 0.011%  worker.mjs:130509
+         0     0%   100%    20.90ms  0.21%  worker.mjs:130521
+         0     0%   100%    65.65ms  0.67%  worker.mjs:13055
+         0     0%   100%     1.07ms 0.011%  worker.mjs:13222
+         0     0%   100%     1.06ms 0.011%  worker.mjs:13240
+         0     0%   100%    46.38ms  0.47%  worker.mjs:13253
+         0     0%   100%    10.34ms  0.11%  worker.mjs:13382
+         0     0%   100%     1.08ms 0.011%  worker.mjs:13421
+         0     0%   100%    15.41ms  0.16%  worker.mjs:13436
+         0     0%   100%    13.71ms  0.14%  worker.mjs:13442
+         0     0%   100%   149.69ms  1.52%  worker.mjs:13495
+         0     0%   100%     4.51ms 0.046%  worker.mjs:14708
+         0     0%   100%   147.60ms  1.50%  worker.mjs:14764
+         0     0%   100%     3.54ms 0.036%  worker.mjs:1514
+         0     0%   100%     2.14ms 0.022%  worker.mjs:2083
+         0     0%   100%     1.07ms 0.011%  worker.mjs:21186
+         0     0%   100%    13.71ms  0.14%  worker.mjs:21236
+         0     0%   100%     2.15ms 0.022%  worker.mjs:21349
+         0     0%   100%   108.77ms  1.11%  worker.mjs:21496
+         0     0%   100%   108.77ms  1.11%  worker.mjs:21529
+         0     0%   100%   108.77ms  1.11%  worker.mjs:21628
+         0     0%   100%     3.23ms 0.033%  worker.mjs:22560
+         0     0%   100%     1.10ms 0.011%  worker.mjs:23073
+         0     0%   100%     5.39ms 0.055%  worker.mjs:2360
+         0     0%   100%     1.06ms 0.011%  worker.mjs:23815
+         0     0%   100%   125.04ms  1.27%  worker.mjs:2416
+         0     0%   100%     2.15ms 0.022%  worker.mjs:24171
+         0     0%   100%     1.07ms 0.011%  worker.mjs:24172
+         0     0%   100%   141.18ms  1.43%  worker.mjs:25280
+         0     0%   100%    30.29ms  0.31%  worker.mjs:25317
+         0     0%   100%     7.53ms 0.076%  worker.mjs:25347
+         0     0%   100%     3.23ms 0.033%  worker.mjs:28898
+         0     0%   100%     3.21ms 0.033%  worker.mjs:29197
+         0     0%   100%     1.08ms 0.011%  worker.mjs:29409
+         0     0%   100%     3.23ms 0.033%  worker.mjs:29461
+         0     0%   100%     2.17ms 0.022%  worker.mjs:29496
+         0     0%   100%     3.23ms 0.033%  worker.mjs:29606
+         0     0%   100%     6.43ms 0.065%  worker.mjs:32644
+         0     0%   100%     2.36ms 0.024%  worker.mjs:34838
+         0     0%   100%     1.08ms 0.011%  worker.mjs:34902
+         0     0%   100%     5.39ms 0.055%  worker.mjs:35441
+         0     0%   100%    13.71ms  0.14%  worker.mjs:35578
+         0     0%   100%     4.43ms 0.045%  worker.mjs:37240
+         0     0%   100%     4.29ms 0.044%  worker.mjs:38744
+         0     0%   100%    23.05ms  0.23%  worker.mjs:40096
+         0     0%   100%     3.54ms 0.036%  worker.mjs:401
+         0     0%   100%    21.98ms  0.22%  worker.mjs:40126
+         0     0%   100%     1.09ms 0.011%  worker.mjs:40264
+         0     0%   100%   114.25ms  1.16%  worker.mjs:40274
+         0     0%   100%    67.78ms  0.69%  worker.mjs:40370
+         0     0%   100%    43.66ms  0.44%  worker.mjs:40373
+         0     0%   100%    23.05ms  0.23%  worker.mjs:40524
+         0     0%   100%    39.42ms   0.4%  worker.mjs:40795
+         0     0%   100%     3.22ms 0.033%  worker.mjs:40965
+         0     0%   100%     2.13ms 0.022%  worker.mjs:40999
+         0     0%   100%   146.78ms  1.49%  worker.mjs:414
+         0     0%   100%     4.30ms 0.044%  worker.mjs:423
+         0     0%   100%     1.08ms 0.011%  worker.mjs:42564
+         0     0%   100%    14.88ms  0.15%  worker.mjs:43554
+         0     0%   100%     2.15ms 0.022%  worker.mjs:43657
+         0     0%   100%     2.17ms 0.022%  worker.mjs:44321
+         0     0%   100%     3.38ms 0.034%  worker.mjs:44948
+         0     0%   100%   151.73ms  1.54%  worker.mjs:4499
+         0     0%   100%    75.84ms  0.77%  worker.mjs:4506
+         0     0%   100%     1.88ms 0.019%  worker.mjs:45748
+         0     0%   100%     1.07ms 0.011%  worker.mjs:46328
+         0     0%   100%     3.23ms 0.033%  worker.mjs:46999
+         0     0%   100%     1.08ms 0.011%  worker.mjs:47229
+         0     0%   100%     1.07ms 0.011%  worker.mjs:47476
+         0     0%   100%     1.06ms 0.011%  worker.mjs:52785
+         0     0%   100%     1.07ms 0.011%  worker.mjs:52786
+         0     0%   100%     8.65ms 0.088%  worker.mjs:53745
+         0     0%   100%     1.06ms 0.011%  worker.mjs:53822
+         0     0%   100%     1.08ms 0.011%  worker.mjs:53862
+         0     0%   100%     1.08ms 0.011%  worker.mjs:53877
+         0     0%   100%     1.08ms 0.011%  worker.mjs:53897
+         0     0%   100%    45.80ms  0.47%  worker.mjs:5478
+         0     0%   100%    49.41ms   0.5%  worker.mjs:5480
+         0     0%   100%     8.57ms 0.087%  worker.mjs:54940
+         0     0%   100%     1.08ms 0.011%  worker.mjs:55076
+         0     0%   100%     1.07ms 0.011%  worker.mjs:55326
+         0     0%   100%    73.16ms  0.74%  worker.mjs:5600
+         0     0%   100%     1.08ms 0.011%  worker.mjs:5628
+         0     0%   100%   200.12ms  2.03%  worker.mjs:5629
+         0     0%   100%     1.07ms 0.011%  worker.mjs:56749
+         0     0%   100%    34.53ms  0.35%  worker.mjs:5781
+         0     0%   100%   988.09ms 10.04%  worker.mjs:5948
+         0     0%   100%     3.14ms 0.032%  worker.mjs:5974
+         0     0%   100%     1.07ms 0.011%  worker.mjs:59923
+         0     0%   100%     1.07ms 0.011%  worker.mjs:59987
+         0     0%   100%     1.07ms 0.011%  worker.mjs:6137
+         0     0%   100%     1.07ms 0.011%  worker.mjs:6208
+         0     0%   100%     1.07ms 0.011%  worker.mjs:62152
+         0     0%   100%     1.07ms 0.011%  worker.mjs:63410
+         0     0%   100%     1.07ms 0.011%  worker.mjs:63530
+         0     0%   100%     2.16ms 0.022%  worker.mjs:63810
+         0     0%   100%     1.10ms 0.011%  worker.mjs:63971
+         0     0%   100%     9.60ms 0.098%  worker.mjs:6560
+         0     0%   100%     3.23ms 0.033%  worker.mjs:67276
+         0     0%   100%     5.44ms 0.055%  worker.mjs:6857
+         0     0%   100%    54.95ms  0.56%  worker.mjs:6884
+         0     0%   100%     1.07ms 0.011%  worker.mjs:69967
+         0     0%   100%   644.46ms  6.55%  worker.mjs:7011
+         0     0%   100%   290.84ms  2.96%  worker.mjs:7034
+         0     0%   100%    23.05ms  0.23%  worker.mjs:7049
+         0     0%   100%    10.71ms  0.11%  worker.mjs:70672
+         0     0%   100%    23.05ms  0.23%  worker.mjs:7097
+         0     0%   100%    23.05ms  0.23%  worker.mjs:7107
+         0     0%   100%     2.18ms 0.022%  worker.mjs:71276
+         0     0%   100%     2.15ms 0.022%  worker.mjs:71392
+         0     0%   100%     1.08ms 0.011%  worker.mjs:71492
+         0     0%   100%     1.08ms 0.011%  worker.mjs:71968
+         0     0%   100%     1.07ms 0.011%  worker.mjs:7292
+         0     0%   100%     2.15ms 0.022%  worker.mjs:7367
+         0     0%   100%   292.33ms  2.97%  worker.mjs:7424
+         0     0%   100%     4.35ms 0.044%  worker.mjs:7427
+         0     0%   100%    86.33ms  0.88%  worker.mjs:7468
+         0     0%   100%     5.45ms 0.055%  worker.mjs:7869
+         0     0%   100%     1.07ms 0.011%  worker.mjs:8053
+         0     0%   100%     1.07ms 0.011%  worker.mjs:8055
+         0     0%   100%     9.50ms 0.097%  write worker.mjs:69927

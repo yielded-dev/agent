@@ -1,0 +1,33 @@
+Base: d52ee32a51c7bf93a226272578f13cebcc66f2e1
+Shared worktree: /Users/dan/dev/effect-agent/.worktrees/dan-prod-turn-latency
+Alarm.ts and bun.lock are concurrent changes by the primary, not part of candidate.patch.
+
+Commands (package cwd unless root specified):
+storage-cloudflare: vp test test/do-ledger-failpoints.test.ts -t "recovers ledger identity" [storage-red.log, before implementation]
+platform-cloudflare: vp test test/projection.test.ts -t "retains settlement host enrollment" [enrollment-red.log, before implementation]
+storage-cloudflare: vp test test/do-ledger.test.ts test/do-ledger-failpoints.test.ts test/do-ledger-reads.test.ts [storage-green.log]
+platform-cloudflare: vp test test/projection.test.ts test/subagents-cross-do.test.ts test/join-restart.test.ts test/background-workers.test.ts test/chaos.test.ts test/restart/travel-planner-restart.test.ts [platform-green.log; obsolete revision assertion failed, other cases passed]
+platform-cloudflare: vp test test/projection.test.ts [enrollment-green.log; retained-revision assertion passed]
+root: vp run -F @yielded/agent-storage-cloudflare -F @yielded/agent-platform-cloudflare check [types.log]
+root: vp run ready [ready.log]
+Prerequisites: pinned installed dependencies and permission for workerd/Miniflare localhost listeners. Existing fixtures own storage initialization and teardown; no credentials or production services used.
+
+Final commands:
+platform-cloudflare: vp test test/projection.test.ts -t "retains settlement host enrollment" [enrollment-final.log, passed]
+root: vp run -F @yielded/agent-storage-cloudflare -F @yielded/agent-platform-cloudflare build [build.log, passed]
+
+Results:
+Before implementation: storage rollback assertion failed because publication did not reach finalization; host eviction assertion failed because test:Settlement was absent.
+After implementation: 54 focused storage checks pass; all 29 selected platform checks pass across initial run plus projection rerun. Full storage suite 111/111 passed during ready. Both package type checks and builds pass.
+Full ready: static checks passed; PostgreSQL certification failed with ECONNREFUSED localhost:55432. Three concurrent suites ended with exit 137; build phase was not reached. See ready.log and ready-details.log. No rerun without changing the unavailable database prerequisite.
+Obligation-bearing recovery: background-workers.test.ts standard-report eviction passes; worker:after-report-append occurs after canonical settlement and before report-delivery retention / ledger finalization. Alarm recovery with dropped hints processes the report. Existing parent proof covers parent notification before finalization and eviction after finalization. Full Miniflare dispose/reopen proof for an obligation-bearing canonical-before-finalize prefix is not supplied by the adjusted ordinary-root restart scenario.
+
+Current SHA256:
+9313196818835cba4cb72a4e586cc55aca3ba8305f4ba92263655e6cae38f0f5  packages/storage-cloudflare/src/DoSubmissionLedger.ts
+71ae67804a06d47ef7cfa2bc4c97949e63f89e0c21b965cf465e3e0ef73e5416  packages/platform-cloudflare/src/internal/layers.ts
+85ed66f51a4361969fba9c5b0275069f04a635dad10fbc22a90fac86eeae9186  packages/storage-cloudflare/test/do-ledger-failpoints.test.ts
+4fb651667929c060645cfc86dee8ab49727bdde63b78ebf02db84d2fafa1cd9e  packages/platform-cloudflare/test/projection.test.ts
+d5684b92959a82f1eedc31dfc143b46360958e5ef115e1afb97b9967ee4aebd3  packages/platform-cloudflare/test/restart/travel-planner-restart.test.ts
+504881865dd59145a6388927e04440c8bf02312c43f5a6d1cc4df78770ecd781  packages/platform-cloudflare/test/chaos.test.ts
+be90f57a7f1d32109d5a57a668339d34aef0cc227fb448f5e1b4dd41f454c65a  packages/platform-cloudflare/src/Alarm.ts
+5eecdfba91a0b85ae031083646018dd7b9668cc776520b9b735e032655b02b7d  bun.lock

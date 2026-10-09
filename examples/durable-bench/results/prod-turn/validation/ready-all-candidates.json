@@ -1,0 +1,11 @@
+{
+  "command": "vp run ready",
+  "exitCode": 0,
+  "nodeVersion": "24.21.0",
+  "nodeResolution": "Vite+ managed binary first on process PATH",
+  "postgresFixture": "task-owned PostgreSQL 17 on localhost:55432",
+  "base": "d52ee32a51c7bf93a226272578f13cebcc66f2e1",
+  "logSha256": "a45db9c37147f5d65ce6469df00f89cdb3f27b955acaa85bacecdecc89e59de1",
+  "patchSha256": "ea503d27f1a4c610602e6a70e67a272ba2429003cd2012fc2c6560a7d0bd27a6",
+  "checks": "71 repository tasks; 43 cache hits; checks, tests and builds passed"
+}
