@@ -61,7 +61,6 @@ export class ThreadRow extends Schema.Class<ThreadRow>("ThreadRow")({
 }) {}
 
 export class BatchRow extends Schema.Class<BatchRow>("BatchRow")({
-  batch_digest: BoundedStoredText,
   batch_id: BoundedIdentifier,
   batch_json: BoundedStoredText,
   thread_id: BoundedIdentifier,
@@ -91,7 +90,6 @@ class CheckpointRow extends Schema.Class<CheckpointRow>("CheckpointRow")({
  * and validation before entering this journal, whose caller already holds SQL storage authority.
  */
 export interface RawAppendRequest {
-  readonly batchDigest: Digest;
   readonly batchId: PreparedAppend["batch"]["batchId"];
   readonly batchJson: string;
   readonly batchHeaderJson: string;
@@ -106,6 +104,7 @@ export interface RawAppendRequest {
     }
   >;
   readonly progress: PreparedAppend["progress"];
+  /** Full chained batch digest; also the identity used for exact append replay. */
   readonly tailDigest: Digest;
 }
 
@@ -365,7 +364,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
       request.threadId.length > MAX_IDENTIFIER_LENGTH ||
       request.batchId.length > MAX_IDENTIFIER_LENGTH ||
       request.batchBytes > MAX_STORED_TEXT_BYTES ||
-      storedTextBytes(request.batchDigest) > MAX_STORED_TEXT_BYTES ||
       storedTextBytes(request.tailDigest) > MAX_STORED_TEXT_BYTES ||
       request.records.some(
         (record) =>
@@ -411,7 +409,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           batch_id,
           first_sequence,
           last_sequence,
-          batch_digest,
           tail_digest,
           '' AS batch_json
         FROM ${relation("effect_agent_canonical_batches")}
@@ -435,7 +432,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     if (batches.length === 1) {
       const existing = batches[0];
 
-      if (existing.batch_digest !== request.batchDigest) {
+      if (existing.tail_digest !== request.tailDigest) {
         return yield* AppendConflict.make({
           threadId: request.threadId,
           batchId: request.batchId,
@@ -517,7 +514,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           batch_id,
           first_sequence,
           last_sequence,
-          batch_digest,
           tail_digest,
           batch_header_json
         ) VALUES (
@@ -525,7 +521,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           ${request.batchId},
           ${firstSequence},
           ${lastSequence},
-          ${request.batchDigest},
           ${request.tailDigest},
           ${request.batchHeaderJson}
         )
@@ -778,7 +773,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
         batch_id,
         first_sequence,
         last_sequence,
-        batch_digest,
         tail_digest,
         '' AS batch_json
       FROM ${relation("effect_agent_canonical_batches")}
@@ -819,7 +813,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
               batch_id,
               first_sequence,
               last_sequence,
-              batch_digest,
               tail_digest,
               ${batchJson} AS batch_json
             FROM ${relation("effect_agent_canonical_batches")}

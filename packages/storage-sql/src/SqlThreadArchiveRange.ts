@@ -336,7 +336,6 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
       batch_id: Schema.String,
       first_sequence: SqlInteger,
       last_sequence: SqlInteger,
-      batch_digest: Digest,
       tail_digest: Digest,
       byte_count: SqlInteger,
       header_byte_count: SqlInteger,
@@ -359,7 +358,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
 
     const batches = yield* Schema.decodeUnknownEffect(Schema.Array(BatchPlan))(
       yield* query(sql`
-      SELECT c.batch_id, c.first_sequence, c.last_sequence, c.batch_digest, c.tail_digest, ${batchSize} AS byte_count, ${size(sql`c.batch_header_json`)} AS header_byte_count
+      SELECT c.batch_id, c.first_sequence, c.last_sequence, c.tail_digest, ${batchSize} AS byte_count, ${size(sql`c.batch_header_json`)} AS header_byte_count
       FROM ${table("effect_agent_canonical_batches")} c ${batchJoin}
       WHERE c.thread_id=${row.thread_id} AND c.first_sequence>=${row.first_sequence} AND c.first_sequence<=${row.last_sequence}
       ORDER BY c.first_sequence LIMIT ${MAX_ARCHIVE_RANGE_RECORDS + 1}`),
@@ -425,8 +424,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
         Effect.provideService(Crypto.Crypto, crypto),
         Effect.mapError((cause) => failure("archive digest", cause)),
       );
-      if (digest !== batch.batch_digest || digest !== batch.tail_digest)
-        return yield* failure("archive batch digest");
+      if (digest !== batch.tail_digest) return yield* failure("archive batch digest");
       for (const record of decoded.records) {
         const plan = records[recordIndex++];
 

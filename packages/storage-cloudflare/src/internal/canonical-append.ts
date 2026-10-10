@@ -46,7 +46,6 @@ export const prepareCanonicalAppend = Effect.fnUntraced(function* (input: Fenced
     expectedTailSequence: request.expectedTailSequence,
     expectedTailDigest: request.expectedTailDigest,
     batchId: request.batch.batchId,
-    batchDigest: tailDigest,
     tailDigest,
     batchJson: request.batchJson,
     batchHeaderJson: canonicalBatchHeaderJson(request.batch),

@@ -97,7 +97,6 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
   return {
     threadId: captured.threadId,
     batchId: captured.batch.batchId,
-    batchDigest: tailDigest,
     batchJson: captured.batchJson,
     batchHeaderJson: canonicalBatchHeaderJson(captured.batch),
     batchBytes: captured.batchBytes,
@@ -561,17 +560,13 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
 
           for (const batch of prepared.batches) {
             const stored = yield* decode(
-              Schema.Array(Schema.Struct({ batch_digest: Digest, tail_digest: Digest })),
+              Schema.Array(Schema.Struct({ tail_digest: Digest })),
               yield* query(
-                sql`SELECT batch_digest, tail_digest FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${thread.thread_id} AND batch_id=${batch.batch.batchId}`,
+                sql`SELECT tail_digest FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${thread.thread_id} AND batch_id=${batch.batch.batchId}`,
               ),
             );
 
-            if (
-              stored.length !== 1 ||
-              stored[0]?.batch_digest !== batch.tailDigest ||
-              stored[0]?.tail_digest !== batch.tailDigest
-            )
+            if (stored.length !== 1 || stored[0]?.tail_digest !== batch.tailDigest)
               return yield* options.errors.corruption({
                 table: "effect_agent_canonical_batches",
                 rowKey: `${thread.thread_id}/${batch.batch.batchId}`,
