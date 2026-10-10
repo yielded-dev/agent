@@ -113,8 +113,11 @@ export const transferSnapshotId = (manifest: TransferManifest) =>
 /** Exact evidence references outside this page, including references into archived ranges. */
 export const transferDependencies = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
-): ReadonlyArray<RecordId> => {
-  return transferRecordDependencies(records.map((entry) => entry.record));
+): ReadonlyArray<RecordId | CanonicalSequence> => {
+  return transferRecordDependencies(
+    records.map((entry) => entry.record),
+    records[0]?.sequence,
+  );
 };
 
 export const checkTransferPageBytes = (page: ThreadExport) =>

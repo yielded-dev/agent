@@ -83,11 +83,21 @@ export interface RunOwnership {
   ) => ReturnType<SubmissionLedger["Service"]["attachChildToReservation"]>;
 }
 
+/** Immutable CAS frontier used to prepare sequence-addressed progress. */
+export interface RunWriterTail {
+  readonly sequence: CanonicalSequence;
+  readonly digest: Digest;
+}
+
 export interface RunWriter {
   readonly threadId: ThreadId;
   readonly producerEpoch: ProducerEpoch;
   readonly tail: Effect.Effect<{ readonly sequence: CanonicalSequence; readonly digest: Digest }>;
-  readonly append: (batch: CanonicalBatch) => Effect.Effect<AppendResult, ThreadStoreFailure>;
+  /** An explicit preparation frontier cannot be refreshed without repreparing the batch. */
+  readonly append: (
+    batch: CanonicalBatch,
+    frontier?: RunWriterTail,
+  ) => Effect.Effect<AppendResult, ThreadStoreFailure>;
   /** Recheck the writer fence after effectful preflight, before dispatch; append no record. */
   readonly checkFence: Effect.Effect<
     void,
@@ -99,6 +109,7 @@ export interface RunWriter {
 export interface RunStorageSession extends RunWriter, RunOwnership {
   readonly publishSettlement: (
     batch: CanonicalBatch,
+    frontier?: RunWriterTail,
   ) => Effect.Effect<SettlementPublicationResult, SettlementPublicationFailure>;
   /** Initial grant for binding identity. Its token is not an authority for subsequent commands. */
   readonly claim: Claim;
@@ -215,7 +226,7 @@ export const makeRunWriter = Effect.fnUntraced(function* (
     }),
   );
 
-  const append = (batch: CanonicalBatch) =>
+  const append = (batch: CanonicalBatch, frontier?: RunWriterTail) =>
     gate.withPermits(1)(
       Effect.gen(function* () {
         for (let retries = 0; ; retries++) {
@@ -225,8 +236,8 @@ export const makeRunWriter = Effect.fnUntraced(function* (
                 threadId,
                 producerEpoch,
                 batch,
-                expectedTailSequence: tail.sequence,
-                expectedTailDigest: tail.digest,
+                expectedTailSequence: (frontier ?? tail).sequence,
+                expectedTailDigest: (frontier ?? tail).digest,
               }),
             )
             .pipe(
@@ -243,7 +254,10 @@ export const makeRunWriter = Effect.fnUntraced(function* (
                 tail = { sequence: conflict.actualTailSequence, digest: conflict.actualTailDigest };
 
                 // Progress must be rebuilt from the winning revision, never resent verbatim.
-                if (batch.records.some(({ payload }) => payload._tag === "RunContinuation"))
+                if (
+                  frontier !== undefined ||
+                  batch.records.some(({ payload }) => payload._tag === "RunContinuation")
+                )
                   return Effect.fail(conflict);
 
                 return Effect.succeed(undefined);
@@ -402,7 +416,7 @@ export const make = Effect.gen(function* () {
               claim: claimed,
               release,
               renew,
-              append: (batch) => canonical(writer.append(batch)),
+              append: (batch, frontier) => canonical(writer.append(batch, frontier)),
               checkFence: canonical(writer.checkFence),
               refresh: canonical(writer.refresh),
               maintain: (interval) =>
@@ -438,7 +452,7 @@ export const make = Effect.gen(function* () {
                     Effect.uninterruptible,
                   ),
                 ),
-              publishSettlement: (batch) =>
+              publishSettlement: (batch, frontier) =>
                 command<SettlementPublicationResult, SettlementPublicationFailure>(
                   Effect.gen(function* () {
                     let tail = yield* writer.tail;
@@ -454,8 +468,8 @@ export const make = Effect.gen(function* () {
                                 append: FencedAppendRequest.make({
                                   threadId: request.threadId,
                                   producerEpoch: claimed.producerEpoch,
-                                  expectedTailSequence: tail.sequence,
-                                  expectedTailDigest: tail.digest,
+                                  expectedTailSequence: (frontier ?? tail).sequence,
+                                  expectedTailDigest: (frontier ?? tail).digest,
                                   batch,
                                 }),
                               }),
@@ -477,6 +491,7 @@ export const make = Effect.gen(function* () {
                             };
 
                             if (
+                              frontier !== undefined ||
                               batch.records.some(
                                 ({ payload }) => payload._tag === "RunContinuation",
                               )

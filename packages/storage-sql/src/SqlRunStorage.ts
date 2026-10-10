@@ -559,7 +559,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
                 sidecar.payload._tag !== "RunContinuation" ||
                 sidecar.payload.runId !== runIdForSubmission(submissionId) ||
                 sidecar.payload.submissionId !== submissionId ||
-                sidecar.payload.lastFact.recordId !== record?.recordId,
+                sidecar.payload.lastFact.sequence !== raw.expectedTailSequence + 1,
             ) ||
           raw.batchId !== submissionInputBatchId(submissionId) ||
           record?.recordId !== submissionInputRecordId(submissionId) ||
@@ -608,7 +608,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
       }),
     );
 
-    const append: RunStorageSession["append"] = (batch) =>
+    const append: RunStorageSession["append"] = (batch, frontier) =>
       bind(
         gate.withPermits(1)(
           Effect.uninterruptibleMask((restore) =>
@@ -623,8 +623,8 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
                 const request = FencedAppendRequest.make({
                   threadId: claimedThreadId,
                   producerEpoch: owned.epoch,
-                  expectedTailSequence: writerTail.sequence,
-                  expectedTailDigest: writerTail.digest,
+                  expectedTailSequence: (frontier ?? writerTail).sequence,
+                  expectedTailDigest: (frontier ?? writerTail).digest,
                   batch,
                 });
 
@@ -638,6 +638,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
                   }
                   if (
                     retries >= 8 ||
+                    frontier !== undefined ||
                     batch.records.some(({ payload }) => payload._tag === "RunContinuation")
                   )
                     return yield* result;
@@ -742,7 +743,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
             owned.releaseNeeded = false;
           }
         }),
-      publishSettlement: (batch) =>
+      publishSettlement: (batch, frontier) =>
         command(
           Effect.suspend(() =>
             ledgerKernel.publishWithState(
@@ -752,8 +753,8 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
                 append: FencedAppendRequest.make({
                   threadId: claimedThreadId,
                   producerEpoch: owned.epoch,
-                  expectedTailSequence: writerTail.sequence,
-                  expectedTailDigest: writerTail.digest,
+                  expectedTailSequence: (frontier ?? writerTail).sequence,
+                  expectedTailDigest: (frontier ?? writerTail).digest,
                   batch,
                 }),
               }),

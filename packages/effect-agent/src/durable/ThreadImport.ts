@@ -40,6 +40,7 @@ import {
   MAX_THREAD_EXPORT_PAGE_BYTES,
   MAX_THREAD_EXPORT_PAGE_RECORDS,
   ThreadAdmission,
+  ThreadRead,
   ThreadExport,
   ThreadAbortFact,
   ThreadApprovalFact,
@@ -213,7 +214,18 @@ export const verifyImportedReferences = Effect.fnUntraced(function* (
           : [];
 
   for (const ref of references) {
-    const evidence = yield* resolve(ref.recordId);
+    const evidence =
+      "recordId" in ref
+        ? yield* resolve(ref.recordId)
+        : (yield* Stream.runCollect(
+            reader.read(
+              ThreadRead.make({
+                threadId: entry.threadId,
+                afterSequence: CanonicalSequence.make(ref.sequence - 1),
+                limit: 1,
+              }),
+            ),
+          ))[0];
 
     if (
       evidence === undefined ||

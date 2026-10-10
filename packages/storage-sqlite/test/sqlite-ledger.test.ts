@@ -222,7 +222,7 @@ it.effect("reprepares native settlement progress after a same-epoch administrati
         Effect.provideService(CurrentRunSettlement, {
           threadId: session.threadId,
           tail: session.tail,
-          publishSettlement: (prepared) =>
+          publishSettlement: (prepared, frontier) =>
             Effect.gen(function* () {
               if (!injected) {
                 injected = true;
@@ -249,7 +249,7 @@ it.effect("reprepares native settlement progress after a same-epoch administrati
                   .pipe(Effect.provideService(CurrentRunWriter, administrative));
               }
 
-              return yield* session.publishSettlement(prepared);
+              return yield* session.publishSettlement(prepared, frontier);
             }),
         }),
       );

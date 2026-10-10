@@ -1957,7 +1957,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
             Layer.provide(
               DurableRuntimeConfig.layer({
                 deploymentId: Schema.decodeSync(DeploymentId)(
-                  fault === "step-envelope" ? "d".repeat(4_500) : "deployment-refused",
+                  fault === "step-envelope" ? "d".repeat(5_300) : "deployment-refused",
                 ),
                 producerId: Schema.decodeSync(ProducerId)("producer-refused"),
                 settlementPollInterval: Duration.millis(100),

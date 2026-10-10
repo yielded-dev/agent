@@ -48,7 +48,7 @@ import {
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
 import { WORK_INDEX_VERSION } from "@yielded/agent/thread-work";
-import { Context, Effect, Predicate, Schema } from "effect";
+import { Context, Crypto, Effect, Predicate, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 import type { Fragment } from "effect/sql/Statement";
@@ -231,6 +231,7 @@ const boundedCandidates = (
 
 /** Caller owns the existing append transaction; no snapshot or nested transaction here. */
 export const makeProgressAppendValidation = Effect.fnUntraced(function* (namespace?: string) {
+  const crypto = yield* Crypto.Crypto;
   const sql = yield* SqlClient.SqlClient;
   const { table, execute } = yield* makeSqlQuery(namespace);
   const recordJson = canonicalRecordJson(sql, namespace);
@@ -246,7 +247,8 @@ export const makeProgressAppendValidation = Effect.fnUntraced(function* (namespa
 
   return Effect.fnUntraced(function* (request: RawAppendRequest) {
     if (!request.progress.some((record) => record.continuation !== undefined)) return;
-    yield* validateProgressAppend(request.progress).pipe(
+    yield* validateProgressAppend(request.progress, request.expectedTailSequence).pipe(
+      Effect.provideService(Crypto.Crypto, crypto),
       Effect.provideService(ProgressAppendReader, {
         previous: (runId) =>
           Effect.gen(function* () {
@@ -307,7 +309,7 @@ export const makeProgressAppendValidation = Effect.fnUntraced(function* (namespa
               }),
             );
 
-            const records: Array<CanonicalRecord> = [];
+            const records: Array<CanonicalRecordEnvelope> = [];
             let afterSequence = CanonicalSequence.make(0);
             let bytes = 0;
 
@@ -324,7 +326,7 @@ export const makeProgressAppendValidation = Effect.fnUntraced(function* (namespa
               });
 
               for (const entry of page) {
-                records.push(entry.record);
+                records.push(entry);
                 bytes += canonicalRecordBytes(entry.record);
                 if (
                   records.length > MAX_RUN_RECOVERY_SUFFIX_RECORDS ||

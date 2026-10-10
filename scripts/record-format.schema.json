@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 6,
   "dialect": "draft-2020-12",
   "schema": {
     "type": "object",
@@ -3409,71 +3409,76 @@
         "originalInput": {
           "type": "object",
           "properties": {
-            "recordId": {
-              "type": "string",
-              "minLength": 1
+            "sequence": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": 0
             },
             "digest": {
               "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["sequence", "digest"],
           "additionalProperties": true
         },
         "savedContext": {
           "type": "object",
           "properties": {
-            "recordId": {
-              "type": "string",
-              "minLength": 1
+            "sequence": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": 0
             },
             "digest": {
               "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["sequence", "digest"],
           "additionalProperties": true
         },
         "latestResponse": {
           "type": "object",
           "properties": {
-            "recordId": {
-              "type": "string",
-              "minLength": 1
+            "sequence": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": 0
             },
             "digest": {
               "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["sequence", "digest"],
           "additionalProperties": true
         },
         "terminal": {
           "type": "object",
           "properties": {
-            "recordId": {
-              "type": "string",
-              "minLength": 1
+            "sequence": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": 0
             },
             "digest": {
               "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["sequence", "digest"],
           "additionalProperties": true
         },
         "lastFact": {
           "type": "object",
           "properties": {
-            "recordId": {
-              "type": "string",
-              "minLength": 1
+            "sequence": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": 0
             },
             "digest": {
               "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["sequence", "digest"],
           "additionalProperties": true
         },
         "position": {

@@ -1214,10 +1214,18 @@ export const RunPosition = Schema.Literals([
   "settled",
 ]);
 
+/** Exact immutable evidence in this Thread; the position is bound to its append frontier. */
+export const ContinuationReference = Schema.Struct({
+  sequence: CanonicalSequence.check(Schema.isGreaterThan(0)),
+  digest: Digest,
+});
+
+export type ContinuationReference = typeof ContinuationReference.Type;
+
 /**
  * Canonical interpreter progress, co-committed with lastFact under the Thread fence.
  * lastFact is the exact accounted frontier in the same atomic batch; its logical
- * sequence is resolved from canonical evidence rather than predicted by a producer.
+ * sequence is assigned against the prepared tail and validated inside the canonical mutation.
  * References resolve within this Thread. Operation results, call identities, approvals,
  * delivery obligations, and context payloads stay in their own canonical owners.
  * Neither this record nor its latest-record index grants execution authority.
@@ -1247,19 +1255,19 @@ export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
     terminalRecords: Schema.Natural.check(Schema.isLessThanOrEqualTo(RUN_TERMINAL_RESERVE_RECORDS)),
     /** Conservative room for terminal usage grouping; derived only from canonical model usage. */
     terminalUsageBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_RUN_EVIDENCE_BYTES)),
-    originalInput: EvidenceReference,
-    savedContext: Schema.optionalKey(EvidenceReference),
-    latestResponse: Schema.optionalKey(EvidenceReference),
-    terminal: Schema.optionalKey(EvidenceReference),
-    lastFact: EvidenceReference,
+    originalInput: ContinuationReference,
+    savedContext: Schema.optionalKey(ContinuationReference),
+    latestResponse: Schema.optionalKey(ContinuationReference),
+    terminal: Schema.optionalKey(ContinuationReference),
+    lastFact: ContinuationReference,
     position: RunPosition,
     accounting: ContinuationAccounting,
   }),
 ) {}
 
 /** Bump only when the meaning of an existing record changes, independently of SQL layout. */
-export const CURRENT_RECORD_VERSION = 3;
-export const CURRENT_RECORD_FORMAT = "effect-agent/thread@3";
+export const CURRENT_RECORD_VERSION = 6;
+export const CURRENT_RECORD_FORMAT = "effect-agent/thread@6";
 
 /** Supported canonical facts. Unsupported control records must fail before execution. */
 export const KnownRecordPayload = Schema.Union([
