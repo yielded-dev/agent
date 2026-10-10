@@ -32,7 +32,7 @@ See the [Node.js](/platforms/node/) and [Cloudflare](/platforms/cloudflare/) gui
 Replay rebuilds state from canonical records without executing tools. Projections and checkpoints
 are disposable; retain canonical records when rebuilding them.
 
-The execution protocol uses `effect-agent/thread@3` records in fresh layout-21 stores.
+The execution protocol uses `effect-agent/thread@5` records in fresh layout-23 stores.
 This format is unreleased: install matching runtime and storage packages, and retain predecessor
 stores with their matching release. Opening or importing a predecessor format fails before mutation;
 this release has no converter, predecessor decoder, or layout upgrade.
@@ -95,9 +95,10 @@ facts. Results, Durable Steps, approval decisions, and original operation contra
 canonical identities. Recovery reuses those facts; it neither replenishes allowances nor repeats
 recorded results. An unresolved ordinary mutating call still requires reconciliation.
 
-`RunContextRecorded` preserves evaluated instructions and this Run's input, plus a canonical
-history range and the digest of its projected prior Prompt. It retains exact references only to
-earlier facts still needed after compaction. It shares the start transaction without copying prior
+`RunStarted` owns the evaluated instructions and this Run's input, plus a canonical history range
+and the digest of its projected prior Prompt. It retains exact references only to earlier facts
+still needed after compaction. If preparation failure already made a contextless start durable,
+recovery appends `RunContextRecorded` without rewriting that start. Neither form copies prior
 Prompt payloads or a per-record history manifest. Compaction changes the model view independently.
 A compatible current Binding supplies execution services, while saved instructions, user intent, and the Run's
 own continuation remain unchanged by another Run's later traffic. New Runs evaluate current

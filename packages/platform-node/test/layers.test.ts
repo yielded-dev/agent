@@ -660,7 +660,10 @@ describe("NodeDurableAgentRuntime", () => {
           const queuedRecords = yield* readRecords(queued.threadId);
 
           expect(
-            records.filter(({ record }) => record.payload._tag === "RunContextRecorded"),
+            records.filter(
+              ({ record }) =>
+                record.payload._tag === "RunStarted" && record.payload.context !== undefined,
+            ),
           ).toHaveLength(1);
           expect(queuedRecords.some(({ record }) => record.payload._tag === "RunStarted")).toBe(
             false,

@@ -2,7 +2,7 @@ import { Effect, Option, Schema, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
 import { digestJson } from "../Digest.ts";
-import { CanonicalSequence, type CanonicalRecordEnvelope } from "../Records.ts";
+import { CanonicalSequence, runContext, type CanonicalRecordEnvelope } from "../Records.ts";
 import { RunJournalError, toolCallSettledRecordId } from "../RunJournal.ts";
 import { submissionSettlementRecordId } from "../SubmissionLedger.ts";
 import { getRecord, getRunInput, PROMPT_EVIDENCE_TAGS, ThreadReader } from "../ThreadStore.ts";
@@ -78,12 +78,12 @@ export const initialContext = Effect.fnUntraced(function* (original: CanonicalRe
   const base = contexts[0];
 
   if (base !== undefined) {
-    const context = base.record.payload;
+    const context = runContext(base.record.payload);
 
     if (
       base.threadId !== threadId ||
       base.sequence > through ||
-      context._tag !== "RunContextRecorded" ||
+      context === undefined ||
       context.historyThrough >= base.sequence ||
       context.historyThrough > through
     )

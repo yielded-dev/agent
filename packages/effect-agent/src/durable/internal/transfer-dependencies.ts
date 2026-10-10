@@ -1,4 +1,4 @@
-import type { RecordEnvelope, RecordId } from "../Records.ts";
+import { runContext, type RecordEnvelope, type RecordId } from "../Records.ts";
 
 /** Exact references outside one complete canonical batch. */
 export const transferRecordDependencies = (
@@ -13,8 +13,10 @@ export const transferRecordDependencies = (
         if (!local.has(ref.recordId)) dependencies.add(ref.recordId);
     if (payload._tag === "WorkHandoffCompleted" && !local.has(payload.preparationId))
       dependencies.add(payload.preparationId);
-    if (payload._tag === "RunContextRecorded")
-      for (const ref of payload.retained)
+    const context = runContext(payload);
+
+    if (context !== undefined)
+      for (const ref of context.retained)
         if (!local.has(ref.recordId)) dependencies.add(ref.recordId);
     if (payload._tag === "RunContinuation")
       for (const ref of [

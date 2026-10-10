@@ -460,8 +460,9 @@ describe("retained Run recovery", () => {
           (entry) => entry.record.recordId === olderProgress.savedContext?.recordId,
         )?.record.payload,
       ).toMatchObject({
-        _tag: "RunContextRecorded",
+        _tag: "RunStarted",
         runId: runIdForSubmission(older.submissionId),
+        context: { version: 1 },
       });
 
       yield* ledger.recordUnknownResolution(

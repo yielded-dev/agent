@@ -478,7 +478,7 @@ uncertainty, payloads and transactional prearming; this extension defines no pro
 ### Adopting these contracts
 
 Table layout and record meaning have independent versions. The unreleased protocol accepts fresh
-layout-21 stores and `effect-agent/thread@3` records on SQLite, PostgreSQL, and Cloudflare. Opening
+layout-23 stores and `effect-agent/thread@5` records on SQLite, PostgreSQL, and Cloudflare. Opening
 predecessor or ambiguous stores fails before DDL or payload mutation. Keep them with their matching
 release; no historical decoder, layout upgrade, converter, or mixed-format runtime is included.
 

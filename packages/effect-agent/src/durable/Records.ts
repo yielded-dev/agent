@@ -275,6 +275,46 @@ export class UserInputRecorded extends Schema.TaggedClass<UserInputRecorded>(
   messageAdmission: Schema.optionalKey(InputMessage),
 }) {}
 
+/** Logical canonical identity and content integrity, independent of hot-storage location. */
+export const EvidenceReference = Schema.Struct({ recordId: RecordId, digest: Digest });
+export type EvidenceReference = typeof EvidenceReference.Type;
+
+export const ContextEvidenceReference = Schema.Struct({
+  ...EvidenceReference.fields,
+  sequence: CanonicalSequence,
+});
+
+const RunContextFields = Schema.Struct({
+  version: Schema.Literal(1),
+  /** Only evaluated instructions and this Run's input; prior history remains in its facts. */
+  runScopedInput: PersistedJson,
+  /** Inclusive range; historyThrough + 1 denotes an empty range. */
+  historyFrom: CanonicalSequence.check(Schema.isGreaterThan(0)),
+  /** Fixed prior-history boundary, immediately before the original accepted input. */
+  historyThrough: CanonicalSequence,
+  /** Facts below historyFrom still needed after summarize or rollover coverage. */
+  retained: Schema.Array(ContextEvidenceReference).check(Schema.isMaxLength(4_096)),
+  /** Pins the projected prior Prompt, not a second copy or a per-record manifest. */
+  historyDigest: Digest,
+  priorHistoryLength: Schema.Natural,
+  contextWindowId: Schema.optionalKey(BoundedName),
+});
+
+const contextBoundary = Schema.makeFilter(
+  (context: typeof RunContextFields.Type) =>
+    context.historyFrom <= context.historyThrough + 1 &&
+    context.retained.every(
+      (ref, index) =>
+        ref.sequence > (context.retained[index - 1]?.sequence ?? 0) &&
+        ref.sequence < context.historyFrom,
+    ),
+  { title: "Saved context retains an ordered prefix below its original history range" },
+);
+
+/** Original evaluated context, owned by the start or a later standalone canonical fact. */
+export const RunContextData = RunContextFields.check(contextBoundary);
+export type RunContextData = typeof RunContextData.Type;
+
 /** Immutable Run start and per-Attempt duration allowance, before any agent execution. */
 export class RunStartedRecord extends Schema.TaggedClass<RunStartedRecord>(
   "@effect-agent/thread/RunStartedRecord",
@@ -283,6 +323,8 @@ export class RunStartedRecord extends Schema.TaggedClass<RunStartedRecord>(
   /** Older private histories cannot prove programmatic accounting and must be reset. */
   policyAccountingVersion: Schema.Literal(1),
   maxDurationMillis: Schema.Finite.check(Schema.isGreaterThan(0)),
+  /** Initial context shares the start commit before any dependent model dispatch. */
+  context: Schema.optionalKey(RunContextData),
 }) {}
 
 /** An active Attempt exhausted its execution allowance; downtime alone never writes this. */
@@ -1106,10 +1148,6 @@ export class SubtreeBudgetReserved extends Schema.TaggedClass<SubtreeBudgetReser
   },
 ) {}
 
-/** Logical canonical identity and content integrity, independent of hot-storage location. */
-export const EvidenceReference = Schema.Struct({ recordId: RecordId, digest: Digest });
-export type EvidenceReference = typeof EvidenceReference.Type;
-
 /**
  * Receipt-free factual closure. The receiver's irreversible inbox seal precedes its exact-key
  * NotAdmitted observation; a refusal or an absent lookup alone cannot close reserved work.
@@ -1149,41 +1187,22 @@ export const MAX_RUN_RECOVERY_SUFFIX_RECORDS = 64;
 export const MAX_RUN_RECOVERY_SUFFIX_BYTES = 2 * 1024 * 1024;
 export const MAX_RUN_TOOL_CALL_IDENTITIES = 4_096;
 
-export const ContextEvidenceReference = Schema.Struct({
-  ...EvidenceReference.fields,
-  sequence: CanonicalSequence,
-});
-
+/** Context appended after a start that was already durable without evaluated context. */
 export class RunContextRecorded extends Schema.TaggedClass<RunContextRecorded>()(
   "RunContextRecorded",
-  Schema.Struct({
-    version: Schema.Literal(1),
-    runId: RunId,
-    /** Only evaluated instructions and this Run's input; prior history remains in its facts. */
-    runScopedInput: PersistedJson,
-    /** Inclusive range; historyThrough + 1 denotes an empty range. */
-    historyFrom: CanonicalSequence.check(Schema.isGreaterThan(0)),
-    /** Fixed prior-history boundary, immediately before the original accepted input. */
-    historyThrough: CanonicalSequence,
-    /** Facts below historyFrom still needed after summarize or rollover coverage. */
-    retained: Schema.Array(ContextEvidenceReference).check(Schema.isMaxLength(4_096)),
-    /** Pins the projected prior Prompt, not a second copy or a per-record manifest. */
-    historyDigest: Digest,
-    priorHistoryLength: Schema.Natural,
-    contextWindowId: Schema.optionalKey(BoundedName),
-  }).check(
-    Schema.makeFilter(
-      (context) =>
-        context.historyFrom <= context.historyThrough + 1 &&
-        context.retained.every(
-          (ref, index) =>
-            ref.sequence > (context.retained[index - 1]?.sequence ?? 0) &&
-            ref.sequence < context.historyFrom,
-        ),
-      { title: "Saved context retains an ordered prefix below its original history range" },
-    ),
-  ),
+  Schema.Struct({ ...RunContextFields.fields, runId: RunId }).check(contextBoundary),
 ) {}
+
+/** Typed context view only; integrity references must identify its actual owning record. */
+export const runContext = (payload: CanonicalRecordPayload): RunContextRecorded | undefined =>
+  payload._tag === "RunContextRecorded"
+    ? payload
+    : payload._tag === "RunStarted" && payload.context !== undefined
+      ? new RunContextRecorded(
+          { ...payload.context, runId: payload.runId },
+          { disableChecks: true },
+        )
+      : undefined;
 
 /** Accumulated charges; replacement Attempts never replenish or charge these again. */
 export const ContinuationAccounting = Schema.Struct({
@@ -1258,8 +1277,8 @@ export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
 ) {}
 
 /** Bump only when the meaning of an existing record changes, independently of SQL layout. */
-export const CURRENT_RECORD_VERSION = 3;
-export const CURRENT_RECORD_FORMAT = "effect-agent/thread@3";
+export const CURRENT_RECORD_VERSION = 5;
+export const CURRENT_RECORD_FORMAT = "effect-agent/thread@5";
 
 /** Supported canonical facts. Unsupported control records must fail before execution. */
 export const KnownRecordPayload = Schema.Union([

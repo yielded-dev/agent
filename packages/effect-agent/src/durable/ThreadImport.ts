@@ -18,6 +18,7 @@ import {
   ProducerEpoch,
   RecordEnvelope,
   RecordJson,
+  runContext,
   SubtreeBudgetReserved,
 } from "./Records.ts";
 import { isPreContinuationFact } from "./RunContinuation.ts";
@@ -180,8 +181,10 @@ export const verifyImportedReferences = Effect.fnUntraced(function* (
       );
   }
 
-  if (payload._tag === "RunContextRecorded") {
-    const owner = yield* reader.runOwner(payload.runId);
+  const context = runContext(payload);
+
+  if (context !== undefined) {
+    const owner = yield* reader.runOwner(context.runId);
 
     const original =
       owner === undefined ? undefined : yield* resolve(submissionInputRecordId(owner.submissionId));
@@ -192,7 +195,7 @@ export const verifyImportedReferences = Effect.fnUntraced(function* (
       original.sequence >= entry.sequence
     )
       return yield* invalid("Saved context has no original admitted input", entry.threadId);
-    yield* validateContextBoundary(payload, original).pipe(
+    yield* validateContextBoundary(context, original).pipe(
       Effect.mapError((error) => invalid(error.message, entry.threadId)),
     );
   }
@@ -200,8 +203,8 @@ export const verifyImportedReferences = Effect.fnUntraced(function* (
   const references =
     payload._tag === "WorkerInputRefused"
       ? [payload.reservation, payload.stop]
-      : payload._tag === "RunContextRecorded"
-        ? payload.retained
+      : context !== undefined
+        ? context.retained
         : payload._tag === "RunContinuation"
           ? [
               payload.originalInput,
