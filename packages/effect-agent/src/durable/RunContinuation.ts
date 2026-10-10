@@ -442,7 +442,11 @@ export const validateProgressAppend = Effect.fnUntraced(function* (
       !Schema.toEquivalence(RunContinuation)(next, update.checkpoint.progress) ||
       update.previousRevision + 1 !== next.revision ||
       update.facts.some((fact) => !isOperationalRecord(fact)) ||
-      (update.retire && next.position !== "settled")
+      (update.retire &&
+        (next.position !== "settled" ||
+          next.terminal === undefined ||
+          (next.latestResponse !== undefined &&
+            next.accounting.accountedToolTurn < next.accounting.committedTurns)))
     )
       return yield* failure("Invalid active execution transition");
 

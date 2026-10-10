@@ -266,33 +266,30 @@ const submit = (thread: string, key: string) =>
 const corruptHistory = (owner: string, thread: string, sequence = 1) =>
   storage(owner, (state) => {
     const row = state.storage.sql
-      .exec<{ record_json: string }>(
-        "SELECT record_json FROM effect_agent_canonical_records WHERE thread_id = ? AND sequence = ?",
+      .exec<{ payload_json: string }>(
+        "SELECT payload_json FROM effect_agent_canonical_records WHERE thread_id = ? AND sequence = ?",
         thread,
         sequence,
       )
       .one();
 
-    const record = JSON.parse(row.record_json);
+    const payload = JSON.parse(row.payload_json);
 
     // Keep native ownership selectors addressable while corrupting the required evidence.
     const corrupted = JSON.stringify({
-      ...record,
-      payload: {
-        _tag: record.payload._tag,
-        ...("runId" in record.payload ? { runId: record.payload.runId } : {}),
-        private_fixture_payload: "never expose this value",
-      },
+      _tag: payload._tag,
+      ...("runId" in payload ? { runId: payload.runId } : {}),
+      private_fixture_payload: "never expose this value",
     });
 
     state.storage.sql.exec(
-      "UPDATE effect_agent_canonical_records SET record_json = ? WHERE thread_id = ? AND sequence = ?",
+      "UPDATE effect_agent_canonical_records SET payload_json = ? WHERE thread_id = ? AND sequence = ?",
       corrupted,
       thread,
       sequence,
     );
 
-    return Effect.runPromise(invalidate(state.storage).pipe(Effect.as(row.record_json)));
+    return Effect.runPromise(invalidate(state.storage).pipe(Effect.as(row.payload_json)));
   });
 
 // Regression: https://github.com/yielded-dev/agent/commit/35b5e858
@@ -715,7 +712,7 @@ describe("recovery faults independent of execution history", () => {
         // Restore only the selected evidence: no wake or source-generation mutation enables retry.
         yield* storage(owner, (state) => {
           state.storage.sql.exec(
-            "UPDATE effect_agent_canonical_records SET record_json = ? WHERE thread_id = ? AND sequence = ?",
+            "UPDATE effect_agent_canonical_records SET payload_json = ? WHERE thread_id = ? AND sequence = ?",
             original,
             owner,
             appended.lastSequence,

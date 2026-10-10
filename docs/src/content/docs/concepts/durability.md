@@ -83,6 +83,8 @@ fenced transaction as new history facts; a progress-only commit leaves the histo
 The ledger alone admits work and grants ownership. Normal settlement removes the checkpoint and
 its retry receipts atomically with the terminal fact. Unresolved operations retain their checkpoint
 until their obligations close. Terminal delivery reports can append without restarting a Run.
+SQL append retries after retirement compare retained canonical content; discarded operational intent
+is no longer available for comparison.
 
 Offline `verify` checks the history hash chain, retained fact counts and references, and each active
 checkpoint's original context digest. It cannot replay discarded checkpoint revisions or verify

@@ -10,6 +10,7 @@ import { Effect, Option, Schema, Stream } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { Fragment } from "effect/sql/Statement";
 
+import { RECORD_TAGS } from "../SqlCanonicalStorage.ts";
 import { makeSqlQuery, SqlInteger } from "../SqlStorage.ts";
 
 // Disjoint dyadic spans cover [input + 1, settlement). A point belongs to exactly one span
@@ -53,16 +54,20 @@ export const makeSqlSettlementIntervals = Effect.fnUntraced(function* (namespace
       Effect.mapError((cause) => invalid("Interval metadata is malformed", cause)),
     );
 
-  const boundary = Effect.fnUntraced(function* (threadId: ThreadId, recordId: string, tag: string) {
+  const boundary = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    recordId: string,
+    tag: keyof typeof RECORD_TAGS,
+  ) {
     const rows =
       yield* query(sql`SELECT sequence, record_tag FROM ${table("effect_agent_canonical_records")}
-      WHERE thread_id=${threadId} AND record_id=${recordId}`).pipe(
+      WHERE thread_id=${threadId} AND record_id=${JSON.stringify(recordId)}`).pipe(
         Effect.flatMap((r) =>
           decode(
             Schema.Array(
               Schema.Struct({
                 sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-                record_tag: Schema.String,
+                record_tag: SqlInteger,
               }),
             ),
             r,
@@ -72,7 +77,7 @@ export const makeSqlSettlementIntervals = Effect.fnUntraced(function* (namespace
 
     const row = rows[0];
 
-    if (rows.length > 1 || (row !== undefined && row.record_tag !== tag))
+    if (rows.length > 1 || (row !== undefined && row.record_tag !== RECORD_TAGS[tag]))
       return yield* invalid("Interval boundary has conflicting canonical identity");
 
     return row?.sequence;
@@ -201,7 +206,7 @@ export const makeSqlSettlementIntervals = Effect.fnUntraced(function* (namespace
           decode(
             Schema.Array(
               Schema.Struct({
-                record_tag: Schema.String,
+                record_tag: SqlInteger,
                 submission_id: Schema.NullOr(Schema.String),
               }),
             ),
@@ -212,7 +217,11 @@ export const makeSqlSettlementIntervals = Effect.fnUntraced(function* (namespace
 
     const row = rows[0];
 
-    if (rows.length !== 1 || row?.record_tag !== "UserInputRecorded" || row.submission_id === null)
+    if (
+      rows.length !== 1 ||
+      row?.record_tag !== RECORD_TAGS.UserInputRecorded ||
+      row.submission_id === null
+    )
       return yield* invalid("Indexed FIFO predecessor has no canonical input identity");
 
     return { submissionId: yield* decode(Schema.fromJsonString(SubmissionId), row.submission_id) };

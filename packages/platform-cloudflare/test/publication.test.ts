@@ -411,7 +411,7 @@ describe("durable host publication", () => {
           Schema.decodeUnknownSync(Schema.Struct({ declarations: Schema.Natural }))(
             state.storage.sql
               .exec(
-                "SELECT COUNT(*) AS declarations FROM effect_agent_canonical_records WHERE json_extract(record_json, '$.payload._tag') = 'ModelResponseRecorded'",
+                "SELECT COUNT(*) AS declarations FROM effect_agent_canonical_records WHERE json_extract(payload_json, '$._tag') = 'ModelResponseRecorded'",
               )
               .one(),
           ),

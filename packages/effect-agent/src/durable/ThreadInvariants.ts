@@ -51,7 +51,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
 
   const progress = makeThreadImportProgress();
 
-  // Canonical pages, not the disposable Run directory, determine what must be recomputed.
+  // Canonical pages, not the disposable Run directory, determine which retained facts to check.
   // Retain only one bounded selection; interleaved Runs may require another explicit read.
   let verifiedRun:
     | { readonly runId: RunId; readonly records: ReadonlyMap<RecordId, CanonicalRecordEnvelope> }
@@ -141,7 +141,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
             )
               fail(
                 "continuation-evidence",
-                `Canonical record ${entry.record.recordId} is missing or differs from recomputed Run evidence`,
+                `Canonical record ${entry.record.recordId} is missing or differs from retained Run evidence`,
               );
           }
         }).pipe(

@@ -537,7 +537,7 @@ Receipt, or scoped Thread/principal/key. The same principal/key in another Threa
 
 Cloudflare's separate Schedule and Subscription stores use their current fresh layouts and reject
 predecessor schemas without mutation. Their retained input and destination ownership remain
-independent of canonical Run progress.
+independent of active Run progress.
 
 Application checkpoint consumers validate their own Schema. `verifyOnOpen` audits canonical history
 and application projections. Active checkpoint references, revisions, and original context are

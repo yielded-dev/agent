@@ -8,7 +8,7 @@ export type LayoutExpression =
       LayoutExpression,
       LayoutExpression,
     ]
-  | readonly ["in" | "notIn", LayoutExpression, ReadonlyArray<string>]
+  | readonly ["in" | "notIn", LayoutExpression, ReadonlyArray<string | number>]
   | readonly ["and", ReadonlyArray<LayoutExpression>];
 
 /** Decode deparser syntax into meaning; unknown tokens/forms fail closed. Never execute it. */
@@ -82,6 +82,12 @@ const readExpressions = (input: string): ReadonlyArray<LayoutExpression> | undef
         value = ["length", column];
       } else value = ["column", name];
     }
+    if (take("::")) {
+      const type = identifier();
+
+      if (value?.[0] !== "integer" || (type !== "bigint" && type !== "pg_catalog.int8"))
+        return undefined;
+    }
     if (take("->>")) {
       const key = operand();
 
@@ -107,15 +113,15 @@ const readExpressions = (input: string): ReadonlyArray<LayoutExpression> | undef
     return value;
   };
 
-  const textList = (array: boolean): ReadonlyArray<string> | undefined => {
+  const textList = (array: boolean): ReadonlyArray<string | number> | undefined => {
     if (!take("(")) return undefined;
     if (array && (!take("array") || !take("["))) return undefined;
-    const values: Array<string> = [];
+    const values: Array<string | number> = [];
 
     do {
       const item = operand();
 
-      if (item?.[0] !== "text") return undefined;
+      if (item?.[0] !== "text" && item?.[0] !== "integer") return undefined;
       values.push(item[1]);
     } while (take(","));
     if (array && !take("]")) return undefined;

@@ -1062,26 +1062,13 @@ describe("SqliteSubmissionLedger", () => {
           }),
         );
 
-        const attemptRows = withSql(
-          filename,
-          Effect.gen(function* () {
-            const sql = yield* SqlClientService.SqlClient;
-
-            return yield* sql<Record<string, unknown>>`
-              SELECT attempt_id, submission_id, producer_epoch
-              FROM effect_agent_attempts
-              ORDER BY producer_epoch
-            `;
-          }),
-        );
-
         const canonicalRows = withSql(
           filename,
           Effect.gen(function* () {
             const sql = yield* SqlClientService.SqlClient;
 
             return yield* sql<Record<string, unknown>>`
-              SELECT record_id, record_json
+              SELECT record_id, payload_json
               FROM effect_agent_canonical_records
             `;
           }),
@@ -1163,7 +1150,6 @@ describe("SqliteSubmissionLedger", () => {
         expect(orphanedOwnership[0]?.producer_epoch).toBe(1);
         expect(yield* threadRows).toEqual([{ thread_id: lane, producer_epoch: 1 }]);
         expect((yield* submissionStates)[0]?.state).toBe("running");
-        expect(yield* attemptRows).toHaveLength(1);
         // The orphaned lease blocks until expiry; a later Attempt reclaims at a higher epoch.
         yield* select(undefined);
         expect(Option.isNone(yield* claimOnce)).toBe(true);
@@ -1173,7 +1159,16 @@ describe("SqliteSubmissionLedger", () => {
         expect(Option.isSome(claim)).toBe(true);
         if (Option.isNone(claim)) return;
         expect(claim.value.producerEpoch).toBe(2);
-        expect(yield* attemptRows).toHaveLength(2);
+        const currentOwnership = yield* ownershipRows;
+
+        expect(currentOwnership).toHaveLength(1);
+        expect(currentOwnership[0]?.producer_epoch).toBe(2);
+        expect(currentOwnership[0]?.attempt_id).toBe(claim.value.attemptId);
+        expect(currentOwnership[0]?.ownership_token).toBe(claim.value.ownershipToken);
+        expect(currentOwnership[0]?.attempt_id).not.toBe(orphanedOwnership[0]?.attempt_id);
+        expect(currentOwnership[0]?.ownership_token).not.toBe(
+          orphanedOwnership[0]?.ownership_token,
+        );
 
         const markInputOnce = failingLedger(
           Effect.gen(function* () {
@@ -1209,7 +1204,7 @@ describe("SqliteSubmissionLedger", () => {
 
         expect(publishedRows).toHaveLength(1);
         expect(publishedRows[0]?.record_id).toBe(
-          submissionSettlementRecordId(admitted.submissionId),
+          JSON.stringify(submissionSettlementRecordId(admitted.submissionId)),
         );
         expect((yield* submissionStates)[0]?.finalized_at).not.toBeNull();
         expect((yield* submissionStates)[0]?.state).toBe("settled");

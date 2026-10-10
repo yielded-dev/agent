@@ -621,6 +621,9 @@ export const prepareImportPage = Effect.fnUntraced(function* (
         Effect.mapError((e) => invalid(e.message, threadId)),
       );
 
+      if (record.payload._tag === "RunContinuation")
+        return yield* invalid("Mutable interpreter progress is not canonical history", threadId);
+
       records.push(CanonicalRecordEnvelope.make({ ...entry, record }));
       current.push(record);
       encoded.push(entry.record);

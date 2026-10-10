@@ -5,16 +5,21 @@ import { ScriptedModel, type ScriptedStreamPart } from "@yielded/agent-testing/s
 import { type AgentAttemptContext } from "@yielded/agent/agent-registration";
 import { digestDefinitions } from "@yielded/agent/digest";
 import { type Receipt } from "@yielded/agent/durable-agent-runtime";
-import { ThreadId } from "@yielded/agent/identifiers";
+import { SubmissionId, ThreadId } from "@yielded/agent/identifiers";
 import { DefinitionDigestInput } from "@yielded/agent/records";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
 import {
   IdempotencyKey,
   Principal,
   RecoverySnapshotRequest,
   SubmissionLedger,
 } from "@yielded/agent/submission-ledger";
-import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
-import { Clock, Deferred, Effect, Fiber, FileSystem, Layer, Path, Schema } from "effect";
+import {
+  ThreadExportRequest,
+  ThreadStore,
+  type ExecutionCheckpoint,
+} from "@yielded/agent/thread-store";
+import { Clock, Deferred, Effect, Fiber, FileSystem, Layer, Option, Path, Schema } from "effect";
 import { AiError, Model, Tool, Toolkit } from "effect/ai";
 
 import { BenchmarkError, check } from "./contracts.js";
@@ -118,6 +123,7 @@ export const runFairnessCase = Effect.fn("diagnostic.fairness")(
       toolCalls: 0,
       claimedSubmissionId: "",
       receipt: undefined as Receipt | undefined,
+      execution: undefined as ExecutionCheckpoint | undefined,
     }));
 
     const registrations = lanes.map((lane) => {
@@ -286,17 +292,43 @@ export const runFairnessCase = Effect.fn("diagnostic.fairness")(
       digestDefinitions(entry.definitions),
     ).pipe(Effect.provide(NodeCrypto.layer));
 
+    let atSettlement: Effect.Effect<void> = Effect.die("Settlement observer not acquired");
+
     const hostLayer = NodeDurableHost.layerRegistered(registrations, {
       filename: path.join(directory, "fairness.sqlite"),
       deploymentId: "fairness-diagnostic",
       producerId: "fairness-diagnostic",
       workerConcurrency: concurrency,
+      runtimeFailpoint: (location) =>
+        location === "terminalize:before-publication"
+          ? Effect.suspend(() => atSettlement)
+          : Effect.void,
     });
 
     const result = yield* Effect.gen(function* () {
       const host = yield* NodeDurableHost;
       const store = yield* ThreadStore;
       const ledger = yield* SubmissionLedger;
+
+      atSettlement = Effect.gen(function* () {
+        // The host callback is shared by the bounded worker pool. Capture each lane's
+        // validated completion while it is active, before publication can retire it.
+        if (typeof store.readExecution !== "function") return;
+        for (const lane of lanes) {
+          if (lane.execution !== undefined || lane.claimedSubmissionId === "") continue;
+
+          const execution = yield* store.readExecution({
+            threadId: lane.threadId,
+            runId: runIdForSubmission(SubmissionId.make(lane.claimedSubmissionId)),
+          });
+
+          if (
+            Option.isSome(execution) &&
+            execution.value.operational.some(({ payload }) => payload._tag === "RunCompleted")
+          )
+            lane.execution = execution.value;
+        }
+      }).pipe(Effect.orDie);
 
       const submit = Effect.fn("diagnostic.fairnessSubmit")(function* (index: number) {
         const lane = lanes[index]!;
@@ -377,10 +409,17 @@ export const runFairnessCase = Effect.fn("diagnostic.fairness")(
       for (const lane of lanes) {
         const log = yield* store.export(ThreadExportRequest.make({ threadId: lane.threadId }));
         const payloads = log.records.map(({ record }) => record.payload);
+        const current = typeof store.readExecution === "function";
+
+        yield* check(!current || lane.execution !== undefined, "Missing active fairness capture");
+
+        const operational = current
+          ? (lane.execution?.operational.map(({ payload }) => payload) ?? [])
+          : payloads;
 
         const inputs = payloads.filter((payload) => payload._tag === "UserInputRecorded");
-        const starts = payloads.filter((payload) => payload._tag === "RunStarted");
-        const completions = payloads.filter((payload) => payload._tag === "RunCompleted");
+        const starts = operational.filter((payload) => payload._tag === "RunStarted");
+        const completions = operational.filter((payload) => payload._tag === "RunCompleted");
         const settlements = payloads.filter((payload) => payload._tag === "SubmissionSettled");
         const runStarted = starts[0];
         const runCompleted = completions[0];
@@ -396,9 +435,16 @@ export const runFairnessCase = Effect.fn("diagnostic.fairness")(
         )
           return yield* BenchmarkError.make({
             message:
-              "Fairness lane did not retain exactly one started/completed Run and Settlement",
+              "Fairness lane lacks one observed started/completed Run and canonical Settlement",
           });
 
+        if (current)
+          yield* check(
+            Option.isNone(
+              yield* store.readExecution({ threadId: lane.threadId, runId: runStarted.runId }),
+            ),
+            "Completed fairness lane retained execution obligations",
+          );
         const output = yield* Schema.decodeUnknownEffect(FairnessOutput)(runCompleted.output);
         const settledOutput = yield* Schema.decodeUnknownEffect(FairnessOutput)(settlement.result);
 

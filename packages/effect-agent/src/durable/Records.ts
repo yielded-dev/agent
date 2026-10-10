@@ -1311,8 +1311,8 @@ export const CanonicalRecordPayload = KnownRecordPayload;
 export type CanonicalRecordPayload = typeof CanonicalRecordPayload.Type;
 
 /**
- * Versioned record envelope stored in an atomic batch. Thread ordering is assigned only
- * when the batch is committed.
+ * Versioned durable fact. Retained history acquires Thread ordering at its atomic commit;
+ * active operational facts keep their identities without a canonical sequence.
  */
 export class RecordEnvelope extends Schema.Class<RecordEnvelope>(
   "@effect-agent/thread/RecordEnvelope",

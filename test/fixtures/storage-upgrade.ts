@@ -80,9 +80,15 @@ export const snapshotStore = Effect.gen(function* () {
   const contents: Record<string, ReadonlyArray<object>> = {};
 
   for (const row of definitions)
-    if (row.sql.startsWith("CREATE TABLE"))
+    if (row.sql.startsWith("CREATE TABLE")) {
       // The table shape changes during the upgrade; do not reuse pre-DDL column metadata.
-      contents[row.name] = yield* sql`SELECT * FROM ${sql(row.name)} ORDER BY rowid`.unprepared;
+      const rows = yield* sql`SELECT * FROM ${sql(row.name)}`.unprepared;
+
+      // Logical contents have stable ordering for tables with or without SQLite rowids.
+      contents[row.name] = [...rows].sort((left, right) =>
+        JSON.stringify(left).localeCompare(JSON.stringify(right)),
+      );
+    }
 
   return { definitions, contents };
 });

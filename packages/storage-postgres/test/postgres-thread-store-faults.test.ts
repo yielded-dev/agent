@@ -510,7 +510,7 @@ describe("PostgresThreadStore faults", () => {
 
             yield* sql`
               UPDATE effect_agent_canonical_records
-              SET record_json = '{"schemaVersion":2}'
+              SET payload_json = '{"schemaVersion":2}'
               WHERE thread_id = ${threadId}
                 AND sequence = 1
             `;
@@ -553,14 +553,14 @@ describe("PostgresThreadStore faults", () => {
             const sql = yield* SqlClientService.SqlClient;
 
             return yield* sql<Record<string, unknown>>`
-              SELECT sequence, record_json
+              SELECT sequence, payload_json
               FROM effect_agent_canonical_records
               WHERE thread_id = ${threadId}
             `;
           }),
         );
 
-        expect(rows).toEqual([{ sequence: 1n, record_json: '{"schemaVersion":2}' }]);
+        expect(rows).toEqual([{ sequence: 1n, payload_json: '{"schemaVersion":2}' }]);
       }),
     ),
   );
