@@ -1,3 +1,4 @@
+import { RECORD_TAGS } from "@yielded/agent-storage-sql/sql-canonical-storage";
 import { makeSqlQuery, SqlInteger } from "@yielded/agent-storage-sql/sql-storage";
 import { SQL_PROMPT_PREDICATE } from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
@@ -173,22 +174,23 @@ const transferTriggers = [
 const layoutStatements = [
   'CREATE TABLE __NAMESPACE__."effect_agent_storage_version" ( id BOOLEAN PRIMARY KEY NOT NULL, version BIGINT NOT NULL, CONSTRAINT effect_agent_storage_version_single_row CHECK (id) )',
   'CREATE TABLE __NAMESPACE__."effect_agent_threads" ( thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, created_at TEXT COLLATE "C" NOT NULL, tail_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, producer_epoch BIGINT NOT NULL )',
+  'CREATE TABLE __NAMESPACE__.effect_agent_envelopes (envelope_key BIGSERIAL PRIMARY KEY NOT NULL, content_digest TEXT COLLATE "C" UNIQUE NOT NULL, prefix TEXT COLLATE "C" NOT NULL, before_payload TEXT COLLATE "C" NOT NULL, before_record_id TEXT COLLATE "C" NOT NULL, suffix TEXT COLLATE "C" NOT NULL)',
+  'CREATE TABLE __NAMESPACE__.effect_agent_run_keys (run_key BIGSERIAL PRIMARY KEY NOT NULL, thread_id TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C" NOT NULL, UNIQUE (thread_id, run_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__.effect_agent_threads(thread_id) ON DELETE RESTRICT)',
+  'CREATE TABLE __NAMESPACE__.effect_agent_definitions (definition_key BIGSERIAL PRIMARY KEY NOT NULL, content_digest TEXT COLLATE "C" UNIQUE NOT NULL, value_json TEXT COLLATE "C" NOT NULL)',
   'CREATE TABLE __NAMESPACE__.effect_agent_executions (thread_id TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C" NOT NULL, input_sequence BIGINT NOT NULL, revision BIGINT NOT NULL, checkpoint_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, run_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__.effect_agent_threads(thread_id) ON DELETE RESTRICT)',
   'CREATE TABLE __NAMESPACE__.effect_agent_execution_receipts (thread_id TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, commit_digest TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, run_id, batch_id), FOREIGN KEY (thread_id, run_id) REFERENCES __NAMESPACE__.effect_agent_executions(thread_id, run_id) ON DELETE RESTRICT)',
   "CREATE INDEX effect_agent_execution_receipts_batch ON __NAMESPACE__.effect_agent_execution_receipts(thread_id, batch_id)",
-  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_batches" ( thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, batch_digest TEXT COLLATE "C" NOT NULL, commit_digest TEXT COLLATE "C" NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, batch_header_json TEXT COLLATE "C" NOT NULL, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
-  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_records" ( thread_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, record_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, record_json TEXT COLLATE "C", record_tag TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C", tool_call_id TEXT COLLATE "C", input_kind TEXT COLLATE "C", source_submission_id TEXT COLLATE "C", message_id TEXT COLLATE "C", submission_id TEXT COLLATE "C", application_input BIGINT NOT NULL, context_through BIGINT, context_kind TEXT COLLATE "C", worker_thread_id TEXT COLLATE "C", handoff BIGINT NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id, batch_id) REFERENCES __NAMESPACE__."effect_agent_canonical_batches"(thread_id, batch_id) ON DELETE RESTRICT )',
-  'CREATE TABLE __NAMESPACE__."effect_agent_record_runs" ( thread_id TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, run_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__."effect_agent_canonical_records"(thread_id, sequence) ON DELETE RESTRICT )',
+  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_batches" ( thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, producer_id_json TEXT COLLATE "C" NOT NULL, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
+  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_records" ( thread_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, record_id TEXT COLLATE "C" NOT NULL, created_at_json TEXT COLLATE "C" NOT NULL, envelope_key BIGINT NOT NULL, payload_json TEXT COLLATE "C", record_tag BIGINT NOT NULL, run_id BIGINT, tool_call_id TEXT COLLATE "C", input_kind TEXT COLLATE "C", source_submission_id TEXT COLLATE "C", message_id TEXT COLLATE "C", submission_id TEXT COLLATE "C", application_input BIGINT NOT NULL, context_through BIGINT, context_kind TEXT COLLATE "C", worker_thread_id TEXT COLLATE "C", handoff BIGINT NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
+  'CREATE TABLE __NAMESPACE__."effect_agent_record_runs" ( thread_id TEXT COLLATE "C" NOT NULL, run_id BIGINT NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, run_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__."effect_agent_canonical_records"(thread_id, sequence) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__.effect_agent_tool_declarations (thread_id TEXT COLLATE "C" NOT NULL, settlement_record_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, settlement_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)',
   "CREATE INDEX effect_agent_tool_declarations_sequence ON __NAMESPACE__.effect_agent_tool_declarations(thread_id, sequence)",
   'CREATE TABLE __NAMESPACE__.effect_agent_record_refusals (thread_id TEXT COLLATE "C" NOT NULL, reservation_record_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, reservation_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)',
   "CREATE INDEX effect_agent_record_refusals_sequence ON __NAMESPACE__.effect_agent_record_refusals(thread_id, sequence)",
-  'CREATE INDEX effect_agent_canonical_records_batch ON __NAMESPACE__."effect_agent_canonical_records" (thread_id, batch_id, sequence)',
   'CREATE TABLE __NAMESPACE__."effect_agent_checkpoints" ( thread_id TEXT COLLATE "C" NOT NULL, through_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, checkpoint_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, through_sequence), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
-  'CREATE TABLE __NAMESPACE__."effect_agent_submissions" ( submission_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, thread_id TEXT COLLATE "C" NOT NULL, queue_sequence BIGINT NOT NULL, principal TEXT COLLATE "C" NOT NULL, idempotency_key TEXT COLLATE "C" NOT NULL, agent_id TEXT COLLATE "C" NOT NULL, agent_digests_json TEXT COLLATE "C" NOT NULL, deployment_id TEXT COLLATE "C" NOT NULL, input_json TEXT COLLATE "C" NOT NULL, input_digest TEXT COLLATE "C" NOT NULL, receipt_id TEXT COLLATE "C" NOT NULL, state TEXT COLLATE "C" NOT NULL, settled_outcome TEXT COLLATE "C", settled_record_id TEXT COLLATE "C", finalized_at TEXT COLLATE "C", created_at TEXT COLLATE "C" NOT NULL, ready_at TEXT COLLATE "C", input_applied_record_id TEXT COLLATE "C", input_applied_sequence BIGINT, joined_host_submission_id TEXT COLLATE "C", suspended_reason_json TEXT COLLATE "C", suspended_at TEXT COLLATE "C", unknown_reason TEXT COLLATE "C", unknown_tool_call_ids_json TEXT COLLATE "C", parent_submission_id TEXT COLLATE "C", parent_tool_call_id TEXT COLLATE "C", admission_group TEXT COLLATE "C", admission_fence_json TEXT COLLATE "C", worker_admission_json TEXT COLLATE "C", message_admission_json TEXT COLLATE "C", UNIQUE (thread_id, principal, idempotency_key), UNIQUE (thread_id, queue_sequence) )',
+  'CREATE TABLE __NAMESPACE__."effect_agent_submissions" ( submission_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, thread_id TEXT COLLATE "C" NOT NULL, queue_sequence BIGINT NOT NULL, principal TEXT COLLATE "C" NOT NULL, idempotency_key TEXT COLLATE "C" NOT NULL, agent_id TEXT COLLATE "C" NOT NULL, definition_key BIGINT NOT NULL, deployment_id TEXT COLLATE "C" NOT NULL, input_json TEXT COLLATE "C" NOT NULL, input_digest TEXT COLLATE "C" NOT NULL, receipt_id TEXT COLLATE "C" NOT NULL, state TEXT COLLATE "C" NOT NULL, settled_outcome TEXT COLLATE "C", settled_record_id TEXT COLLATE "C", finalized_at TEXT COLLATE "C", created_at TEXT COLLATE "C" NOT NULL, ready_at TEXT COLLATE "C", input_applied_record_id TEXT COLLATE "C", input_applied_sequence BIGINT, joined_host_submission_id TEXT COLLATE "C", suspended_reason_json TEXT COLLATE "C", suspended_at TEXT COLLATE "C", unknown_reason TEXT COLLATE "C", unknown_tool_call_ids_json TEXT COLLATE "C", parent_submission_id TEXT COLLATE "C", parent_tool_call_id TEXT COLLATE "C", admission_group TEXT COLLATE "C", admission_fence_json TEXT COLLATE "C", worker_admission_json TEXT COLLATE "C", message_admission_json TEXT COLLATE "C", UNIQUE (thread_id, principal, idempotency_key), UNIQUE (thread_id, queue_sequence) )',
   'CREATE INDEX effect_agent_submissions_group ON __NAMESPACE__."effect_agent_submissions" (thread_id, admission_group, state)',
   'CREATE TABLE __NAMESPACE__."effect_agent_submission_ownership" ( submission_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, attempt_id TEXT COLLATE "C" NOT NULL, ownership_token TEXT COLLATE "C" NOT NULL, producer_epoch BIGINT NOT NULL, owner_producer_id TEXT COLLATE "C" NOT NULL, lease_expires_at TEXT COLLATE "C" NOT NULL, FOREIGN KEY (submission_id) REFERENCES __NAMESPACE__."effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
-  'CREATE TABLE __NAMESPACE__."effect_agent_attempts" ( attempt_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, submission_id TEXT COLLATE "C" NOT NULL, thread_id TEXT COLLATE "C" NOT NULL, owner_producer_id TEXT COLLATE "C" NOT NULL, producer_epoch BIGINT NOT NULL, claimed_at TEXT COLLATE "C" NOT NULL, FOREIGN KEY (submission_id) REFERENCES __NAMESPACE__."effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__."effect_agent_abort_intents" ( submission_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, author TEXT COLLATE "C" NOT NULL, reason TEXT COLLATE "C" NOT NULL, requested_at TEXT COLLATE "C" NOT NULL, canonical_record_id TEXT COLLATE "C", FOREIGN KEY (submission_id) REFERENCES __NAMESPACE__."effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
   'CREATE INDEX effect_agent_submissions_joined_host ON __NAMESPACE__."effect_agent_submissions" (joined_host_submission_id)',
   'CREATE TABLE __NAMESPACE__."effect_agent_approval_decisions" ( submission_id TEXT COLLATE "C" NOT NULL, tool_call_id TEXT COLLATE "C" NOT NULL, decision TEXT COLLATE "C" NOT NULL, resolver TEXT COLLATE "C" NOT NULL, reason TEXT COLLATE "C" NOT NULL, decided_at TEXT COLLATE "C" NOT NULL, PRIMARY KEY (submission_id, tool_call_id), FOREIGN KEY (submission_id) REFERENCES __NAMESPACE__."effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
@@ -215,29 +217,27 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_worker_starts ON __NAMESPACE__.\"effect_agent_message_deliveries\"(owner_thread_id, (read_metadata ->> 'delegationId'), (read_metadata ->> 'targetAgentId'), message_id) WHERE (read_metadata ->> 'workerStart') = 'true'",
   "CREATE INDEX effect_agent_worker_pending ON __NAMESPACE__.\"effect_agent_message_deliveries\"(owner_thread_id, (read_metadata ->> 'threadId'), message_id) WHERE state IN ('pending', 'parked') AND (read_metadata ->> 'hasReceipt') = 'false'",
   'CREATE INDEX effect_agent_records_call ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, record_tag, run_id, tool_call_id)',
-  "CREATE INDEX effect_agent_records_run_input ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, run_id) WHERE record_tag = 'UserInputRecorded' AND input_kind = 'user'",
-  "CREATE INDEX effect_agent_records_subtree ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, source_submission_id, sequence) WHERE record_tag = 'SubtreeBudgetReserved'",
-  "CREATE INDEX effect_agent_records_worker_input ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, message_id) WHERE record_tag = 'WorkerInputRequested'",
+  "CREATE INDEX effect_agent_records_run_input ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, run_id) WHERE record_tag = 30 AND input_kind = 'user'",
+  'CREATE INDEX effect_agent_records_subtree ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, source_submission_id, sequence) WHERE record_tag = 22',
+  'CREATE INDEX effect_agent_records_worker_input ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, message_id) WHERE record_tag = 34',
   'CREATE INDEX effect_agent_worker_execution ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, record_tag, sequence) WHERE run_id IS NOT NULL',
   "CREATE INDEX effect_agent_message_deliveries_pending ON __NAMESPACE__.\"effect_agent_message_deliveries\"(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused')",
-  "CREATE INDEX effect_agent_records_continuation ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, run_id, sequence) WHERE record_tag = 'RunContinuation'",
   'CREATE INDEX effect_agent_records_tag ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, record_tag, sequence)',
   'CREATE INDEX effect_agent_records_handoff ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, sequence) WHERE handoff = 1',
   "CREATE INDEX effect_agent_records_run_identity ON __NAMESPACE__.effect_agent_canonical_records(thread_id, run_id) WHERE run_id IS NOT NULL",
   "CREATE INDEX effect_agent_records_application_input ON __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) WHERE application_input = 1",
-  "CREATE INDEX effect_agent_records_context ON __NAMESPACE__.effect_agent_canonical_records(thread_id, context_through, sequence) WHERE record_tag = 'RunContextRecorded'",
   `CREATE INDEX effect_agent_records_prompt ON __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) WHERE ${SQL_PROMPT_PREDICATE}`,
-  "CREATE INDEX effect_agent_records_admitted_input ON __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) WHERE record_tag = 'UserInputRecorded' AND submission_id IS NOT NULL",
+  "CREATE INDEX effect_agent_records_admitted_input ON __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) WHERE record_tag = 30 AND submission_id IS NOT NULL",
   // Prefix indexes let a coverage range produce at most 53 latest-visible candidates.
-  "CREATE INDEX effect_agent_records_rollover ON __NAMESPACE__.effect_agent_canonical_records(thread_id, context_through, sequence) WHERE record_tag = 'CompactionCreated' AND context_kind = 'rollover'",
+  "CREATE INDEX effect_agent_records_rollover ON __NAMESPACE__.effect_agent_canonical_records(thread_id, context_through, sequence) WHERE record_tag = 3 AND context_kind = 'rollover'",
   ...Array.from(
     { length: 52 },
     (_, i) =>
-      `CREATE INDEX effect_agent_records_rollover_bucket_${i + 1} ON __NAMESPACE__.effect_agent_canonical_records(thread_id, (context_through >> ${i + 1}), sequence) WHERE record_tag = 'CompactionCreated' AND context_kind = 'rollover'`,
+      `CREATE INDEX effect_agent_records_rollover_bucket_${i + 1} ON __NAMESPACE__.effect_agent_canonical_records(thread_id, (context_through >> ${i + 1}), sequence) WHERE record_tag = 3 AND context_kind = 'rollover'`,
   ),
-  "CREATE INDEX effect_agent_records_worker_funding ON __NAMESPACE__.effect_agent_canonical_records(thread_id, source_submission_id, sequence, message_id) WHERE record_tag = 'WorkerInputRequested'",
-  "CREATE INDEX effect_agent_records_worker_completed ON __NAMESPACE__.effect_agent_canonical_records(thread_id, message_id, sequence) WHERE record_tag = 'WorkerInputCompleted'",
-  "CREATE INDEX effect_agent_records_worker_stop ON __NAMESPACE__.effect_agent_canonical_records(thread_id, worker_thread_id, sequence) WHERE record_tag = 'WorkerStopRequested'",
+  "CREATE INDEX effect_agent_records_worker_funding ON __NAMESPACE__.effect_agent_canonical_records(thread_id, source_submission_id, sequence, message_id) WHERE record_tag = 34",
+  "CREATE INDEX effect_agent_records_worker_completed ON __NAMESPACE__.effect_agent_canonical_records(thread_id, message_id, sequence) WHERE record_tag = 32",
+  "CREATE INDEX effect_agent_records_worker_stop ON __NAMESPACE__.effect_agent_canonical_records(thread_id, worker_thread_id, sequence) WHERE record_tag = 38",
   "CREATE INDEX effect_agent_message_deliveries_identity ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, (read_metadata ->> 'messageId'))",
   "CREATE INDEX effect_agent_message_deliveries_peer ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused') AND (read_metadata ->> 'peer') = 'true'",
   'CREATE TABLE __NAMESPACE__.effect_agent_journal_ranges (thread_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, previous_tail_digest TEXT COLLATE "C" NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, record_count BIGINT NOT NULL, batch_count BIGINT NOT NULL, byte_count BIGINT NOT NULL, state TEXT COLLATE "C" NOT NULL, locator TEXT COLLATE "C", PRIMARY KEY (thread_id, first_sequence), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__.effect_agent_threads(thread_id) ON DELETE RESTRICT)',
@@ -446,23 +446,38 @@ const layoutShape: Readonly<
       ],
     },
   },
-  effect_agent_attempts: {
+  effect_agent_envelopes: {
     columns: [
-      "attempt_id:text:true",
-      "submission_id:text:true",
-      "thread_id:text:true",
-      "owner_producer_id:text:true",
-      "producer_epoch:bigint:true",
-      "claimed_at:text:true",
+      "envelope_key:bigint:true",
+      "content_digest:text:true",
+      "prefix:text:true",
+      "before_payload:text:true",
+      "before_record_id:text:true",
+      "suffix:text:true",
     ],
     constraints: {
-      effect_agent_attempts_pkey: ["p", ["attempt_id"]],
-      effect_agent_attempts_submission_id_fkey: [
+      effect_agent_envelopes_pkey: ["p", ["envelope_key"]],
+      effect_agent_envelopes_content_digest_key: ["u", ["content_digest"]],
+    },
+  },
+  effect_agent_run_keys: {
+    columns: ["run_key:bigint:true", "thread_id:text:true", "run_id:text:true"],
+    constraints: {
+      effect_agent_run_keys_pkey: ["p", ["run_key"]],
+      effect_agent_run_keys_thread_id_run_id_key: ["u", ["thread_id", "run_id"]],
+      effect_agent_run_keys_thread_id_fkey: [
         "f",
-        ["submission_id"],
-        "effect_agent_submissions",
-        ["submission_id"],
+        ["thread_id"],
+        "effect_agent_threads",
+        ["thread_id"],
       ],
+    },
+  },
+  effect_agent_definitions: {
+    columns: ["definition_key:bigint:true", "content_digest:text:true", "value_json:text:true"],
+    constraints: {
+      effect_agent_definitions_pkey: ["p", ["definition_key"]],
+      effect_agent_definitions_content_digest_key: ["u", ["content_digest"]],
     },
   },
   effect_agent_canonical_batches: {
@@ -471,10 +486,8 @@ const layoutShape: Readonly<
       "batch_id:text:true",
       "first_sequence:bigint:true",
       "last_sequence:bigint:true",
-      "batch_digest:text:true",
-      "commit_digest:text:true",
       "tail_digest:text:true",
-      "batch_header_json:text:true",
+      "producer_id_json:text:true",
     ],
     constraints: {
       effect_agent_canonical_batches_pkey: ["p", ["thread_id", "batch_id"]],
@@ -531,7 +544,7 @@ const layoutShape: Readonly<
     constraints: { effect_agent_live_child_reservations_pkey: ["p", ["reservation_id"]] },
   },
   effect_agent_record_runs: {
-    columns: ["thread_id:text:true", "run_id:text:true", "sequence:bigint:true"],
+    columns: ["thread_id:text:true", "run_id:bigint:true", "sequence:bigint:true"],
     constraints: {
       effect_agent_record_runs_pkey: ["p", ["thread_id", "run_id", "sequence"]],
       effect_agent_record_runs_thread_id_sequence_fkey: [
@@ -547,10 +560,11 @@ const layoutShape: Readonly<
       "thread_id:text:true",
       "sequence:bigint:true",
       "record_id:text:true",
-      "batch_id:text:true",
-      "record_json:text:false",
-      "record_tag:text:true",
-      "run_id:text:false",
+      "created_at_json:text:true",
+      "envelope_key:bigint:true",
+      "payload_json:text:false",
+      "record_tag:bigint:true",
+      "run_id:bigint:false",
       "tool_call_id:text:false",
       "input_kind:text:false",
       "source_submission_id:text:false",
@@ -564,11 +578,11 @@ const layoutShape: Readonly<
     ],
     constraints: {
       effect_agent_canonical_records_pkey: ["p", ["thread_id", "sequence"]],
-      effect_agent_canonical_records_thread_id_batch_id_fkey: [
+      effect_agent_canonical_records_thread_id_fkey: [
         "f",
-        ["thread_id", "batch_id"],
-        "effect_agent_canonical_batches",
-        ["thread_id", "batch_id"],
+        ["thread_id"],
+        "effect_agent_threads",
+        ["thread_id"],
       ],
       effect_agent_canonical_records_thread_id_record_id_key: ["u", ["thread_id", "record_id"]],
     },
@@ -675,7 +689,7 @@ const layoutShape: Readonly<
       "principal:text:true",
       "idempotency_key:text:true",
       "agent_id:text:true",
-      "agent_digests_json:text:true",
+      "definition_key:bigint:true",
       "deployment_id:text:true",
       "input_json:text:true",
       "input_digest:text:true",
@@ -1000,15 +1014,14 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
     columns: ["thread_id", "sequence"],
     predicate: ["eq", ["column", "application_input"], ["integer", 1]],
   },
-  effect_agent_records_context: {
-    table: "effect_agent_canonical_records",
-    columns: ["thread_id", "context_through", "sequence"],
-    predicate: ["eq", ["column", "record_tag"], ["text", "RunContextRecorded"]],
-  },
   effect_agent_records_prompt: {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", "sequence"],
-    predicate: ["in", ["column", "record_tag"], PROMPT_EVIDENCE_TAGS],
+    predicate: [
+      "in",
+      ["column", "record_tag"],
+      PROMPT_EVIDENCE_TAGS.map((tag) => RECORD_TAGS[tag]),
+    ],
   },
   effect_agent_records_admitted_input: {
     table: "effect_agent_canonical_records",
@@ -1016,7 +1029,7 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
     predicate: [
       "and",
       [
-        ["eq", ["column", "record_tag"], ["text", "UserInputRecorded"]],
+        ["eq", ["column", "record_tag"], ["integer", 30]],
         ["notNull", ["column", "submission_id"]],
       ],
     ],
@@ -1031,7 +1044,7 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
         predicate: [
           "and",
           [
-            ["eq", ["column", "record_tag"], ["text", "CompactionCreated"]],
+            ["eq", ["column", "record_tag"], ["integer", 3]],
             ["eq", ["column", "context_kind"], ["text", "rollover"]],
           ],
         ],
@@ -1044,7 +1057,7 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
     predicate: [
       "and",
       [
-        ["eq", ["column", "record_tag"], ["text", "CompactionCreated"]],
+        ["eq", ["column", "record_tag"], ["integer", 3]],
         ["eq", ["column", "context_kind"], ["text", "rollover"]],
       ],
     ],
@@ -1052,17 +1065,17 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
   effect_agent_records_worker_funding: {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", "source_submission_id", "sequence", "message_id"],
-    predicate: ["eq", ["column", "record_tag"], ["text", "WorkerInputRequested"]],
+    predicate: ["eq", ["column", "record_tag"], ["integer", 34]],
   },
   effect_agent_records_worker_completed: {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", "message_id", "sequence"],
-    predicate: ["eq", ["column", "record_tag"], ["text", "WorkerInputCompleted"]],
+    predicate: ["eq", ["column", "record_tag"], ["integer", 32]],
   },
   effect_agent_records_worker_stop: {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", "worker_thread_id", "sequence"],
-    predicate: ["eq", ["column", "record_tag"], ["text", "WorkerStopRequested"]],
+    predicate: ["eq", ["column", "record_tag"], ["integer", 38]],
   },
   effect_agent_message_deliveries_identity: {
     table: "effect_agent_message_deliveries",
@@ -1080,11 +1093,6 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
       ],
     ],
   },
-  effect_agent_records_continuation: {
-    table: "effect_agent_canonical_records",
-    columns: ["thread_id", "run_id", "sequence"],
-    predicate: ["eq", ["column", "record_tag"], ["text", "RunContinuation"]],
-  },
   effect_agent_records_tag: {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", "record_tag", "sequence"],
@@ -1093,10 +1101,6 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", "sequence"],
     predicate: ["eq", ["column", "handoff"], ["integer", 1]],
-  },
-  effect_agent_canonical_records_batch: {
-    table: "effect_agent_canonical_records",
-    columns: ["thread_id", "batch_id", "sequence"],
   },
   effect_agent_message_deliveries_due: {
     table: "effect_agent_message_deliveries",
@@ -1124,7 +1128,7 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
     predicate: [
       "and",
       [
-        ["eq", ["column", "record_tag"], ["text", "UserInputRecorded"]],
+        ["eq", ["column", "record_tag"], ["integer", 30]],
         ["eq", ["column", "input_kind"], ["text", "user"]],
       ],
     ],
@@ -1132,12 +1136,12 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
   effect_agent_records_subtree: {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", "source_submission_id", "sequence"],
-    predicate: ["eq", ["column", "record_tag"], ["text", "SubtreeBudgetReserved"]],
+    predicate: ["eq", ["column", "record_tag"], ["integer", 22]],
   },
   effect_agent_records_worker_input: {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", "message_id"],
-    predicate: ["eq", ["column", "record_tag"], ["text", "WorkerInputRequested"]],
+    predicate: ["eq", ["column", "record_tag"], ["integer", 34]],
   },
   effect_agent_schedules_deadline: {
     table: "effect_agent_schedules",

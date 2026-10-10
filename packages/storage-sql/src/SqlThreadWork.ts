@@ -38,6 +38,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 
 import { makeSqlSettlementIntervals } from "./internal/settlement-intervals.ts";
 import { sqliteJsonText } from "./internal/sql-json.ts";
+import { makeCanonicalStorage, recordBatchId } from "./SqlCanonicalStorage.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 import { canonicalRecordJson } from "./SqlThreadArchiveRange.ts";
 import { canonicalRecordMetadata, canonicalRecordPointers } from "./SqlThreadNativeReads.ts";
@@ -160,8 +161,8 @@ const metadataFailure = (cause: Schema.SchemaError) => failure("decode work meta
 
 const RebuildRow = Schema.Struct({
   sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-  record_id: RecordId,
-  batch_id: CanonicalRecordEnvelope.fields.batchId,
+  record_id: Schema.fromJsonString(RecordId),
+  batch_id: Schema.fromJsonString(CanonicalRecordEnvelope.fields.batchId),
   record_bytes: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
 });
 
@@ -178,6 +179,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
   const crypto = yield* Crypto.Crypto;
   const { table, execute } = yield* makeSqlQuery(options.namespace);
   const recordJson = canonicalRecordJson(sql, options.namespace);
+  const physical = yield* makeCanonicalStorage(options.namespace);
   let tablesPresent = false;
 
   // Schema presence belongs to this storage session. Owners invalidate it with their other
@@ -701,7 +703,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
 
           const plan = yield* decode(
             Schema.Array(RebuildRow),
-            yield* query(sql`SELECT sequence, record_id, batch_id,
+            yield* query(sql`SELECT sequence, record_id, ${recordBatchId(sql, options.namespace)} AS batch_id,
           ${sql.onDialectOrElse({ pg: () => sql`octet_length(${recordJson})`, orElse: () => sql`length(CAST(${recordJson} AS BLOB))` })} AS record_bytes
           FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${request.threadId} AND sequence>${current.through_sequence}
             AND sequence<=${observedTail} ORDER BY sequence LIMIT ${request.limit ?? MAX_WORK_REBUILD_RECORDS}`),
@@ -739,14 +741,14 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
 
             const metadata = canonicalRecordMetadata({ canonical: record, wire });
 
-            yield* query(sql`UPDATE ${table("effect_agent_canonical_records")} SET ${sql.update(metadata.columns)}
+            yield* query(sql`UPDATE ${table("effect_agent_canonical_records")} SET ${sql.update({ ...metadata.columns, run_id: metadata.columns.run_id === null ? null : yield* physical.run(request.threadId, metadata.columns.run_id) })}
             WHERE thread_id=${request.threadId} AND sequence=${row.sequence}`);
             yield* query(
               sql`DELETE FROM ${table("effect_agent_record_runs")} WHERE thread_id=${request.threadId} AND sequence=${row.sequence}`,
             );
             for (const runId of metadata.runIds)
               yield* query(sql`INSERT INTO ${table("effect_agent_record_runs")} (thread_id, run_id, sequence)
-            VALUES (${request.threadId}, ${runId}, ${row.sequence})`);
+            VALUES (${request.threadId}, ${yield* physical.run(request.threadId, runId)}, ${row.sequence})`);
             yield* indexCanonicalPointers(request.threadId, row.sequence, record, true);
             workerMode = yield* fold(request.threadId, row.sequence, record, workerMode);
             through = row.sequence;

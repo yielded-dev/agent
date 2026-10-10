@@ -347,8 +347,9 @@ export const IntegrityCheckName = Schema.Literals([
   "sequence-contiguity",
   /** The tail digest chain recomputes from EMPTY_TAIL_DIGEST over every batch (DUR-006/DUR-007). */
   "digest-chain",
-  /** Every canonical Run fact participates in bounded continuation reconstruction, independently
-   * of the disposable Run directory. Persisted progress, accounting and references must agree. */
+  /** Every retained Run fact is addressable independently of the disposable Run directory.
+   * Current execution references and original context must agree with retained history;
+   * discarded checkpoint revisions and their historical counters are not reconstructed. */
   "continuation-evidence",
   /** Canonical `input:{sid}` records follow the admitted FIFO order (DUR-004). */
   "fifo-input-order",

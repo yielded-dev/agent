@@ -528,7 +528,7 @@ describe("SqliteThreadStore", () => {
 
             yield* sql`
               UPDATE effect_agent_canonical_records
-              SET record_json = '{"schemaVersion":2}'
+              SET payload_json = '{"schemaVersion":2}'
               WHERE thread_id = ${threadId}
                 AND sequence = 1
             `;
@@ -574,14 +574,14 @@ describe("SqliteThreadStore", () => {
             const sql = yield* SqlClientService.SqlClient;
 
             return yield* sql<Record<string, unknown>>`
-              SELECT sequence, record_json
+              SELECT sequence, payload_json
               FROM effect_agent_canonical_records
               WHERE thread_id = ${threadId}
             `;
           }),
         );
 
-        expect(rows).toEqual([{ sequence: 1, record_json: '{"schemaVersion":2}' }]);
+        expect(rows).toEqual([{ sequence: 1, payload_json: '{"schemaVersion":2}' }]);
       }),
     ),
   );
@@ -777,7 +777,10 @@ describe("SqliteThreadStore", () => {
             expect(
               yield* sql`SELECT record_id FROM effect_agent_canonical_records
             WHERE thread_id=${threadId} ORDER BY sequence`,
-            ).toEqual([{ record_id: "independent-fact" }, { record_id: "session-fact" }]);
+            ).toEqual([
+              { record_id: JSON.stringify("independent-fact") },
+              { record_id: JSON.stringify("session-fact") },
+            ]);
           } else {
             yield* independent.materialize(
               ThreadMaterialization.make({

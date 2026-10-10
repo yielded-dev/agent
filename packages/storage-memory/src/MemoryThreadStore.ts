@@ -18,7 +18,6 @@ import {
   RUN_TERMINAL_RESERVE_RECORDS,
   MAX_RUN_RECOVERY_SUFFIX_RECORDS,
   MAX_RUN_RECOVERY_SUFFIX_BYTES,
-  MAX_RUN_CONTINUATION_BYTES,
   PromptRecord,
   type PromptRecordEnvelope,
 } from "@yielded/agent/records";
@@ -230,13 +229,11 @@ function* earlierSettlementInputs(
 interface StoredThread {
   /** Append-only owner indexes; readers must constrain them to their captured canonical tail. */
   readonly runRecords: Map<string, Array<CanonicalRecordEnvelope>>;
-  readonly continuations: Map<string, Array<CanonicalRecordEnvelope>>;
   readonly operationRecords: Map<string, Array<CanonicalRecordEnvelope>>;
   readonly handoffs: Array<CanonicalRecordEnvelope>;
   readonly agentUpdates: Array<CanonicalRecordEnvelope>;
   readonly deliveryPredecessors: Array<CanonicalRecordEnvelope>;
   readonly toolDeclarations: Map<string, CanonicalRecordEnvelope | null>;
-  readonly contexts: Array<CanonicalRecordEnvelope>;
   readonly promptEvidence: Array<CanonicalRecordEnvelope>;
   readonly modelCompletions: Array<CanonicalRecordEnvelope>;
   readonly applicationInputs: Array<CanonicalRecordEnvelope>;
@@ -327,7 +324,6 @@ interface MemoryState {
 type NativeIndexes = Pick<
   StoredThread,
   | "toolDeclarations"
-  | "contexts"
   | "promptEvidence"
   | "modelCompletions"
   | "applicationInputs"
@@ -339,7 +335,6 @@ type NativeIndexes = Pick<
   | "byId"
   | "runInputs"
   | "runRecords"
-  | "continuations"
   | "handoffs"
   | "operationRecords"
   | "agentUpdates"
@@ -348,7 +343,6 @@ type NativeIndexes = Pick<
 
 const emptyIndexes = (): NativeIndexes => ({
   toolDeclarations: new Map(),
-  contexts: [],
   promptEvidence: [],
   modelCompletions: [],
   applicationInputs: [],
@@ -360,7 +354,6 @@ const emptyIndexes = (): NativeIndexes => ({
   byId: new Map(),
   runInputs: new Map(),
   runRecords: new Map(),
-  continuations: new Map(),
   handoffs: [],
   agentUpdates: [],
   deliveryPredecessors: [],
@@ -588,7 +581,6 @@ const prepareIndexes = (
   const byId = new Map<string, CanonicalRecordEnvelope>();
   const runInputs = new Map<string, CanonicalRecordEnvelope | null>();
   const runRecords = new Map<string, Array<CanonicalRecordEnvelope>>();
-  const continuations = new Map<string, Array<CanonicalRecordEnvelope>>();
   const handoffs: Array<CanonicalRecordEnvelope> = [];
   const agentUpdates: Array<CanonicalRecordEnvelope> = [];
 
@@ -601,7 +593,6 @@ const prepareIndexes = (
     byId.set(entry.record.recordId, entry);
     const payload = entry.record.payload;
 
-    if (payload._tag === "RunContextRecorded") nativeAdds.contexts.push(entry);
     if (payload._tag === "ModelResponseRecorded")
       for (const operation of payload.toolOperations) {
         const id = toolCallSettledRecordId(payload.runId, payload.turn, operation.toolCallId);
@@ -643,9 +634,7 @@ const prepareIndexes = (
           entry,
         );
 
-    for (const runId of canonicalRunIds(entry.record))
-      if (payload._tag === "RunContinuation") appendToIndex(continuations, runId, entry);
-      else appendToIndex(runRecords, runId, entry);
+    for (const runId of canonicalRunIds(entry.record)) appendToIndex(runRecords, runId, entry);
     if (isWorkHandoff(entry.record)) handoffs.push(entry);
     if (payload._tag === "AgentUpdateEmitted") agentUpdates.push(entry);
     if (
@@ -738,20 +727,9 @@ const prepareIndexes = (
     indexes: { ...previous, peerCount },
     commit: () => {
       commitIndex(previous.runRecords, runRecords);
-      commitIndex(previous.continuations, continuations);
       commitIndex(previous.operationRecords, operationAppends);
       for (const [id, entry] of nativeAdds.toolDeclarations)
         previous.toolDeclarations.set(id, entry);
-      for (const entry of nativeAdds.contexts) {
-        const payload = entry.record.payload;
-        const old = previous.contexts.at(-1)?.record.payload;
-
-        if (
-          payload._tag === "RunContextRecorded" &&
-          (old?._tag !== "RunContextRecorded" || payload.historyThrough >= old.historyThrough)
-        )
-          previous.contexts.push(entry);
-      }
       for (const key of ["promptEvidence", "modelCompletions", "applicationInputs"] as const)
         for (const entry of nativeAdds[key]) previous[key].push(entry);
       commitIndex(previous.windowBoundaries, nativeAdds.windowBoundaries);
@@ -1257,13 +1235,11 @@ const makeThreadStore = Effect.gen(function* () {
             peerCount: 0,
             runInputs: new Map(),
             runRecords: new Map(),
-            continuations: new Map(),
             operationRecords: new Map(),
             handoffs: [],
             agentUpdates: [],
             deliveryPredecessors: [],
             toolDeclarations: new Map(),
-            contexts: [],
             promptEvidence: [],
             modelCompletions: [],
             applicationInputs: [],
@@ -1826,9 +1802,6 @@ const makeThreadStore = Effect.gen(function* () {
             sources = [one(entry)];
             break;
           }
-          case "RunContinuation":
-            sources = [latest(thread.continuations.get(selection.runId) ?? [])];
-            break;
           case "RunEvidence":
             sources = [
               thread.runRecords.get(selection.runId) ?? [],
@@ -1863,9 +1836,6 @@ const makeThreadStore = Effect.gen(function* () {
             break;
           case "DeliveryPredecessor":
             sources = [latest(thread.deliveryPredecessors)];
-            break;
-          case "LatestRunContext":
-            sources = [latest(thread.contexts)];
             break;
           case "LatestModelCompleted":
             sources = [latest(thread.modelCompletions)];
@@ -2220,25 +2190,16 @@ const makeThreadStore = Effect.gen(function* () {
       const records: Array<CanonicalRecordEnvelope> = [];
       let bytes = 0;
       const facts = thread.runRecords.get(runId) ?? [];
-      const progress = thread.continuations.get(runId) ?? [];
 
       if (
         facts.length >
-          MAX_RUN_EVIDENCE_RECORDS +
-            RUN_TERMINAL_RESERVE_RECORDS +
-            MAX_RUN_RECOVERY_SUFFIX_RECORDS ||
-        progress.length > MAX_RUN_EVIDENCE_RECORDS + RUN_TERMINAL_RESERVE_RECORDS
+        MAX_RUN_EVIDENCE_RECORDS + RUN_TERMINAL_RESERVE_RECORDS + MAX_RUN_RECOVERY_SUFFIX_RECORDS
       )
         return yield* storeError("Run evidence", "Run record bounds exceeded");
       for (const entry of facts) {
         bytes += canonicalRecordBytes(entry.record);
         if (bytes > MAX_RUN_EVIDENCE_BYTES + MAX_RUN_TERMINAL_BYTES + MAX_RUN_RECOVERY_SUFFIX_BYTES)
           return yield* storeError("Run evidence", "Run byte bounds exceeded");
-        records.push(entry);
-      }
-      for (const entry of progress) {
-        if (canonicalRecordBytes(entry.record) > MAX_RUN_CONTINUATION_BYTES)
-          return yield* storeError("Run evidence", "Continuation byte bound exceeded");
         records.push(entry);
       }
 
@@ -2998,11 +2959,6 @@ const makeThreadStore = Effect.gen(function* () {
           const submissions = () => ledgerTransfer?.submissions(id) ?? Stream.empty;
 
           const runs = Stream.fromIterable(thread.runRecords.keys()).pipe(
-            Stream.concat(
-              Stream.fromIterable(thread.continuations.keys()).pipe(
-                Stream.filter((run) => !thread.runRecords.has(run)),
-              ),
-            ),
             Stream.map((runId) => Schema.decodeSync(RunId)(runId)),
           );
 

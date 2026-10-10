@@ -1,3 +1,4 @@
+import { makeCanonicalStorage } from "@yielded/agent-storage-sql/sql-canonical-storage";
 import {
   CanonicalBatch,
   DefinitionDigests,
@@ -180,15 +181,18 @@ const seedScan = Effect.fn("LedgerReadFixture.seedScan")(function* (count: numbe
     definitions,
   );
 
+  const storage = yield* makeCanonicalStorage();
+  const definitionKey = yield* storage.definition(encodedDefinitions);
+
   yield* sql`
     WITH RECURSIVE positions(n) AS (SELECT 0 UNION ALL SELECT n + 1 FROM positions WHERE n + 1 < ${count})
     INSERT INTO effect_agent_submissions (
       submission_id, thread_id, queue_sequence, principal, idempotency_key,
-      agent_id, agent_digests_json, deployment_id, input_json, input_digest,
+      agent_id, definition_key, deployment_id, input_json, input_digest,
       receipt_id, state, settled_outcome, created_at, ready_at
     )
     SELECT 'scan-' || n, 'scan-lane', n + 1, 'ledger-read-test', 'scan-' || n,
-      'ledger-read-test', ${encodedDefinitions}, ${deploymentId}, 'null', ${digest},
+      'ledger-read-test', ${definitionKey}, ${deploymentId}, 'null', ${digest},
       'receipt-scan-' || n,
       'ready',
       NULL,
@@ -283,7 +287,7 @@ export const ledgerReadCases = (invalidateReadState: Effect.Effect<void> = Effec
       const request = yield* publishReadFixture(`corrupt-${corruption}`);
 
       yield* ledger.finalizeSettlement(request);
-      const recordId = submissionSettlementRecordId(request.submissionId);
+      const recordId = JSON.stringify(submissionSettlementRecordId(request.submissionId));
 
       yield* sql`DELETE FROM effect_agent_record_runs WHERE (thread_id, sequence) IN (
         SELECT thread_id, sequence FROM effect_agent_canonical_records WHERE record_id=${recordId}

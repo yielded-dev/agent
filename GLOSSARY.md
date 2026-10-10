@@ -163,14 +163,21 @@ append; `joined` follows it and settles with the host Run.
 
 **Run Continuation**
 
-Versioned canonical semantic progress for one Run, atomically fenced with its execution facts.
-It retains cumulative charges and exact references to original input, saved context, declared
-operations, and terminal evidence. Its index is disposable and grants no ownership.
+Current semantic progress for one Run, held in its Execution Checkpoint and atomically fenced
+with new history facts. It retains cumulative charges and exact references to original input,
+saved context, declared operations, and terminal evidence; previous revisions are discarded.
+
+**Execution Checkpoint**
+
+Authoritative current state for unfinished execution, including its Run Continuation and original
+context. It grants no ownership and retires only after canonical settlement and closure of execution
+obligations. A backup must retain it with the history needed to resume that execution.
 
 **Saved Run context**
 
-The original evaluated instructions, input messages, and prior conversation of a Run, recorded
-once independently of execution progress and later compaction. Another Run cannot replace it.
+The original evaluated instructions and input messages, plus a fixed history range and Prompt
+digest for a Run. Its Execution Checkpoint retains them until execution closes, independently of
+later compaction. Another Run cannot replace them.
 
 **Work handoff**
 
@@ -485,8 +492,8 @@ A materialized view derived from Canonical Records, such as transcript, active r
 client messages. Projections are rebuildable.
 
 **Checkpoint**  
-A versioned optimization containing a Projection through a verified log offset. A Checkpoint is
-never recovery truth.
+An application-owned optimization containing a Projection through a verified log offset. It is
+disposable and distinct from the authoritative Execution Checkpoint of an unfinished Run.
 
 **Producer Epoch**  
 A fencing token that grants one owner permission to append. A stale owner with an older epoch

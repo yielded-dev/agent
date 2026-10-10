@@ -7,6 +7,12 @@ import {
   decodeResolutionFact,
 } from "@yielded/agent-storage-sql/sql-admission-facts";
 import {
+  definitionJson,
+  makeCanonicalStorage,
+  recordBatchId,
+  runKey,
+} from "@yielded/agent-storage-sql/sql-canonical-storage";
+import {
   SqlStorageProgress,
   type SqlStorageProgressKind,
 } from "@yielded/agent-storage-sql/sql-storage-progress";
@@ -297,7 +303,6 @@ const SUBMISSION_COLUMNS = `
   principal,
   idempotency_key,
   agent_id,
-  agent_digests_json,
   deployment_id,
   input_json,
   input_digest,
@@ -412,6 +417,7 @@ const submissionsRows = ownedRows(
   (row) => row.submission_id,
   "submission_id",
   [["thread_id", "principal", "idempotency_key"]],
+  (sql) => sql`*, ${definitionJson(sql)} AS agent_digests_json`,
 );
 
 const ownershipRows = ownedRows(
@@ -478,6 +484,8 @@ const makeServices = Effect.fnUntraced(function* () {
   const failpoint = yield* DoStorageFailpoint;
   const sql = yield* SqlClientService.SqlClient;
   const crypto = yield* Crypto.Crypto;
+  const physical = yield* makeCanonicalStorage();
+  const submissionColumns = sql`${sql.literal(SUBMISSION_COLUMNS)}, ${definitionJson(sql)} AS agent_digests_json`;
   const admissionFence = yield* SubmissionAdmissionFence;
   const journal = yield* initializeDoJournal(sql, failpoint.hit, config.maxStoredValueBytes);
   const lifecycle = journal.lifecycle;
@@ -796,15 +804,16 @@ const makeServices = Effect.fnUntraced(function* () {
     const expected = yield* decodeSubmissionSnapshot(operation, submission);
     const recordId = submissionSettlementRecordId(expected.submissionId);
 
-    const found = yield* sql`SELECT batch_id, record_id, ${canonicalRecordJson(sql)} AS record_json
+    const found =
+      yield* sql`SELECT ${recordBatchId(sql)} AS batch_id, record_id, ${canonicalRecordJson(sql)} AS record_json
       FROM effect_agent_canonical_records WHERE thread_id = ${submission.thread_id}
-      AND record_id = ${recordId}`.pipe(Effect.mapError(sqlFailure(operation)));
+      AND record_id = ${JSON.stringify(recordId)}`.pipe(Effect.mapError(sqlFailure(operation)));
 
     const decoded = yield* decodeRows(
       Schema.Array(
         Schema.Struct({
-          batch_id: BoundedIdentifier,
-          record_id: BoundedIdentifier,
+          batch_id: Schema.fromJsonString(BoundedIdentifier),
+          record_id: Schema.fromJsonString(BoundedIdentifier),
           record_json: BoundedStoredText,
         }),
       ),
@@ -1379,7 +1388,7 @@ const makeServices = Effect.fnUntraced(function* () {
               principal,
               idempotency_key,
               agent_id,
-              agent_digests_json,
+              definition_key,
               deployment_id,
               input_json,
               input_digest,
@@ -1399,7 +1408,7 @@ const makeServices = Effect.fnUntraced(function* () {
               ${validated.principal},
               ${validated.idempotencyKey},
               ${validated.agentId},
-              ${agentDigestsJson},
+              ${yield* physical.definition(agentDigestsJson).pipe(Effect.mapError(internalFailure(operation)))},
               ${validated.deploymentId},
               ${inputJson},
               ${validated.inputDigest},
@@ -1413,7 +1422,10 @@ const makeServices = Effect.fnUntraced(function* () {
               ${workerAdmissionJson},
               ${messageAdmissionJson}
             )
-           RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+           RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+          rows.submissions.write,
+          Effect.mapError(internalFailure(operation)),
+        );
 
         if (queueSequence === 1) {
           const threads = yield* journal
@@ -1475,7 +1487,10 @@ const makeServices = Effect.fnUntraced(function* () {
           UPDATE effect_agent_submissions
           SET state = 'ready', ready_at = ${now.iso}
           WHERE submission_id = ${validated.submissionId}
-         RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+         RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+          rows.submissions.write,
+          Effect.mapError(internalFailure(operation)),
+        );
         yield* recordProgress("submission", operation);
         yield* retainLifecycle(submission, {
           _tag: "SubmissionReady",
@@ -1682,7 +1697,7 @@ const makeServices = Effect.fnUntraced(function* () {
           const headRows =
             lane === undefined
               ? yield* sql<Record<string, unknown>>`
-            SELECT ${sql.literal(SUBMISSION_COLUMNS)}
+            SELECT ${submissionColumns}
             FROM effect_agent_submissions
             WHERE thread_id = ${validated.threadId}
               AND state <> 'settled'
@@ -1825,30 +1840,15 @@ const makeServices = Effect.fnUntraced(function* () {
               lease_expires_at = excluded.lease_expires_at
            RETURNING *`.pipe(rows.ownership.write, Effect.mapError(internalFailure(operation)));
 
-          yield* sql`
-            INSERT INTO effect_agent_attempts (
-              attempt_id,
-              submission_id,
-              thread_id,
-              owner_producer_id,
-              producer_epoch,
-              claimed_at
-            ) VALUES (
-              ${attemptId},
-              ${head.submission_id},
-              ${head.thread_id},
-              ${validated.producerId},
-              ${producerEpoch},
-              ${now.iso}
-            )
-          `.pipe(Effect.mapError(sqlFailure(operation)));
-
           if (head.state === "ready") {
             yield* sql`
               UPDATE effect_agent_submissions
               SET state = 'running'
               WHERE submission_id = ${head.submission_id}
-             RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+             RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+              rows.submissions.write,
+              Effect.mapError(internalFailure(operation)),
+            );
           }
 
           const inputPayload = yield* parseStoredJsonText(head.input_json).pipe(
@@ -1948,7 +1948,10 @@ const makeServices = Effect.fnUntraced(function* () {
             UPDATE effect_agent_submissions
             SET state = 'ready'
             WHERE submission_id = ${validated.submissionId}
-           RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+           RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+              rows.submissions.write,
+              Effect.mapError(internalFailure(operation)),
+            );
           }
         }),
         (error) => error._tag === "OwnershipLost",
@@ -2001,7 +2004,10 @@ const makeServices = Effect.fnUntraced(function* () {
               ELSE state
             END
           WHERE submission_id = ${validated.submissionId}
-         RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+         RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+            rows.submissions.write,
+            Effect.mapError(internalFailure(operation)),
+          );
         }),
       );
       yield* hitFailpoint("ledger:mark-input-applied:after", operation);
@@ -2320,7 +2326,10 @@ const makeServices = Effect.fnUntraced(function* () {
           SET state = 'settled', settled_outcome = ${canonicalSettlement.outcome},
               settled_record_id = ${canonicalRecord.recordId}, finalized_at = ${now.iso}
           WHERE submission_id = ${validated.submissionId}
-         RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+         RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+          rows.submissions.write,
+          Effect.mapError(internalFailure(operation)),
+        );
         yield* sql`
           DELETE FROM effect_agent_submission_ownership
           WHERE submission_id = ${validated.submissionId}
@@ -2354,12 +2363,11 @@ const makeServices = Effect.fnUntraced(function* () {
       .transaction(
         Effect.gen(function* () {
           const read = Effect.fnUntraced(function* (active: boolean) {
-            const rows =
-              yield* sql`SELECT ${sql.literal(SUBMISSION_COLUMNS)} FROM effect_agent_submissions
+            const rows = yield* sql`SELECT ${submissionColumns} FROM effect_agent_submissions
           WHERE thread_id = ${threadId} ${active ? sql`AND state <> 'settled'` : sql``}
           ORDER BY queue_sequence ${active ? sql`ASC` : sql`DESC`} LIMIT 1`.pipe(
-                Effect.mapError(sqlFailure(operation)),
-              );
+              Effect.mapError(sqlFailure(operation)),
+            );
 
             const decoded = yield* decodeSubmissionRows(operation, threadId, rows);
 
@@ -2572,7 +2580,7 @@ const makeServices = Effect.fnUntraced(function* () {
         const laterRows =
           lane === undefined
             ? yield* sql<Record<string, unknown>>`
-          SELECT ${sql.literal(SUBMISSION_COLUMNS)}
+          SELECT ${submissionColumns}
           FROM effect_agent_submissions
           WHERE thread_id = ${validated.threadId}
             AND queue_sequence > ${host.queue_sequence}
@@ -2611,7 +2619,10 @@ const makeServices = Effect.fnUntraced(function* () {
             UPDATE effect_agent_submissions
             SET state = 'joining', joined_host_submission_id = ${validated.hostSubmissionId}
             WHERE submission_id = ${row.submission_id}
-           RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+           RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+            rows.submissions.write,
+            Effect.mapError(internalFailure(operation)),
+          );
 
           const inputPayload = yield* parseStoredJsonText(row.input_json).pipe(
             Effect.mapError((error) =>
@@ -2696,7 +2707,10 @@ const makeServices = Effect.fnUntraced(function* () {
             input_applied_sequence = ${validated.sequence},
             state = 'joined'
           WHERE submission_id = ${validated.submissionId}
-         RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+         RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+          rows.submissions.write,
+          Effect.mapError(internalFailure(operation)),
+        );
       }),
     );
     yield* hitFailpoint("ledger:mark-joined:after", operation);
@@ -2757,7 +2771,10 @@ const makeServices = Effect.fnUntraced(function* () {
           UPDATE effect_agent_submissions
           SET state = 'ready', joined_host_submission_id = NULL
           WHERE submission_id = ${validated.submissionId}
-         RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+         RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+          rows.submissions.write,
+          Effect.mapError(internalFailure(operation)),
+        );
       }),
     );
     yield* hitFailpoint("ledger:revert-joining:after", operation);
@@ -2855,7 +2872,10 @@ const makeServices = Effect.fnUntraced(function* () {
               suspended_reason_json = ${reasonJson},
               suspended_at = ${now.iso}
             WHERE submission_id = ${validated.submissionId}
-           RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+           RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+          rows.submissions.write,
+          Effect.mapError(internalFailure(operation)),
+        );
         // Suspension ends the ownership period WITHOUT settling: the accepted-work
         // obligation stays owed while the lane consumes no worker permit (plan §2.6).
         yield* sql`
@@ -2916,7 +2936,10 @@ const makeServices = Effect.fnUntraced(function* () {
         suspended_reason_json = NULL,
         suspended_at = NULL
       WHERE submission_id = ${submission.submission_id}
-     RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+     RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+      rows.submissions.write,
+      Effect.mapError(internalFailure(operation)),
+    );
     yield* retainLifecycle(submission, {
       _tag: "SubmissionResumed",
       submissionId: yield* decodeSubmissionId(submission.submission_id).pipe(
@@ -3069,7 +3092,10 @@ const makeServices = Effect.fnUntraced(function* () {
             unknown_reason = ${submission.unknown_reason ?? validated.reason},
             unknown_tool_call_ids_json = ${idsJson}
           WHERE submission_id = ${validated.submissionId}
-         RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+         RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+          rows.submissions.write,
+          Effect.mapError(internalFailure(operation)),
+        );
         if (submission.state !== "unknown")
           yield* retainLifecycle(submission, {
             _tag: "SubmissionUnknown",
@@ -3153,8 +3179,8 @@ const makeServices = Effect.fnUntraced(function* () {
             const found = yield* sql`
               SELECT ${canonicalRecordJson(sql)} AS record_json FROM effect_agent_canonical_records
               WHERE thread_id = ${submission.thread_id}
-                AND record_tag = 'ToolCallSettled'
-                AND run_id = ${JSON.stringify(runId)}
+                AND record_tag = 27
+                AND run_id = ${runKey(sql, sql`${submission.thread_id}`, sql`${JSON.stringify(runId)}`)}
                 AND tool_call_id = ${JSON.stringify(validated.toolCallId)}
               LIMIT 2
             `.pipe(Effect.mapError(sqlFailure(operation)));
@@ -3255,7 +3281,10 @@ const makeServices = Effect.fnUntraced(function* () {
                 unknown_reason = NULL,
                 unknown_tool_call_ids_json = NULL
               WHERE submission_id = ${validated.submissionId}
-             RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+             RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+                rows.submissions.write,
+                Effect.mapError(internalFailure(operation)),
+              );
               yield* retainLifecycle(submission, {
                 _tag: "SubmissionResumed",
                 submissionId: validated.submissionId,
@@ -3386,7 +3415,10 @@ const makeServices = Effect.fnUntraced(function* () {
             suspended_reason_json = NULL,
             suspended_at = NULL
           WHERE submission_id = ${validated.parentSubmissionId}
-         RETURNING *`.pipe(rows.submissions.write, Effect.mapError(internalFailure(operation)));
+         RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+            rows.submissions.write,
+            Effect.mapError(internalFailure(operation)),
+          );
 
           yield* retainLifecycle(parent, {
             _tag: "SubmissionResumed",

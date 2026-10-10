@@ -86,6 +86,7 @@ export const ownedRows = <A, I>(
   key: (row: A) => string,
   identityColumn?: keyof A & string,
   uniqueFields: ReadonlyArray<ReadonlyArray<keyof A & string>> = [],
+  projection: (sql: SqlClient) => ReturnType<SqlClient["literal"]> = (sql) => sql.literal("*"),
 ) => {
   type View = {
     readonly id: string;
@@ -167,7 +168,7 @@ export const ownedRows = <A, I>(
       matching(
         JSON.stringify([field, value]),
         (row) => row[field] === value,
-        sql`SELECT * FROM ${sql(table)} WHERE ${sql(field)} = ${value}`,
+        sql`SELECT ${projection(sql)} FROM ${sql(table)} WHERE ${sql(field)} = ${value}`,
       );
 
     // Only a source mutation proving the complete result may seed a view. This must run
@@ -179,7 +180,7 @@ export const ownedRows = <A, I>(
       matching(
         JSON.stringify(fields),
         (row) => fields.every(([field, value]) => row[field] === value),
-        sql`SELECT * FROM ${sql(table)} WHERE ${sql.and(fields.map(([field, value]) => sql`${sql(field)} = ${value}`))}`,
+        sql`SELECT ${projection(sql)} FROM ${sql(table)} WHERE ${sql.and(fields.map(([field, value]) => sql`${sql(field)} = ${value}`))}`,
       );
 
     const apply =
