@@ -52,27 +52,47 @@ fingerprint/build checks, cold setup attempts, failures and cleanup. No timing e
 building history, cold turn, warm turn and SQLite storage. It skips local fixtures entirely.
 
 ```sh
-vp run deployed -- --build-history
+vp run deployed -- --build-history --build-concurrency 36 --concurrency 3
 ```
 
 Defaults are 50, 250, 1,000 and 3,500 historical turns, three independent Objects per
-target and size, concurrency one, zero provider TTFT, one cold turn and nine warm turns. `--sizes`,
-`--objects`, `--repeats`, `--ttft` and `--concurrency` remain configurable. Each Object
-starts empty and runs real historical turns inside its owning runtime in batches of 50. The history provider always has zero delays. Sizes use separate Objects, so measured
-turns never enter another size's history. The driver restarts each Object between
+target and size, zero provider TTFT, one cold turn and nine warm turns. All selected histories
+build concurrently by default; `--build-concurrency` limits that phase. Measurements default
+to six concurrent Objects, controlled separately by `--concurrency`. `--sizes`, `--objects`,
+`--repeats` and `--ttft` remain configurable.
+
+Each logical sample Object (target, size and replica) has a dedicated Worker so concurrent
+samples do not share a Worker isolate's CPU budget. Results record a per-isolate token.
+If separate sample Objects in the concurrent build cohort report the same token, the
+cohort's timings are rejected.
+
+Each Object starts empty and runs real historical turns inside its owning runtime in batches
+of 50. The history provider always has zero delays.
+Sizes use separate Objects, so measured turns never enter another size's history.
+The driver restarts each Object between
 batches over its retained storage, matching the original seeder's disposal of each
 runtime. The adapters close pi's Harness and tardie's Thread and Actor runtimes before
 aborting; pi's extension registry belongs to each Harness so isolate globals cannot
-retain an old runtime. These restarts count toward build time. Serial builds avoid
-overlapping histories in Cloudflare's shared isolate memory budget.
+retain an old runtime. These restarts count toward build time.
 
-The nearby driver times the complete build across all batches, including network and
-storage acknowledgement. Deployment and the initial readiness/abort check are setup outside
-this timer; constructors may initialize empty database schemas there, but no history is built.
-Every batch records its final model-visible fingerprint;
-every measured model request must match the independent reference transcript. Failed
-or uncertain batches are never resubmitted. Failure invalidates that Object while the
-remaining Objects continue; partial build progress and errors stay in the result JSON.
+The nearby driver handles one resumable request per 50-turn batch. End-to-end build time
+spans the first batch through the final acknowledgement, including network, storage,
+controller gaps and downtime if resumed. Deployment and the initial readiness/abort check
+are setup outside this timer; constructors may initialize empty database schemas there,
+but no history is built. Every batch records its completed count and final model-visible
+fingerprint; every measured model request must match the independent reference transcript.
+Failed or uncertain batches are never resubmitted. Failure invalidates that Object while
+the remaining Objects continue; partial progress and errors stay in the result JSON.
+
+A graceful interruption waits for each current 50-turn batch and preserves the run for
+`--resume <run-name>`. Resume uses the saved options and requires identical compiled Worker
+bundles. It continues only from verified batch boundaries whose count and fingerprint match
+the Object's state. Unknown in-flight batches and partially measured Objects are retired.
+Use the same `DURABLE_BENCH_PREFIX` when resuming.
+
+```sh
+vp run deployed -- --resume run-name
+```
 
 After an acknowledged Object abort, an untimed request constructs the new Object
 without opening pi's Harness or tardie's native reference. Cold adds the Object-local
@@ -103,12 +123,12 @@ made during the window, not retained memory or a heap snapshot.
 
 For history-build diagnostics, add `--profile-after <turns>` to start a ten-second capture
 after a verified checkpoint while subsequent batches continue. This requires one target,
-size, TTFT, Object and concurrency one. The checkpoint must be a multiple of 50 before
-the final history turn. JSON records the trigger and the latest acknowledged checkpoint
+size, TTFT and Object, with both concurrency limits set to one. The checkpoint must be a
+multiple of 50 before the final history turn. JSON records the trigger and the latest acknowledged checkpoint
 at capture completion; exclude this diagnostic run from timing comparisons.
 
 ```sh
-vp run deployed -- --build-history --targets pi --sizes 3500 --objects 1 --profile memory --profile-after 1950
+vp run deployed -- --build-history --targets pi --sizes 3500 --objects 1 --concurrency 1 --profile memory --profile-after 1950
 ```
 
 Profile requests, downloads and file writes are outside the turn timers, but profiling adds
@@ -125,13 +145,15 @@ Flamegraph view while the Worker is retained with `--keep`.
 
 ## Infrastructure and cleanup
 
-Alchemy owns two stacks: the named `durable-bench-infrastructure` stage keeps
+The shared `durable-bench-infrastructure` Alchemy stage keeps
 `durable-bench-shared-<installation>-driver` and `durable-bench-shared-<installation>-provider`
-deployed between runs. Fresh installations use fresh names to avoid recently deleted endpoints. A unique
-`durable-bench-*` target stage contains the run's Worker and four SQLite Durable Object
-namespaces. Each normal run destroys its target stage and verifies deletion through the
-Cloudflare API, including after failure. `--keep` retains it for inspection. Interruption
-attempts cleanup too; if the process is killed before it finishes, run `--teardown`.
+deployed between runs. Fresh installations use fresh names to avoid recently deleted endpoints.
+Run-specific `durable-bench-*` target stages contain the run's Workers and SQLite Durable Object
+namespaces. History builds use dedicated Workers per logical sample; quick mode uses one
+target Worker. Each normal run destroys its target stages and verifies deletion through the
+Cloudflare API, including after failure. `--keep` retains it for inspection. Interrupted
+history-build runs retain their resources for `--resume`; other interruptions attempt cleanup.
+Use `--teardown` to discard retained runs or finish interrupted cleanup.
 
 Private ownership data and Alchemy state live under `~/.local/state/durable-bench` (mode
 700), outside the checkout. Keep that directory until cleanup. The command refuses to
@@ -148,7 +170,7 @@ This destroys retained target stacks and the shared infrastructure, verifies tha
 `durable-bench` Workers or namespaces remain in the same account, writes `results/cleanup.json`,
 and removes private state. After an interrupted cleanup, rerun `--teardown`.
 Shared code changes redeploy the infrastructure on the next run; otherwise only the target
-Worker is deployed. Account IDs, tokens, namespace IDs and Alchemy output are not results.
+Workers are deployed. Account IDs, API tokens, namespace IDs and Alchemy output are not results.
 
 ## Workload and measurement
 
@@ -165,7 +187,7 @@ delays. Every target receives the same preamble and reply, and subsequent reques
 checked against the extended reference transcript. Before forwarding streaming requests, the
 common bridge splits mixed assistant text/tool messages to match the pinned Effect provider's layout.
 The flag keeps the original completion workload available; compare tables with the same workload label.
-All Objects request `locationHint: "wnam"`; the driver and target Worker request
+All Objects request `locationHint: "wnam"`; the driver and target Workers request
 `aws:us-west-1` placement. Placement is a hint, not a guarantee.
 
 For Yielded, the driver times public `submit` admission through public `awaitSettlement`:

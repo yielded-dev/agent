@@ -8,6 +8,8 @@ import {
   errorText,
   readQuery,
   SeedBatch,
+  SeedProgress,
+  SeedResult,
   type Env,
   type Query,
   type Target,
@@ -59,6 +61,17 @@ export class Host {
       this.ctx.abort(COLD_ABORT);
     }
     try {
+      if (url.pathname === "/seed-progress") {
+        this.meter.assertBuild(query);
+        const stored = await this.ctx.storage.get("durable-bench/history");
+
+        const progress =
+          stored === undefined
+            ? { completed: 0, inFlight: false }
+            : Schema.decodeUnknownSync(SeedProgress)(stored);
+
+        return Response.json({ ...progress, identity: this.meter.identity() });
+      }
       if (url.pathname === "/prime") {
         this.meter.assertBuild(query);
 
@@ -81,7 +94,7 @@ export class Host {
       if (url.pathname === "/seed") {
         this.meter.assertBuild(query);
         if (!handlers.run) throw new Error("Target has no native history builder");
-        const { from, to } = Schema.decodeUnknownSync(SeedBatch)(await request.json());
+        const { from, to, startedMs } = Schema.decodeUnknownSync(SeedBatch)(await request.json());
 
         if (to <= from || to - from > 50 || to > query.history)
           throw new Error("History batches must contain 1–50 turns within the requested history");
@@ -93,15 +106,15 @@ export class Host {
           const progress =
             stored === undefined
               ? { completed: 0, inFlight: false }
-              : Schema.decodeUnknownSync(
-                  Schema.Struct({ completed: Schema.Natural, inFlight: Schema.Boolean }),
-                )(stored);
+              : Schema.decodeUnknownSync(SeedProgress)(stored);
 
           if (progress.inFlight || progress.completed !== from)
             throw new Error(
               "History batch is repeated, out of order, or has an uncertain predecessor",
             );
-          await this.ctx.storage.put(key, { completed: from, inFlight: true });
+          if (progress.batch && progress.batch.startedMs !== startedMs)
+            throw new Error("History build clock changed");
+          await this.ctx.storage.put(key, { ...progress, inFlight: true });
         });
         const providerColos = new Set<string>();
 
@@ -135,17 +148,21 @@ export class Host {
         const fingerprint = this.meter.calls.at(-1)?.fingerprint;
 
         if (!fingerprint) throw new Error("History batch has no final model fingerprint");
-        await this.ctx.storage.put(key, { completed: to, inFlight: false });
-        await this.ctx.storage.sync();
 
-        return Response.json({
+        const batch = SeedResult.make({
           ok: true,
           from,
           to,
+          startedMs,
           fingerprint,
           identity: this.meter.identity(),
           providerColos: [...providerColos],
         });
+
+        await this.ctx.storage.put(key, { completed: to, inFlight: false, batch });
+        await this.ctx.storage.sync();
+
+        return Response.json(batch);
       }
       if (url.pathname === "/import") {
         this.meter.assertBuild(query);

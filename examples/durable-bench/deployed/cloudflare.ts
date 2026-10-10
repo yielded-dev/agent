@@ -74,11 +74,13 @@ const connect = Effect.gen(function* () {
   const resources = Effect.fnUntraced(function* (workerName?: string) {
     // Prefixes may contain hyphens, so match the complete names emitted by run/deploy.
     const generatedName = new RegExp(
-      `^${prefix}-(?:shared-[a-f0-9]{8}-(?:driver|provider)|[a-z0-9]+-[a-f0-9]{8})$`,
+      `^${prefix}-(?:shared-[a-f0-9]{8}-(?:driver|provider)|[a-z0-9]+-[a-f0-9]{8}(?:-[a-z0-9-]+)?)$`,
     );
 
     const matches = (name: string) =>
-      workerName === undefined ? generatedName.test(name) : name === workerName;
+      workerName === undefined
+        ? generatedName.test(name)
+        : name === workerName || name.startsWith(workerName + "-");
 
     const workers = (yield* api("workers/scripts", Workers))
       .filter((w) => matches(w.id))

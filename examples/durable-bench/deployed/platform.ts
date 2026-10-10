@@ -15,6 +15,39 @@ export const workspace = resolve(directory, "..");
 export const repository = resolve(workspace, "../..");
 export const stateDirectory = (prefix: string) => resolve(homedir(), ".local/state", prefix);
 
+/** Competing controllers advertise before checking peers; only a sole live owner proceeds. */
+export const prefixLock = Effect.fnUntraced(function* (prefix: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const directory = stateDirectory(prefix) + ".locks";
+  const own = String(process.pid);
+
+  yield* fs.makeDirectory(directory, { recursive: true, mode: 0o700 });
+  yield* Effect.acquireRelease(
+    fs.writeFileString(resolve(directory, own), own, { mode: 0o600 }),
+    () => fs.remove(resolve(directory, own), { force: true }).pipe(Effect.orDie),
+  );
+  for (const peer of yield* fs.readDirectory(directory)) {
+    if (peer === own) continue;
+
+    const dead =
+      /^\d+$/.test(peer) &&
+      (yield* Effect.sync(() => {
+        try {
+          process.kill(Number(peer), 0);
+
+          return false;
+        } catch (cause) {
+          return (
+            typeof cause === "object" && cause !== null && "code" in cause && cause.code === "ESRCH"
+          );
+        }
+      }));
+
+    if (!dead)
+      return yield* new BenchError({ message: `Another controller owns the ${prefix} prefix.` });
+  }
+});
+
 export const hash = (value: string | Uint8Array) =>
   createHash("sha256").update(value).digest("hex");
 

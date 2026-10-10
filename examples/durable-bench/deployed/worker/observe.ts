@@ -14,6 +14,8 @@ import {
 } from "./protocol.ts";
 
 const meters = new WeakMap<DurableObjectStorage, Observation>();
+// Lazily draw randomness in a request context, then retain one token per Worker isolate.
+let isolate: string | undefined;
 
 export const observation = (storage: DurableObjectStorage): Observation => {
   const meter = meters.get(storage);
@@ -50,6 +52,7 @@ export class Observation {
   identity(): Identity {
     return {
       build: this.env.BUILD,
+      isolate: (isolate ??= crypto.randomUUID()),
       incarnation: this.incarnation,
       constructedMs: this.constructedMs,
       firstEntry: this.entries === 0,

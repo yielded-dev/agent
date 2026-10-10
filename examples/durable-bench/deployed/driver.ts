@@ -1,7 +1,13 @@
 import { Clock, Deferred, Effect, Schema, Stream } from "effect";
 import { Ndjson } from "effect/encoding";
 
-import { BuildEvent, DriverRequest, MeasureRequest, type FirstTextSource } from "./model.ts";
+import {
+  BuildEvent,
+  BuildRequest,
+  DriverRequest,
+  MeasureRequest,
+  type FirstTextSource,
+} from "./model.ts";
 import {
   AwaitResult,
   ColdResult,
@@ -9,6 +15,7 @@ import {
   PrimeResult,
   RunResult,
   SeedResult,
+  SeedCheckpoint,
   SettledTextResult,
   SubmitResult,
   TextObservation,
@@ -78,8 +85,19 @@ export default {
         return response;
       };
 
+      if (new URL(request.url).pathname === "/history-checkpoint") {
+        const checkpoint = Schema.decodeUnknownSync(SeedCheckpoint)(
+          await (await invoke("/seed-progress")).json(),
+        );
+
+        return Response.json({
+          ...checkpoint,
+          driverMs: checkpoint.batch ? Date.now() - checkpoint.batch.startedMs : 0,
+        });
+      }
       if (new URL(request.url).pathname === "/build-history") {
-        const startedMs = Date.now();
+        const { from, startedMs: previousStart } = Schema.decodeUnknownSync(BuildRequest)(input);
+        const startedMs = previousStart ?? Date.now();
         const colo = typeof request.cf?.colo === "string" ? request.cf.colo : null;
         const encoder = new TextEncoder();
         const encode = Schema.encodeSync(Schema.fromJsonString(BuildEvent));
@@ -104,43 +122,45 @@ export default {
 
             context.waitUntil(
               (async () => {
-                let completed = 0;
+                let completed = from;
 
                 try {
-                  while (completed < query.history) {
-                    const to = Math.min(completed + 50, query.history);
+                  const checkpoint = Schema.decodeUnknownSync(SeedCheckpoint)(
+                    await (await invoke("/seed-progress")).json(),
+                  );
 
-                    const result = Schema.decodeUnknownSync(SeedResult)(
-                      await (await invoke("/seed", { from: completed, to }, 600_000)).json(),
+                  if (checkpoint.inFlight || checkpoint.completed !== from || from >= query.history)
+                    throw new Error("History is not at the requested verified batch boundary");
+                  if (from > 0) {
+                    // Close the preceding runtime before admitting this single batch.
+                    const reset = Schema.decodeUnknownSync(ColdResult)(
+                      await (await invoke("/cold")).json(),
                     );
 
                     if (
-                      result.from !== completed ||
-                      result.to !== to ||
-                      result.identity.build !== query.expectedBuild
+                      !reset.ok ||
+                      !reset.threadAborted ||
+                      reset.directoryAborted === false ||
+                      reset.before.build !== query.expectedBuild ||
+                      (reset.directoryBefore && reset.directoryBefore.build !== query.expectedBuild)
                     )
-                      throw new Error("History batch acknowledgement or Object build mismatch");
-                    completed = to;
-                    write({ _tag: "Batch", result, driverMs: Date.now() - startedMs, colo });
-                    if (completed < query.history) {
-                      // Mario's seeder also disposes its runtime after every 50 turns.
-                      const reset = Schema.decodeUnknownSync(ColdResult)(
-                        await (await invoke("/cold")).json(),
-                      );
-
-                      if (
-                        !reset.ok ||
-                        !reset.threadAborted ||
-                        reset.directoryAborted === false ||
-                        reset.before.build !== query.expectedBuild ||
-                        (reset.directoryBefore &&
-                          reset.directoryBefore.build !== query.expectedBuild)
-                      )
-                        throw new Error(
-                          "History batch restart or Object build was not acknowledged",
-                        );
-                    }
+                      throw new Error("History batch restart or Object build was not acknowledged");
                   }
+                  const to = Math.min(from + 50, query.history);
+
+                  const result = Schema.decodeUnknownSync(SeedResult)(
+                    await (await invoke("/seed", { from, to, startedMs }, 600_000)).json(),
+                  );
+
+                  if (
+                    result.from !== from ||
+                    result.to !== to ||
+                    result.startedMs !== startedMs ||
+                    result.identity.build !== query.expectedBuild
+                  )
+                    throw new Error("History batch acknowledgement or Object build mismatch");
+                  completed = to;
+                  write({ _tag: "Batch", result, driverMs: Date.now() - startedMs, colo });
                 } catch (cause) {
                   write({
                     _tag: "Failed",

@@ -103,6 +103,7 @@ export type BulkFixture = typeof BulkFixture.Type;
 
 export const Identity = Schema.Struct({
   build: Schema.NonEmptyString,
+  isolate: Schema.NonEmptyString,
   incarnation: Schema.NonEmptyString,
   constructedMs: Schema.Number,
   firstEntry: Schema.Boolean,
@@ -111,7 +112,11 @@ export const Identity = Schema.Struct({
 
 export type Identity = typeof Identity.Type;
 
-export const SeedBatch = Schema.Struct({ from: Schema.Natural, to: History });
+export const SeedBatch = Schema.Struct({
+  from: Schema.Natural,
+  to: History,
+  startedMs: Schema.Number,
+});
 
 export const SeedResult = Schema.Struct({
   ok: Schema.Literal(true),
@@ -122,6 +127,18 @@ export const SeedResult = Schema.Struct({
 });
 
 export type SeedResult = typeof SeedResult.Type;
+
+/** Written only after every turn in a batch has settled and its transcript was checked. */
+export const SeedProgress = Schema.Struct({
+  completed: Schema.Natural,
+  inFlight: Schema.Boolean,
+  batch: Schema.optionalKey(SeedResult),
+});
+
+export const SeedCheckpoint = Schema.Struct({
+  ...SeedProgress.fields,
+  identity: Identity,
+});
 
 /** Construction is primed outside the driver timer; this interval retains the clock probe's RTT. */
 export const PrimeResult = Schema.Struct({

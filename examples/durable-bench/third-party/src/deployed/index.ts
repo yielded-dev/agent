@@ -111,7 +111,7 @@ export default {
         return Response.json({ ok: true, build: env.BUILD });
       }
       const query = readQuery(url);
-      if (["/prime", "/seed", "/import", "/submit", "/await", "/result", "/run", "/text", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
+      if (["/prime", "/seed", "/seed-progress", "/import", "/submit", "/await", "/result", "/run", "/text", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
         return Response.json(
           {
             ok: false,
@@ -136,7 +136,7 @@ export default {
 
       if (mutating && request.method !== "POST")
         return new Response("POST required", { status: 405 });
-      if (!["/prime", "/seed", "/import", "/cold", "/submit", "/await", "/result", "/run", "/text", "/metrics"].includes(url.pathname))
+      if (!["/prime", "/seed", "/seed-progress", "/import", "/cold", "/submit", "/await", "/result", "/run", "/text", "/metrics"].includes(url.pathname))
         return new Response("not found", { status: 404 });
 
       const actor =

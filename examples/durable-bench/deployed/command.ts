@@ -3,7 +3,7 @@ import { Command, Flag } from "effect/cli";
 
 import { ProfileType } from "./model.ts";
 import { BenchError } from "./platform.ts";
-import { run, teardown } from "./run.ts";
+import { resume, run, teardown } from "./run.ts";
 import { History, Target } from "./worker/protocol.ts";
 
 const positive = (name: string) => Flag.Int(name).pipe(Flag.withSchema(History));
@@ -45,8 +45,12 @@ export const command = Command.make(
     ),
     concurrency: positive("concurrency").pipe(
       Flag.optional,
+      Flag.withDescription("Concurrent measured Objects (default: 6); turns stay sequential"),
+    ),
+    buildConcurrency: positive("build-concurrency").pipe(
+      Flag.optional,
       Flag.withDescription(
-        "Concurrent Objects (quick: 6; build-history: 1); turns stay sequential",
+        "Concurrent histories (build-history: all selected Objects; quick: --concurrency)",
       ),
     ),
     cold: Flag.Boolean("cold").pipe(
@@ -83,6 +87,12 @@ export const command = Command.make(
     ),
     baseline: Flag.String("baseline").pipe(Flag.optional),
     candidate: Flag.String("candidate").pipe(Flag.optional),
+    resume: Flag.String("resume").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        "Resume a saved run with its options; preserve verified history checkpoints and retire unknown in-flight or partially measured Objects",
+      ),
+    ),
     teardown: Flag.Boolean("teardown").pipe(
       Flag.withDefault(false),
       Flag.withDescription(
@@ -92,6 +102,9 @@ export const command = Command.make(
   },
   Effect.fnUntraced(function* (flags) {
     if (flags.teardown) return yield* teardown;
+    const runName = Option.getOrUndefined(flags.resume);
+
+    if (runName !== undefined) return yield* resume(runName);
     const baseline = Option.getOrUndefined(flags.baseline);
     const candidate = Option.getOrUndefined(flags.candidate);
 
@@ -124,7 +137,14 @@ export const command = Command.make(
     const profiles = [...new Set(flags.profile.flat())];
     const profileAfter = Option.getOrUndefined(flags.profileAfter);
     const objects = Option.getOrElse(flags.objects, () => (flags.buildHistory ? 3 : 7));
-    const concurrency = Option.getOrElse(flags.concurrency, () => (flags.buildHistory ? 1 : 6));
+    const concurrency = Option.getOrElse(flags.concurrency, () => 6);
+
+    const buildConcurrency = flags.buildHistory
+      ? Option.getOrElse(
+          flags.buildConcurrency,
+          () => new Set(targets).size * new Set(sizes).size * new Set(ttft).size * objects,
+        )
+      : concurrency;
 
     if (flags.buildHistory && (flags.rigorous || flags.textStreaming))
       return yield* new BenchError({
@@ -141,11 +161,12 @@ export const command = Command.make(
         targets.length !== 1 ||
         ttft.length !== 1 ||
         objects !== 1 ||
-        concurrency !== 1)
+        concurrency !== 1 ||
+        buildConcurrency !== 1)
     )
       return yield* new BenchError({
         message:
-          "--profile-after requires --build-history, --profile, one target/size/TTFT/Object, concurrency 1, and a checkpoint divisible by 50 before the final turn.",
+          "--profile-after requires --build-history, --profile, one target/size/TTFT/Object, concurrency and build-concurrency 1, and a checkpoint divisible by 50 before the final turn.",
       });
     if (flags.buildHistory && profiles.length > 0 && profileAfter === undefined)
       return yield* new BenchError({ message: "History profiling requires --profile-after." });
@@ -161,6 +182,7 @@ export const command = Command.make(
         flags.buildHistory ? 9 : flags.rigorous ? 6 : 4,
       ),
       concurrency,
+      buildConcurrency,
       cold: flags.cold || flags.rigorous || flags.buildHistory,
       cpu: flags.cpu || flags.rigorous,
       profiles,

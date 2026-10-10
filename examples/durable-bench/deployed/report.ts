@@ -147,6 +147,10 @@ const historyTable = (result: Result): string => {
         ]
       : []),
     "Independent Objects per size; real one-tool, one-tool, zero-tool turns in batches of 50 at zero provider TTFT, with runtime restarts between batches.",
+    "Each logical sample has a dedicated Worker. Batch isolate tokens are checked for sharing across build cohorts; shared cohorts are rejected.",
+    ...(result.resumeCount
+      ? [`Resumed ${result.resumeCount} time(s); resumed build times include controller downtime.`]
+      : []),
     "Build: end-to-end driver elapsed. Cold: constructor + clock-probe roundtrip + native open and first turn; isolate startup and priming transport are excluded.",
     "Warm: pooled median of the next warm turns, with no extra warmup. Storage: median after the last measured turn, including Tardie's Actor directory.",
     "Network hops are included. Compare ratios within this deployment; absolute times are not comparable to Miniflare.",

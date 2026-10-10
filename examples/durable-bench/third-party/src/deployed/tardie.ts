@@ -293,7 +293,7 @@ export class ThreadDO extends actorWorker.ThreadObject {
   }
   override fetch(request: Request) {
     if (
-      !["/identity", "/prime", "/seed", "/import", "/run", "/metrics", "/cold"].includes(new URL(request.url).pathname)
+      !["/identity", "/prime", "/seed", "/seed-progress", "/import", "/run", "/metrics", "/cold"].includes(new URL(request.url).pathname)
     )
       return super.fetch(request);
 
