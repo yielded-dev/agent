@@ -226,7 +226,7 @@
       },
       "peerDependencies": {
         "effect": "^4.0.0",
-        "effect-cf": "^0.54.0",
+        "effect-cf": "^0.55.0",
       },
     },
     "packages/platform-node": {
@@ -672,7 +672,7 @@
     "clsx": "2.1.1",
     "diff": "8.0.4",
     "effect": "4.0.0",
-    "effect-cf": "0.54.0",
+    "effect-cf": "0.55.0",
     "esbuild": "0.28.1",
     "expressive-code-twoslash": "0.6.1",
     "isomorphic-git": "1.41.9",
@@ -2269,7 +2269,7 @@
 
     "effect": ["effect@4.0.0", "", {}, "sha512-ooc1TG5t+FfzgYnFz2ff6BBKyZ7EwBRVXC7c4RhQUAD6/TZ2gTXXMeb4WX7a19ozQo4J73/QW+S00YAIresoMQ=="],
 
-    "effect-cf": ["effect-cf@0.54.0", "", { "peerDependencies": { "@cloudflare/computer": "^0.2.0", "@cloudflare/sandbox": "^0.13.0-next.738.2 || ^1.0.0", "@cloudflare/vitest-plugin": "^1.0.0", "@cloudflare/workers-types": "^5.20260926.1", "@effect/sql-d1": "^4.0.0", "@effect/sql-pg": "^4.0.0", "@effect/sql-sqlite-do": "^4.0.0", "@modelcontextprotocol/server": "^2.0.0", "effect": "^4.0.0" }, "optionalPeers": ["@cloudflare/computer", "@cloudflare/sandbox", "@cloudflare/vitest-plugin", "@cloudflare/workers-types", "@effect/sql-pg", "@modelcontextprotocol/server"] }, "sha512-V/luKE2tcoVjKVmdd69jqL12NkSCzWrBn9lXfoW5J7GgNDTJVtRvA2BxsGV4sDcsFMo+glngkoTGZqN+YexE7w=="],
+    "effect-cf": ["effect-cf@0.55.0", "", { "peerDependencies": { "@cloudflare/computer": "^0.2.0", "@cloudflare/sandbox": "^0.13.0-next.738.2 || ^1.0.0", "@cloudflare/vitest-plugin": "^1.0.0", "@cloudflare/workers-types": "^5.20260926.1", "@effect/sql-d1": "^4.0.0", "@effect/sql-pg": "^4.0.0", "@effect/sql-sqlite-do": "^4.0.0", "@modelcontextprotocol/server": "^2.0.0", "effect": "^4.0.0" }, "optionalPeers": ["@cloudflare/computer", "@cloudflare/sandbox", "@cloudflare/vitest-plugin", "@cloudflare/workers-types", "@effect/sql-pg", "@modelcontextprotocol/server"] }, "sha512-Tk3ZWffXIOElZtwSMGy+1Flg2QrhZ7sI9aOM5dRZ6ubANqRJqYqZraZJvqmp4njkYbnjszi5/ybbtA8O1zgGzA=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.398", "", {}, "sha512-AsvhAxopJGh6museTDMIjn6JpDYOfgu4RLlygomt87MUwBUqTfd/1EiPtx10/LZE8xpTvkP2E9Gafq7lkLtodQ=="],
 

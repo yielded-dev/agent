@@ -950,9 +950,10 @@ Compose logical registrations to share it; never write the native alarm or overr
 Thread maintenance uses a manual alarm, keeping completion, claims and retry policy in its durable
 queue. Source mutations atomically enroll a logical deadline before fallible work.
 
-During maintenance, effect-cf defers native changes and retains a recovery guard. Eviction before
-final reconciliation can delay recovery until that guard, one hour by default, even when the
-queue has an earlier logical deadline. `dispatchAfterEvent` does not shorten this recovery bound.
+During maintenance, effect-cf coalesces native changes while retaining a short recovery alarm.
+`inFlightRecovery` defaults to one second. Cloudflare delivery and existing queue claims or
+leases can delay resumed work beyond that deadline. After a handler returns, an unchanged
+manual checkpoint uses the separate parked-recovery interval.
 
 Schedule Owners and Subscription Partitions use `effect-cf` logical alarms. Failed handlers and
 self-rearms use exponential backoff with a one-second minimum; after eight attempts without
