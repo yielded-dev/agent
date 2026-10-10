@@ -84,11 +84,19 @@ export default {
         const encoder = new TextEncoder();
         const encode = Schema.encodeSync(Schema.fromJsonString(BuildEvent));
         let cancelled = false;
+        let stopHeartbeat = () => {};
 
         const body = new ReadableStream<Uint8Array>({
           start(controller) {
-            // Flush headers before a long batch; empty lines are not measurement events.
-            controller.enqueue(encoder.encode("\n"));
+            // Keep the client socket alive while a batch runs; empty lines are not events.
+            const heartbeat = () => {
+              if (!cancelled) controller.enqueue(encoder.encode("\n"));
+            };
+
+            heartbeat();
+            const timer = setInterval(heartbeat, 15_000);
+
+            stopHeartbeat = () => clearInterval(timer);
 
             const write = (event: BuildEvent) => {
               if (!cancelled) controller.enqueue(encoder.encode(encode(event) + "\n"));
@@ -142,6 +150,7 @@ export default {
                     error: errorText(cause),
                   });
                 } finally {
+                  stopHeartbeat();
                   if (!cancelled) controller.close();
                 }
               })(),
@@ -149,6 +158,7 @@ export default {
           },
           cancel(reason) {
             cancelled = true;
+            stopHeartbeat();
             cancellation.abort(reason);
           },
         });

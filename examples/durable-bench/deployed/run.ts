@@ -513,7 +513,6 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                       );
                     }),
                   ),
-                  Effect.timeout("2 hours"),
                 );
                 if (
                   !result.histories.some(
