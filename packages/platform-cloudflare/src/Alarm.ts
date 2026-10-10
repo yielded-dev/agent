@@ -1168,6 +1168,7 @@ export class ThreadMaintenance extends Context.Service<
     | DurableRuntimeConfig
     | SubmissionLedger
     | WakeScheduler
+    | DurableAlarmService
     | ThreadMaintenanceAlarm
     | ThreadMaintenanceFailpoint
     | CloudflareDurableRuntimeConfig
@@ -1179,6 +1180,7 @@ export class ThreadMaintenance extends Context.Service<
       const recoveryConfig = yield* DurableRuntimeConfig;
       const ledger = yield* SubmissionLedger;
       const wakes = yield* WakeScheduler;
+      const hints = yield* DurableAlarmService;
       const alarms = yield* ThreadMaintenanceAlarm;
       const config = yield* CloudflareDurableRuntimeConfig;
       const { ctx } = yield* DurableObjectContext;
@@ -3101,6 +3103,7 @@ export class ThreadMaintenance extends Context.Service<
               ),
             )
             .pipe(
+              hints.withHintsDeferred,
               Effect.catchTags({
                 StorageOperationError: (error) => alarmFailure("defer maintenance wakes")(error),
                 InvalidScheduleConfigurationError: (error) =>
