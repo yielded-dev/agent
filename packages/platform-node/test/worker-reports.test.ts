@@ -6,7 +6,8 @@ import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpointError } from "@yielded/agent/durable-failpoint";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { MessageDeliveryStore } from "@yielded/agent/message-delivery";
-import { DefinitionDigestInput } from "@yielded/agent/records";
+import { DefinitionDigestInput, type RunCompleted } from "@yielded/agent/records";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentHost } from "@yielded/agent/subagent-host";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
@@ -21,6 +22,7 @@ import {
   Exit,
   FileSystem,
   Layer,
+  Option,
   Ref,
   Schema,
   Scope,
@@ -151,6 +153,8 @@ it.live.each(["worker:after-report-append"] as const)(
         };
 
         const firstScope = yield* Scope.make();
+        const completions: Array<RunCompleted> = [];
+        let inspectCompletion: Effect.Effect<void> = Effect.void;
 
         yield* Effect.addFinalizer(() => Scope.close(firstScope, Exit.void));
 
@@ -160,7 +164,9 @@ it.live.each(["worker:after-report-append"] as const)(
             runtimeFailpoint: (location) =>
               location === failpoint
                 ? DurableRuntimeFailpointError.make({ location })
-                : Effect.void,
+                : location === "terminalize:before-publication"
+                  ? inspectCompletion
+                  : Effect.void,
           }).pipe(
             Layer.provide(authority),
             Layer.provide(background.layer),
@@ -203,6 +209,26 @@ it.live.each(["worker:after-report-append"] as const)(
           { question: "joined input" },
           { idempotencyKey: key("joined") },
         ).pipe(Effect.provideService(SubagentHost, host));
+
+        const childReceipt = started.delivery.receipt;
+
+        if (childReceipt === null)
+          return yield* Effect.die("Expected the worker's accepted receipt");
+        inspectCompletion = Context.get(first, ThreadStore)
+          .readExecution({
+            threadId: started.worker.threadId,
+            runId: runIdForSubmission(childReceipt.submissionId),
+          })
+          .pipe(
+            Effect.map((execution) => {
+              completions.push(
+                ...Option.getOrThrow(execution).operational.flatMap(({ payload }) =>
+                  payload._tag === "RunCompleted" ? [payload] : [],
+                ),
+              );
+            }),
+            Effect.orDie,
+          );
 
         const interrupted = yield* runtime
           .processThreadResolved(started.worker.threadId)
@@ -361,9 +387,18 @@ it.live.each(["worker:after-report-append"] as const)(
           reports[0]?.runId,
         ]);
         expect(reports).toEqual(decisions);
+        expect(completions).toHaveLength(1);
         expect(
-          childLog.records.filter(({ record }) => record.payload._tag === "RunCompleted"),
-        ).toHaveLength(1);
+          childSettlements.find(
+            (settlement) => settlement.submissionId === childReceipt.submissionId,
+          )?.result,
+        ).toEqual(completions[0]?.output);
+        expect(
+          yield* store.readExecution({
+            threadId: started.worker.threadId,
+            runId: runIdForSubmission(childReceipt.submissionId),
+          }),
+        ).toEqual(Option.none());
         expect(
           childLog.records.filter(({ record }) => record.payload._tag === "ModelResponseRecorded"),
         ).toHaveLength(1);

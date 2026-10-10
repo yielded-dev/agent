@@ -691,6 +691,12 @@ const makeServices = Effect.fnUntraced(function* () {
       ? {}
       : { lifecyclePublications: journal.lifecycle.storage }),
     readIdentity: selectedReads.readIdentity,
+    readExecution: (request) =>
+      journal.state.read(
+        requireThread(journal, request.threadId).pipe(
+          Effect.andThen(journal.readExecution(request)),
+        ),
+      ),
     readWorkerCapacity: selectedReads.readWorkerCapacity,
     verification: transfer.verification,
     countPeerMessages: selectedReads.countPeerMessages,

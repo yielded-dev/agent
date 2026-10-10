@@ -49,6 +49,8 @@ import {
 } from "@yielded/agent/thread-archive-range";
 import {
   AppendConflict,
+  ExecutionRead,
+  ExecutionCheckpoint,
   AppendResult,
   ThreadExport,
   ThreadPeerCountRequest,
@@ -259,6 +261,11 @@ export class StoreReadIdentityCall extends Schema.TaggedClass<StoreReadIdentityC
   request: ThreadIdentityRequest,
 }) {}
 
+export class StoreReadExecutionCall extends Schema.TaggedClass<StoreReadExecutionCall>()(
+  "StoreReadExecution",
+  { request: ExecutionRead },
+) {}
+
 export class StoreWorkerCapacityCall extends Schema.TaggedClass<StoreWorkerCapacityCall>()(
   "StoreWorkerCapacity",
   { request: ThreadWorkerCapacityRequest },
@@ -344,6 +351,7 @@ export const PortRequest = Schema.Union([
   StoreReadPromptCall,
   StoreInspectTailCall,
   StoreReadIdentityCall,
+  StoreReadExecutionCall,
   StoreWorkerCapacityCall,
   StoreVerificationCall,
   StoreExportCall,
@@ -432,6 +440,11 @@ export class StoreInspectTailResult extends Schema.TaggedClass<StoreInspectTailR
 )("StoreInspectTailResult", {
   tail: ThreadTail,
 }) {}
+
+export class StoreReadExecutionResult extends Schema.TaggedClass<StoreReadExecutionResult>()(
+  "StoreReadExecutionResult",
+  { checkpoint: Schema.OptionFromNullOr(ExecutionCheckpoint) },
+) {}
 
 export class StoreReadIdentityResult extends Schema.TaggedClass<StoreReadIdentityResult>(
   "@effect-agent/storage-cloudflare/StoreReadIdentityResult",
@@ -538,6 +551,7 @@ export const PortResult = Schema.Union([
   StoreReadPromptResult,
   StoreInspectTailResult,
   StoreReadIdentityResult,
+  StoreReadExecutionResult,
   StoreWorkerCapacityResult,
   StoreVerificationResult,
   StoreExportResult,

@@ -8,8 +8,13 @@ import * as Agent from "@yielded/agent/agent";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { CanonicalRecordEnvelope } from "@yielded/agent/records";
 import { ThreadArchive, ThreadImport } from "@yielded/agent/thread-import";
-import { ThreadExport, ThreadExportRequest, streamExport } from "@yielded/agent/thread-store";
-import { Effect, FileSystem, Layer, Schema, Stream } from "effect";
+import {
+  ThreadExport,
+  ThreadExportRequest,
+  ThreadStore,
+  streamExport,
+} from "@yielded/agent/thread-store";
+import { Effect, FileSystem, Layer, Option, Schema, Stream } from "effect";
 import { LanguageModel, Model, type Prompt } from "effect/ai";
 
 import {
@@ -94,12 +99,12 @@ const comparablePage = Effect.fnUntraced(function* (page: ThreadExport) {
 });
 
 // A real current-format worker loses its process after canonical compaction. Transfer must
-// discard execution authority while preserving original input, context, progress and admissions.
+// discard producer ownership while preserving original input, context, active progress and admissions.
 layer(NodeFileSystem.layer, { excludeTestServices: true })(
   "Thread transfer after process loss",
   (it) => {
     it.effect(
-      "exports current canonical progress, imports a fresh store, and resumes the original Run",
+      "exports active progress, imports a fresh store, and resumes the original Run",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
@@ -123,7 +128,10 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               Effect.gen(function* () {
                 const db = yield* openDatabase(site.db);
 
-                expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 21 });
+                expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 22 });
+                expect(db.prepare("SELECT record_format FROM effect_agent_schema").get()).toEqual({
+                  record_format: "effect-agent/thread@4",
+                });
                 expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
                 expect(derivativeCounts(db)).toEqual({ ownership: 1, attempts: 1 });
               }),
@@ -134,10 +142,25 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
 
             if (exported === undefined) return yield* Effect.die("Missing transfer fixture page");
             const sourceRecords = pages.flatMap(({ page }) => page.records);
+            const sourceExecutions = pages.flatMap(({ page }) => page.executions);
 
+            expect(exported.transferFormat).toBe("effect-agent/thread-transfer@2");
+            expect(sourceExecutions).toHaveLength(1);
+            const execution = sourceExecutions[0]?.checkpoint;
+
+            if (execution === undefined)
+              return yield* Effect.die("Missing active execution checkpoint");
             expect(
-              sourceRecords.some(({ record }) => record.payload._tag === "RunContinuation"),
-            ).toBe(true);
+              execution.operational.filter(({ payload }) => payload._tag === "RunStarted"),
+            ).toHaveLength(1);
+            expect(execution.progress.savedContext).toBeDefined();
+            expect(
+              sourceRecords.filter(({ record }) =>
+                ["RunStarted", "RunContextRecorded", "RunCompleted", "RunContinuation"].includes(
+                  record.payload._tag,
+                ),
+              ),
+            ).toEqual([]);
 
             const imported = yield* Effect.gen(function* () {
               const importer = yield* ThreadImport;
@@ -218,8 +241,30 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                   yield* encode(sourceRecords),
                 );
                 expect(
-                  records.filter(({ record }) => record.payload._tag === "RunStarted"),
+                  records.filter(
+                    ({ record }) =>
+                      record.payload._tag === "UserInputRecorded" &&
+                      record.payload.kind === "user" &&
+                      record.payload.runId === execution.progress.runId,
+                  ),
                 ).toHaveLength(1);
+                expect(
+                  records.filter(({ record }) =>
+                    [
+                      "RunStarted",
+                      "RunContextRecorded",
+                      "RunCompleted",
+                      "RunContinuation",
+                    ].includes(record.payload._tag),
+                  ),
+                ).toEqual([]);
+                const store = yield* ThreadStore;
+
+                expect(
+                  Option.isNone(
+                    yield* store.readExecution({ threadId, runId: execution.progress.runId }),
+                  ),
+                ).toBe(true);
                 expect(supplierCounts(site.supplier)).toEqual({
                   "checkpoint-read:checkpoint-read-1": 1,
                   "checkpoint-read:checkpoint-read-2": 1,

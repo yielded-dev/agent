@@ -24,6 +24,7 @@ import {
   RecordId,
 } from "../Records.ts";
 import { readRunEvidenceSnapshot } from "../RunContinuation.ts";
+import { runIdForSubmission } from "../RunJournal.ts";
 import { LedgerError, type SubmissionSnapshot } from "../SubmissionLedger.ts";
 import { PreparedInput } from "../Subscription.ts";
 import {
@@ -97,6 +98,9 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
     return {
       ...tail,
       records,
+      execution: yield* store
+        .readExecution({ threadId, runId: runIdForSubmission(submissionId) })
+        .pipe(Effect.mapError(storage)),
       updateSequence: payload?._tag === "AgentUpdateEmitted" ? payload.update.sequence : 0,
     };
   });
@@ -245,9 +249,9 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
           ({ record }) =>
             record.payload._tag === "SubmissionSettled" && record.payload.runId === request.runId,
         ) ||
-        !history.records.some(
-          ({ record }) =>
-            record.payload._tag === "RunStarted" && record.payload.runId === request.runId,
+        Option.isNone(history.execution) ||
+        !history.execution.value.operational.some(
+          ({ payload }) => payload._tag === "RunStarted" && payload.runId === request.runId,
         )
       )
         return yield* rejected("identity");

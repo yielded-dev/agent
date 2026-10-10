@@ -1,4 +1,9 @@
-import { EMPTY_TAIL_DIGEST, canonicalJson, utf8ByteLength } from "@yielded/agent/digest";
+import {
+  EMPTY_TAIL_DIGEST,
+  canonicalJson,
+  digestCanonicalJson,
+  utf8ByteLength,
+} from "@yielded/agent/digest";
 import { RunId, SubmissionId, ThreadId } from "@yielded/agent/identifiers";
 import {
   MessageDeliveryRecord,
@@ -26,7 +31,7 @@ import {
   MAX_RUN_RECOVERY_SUFFIX_BYTES,
   MAX_RUN_CONTINUATION_BYTES,
 } from "@yielded/agent/records";
-import { verifyRunContinuations } from "@yielded/agent/run-continuation";
+import { isOperationalRecord, verifyRunContinuations } from "@yielded/agent/run-continuation";
 import { validateCanonicalSettlement } from "@yielded/agent/settlement-publisher";
 import {
   ApprovalDecisionIntent,
@@ -56,6 +61,8 @@ import {
   rebuildImportedSubmission,
   verifyImportedReferences,
   verifyImportedSettlementOrder,
+  validateImportedExecution,
+  validateImportedRunExecution,
   invalidThreadArchive,
   type ThreadArchive,
   ThreadImportReader,
@@ -72,6 +79,7 @@ import {
   ThreadNotMaterialized,
   ThreadStoreError,
   ThreadCheckpoint,
+  ExecutionCheckpoint,
   streamExport,
   ThreadExportSource,
   canonicalBatchFitsTransfer,
@@ -79,6 +87,7 @@ import {
 import {
   exportThreadPage,
   ThreadExporterReader,
+  executionTransferFact,
   type TransferSection,
   type TransferFacts,
 } from "@yielded/agent/thread-transfer";
@@ -150,6 +159,16 @@ const Row = Schema.Struct({
 const WireBatch = Schema.Struct({
   ...ThreadExportBatch.fields,
   records: Schema.NonEmptyArray(RecordJson).check(Schema.isMaxLength(256)),
+});
+
+const ExecutionRow = Schema.Struct({
+  thread_id: ThreadId,
+  run_id: Schema.fromJsonString(RunId),
+  input_sequence: SqlInteger.pipe(
+    Schema.decodeTo(CanonicalSequence.check(Schema.isGreaterThan(0))),
+  ),
+  revision: SqlInteger.check(Schema.isGreaterThan(0)),
+  checkpoint_json: Schema.String.check(Schema.isMaxLength(16 * 1024 * 1024)),
 });
 
 const decodeStoredIdentifiers = Schema.decodeEffect(Schema.Array(ThreadRow.fields.thread_id));
@@ -305,6 +324,36 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
   const admission = (row: typeof AdmissionRow.Type) =>
     decodeAdmissionFact(row).pipe(Effect.mapError((e) => failure("decode transfer admission", e)));
+
+  const executions = Effect.fnUntraced(function* (threadId: ThreadId, predicate: Fragment) {
+    const selected =
+      yield* query(sql`SELECT e.thread_id, e.run_id, e.input_sequence, e.revision, e.checkpoint_json
+      FROM ${table("effect_agent_executions")} e WHERE e.thread_id=${threadId} AND ${predicate}
+      ORDER BY e.input_sequence LIMIT 1`).pipe(
+        Effect.flatMap((value) =>
+          decode(Schema.Array(ExecutionRow).check(Schema.isMaxLength(1)), value),
+        ),
+      );
+
+    return yield* Effect.forEach(selected, (row) =>
+      Effect.gen(function* () {
+        const checkpoint = yield* json(ExecutionCheckpoint, row.checkpoint_json);
+
+        if (
+          row.thread_id !== threadId ||
+          checkpoint.progress.runId !== row.run_id ||
+          checkpoint.progress.revision !== row.revision ||
+          checkpoint.originalSequence !== row.input_sequence
+        )
+          return yield* failure(
+            "read transfer execution",
+            "Active execution differs from its stored identity or revision",
+          );
+
+        return checkpoint;
+      }),
+    );
+  });
 
   const commandFacts = Effect.fnUntraced(function* (
     threadId: ThreadId,
@@ -484,7 +533,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
       const state =
         yield* query(sql`SELECT revision, admissions_count AS admissions, aborts_count AS aborts,
-        approvals_count AS approvals, resolutions_count AS resolutions, deliveries_count AS deliveries
+        approvals_count AS approvals, resolutions_count AS resolutions, deliveries_count AS deliveries, executions_count AS executions
         FROM ${table("effect_agent_transfer_state")} WHERE thread_id=${threadId}`).pipe(
           Effect.flatMap((r) =>
             decode(
@@ -496,6 +545,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                   approvals: SqlInteger,
                   resolutions: SqlInteger,
                   deliveries: SqlInteger,
+                  executions: SqlInteger,
                 }),
               ),
               r,
@@ -664,6 +714,12 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           return yield* failure("export batch", "Canonical batch differs from its indexed records");
         const entry = yield* envelope(item);
 
+        // PersistentHistory retains RunCompleted as its canonical terminal fact.
+        if (
+          (isOperationalRecord(entry.record) && entry.record.payload._tag !== "RunCompleted") ||
+          entry.record.payload._tag === "RunContinuation"
+        )
+          return yield* failure("export batch", "Execution state is not canonical history");
         if (!(entry.record instanceof ExportedRecord))
           return yield* failure("export batch", "Canonical wire is missing");
         records.push(ThreadExportRecord.make({ ...entry, record: entry.record }));
@@ -683,6 +739,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         admissions: [],
         commands: { aborts: [], approvals: [], resolutions: [] },
         deliveries: [],
+        executions: [],
       };
 
       if (section === "admissions") {
@@ -717,6 +774,20 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         after === undefined
           ? 0
           : yield* decode(Schema.FiniteFromString.pipe(Schema.decodeTo(Schema.Natural)), after);
+
+      if (section === "executions") {
+        const selected = yield* executions(threadId, sql`e.input_sequence>${sequence}`);
+
+        return {
+          facts: {
+            ...facts,
+            executions: yield* Effect.forEach(selected, (checkpoint) =>
+              executionTransferFact(checkpoint).pipe(Effect.provideService(Crypto.Crypto, crypto)),
+            ),
+          },
+          after: String(selected[0]?.originalSequence ?? sequence),
+        };
+      }
 
       const page = yield* commandFacts(
         threadId,
@@ -761,6 +832,10 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
       MAX_RUN_RECOVERY_SUFFIX_RECORDS;
 
     return ThreadImportReader.layer({
+      execution: (runId) =>
+        executions(id, sql`e.run_id=${JSON.stringify(runId)}`).pipe(
+          Effect.map((selected) => selected[0]),
+        ),
       read: (input) =>
         Stream.unwrap(
           Effect.gen(function* () {
@@ -1032,6 +1107,8 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                     "effect_agent_canonical_records",
                     "effect_agent_record_runs",
                     "effect_agent_canonical_batches",
+                    "effect_agent_executions",
+                    "effect_agent_execution_receipts",
                     "effect_agent_checkpoints",
                     "effect_agent_worker_stops",
                     "effect_agent_attempts",
@@ -1062,7 +1139,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                     return yield* reject("target-not-empty", "Destination Thread is not empty");
 
                   const counters = yield* query(
-                    sql`SELECT revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count FROM ${table("effect_agent_transfer_state")} WHERE thread_id=${threadId}`,
+                    sql`SELECT revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count, executions_count FROM ${table("effect_agent_transfer_state")} WHERE thread_id=${threadId}`,
                   ).pipe(
                     Effect.flatMap((r) =>
                       decode(
@@ -1074,6 +1151,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                             approvals_count: SqlInteger,
                             resolutions_count: SqlInteger,
                             deliveries_count: SqlInteger,
+                            executions_count: SqlInteger,
                           }),
                         ),
                         r,
@@ -1125,11 +1203,22 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                     yield* query(
                       sql`INSERT INTO ${table("effect_agent_threads")} (thread_id, created_at, tail_sequence, tail_digest, producer_epoch) VALUES (${threadId}, ${now}, 0, ${EMPTY_TAIL_DIGEST}, ${destinationEpoch})`,
                     );
-                  yield* query(sql`INSERT INTO ${table("effect_agent_transfer_state")} (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count)
-          VALUES (${threadId}, 0, 0, 0, 0, 0, 0) ON CONFLICT DO NOTHING`);
+                  yield* query(sql`INSERT INTO ${table("effect_agent_transfer_state")} (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count, executions_count)
+          VALUES (${threadId}, 0, 0, 0, 0, 0, 0, 0) ON CONFLICT DO NOTHING`);
                   yield* work.initialize(threadId);
                 }
                 for (const batch of page.batches) {
+                  if (
+                    batch.batch.records.some(
+                      (record) =>
+                        (isOperationalRecord(record) && record.payload._tag !== "RunCompleted") ||
+                        record.payload._tag === "RunContinuation",
+                    )
+                  )
+                    return yield* invalidThreadArchive(
+                      "Execution state is not canonical history",
+                      threadId,
+                    );
                   if (
                     !canonicalBatchFitsTransfer(
                       threadId,
@@ -1163,8 +1252,15 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                   yield* checkValues([batch.batchJson, ...batch.recordJson]);
                   const batchHeaderJson = canonicalBatchHeaderJson(batch.batch);
 
-                  yield* query(sql`INSERT INTO ${table("effect_agent_canonical_batches")} (thread_id, batch_id, first_sequence, last_sequence, batch_digest, tail_digest, batch_header_json)
-          VALUES (${threadId}, ${batch.batch.batchId}, ${batch.firstSequence}, ${batch.lastSequence}, ${batch.tailDigest}, ${batch.tailDigest}, ${batchHeaderJson})`);
+                  // Imported history has no operational retry receipts; its retained intent is canonical-only.
+                  const commitDigest = yield* digestCanonicalJson(
+                    JSON.stringify([batch.batchJson, "[]"]),
+                  ).pipe(
+                    Effect.mapError((cause) => failure("digest imported canonical intent", cause)),
+                  );
+
+                  yield* query(sql`INSERT INTO ${table("effect_agent_canonical_batches")} (thread_id, batch_id, first_sequence, last_sequence, batch_digest, commit_digest, tail_digest, batch_header_json)
+          VALUES (${threadId}, ${batch.batch.batchId}, ${batch.firstSequence}, ${batch.lastSequence}, ${batch.tailDigest}, ${commitDigest}, ${batch.tailDigest}, ${batchHeaderJson})`);
                   const captured = [];
 
                   for (const [index, record] of batch.batch.records.entries()) {
@@ -1225,6 +1321,8 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                       producerEpoch: ProducerEpoch.make(destinationEpoch),
                       records: captured,
                       progress: [],
+                      executionWrites: [],
+                      commitDigest,
                     },
                     batch.firstSequence,
                     batch.lastSequence,
@@ -1442,6 +1540,35 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           VALUES (${threadId}, ${delivery.key.messageId}, ${delivery.version}, ${delivery.status}, ${messageDeliveryDeadline(delivery)}, ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, ${messageDeliveryMetadata(delivery)}::jsonb` })})`);
                   yield* work.transferDelivery(threadId, delivery.key.messageId);
                 }
+                for (const { checkpoint } of page.archive.executions) {
+                  const runId = JSON.stringify(checkpoint.progress.runId);
+
+                  if (
+                    (yield* query(sql`SELECT run_id FROM ${table("effect_agent_executions")}
+                    WHERE thread_id=${threadId} AND (run_id=${runId} OR input_sequence=${checkpoint.originalSequence}) LIMIT 1`))
+                      .length > 0
+                  )
+                    return yield* invalidThreadArchive(
+                      "Duplicate active Run or original input identity",
+                      threadId,
+                    );
+
+                  const checkpointJson = yield* encode(
+                    Schema.fromJsonString(ExecutionCheckpoint),
+                    checkpoint,
+                  );
+
+                  yield* checkIdentifiers([
+                    checkpoint.progress.runId,
+                    checkpoint.progress.submissionId,
+                    checkpoint.batchId,
+                  ]);
+                  yield* checkValues([checkpointJson, runId]);
+                  // Execution triggers own count/revision maintenance; retry/lease authority is not transferred.
+                  yield* query(sql`INSERT INTO ${table("effect_agent_executions")}
+                    (thread_id, run_id, input_sequence, revision, checkpoint_json)
+                    VALUES (${threadId}, ${runId}, ${checkpoint.originalSequence}, ${checkpoint.progress.revision}, ${checkpointJson})`);
+                }
                 if (options.afterPage !== undefined)
                   yield* options
                     .afterPage(page)
@@ -1460,7 +1587,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
               );
               const reader = yield* ThreadImportReader;
               const readAdmission = reader.admission;
-              // Exact Run selections include continuations as well as the sparse record_runs membership.
+              // Check missing active state for every retained Run, including terminal history counts.
               let afterRun: string | undefined;
 
               while (true) {
@@ -1481,8 +1608,26 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                 yield* verifyRunContinuations(yield* reader.runRecords(runId), {
                   verifyContext: false,
                 }).pipe(Effect.mapError((e) => invalidThreadArchive(e.message, id)));
+                yield* validateImportedRunExecution(id, runId, result.tailSequence);
                 afterRun = next.run_id;
               }
+              // Active rows are authoritative even if their Run is absent from the canonical directory.
+              let afterExecution = 0;
+              let executionCount = 0;
+
+              while (true) {
+                const [checkpoint] = yield* executions(id, sql`e.input_sequence>${afterExecution}`);
+
+                if (checkpoint === undefined) break;
+                yield* validateImportedExecution(id, checkpoint, result.tailSequence);
+                afterExecution = checkpoint.originalSequence;
+                executionCount++;
+              }
+              if (executionCount !== progress.counts.executions)
+                return yield* invalidThreadArchive(
+                  "Active execution directory differs from the captured count",
+                  id,
+                );
               let afterQueue = -1;
 
               while (true) {
@@ -1853,7 +1998,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
               const staged =
                 yield* query(sql`SELECT admissions_count AS admissions, aborts_count AS aborts, approvals_count AS approvals,
-          resolutions_count AS resolutions, deliveries_count AS deliveries FROM ${table("effect_agent_transfer_state")} WHERE thread_id=${id}`).pipe(
+          resolutions_count AS resolutions, deliveries_count AS deliveries, executions_count AS executions FROM ${table("effect_agent_transfer_state")} WHERE thread_id=${id}`).pipe(
                   Effect.flatMap((r) =>
                     decode(
                       Schema.Array(
@@ -1863,6 +2008,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                           approvals: SqlInteger,
                           resolutions: SqlInteger,
                           deliveries: SqlInteger,
+                          executions: SqlInteger,
                         }),
                       ),
                       r,

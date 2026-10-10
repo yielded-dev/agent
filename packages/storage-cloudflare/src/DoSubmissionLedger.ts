@@ -2105,13 +2105,16 @@ const makeServices = Effect.fnUntraced(function* () {
                 runId: undefined,
               });
           }
-          if (existing !== undefined)
+          if (existing !== undefined) {
+            yield* journal.checkCommitIntent(prepared.raw);
+
             return SettlementPublicationResult.make({
               record: existing.record,
               tailSequence: thread.tail_sequence,
               tailDigest,
               replayed: true,
             });
+          }
           if (submission.state === "settled")
             return yield* LedgerError.make({
               operation,

@@ -17,8 +17,9 @@ administration contract applies to Node and SQLite class `DN` and Cloudflare Dur
 
 - `explain(submissionId)` and `explainThread(threadId)` return the recovery decision,
   operator meaning, and expected disposition. They write nothing.
-- `verify(threadId)` checks the canonical batch digest chain and recomputes Run continuations from
-  their referenced facts. Missing or mismatched progress fails integrity verification.
+- `verify(threadId)` checks the canonical batch digest chain, retained history and active Run
+  checkpoints, including their original Prompt digests. Missing or mismatched active state fails
+  integrity verification; discarded intermediate checkpoints are not historical proof.
 - `retry(RetryCommand.make({ submissionId, author, reason }))` logs the operator and repeats the classifier's
   decision. Repairs with a claim annotate their attempt using that claim's epoch; state-only wakes
   and marker repairs do not append canonical audit records. Retry refuses settled work and requests
@@ -478,7 +479,7 @@ uncertainty, payloads and transactional prearming; this extension defines no pro
 ### Adopting these contracts
 
 Table layout and record meaning have independent versions. The unreleased protocol accepts fresh
-layout-21 stores and `effect-agent/thread@3` records on SQLite, PostgreSQL, and Cloudflare. Opening
+layout-22 stores and `effect-agent/thread@4` records on SQLite, PostgreSQL, and Cloudflare. Opening
 predecessor or ambiguous stores fails before DDL or payload mutation. Keep them with their matching
 release; no historical decoder, layout upgrade, converter, or mixed-format runtime is included.
 
@@ -494,14 +495,16 @@ vp run admin:durable import --database destination.sqlite --input thread.ndjson
 vp run admin:durable reencode --database source.sqlite --thread THREAD --target destination.sqlite
 ```
 
-Every page binds the canonical tail and a revision of independent admissions, accepted commands,
-and delivery facts. Changes during export require a new export. Import preserves exact record wire,
+Every page binds the canonical tail and a revision of admissions, accepted commands, delivery facts
+and active execution state. Progress-only checkpoint updates also invalidate an in-flight export.
+Import preserves exact record wire,
 batch producers, digest anchors, queue order, admission time, Receipts, principals, keys, and opaque
 admission fences and groups. Destination admission policy and active-group constraints still apply.
 Truncated pages, missing cross-range evidence, contradictory identities, or unavailable policy
 checks fail without publishing staged work. Keep the source when validation fails.
 
-Import rebuilds ledger state and native indexes from facts. Claims, leases, execution ownership,
+Import restores authoritative active checkpoints and rebuilds ledger state and native indexes from
+retained facts. Claims, leases, execution ownership,
 application checkpoints, and recovery caches start empty. Unresolved ordinary tools remain Unknown;
 settlement does not close surviving effects or deliveries. Closed historical workers and children
 can transfer; live obligations owned by another store must finish through their owning workflow
@@ -537,7 +540,7 @@ predecessor schemas without mutation. Their retained input and destination owner
 independent of canonical Run progress.
 
 Application checkpoint consumers validate their own Schema. `verifyOnOpen` audits canonical history
-and application projections. Canonical continuation references, revisions, and original context are
+and application projections. Active checkpoint references, revisions, and original context are
 validated before import and recovery; missing or corrupt progress leaves work owed. See
 [Run continuations](/concepts/durability/#run-continuations).
 

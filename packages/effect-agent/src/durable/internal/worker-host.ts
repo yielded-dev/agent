@@ -546,10 +546,11 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       })
       .pipe(Stream.runCollect, Effect.mapError(storageFailure("start")));
 
-    const run = execution.find(({ record }) => record.payload._tag === "RunStarted")?.record
+    const run = execution.find(({ record }) => record.payload._tag === "SubmissionSettled")?.record
       .payload;
 
-    if (run?._tag !== "RunStarted") return yield* failure("start", "corrupt");
+    if (run?._tag !== "SubmissionSettled" || run.runId === undefined)
+      return yield* failure("start", "corrupt");
 
     const input = Option.getOrUndefined(
       yield* getRunInput({ threadId: selected.threadId, runId: run.runId }).pipe(
@@ -3001,8 +3002,33 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
         const applied = records.find((entry) => entry.record.payload._tag === "UserInputRecorded");
 
-        const started = records.find((entry) => entry.record.payload._tag === "RunStarted")?.record
-          .payload;
+        const appliedRunId =
+          applied?.record.payload._tag === "UserInputRecorded"
+            ? applied.record.payload.runId
+            : undefined;
+
+        const execution =
+          appliedRunId === undefined
+            ? undefined
+            : Option.getOrUndefined(
+                yield* deps.store
+                  .readExecution({ threadId, runId: appliedRunId })
+                  .pipe(Effect.mapError(storageFailure(operation))),
+              );
+
+        const started = execution?.operational.find(
+          (record) => record.payload._tag === "RunStarted",
+        )?.payload;
+
+        const settled = records.find((entry) => entry.record.payload._tag === "SubmissionSettled")
+          ?.record.payload;
+
+        const latestRunId =
+          started?._tag === "RunStarted"
+            ? started.runId
+            : settled?._tag === "SubmissionSettled"
+              ? settled.runId
+              : undefined;
 
         const acceptedInput = control.latest === null ? null : yield* input(control.latest);
         let appliedInput: WorkerSummary["appliedInput"] = null;
@@ -3019,9 +3045,9 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
             sequence: applied.sequence,
           };
         }
-        if (started?._tag === "RunStarted") {
+        if (latestRunId !== undefined) {
           const initial = Option.getOrUndefined(
-            yield* getRunInput({ threadId, runId: started.runId }).pipe(
+            yield* getRunInput({ threadId, runId: latestRunId }).pipe(
               Effect.provideService(ThreadReader, ThreadReader.fromStore(deps.store)),
               Effect.mapError(storageFailure(operation)),
             ),
@@ -3041,12 +3067,12 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
 
           if (
             terminal !== undefined &&
-            (terminal._tag !== "SubmissionSettled" || terminal.runId !== started.runId)
+            (terminal._tag !== "SubmissionSettled" || terminal.runId !== latestRunId)
           )
             return yield* failure(operation, "corrupt");
 
           run = {
-            runId: started.runId,
+            runId: latestRunId,
             hostReceipt: host.receipt,
             outcome: terminal?.outcome ?? null,
             disposition: terminal?.runDisposition ?? null,
@@ -3060,10 +3086,20 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         const afterTail = yield* tail();
         const afterDelivery = yield* pending();
 
+        const afterExecution =
+          appliedRunId === undefined
+            ? undefined
+            : Option.getOrUndefined(
+                yield* deps.store
+                  .readExecution({ threadId, runId: appliedRunId })
+                  .pipe(Effect.mapError(storageFailure(operation))),
+              );
+
         if (
           !Schema.toEquivalence(WorkerLedgerState)(control, after) ||
           current?.tailSequence !== afterTail?.tailSequence ||
           current?.tailDigest !== afterTail?.tailDigest ||
+          execution?.progress.revision !== afterExecution?.progress.revision ||
           delivery?.key.messageId !== afterDelivery?.key.messageId ||
           delivery?.version !== afterDelivery?.version
         )

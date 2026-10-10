@@ -16,6 +16,8 @@ import {
   ThreadExport,
   ThreadExportRequest,
   ThreadExportSnapshot,
+  ExecutionCheckpoint,
+  type ThreadExecutionFact,
   type ThreadNotMaterialized,
   ThreadStoreError,
 } from "./ThreadStore.ts";
@@ -26,10 +28,15 @@ export const transferSections = [
   "approvals",
   "resolutions",
   "deliveries",
+  "executions",
 ] as const;
 
 export type TransferSection = (typeof transferSections)[number];
-export type TransferFacts = Pick<ThreadExport, "admissions" | "commands" | "deliveries">;
+
+export type TransferFacts = Pick<
+  ThreadExport,
+  "admissions" | "commands" | "deliveries" | "executions"
+>;
 
 export type TransferManifest = Pick<
   ThreadExport,
@@ -85,7 +92,7 @@ const Position = Schema.Struct({
   snapshotId: Digest,
   fromSequence: Schema.Int.check(Schema.isGreaterThan(0)),
   previousTailDigest: Digest,
-  section: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 5 })),
+  section: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: transferSections.length })),
   consumed: Schema.Natural,
   after: Schema.optionalKey(Schema.String),
 });
@@ -113,9 +120,38 @@ export const transferSnapshotId = (manifest: TransferManifest) =>
 /** Exact evidence references outside this page, including references into archived ranges. */
 export const transferDependencies = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
+  executions: ThreadExport["executions"] = [],
 ): ReadonlyArray<RecordId> => {
-  return transferRecordDependencies(records.map((entry) => entry.record));
+  const dependencies = new Set(transferRecordDependencies(records.map((entry) => entry.record)));
+
+  for (const { checkpoint } of executions) {
+    const local = new Set(checkpoint.operational.map((record) => record.recordId));
+
+    for (const ref of transferRecordDependencies([
+      checkpoint.progressRecord,
+      ...checkpoint.operational,
+    ]))
+      if (!local.has(ref)) dependencies.add(ref);
+  }
+
+  return [...dependencies].sort();
 };
+
+export const executionTransferFact = (checkpoint: ExecutionCheckpoint) =>
+  Schema.encodeEffect(ExecutionCheckpoint)(checkpoint).pipe(
+    Effect.flatMap(digestJson),
+    Effect.map((digest): ThreadExecutionFact => ({ checkpoint, digest })),
+    Effect.mapError((cause) => failure("Cannot encode active execution transfer", cause)),
+  );
+
+const factCount = (facts: TransferFacts, section: TransferSection): number =>
+  section === "admissions"
+    ? facts.admissions.length
+    : section === "deliveries"
+      ? facts.deliveries.length
+      : section === "executions"
+        ? facts.executions.length
+        : facts.commands[section].length;
 
 export const checkTransferPageBytes = (page: ThreadExport) =>
   Schema.encodeEffect(ThreadExport)(page).pipe(
@@ -164,6 +200,7 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
     admissions: [],
     commands: { aborts: [], approvals: [], resolutions: [] },
     deliveries: [],
+    executions: [],
   };
 
   const fromSequence = position.fromSequence;
@@ -213,12 +250,7 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
       if (position.consumed === manifest.snapshot[section]) {
         const probe = yield* reader.facts(request.threadId, section, position.after);
 
-        const remaining =
-          section === "admissions"
-            ? probe.facts.admissions.length
-            : section === "deliveries"
-              ? probe.facts.deliveries.length
-              : probe.facts.commands[section].length;
+        const remaining = factCount(probe.facts, section);
 
         if (remaining !== 0) return yield* failure("Native transfer count omits retained facts");
         position = nextSection(position);
@@ -228,12 +260,7 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
 
       facts = page.facts;
 
-      const count =
-        section === "admissions"
-          ? facts.admissions.length
-          : section === "deliveries"
-            ? facts.deliveries.length
-            : facts.commands[section].length;
+      const count = factCount(facts, section);
 
       if (
         count === 0 ||
@@ -253,12 +280,7 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
     const section = transferSections[position.section]!;
     const probe = yield* reader.facts(request.threadId, section, position.after);
 
-    const count =
-      section === "admissions"
-        ? probe.facts.admissions.length
-        : section === "deliveries"
-          ? probe.facts.deliveries.length
-          : probe.facts.commands[section].length;
+    const count = factCount(probe.facts, section);
 
     if (count !== 0) return yield* failure("Native transfer count omits retained facts");
     position = nextSection(position);
@@ -278,13 +300,13 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
 
   const page = yield* ThreadExport.makeEffect({
     ...manifest,
-    transferFormat: "effect-agent/thread-transfer@1",
+    transferFormat: "effect-agent/thread-transfer@2",
     snapshotId,
     fromSequence: Schema.decodeSync(CanonicalSequence)(fromSequence),
     previousTailDigest,
     ...canonical,
     ...facts,
-    dependencies: transferDependencies(canonical.records),
+    dependencies: transferDependencies(canonical.records, facts.executions),
     ...(cursor === undefined ? {} : { cursor }),
   }).pipe(Effect.mapError(() => failure("Transfer page exceeds its schema bounds")));
 

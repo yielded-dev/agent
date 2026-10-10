@@ -223,9 +223,9 @@ layer(testLayer)("durable output and current-Run pruning", (it) => {
 
         expect(
           records
-            .filter(({ record }) => record.payload._tag === "RunCompleted")
+            .filter(({ record }) => record.payload._tag === "SubmissionSettled")
             .map(({ record }) => record.payload),
-        ).toEqual([expect.objectContaining({ output: text })]);
+        ).toEqual([expect.objectContaining({ result: text })]);
       }),
     );
   }

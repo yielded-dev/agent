@@ -21,6 +21,8 @@ import {
   verifyImportedSettlementOrder,
   ThreadImportRejected,
   ThreadImportReader,
+  validateImportedExecution,
+  validateImportedRunExecution,
 } from "./ThreadImport.ts";
 import { ThreadExport, ThreadStoreError, type ThreadCheckpoint } from "./ThreadStore.ts";
 
@@ -74,7 +76,12 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
         });
       after = entry.sequence;
     }
-    yield* verifyRunContinuations(records);
+    yield* verifyRunContinuations(records, { verifyContext: false });
+    yield* validateImportedRunExecution(
+      input.threadId,
+      runId,
+      progress.manifest?.tailSequence ?? CanonicalSequence.make(0),
+    );
     const byId = new Map(records.map((entry) => [entry.record.recordId, entry]));
 
     verifiedRun = { runId, records: byId };
@@ -111,6 +118,13 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
       );
 
       if (prepared === undefined) return;
+      for (const { checkpoint } of prepared.archive.executions)
+        yield* validateImportedExecution(input.threadId, checkpoint, page.tailSequence).pipe(
+          Effect.match({
+            onSuccess: () => undefined,
+            onFailure: (e) => fail("continuation-evidence", e.message),
+          }),
+        );
       for (const batch of prepared.batches)
         if (batch.lastSequence === input.checkpoint?.throughSequence)
           checkpointDigest = batch.tailDigest;

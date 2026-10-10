@@ -7,14 +7,14 @@ import { DurableAgentRuntime, DurableRuntimeConfig } from "@yielded/agent/durabl
 import { DurableRuntimeFailpointError } from "@yielded/agent/durable-failpoint";
 import { DurableStep, DurableStepError, ToolExecutionClass } from "@yielded/agent/durable-step";
 import { ThreadId, ToolCallId } from "@yielded/agent/identifiers";
+import type { CanonicalRecordEnvelope } from "@yielded/agent/records";
 import {
   DefinitionDigests,
   DeploymentId,
   Digest,
   ProducerId,
-  CanonicalRecord,
-  CanonicalRecordEnvelope,
-  RepairAnnotated,
+  RecordEnvelope,
+  RunContextRecorded,
 } from "@yielded/agent/records";
 import { canonicalRecordBytes } from "@yielded/agent/run-continuation";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
@@ -35,10 +35,10 @@ import { reencodeThread } from "@yielded/agent/thread-import";
 import {
   ThreadExportRequest,
   ThreadStore,
-  ThreadTailRequest,
   ThreadRead,
   streamExport,
   ThreadExportSource,
+  ExecutionCheckpoint,
 } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
@@ -421,32 +421,43 @@ describe("retained Run recovery", () => {
 
       phase = "later";
       const later = yield* submit("later input");
+      const laterExecutions: Array<ExecutionCheckpoint> = [];
+
+      yield* failpoints.setHandler((location) =>
+        location === "terminalize:before-publication"
+          ? store.readExecution({ threadId, runId: runIdForSubmission(later.submissionId) }).pipe(
+              Effect.map((execution) => {
+                if (Option.isSome(execution)) laterExecutions.push(execution.value);
+              }),
+              Effect.orDie,
+            )
+          : Effect.void,
+      );
       const laterOutcome = yield* runtime.processThreadHead(threadId);
 
+      yield* failpoints.clear;
       expect(Option.isSome(laterOutcome) && laterOutcome.value.submissionId).toBe(
         later.submissionId,
       );
       expect(handlerCalls).toBe(2);
 
       const before = yield* fixtureHistory(store, ThreadExportRequest.make({ threadId }));
-      const captured = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
-      const [olderProgress, laterProgress] = yield* Effect.forEach([older, later], (receipt) =>
-        Stream.runCollect(
-          store.read({
-            threadId,
-            selection: {
-              _tag: "RunContinuation",
-              runId: runIdForSubmission(receipt.submissionId),
-              throughSequence: captured.tailSequence,
-            },
-            page: { limit: 1 },
-          }),
-        ).pipe(Effect.map((records) => records[0]?.record.payload)),
-      );
+      const olderExecution = yield* store.readExecution({
+        threadId,
+        runId: runIdForSubmission(older.submissionId),
+      });
 
-      if (olderProgress?._tag !== "RunContinuation" || laterProgress?._tag !== "RunContinuation")
-        return yield* Effect.die("Missing exact older/later Run continuation");
+      expect(laterExecutions).toHaveLength(1);
+      const laterProgress = laterExecutions[0]?.progress;
+
+      if (Option.isNone(olderExecution) || laterProgress === undefined)
+        return yield* Effect.die("Missing exact older/later execution checkpoint");
+      const olderProgress = olderExecution.value.progress;
+
+      expect(
+        yield* store.readExecution({ threadId, runId: runIdForSubmission(later.submissionId) }),
+      ).toEqual(Option.none());
       expect(olderProgress.originalInput.recordId).toBe(
         submissionInputRecordId(older.submissionId),
       );
@@ -456,9 +467,9 @@ describe("retained Run recovery", () => {
       expect(olderProgress.savedContext).toBeDefined();
       expect(olderProgress.savedContext).not.toEqual(laterProgress.savedContext);
       expect(
-        before.records.find(
-          (entry) => entry.record.recordId === olderProgress.savedContext?.recordId,
-        )?.record.payload,
+        olderExecution.value.operational.find(
+          (record) => record.recordId === olderProgress.savedContext?.recordId,
+        )?.payload,
       ).toMatchObject({
         _tag: "RunContextRecorded",
         runId: runIdForSubmission(older.submissionId),
@@ -477,8 +488,21 @@ describe("retained Run recovery", () => {
         }),
       );
       phase = "resume";
+      const resumedExecutions: Array<ExecutionCheckpoint> = [];
+
+      yield* failpoints.setHandler((location) =>
+        location === "terminalize:before-publication"
+          ? store.readExecution({ threadId, runId: runIdForSubmission(older.submissionId) }).pipe(
+              Effect.map((execution) => {
+                if (Option.isSome(execution)) resumedExecutions.push(execution.value);
+              }),
+              Effect.orDie,
+            )
+          : Effect.void,
+      );
       const resumed = yield* runtime.processThreadHead(threadId);
 
+      yield* failpoints.clear;
       expect(Option.isSome(resumed) && resumed.value).toMatchObject({
         submissionId: older.submissionId,
         receiptId: older.receiptId,
@@ -507,13 +531,19 @@ describe("retained Run recovery", () => {
           payload._tag === "SubmissionSettled" ? [payload.submissionId] : [],
         ),
       ).toEqual([prefix.submissionId, later.submissionId, older.submissionId]);
+      expect(resumedExecutions).toHaveLength(1);
+
+      const resumedStarts = resumedExecutions[0]!.operational.filter(
+        ({ payload }) => payload._tag === "RunStarted",
+      );
+
+      expect(resumedStarts).toHaveLength(1);
+      expect(resumedStarts).toEqual(
+        olderExecution.value.operational.filter(({ payload }) => payload._tag === "RunStarted"),
+      );
       expect(
-        completed.records.filter(
-          ({ record: { payload } }) =>
-            payload._tag === "RunStarted" &&
-            payload.runId === runIdForSubmission(older.submissionId),
-        ),
-      ).toHaveLength(1);
+        yield* store.readExecution({ threadId, runId: runIdForSubmission(older.submissionId) }),
+      ).toEqual(Option.none());
     }).pipe(Effect.provide(base)),
   );
 
@@ -694,35 +724,42 @@ describe("retained Run recovery", () => {
 
       yield* failpoints.clear;
 
-      // Former cache-gap/corruption cases now exercise required canonical evidence.
-      const cursor = original.records.findLast(
-        (entry) => entry.record.payload._tag === "RunContinuation",
-      )?.record.payload;
+      const execution = yield* store.readExecution({
+        threadId: receipt.threadId,
+        runId: runIdForSubmission(receipt.submissionId),
+      });
 
-      if (cursor?._tag !== "RunContinuation" || cursor.savedContext === undefined)
+      if (Option.isNone(execution) || execution.value.progress.savedContext === undefined)
         return yield* Effect.die("Missing current Run continuation/context reference");
-      const contextId = cursor.savedContext.recordId;
+      const contextId = execution.value.progress.savedContext.recordId;
 
       const observed = ThreadStore.of({
         ...store,
-        read: (request) =>
-          store.read(request).pipe(
-            Stream.filter(
-              (entry) => scenario !== "missing-evidence" || entry.record.recordId !== contextId,
-            ),
-            Stream.map((entry) =>
-              scenario === "corrupt-evidence" && entry.record.recordId === contextId
-                ? CanonicalRecordEnvelope.make({
-                    ...entry,
-                    record: CanonicalRecord.make({
-                      ...entry.record,
-                      payload: RepairAnnotated.make({
-                        reason: "altered required evidence",
-                        details: {},
-                      }),
-                    }),
-                  })
-                : entry,
+        readExecution: (request) =>
+          store.readExecution(request).pipe(
+            Effect.map(
+              Option.map((checkpoint) =>
+                ExecutionCheckpoint.make({
+                  ...checkpoint,
+                  operational: checkpoint.operational
+                    .filter(
+                      (record) => scenario !== "missing-evidence" || record.recordId !== contextId,
+                    )
+                    .map((record) =>
+                      scenario === "corrupt-evidence" &&
+                      record.recordId === contextId &&
+                      record.payload._tag === "RunContextRecorded"
+                        ? RecordEnvelope.make({
+                            ...record,
+                            payload: RunContextRecorded.make({
+                              ...record.payload,
+                              runScopedInput: "altered required evidence",
+                            }),
+                          })
+                        : record,
+                    ),
+                }),
+              ),
             ),
           ),
       });
@@ -786,10 +823,29 @@ describe("retained Run recovery", () => {
         return;
       }
 
+      const completing: Array<ExecutionCheckpoint> = [];
+
+      yield* failpoints.setHandler((location) =>
+        location === "terminalize:before-publication"
+          ? store
+              .readExecution({
+                threadId: receipt.threadId,
+                runId: runIdForSubmission(receipt.submissionId),
+              })
+              .pipe(
+                Effect.map((checkpoint) => {
+                  if (Option.isSome(checkpoint)) completing.push(checkpoint.value);
+                }),
+                Effect.orDie,
+              )
+          : Effect.void,
+      );
+
       const outcome = yield* resumed
         .processThreadHead(receipt.threadId)
         .pipe(Effect.provide(handlers));
 
+      yield* failpoints.clear;
       if (scenario === "uncertain") {
         expect(Option.isNone(outcome)).toBe(true);
         expect(requests).toHaveLength(requestsBefore);
@@ -821,9 +877,28 @@ describe("retained Run recovery", () => {
       );
 
       expect(completed.records.slice(0, original.records.length)).toEqual(original.records);
-      expect(
-        completed.records.filter(({ record }) => record.payload._tag === "RunStarted"),
-      ).toHaveLength(1);
+
+      const retained = yield* store.readExecution({
+        threadId: receipt.threadId,
+        runId: runIdForSubmission(receipt.submissionId),
+      });
+
+      if (scenario === "uncertain") {
+        expect(Option.isSome(retained)).toBe(true);
+        if (Option.isSome(retained)) completing.push(retained.value);
+      } else {
+        expect(retained).toEqual(Option.none());
+      }
+      expect(completing).toHaveLength(1);
+
+      const starts = completing[0]!.operational.filter(
+        ({ payload }) => payload._tag === "RunStarted",
+      );
+
+      expect(starts).toHaveLength(1);
+      expect(starts).toEqual(
+        execution.value.operational.filter(({ payload }) => payload._tag === "RunStarted"),
+      );
     }).pipe(Effect.provide(base)),
   );
 });

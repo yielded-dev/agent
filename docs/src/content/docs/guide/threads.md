@@ -209,7 +209,7 @@ completion or failure, and repairs. Partial tool argument deltas and live queue 
 `PersistentHistory.layer` appends `UserInputRecorded`, `ModelCompleted`, and `RunCompleted` together.
 It opens the latest bounded model-context snapshot; each Run also records its own message
 contribution. Durable execution records each turn and tool result separately and resumes from a
-[canonical Run continuation](/concepts/durability/#run-continuations), its original saved context,
+[active Run checkpoint](/concepts/durability/#run-continuations), its original saved context,
 and bounded exact evidence.
 
 `ThreadStore.read` returns at most 1,024 records per request, and each atomic `CanonicalBatch`
@@ -225,7 +225,7 @@ facts remain directly addressable while newer facts append. See the
 ## Choose storage
 
 The [Storage guides](/storage/) compare backends and show how to connect each one.
-SQLite, PostgreSQL, and Cloudflare accept fresh layout-21 stores and the current record format.
+SQLite, PostgreSQL, and Cloudflare accept fresh layout-22 stores and the current record format.
 Other layouts fail before mutation. See
 [adopting these contracts](/guide/operations/#adopting-these-contracts) for same-format transfer,
 and [Persistence & durability](/concepts/durability/) for execution recovery guarantees.

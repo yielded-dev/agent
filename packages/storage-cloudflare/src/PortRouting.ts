@@ -96,6 +96,8 @@ import {
   StoreVerificationResult,
   StoreReadIdentityCall,
   StoreReadIdentityResult,
+  StoreReadExecutionCall,
+  StoreReadExecutionResult,
   StoreMaterializeCall,
   StoreMaterializeResult,
   StoreReadPageCall,
@@ -1000,6 +1002,16 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
   };
 
   const routed = ThreadStore.of({
+    readExecution: (request) =>
+      options.ownsThread(request.threadId)
+        ? local.readExecution(request)
+        : foreignStoreCall(
+            "read execution",
+            request.threadId,
+            StoreReadExecutionCall.make({ request }),
+            StoreReadExecutionResult,
+            ThreadNotMaterialized,
+          ).pipe(Effect.map((reply) => reply.checkpoint)),
     archives: {
       page: (request) =>
         options.ownsThread(request.threadId)
@@ -1763,6 +1775,15 @@ export const executePortRequest = Effect.fnUntraced(function* (
         store
           .inspectTail(request.request)
           .pipe(Effect.map((tail) => StoreInspectTailResult.make({ tail }))),
+      );
+    }
+    case "StoreReadExecution": {
+      const store = yield* ThreadStore;
+
+      return yield* capture(
+        store
+          .readExecution(request.request)
+          .pipe(Effect.map((checkpoint) => StoreReadExecutionResult.make({ checkpoint }))),
       );
     }
     case "StoreReadIdentity": {

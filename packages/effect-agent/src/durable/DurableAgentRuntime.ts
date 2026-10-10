@@ -1677,10 +1677,22 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       );
 
       if (Option.isNone(loaded)) {
+        const terminal = own.findLast(
+          ({ record }) =>
+            record.payload._tag === "SubmissionSettled" && record.payload.runId === runId,
+        );
+
+        if (terminal?.record.payload._tag === "SubmissionSettled") {
+          if (
+            terminal.record.payload.historyRecordCount === undefined ||
+            own.filter((entry) => entry.sequence <= terminal.sequence).length !==
+              terminal.record.payload.historyRecordCount
+          )
+            return yield* invalid("Settled Run history is incomplete");
+          continue;
+        }
         if (own.some(({ record }) => !isPreContinuationFact(record)))
-          return yield* invalid(
-            "Run execution has no canonical continuation; repair its locator explicitly",
-          );
+          return yield* invalid("Active Run execution has no authoritative checkpoint");
         continue;
       }
       const envelope = loaded.value;
@@ -1714,6 +1726,19 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         return found;
       });
 
+      const resolveRecord = Effect.fnUntraced(function* (ref: typeof cursor.originalInput) {
+        const operational = envelope.operational.find((record) => record.recordId === ref.recordId);
+
+        if (operational === undefined) return (yield* resolve(ref)).record;
+        if (
+          (yield* reference(operational).pipe(Effect.provideService(Crypto.Crypto, crypto)))
+            .digest !== ref.digest
+        )
+          return yield* invalid("Active Run evidence has invalid integrity");
+
+        return operational;
+      });
+
       const input = yield* resolve(cursor.originalInput);
 
       if (
@@ -1723,21 +1748,22 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         input.record.payload.runId !== runId
       )
         return yield* invalid("Run continuation has no exact original admitted input");
-      const frontier = yield* resolve(cursor.lastFact);
+      yield* resolveRecord(cursor.lastFact);
 
       // An intact frontier does not prove that every earlier locator entry is present.
       if (
-        own.reduce((count, entry) => count + (entry.sequence <= frontier.sequence ? 1 : 0), 0) !==
-        cursor.recordCount
+        own.reduce(
+          (count, entry) => count + (entry.sequence <= envelope.throughSequence ? 1 : 0),
+          0,
+        ) !== envelope.canonicalRecords
       )
         return yield* invalid(
           "Run continuation has incomplete canonical evidence; rebuild its locator explicitly",
         );
 
       if (
-        frontier.batchId !== envelope.batchId ||
-        frontier.sequence >= envelope.sequence ||
-        !validateSuffix(own, envelope.sequence)
+        envelope.throughSequence < input.sequence ||
+        !validateSuffix(own, envelope.throughSequence)
       )
         return yield* invalid(
           "Run continuation has an invalid frontier or exceeds its selected suffix bound",
@@ -1745,14 +1771,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       let saved: RunJournalContext | undefined;
 
       if (cursor.savedContext !== undefined) {
-        const savedEnvelope = yield* resolve(cursor.savedContext);
+        const savedRecord = yield* resolveRecord(cursor.savedContext);
 
-        if (
-          savedEnvelope.record.payload._tag !== "RunContextRecorded" ||
-          savedEnvelope.sequence <= input.sequence
-        )
+        if (savedRecord.payload._tag !== "RunContextRecorded")
           return yield* invalid("Run continuation has invalid saved original context");
-        const initial = savedEnvelope.record.payload;
+        const initial = savedRecord.payload;
         const cachedContext = resolvedContext;
 
         if (
@@ -1771,7 +1794,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           );
           resolvedContext = { threadId, digest: cursor.savedContext.digest, value: saved };
         }
-        if (own.filter(({ record }) => record.payload._tag === "RunContextRecorded").length !== 1)
+        if (
+          envelope.operational.filter(({ payload }) => payload._tag === "RunContextRecorded")
+            .length !== 1
+        )
           return yield* invalid("Run has conflicting saved original contexts");
       }
       if (cursor.latestResponse !== undefined) {
@@ -1784,7 +1810,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           own.some(
             (entry) =>
               entry.record.payload._tag === "ModelResponseRecorded" &&
-              entry.sequence <= frontier.sequence &&
+              entry.sequence <= envelope.throughSequence &&
               entry.sequence > response.sequence,
           )
         )
@@ -1792,19 +1818,19 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       } else if (cursor.accounting.committedTurns !== 0)
         return yield* invalid("Run continuation accounting has no corresponding response");
       if (cursor.terminal !== undefined) {
-        const terminal = yield* resolve(cursor.terminal);
+        const terminal = yield* resolveRecord(cursor.terminal);
 
         if (
-          terminal.record.payload._tag !== "RunCompleted" &&
-          terminal.record.payload._tag !== "RunFailed" &&
-          terminal.record.payload._tag !== "SubmissionSettled"
+          terminal.payload._tag !== "RunCompleted" &&
+          terminal.payload._tag !== "RunFailed" &&
+          terminal.payload._tag !== "SubmissionSettled"
         )
           return yield* invalid("Run continuation has invalid terminal evidence");
       }
       if (journalOwner === runId) {
         context = saved;
         progress = cursor;
-        progressThrough = frontier.sequence;
+        progressThrough = envelope.throughSequence;
       }
     }
 
@@ -2585,7 +2611,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const owned: RunWriter = {
       ...writer,
       append: (batch) =>
-        progress.commit(batch).pipe(Effect.provideService(CurrentRunWriter, writer)),
+        progress.commit(batch).pipe(
+          Effect.provideService(CurrentRunWriter, writer),
+          // A replaced owner may observe retired progress before it reaches the append gate.
+          Effect.tapError(() => writer.checkFence),
+        ),
     };
 
     progressWriters.set(owned, progress);
@@ -2648,7 +2678,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           Effect.provideService(CurrentRunWriter, {
             threadId: request.threadId,
             tail: Effect.sync(() => tail),
-            append: (batch) =>
+            append: (batch, executions) =>
               store
                 .append(
                   FencedAppendRequest.make({
@@ -2656,6 +2686,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                     expectedTailSequence: tail.sequence,
                     expectedTailDigest: tail.digest,
                     batch,
+                    executions,
                   }),
                 )
                 .pipe(
@@ -2719,7 +2750,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           Effect.provideService(CurrentRunSettlement, {
             threadId: ctx.threadId,
             tail: ctx.tail,
-            publishSettlement: (prepared) =>
+            publishSettlement: (prepared, executions) =>
               Effect.gen(function* () {
                 let tail = yield* ctx.tail;
 
@@ -2735,6 +2766,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                           expectedTailSequence: tail.sequence,
                           expectedTailDigest: tail.digest,
                           batch: prepared,
+                          executions,
                         }),
                       }),
                     )
@@ -2752,9 +2784,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                           digest: conflict.actualTailDigest,
                         };
 
-                        if (
-                          prepared.records.some(({ payload }) => payload._tag === "RunContinuation")
-                        )
+                        if (executions !== undefined && executions.length > 0)
                           return ctx.checkFence.pipe(Effect.andThen(Effect.fail(conflict)));
 
                         return Effect.succeed(undefined);
@@ -3228,30 +3258,27 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     yield* ownership.markInputApplied({ recordId, sequence: result.firstSequence });
   });
 
-  const canonicalRunStartFromRecords = Effect.fnUntraced(function* (
-    records: ReadonlyArray<CanonicalRecordEnvelope>,
-    runId: RunId,
-  ) {
+  const readRunStart = Effect.fnUntraced(function* (threadId: ThreadId, runId: RunId) {
+    const loaded = yield* reader
+      .readExecution({ threadId, runId })
+      .pipe(Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(Option.none())));
+
+    if (Option.isNone(loaded)) return undefined;
     const recordId = runStartedRecordId(runId);
-
-    const starts = records.filter(
-      ({ record }) => record.payload._tag === "RunStarted" && record.payload.runId === runId,
-    );
-
-    const existing = records.find(({ record }) => record.recordId === recordId);
+    const starts = loaded.value.operational.filter(({ payload }) => payload._tag === "RunStarted");
+    const existing = loaded.value.operational.find((record) => record.recordId === recordId);
 
     if (
       starts.length > 1 ||
-      (starts.length === 1 && starts[0]?.record.recordId !== recordId) ||
+      (starts.length === 1 && starts[0]?.recordId !== recordId) ||
       (existing !== undefined &&
-        (existing.record.payload._tag !== "RunStarted" || existing.record.payload.runId !== runId))
-    ) {
+        (existing.payload._tag !== "RunStarted" || existing.payload.runId !== runId))
+    )
       return yield* RunJournalError.make({
-        message: `Run ${runId} has conflicting start evidence`,
+        message: `Run ${runId} has conflicting active start state`,
       });
-    }
 
-    return existing?.record;
+    return existing;
   });
 
   const makeRunStart = Effect.fnUntraced(function* (
@@ -3262,7 +3289,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const writer = yield* CurrentRunWriter;
     const runId = runIdForSubmission(submission.submissionId);
     const recordId = runStartedRecordId(runId);
-    const existing = yield* canonicalRunStartFromRecords(records, runId);
+    const existing = yield* readRunStart(submission.threadId, runId);
     let start: RecordEnvelope;
     let allowance = maxDurationMillis;
     let committed = existing !== undefined;
@@ -5381,9 +5408,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           });
         });
 
-      const recordedCompletion = records.find(
-        (envelope) => envelope.record.recordId === runCompletedRecordId(runId),
-      )?.record.payload;
+      const activeExecution = yield* reader.readExecution({ threadId: ctx.threadId, runId });
+
+      const recordedCompletion = Option.isSome(activeExecution)
+        ? activeExecution.value.operational.find(
+            (record) => record.recordId === runCompletedRecordId(runId),
+          )?.payload
+        : undefined;
 
       if (recordedCompletion !== undefined) {
         if (recordedCompletion._tag !== "RunCompleted" || recordedCompletion.runId !== runId) {
@@ -9542,7 +9573,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   > {
     const submission = snapshot.submission;
     const runId = runIdForSubmission(submission.submissionId);
-    const start = yield* canonicalRunStartFromRecords(records, runId);
+    const start = yield* readRunStart(submission.threadId, runId);
 
     if (
       start?.payload._tag === "RunStarted" &&

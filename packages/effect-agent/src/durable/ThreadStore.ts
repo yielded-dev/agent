@@ -16,9 +16,9 @@ import type { LifecyclePublicationStorage } from "./LifecyclePublication.ts";
 import { MessageDeliveryRecord } from "./MessageDelivery.ts";
 import { ExportRecord } from "./RecordFormat.ts";
 import {
+  type CanonicalBatch,
   type RecordJson,
   BatchId,
-  CanonicalBatch,
   CanonicalRecordEnvelope,
   CanonicalSequence,
   Digest,
@@ -29,6 +29,8 @@ import {
   ProducerEpoch,
   ProducerId,
   RecordId,
+  RecordEnvelope,
+  RunContinuation,
 } from "./Records.ts";
 import { subagentLineageRecordId, workerOriginRecordId } from "./RunJournal.ts";
 import {
@@ -72,6 +74,7 @@ export const ThreadExportSnapshot = Schema.Struct({
   approvals: Schema.Natural,
   resolutions: Schema.Natural,
   deliveries: Schema.Natural,
+  executions: Schema.Natural,
 });
 
 export type ThreadExportSnapshot = typeof ThreadExportSnapshot.Type;
@@ -281,11 +284,63 @@ export class ThreadMaterialization extends Schema.Class<ThreadMaterialization>(
   producerEpoch: ProducerEpoch,
 }) {}
 
+/** Current interpreter state, not an append-only history record or a disposable projection. */
+export class ExecutionCheckpoint extends Schema.Class<ExecutionCheckpoint>(
+  "@effect-agent/thread/ExecutionCheckpoint",
+)({
+  version: Schema.Literal(1),
+  progress: RunContinuation,
+  /** Logical progress encoding is charged while active; previous revisions are discarded. */
+  progressRecord: RecordEnvelope,
+  /** Original start, evaluated context and validated completion intent while the Run is active. */
+  operational: Schema.Array(RecordEnvelope).check(Schema.isMaxLength(8)),
+  canonicalRecords: Schema.Natural,
+  /** Stable admitted-input position also supplies a bounded transfer cursor. */
+  originalSequence: CanonicalSequence.check(Schema.isGreaterThan(0)),
+  throughSequence: CanonicalSequence,
+  batchId: BatchId,
+}) {}
+
+/** Integrity-bound active state transfers separately from the immutable history chain. */
+export const ThreadExecutionFact = Schema.Struct({
+  checkpoint: ExecutionCheckpoint,
+  digest: Digest,
+});
+
+export type ThreadExecutionFact = typeof ThreadExecutionFact.Type;
+
+/** A revision-checked transition committed by the same owner as the retained history facts. */
+export class ExecutionUpdate extends Schema.Class<ExecutionUpdate>(
+  "@effect-agent/thread/ExecutionUpdate",
+)({
+  previousRevision: Schema.Natural,
+  checkpoint: ExecutionCheckpoint,
+  /** Newly durable operational facts; capture and validate these before entering the writer. */
+  facts: Schema.Array(RecordEnvelope).check(Schema.isMaxLength(8)),
+  /** Only an authorized terminal publication or closure of its remaining obligations may retire. */
+  retire: Schema.Boolean,
+}) {}
+
+/** A progress-only commit has no canonical records and does not advance the history tail. */
+export class CommitBatch extends Schema.Class<CommitBatch>("@effect-agent/thread/CommitBatch")({
+  batchId: BatchId,
+  producerId: ProducerId,
+  records: Schema.Array(RecordEnvelope).check(Schema.isMaxLength(256)),
+}) {}
+
+export class ExecutionRead extends Schema.Class<ExecutionRead>(
+  "@effect-agent/thread/ExecutionRead",
+)({
+  threadId: ThreadId,
+  runId: RunId,
+}) {}
+
 export class FencedAppendRequest extends Schema.Class<FencedAppendRequest>(
   "@effect-agent/thread/FencedAppendRequest",
 )({
   threadId: ThreadId,
-  batch: CanonicalBatch,
+  batch: CommitBatch,
+  executions: Schema.optionalKey(Schema.Array(ExecutionUpdate).check(Schema.isMaxLength(256))),
   expectedTailSequence: CanonicalSequence,
   expectedTailDigest: Digest,
   producerEpoch: ProducerEpoch,
@@ -303,8 +358,12 @@ const AppendHeader = Schema.Struct({
 const validateHeader = Schema.decodeUnknownSync(AppendHeader);
 
 const validateRecordCount = Schema.decodeUnknownSync(
-  Schema.NonEmptyArray(Schema.Unknown).check(Schema.isMaxLength(256)),
+  Schema.Array(Schema.Unknown).check(Schema.isMaxLength(256)),
 );
+
+const executionJson = Schema.fromJsonString(ExecutionUpdate);
+const encodeExecution = Schema.encodeSync(executionJson);
+const decodeExecution = Schema.decodeSync(executionJson);
 
 const capturedAppends = new WeakMap<FencedAppendRequest, PreparedAppend>();
 
@@ -315,7 +374,7 @@ const capturedAppends = new WeakMap<FencedAppendRequest, PreparedAppend>();
  */
 export const canonicalBatchFitsTransfer = (
   threadId: ThreadId,
-  batch: Pick<CanonicalBatch, "batchId" | "records">,
+  batch: Pick<CommitBatch, "batchId" | "records">,
   batchBytes: number,
   maxOffsetBytes: number,
 ): boolean => {
@@ -348,6 +407,11 @@ export interface PreparedAppend extends FencedAppendRequest {
   readonly batchJson: string;
   readonly batchBytes: number;
   readonly progress: ReadonlyArray<ProgressAppendRecord>;
+  readonly executionWrites: ReadonlyArray<{
+    readonly update: ExecutionUpdate;
+    readonly json: string;
+    readonly bytes: number;
+  }>;
   readonly records: ReadonlyArray<{
     readonly recordId: RecordId;
     readonly recordJson: string;
@@ -374,6 +438,30 @@ export const PreparedAppend = {
           });
 
           validateRecordCount(input.batch.records);
+          validateRecordCount(input.executions ?? []);
+
+          const executionWrites = Object.freeze(
+            (input.executions ?? []).map((update) => {
+              const json = encodeExecution(update);
+
+              return Object.freeze({
+                update: decodeExecution(json),
+                json,
+                bytes: utf8ByteLength(json),
+              });
+            }),
+          );
+
+          if (input.batch.records.length === 0 && executionWrites.length === 0)
+            throw ThreadStoreError.make({
+              operation: "prepare durable commit",
+              message: "A commit must contain history facts or an active execution transition",
+            });
+          if (executionWrites.some(({ bytes }) => !transferPageFits(header.threadId, bytes)))
+            throw ThreadStoreError.make({
+              operation: "prepare durable commit",
+              message: "Active state exceeds its bounded transfer representation",
+            });
           // Visit sparse slots too: capture owns each record's validation boundary.
           const encodings = Array.from(input.batch.records, captureRecord);
           const prefix = `{"batchId":${JSON.stringify(header.batchId)},"producerId":${JSON.stringify(header.producerId)},"records":[`;
@@ -389,17 +477,13 @@ export const PreparedAppend = {
               operation: "prepare canonical append",
               message: `Canonical batch exceeds ${MAX_CANONICAL_BATCH_BYTES} bytes`,
             });
-          const first = encodings[0]!;
 
           const batch = Object.freeze(
-            new CanonicalBatch(
+            new CommitBatch(
               {
                 batchId: header.batchId,
                 producerId: header.producerId,
-                records: Object.freeze([
-                  first.canonical,
-                  ...encodings.slice(1).map(({ canonical }) => canonical),
-                ]),
+                records: Object.freeze(encodings.map(({ canonical }) => canonical)),
               },
               { disableChecks: true },
             ),
@@ -412,6 +496,9 @@ export const PreparedAppend = {
               expectedTailDigest: header.expectedTailDigest,
               producerEpoch: header.producerEpoch,
               batch,
+              ...(executionWrites.length === 0
+                ? {}
+                : { executions: Object.freeze(executionWrites.map(({ update }) => update)) }),
             },
             { disableChecks: true },
           );
@@ -436,7 +523,11 @@ export const PreparedAppend = {
               batchBytes,
               records,
               progress,
-              digest: () => digestCanonicalBatchJson(request.expectedTailDigest, batchJson),
+              executionWrites,
+              digest: () =>
+                records.length === 0
+                  ? Effect.succeed(request.expectedTailDigest)
+                  : digestCanonicalBatchJson(request.expectedTailDigest, batchJson),
             }),
           );
 
@@ -734,7 +825,7 @@ export class ThreadExportRecord extends CanonicalRecordEnvelope.extend<ThreadExp
 
 /** One bounded, batch-aligned page. An absent cursor alone marks a complete transfer. */
 export class ThreadExport extends Schema.Class<ThreadExport>("@effect-agent/thread/ThreadExport")({
-  transferFormat: Schema.Literal("effect-agent/thread-transfer@1"),
+  transferFormat: Schema.Literal("effect-agent/thread-transfer@2"),
   format: Schema.NonEmptyString,
   threadId: ThreadId,
   tailSequence: CanonicalSequence,
@@ -758,6 +849,9 @@ export class ThreadExport extends Schema.Class<ThreadExport>("@effect-agent/thre
   commands: ThreadCommands,
   /** Frozen delivery facts and outcomes; claims and leases are never transfer authority. */
   deliveries: Schema.Array(MessageDeliveryRecord).check(
+    Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS),
+  ),
+  executions: Schema.Array(ThreadExecutionFact).check(
     Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS),
   ),
   cursor: Schema.optionalKey(ThreadExportCursor),
@@ -826,7 +920,7 @@ export const streamExport = (request: ThreadExportRequest) =>
 /**
  * A disposable projection snapshot. Adapters bind its sequence and digest to the canonical
  * log; consumers decode `state` and decide projection compatibility before suffix replay.
- * Run recovery uses canonical continuations independently of these application snapshots.
+ * Run recovery uses authoritative active checkpoints independently of these application snapshots.
  */
 export class ThreadCheckpoint extends Schema.Class<ThreadCheckpoint>(
   "@effect-agent/thread/ThreadCheckpoint",
@@ -947,6 +1041,13 @@ export class ThreadStore extends Context.Service<
       AppendResult,
       ThreadStoreError | ThreadNotMaterialized | AppendConflict | FenceRejected
     >;
+    /** Authoritative current state only. Absence after settlement is normal; loss while active is corruption. */
+    readonly readExecution: (
+      request: ExecutionRead,
+    ) => Effect.Effect<
+      Option.Option<ExecutionCheckpoint>,
+      ThreadStoreError | ThreadNotMaterialized
+    >;
     readonly read: (
       request: ThreadReadRequest,
     ) => Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>;
@@ -988,6 +1089,7 @@ export class ThreadReader extends Context.Service<
   Pick<
     ThreadStore["Service"],
     | "read"
+    | "readExecution"
     | "readPrompt"
     | "observe"
     | "export"
@@ -1000,6 +1102,7 @@ export class ThreadReader extends Context.Service<
   static fromStore(store: ThreadStore["Service"]): ThreadReader["Service"] {
     return {
       read: store.read,
+      readExecution: store.readExecution,
       readPrompt: store.readPrompt,
       observe: store.observe,
       export: store.export,

@@ -12,7 +12,7 @@ import {
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 21;
+export const CurrentPostgresStorageVersion = 22;
 
 /** Counter function body is frozen and checked on every layout inspection. */
 const transferFunctionBody = `
@@ -35,18 +35,20 @@ BEGIN
     END IF;
   END IF;
   INSERT INTO __NAMESPACE__.effect_agent_transfer_state
-    (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count)
+    (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count, executions_count)
     VALUES (owner_id, 1, CASE WHEN TG_ARGV[1]='admissions_count' THEN 1 ELSE 0 END,
       CASE WHEN TG_ARGV[1]='aborts_count' THEN 1 ELSE 0 END,
       CASE WHEN TG_ARGV[1]='approvals_count' THEN 1 ELSE 0 END,
       CASE WHEN TG_ARGV[1]='resolutions_count' THEN 1 ELSE 0 END,
-      CASE WHEN TG_ARGV[1]='deliveries_count' THEN 1 ELSE 0 END)
+      CASE WHEN TG_ARGV[1]='deliveries_count' THEN 1 ELSE 0 END,
+      CASE WHEN TG_ARGV[1]='executions_count' THEN CASE TG_OP WHEN 'INSERT' THEN 1 WHEN 'DELETE' THEN -1 ELSE 0 END ELSE 0 END)
     ON CONFLICT(thread_id) DO UPDATE SET revision=effect_agent_transfer_state.revision+1,
       admissions_count=effect_agent_transfer_state.admissions_count+EXCLUDED.admissions_count,
       aborts_count=effect_agent_transfer_state.aborts_count+EXCLUDED.aborts_count,
       approvals_count=effect_agent_transfer_state.approvals_count+EXCLUDED.approvals_count,
       resolutions_count=effect_agent_transfer_state.resolutions_count+EXCLUDED.resolutions_count,
-      deliveries_count=effect_agent_transfer_state.deliveries_count+EXCLUDED.deliveries_count
+      deliveries_count=effect_agent_transfer_state.deliveries_count+EXCLUDED.deliveries_count,
+      executions_count=effect_agent_transfer_state.executions_count+EXCLUDED.executions_count
     RETURNING CASE TG_ARGV[1] WHEN 'aborts_count' THEN aborts_count WHEN 'approvals_count' THEN approvals_count
       WHEN 'resolutions_count' THEN resolutions_count END INTO command_sequence;
   IF command_sequence IS NOT NULL THEN
@@ -60,6 +62,27 @@ END;
 `;
 
 const transferTriggers = [
+  {
+    name: "effect_agent_transfer_executions_insert",
+    table: "effect_agent_executions",
+    event: "INSERT",
+    owner: "thread_id",
+    count: "executions_count",
+  },
+  {
+    name: "effect_agent_transfer_executions_update",
+    table: "effect_agent_executions",
+    event: "UPDATE",
+    owner: "thread_id",
+    count: "executions_count",
+  },
+  {
+    name: "effect_agent_transfer_executions_delete",
+    table: "effect_agent_executions",
+    event: "DELETE",
+    owner: "thread_id",
+    count: "executions_count",
+  },
   {
     name: "effect_agent_transfer_submissions_insert",
     table: "effect_agent_submissions",
@@ -150,7 +173,10 @@ const transferTriggers = [
 const layoutStatements = [
   'CREATE TABLE __NAMESPACE__."effect_agent_storage_version" ( id BOOLEAN PRIMARY KEY NOT NULL, version BIGINT NOT NULL, CONSTRAINT effect_agent_storage_version_single_row CHECK (id) )',
   'CREATE TABLE __NAMESPACE__."effect_agent_threads" ( thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, created_at TEXT COLLATE "C" NOT NULL, tail_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, producer_epoch BIGINT NOT NULL )',
-  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_batches" ( thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, batch_digest TEXT COLLATE "C" NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, batch_header_json TEXT COLLATE "C" NOT NULL, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
+  'CREATE TABLE __NAMESPACE__.effect_agent_executions (thread_id TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C" NOT NULL, input_sequence BIGINT NOT NULL, revision BIGINT NOT NULL, checkpoint_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, run_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__.effect_agent_threads(thread_id) ON DELETE RESTRICT)',
+  'CREATE TABLE __NAMESPACE__.effect_agent_execution_receipts (thread_id TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, commit_digest TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, run_id, batch_id), FOREIGN KEY (thread_id, run_id) REFERENCES __NAMESPACE__.effect_agent_executions(thread_id, run_id) ON DELETE RESTRICT)',
+  "CREATE INDEX effect_agent_execution_receipts_batch ON __NAMESPACE__.effect_agent_execution_receipts(thread_id, batch_id)",
+  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_batches" ( thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, batch_digest TEXT COLLATE "C" NOT NULL, commit_digest TEXT COLLATE "C" NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, batch_header_json TEXT COLLATE "C" NOT NULL, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__."effect_agent_canonical_records" ( thread_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, record_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, record_json TEXT COLLATE "C", record_tag TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C", tool_call_id TEXT COLLATE "C", input_kind TEXT COLLATE "C", source_submission_id TEXT COLLATE "C", message_id TEXT COLLATE "C", submission_id TEXT COLLATE "C", application_input BIGINT NOT NULL, context_through BIGINT, context_kind TEXT COLLATE "C", worker_thread_id TEXT COLLATE "C", handoff BIGINT NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id, batch_id) REFERENCES __NAMESPACE__."effect_agent_canonical_batches"(thread_id, batch_id) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__."effect_agent_record_runs" ( thread_id TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, run_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__."effect_agent_canonical_records"(thread_id, sequence) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__.effect_agent_tool_declarations (thread_id TEXT COLLATE "C" NOT NULL, settlement_record_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, settlement_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)',
@@ -236,7 +262,7 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_import_fifo_active ON __NAMESPACE__.effect_agent_import_fifo(thread_id, queue_sequence)",
   'CREATE TABLE __NAMESPACE__.effect_agent_import_delivery_visits (thread_id TEXT COLLATE "C" NOT NULL, message_id TEXT COLLATE "C" NOT NULL, path_id TEXT COLLATE "C" NOT NULL, completed BIGINT NOT NULL, PRIMARY KEY (thread_id, message_id))',
   "CREATE INDEX effect_agent_import_delivery_visits_path ON __NAMESPACE__.effect_agent_import_delivery_visits(thread_id, path_id)",
-  'CREATE TABLE __NAMESPACE__.effect_agent_transfer_state (thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, revision BIGINT NOT NULL, admissions_count BIGINT NOT NULL, aborts_count BIGINT NOT NULL, approvals_count BIGINT NOT NULL, resolutions_count BIGINT NOT NULL, deliveries_count BIGINT NOT NULL)',
+  'CREATE TABLE __NAMESPACE__.effect_agent_transfer_state (thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, revision BIGINT NOT NULL, admissions_count BIGINT NOT NULL, aborts_count BIGINT NOT NULL, approvals_count BIGINT NOT NULL, resolutions_count BIGINT NOT NULL, deliveries_count BIGINT NOT NULL, executions_count BIGINT NOT NULL)',
   `CREATE FUNCTION __NAMESPACE__.effect_agent_transfer_mutation() RETURNS trigger LANGUAGE plpgsql AS $transfer$${transferFunctionBody}$transfer$`,
   "CREATE INDEX effect_agent_message_deliveries_capacity ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, (read_metadata ->> 'workerUpdate'), message_id) WHERE state IN ('pending', 'accepted', 'parked')",
   ...transferTriggers.map(
@@ -276,6 +302,44 @@ const layoutShape: Readonly<
     }
   >
 > = {
+  effect_agent_executions: {
+    columns: [
+      "thread_id:text:true",
+      "run_id:text:true",
+      "input_sequence:bigint:true",
+      "revision:bigint:true",
+      "checkpoint_json:text:true",
+    ],
+    constraints: {
+      effect_agent_executions_pkey: ["p", ["thread_id", "run_id"]],
+      effect_agent_executions_thread_id_fkey: [
+        "f",
+        ["thread_id"],
+        "effect_agent_threads",
+        ["thread_id"],
+      ],
+    },
+  },
+  effect_agent_execution_receipts: {
+    columns: [
+      "thread_id:text:true",
+      "run_id:text:true",
+      "batch_id:text:true",
+      "commit_digest:text:true",
+      "first_sequence:bigint:true",
+      "last_sequence:bigint:true",
+      "tail_digest:text:true",
+    ],
+    constraints: {
+      effect_agent_execution_receipts_pkey: ["p", ["thread_id", "run_id", "batch_id"]],
+      effect_agent_execution_receipts_thread_id_run_id_fkey: [
+        "f",
+        ["thread_id", "run_id"],
+        "effect_agent_executions",
+        ["thread_id", "run_id"],
+      ],
+    },
+  },
   effect_agent_journal_ranges: {
     columns: [
       "thread_id:text:true",
@@ -408,6 +472,7 @@ const layoutShape: Readonly<
       "first_sequence:bigint:true",
       "last_sequence:bigint:true",
       "batch_digest:text:true",
+      "commit_digest:text:true",
       "tail_digest:text:true",
       "batch_header_json:text:true",
     ],
@@ -843,6 +908,7 @@ const layoutShape: Readonly<
       "approvals_count:bigint:true",
       "resolutions_count:bigint:true",
       "deliveries_count:bigint:true",
+      "executions_count:bigint:true",
     ],
     constraints: { effect_agent_transfer_state_pkey: ["p", ["thread_id"]] },
   },
@@ -853,6 +919,10 @@ const layoutShape: Readonly<
 };
 
 const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
+  effect_agent_execution_receipts_batch: {
+    table: "effect_agent_execution_receipts",
+    columns: ["thread_id", "batch_id"],
+  },
   effect_agent_journal_ranges_open: {
     table: "effect_agent_journal_ranges",
     columns: ["thread_id"],
@@ -1610,10 +1680,10 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
   const { table, execute } = yield* makeSqlQuery(namespace);
 
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 21)`,
+    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 22)`,
   );
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 21, ${CURRENT_RECORD_FORMAT})`,
+    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 22, ${CURRENT_RECORD_FORMAT})`,
   );
 
   return yield* readPostgresStorageHeader(namespace);
