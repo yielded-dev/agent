@@ -1387,7 +1387,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const deliveries = yield* Effect.serviceOption(MessageDeliveryStore);
 
   // Disposable: canonical tail and owner identify the exact projection, never ownership.
-  // Retain only the most recent view; canonical continuations govern cold recovery.
+  // Retain only the most recent view; authoritative active checkpoints govern cold recovery.
   let projectedJournal:
     | {
         readonly threadId: ThreadId;

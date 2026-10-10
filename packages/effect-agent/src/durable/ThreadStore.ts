@@ -580,12 +580,6 @@ export const ThreadSelection = Schema.Union([
     settlementRecordId: RecordId,
     throughSequence: CanonicalSequence,
   }),
-  /** Canonical progress lookup. An absent locator never authorizes full-history fallback. */
-  Schema.Struct({
-    _tag: Schema.Literal("RunContinuation"),
-    runId: RunId,
-    throughSequence: CanonicalSequence,
-  }),
   /** Only the selected Run's facts; unrelated Thread traffic cannot enlarge its suffix. */
   Schema.Struct({
     _tag: Schema.Literal("RunEvidence"),
@@ -610,11 +604,6 @@ export const ThreadSelection = Schema.Union([
   ),
   Schema.Struct({
     _tag: Schema.Literal("LastAgentUpdate"),
-    throughSequence: CanonicalSequence,
-  }),
-  /** Greatest original history boundary, including contexts committed late by parked Runs. */
-  Schema.Struct({
-    _tag: Schema.Literal("LatestRunContext"),
     throughSequence: CanonicalSequence,
   }),
   /** Sparse canonical pages; callers bound total evidence before building model metadata. */
@@ -1035,6 +1024,10 @@ export class ThreadStore extends Context.Service<
     readonly materialize: (
       request: ThreadMaterialization,
     ) => Effect.Effect<void, ThreadStoreError | FenceRejected>;
+    /**
+     * Commit history and active state atomically under the producer fence. Operational retry
+     * receipts may retire with closed execution; later retries compare retained canonical content.
+     */
     readonly append: (
       request: FencedAppendRequest,
     ) => Effect.Effect<

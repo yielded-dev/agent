@@ -148,18 +148,6 @@ describe("DoSubmissionLedger failpoints", () => {
           }),
         );
 
-        const attemptRows = withSql(
-          Effect.gen(function* () {
-            const sql = yield* SqlClientService.SqlClient;
-
-            return yield* sql<Record<string, unknown>>`
-              SELECT attempt_id, submission_id, producer_epoch
-              FROM effect_agent_attempts
-              ORDER BY producer_epoch
-            `;
-          }),
-        );
-
         const publicationRows = withSql(
           Effect.gen(function* () {
             const sql = yield* SqlClientService.SqlClient;
@@ -167,7 +155,7 @@ describe("DoSubmissionLedger failpoints", () => {
             return yield* sql<
               Record<string, unknown>
             >`SELECT record_id FROM effect_agent_canonical_records
-            WHERE json_extract(record_json, '$.payload._tag') = 'SubmissionSettled'`;
+            WHERE json_extract(payload_json, '$._tag') = 'SubmissionSettled'`;
           }),
         );
 
@@ -245,7 +233,6 @@ describe("DoSubmissionLedger failpoints", () => {
         expect(orphanedOwnership[0]?.producer_epoch).toBe(1);
         expect(yield* threadRows).toEqual([{ thread_id: lane, producer_epoch: 1 }]);
         expect((yield* submissionStates)[0]?.state).toBe("running");
-        expect(yield* attemptRows).toHaveLength(1);
         // The orphaned lease blocks until expiry; a later Attempt (in DC: the next
         // incarnation's alarm pass) reclaims at a higher epoch.
         yield* select(undefined);
@@ -256,7 +243,16 @@ describe("DoSubmissionLedger failpoints", () => {
         expect(Option.isSome(claim)).toBe(true);
         if (Option.isNone(claim)) return;
         expect(claim.value.producerEpoch).toBe(2);
-        expect(yield* attemptRows).toHaveLength(2);
+        const currentOwnership = yield* ownershipRows;
+
+        expect(currentOwnership).toHaveLength(1);
+        expect(currentOwnership[0]?.producer_epoch).toBe(2);
+        expect(currentOwnership[0]?.attempt_id).toBe(claim.value.attemptId);
+        expect(currentOwnership[0]?.ownership_token).toBe(claim.value.ownershipToken);
+        expect(currentOwnership[0]?.attempt_id).not.toBe(orphanedOwnership[0]?.attempt_id);
+        expect(currentOwnership[0]?.ownership_token).not.toBe(
+          orphanedOwnership[0]?.ownership_token,
+        );
 
         const markInputOnce = failingLedger(
           Effect.gen(function* () {

@@ -53,12 +53,13 @@ digest anchors. Compaction changes the model view, independently of physical sto
 adapters verify archive contents and publish their locator before removing hot payload copies.
 
 `streamExport({ threadId })` acquires `ThreadExportSource` and yields snapshot-bound pages of
-canonical batches, immutable admissions, accepted commands, and retained deliveries. Pass those pages to the local `ThreadImport`
+canonical batches, immutable admissions, accepted commands, retained deliveries, and current execution
+checkpoints. Pass those pages to the local `ThreadImport`
 service through `reencodeThread(source)`, or save the NDJSON archive with the admin CLI. Import
 validates every page and referenced fact, applies destination admission constraints, and publishes
 atomically into an empty Thread. Missing dependencies leave the destination unchanged. Historical
 closed workers and children remain evidence; unsupported live foreign obligations refuse transfer.
-Claims, leases, checkpoints, and recovery caches are not transferred. Unresolved effects retain
+Claims, leases, application checkpoints, and recovery caches are not transferred. Unresolved effects retain
 their uncertainty.
 
 Provide `ThreadExportSource.layer()` from the source `ThreadStore`, or SQLite's read-only

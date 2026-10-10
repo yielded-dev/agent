@@ -3,8 +3,12 @@ import * as NodeHost from "@yielded/agent-platform-node/node-durable-host";
 import { digestDefinitions } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { DefinitionDigestInput } from "@yielded/agent/records";
-import { runCompletedRecordId, runIdForSubmission } from "@yielded/agent/run-journal";
-import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
+import {
+  IdempotencyKey,
+  Principal,
+  submissionSettlementRecordId,
+} from "@yielded/agent/submission-ledger";
 import { getRecord } from "@yielded/agent/thread-store";
 import { Clock, Effect, FileSystem, Layer, Option, References, Schema, Stream } from "effect";
 import { AiError, LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
@@ -194,18 +198,21 @@ export const runSteadyState = Effect.fn("benchmark.steadyState")(function* (
 
       const record = yield* getRecord({
         threadId: receipt.threadId,
-        recordId: runCompletedRecordId(runId),
+        recordId: submissionSettlementRecordId(receipt.submissionId),
       });
 
       if (
         Option.isNone(record) ||
-        record.value.record.payload._tag !== "RunCompleted" ||
-        record.value.record.payload.runId !== runId
+        record.value.record.payload._tag !== "SubmissionSettled" ||
+        record.value.record.payload.submissionId !== receipt.submissionId ||
+        record.value.record.payload.runId !== runId ||
+        record.value.record.payload.outcome !== "completed" ||
+        record.value.record.payload.finishReason !== undefined
       )
         return yield* BenchmarkError.make({ message: "Missing canonical steady-state completion" });
 
       const result = yield* Schema.decodeUnknownEffect(outputSchema)(
-        record.value.record.payload.output,
+        record.value.record.payload.result,
       );
 
       yield* check(

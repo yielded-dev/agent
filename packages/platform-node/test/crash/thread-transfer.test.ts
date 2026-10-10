@@ -45,15 +45,9 @@ const openDatabase = (filename: string) =>
     (db) => Effect.sync(() => db.close()),
   );
 
-const derivativeCounts = (db: DatabaseSync) =>
-  Schema.decodeUnknownSync(Schema.Struct({ ownership: Schema.Int, attempts: Schema.Int }))(
-    db
-      .prepare(
-        `SELECT
-          (SELECT COUNT(*) FROM effect_agent_submission_ownership) AS ownership,
-          (SELECT COUNT(*) FROM effect_agent_attempts) AS attempts`,
-      )
-      .get(),
+const ownershipCount = (db: DatabaseSync) =>
+  Schema.decodeUnknownSync(Schema.Struct({ ownership: Schema.Int }))(
+    db.prepare("SELECT COUNT(*) AS ownership FROM effect_agent_submission_ownership").get(),
   );
 
 // This process-loss fixture is small; bound its comparison buffers independently of the
@@ -133,7 +127,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                   record_format: "effect-agent/thread@4",
                 });
                 expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
-                expect(derivativeCounts(db)).toEqual({ ownership: 1, attempts: 1 });
+                expect(ownershipCount(db)).toEqual({ ownership: 1 });
               }),
             );
             const sourceBytes = yield* fs.readFile(site.db);
@@ -182,7 +176,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               Effect.gen(function* () {
                 const db = yield* openDatabase(target);
 
-                expect(derivativeCounts(db)).toEqual({ ownership: 0, attempts: 0 });
+                expect(ownershipCount(db)).toEqual({ ownership: 0 });
               }),
             );
 

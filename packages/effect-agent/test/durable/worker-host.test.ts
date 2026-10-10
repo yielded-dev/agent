@@ -447,15 +447,6 @@ const harness = Effect.fn("workerHostHarness")(function* (
                 payload.command.worker.threadId === selection.workerThreadId,
             )
             .slice(-1);
-        } else if (selection?._tag === "RunContinuation") {
-          records = all
-            .filter(
-              ({ sequence, record: { payload } }) =>
-                sequence <= selection.throughSequence &&
-                payload._tag === "RunContinuation" &&
-                payload.runId === selection.runId,
-            )
-            .slice(-1);
         } else if (selection?._tag === "RunEvidence") {
           records = all.filter(
             ({ sequence, record }) =>

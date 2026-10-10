@@ -122,6 +122,7 @@ import {
   decodeApprovalFact,
   decodeResolutionFact,
 } from "./SqlAdmissionFacts.ts";
+import { definitionJson, makeCanonicalStorage, runKey } from "./SqlCanonicalStorage.ts";
 import type { SqlJournal, ThreadRow } from "./SqlJournal.ts";
 import {
   makeRowDecoder,
@@ -291,11 +292,11 @@ class AbortIntentLookupRow extends Schema.Class<AbortIntentLookupRow>("AbortInte
   author: Schema.NullOr(BoundedIdentifier),
   reason: Schema.NullOr(BoundedStoredText),
   requested_at: Schema.NullOr(BoundedTimestamp),
-  canonical_record_id: Schema.NullOr(BoundedIdentifier),
+  canonical_record_id: Schema.NullOr(Schema.fromJsonString(BoundedIdentifier)),
 }) {}
 
 class CanonicalRecordIdRow extends Schema.Class<CanonicalRecordIdRow>("CanonicalRecordIdRow")({
-  record_id: BoundedIdentifier,
+  record_id: Schema.fromJsonString(BoundedIdentifier),
 }) {}
 
 const SUBMISSION_COLUMNS = `
@@ -305,7 +306,6 @@ const SUBMISSION_COLUMNS = `
   principal,
   idempotency_key,
   agent_id,
-  agent_digests_json,
   deployment_id,
   input_json,
   input_digest,
@@ -473,6 +473,8 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
   const sql = yield* SqlClientService.SqlClient;
   const { table: relation, execute } = yield* makeSqlQuery(options.namespace);
   const crypto = yield* Crypto.Crypto;
+  const physical = yield* makeCanonicalStorage(options.namespace);
+  const submissionColumns = sql`${sql.literal(SUBMISSION_COLUMNS)}, ${definitionJson(sql, options.namespace)} AS agent_digests_json`;
   const lifecycle = journal.lifecycle;
 
   const retainLifecycle = (
@@ -648,7 +650,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     submissionId: string,
   ): Effect.fn.Return<Option.Option<SubmissionRow>, LedgerError> {
     const rows = yield* sql<Record<string, unknown>>`
-      SELECT ${sql.literal(SUBMISSION_COLUMNS)}
+      SELECT ${submissionColumns}
       FROM ${relation("effect_agent_submissions")}
       WHERE submission_id = ${submissionId}
     `.pipe(execute, Effect.mapError(sqlFailure(operation)));
@@ -804,7 +806,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     const rows = yield* sql<{ readonly record_json: string | null }>`
       SELECT ${canonicalRecordJson(sql, options.namespace)} AS record_json FROM ${relation("effect_agent_canonical_records")}
       WHERE thread_id = ${submission.thread_id}
-        AND record_id = ${submissionSettlementRecordId(submissionId)}
+        AND record_id = ${JSON.stringify(submissionSettlementRecordId(submissionId))}
     `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
     if (rows.length === 0) return Option.none();
@@ -1076,7 +1078,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         SELECT record_id
         FROM ${relation("effect_agent_canonical_records")}
         WHERE thread_id = ${threadId}
-          AND record_id = ${recordId}
+          AND record_id = ${JSON.stringify(recordId)}
       `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
     const decoded = yield* decodeCanonicalRecordIdRows(
@@ -1181,7 +1183,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         const keyRowKey = `${validated.threadId}/${validated.principal}/${validated.idempotencyKey}`;
 
         const existingRows = yield* sql<Record<string, unknown>>`
-            SELECT ${sql.literal(SUBMISSION_COLUMNS)}
+            SELECT ${submissionColumns}
             FROM ${relation("effect_agent_submissions")}
             WHERE thread_id = ${validated.threadId}
               AND principal = ${validated.principal}
@@ -1377,7 +1379,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
               principal,
               idempotency_key,
               agent_id,
-              agent_digests_json,
+              definition_key,
               deployment_id,
               input_json,
               input_digest,
@@ -1397,7 +1399,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
               ${validated.principal},
               ${validated.idempotencyKey},
               ${validated.agentId},
-              ${agentDigestsJson},
+              ${yield* physical.definition(agentDigestsJson).pipe(Effect.mapError(internalFailure(operation)))},
               ${validated.deploymentId},
               ${inputJson},
               ${validated.inputDigest},
@@ -1584,7 +1586,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
     }
 
     const rows = yield* sql<Record<string, unknown>>`
-      SELECT ${sql.literal(SUBMISSION_COLUMNS)}
+      SELECT ${submissionColumns}
       FROM ${relation("effect_agent_submissions")}
       WHERE thread_id = ${validated.threadId}
         AND principal = ${validated.principal}
@@ -1622,7 +1624,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       ).pipe(Effect.mapError(internalFailure(operation)));
 
       const rows = yield* sql<Record<string, unknown>>`
-      SELECT ${sql.literal(SUBMISSION_COLUMNS)}
+      SELECT ${submissionColumns}
       FROM ${relation("effect_agent_submissions")}
       WHERE thread_id = ${validated.threadId}
         AND principal = ${validated.principal}
@@ -1828,24 +1830,6 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
               producer_epoch = excluded.producer_epoch,
               owner_producer_id = excluded.owner_producer_id,
               lease_expires_at = excluded.lease_expires_at
-          `.pipe(execute, Effect.mapError(sqlFailure(operation)));
-
-          yield* sql`
-            INSERT INTO ${relation("effect_agent_attempts")} (
-              attempt_id,
-              submission_id,
-              thread_id,
-              owner_producer_id,
-              producer_epoch,
-              claimed_at
-            ) VALUES (
-              ${attemptId},
-              ${head.submission_id},
-              ${head.thread_id},
-              ${validated.producerId},
-              ${producerEpoch},
-              ${now.iso}
-            )
           `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
           if (head.state === "ready") {
@@ -2432,7 +2416,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         Effect.gen(function* () {
           const read = Effect.fnUntraced(function* (active: boolean) {
             const rows =
-              yield* sql`SELECT ${sql.literal(SUBMISSION_COLUMNS)} FROM ${relation("effect_agent_submissions")}
+              yield* sql`SELECT ${submissionColumns} FROM ${relation("effect_agent_submissions")}
           WHERE thread_id = ${threadId} ${active ? sql`AND state <> 'settled'` : sql``}
           ORDER BY queue_sequence ${active ? sql`ASC` : sql`DESC`} LIMIT 1`.pipe(
                 execute,
@@ -2668,7 +2652,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         if (stopped.length > 0) return [];
 
         const laterRows = yield* sql<Record<string, unknown>>`
-          SELECT ${sql.literal(SUBMISSION_COLUMNS)}
+          SELECT ${submissionColumns}
           FROM ${relation("effect_agent_submissions")}
           WHERE thread_id = ${validated.threadId}
             AND queue_sequence > ${host.queue_sequence}
@@ -3253,8 +3237,8 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
               SELECT ${canonicalRecordJson(sql, options.namespace)} AS record_json
               FROM ${relation("effect_agent_canonical_records")}
               WHERE thread_id = ${submission.thread_id}
-                AND record_tag = 'ToolCallSettled'
-                AND run_id = ${JSON.stringify(runId)}
+                AND record_tag = 27
+                AND run_id = ${runKey(sql, sql`${submission.thread_id}`, sql`${JSON.stringify(runId)}`, options.namespace)}
                 AND tool_call_id = ${JSON.stringify(validated.toolCallId)}
               LIMIT 2
             `.pipe(execute, Effect.mapError(sqlFailure(operation)));
@@ -3881,7 +3865,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         ON abort.submission_id = submission.submission_id
       LEFT JOIN ${relation("effect_agent_canonical_records")} AS canonical
         ON canonical.thread_id = submission.thread_id
-          AND canonical.record_id = ${recordId}
+          AND canonical.record_id = ${JSON.stringify(recordId)}
       WHERE submission.submission_id = ${validated.submissionId}
     `.pipe(execute, Effect.mapError(sqlFailure(operation)));
 
@@ -3980,7 +3964,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
             // Host-side view: every Submission whose host linkage points here, in queue order
             // (the terminalize loop settles them with the host outcome, DUR-002).
             const joinRows = yield* sql<Record<string, unknown>>`
-            SELECT ${sql.literal(SUBMISSION_COLUMNS)}
+            SELECT ${submissionColumns}
             FROM ${relation("effect_agent_submissions")}
             WHERE joined_host_submission_id = ${validated.submissionId}
             ORDER BY queue_sequence ASC

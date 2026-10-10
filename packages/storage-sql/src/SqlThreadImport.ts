@@ -29,7 +29,6 @@ import {
   RUN_TERMINAL_RESERVE_RECORDS,
   MAX_RUN_RECOVERY_SUFFIX_RECORDS,
   MAX_RUN_RECOVERY_SUFFIX_BYTES,
-  MAX_RUN_CONTINUATION_BYTES,
 } from "@yielded/agent/records";
 import { isOperationalRecord, verifyRunContinuations } from "@yielded/agent/run-continuation";
 import { validateCanonicalSettlement } from "@yielded/agent/settlement-publisher";
@@ -104,6 +103,15 @@ import {
   decodeApprovalFact,
   decodeResolutionFact,
 } from "./SqlAdmissionFacts.ts";
+import {
+  captureRecordStorage,
+  definitionJson,
+  makeCanonicalStorage,
+  recordBatchId,
+  runIdentity,
+  runKey,
+  storedBatchHeader,
+} from "./SqlCanonicalStorage.ts";
 import { BatchRow, RecordRow, ThreadRow } from "./SqlJournal.ts";
 import { messageDeliveryMetadata } from "./SqlMessageDeliveryStore.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
@@ -247,6 +255,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
   const admissionFence = yield* SubmissionAdmissionFence;
   const deliveryLimits = options.deliveryLimits ?? defaultMessageDeliveryStoreLimits;
   const { table, execute } = yield* makeSqlQuery(options.namespace);
+  const physical = yield* makeCanonicalStorage(options.namespace);
 
   const intervals = yield* makeSqlSettlementIntervals(options.namespace);
 
@@ -276,7 +285,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
   const rows = (threadId: ThreadId, predicate: Fragment, limit: number) =>
     query(
-      sql`SELECT r.thread_id, r.batch_id, r.sequence, r.record_id, ${recordJson} AS record_json
+      sql`SELECT r.thread_id, ${recordBatchId(sql, options.namespace, "r")} AS batch_id, r.sequence, r.record_id, ${recordJson} AS record_json
       FROM ${table("effect_agent_canonical_records")} r WHERE r.thread_id=${threadId} AND ${predicate}
       ORDER BY r.sequence LIMIT ${limit}`,
     ).pipe(Effect.flatMap((value) => decode(Schema.Array(Row), value)));
@@ -318,7 +327,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
   const admissionRows = (threadId: ThreadId, predicate: Fragment, limit: number) =>
     query(
-      sql`SELECT s.* FROM ${table("effect_agent_submissions")} s WHERE s.thread_id=${threadId} AND ${predicate}
+      sql`SELECT s.*, ${definitionJson(sql, options.namespace, "s")} AS agent_digests_json FROM ${table("effect_agent_submissions")} s WHERE s.thread_id=${threadId} AND ${predicate}
       ORDER BY s.queue_sequence LIMIT ${limit}`,
     ).pipe(Effect.flatMap((value) => decode(Schema.Array(AdmissionRow), value)));
 
@@ -615,8 +624,8 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
       const batchLength = canonicalBatchBytes(sql, options.namespace, "b");
 
       const headerLength = sql.onDialectOrElse({
-        pg: () => sql`octet_length(b.batch_header_json)`,
-        orElse: () => sql`length(CAST(b.batch_header_json AS BLOB))`,
+        pg: () => sql`octet_length(${storedBatchHeader(sql, "b")})`,
+        orElse: () => sql`length(CAST(${storedBatchHeader(sql, "b")} AS BLOB))`,
       });
 
       const recordLength = sql.onDialectOrElse({
@@ -661,7 +670,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         );
 
       const stored =
-        yield* query(sql`SELECT b.batch_id, b.first_sequence, b.last_sequence, b.batch_digest, b.tail_digest, b.batch_header_json, ${batchJson} AS batch_json
+        yield* query(sql`SELECT b.batch_id, b.first_sequence, b.last_sequence, b.tail_digest AS batch_digest, b.tail_digest, ${storedBatchHeader(sql, "b")} AS batch_header_json, ${batchJson} AS batch_json
         FROM ${table("effect_agent_canonical_batches")} b WHERE b.thread_id=${threadId} AND b.first_sequence=${fromSequence} LIMIT 2`).pipe(
           Effect.flatMap((r) =>
             decode(
@@ -682,7 +691,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         return yield* failure("export batch", "Missing or oversized canonical batch");
       if (
         (yield* query(sql`SELECT batch_id FROM ${table("effect_agent_canonical_batches")} ${seekIndex("effect_agent_canonical_batches_sequence")}
-        WHERE thread_id=${threadId} AND batch_id<>${row.batch_id}
+        WHERE thread_id=${threadId} AND batch_id<>${JSON.stringify(row.batch_id)}
         AND first_sequence BETWEEN ${Math.max(1, row.first_sequence - 255)} AND ${row.last_sequence}
         AND last_sequence>=${row.first_sequence} LIMIT 1`)).length > 0
       )
@@ -818,7 +827,11 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     mode: "import" | "verify",
   ): ReturnType<typeof ThreadImportReader.layer> => {
     const readRecord = (recordId: RecordId) =>
-      rows(id, sql`r.record_id=${recordId} AND r.sequence<=${tailSequence}`, 1).pipe(
+      rows(
+        id,
+        sql`r.record_id=${JSON.stringify(recordId)} AND r.sequence<=${tailSequence}`,
+        1,
+      ).pipe(
         Effect.flatMap((r) => (r[0] === undefined ? Effect.succeed(undefined) : envelope(r[0]))),
       );
 
@@ -901,25 +914,17 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
         let after = 0,
           facts = 0,
-          continuations = 0,
           bytes = 0;
 
         while (true) {
-          const selected = yield* query(sql`SELECT * FROM (
-            SELECT * FROM (SELECT r.thread_id, r.batch_id, r.sequence, r.record_id, ${recordJson} AS record_json
-              FROM ${table("effect_agent_record_runs")} rr
-              LEFT JOIN ${table("effect_agent_canonical_records")} r ON r.thread_id=rr.thread_id AND r.sequence=rr.sequence
-              WHERE rr.thread_id=${id} AND rr.run_id=${JSON.stringify(runId)} AND rr.sequence>${after} AND rr.sequence<=${tailSequence}
-              ORDER BY rr.sequence LIMIT 1) AS run_facts
-            UNION ALL
-            SELECT * FROM (SELECT r.thread_id, r.batch_id, r.sequence, r.record_id, ${recordJson} AS record_json
-              FROM ${table("effect_agent_canonical_records")} r ${seekIndex("effect_agent_records_continuation")}
-              WHERE r.thread_id=${id} AND r.record_tag='RunContinuation' AND r.run_id=${JSON.stringify(runId)}
-                AND r.sequence>${after} AND r.sequence<=${tailSequence}
-              ORDER BY r.sequence LIMIT 1) AS run_progress
-            ) AS run_membership ORDER BY sequence LIMIT 1`).pipe(
-            Effect.flatMap((value) => decode(Schema.Array(Row), value)),
-          );
+          const selected =
+            yield* query(sql`SELECT r.thread_id, ${recordBatchId(sql, options.namespace, "r")} AS batch_id, r.sequence, r.record_id, ${recordJson} AS record_json
+            FROM ${table("effect_agent_record_runs")} rr
+            LEFT JOIN ${table("effect_agent_canonical_records")} r ON r.thread_id=rr.thread_id AND r.sequence=rr.sequence
+            WHERE rr.thread_id=${id} AND rr.run_id=${runKey(sql, sql`${id}`, sql`${JSON.stringify(runId)}`, options.namespace)} AND rr.sequence>${after} AND rr.sequence<=${tailSequence}
+            ORDER BY rr.sequence LIMIT 1`).pipe(
+              Effect.flatMap((value) => decode(Schema.Array(Row), value)),
+            );
 
           const row = selected[0];
 
@@ -927,17 +932,8 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           const entry = yield* envelope(row);
           const size = utf8ByteLength(row.record_json);
 
-          if (entry.record.payload._tag === "RunContinuation") {
-            continuations++;
-            if (
-              size > MAX_RUN_CONTINUATION_BYTES ||
-              continuations > MAX_RUN_EVIDENCE_RECORDS + RUN_TERMINAL_RESERVE_RECORDS
-            )
-              return yield* failure("read bounded Run", "Continuation evidence exceeds its bound");
-          } else {
-            facts++;
-            bytes += size;
-          }
+          facts++;
+          bytes += size;
           if (
             facts >
               MAX_RUN_EVIDENCE_RECORDS +
@@ -1010,7 +1006,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         return { ...result, aborts: aborts.commands.aborts, approvals, resolutions };
       }),
       hasAgent: (agentId) =>
-        query(sql`SELECT record_id FROM ${table("effect_agent_canonical_records")} r WHERE r.thread_id=${id} AND r.record_tag='ThreadCreated'
+        query(sql`SELECT record_id FROM ${table("effect_agent_canonical_records")} r WHERE r.thread_id=${id} AND r.record_tag=23
         AND ${sql.onDialectOrElse({ pg: () => sql`(${recordJson})::jsonb -> 'payload' ->> 'agentId'`, orElse: () => sql`json_extract(${recordJson}, '$.payload.agentId')` })}=${agentId} LIMIT 1`).pipe(
           Effect.map((r) => r.length === 1),
         ),
@@ -1111,7 +1107,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                     "effect_agent_execution_receipts",
                     "effect_agent_checkpoints",
                     "effect_agent_worker_stops",
-                    "effect_agent_attempts",
+                    "effect_agent_run_keys",
                     "effect_agent_work_entries",
                     "effect_agent_journal_ranges",
                     "effect_agent_import_fifo",
@@ -1237,7 +1233,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
                   if (
                     (yield* query(
-                      sql`SELECT batch_id FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${threadId} AND batch_id=${batch.batch.batchId} LIMIT 1`,
+                      sql`SELECT batch_id FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${threadId} AND batch_id=${JSON.stringify(batch.batch.batchId)} LIMIT 1`,
                     )).length > 0
                   )
                     return yield* invalidThreadArchive(
@@ -1252,15 +1248,15 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                   yield* checkValues([batch.batchJson, ...batch.recordJson]);
                   const batchHeaderJson = canonicalBatchHeaderJson(batch.batch);
 
-                  // Imported history has no operational retry receipts; its retained intent is canonical-only.
+                  // This transient append descriptor has no operational retry receipt or persisted intent hash.
                   const commitDigest = yield* digestCanonicalJson(
                     JSON.stringify([batch.batchJson, "[]"]),
                   ).pipe(
                     Effect.mapError((cause) => failure("digest imported canonical intent", cause)),
                   );
 
-                  yield* query(sql`INSERT INTO ${table("effect_agent_canonical_batches")} (thread_id, batch_id, first_sequence, last_sequence, batch_digest, commit_digest, tail_digest, batch_header_json)
-          VALUES (${threadId}, ${batch.batch.batchId}, ${batch.firstSequence}, ${batch.lastSequence}, ${batch.tailDigest}, ${commitDigest}, ${batch.tailDigest}, ${batchHeaderJson})`);
+                  yield* query(sql`INSERT INTO ${table("effect_agent_canonical_batches")} (thread_id, batch_id, first_sequence, last_sequence, tail_digest, producer_id_json)
+          VALUES (${threadId}, ${JSON.stringify(batch.batch.batchId)}, ${batch.firstSequence}, ${batch.lastSequence}, ${batch.tailDigest}, ${JSON.stringify(batch.batch.producerId)})`);
                   const captured = [];
 
                   for (const [index, record] of batch.batch.records.entries()) {
@@ -1271,7 +1267,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                       );
                     if (
                       (yield* query(
-                        sql`SELECT record_id FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${threadId} AND record_id=${record.recordId} LIMIT 1`,
+                        sql`SELECT record_id FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${threadId} AND record_id=${JSON.stringify(record.recordId)} LIMIT 1`,
                       )).length > 0
                     )
                       return yield* invalidThreadArchive(
@@ -1284,26 +1280,40 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                       wire: record.wire,
                     });
 
-                    yield* query(
-                      sql`INSERT INTO ${table("effect_agent_canonical_records")} ${sql.insert({
-                        thread_id: threadId,
-                        sequence: batch.firstSequence + index,
-                        record_id: record.recordId,
-                        batch_id: batch.batch.batchId,
-                        record_json: batch.recordJson[index],
-                        ...metadata.columns,
-                      })}`,
+                    const recordJson = batch.recordJson[index];
+
+                    if (recordJson === undefined)
+                      return yield* invalidThreadArchive(
+                        "Imported record capture is missing",
+                        threadId,
+                      );
+                    const storage = yield* captureRecordStorage(record.wire, recordJson);
+
+                    const [stored] = yield* physical.records(
+                      threadId,
+                      batch.firstSequence + index,
+                      [{ storage, readMetadata: metadata }],
                     );
-                    for (const runId of metadata.runIds)
+
+                    if (stored === undefined)
+                      return yield* invalidThreadArchive(
+                        "Imported record capture is missing",
+                        threadId,
+                      );
+                    yield* query(
+                      sql`INSERT INTO ${table("effect_agent_canonical_records")} ${sql.insert(stored.columns)}`,
+                    );
+                    for (const member of stored.memberships)
                       yield* query(
-                        sql`INSERT INTO ${table("effect_agent_record_runs")} (thread_id, run_id, sequence) VALUES (${threadId}, ${runId}, ${batch.firstSequence + index})`,
+                        sql`INSERT INTO ${table("effect_agent_record_runs")} ${sql.insert(member)}`,
                       );
                     captured.push({
+                      storage,
                       recordId: record.recordId,
-                      recordBytes: utf8ByteLength(batch.recordJson[index]!),
+                      recordBytes: utf8ByteLength(recordJson),
                       canonical: record,
                       wire: record.wire,
-                      recordJson: batch.recordJson[index]!,
+                      recordJson,
                       readMetadata: metadata,
                     });
                   }
@@ -1313,6 +1323,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                       batchId: batch.batch.batchId,
                       batchJson: batch.batchJson,
                       batchHeaderJson,
+                      producerIdJson: JSON.stringify(batch.batch.producerId),
                       batchBytes: utf8ByteLength(batch.batchJson),
                       batchDigest: batch.tailDigest,
                       expectedTailSequence: CanonicalSequence.make(batch.firstSequence - 1),
@@ -1364,7 +1375,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
                   const terminalRows = yield* rows(
                     threadId,
-                    sql`r.record_id=${submissionSettlementRecordId(fact.submissionId)}`,
+                    sql`r.record_id=${JSON.stringify(submissionSettlementRecordId(fact.submissionId))}`,
                     1,
                   );
 
@@ -1410,7 +1421,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                       principal: a.principal,
                       idempotency_key: a.idempotencyKey,
                       agent_id: a.agentId,
-                      agent_digests_json: canonicalJson(a.agentDigests),
+                      definition_key: yield* physical.definition(canonicalJson(a.agentDigests)),
                       deployment_id: a.deploymentId,
                       input_json: canonicalJson(a.inputPayload),
                       input_digest: a.inputDigest,
@@ -1588,15 +1599,18 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
               const reader = yield* ThreadImportReader;
               const readAdmission = reader.admission;
               // Check missing active state for every retained Run, including terminal history counts.
-              let afterRun: string | undefined;
+              let afterRun: number | undefined;
 
               while (true) {
                 const found =
-                  yield* query(sql`SELECT run_id FROM ${table("effect_agent_canonical_records")} ${seekIndex("effect_agent_records_run_identity")}
+                  yield* query(sql`SELECT r.run_id AS run_key, ${runIdentity(sql, sql`r.run_id`, options.namespace)} AS run_id FROM ${table("effect_agent_canonical_records")} r ${seekIndex("effect_agent_records_run_identity")}
         WHERE thread_id=${id} AND run_id IS NOT NULL
-        ${afterRun === undefined ? sql`` : sql`AND run_id>${afterRun}`} GROUP BY run_id ORDER BY run_id LIMIT 1`).pipe(
+        ${afterRun === undefined ? sql`` : sql`AND run_id>${afterRun}`} GROUP BY r.run_id ORDER BY r.run_id LIMIT 1`).pipe(
                     Effect.flatMap((r) =>
-                      decode(Schema.Array(Schema.Struct({ run_id: Schema.String })), r),
+                      decode(
+                        Schema.Array(Schema.Struct({ run_key: SqlInteger, run_id: Schema.String })),
+                        r,
+                      ),
                     ),
                   );
 
@@ -1609,7 +1623,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                   verifyContext: false,
                 }).pipe(Effect.mapError((e) => invalidThreadArchive(e.message, id)));
                 yield* validateImportedRunExecution(id, runId, result.tailSequence);
-                afterRun = next.run_id;
+                afterRun = next.run_key;
               }
               // Active rows are authoritative even if their Run is absent from the canonical directory.
               let afterExecution = 0;
@@ -1878,7 +1892,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                     );
 
                   const evidence =
-                    yield* query(sql`SELECT s.* FROM ${table("effect_agent_submissions")} s WHERE thread_id=${d.receipt.threadId}
+                    yield* query(sql`SELECT s.*, ${definitionJson(sql, options.namespace, "s")} AS agent_digests_json FROM ${table("effect_agent_submissions")} s WHERE thread_id=${d.receipt.threadId}
           AND submission_id=${d.receipt.submissionId} LIMIT 1`).pipe(
                       Effect.flatMap((r) => decode(Schema.Array(AdmissionRow), r)),
                     );
@@ -1935,7 +1949,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                   if (d.settlement !== null) {
                     const found = yield* rows(
                       destination.threadId,
-                      sql`r.record_id=${submissionSettlementRecordId(destination.submissionId)}`,
+                      sql`r.record_id=${JSON.stringify(submissionSettlementRecordId(destination.submissionId))}`,
                       1,
                     );
 
@@ -2098,7 +2112,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           Stream.paginate(-1, (after) =>
             Effect.gen(function* () {
               const rows = yield* query(
-                sql`SELECT s.* FROM ${table("effect_agent_submissions")} s WHERE s.thread_id=${id} AND ${predicate(after)} ORDER BY s.queue_sequence LIMIT 1`,
+                sql`SELECT s.*, ${definitionJson(sql, options.namespace, "s")} AS agent_digests_json FROM ${table("effect_agent_submissions")} s WHERE s.thread_id=${id} AND ${predicate(after)} ORDER BY s.queue_sequence LIMIT 1`,
               ).pipe(Effect.flatMap((r) => decode(Schema.Array(LedgerRow), r)));
 
               const row = rows[0];
@@ -2112,16 +2126,19 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
         const submissions = scan((after) => sql`s.queue_sequence>${after}`);
 
-        const runs = Stream.paginate<string | undefined, RunId, ThreadStoreError>(
+        const runs = Stream.paginate<number | undefined, RunId, ThreadStoreError>(
           undefined,
           (after) =>
             Effect.gen(function* () {
               const selected =
-                yield* query(sql`SELECT run_id FROM ${table("effect_agent_canonical_records")} ${seekIndex("effect_agent_records_run_identity")}
+                yield* query(sql`SELECT r.run_id AS run_key, ${runIdentity(sql, sql`r.run_id`, options.namespace)} AS run_id FROM ${table("effect_agent_canonical_records")} r ${seekIndex("effect_agent_records_run_identity")}
           WHERE thread_id=${id} AND sequence<=${first.tailSequence} AND run_id IS NOT NULL
-          ${after === undefined ? sql`` : sql`AND run_id>${after}`} GROUP BY run_id ORDER BY run_id LIMIT 1`).pipe(
+          ${after === undefined ? sql`` : sql`AND run_id>${after}`} GROUP BY r.run_id ORDER BY r.run_id LIMIT 1`).pipe(
                   Effect.flatMap((r) =>
-                    decode(Schema.Array(Schema.Struct({ run_id: Schema.String })), r),
+                    decode(
+                      Schema.Array(Schema.Struct({ run_key: SqlInteger, run_id: Schema.String })),
+                      r,
+                    ),
                   ),
                 );
 
@@ -2129,7 +2146,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
               return [
                 row === undefined ? [] : [yield* json(RunId, row.run_id)],
-                row === undefined ? Option.none<string | undefined>() : Option.some(row.run_id),
+                row === undefined ? Option.none<number | undefined>() : Option.some(row.run_key),
               ] as const;
             }),
         );

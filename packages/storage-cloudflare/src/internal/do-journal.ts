@@ -1,3 +1,7 @@
+import {
+  makeCanonicalStorage,
+  recordBatchId,
+} from "@yielded/agent-storage-sql/sql-canonical-storage";
 import type { RawAppendRequest } from "@yielded/agent-storage-sql/sql-journal";
 import { makeSqlExecutions } from "@yielded/agent-storage-sql/sql-journal";
 import {
@@ -95,8 +99,7 @@ const threadRows = ownedRows(
 
 class BatchRow extends Schema.Class<BatchRow>("BatchRow")({
   batch_digest: BoundedStoredText,
-  commit_digest: BoundedStoredText,
-  batch_id: BoundedIdentifier,
+  batch_id: Schema.fromJsonString(BoundedIdentifier),
   batch_json: BoundedStoredText,
   thread_id: BoundedIdentifier,
   first_sequence: CanonicalSequence,
@@ -105,9 +108,9 @@ class BatchRow extends Schema.Class<BatchRow>("BatchRow")({
 }) {}
 
 class RecordRow extends Schema.Class<RecordRow>("RecordRow")({
-  batch_id: BoundedIdentifier,
+  batch_id: Schema.fromJsonString(BoundedIdentifier),
   thread_id: BoundedIdentifier,
-  record_id: BoundedIdentifier,
+  record_id: Schema.fromJsonString(BoundedIdentifier),
   record_json: BoundedStoredText,
   sequence: CanonicalSequence,
 }) {}
@@ -463,6 +466,10 @@ const makeJournal = (
 
     const recordJson = canonicalRecordJson(sql);
 
+    const physical = yield* makeCanonicalStorage().pipe(
+      Effect.provideService(SqlClient.SqlClient, sql),
+    );
+
     /** Typed pre-write refusal for any single value over the configured byte bound. */
     const checkValueBound = (
       operation: string,
@@ -664,7 +671,7 @@ const makeJournal = (
       if (prefix !== undefined) return prefix.some((row) => row.record_id === recordId);
 
       const rows = yield* sql`SELECT record_id FROM effect_agent_canonical_records
-      WHERE thread_id = ${threadId} AND record_id = ${recordId}`.pipe(
+      WHERE thread_id = ${threadId} AND record_id = ${JSON.stringify(recordId)}`.pipe(
         Effect.mapError(storageError("read canonical record identity")),
       );
 
@@ -750,42 +757,13 @@ const makeJournal = (
 
       if (replay !== undefined) return RawAppendResult.make(replay);
 
-      const batchRows =
+      const existing =
         prefix !== undefined && !prefix.some((row) => row.batch_id === request.batchId)
-          ? []
-          : yield* sql<Record<string, unknown>>`
-          SELECT
-            thread_id,
-            batch_id,
-            first_sequence,
-            last_sequence,
-            batch_digest,
-            commit_digest,
-            tail_digest,
-            '' AS batch_json
-          FROM effect_agent_canonical_batches
-          WHERE thread_id = ${request.threadId}
-            AND batch_id = ${request.batchId}
-        `.pipe(Effect.mapError(storageError("read idempotent batch")));
+          ? undefined
+          : yield* archives.replay(request.threadId, request.batchId);
 
-      const batches = yield* decodeRows(
-        Schema.Array(BatchRow),
-        "effect_agent_canonical_batches",
-        `${request.threadId}/${request.batchId}`,
-        batchRows,
-      );
-
-      if (batches.length > 1) {
-        return yield* DoStorageCorruptionError.make({
-          table: "effect_agent_canonical_batches",
-          rowKey: `${request.threadId}/${request.batchId}`,
-          message: "A canonical batch primary key returned more than one row.",
-        });
-      }
-      if (batches.length === 1) {
-        const existing = batches[0];
-
-        if (existing.commit_digest !== request.commitDigest) {
+      if (existing !== undefined) {
+        if (existing.batch_json !== request.batchJson) {
           return yield* DoAppendConflict.make({
             message: `Batch ${request.batchId} already exists with different canonical content.`,
             reason: "batch-digest",
@@ -827,11 +805,11 @@ const makeJournal = (
               thread_id,
               sequence,
               record_id,
-              batch_id,
+              ${recordBatchId(sql)} AS batch_id,
               ${recordJson} AS record_json
             FROM effect_agent_canonical_records
             WHERE thread_id = ${request.threadId}
-              AND record_id IN ${sql.in([...chunk])}
+              AND record_id IN ${sql.in(chunk.map((id) => JSON.stringify(id)))}
           `.pipe(Effect.mapError(storageError("check canonical record identities")));
 
         existingRecords.push(
@@ -892,51 +870,41 @@ const makeJournal = (
             batch_id,
             first_sequence,
             last_sequence,
-            batch_digest,
-            commit_digest,
             tail_digest,
-            batch_header_json
+            producer_id_json
           ) VALUES (
             ${request.threadId},
-            ${request.batchId},
+            ${JSON.stringify(request.batchId)},
             ${firstSequence},
             ${lastSequence},
-            ${request.batchDigest},
-            ${request.commitDigest},
             ${request.tailDigest},
-            ${request.batchHeaderJson}
+            ${request.producerIdJson}
           )
         `.pipe(Effect.mapError(storageError("insert canonical batch")));
       }
       yield* failpoint("append:after-batch-insert");
 
-      const records = request.records.map((record, index) => ({
-        record,
-        canonical: record.canonical,
-        row: {
-          thread_id: request.threadId,
-          sequence: firstSequence + index,
-          record_id: record.recordId,
-          batch_id: request.batchId,
-          record_json: record.recordJson,
-          ...record.readMetadata.columns,
-        },
+      const physicalRecords = yield* physical.records(
+        request.threadId,
+        firstSequence,
+        request.records,
+      );
+
+      const records = physicalRecords.map(({ columns, memberships }, index) => ({
+        record: request.records[index]!,
+        canonical: request.records[index]!.canonical,
+        row: columns,
+        memberships,
       }));
 
       // Captured scalar locators avoid parsing canonical JSON under the writer.
-      // Seventeen bound columns per row stay within workerd's statement limit.
-      for (const group of chunked(records, Math.floor(MAX_BOUND_PARAMETERS / 17))) {
+      // Eighteen bound columns per row stay within workerd's statement limit.
+      for (const group of chunked(records, Math.floor(MAX_BOUND_PARAMETERS / 18))) {
         yield* sql`INSERT INTO effect_agent_canonical_records ${sql.insert(group.map(({ row }) => row))}`.pipe(
           Effect.mapError(storageError("insert canonical records")),
         );
 
-        const memberships = group.flatMap(({ record, row }) =>
-          record.readMetadata.runIds.map((runId) => ({
-            thread_id: request.threadId,
-            run_id: runId,
-            sequence: row.sequence,
-          })),
-        );
+        const memberships = group.flatMap(({ memberships }) => memberships);
 
         for (const members of chunked(memberships, Math.floor(MAX_BOUND_PARAMETERS / 3)))
           yield* sql`INSERT INTO effect_agent_record_runs ${sql.insert(members)}`.pipe(
@@ -946,6 +914,9 @@ const makeJournal = (
           recordCache.put(
             RecordRow.make({
               ...row,
+              record_id: record.recordId,
+              batch_id: request.batchId,
+              record_json: record.recordJson,
               sequence: Schema.decodeSync(CanonicalSequence)(row.sequence),
             }),
             record.recordBytes,
@@ -1082,7 +1053,7 @@ const makeJournal = (
         ) {
           const batches = yield* sql`
           SELECT batch_id FROM effect_agent_canonical_batches
-          WHERE thread_id = ${request.threadId} AND batch_id = ${request.batchId}
+          WHERE thread_id = ${request.threadId} AND batch_id = ${JSON.stringify(request.batchId)}
           UNION ALL SELECT batch_id FROM effect_agent_execution_receipts
           WHERE thread_id = ${request.threadId} AND batch_id = ${request.batchId}
           LIMIT 1
@@ -1178,7 +1149,7 @@ const makeJournal = (
 
       const readPage = Effect.fnUntraced(function* (page: ReadPage) {
         const rows = yield* sql<Record<string, unknown>>`
-        SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
+        SELECT thread_id, sequence, record_id, ${recordBatchId(sql)} AS batch_id, ${recordJson} AS record_json
         FROM effect_agent_canonical_records
         WHERE thread_id = ${request.threadId}
           AND sequence >= ${page[0].sequence}
@@ -1353,14 +1324,13 @@ const makeJournal = (
         batch_id,
         first_sequence,
         last_sequence,
-        batch_digest,
-        commit_digest,
+        tail_digest AS batch_digest,
         tail_digest,
         '' AS batch_json
       FROM effect_agent_canonical_batches
       WHERE thread_id = ${threadId}
         AND batch_id = (
-          SELECT batch_id FROM effect_agent_canonical_records
+          SELECT ${recordBatchId(sql)} FROM effect_agent_canonical_records
           WHERE thread_id = ${threadId} AND sequence = ${sequence}
         )
         AND last_sequence = ${sequence}

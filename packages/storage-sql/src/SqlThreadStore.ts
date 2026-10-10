@@ -42,6 +42,7 @@ import {
 import { Clock, Crypto, Effect, Option, Ref, Schema, Stream } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 
+import { captureRecordStorage } from "./SqlCanonicalStorage.ts";
 import {
   type RawAppendRequest,
   RawCheckpoint,
@@ -115,8 +116,12 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
       message: "Canonical batch exceeds its bounded transfer representation",
     });
 
-  const records = captured.records.map((record) =>
-    Object.freeze({ ...record, readMetadata: canonicalRecordMetadata(record) }),
+  const records = yield* Effect.forEach(captured.records, (record) =>
+    captureRecordStorage(record.wire, record.recordJson).pipe(
+      Effect.map((storage) =>
+        Object.freeze({ ...record, storage, readMetadata: canonicalRecordMetadata(record) }),
+      ),
+    ),
   );
 
   const executionWrites = captured.executionWrites.map((write) =>
@@ -141,6 +146,7 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
     batchDigest: tailDigest,
     batchJson: captured.batchJson,
     batchHeaderJson: canonicalBatchHeaderJson(captured.batch),
+    producerIdJson: JSON.stringify(captured.batch.producerId),
     batchBytes: captured.batchBytes,
     expectedTailSequence: captured.expectedTailSequence,
     expectedTailDigest: captured.expectedTailDigest,
@@ -606,7 +612,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
             const stored = yield* decode(
               Schema.Array(Schema.Struct({ batch_digest: Digest, tail_digest: Digest })),
               yield* query(
-                sql`SELECT batch_digest, tail_digest FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${thread.thread_id} AND batch_id=${batch.batch.batchId}`,
+                sql`SELECT tail_digest AS batch_digest, tail_digest FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${thread.thread_id} AND batch_id=${JSON.stringify(batch.batch.batchId)}`,
               ),
             );
 

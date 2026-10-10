@@ -408,7 +408,7 @@ describe("DoThreadStore", () => {
           yield* Effect.sync(() => {
             if (decoder === "CanonicalRecord")
               storage.sql.exec(
-                "UPDATE effect_agent_canonical_records SET record_json = ? WHERE thread_id = ?",
+                "UPDATE effect_agent_canonical_records SET payload_json = ? WHERE thread_id = ?",
                 `{"unexpected":"${privateValue}"}`,
                 threadId,
               );
@@ -698,7 +698,7 @@ describe("DoThreadStore", () => {
             Effect.sync(() => {
               if (record.sequence === 1) {
                 storage.sql.exec(
-                  "UPDATE effect_agent_canonical_records SET record_json = NULL WHERE thread_id = ? AND sequence = 9",
+                  "UPDATE effect_agent_canonical_records SET payload_json = NULL WHERE thread_id = ? AND sequence = 9",
                   threadId,
                 );
               }

@@ -208,7 +208,7 @@ completion or failure, and repairs. Partial tool argument deltas and live queue 
 
 `PersistentHistory.layer` appends `UserInputRecorded`, `ModelCompleted`, and `RunCompleted` together.
 It opens the latest bounded model-context snapshot; each Run also records its own message
-contribution. Durable execution records each turn and tool result separately and resumes from a
+contribution. Durable execution records each turn and tool result separately and resumes from an
 [active Run checkpoint](/concepts/durability/#run-continuations), its original saved context,
 and bounded exact evidence.
 
