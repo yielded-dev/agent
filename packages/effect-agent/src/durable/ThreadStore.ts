@@ -856,6 +856,9 @@ export class LoadCheckpointRequest extends Schema.Class<LoadCheckpointRequest>(
 /** A bounded, disposable prior Prompt. Its bytes must match the named canonical Run context. */
 export const MAX_PROMPT_CHECKPOINT_BYTES = 16 * 1024 * 1024;
 
+/** Maximum ordinary Runs between full prompt replacements and in a cold catch-up suffix. */
+export const MAX_PROMPT_CHECKPOINT_RUNS = 16;
+
 export const PromptCheckpointHead = Schema.Struct({
   version: Schema.Literal(1),
   recordFormat: Schema.Literal(CURRENT_RECORD_FORMAT),
@@ -884,7 +887,9 @@ export type PromptCheckpointRead = typeof PromptCheckpointRead.Type;
 /**
  * Optional cold-context acceleration, separate from application checkpoints. Save only after
  * canonical settlement. Replace the prior value atomically, fenced at the exact supplied head.
- * Load only at that head under its next ordinary producer epoch; any mismatch is a cache miss.
+ * Load only under the current producer epoch, authenticating the saved historical batch head.
+ * The runtime validates the bounded suffix and one ordinary claim per intervening completed Run.
+ * Any incompatible head, fence, context digest or suffix is a cache miss.
  * Never export these bytes or use them as execution/compaction evidence.
  */
 export interface PromptCheckpoints {
