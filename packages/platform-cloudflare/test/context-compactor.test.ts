@@ -9,7 +9,7 @@ import { submissionSettlementRecordId } from "@yielded/agent/submission-ledger";
 import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
 import { runInDurableObject } from "cloudflare:test";
-import { Effect, Layer, Option, Schema, Stream } from "effect";
+import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
 import { DurableObject } from "effect-cf";
 import { LanguageModel, Model, Toolkit } from "effect/ai";
 import { describe, expect, it } from "vite-plus/test";
@@ -136,15 +136,15 @@ describe("Cloudflare replaceable compaction", () => {
 
           const binding = yield* DurableWorkerBinding.make(agent, TEST_DIGESTS);
 
-          const runtime = yield* DurableAgentRuntime.pipe(
-            Effect.provide(
-              DurableAgentRuntime.layerWithBindings([binding]).pipe(
-                Layer.provide(runStorageLayer()),
-                Layer.provide(
-                  Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
-                ),
+          const runtime = yield* Layer.build(
+            DurableAgentRuntime.layerWithBindings([binding]).pipe(
+              Layer.provide(runStorageLayer()),
+              Layer.provide(
+                Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
               ),
             ),
+          ).pipe(
+            Effect.map((services) => Context.get(services, DurableAgentRuntime)),
             Effect.provideService(ThreadStore, store),
             Effect.provideService(RunContextPreparation, {
               hook: {
