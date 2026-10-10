@@ -1198,7 +1198,24 @@ export const ContinuationAccounting = Schema.Struct({
   costMicrousd: Schema.Natural,
   /** The last complete operation batch whose declaration-ordered failure streak was charged. */
   accountedToolTurn: Schema.Natural,
-});
+}).pipe(
+  Schema.encodeKeys({
+    committedTurns: "t",
+    toolCalls: "c",
+    programmaticToolCalls: "p",
+    consecutiveToolFailures: "f",
+    finalizationUsed: "z",
+    modelRestarts: "r",
+    modelCalls: "m",
+    unobservedModelCalls: "u",
+    inputTokens: "i",
+    outputTokens: "o",
+    lastInputTokens: "li",
+    lastOutputTokens: "lo",
+    costMicrousd: "d",
+    accountedToolTurn: "a",
+  }),
+);
 
 export type ContinuationAccounting = typeof ContinuationAccounting.Type;
 
@@ -1213,6 +1230,10 @@ export const RunPosition = Schema.Literals([
   "settling",
   "settled",
 ]);
+
+const ContinuationReference = EvidenceReference.pipe(
+  Schema.encodeKeys({ recordId: "r", digest: "d" }),
+);
 
 /**
  * Canonical interpreter progress, co-committed with lastFact under the Thread fence.
@@ -1247,19 +1268,43 @@ export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
     terminalRecords: Schema.Natural.check(Schema.isLessThanOrEqualTo(RUN_TERMINAL_RESERVE_RECORDS)),
     /** Conservative room for terminal usage grouping; derived only from canonical model usage. */
     terminalUsageBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_RUN_EVIDENCE_BYTES)),
-    originalInput: EvidenceReference,
-    savedContext: Schema.optionalKey(EvidenceReference),
-    latestResponse: Schema.optionalKey(EvidenceReference),
-    terminal: Schema.optionalKey(EvidenceReference),
-    lastFact: EvidenceReference,
+    originalInput: ContinuationReference,
+    savedContext: Schema.optionalKey(ContinuationReference),
+    latestResponse: Schema.optionalKey(ContinuationReference),
+    terminal: Schema.optionalKey(ContinuationReference),
+    lastFact: ContinuationReference,
     position: RunPosition,
     accounting: ContinuationAccounting,
   }),
 ) {}
 
-/** Bump only when the meaning of an existing record changes, independently of SQL layout. */
-export const CURRENT_RECORD_VERSION = 3;
-export const CURRENT_RECORD_FORMAT = "effect-agent/thread@3";
+/** Compact wire keys keep repeated progress metadata bounded without changing its typed view. */
+const RunContinuationRecord = RunContinuation.pipe(
+  Schema.encodeKeys({
+    version: "v",
+    runId: "r",
+    submissionId: "s",
+    revision: "n",
+    recordCount: "c",
+    recordBytes: "b",
+    turn: "t",
+    turnBytes: "tb",
+    terminalBytes: "eb",
+    terminalRecords: "ec",
+    terminalUsageBytes: "ub",
+    originalInput: "i",
+    savedContext: "x",
+    latestResponse: "m",
+    terminal: "e",
+    lastFact: "f",
+    position: "p",
+    accounting: "a",
+  }),
+);
+
+/** Bump for incompatible canonical encodings or meanings, independently of SQL layout. */
+export const CURRENT_RECORD_VERSION = 4;
+export const CURRENT_RECORD_FORMAT = "effect-agent/thread@4";
 
 /** Supported canonical facts. Unsupported control records must fail before execution. */
 export const KnownRecordPayload = Schema.Union([
@@ -1300,7 +1345,7 @@ export const KnownRecordPayload = Schema.Union([
   SubtreeBudgetReserved,
   RepairAnnotated,
   RunContextRecorded,
-  RunContinuation,
+  RunContinuationRecord,
 ]);
 
 /** This format accepts only understood facts; unknown control cannot grant permission. */

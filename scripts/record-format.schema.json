@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "dialect": "draft-2020-12",
   "schema": {
     "type": "object",
@@ -3355,128 +3355,128 @@
           "type": "string",
           "enum": ["RunContinuation"]
         },
-        "version": {
+        "v": {
           "type": "number",
           "enum": [1]
         },
-        "runId": {
+        "r": {
           "type": "string",
           "minLength": 1
         },
-        "submissionId": {
+        "s": {
           "type": "string",
           "minLength": 1
         },
-        "revision": {
+        "n": {
           "type": "integer",
           "minimum": 0,
           "exclusiveMinimum": 0
         },
-        "recordCount": {
+        "c": {
           "type": "integer",
           "minimum": 0,
           "maximum": 16388
         },
-        "recordBytes": {
+        "b": {
           "type": "integer",
           "minimum": 0,
           "maximum": 42205184
         },
-        "turn": {
+        "t": {
           "type": "integer",
           "minimum": 0
         },
-        "turnBytes": {
+        "tb": {
           "type": "integer",
           "minimum": 0,
           "maximum": 12845056
         },
-        "terminalBytes": {
+        "eb": {
           "type": "integer",
           "minimum": 0,
           "maximum": 8650752
         },
-        "terminalRecords": {
+        "ec": {
           "type": "integer",
           "minimum": 0,
           "maximum": 4
         },
-        "terminalUsageBytes": {
+        "ub": {
           "type": "integer",
           "minimum": 0,
           "maximum": 33554432
         },
-        "originalInput": {
+        "i": {
           "type": "object",
           "properties": {
-            "recordId": {
+            "r": {
               "type": "string",
               "minLength": 1
             },
-            "digest": {
+            "d": {
               "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["r", "d"],
           "additionalProperties": true
         },
-        "savedContext": {
+        "x": {
           "type": "object",
           "properties": {
-            "recordId": {
+            "r": {
               "type": "string",
               "minLength": 1
             },
-            "digest": {
+            "d": {
               "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["r", "d"],
           "additionalProperties": true
         },
-        "latestResponse": {
+        "m": {
           "type": "object",
           "properties": {
-            "recordId": {
+            "r": {
               "type": "string",
               "minLength": 1
             },
-            "digest": {
+            "d": {
               "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["r", "d"],
           "additionalProperties": true
         },
-        "terminal": {
+        "e": {
           "type": "object",
           "properties": {
-            "recordId": {
+            "r": {
               "type": "string",
               "minLength": 1
             },
-            "digest": {
+            "d": {
               "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["r", "d"],
           "additionalProperties": true
         },
-        "lastFact": {
+        "f": {
           "type": "object",
           "properties": {
-            "recordId": {
+            "r": {
               "type": "string",
               "minLength": 1
             },
-            "digest": {
+            "d": {
               "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["r", "d"],
           "additionalProperties": true
         },
-        "position": {
+        "p": {
           "type": "string",
           "enum": [
             "starting",
@@ -3489,102 +3489,87 @@
             "settled"
           ]
         },
-        "accounting": {
+        "a": {
           "type": "object",
           "properties": {
-            "committedTurns": {
+            "t": {
               "type": "integer",
               "minimum": 0
             },
-            "toolCalls": {
+            "c": {
               "type": "integer",
               "minimum": 0
             },
-            "programmaticToolCalls": {
+            "p": {
               "type": "integer",
               "minimum": 0
             },
-            "consecutiveToolFailures": {
+            "f": {
               "type": "integer",
               "minimum": 0
             },
-            "finalizationUsed": {
+            "z": {
               "type": "boolean"
             },
-            "modelRestarts": {
+            "r": {
               "type": "integer",
               "minimum": 0,
               "maximum": 2
             },
-            "modelCalls": {
+            "m": {
               "type": "integer",
               "minimum": 0
             },
-            "unobservedModelCalls": {
+            "u": {
               "type": "integer",
               "minimum": 0
             },
-            "inputTokens": {
+            "i": {
               "type": "integer",
               "minimum": 0
             },
-            "outputTokens": {
+            "o": {
               "type": "integer",
               "minimum": 0
             },
-            "lastInputTokens": {
+            "li": {
               "type": "integer",
               "minimum": 0
             },
-            "lastOutputTokens": {
+            "lo": {
               "type": "integer",
               "minimum": 0
             },
-            "costMicrousd": {
+            "d": {
               "type": "integer",
               "minimum": 0
             },
-            "accountedToolTurn": {
+            "a": {
               "type": "integer",
               "minimum": 0
             }
           },
-          "required": [
-            "committedTurns",
-            "toolCalls",
-            "programmaticToolCalls",
-            "consecutiveToolFailures",
-            "finalizationUsed",
-            "modelRestarts",
-            "modelCalls",
-            "unobservedModelCalls",
-            "inputTokens",
-            "outputTokens",
-            "lastInputTokens",
-            "lastOutputTokens",
-            "costMicrousd",
-            "accountedToolTurn"
-          ],
+          "required": ["t", "c", "p", "f", "z", "r", "m", "u", "i", "o", "li", "lo", "d", "a"],
           "additionalProperties": true
         }
       },
       "required": [
         "_tag",
-        "version",
-        "runId",
-        "submissionId",
-        "revision",
-        "recordCount",
-        "recordBytes",
-        "turn",
-        "turnBytes",
-        "terminalBytes",
-        "terminalRecords",
-        "terminalUsageBytes",
-        "originalInput",
-        "lastFact",
-        "position",
-        "accounting"
+        "v",
+        "r",
+        "s",
+        "n",
+        "c",
+        "b",
+        "t",
+        "tb",
+        "eb",
+        "ec",
+        "ub",
+        "i",
+        "f",
+        "p",
+        "a"
       ],
       "additionalProperties": true
     }
