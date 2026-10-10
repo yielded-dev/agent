@@ -265,7 +265,7 @@ it.effect("reprepares native settlement progress after a same-epoch administrati
         exported.records.flatMap(({ record }) =>
           record.payload._tag === "RunContinuation" ? [record.payload.revision] : [],
         ),
-      ).toEqual([1, 2, 3, 4]);
+      ).toEqual([1, 2, 3]);
       expect(
         exported.records.filter(({ record }) => record.payload._tag === "SubmissionSettled"),
       ).toHaveLength(1);

@@ -1481,7 +1481,6 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         return yield* capacityFailure(
           "Encoded continuation exceeds 8192 bytes including its envelope",
         );
-      continuations.push(record);
 
       const state = {
         continuation,
@@ -1502,6 +1501,23 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
           usageCharge,
         );
       yield* checkFutureShapes(state);
+
+      // Original input alone can remain a bounded preparation. The next progress batch
+      // charges it, including a start-only batch when context initialization fails.
+      // Do not cache a continuation that was never appended.
+      if (
+        previous === undefined &&
+        originalCount === 0 &&
+        ownedRecords.length === 1 &&
+        original === last &&
+        last.payload._tag === "UserInputRecorded" &&
+        last.payload.kind === "user" &&
+        last.payload.submissionId !== undefined &&
+        canonicalRecordBytes(last) <= MAX_RUN_RECOVERY_SUFFIX_BYTES
+      )
+        continue;
+
+      continuations.push(record);
       accepted.set(runId, state);
     }
 
