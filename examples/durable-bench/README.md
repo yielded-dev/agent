@@ -64,7 +64,9 @@ batches over its retained storage, matching the original seeder's disposal of ea
 runtime. These restarts count toward build time.
 
 The nearby driver times the complete build across all batches, including network and
-storage acknowledgement. Every batch records its final model-visible fingerprint;
+storage acknowledgement. Deployment and the initial readiness/abort check are setup outside
+this timer; constructors may initialize empty database schemas there, but no history is built.
+Every batch records its final model-visible fingerprint;
 every measured model request must match the independent reference transcript. Failed
 or uncertain batches are never resubmitted. Failure invalidates that Object while the
 remaining Objects continue; partial build progress and errors stay in the result JSON.
