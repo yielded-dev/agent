@@ -1986,12 +1986,19 @@ export class ThreadMaintenance extends Context.Service<
           activeAtStart: started.activeAtStart,
         });
 
-        const current = yield* Stream.runCollect(ledger.scanNonterminal);
-
-        const afterWorkThread = yield* runTransaction(
+        const { scannedGeneration, afterWorkThread } = yield* runTransaction(
           "read work discovery position",
-          async () => (await readMaintenanceState(ctx.storage)).state.lastRecoveredThreadId,
+          async () => {
+            const { state } = await readMaintenanceState(ctx.storage);
+
+            return {
+              scannedGeneration: state.dirty,
+              afterWorkThread: state.lastRecoveredThreadId,
+            };
+          },
         );
+
+        const current = yield* Stream.runCollect(ledger.scanNonterminal);
 
         let workOwners = yield* runtime
           .discoverWorkThreads({
@@ -2260,11 +2267,6 @@ export class ThreadMaintenance extends Context.Service<
           };
         }
 
-        const scannedGeneration = yield* runTransaction(
-          "observe native source generation",
-          async () => (await readMaintenanceState(ctx.storage)).state.dirty,
-        );
-
         const remaining = yield* Stream.runCollect(ledger.scanNonterminal);
         const waitingHeads = new Map<ThreadId, boolean>();
 
@@ -2324,10 +2326,14 @@ export class ThreadMaintenance extends Context.Service<
               const mutationOverlap =
                 observation.activeAtStart > 0 || started.activeAtStart > 0 || active > 0;
 
-              // An empty control scan needs no older recovery report. Certify its fresh
-              // snapshot only when no producer overlapped it or advanced the generation.
+              // Only a scan without ledger work or canonical obligations can certify a newer
+              // generation without another recovery wave. Read its generation before discovery
+              // so progress committed during the scan retains its own recovery opportunity.
               const generation =
-                remaining.length === 0 && !mutationOverlap && state.dirty === scannedGeneration
+                remaining.length === 0 &&
+                workOwners.threadIds.length === 0 &&
+                !mutationOverlap &&
+                state.dirty === scannedGeneration
                   ? scannedGeneration
                   : observation.generation;
 
@@ -2377,9 +2383,10 @@ export class ThreadMaintenance extends Context.Service<
         );
 
         yield* failpoint.hit("maintenance:checkpoint:after");
-        // Once this empty recovery wave is checkpointed, its producer overlap must not
-        // prevent a later fresh snapshot from acknowledging native quiescence.
-        if (remaining.length === 0 && recovery.pending.size === 0) delete recovery.observation;
+        // A fresh empty scan may clear earlier producer overlap, but this pass has only
+        // recovered its original generation. Retain that boundary for later canonical work.
+        if (remaining.length === 0 && recovery.pending.size === 0)
+          recovery.observation = { generation: observation.generation, activeAtStart: 0 };
         native.deferred.clear();
         native.progressed = false;
         native.needsCheckpoint = false;
