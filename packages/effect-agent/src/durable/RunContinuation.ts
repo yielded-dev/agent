@@ -1,4 +1,4 @@
-import { Context, Crypto, DateTime, Effect, Option, Schema, Semaphore, Stream } from "effect";
+import { Context, Crypto, Effect, Option, Schema, Semaphore, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
 import { AgentPersistenceCapacityError } from "../core/AgentError.ts";
@@ -122,6 +122,8 @@ const ContinuationBytes = Schema.Struct({
   turnBytes: RunContinuation.fields.turnBytes,
   terminalBytes: RunContinuation.fields.terminalBytes,
 });
+
+const encodeRecord = Schema.encodeEffect(RecordEnvelope);
 
 /** One private snapshot for every retry; callers cannot change facts while awaiting the gate. */
 const captureFacts = (batch: CanonicalBatch) =>
@@ -1423,14 +1425,11 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         deploymentId: last.deploymentId,
       };
 
-      // The validated continuation fields are JSON; only the envelope DateTime needs encoding.
-      // Key order does not change byte width. Measure without capturing a provisional record,
-      // then compare against the final Schema encoding before accepting its accounting.
-      const provisional = {
-        ...header,
-        createdAt: DateTime.formatIso(header.createdAt),
-        payload: continuation,
-      } satisfies typeof RecordEnvelope.Encoded;
+      // Measure the compact Schema encoding before solving the self-byte accounting. The final
+      // capture must agree exactly; decoded field names do not determine persisted byte width.
+      const provisional = yield* encodeRecord(
+        new RecordEnvelope({ ...header, payload: continuation }, { disableChecks: true }),
+      ).pipe(Effect.mapError((cause) => failure("Cannot encode canonical continuation", cause)));
 
       const initialCursorBytes = utf8ByteLength(JSON.stringify(provisional));
 

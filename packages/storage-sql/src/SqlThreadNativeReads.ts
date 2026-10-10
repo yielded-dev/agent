@@ -110,12 +110,15 @@ export const canonicalRecordMetadata = (
     return typeof value === "string" ? value : null;
   };
 
-  const tag = record.canonical.payload._tag;
+  const payload = record.canonical.payload;
+  const tag = payload._tag;
 
   return Object.freeze({
     columns: Object.freeze({
       record_tag: tag,
-      run_id: canonicalIdentifier(text("runId")),
+      run_id: canonicalIdentifier(
+        payload._tag === "RunContinuation" ? payload.runId : text("runId"),
+      ),
       tool_call_id: canonicalIdentifier(text("toolCallId")),
       input_kind: text("kind"),
       source_submission_id: canonicalIdentifier(
@@ -128,7 +131,9 @@ export const canonicalRecordMetadata = (
           ? text("reservationId")
           : (text("admission", "messageId") ?? text("messageId")),
       ),
-      submission_id: canonicalIdentifier(text("submissionId")),
+      submission_id: canonicalIdentifier(
+        payload._tag === "RunContinuation" ? payload.submissionId : text("submissionId"),
+      ),
       application_input:
         tag === "UserInputRecorded" &&
         text("messageAdmission", "_tag") !== "WorkerCompletion" &&
