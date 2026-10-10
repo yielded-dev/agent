@@ -190,21 +190,21 @@ export const runCloudflareEvaluation = Effect.fn("ContextContinuity.runCloudflar
           )?.record.payload;
 
           if (settled?._tag === "SubmissionSettled") {
-            const completed = snapshot.records.find(
-              ({ record }) =>
-                record.payload._tag === "RunCompleted" && record.payload.runId === runId,
-            )?.record.payload;
+            const execution = snapshot.activeBeforeSettlement;
 
             if (
               settled.outcome !== "completed" ||
-              completed?._tag !== "RunCompleted" ||
-              completed.finishReason !== undefined
+              settled.runId !== runId ||
+              settled.finishReason !== undefined ||
+              execution === null ||
+              execution.progress.runId !== runId ||
+              snapshot.runContinuation.status !== "missing"
             )
               return yield* EvaluationError.make({
                 stage: "runtime",
                 message: `Cloudflare phase ${phase.index} failed`,
               });
-            const output = yield* Schema.decodeUnknownEffect(ProjectStatus)(completed.output);
+            const output = yield* Schema.decodeUnknownEffect(ProjectStatus)(settled.result);
 
             const first = snapshot.audits.find(
               (a) => a.kind === "request" && a.phase === phase.index,
@@ -212,7 +212,7 @@ export const runCloudflareEvaluation = Effect.fn("ContextContinuity.runCloudflar
 
             const checks = yield* gradePhase(
               phase,
-              { runId, notes: snapshot.notes, output },
+              { runId, notes: snapshot.notes, output, execution },
               snapshot.records,
               report.windows,
               first !== undefined && !first.json.includes(phase.receipt?.code ?? "missing-receipt"),

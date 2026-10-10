@@ -1,6 +1,7 @@
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
 import { CanonicalRecordEnvelope, DefinitionDigestInput } from "@yielded/agent/records";
+import { ExecutionCheckpoint } from "@yielded/agent/thread-store";
 import { Schema } from "effect";
 
 import {
@@ -34,6 +35,7 @@ export const CloudflareSnapshot = Schema.Struct({
   compactions: Schema.Array(CompactionEvidence),
   restarts: Schema.Array(RestartEvidence),
   runContinuation: RunContinuationEvidence,
+  activeBeforeSettlement: Schema.NullOr(ExecutionCheckpoint),
 });
 
 export const cloudflareDefinition = Agent.make("context-continuity-cloudflare", {

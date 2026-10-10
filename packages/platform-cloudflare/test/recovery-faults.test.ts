@@ -28,6 +28,7 @@ import {
   RecordEnvelope,
   RecordId,
 } from "@yielded/agent/records";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
@@ -136,6 +137,18 @@ const localRun =
               Effect.map(ThreadStore, (store) =>
                 ThreadStore.of({
                   ...store,
+                  readExecution: (request) =>
+                    store
+                      .readExecution(request)
+                      .pipe(
+                        Effect.catchCause((cause) =>
+                          Effect.failCause(
+                            options.readFailureDefect === undefined
+                              ? cause
+                              : Cause.combine(cause, Cause.die(options.readFailureDefect)),
+                          ),
+                        ),
+                      ),
                   read: (request) =>
                     Stream.suspend(() => {
                       reads.push(request.threadId);
@@ -780,23 +793,41 @@ describe("recovery faults independent of execution history", () => {
         yield* TestClock.adjust(5_000);
         const second = yield* run(submit(thread, "second"));
 
-        const records = yield* run(
-          ThreadStore.use((store) =>
-            Stream.runCollect(
-              store.read(ThreadRead.make({ threadId: decodeThreadId(thread), limit: 100 })),
+        const execution = Option.getOrThrow(
+          yield* run(
+            ThreadStore.use((store) =>
+              store.readExecution({
+                threadId: decodeThreadId(thread),
+                runId: runIdForSubmission(first.submissionId),
+              }),
             ),
           ),
         );
 
-        const continuation = records.findLast(
-          ({ record }) =>
-            record.payload._tag === "RunContinuation" &&
-            record.payload.submissionId === first.submissionId,
-        );
+        expect(execution.progress).toMatchObject({
+          submissionId: first.submissionId,
+          position: "awaiting-model",
+        });
 
-        if (continuation === undefined) throw new Error("Expected unfinished Run continuation");
-        // Fault the selected Run's canonical progress, independently of prior settled Runs.
-        const original = yield* corruptHistory(owner, thread, continuation.sequence);
+        // Fault only this unfinished Run's authoritative state; prior history stays immutable.
+        const original = yield* storage(owner, (state) => {
+          const row = state.storage.sql
+            .exec<{ checkpoint_json: string }>(
+              "SELECT checkpoint_json FROM effect_agent_executions WHERE thread_id = ? AND run_id = ?",
+              thread,
+              JSON.stringify(execution.progress.runId),
+            )
+            .one();
+
+          state.storage.sql.exec(
+            "UPDATE effect_agent_executions SET checkpoint_json = ? WHERE thread_id = ? AND run_id = ?",
+            JSON.stringify({ private_fixture_payload: "never expose this value" }),
+            thread,
+            JSON.stringify(execution.progress.runId),
+          );
+
+          return Effect.runPromise(invalidate(state.storage).pipe(Effect.as(row.checkpoint_json)));
+        });
 
         // Interrupt after fault commit but before notification, then reconstruct maintenance.
         yield* localRun(owner, [], {
@@ -816,7 +847,7 @@ describe("recovery faults independent of execution history", () => {
           ["created", thread, first.submissionId],
           ["created", thread, second.submissionId],
         ]);
-        // Metadata discovery succeeds; the selected admission's continuation fails recovery.
+        // Metadata discovery succeeds; the selected admission's checkpoint fails recovery.
         expect(events[0]?.failure).toMatchObject({ phase: "recovery", reason: "failure" });
         expect(
           JSON.stringify(events, (_key, value) =>
@@ -866,10 +897,10 @@ describe("recovery faults independent of execution history", () => {
 
         yield* storage(owner, (state) => {
           state.storage.sql.exec(
-            "UPDATE effect_agent_canonical_records SET record_json = ? WHERE thread_id = ? AND sequence = ?",
+            "UPDATE effect_agent_executions SET checkpoint_json = ? WHERE thread_id = ? AND run_id = ?",
             original,
             thread,
-            continuation.sequence,
+            JSON.stringify(execution.progress.runId),
           );
 
           return Effect.runPromise(invalidate(state.storage));

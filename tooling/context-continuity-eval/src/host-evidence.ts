@@ -1,11 +1,16 @@
-import { type ThreadId } from "@yielded/agent/identifiers";
+import { type RunId, type ThreadId } from "@yielded/agent/identifiers";
 import * as MemoryNamespace from "@yielded/agent/memory-namespace";
 import type { MemoryKey } from "@yielded/agent/memory-store";
 import { MemoryReader } from "@yielded/agent/memory-store";
 import type { CanonicalRecordEnvelope } from "@yielded/agent/records";
 import { CanonicalSequence } from "@yielded/agent/records";
-import { ThreadRead, ThreadStore, ThreadTailRequest } from "@yielded/agent/thread-store";
-import { Effect, Schema, Stream } from "effect";
+import {
+  ThreadRead,
+  ThreadStore,
+  ThreadTailRequest,
+  type ExecutionCheckpoint,
+} from "@yielded/agent/thread-store";
+import { Effect, Option, Schema, Stream } from "effect";
 
 import { EvaluationError, type RunContinuationEvidence } from "./contracts.ts";
 
@@ -62,21 +67,21 @@ export const readNotes = Effect.fn("ContextContinuity.readNotes")(function* (key
   return { revision: document?.source.revision ?? null, text: document?.content.text ?? "" };
 });
 
-/** Inspect the oracle already captured for verification, outside any measured operation. */
-export const continuationEvidence = (
-  records: ReadonlyArray<CanonicalRecordEnvelope>,
-): RunContinuationEvidence => {
-  const entry = records.findLast(({ record }) => record.payload._tag === "RunContinuation");
-  const cursor = entry?.record.payload;
+/** Read current progress directly; completed Runs normally have no execution checkpoint. */
+export const continuationEvidence = Effect.fn("ContextContinuity.continuationEvidence")(function* (
+  threadId: ThreadId,
+  runId: RunId | undefined,
+) {
+  if (runId === undefined) return { status: "missing" } satisfies RunContinuationEvidence;
+  const store = yield* ThreadStore;
+  const execution = yield* store.readExecution({ threadId, runId });
 
-  return entry !== undefined && cursor?._tag === "RunContinuation"
-    ? {
-        status: "present",
-        sequence: entry.sequence,
-        runId: cursor.runId,
-        revision: cursor.revision,
-        recordBytes: cursor.recordBytes,
-        turnBytes: cursor.turnBytes,
-      }
-    : { status: "missing" };
-};
+  return Option.isSome(execution)
+    ? ({ status: "present", checkpoint: execution.value } satisfies RunContinuationEvidence)
+    : ({ status: "missing" } satisfies RunContinuationEvidence);
+});
+
+export const originalExecutionFacts = (execution: ExecutionCheckpoint) =>
+  execution.operational.filter(
+    ({ payload }) => payload._tag === "RunStarted" || payload._tag === "RunContextRecorded",
+  );

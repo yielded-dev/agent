@@ -398,10 +398,22 @@ describe("live Thread projection and alarm backfill", () => {
             ),
           );
 
-          const completed = records.find(({ record }) => record.payload._tag === "RunCompleted")
-            ?.record.payload;
+          const settled = records.find(
+            ({ record }) =>
+              record.payload._tag === "SubmissionSettled" &&
+              record.payload.submissionId === state.settlement.submissionId,
+          )?.record.payload;
 
-          if (completed?._tag === "RunCompleted") published.push(completed.output);
+          if (
+            settled?._tag !== "SubmissionSettled" ||
+            settled.outcome !== "completed" ||
+            settled.result === undefined
+          )
+            return yield* DurableAlarmError.make({
+              operation: "fixture host control",
+              message: "Settled reply has no completed outcome",
+            });
+          published.push(settled.result);
         }).pipe(
           Effect.mapError((cause) =>
             DurableAlarmError.make({
