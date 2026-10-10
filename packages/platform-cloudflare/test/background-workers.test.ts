@@ -649,6 +649,19 @@ it("drains private worker progress through rebuilt runtime maintenance into an i
       ).receipt !== null,
   );
   await drainAlarmsUntil(started.worker.threadId, allSettled(started.worker.threadId));
+  // The parent must finish copying the initial worker acknowledgment before this eviction.
+  // Child settlement alone can still leave a foreign read in flight and trigger recovery backoff.
+  const acknowledgement = `worker-effects-resolved:${started.delivery.message.messageId}`;
+
+  await drainAlarmsUntil(source, async () =>
+    (await readCanonical(source)).some(
+      ({ record }) =>
+        record.recordId === acknowledgement &&
+        record.payload._tag === "WorkerInputCompleted" &&
+        record.payload.effectsResolved === true &&
+        record.payload.workerThreadId === started.worker.threadId,
+    ),
+  );
   customRuntimeThreads.add(started.worker.threadId);
   privateProgressRoutes.set(started.worker.threadId, decodeThreadId(source));
   droppedMessageWakes.add(started.worker.threadId);
