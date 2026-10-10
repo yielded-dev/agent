@@ -463,6 +463,65 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                     },
                   ],
                 }));
+
+                const profileAfter = options.profileAfter;
+
+                const capture =
+                  profileAfter === undefined
+                    ? undefined
+                    : yield* prepareProfile({
+                        worker: runName,
+                        endpoint: url("/profile-target", cohort),
+                        token: deploy.token,
+                        query: { ...cohort, expectedBuild },
+                        output,
+                        sourceMap: join(output, label, "target.mjs.map"),
+                      });
+
+                const reached = yield* Deferred.make<void>();
+                let profileStarted = false;
+
+                const profiling =
+                  capture && profileAfter !== undefined
+                    ? yield* Deferred.await(reached).pipe(
+                        Effect.flatMap(() =>
+                          Effect.forEach(
+                            options.profiles,
+                            (type) =>
+                              capture(type, 10_000).pipe(
+                                Effect.matchCauseEffect({
+                                  onFailure: (cause) =>
+                                    update((value) => ({
+                                      ...value,
+                                      failures: [
+                                        ...value.failures,
+                                        `${cohort.target}/${cohort.history} history ${type} profile: ${message(cause)}`,
+                                      ],
+                                    })),
+                                  onSuccess: (profile) =>
+                                    update((value) => ({
+                                      ...value,
+                                      profiles: [
+                                        ...value.profiles,
+                                        {
+                                          ...profile,
+                                          afterHistoryTurns: profileAfter,
+                                          completedAtEnd:
+                                            value.histories.find(
+                                              (row) => objectKey(row) === objectKey(cohort),
+                                            )?.completed ?? 0,
+                                        },
+                                      ],
+                                    })),
+                                }),
+                              ),
+                            { concurrency: 2, discard: true },
+                          ),
+                        ),
+                        Effect.forkScoped,
+                      )
+                    : undefined;
+
                 yield* requestEvents(deploy.driver + "/build-history", deploy.token, BuildEvent, {
                   query: { ...cohort, expectedBuild },
                   targetUrl: endpoint,
@@ -511,7 +570,15 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                       yield* Console.error(
                         `${cohort.target}/${cohort.history}/${cohort.object.split("-").at(-1)} built ${batch.to}/${cohort.history}`,
                       );
+                      if (profiling && batch.to === options.profileAfter) {
+                        profileStarted = true;
+                        yield* Deferred.succeed(reached, undefined);
+                      }
                     }),
+                  ),
+                  // Preserve an in-flight diagnostic even if the following build batch fails.
+                  Effect.onExit(() =>
+                    profiling && profileStarted ? Fiber.join(profiling) : Effect.void,
                   ),
                 );
                 if (
@@ -560,6 +627,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                     "Deployed seed fingerprint or complete table counts differ from the local fixture.",
                 });
             }).pipe(
+              Effect.scoped,
+              (batch) => (options.profileAfter === undefined ? batch : withProfileBatch(batch)),
               Effect.catchCause((cause) =>
                 Effect.gen(function* () {
                   failedObjects.add(objectKey(cohort));
@@ -594,9 +663,9 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         shuffle(cohorts.filter((cohort) => !failedObjects.has(objectKey(cohort)))),
         (cohort) => {
           const profiled =
+            options.profileAfter === undefined &&
             options.profiles.length > 0 &&
-            cohort.object.endsWith("-o0") &&
-            cohort.target !== "tardie";
+            cohort.object.endsWith("-o0");
 
           return Effect.gen(function* () {
             const capture = profiled

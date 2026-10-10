@@ -123,12 +123,12 @@ export default {
       const mutating = ["/prime", "/seed", "/import", "/cold", "/submit", "/await", "/result", "/run"].includes(url.pathname);
 
       if (url.pathname === "/profile-target") {
-        if (query.target === "tardie") throw new Error("Profiling supports Yielded and pi");
-        const namespace = query.target === "yielded" ? env.YIELDED : env.PI;
+        const namespace = query.target === "yielded" ? env.YIELDED : query.target === "pi" ? env.PI : env.THREADS;
+        const name = query.target === "tardie" ? cloudflareThreadName(coordinate(query.object)) : query.object;
 
         return Response.json(Schema.decodeUnknownSync(ProfileTarget)({
-          actorId: namespace.idFromName(query.object).toString(),
-          binding: query.target === "yielded" ? "YIELDED" : "PI",
+          actorId: namespace.idFromName(name).toString(),
+          binding: query.target === "yielded" ? "YIELDED" : query.target === "pi" ? "PI" : "THREADS",
           versionId: env.VERSION?.id,
           build: env.BUILD,
         }));
@@ -187,10 +187,9 @@ export default {
         const before = Schema.decodeUnknownSync(Identity)(await response.json());
         const directoryBefore = actor === undefined ? undefined : await actor.identity();
 
+        const threadAborted = await expectedAbort(() => stub.fetch(request));
         const directoryAborted =
           actor === undefined ? undefined : await expectedAbort(() => actor.abortCold());
-
-        const threadAborted = await expectedAbort(() => stub.fetch(request));
 
         // The driver next attaches its observer, then times submission on this new incarnation.
         return Response.json(

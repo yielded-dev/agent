@@ -235,6 +235,7 @@ export class ActorDO extends actorWorker.ActorObject {
     return this.nativeEntry ?? this.meter.identity();
   }
   async abortCold(): Promise<void> {
+    await super.dispose();
     await this.ctx.storage.sync();
     this.ctx.abort(COLD_ABORT);
   }
@@ -305,6 +306,10 @@ export class ThreadDO extends actorWorker.ThreadObject {
         this.importedHere = true;
       },
       run: (input, _query?: Query) => this.turn(input),
+      close: async () => {
+        this.reference = undefined;
+        await super.dispose();
+      },
     });
   }
 }

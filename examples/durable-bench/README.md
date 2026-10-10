@@ -56,12 +56,15 @@ vp run deployed -- --build-history
 ```
 
 Defaults are 50, 250, 1,000 and 3,500 historical turns, three independent Objects per
-target and size, zero provider TTFT, one cold turn and nine warm turns. `--sizes`,
+target and size, concurrency one, zero provider TTFT, one cold turn and nine warm turns. `--sizes`,
 `--objects`, `--repeats`, `--ttft` and `--concurrency` remain configurable. Each Object
 starts empty and runs real historical turns inside its owning runtime in batches of 50. The history provider always has zero delays. Sizes use separate Objects, so measured
 turns never enter another size's history. The driver restarts each Object between
 batches over its retained storage, matching the original seeder's disposal of each
-runtime. These restarts count toward build time.
+runtime. The adapters close pi's Harness and tardie's Thread and Actor runtimes before
+aborting; pi's extension registry belongs to each Harness so isolate globals cannot
+retain an old runtime. These restarts count toward build time. Serial builds avoid
+overlapping histories in Cloudflare's shared isolate memory budget.
 
 The nearby driver times the complete build across all batches, including network and
 storage acknowledgement. Deployment and the initial readiness/abort check are setup outside
@@ -86,17 +89,27 @@ There is no extra warmup: warm pools the next nine turns from each complete Obje
 each with eight tool calls. Build and cold values are medians across Objects. Storage
 is the median SQLite size after the last measured turn in decimal MB, including tardie's
 Actor directory. Tables include Yielded ÷ pi and tardie ÷ pi for all four cards.
-The mode excludes text observation, profiling and A/B redeployment; use the original
-mode for those workflows. Deployed absolute times include network hops and cannot be
+The mode excludes text observation and A/B redeployment; use the original mode for those
+workflows. Deployed absolute times include network hops and cannot be
 compared with Miniflare timings; compare ratios within a matched deployment.
 
 `--profile cpu|memory` accepts repeats or a comma-separated list. It captures the first
-Yielded Object and, when selected, the first pi Object in every history/TTFT cell and build
-pass. Captures start after warmup, alongside the warm turns, for an estimated batch duration
+Object of each selected target in every history/TTFT cell and build pass (tardie targets
+its Thread Object). Captures start after warmup, alongside the warm turns, for an estimated batch duration
 (5–50 seconds). Cloudflare profiles the running isolate containing that Object, which may
 also contain other Objects. Only already-running isolates can be captured; the bench supplies
 traffic. Short batches may finish before capture does. Memory profiles contain allocations
 made during the window, not retained memory or a heap snapshot.
+
+For history-build diagnostics, add `--profile-after <turns>` to start a ten-second capture
+after a verified checkpoint while subsequent batches continue. This requires one target,
+size, TTFT, Object and concurrency one. The checkpoint must be a multiple of 50 before
+the final history turn. JSON records the trigger and the latest acknowledged checkpoint
+at capture completion; exclude this diagnostic run from timing comparisons.
+
+```sh
+vp run deployed -- --build-history --targets pi --sizes 3500 --objects 1 --profile memory --profile-after 1950
+```
 
 Profile requests, downloads and file writes are outside the turn timers, but profiling adds
 runtime overhead and can extend the run. Use unprofiled runs for timing comparisons.

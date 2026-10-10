@@ -22,7 +22,7 @@ export type Query = typeof Query.Type;
 
 export const ProfileTarget = Schema.Struct({
   actorId: Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/)),
-  binding: Schema.Literals(["YIELDED", "PI"]),
+  binding: Schema.Literals(["YIELDED", "PI", "THREADS"]),
   versionId: Schema.NonEmptyString,
   build: Schema.NonEmptyString,
 });

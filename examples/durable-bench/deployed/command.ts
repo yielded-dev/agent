@@ -44,8 +44,10 @@ export const command = Command.make(
       Flag.withDescription("Warm turns per Object (quick: 4; rigorous: 6; build-history: 9)"),
     ),
     concurrency: positive("concurrency").pipe(
-      Flag.withDefault(6),
-      Flag.withDescription("Concurrent Objects (default: 6); turns stay sequential within each"),
+      Flag.optional,
+      Flag.withDescription(
+        "Concurrent Objects (quick: 6; build-history: 1); turns stay sequential",
+      ),
     ),
     cold: Flag.Boolean("cold").pipe(
       Flag.withDefault(false),
@@ -62,7 +64,13 @@ export const command = Command.make(
       ),
       Flag.atLeast(0),
       Flag.withDescription(
-        "Capture cpu or memory profiles of one Yielded/pi Object per cell; repeat or comma-separate",
+        "Capture cpu or memory profiles of one Object per cell; repeat or comma-separate",
+      ),
+    ),
+    profileAfter: positive("profile-after").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        "Profile 10 seconds after this real-history checkpoint (multiple of 50)",
       ),
     ),
     keep: Flag.Boolean("keep").pipe(
@@ -114,15 +122,33 @@ export const command = Command.make(
       return yield* new BenchError({ message: "Rigorous A/B requires the yielded target." });
 
     const profiles = [...new Set(flags.profile.flat())];
+    const profileAfter = Option.getOrUndefined(flags.profileAfter);
+    const objects = Option.getOrElse(flags.objects, () => (flags.buildHistory ? 3 : 7));
+    const concurrency = Option.getOrElse(flags.concurrency, () => (flags.buildHistory ? 1 : 6));
 
-    if (flags.buildHistory && (flags.rigorous || flags.textStreaming || profiles.length > 0))
+    if (flags.buildHistory && (flags.rigorous || flags.textStreaming))
       return yield* new BenchError({
-        message:
-          "--build-history measures completion without observers, profiling or A/B redeploys.",
+        message: "--build-history measures completion without observers or A/B redeploys.",
       });
 
-    if (profiles.length > 0 && !targets.some((target) => target === "yielded" || target === "pi"))
-      return yield* new BenchError({ message: "--profile requires the yielded or pi target." });
+    if (
+      profileAfter !== undefined &&
+      (!flags.buildHistory ||
+        profiles.length === 0 ||
+        profileAfter % 50 !== 0 ||
+        sizes.length !== 1 ||
+        profileAfter >= sizes[0] ||
+        targets.length !== 1 ||
+        ttft.length !== 1 ||
+        objects !== 1 ||
+        concurrency !== 1)
+    )
+      return yield* new BenchError({
+        message:
+          "--profile-after requires --build-history, --profile, one target/size/TTFT/Object, concurrency 1, and a checkpoint divisible by 50 before the final turn.",
+      });
+    if (flags.buildHistory && profiles.length > 0 && profileAfter === undefined)
+      return yield* new BenchError({ message: "History profiling requires --profile-after." });
 
     return yield* run({
       buildHistory: flags.buildHistory,
@@ -130,14 +156,15 @@ export const command = Command.make(
       sizes: [...new Set(sizes)],
       ttft: [...new Set(ttft)],
       textStreaming: flags.textStreaming,
-      objects: Option.getOrElse(flags.objects, () => (flags.buildHistory ? 3 : 7)),
+      objects,
       repeats: Option.getOrElse(flags.repeats, () =>
         flags.buildHistory ? 9 : flags.rigorous ? 6 : 4,
       ),
-      concurrency: flags.concurrency,
+      concurrency,
       cold: flags.cold || flags.rigorous || flags.buildHistory,
       cpu: flags.cpu || flags.rigorous,
       profiles,
+      ...(profileAfter === undefined ? {} : { profileAfter }),
       keep: flags.keep,
       rigorous: flags.rigorous,
       ...(baseline === undefined ? {} : { baseline }),

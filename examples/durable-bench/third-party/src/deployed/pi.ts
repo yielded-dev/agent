@@ -114,16 +114,6 @@ const lookup = defineTool({
   execute: async ({ n }) => ({ content: [{ type: "text", text: payload(n) }] }),
 });
 
-const registry = createRegistry();
-
-registry.install(
-  defineExtension({
-    name: "bench",
-    tools: [lookup],
-    sections: [section("preamble", () => SYSTEM, { tag: false })],
-  }),
-);
-
 export class PiDO extends DurableObject<Env> {
   private opened?: { harness: Harness; root: Conversation };
   private readonly host: Host;
@@ -136,6 +126,16 @@ export class PiDO extends DurableObject<Env> {
   private async open() {
     if (this.opened) return this.opened;
     const models = modelCollection(this.env, this.host.meter);
+    // Registry subscriptions retain their Harness; an Object abort does not clear isolate globals.
+    const registry = createRegistry();
+
+    registry.install(
+      defineExtension({
+        name: "bench",
+        tools: [lookup],
+        sections: [section("preamble", () => SYSTEM, { tag: false })],
+      }),
+    );
 
     const harness = await Harness.open(
       await openDurableObjectSqliteStorage(this.ctx.storage),
@@ -227,6 +227,12 @@ export class PiDO extends DurableObject<Env> {
         importRows(this.ctx.storage, fixture.thread);
       },
       run: (input, _query?: Query) => this.turn(input),
+      close: async () => {
+        const opened = this.opened;
+
+        this.opened = undefined;
+        if (opened) await opened.harness.close(context);
+      },
     });
   }
 }

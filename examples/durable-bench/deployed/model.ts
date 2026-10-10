@@ -12,6 +12,8 @@ export const Profile = Schema.Struct({
   ttftMs: Query.fields.ttftMs,
   build: Query.fields.expectedBuild,
   durationMs: Schema.Int,
+  afterHistoryTurns: Schema.optionalKey(Schema.Natural),
+  completedAtEnd: Schema.optionalKey(Schema.Natural),
   file: Schema.String,
   sourceMap: Schema.String,
 });
@@ -30,6 +32,7 @@ export interface Options {
   readonly cold: boolean;
   readonly cpu: boolean;
   readonly profiles: readonly (typeof ProfileType.Type)[];
+  readonly profileAfter?: number;
   readonly keep: boolean;
   readonly rigorous: boolean;
   readonly baseline?: string;

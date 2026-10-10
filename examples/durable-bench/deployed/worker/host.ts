@@ -44,6 +44,7 @@ export class Host {
     handlers: {
       import: (fixture: BulkFixture, query: Query) => Promise<void>;
       run?: (input: { id: string; text: string }, query: Query) => Promise<void>;
+      close?: () => Promise<void>;
       directoryUsed?: boolean;
     },
   ): Promise<Response> {
@@ -53,6 +54,7 @@ export class Host {
     if (query.target !== this.target) throw new Error("Target mismatch");
     if (url.pathname === "/identity") return Response.json(this.meter.identity());
     if (url.pathname === "/cold") {
+      await handlers.close?.();
       await this.ctx.storage.sync();
       this.ctx.abort(COLD_ABORT);
     }

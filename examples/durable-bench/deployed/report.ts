@@ -140,6 +140,12 @@ const historyTable = (result: Result): string => {
 
   const lines = [
     ...(result.complete ? [] : ["INCOMPLETE RUN — failed Objects are retained below.", ""]),
+    ...(result.profiles.length
+      ? [
+          "Profiled diagnostic: timing includes profiling overhead; exclude it from comparisons.",
+          "",
+        ]
+      : []),
     "Independent Objects per size; real one-tool, one-tool, zero-tool turns in batches of 50 at zero provider TTFT, with runtime restarts between batches.",
     "Build: end-to-end driver elapsed. Cold: constructor + clock-probe roundtrip + native open and first turn; isolate startup and priming transport are excluded.",
     "Warm: pooled median of the next warm turns, with no extra warmup. Storage: median after the last measured turn, including Tardie's Actor directory.",
