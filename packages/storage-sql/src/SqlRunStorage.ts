@@ -619,42 +619,33 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
                   message: "Run storage session is closed",
                 });
 
-              for (let retries = 0; ; retries++) {
-                const request = FencedAppendRequest.make({
-                  threadId: claimedThreadId,
-                  producerEpoch: owned.epoch,
-                  expectedTailSequence: writerTail.sequence,
-                  expectedTailDigest: writerTail.digest,
-                  batch,
-                });
+              const request = FencedAppendRequest.make({
+                threadId: claimedThreadId,
+                producerEpoch: owned.epoch,
+                expectedTailSequence: writerTail.sequence,
+                expectedTailDigest: writerTail.digest,
+                batch,
+              });
 
-                const result = yield* restore(appendOwned(request)).pipe(Effect.exit);
+              const result = yield* restore(appendOwned(request)).pipe(Effect.exit);
 
-                if (Exit.isFailure(result)) {
-                  if (!acceptTailConflict(result.cause)) {
-                    close(owned);
+              if (Exit.isFailure(result)) {
+                // Refresh a tail conflict, but let the progress writer reprepare its batch.
+                if (!acceptTailConflict(result.cause)) close(owned);
 
-                    return yield* result;
-                  }
-                  if (
-                    retries >= 8 ||
-                    batch.records.some(({ payload }) => payload._tag === "RunContinuation")
-                  )
-                    return yield* result;
-                  continue;
-                }
-                if (!result.value.replayed) {
-                  authority.thread = Object.freeze({
-                    ...authority.thread,
-                    tail_sequence: result.value.lastSequence,
-                    tail_digest: result.value.tailDigest,
-                  });
-                  owned.digest = result.value.tailDigest;
-                }
-                writerTail = { sequence: authority.thread.tail_sequence, digest: owned.digest };
-
-                return result.value;
+                return yield* result;
               }
+              if (!result.value.replayed) {
+                authority.thread = Object.freeze({
+                  ...authority.thread,
+                  tail_sequence: result.value.lastSequence,
+                  tail_digest: result.value.tailDigest,
+                });
+                owned.digest = result.value.tailDigest;
+              }
+              writerTail = { sequence: authority.thread.tail_sequence, digest: owned.digest };
+
+              return result.value;
             }),
           ),
         ),

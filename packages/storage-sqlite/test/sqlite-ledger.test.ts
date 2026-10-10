@@ -20,6 +20,7 @@ import {
   storageConfigLayer,
 } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
 import { digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { MessageAdmission } from "@yielded/agent/messaging";
 import {
   CanonicalBatch,
   AbortRequested,
@@ -35,6 +36,7 @@ import {
   SubmissionSettled,
   SubmissionSettledRecord,
   UserInputRecorded,
+  MAX_RUN_RECOVERY_SUFFIX_BYTES,
   type PersistedJson,
   type SettlementOutcome,
 } from "@yielded/agent/records";
@@ -42,9 +44,10 @@ import {
   CurrentRunSettlement,
   CurrentRunWriter,
   makeProgressWriter,
+  canonicalRecordBytes,
 } from "@yielded/agent/run-continuation";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
-import { makeRunWriter, RunStorage } from "@yielded/agent/run-storage";
+import { layer as runStorageLayer, makeRunWriter, RunStorage } from "@yielded/agent/run-storage";
 import { SettlementPublication, SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
   AdmissionPolicyError,
@@ -99,6 +102,7 @@ import { readTestThread } from "@yielded/agent/testing/thread-store-conformance"
 import {
   ThreadMaterialization,
   ThreadExportRequest,
+  ThreadVerificationRequest,
   ThreadStore,
   FencedAppendRequest,
   FenceRejected,
@@ -136,6 +140,221 @@ const isFenceRejected = Schema.is(FenceRejected);
 const isLedgerError = Schema.is(LedgerError);
 const isSqliteStorageCompatibilityError = Schema.is(SqliteStorageCompatibilityError);
 const isSqliteStorageFailpointError = Schema.is(SqliteStorageFailpointError);
+
+// Regression in d1cdeea09: input-only tail retries could strand an accepted Run.
+// Both writers and either winning order must reprepare against the committed facts.
+for (const [mode, loser] of [
+  ["generic", "input"],
+  ["native", "input"],
+  ["generic", "abort"],
+] as const) {
+  it.effect(
+    `reprepares bounded original input after a same-epoch append (${mode}, ${loser} loses)`,
+    () =>
+      withTemporaryDatabase((filename) => {
+        const dependencies = Layer.mergeAll(
+          SqliteClient.layer({ filename, disableWAL: true }),
+          storageConfigLayer({ filename }),
+          SqliteStorageFailpoint.layer,
+          NodeCrypto.layer,
+        );
+
+        const services =
+          mode === "native"
+            ? exclusiveRunStorageLayer.pipe(
+                Layer.provideMerge(exclusiveHostClientLayer.pipe(Layer.provideMerge(dependencies))),
+              )
+            : runStorageLayer().pipe(
+                Layer.provideMerge(
+                  Layer.mergeAll(threadStoreLayer, submissionLedgerLayer).pipe(
+                    Layer.provideMerge(dependencies),
+                  ),
+                ),
+              );
+
+        return Effect.gen(function* () {
+          const ledger = yield* SubmissionLedger;
+          const store = yield* ThreadStore;
+          const storage = yield* RunStorage;
+          const lane = `input-tail-reprepare-${mode}`;
+
+          const sender = {
+            threadId: thread("message-source"),
+            agentId: id(AdmissionRequest.fields.agentId, "s".repeat(1024 * 1024 - 8 * 1024)),
+          };
+
+          const messageAdmission = MessageAdmission.make({
+            schemaVersion: 1,
+            message: { ownerThreadId: sender.threadId, messageId: id(IdempotencyKey, "message") },
+            peerName: "peer",
+            sender,
+            returnAddress: sender,
+          });
+
+          const admitted = yield* ledger.admit(
+            AdmissionRequest.make({
+              ...(yield* admission(lane, "input-owner", "Kyoto")),
+              messageAdmission,
+            }),
+          );
+
+          yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
+
+          const claimed = yield* storage.claim(
+            ClaimRequest.make({ threadId: thread(lane), producerId: TEST_PRODUCER }),
+          );
+
+          if (Option.isNone(claimed)) return yield* Effect.die("Run was not claimed");
+          const session = claimed.value;
+          const runId = runIdForSubmission(admitted.submissionId);
+
+          const record = (
+            recordId: CanonicalRecord["recordId"],
+            payload: CanonicalRecord["payload"],
+          ) =>
+            CanonicalRecord.make({
+              recordId,
+              family: "thread",
+              schemaVersion: 1,
+              createdAt: at(1),
+              deploymentId: TEST_DEPLOYMENT,
+              payload,
+            });
+
+          const input = record(
+            submissionInputRecordId(admitted.submissionId),
+            UserInputRecorded.make({
+              submissionId: admitted.submissionId,
+              runId,
+              kind: "user",
+              input: "Kyoto",
+              messageAdmission,
+            }),
+          );
+
+          const abortCommand = AbortCommand.make({
+            submissionId: admitted.submissionId,
+            author: "operator",
+            reason: "a".repeat(32 * 1024),
+          });
+
+          const abort = record(
+            submissionAbortRecordId(admitted.submissionId),
+            AbortRequested.make(abortCommand),
+          );
+
+          expect(canonicalRecordBytes(input)).toBeLessThan(MAX_RUN_RECOVERY_SUFFIX_BYTES);
+          expect(canonicalRecordBytes(input) + canonicalRecordBytes(abort)).toBeGreaterThan(
+            MAX_RUN_RECOVERY_SUFFIX_BYTES,
+          );
+
+          const progress = yield* makeProgressWriter(thread(lane), TEST_DEPLOYMENT);
+          const repair = yield* makeProgressWriter(thread(lane), TEST_DEPLOYMENT);
+          const administrative = yield* makeRunWriter(thread(lane), session.producerEpoch);
+
+          const commitInput = (writer: CurrentRunWriter["Service"]) =>
+            progress
+              .commit(
+                CanonicalBatch.make({
+                  batchId: submissionInputBatchId(admitted.submissionId),
+                  producerId: TEST_PRODUCER,
+                  records: [input],
+                }),
+              )
+              .pipe(
+                Effect.provideService(CurrentRunWriter, writer),
+                Effect.tap((appended) =>
+                  session.markInputApplied({
+                    recordId: input.recordId,
+                    sequence: appended.firstSequence,
+                  }),
+                ),
+              );
+
+          const commitAbort = (writer: CurrentRunWriter["Service"]) =>
+            ledger.requestAbort(abortCommand).pipe(
+              Effect.andThen(
+                repair.commit(
+                  CanonicalBatch.make({
+                    batchId: submissionAbortBatchId(admitted.submissionId),
+                    producerId: OTHER_PRODUCER,
+                    records: [abort],
+                  }),
+                ),
+              ),
+              Effect.provideService(CurrentRunWriter, writer),
+            );
+
+          const losingWriter = loser === "input" ? session : administrative;
+          let injected = false;
+
+          const racingWriter: CurrentRunWriter["Service"] = {
+            threadId: losingWriter.threadId,
+            tail: losingWriter.tail,
+            append: (prepared) =>
+              Effect.gen(function* () {
+                if (!injected) {
+                  injected = true;
+                  if (loser === "input") yield* commitAbort(administrative).pipe(Effect.orDie);
+                  else yield* commitInput(session).pipe(Effect.orDie);
+                }
+
+                return yield* losingWriter.append(prepared);
+              }),
+          };
+
+          yield* loser === "input" ? commitInput(racingWriter) : commitAbort(racingWriter);
+          yield* progress
+            .commit(
+              batch("input-race-start", [
+                record(
+                  id(RecordEnvelope.fields.recordId, "input-race-start"),
+                  RunStartedRecord.make({
+                    runId,
+                    policyAccountingVersion: 1,
+                    maxDurationMillis: 30_000,
+                  }),
+                ),
+              ]),
+            )
+            .pipe(Effect.provideService(CurrentRunWriter, session));
+
+          const publication = yield* settlementPublication(
+            admitted,
+            session.claim,
+            lane,
+            "aborted",
+          );
+
+          yield* progress
+            .publish(publication.append.batch)
+            .pipe(Effect.provideService(CurrentRunSettlement, session));
+          // Message admissions use the separate, recoverable finalization path.
+          yield* ledger.finalizeSettlement(
+            SettlementFinalization.make({
+              submissionId: admitted.submissionId,
+              settlementId: submissionSettlementId(admitted.submissionId),
+            }),
+          );
+          if (store.verification === undefined)
+            return yield* Effect.die("SQLite verification is unavailable");
+
+          const integrity = yield* store.verification.verify(
+            ThreadVerificationRequest.make({ threadId: thread(lane), requireAllSettled: true }),
+          );
+
+          expect(integrity).toMatchObject({ ok: true });
+
+          const recovered = yield* ledger.loadRecoverySnapshot(
+            RecoverySnapshotRequest.make({ submissionId: admitted.submissionId }),
+          );
+
+          expect(recovered.submission.state).toBe("settled");
+          expect(recovered.ownership).toBeUndefined();
+        }).pipe(Effect.scoped, Effect.provide(services));
+      }),
+  );
+}
 
 // Requested native CAS proof: administrative writes refresh native authority while
 // settlement progress was prepared against the earlier frontier. It must reprepare.
@@ -265,7 +484,7 @@ it.effect("reprepares native settlement progress after a same-epoch administrati
         exported.records.flatMap(({ record }) =>
           record.payload._tag === "RunContinuation" ? [record.payload.revision] : [],
         ),
-      ).toEqual([1, 2, 3, 4]);
+      ).toEqual([1, 2, 3]);
       expect(
         exported.records.filter(({ record }) => record.payload._tag === "SubmissionSettled"),
       ).toHaveLength(1);
