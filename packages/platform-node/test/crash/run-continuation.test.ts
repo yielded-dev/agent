@@ -3,7 +3,9 @@ import { expect, layer } from "@effect/vitest";
 import { NodeDurableHost } from "@yielded/agent-platform-node/node-durable-host";
 import * as Agent from "@yielded/agent/agent";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
-import { Effect, Layer, Stream } from "effect";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
+import { ThreadStore } from "@yielded/agent/thread-store";
+import { Effect, Layer, Option, Stream } from "effect";
 import { LanguageModel, Model, type Prompt } from "effect/ai";
 
 import {
@@ -44,7 +46,7 @@ const crashPoints = [
 ] as const;
 
 // Each child exits without finalizers after committing the native compaction. Reopening the
-// same SQLite file must use exact canonical progress, input, and context across either boundary.
+// same SQLite file must use the exact checkpoint, canonical input, and saved context at either boundary.
 layer(NodeFileSystem.layer, { excludeTestServices: true })(
   "Run continuation process loss",
   (it) => {
@@ -76,6 +78,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
             const before = yield* withRuntime(
               site.db,
               Effect.gen(function* () {
+                const store = yield* ThreadStore;
                 const records = yield* readLog(thread);
                 const snapshot = yield* lookupByKey(thread, key);
 
@@ -87,16 +90,27 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                 if (point.present)
                   expect(JSON.stringify(compactions)).toContain(CHECKPOINT_HANDOFF);
 
-                const continuation = records.findLast(
-                  ({ record }) => record.payload._tag === "RunContinuation",
+                const execution = Option.getOrThrow(
+                  yield* store.readExecution({
+                    threadId,
+                    runId: runIdForSubmission(snapshot.submissionId),
+                  }),
                 );
 
-                expect(continuation?.record.payload).toMatchObject({
+                expect(execution.progress).toMatchObject({
                   version: 1,
                   accounting: { committedTurns: 2, modelCalls: 2 },
                 });
+
+                const starts = execution.operational.filter(
+                  ({ payload }) => payload._tag === "RunStarted",
+                );
+
+                expect(starts).toHaveLength(1);
                 expect(
-                  records.filter(({ record }) => record.payload._tag === "RunContextRecorded"),
+                  execution.operational.filter(
+                    ({ payload }) => payload._tag === "RunContextRecorded",
+                  ),
                 ).toHaveLength(1);
                 expect(
                   records.filter(({ record }) => record.payload._tag === "ModelResponseRecorded"),
@@ -105,7 +119,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                   records.filter(({ record }) => record.payload._tag === "ToolCallSettled"),
                 ).toHaveLength(2);
 
-                return { records, submissionId: snapshot.submissionId };
+                return { records, starts, submissionId: snapshot.submissionId };
               }),
             );
 
@@ -115,6 +129,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               Effect.gen(function* () {
                 const host = yield* NodeDurableHost;
                 const runtime = yield* DurableAgentRuntime;
+                const store = yield* ThreadStore;
 
                 const report = host.startupRecovery.find(
                   (entry) => entry.submissionId === before.submissionId,
@@ -131,11 +146,28 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                     LanguageModel.LanguageModel,
                     LanguageModel.make({
                       generateText: () => Effect.succeed([]),
-                      streamText: (request) => {
-                        requests.push(request.prompt);
+                      streamText: (request) =>
+                        Stream.unwrap(
+                          store
+                            .readExecution({
+                              threadId,
+                              runId: runIdForSubmission(before.submissionId),
+                            })
+                            .pipe(
+                              Effect.map((execution) => {
+                                const starts = Option.getOrThrow(execution).operational.filter(
+                                  ({ payload }) => payload._tag === "RunStarted",
+                                );
 
-                        return Stream.fromIterable(checkpointParts(requests.length + 2));
-                      },
+                                expect(starts).toHaveLength(1);
+                                expect(starts).toEqual(before.starts);
+                                requests.push(request.prompt);
+
+                                return Stream.fromIterable(checkpointParts(requests.length + 2));
+                              }),
+                              Effect.orDie,
+                            ),
+                        ),
                     }),
                   ),
                 );
@@ -164,8 +196,11 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
 
                 expect(records.slice(0, before.records.length)).toEqual(before.records);
                 expect(
-                  records.filter(({ record }) => record.payload._tag === "RunStarted"),
-                ).toHaveLength(1);
+                  yield* store.readExecution({
+                    threadId,
+                    runId: runIdForSubmission(before.submissionId),
+                  }),
+                ).toEqual(Option.none());
                 expect(
                   records.filter(({ record }) => record.payload._tag === "CompactionCreated"),
                 ).toHaveLength(1);

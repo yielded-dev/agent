@@ -3489,6 +3489,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             admissions: new Array<ThreadAdmission>(),
             commands: commands(undefined),
             deliveries: [],
+            executions: [],
           };
 
           let next = after ?? "";

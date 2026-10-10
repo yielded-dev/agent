@@ -1,10 +1,11 @@
 import { Context, Effect, Pull, Schema, Stream } from "effect";
 
 import { InputMessage } from "../capabilities/Messaging.ts";
+import type { RunId } from "../core/Identifiers.ts";
 import { SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { WorkerRef } from "../core/Worker.ts";
 import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST, utf8ByteLength } from "./Digest.ts";
-import { validateContextBoundary } from "./internal/run-context.ts";
+import { readRunContext, validateContextBoundary } from "./internal/run-context.ts";
 import { ThreadImportReader } from "./internal/thread-import-reader.ts";
 import { toolOperationStates } from "./internal/tool-operations.ts";
 import { MessageDeliveryRecord } from "./MessageDelivery.ts";
@@ -18,9 +19,16 @@ import {
   ProducerEpoch,
   RecordEnvelope,
   RecordJson,
+  RunContinuation,
   SubtreeBudgetReserved,
 } from "./Records.ts";
-import { isPreContinuationFact } from "./RunContinuation.ts";
+import {
+  executionRunIds,
+  isOperationalRecord,
+  isPreContinuationFact,
+  reference,
+  validateSuffix,
+} from "./RunContinuation.ts";
 import { runIdForSubmission } from "./RunJournal.ts";
 import { validateCanonicalSettlement, validateJoinedSettlement } from "./SettlementPublisher.ts";
 import {
@@ -44,6 +52,8 @@ import {
   ThreadAbortFact,
   ThreadApprovalFact,
   ThreadResolutionFact,
+  ExecutionCheckpoint,
+  ThreadExecutionFact,
   makeTransferFactCheck,
   transferPageFits,
   type ThreadStoreError,
@@ -75,6 +85,7 @@ const abortFitsTransfer = makeTransferFactCheck(ThreadAbortFact);
 const approvalFitsTransfer = makeTransferFactCheck(ThreadApprovalFact);
 const resolutionFitsTransfer = makeTransferFactCheck(ThreadResolutionFact);
 const deliveryFitsTransfer = makeTransferFactCheck(MessageDeliveryRecord);
+const executionFitsTransfer = makeTransferFactCheck(ThreadExecutionFact);
 
 export class ThreadImportResult extends Schema.Class<ThreadImportResult>(
   "@effect-agent/thread/ThreadImportResult",
@@ -314,6 +325,142 @@ export const invalidThreadArchive = (message: string, threadId?: ThreadId) =>
 
 const invalid = invalidThreadArchive;
 
+/** Validate authoritative active state against the same staged/captured history and admissions. */
+export const validateImportedExecution = Effect.fnUntraced(function* (
+  threadId: ThreadId,
+  checkpoint: ExecutionCheckpoint,
+  tailSequence: CanonicalSequence,
+) {
+  const reader = yield* ThreadImportReader;
+  const progress = checkpoint.progress;
+  const admission = yield* reader.admission(progress.submissionId);
+
+  const own = (yield* reader.runRecords(progress.runId)).filter((entry) =>
+    executionRunIds(entry.record).includes(progress.runId),
+  );
+
+  const local = new Map(checkpoint.operational.map((record) => [record.recordId, record]));
+
+  if (
+    admission === undefined ||
+    admission.threadId !== threadId ||
+    runIdForSubmission(admission.submissionId) !== progress.runId ||
+    checkpoint.progressRecord.payload._tag !== "RunContinuation" ||
+    !Schema.toEquivalence(RunContinuation)(checkpoint.progressRecord.payload, progress) ||
+    checkpoint.progressRecord.recordId !==
+      JSON.stringify(["continuation@1", progress.runId, checkpoint.batchId]) ||
+    checkpoint.throughSequence > tailSequence ||
+    checkpoint.originalSequence > checkpoint.throughSequence ||
+    local.size !== checkpoint.operational.length ||
+    checkpoint.operational.some(
+      (record) => !isOperationalRecord(record) || !executionRunIds(record).includes(progress.runId),
+    ) ||
+    own.filter((entry) => entry.sequence <= checkpoint.throughSequence).length !==
+      checkpoint.canonicalRecords ||
+    !validateSuffix(own, checkpoint.throughSequence)
+  )
+    return yield* invalid(
+      "Active execution identity, revision or history boundary is invalid",
+      threadId,
+    );
+  for (const id of local.keys())
+    if ((yield* reader.record(id)) !== undefined)
+      return yield* invalid("Operational identity collides with retained history", threadId);
+
+  const resolve = Effect.fnUntraced(function* (ref: typeof progress.originalInput) {
+    const retained = yield* reader.record(ref.recordId);
+    const record = local.get(ref.recordId) ?? retained?.record;
+
+    if (
+      record === undefined ||
+      (retained !== undefined &&
+        (retained.threadId !== threadId || retained.sequence > checkpoint.throughSequence)) ||
+      !executionRunIds(record).includes(progress.runId) ||
+      (yield* reference(record)).digest !== ref.digest
+    )
+      return yield* invalid("Active execution reference is missing, foreign or corrupt", threadId);
+
+    return record;
+  });
+
+  const original = yield* reader.record(progress.originalInput.recordId);
+  const input = (yield* resolve(progress.originalInput)).payload;
+
+  if (
+    original === undefined ||
+    original.sequence !== checkpoint.originalSequence ||
+    input._tag !== "UserInputRecorded" ||
+    input.kind !== "user" ||
+    input.runId !== progress.runId ||
+    input.submissionId !== progress.submissionId
+  )
+    return yield* invalid("Active execution has no exact original admitted input", threadId);
+  yield* resolve(progress.lastFact);
+  if (progress.savedContext !== undefined) {
+    const context = yield* resolve(progress.savedContext);
+
+    if (context.payload._tag !== "RunContextRecorded" || !local.has(context.recordId))
+      return yield* invalid("Saved context is not owned active state", threadId);
+    yield* validateContextBoundary(context.payload, original).pipe(
+      Effect.mapError((cause) => invalid(cause.message, threadId)),
+    );
+    yield* readRunContext(context.payload, original, progress.savedContext.digest).pipe(
+      Effect.mapError((cause) => invalid(cause.message, threadId)),
+    );
+  }
+  if (progress.latestResponse !== undefined) {
+    const response = (yield* resolve(progress.latestResponse)).payload;
+
+    if (
+      response._tag !== "ModelResponseRecorded" ||
+      response.turn !== progress.accounting.committedTurns ||
+      progress.savedContext === undefined
+    )
+      return yield* invalid("Active execution has invalid declared operation evidence", threadId);
+  } else if (progress.accounting.committedTurns !== 0)
+    return yield* invalid("Active accounting has no corresponding response", threadId);
+  if (progress.terminal !== undefined) {
+    const terminal = (yield* resolve(progress.terminal)).payload;
+
+    if (
+      terminal._tag !== "RunCompleted" &&
+      terminal._tag !== "RunFailed" &&
+      terminal._tag !== "SubmissionSettled"
+    )
+      return yield* invalid("Active execution has invalid terminal intent", threadId);
+    if (progress.position === "settled" && terminal._tag !== "SubmissionSettled")
+      return yield* invalid("Settled active state has no canonical terminal outcome", threadId);
+  }
+});
+
+/** An executed unfinished Run cannot be imported without its authoritative operational owner. */
+export const validateImportedRunExecution = Effect.fnUntraced(function* (
+  threadId: ThreadId,
+  runId: RunId,
+  tailSequence: CanonicalSequence,
+) {
+  const reader = yield* ThreadImportReader;
+  const checkpoint = yield* reader.execution(runId);
+
+  if (checkpoint !== undefined)
+    return yield* validateImportedExecution(threadId, checkpoint, tailSequence);
+  const records = yield* reader.runRecords(runId);
+
+  if (
+    records.some(
+      ({ record }) =>
+        record.payload._tag === "UserInputRecorded" &&
+        record.payload.kind === "user" &&
+        record.payload.submissionId !== undefined,
+    ) &&
+    !records.some(
+      ({ record }) => record.payload._tag === "SubmissionSettled" && record.payload.runId === runId,
+    ) &&
+    records.some(({ record }) => !isPreContinuationFact(record))
+  )
+    return yield* invalid("Unfinished execution is missing its authoritative checkpoint", threadId);
+});
+
 /** Own the first page before entering a destination gate; reuse the same scoped source pull. */
 export const captureImportSource = Effect.fnUntraced(function* <E, R>(
   pages: Stream.Stream<ThreadArchive, E, R>,
@@ -350,6 +497,7 @@ export interface ThreadImportProgress {
     approvals: number;
     resolutions: number;
     deliveries: number;
+    executions: number;
   };
 }
 
@@ -360,7 +508,7 @@ export const makeThreadImportProgress = (): ThreadImportProgress => ({
   producerEpoch: 1,
   ended: false,
   cursor: undefined,
-  counts: { admissions: 0, aborts: 0, approvals: 0, resolutions: 0, deliveries: 0 },
+  counts: { admissions: 0, aborts: 0, approvals: 0, resolutions: 0, deliveries: 0, executions: 0 },
 });
 
 /** Capture before awaiting any writes; the retained manifest never retains page payload arrays. */
@@ -392,7 +540,8 @@ export const prepareImportPage = Effect.fnUntraced(function* (
     archive.commands.aborts.some((fact) => !abortFitsTransfer(threadId, fact)) ||
     archive.commands.approvals.some((fact) => !approvalFitsTransfer(threadId, fact)) ||
     archive.commands.resolutions.some((fact) => !resolutionFitsTransfer(threadId, fact)) ||
-    archive.deliveries.some((fact) => !deliveryFitsTransfer(threadId, fact))
+    archive.deliveries.some((fact) => !deliveryFitsTransfer(threadId, fact)) ||
+    archive.executions.some((fact) => !executionFitsTransfer(threadId, fact))
   )
     return yield* ThreadImportRejected.make({
       threadId,
@@ -444,7 +593,12 @@ export const prepareImportPage = Effect.fnUntraced(function* (
     return yield* invalid("Canonical records follow immutable fact sections", threadId);
   if (
     archive.admissions.length > 0 &&
-    state.counts.aborts + state.counts.approvals + state.counts.resolutions > 0
+    state.counts.aborts +
+      state.counts.approvals +
+      state.counts.resolutions +
+      state.counts.deliveries +
+      state.counts.executions >
+      0
   )
     return yield* invalid("Admissions follow accepted command sections", threadId);
   const records: Array<CanonicalRecordEnvelope> = [];
@@ -480,7 +634,7 @@ export const prepareImportPage = Effect.fnUntraced(function* (
       Schema.toType(Schema.Struct(CanonicalBatch.fields)),
     )({ ...batch, records: current }).pipe(
       Effect.mapError(() => invalid("Empty or oversized canonical batch", threadId)),
-      Effect.map(CanonicalBatch.make),
+      Effect.map((value) => CanonicalBatch.make(value)),
     );
 
     const batchJson = canonicalJson({ ...batch, records: encoded });
@@ -508,7 +662,8 @@ export const prepareImportPage = Effect.fnUntraced(function* (
       archive.commands.aborts.length +
       archive.commands.approvals.length +
       archive.commands.resolutions.length +
-      archive.deliveries.length >
+      archive.deliveries.length +
+      archive.executions.length >
       0 &&
     (state.sequence !== archive.tailSequence || state.tailDigest !== archive.tailDigest)
   )
@@ -521,17 +676,34 @@ export const prepareImportPage = Effect.fnUntraced(function* (
     state.counts.admissions + archive.admissions.length !== archive.snapshot.admissions
   )
     return yield* invalid("Accepted commands precede the complete admission directory", threadId);
-  const required = transferDependencies(records);
+
+  const sectionLength = (section: (typeof transferSections)[number]) =>
+    section === "admissions"
+      ? archive.admissions.length
+      : section === "deliveries"
+        ? archive.deliveries.length
+        : section === "executions"
+          ? archive.executions.length
+          : archive.commands[section].length;
+
+  for (let index = 0; index < transferSections.length; index++) {
+    const section = transferSections[index]!;
+
+    if (sectionLength(section) === 0) continue;
+    if (
+      transferSections
+        .slice(0, index)
+        .some((prior) => state.counts[prior] + sectionLength(prior) !== archive.snapshot[prior]) ||
+      transferSections.slice(index + 1).some((later) => state.counts[later] !== 0)
+    )
+      return yield* invalid("Transfer fact sections are out of order", threadId);
+  }
+  const required = transferDependencies(records, archive.executions);
 
   if (canonicalJson(required) !== canonicalJson([...archive.dependencies].sort()))
     return yield* invalid("Cross-range dependency directory is incomplete or ambiguous", threadId);
   for (const section of transferSections) {
-    state.counts[section] +=
-      section === "admissions"
-        ? archive.admissions.length
-        : section === "deliveries"
-          ? archive.deliveries.length
-          : archive.commands[section].length;
+    state.counts[section] += sectionLength(section);
     if (state.counts[section] > archive.snapshot[section])
       return yield* invalid(`Too many ${section} facts`, threadId);
   }
@@ -554,6 +726,14 @@ export const prepareImportPage = Effect.fnUntraced(function* (
     )
       return yield* invalid("Delivery ownership, lease or envelope digest mismatch", threadId);
   }
+  for (const fact of archive.executions) {
+    const encoded = yield* Schema.encodeEffect(ExecutionCheckpoint)(fact.checkpoint).pipe(
+      Effect.mapError(() => invalid("Invalid active execution", threadId)),
+    );
+
+    if ((yield* digest(encoded)) !== fact.digest)
+      return yield* invalid("Active execution digest mismatch", threadId);
+  }
   state.manifest = {
     ...archive,
     records: [],
@@ -561,6 +741,7 @@ export const prepareImportPage = Effect.fnUntraced(function* (
     admissions: [],
     commands: { aborts: [], approvals: [], resolutions: [] },
     deliveries: [],
+    executions: [],
     dependencies: [],
   };
   state.cursor = archive.cursor;

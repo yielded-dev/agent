@@ -1,16 +1,11 @@
-import {
-  digestCanonicalBatch,
-  digestJson,
-  EMPTY_TAIL_DIGEST,
-  utf8ByteLength,
-} from "@yielded/agent/digest";
+import { digestJson, EMPTY_TAIL_DIGEST, utf8ByteLength } from "@yielded/agent/digest";
 import { ThreadId, RunId, SubmissionId as importSubmissionId } from "@yielded/agent/identifiers";
 import type { IdempotencyKey } from "@yielded/agent/receipt";
 import { ExportBatch, ExportedRecord } from "@yielded/agent/record-format";
 import {
   ProducerEpoch,
   CURRENT_RECORD_FORMAT,
-  CanonicalBatch,
+  RecordEnvelope,
   type RecordId,
   CanonicalRecordEnvelope,
   CanonicalSequence,
@@ -64,6 +59,8 @@ import {
   prepareImportPage,
   finishThreadImport,
   verifyImportedReferences,
+  validateImportedExecution,
+  validateImportedRunExecution,
   type ThreadSettlementPredecessorRequest,
   invalidThreadArchive,
   ThreadImportReader,
@@ -73,6 +70,8 @@ import {
 } from "@yielded/agent/thread-import";
 import { verifyThreadInvariants } from "@yielded/agent/thread-invariants";
 import {
+  type FencedAppendRequest,
+  type ExecutionCheckpoint,
   type ThreadCheckpoint,
   ThreadPeerCountRequest,
   ThreadIdentity,
@@ -93,7 +92,8 @@ import {
   ThreadTail,
   ThreadTailRequest,
   FenceRejected,
-  FencedAppendRequest,
+  PreparedAppend,
+  type CommitBatch,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
   PROMPT_EVIDENCE_TAGS,
@@ -105,7 +105,11 @@ import {
   canonicalBatchFitsTransfer,
   transferPageFits,
 } from "@yielded/agent/thread-store";
-import { exportThreadPage, ThreadExporterReader } from "@yielded/agent/thread-transfer";
+import {
+  executionTransferFact,
+  exportThreadPage,
+  ThreadExporterReader,
+} from "@yielded/agent/thread-transfer";
 import {
   WORK_INDEX_VERSION,
   MAX_WORK_REBUILD_RECORDS,
@@ -255,6 +259,16 @@ interface StoredThread {
     { readonly records: Array<CanonicalRecordEnvelope>; readonly bytes: Array<number> }
   >;
   readonly batches: Map<BatchId, StoredBatch>;
+  readonly executions: Map<RunId, ExecutionCheckpoint>;
+  readonly executionRevision: number;
+  readonly executionCommits: Map<
+    BatchId,
+    {
+      readonly intent: string;
+      readonly result: AppendResult;
+      readonly runIds: ReadonlyArray<RunId>;
+    }
+  >;
   readonly batchesByFirst: Map<number, BatchId>;
   readonly tailDigests: Map<CanonicalSequence, Digest>;
   readonly checkpoints: Map<CanonicalSequence, ThreadCheckpoint>;
@@ -657,7 +671,7 @@ const prepareIndexes = (
 
     if (payload._tag === "PeerMessagePrepared") peerCount++;
     if (
-      (payload._tag === "UserInputRecorded" || payload._tag === "RunStarted") &&
+      (payload._tag === "UserInputRecorded" || payload._tag === "SubmissionSettled") &&
       payload.runId !== undefined
     )
       workerRecords.set(`execution:${payload._tag}`, [entry]);
@@ -838,7 +852,7 @@ const observationOffset = (threadId: ThreadId, sequence: CanonicalSequence): Obs
 
 const batchEnvelopes = (
   threadId: ThreadId,
-  batch: CanonicalBatch,
+  batch: CommitBatch,
   firstSequence: CanonicalSequence,
 ): ReadonlyArray<CanonicalRecordEnvelope> =>
   batch.records.map((record, index) => {
@@ -1263,6 +1277,9 @@ const makeThreadStore = Effect.gen(function* () {
             chunks: new Map(),
             batchesByFirst: new Map(),
             batches: new Map(),
+            executions: new Map(),
+            executionRevision: 0,
+            executionCommits: new Map(),
             tailDigests: new Map([[ZERO_CANONICAL_SEQUENCE, EMPTY_TAIL_DIGEST]]),
             checkpoints: new Map(),
           });
@@ -1311,18 +1328,9 @@ const makeThreadStore = Effect.gen(function* () {
   };
 
   const prepareAppend = Effect.fnUntraced(function* (unvalidated: FencedAppendRequest) {
-    const codec = Schema.fromJsonString(FencedAppendRequest);
-
-    const request = yield* Schema.encodeUnknownEffect(codec)(unvalidated).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(codec)),
-      Effect.mapError((error) => storeError("append", "Invalid append request", error)),
-    );
-
-    const batchJson = yield* Schema.encodeEffect(Schema.fromJsonString(CanonicalBatch))(
-      request.batch,
-    ).pipe(
-      Effect.mapError((cause) => storeError("append", "Unable to encode canonical batch", cause)),
-    );
+    const captured = yield* PreparedAppend.capture(unvalidated);
+    const request = captured;
+    const batchJson = captured.batchJson;
 
     const batchBytes = new TextEncoder().encode(batchJson).byteLength;
 
@@ -1337,7 +1345,7 @@ const makeThreadStore = Effect.gen(function* () {
         "Canonical batch exceeds its bounded transfer representation",
       );
 
-    const digest = yield* digestCanonicalBatch(request.expectedTailDigest, request.batch).pipe(
+    const digest = yield* captured.digest().pipe(
       Effect.provideService(Crypto.Crypto, crypto),
       Effect.mapError((error) => storeError("append", error.message, error)),
     );
@@ -1354,29 +1362,80 @@ const makeThreadStore = Effect.gen(function* () {
     const current = yield* Ref.get(state);
     const thread = current.threads.get(request.threadId);
 
+    const executionIntent = JSON.stringify({
+      batch: batchJson,
+      operational: (request.executions ?? []).flatMap((update) =>
+        update.facts.map((fact) => Schema.encodeSync(RecordEnvelope)(fact)),
+      ),
+    });
+
     if (
       thread !== undefined &&
       thread.producerEpoch === request.producerEpoch &&
       thread.tailSequence === request.expectedTailSequence &&
       thread.tailDigest === request.expectedTailDigest &&
-      !thread.batches.has(request.batch.batchId)
-    )
-      yield* validateProgressAppend(prepareProgressAppend(request.batch.records)).pipe(
+      !thread.batches.has(request.batch.batchId) &&
+      !thread.executionCommits.has(request.batch.batchId)
+    ) {
+      const executions = request.executions ?? [];
+
+      if (
+        new Set(executions.map((update) => update.checkpoint.progress.runId)).size !==
+          executions.length ||
+        !Number.isSafeInteger(thread.executionRevision + executions.length)
+      )
+        return yield* storeError("append", "Invalid active execution revision");
+      for (const update of request.executions ?? []) {
+        const prior = thread.executions.get(update.checkpoint.progress.runId);
+
+        if ((prior?.progress.revision ?? 0) !== update.previousRevision)
+          return yield* AppendConflict.make({
+            threadId: request.threadId,
+            batchId: request.batch.batchId,
+            reason: "tail",
+            actualTailSequence: thread.tailSequence,
+            actualTailDigest: thread.tailDigest,
+          });
+        if (
+          update.checkpoint.throughSequence !==
+            thread.tailSequence + request.batch.records.length ||
+          update.checkpoint.batchId !== request.batch.batchId ||
+          (prior !== undefined && update.checkpoint.originalSequence !== prior.originalSequence)
+        )
+          return yield* storeError(
+            "append",
+            "Active checkpoint differs from its committed history boundary",
+          );
+        if (
+          update.retire &&
+          ![
+            ...request.batch.records,
+            ...(thread.runRecords.get(update.checkpoint.progress.runId) ?? []).map(
+              (entry) => entry.record,
+            ),
+          ].some(
+            ({ payload }) =>
+              payload._tag === "SubmissionSettled" &&
+              payload.runId === update.checkpoint.progress.runId &&
+              payload.submissionId === update.checkpoint.progress.submissionId,
+          )
+        )
+          return yield* storeError(
+            "append",
+            "Active state cannot retire without a canonical terminal outcome",
+          );
+      }
+      yield* validateProgressAppend(
+        prepareProgressAppend(request.batch.records),
+        request.executions,
+      ).pipe(
         Effect.provideService(ProgressAppendReader, {
-          previous: (runId) =>
-            Effect.gen(function* () {
-              const latest = thread.continuations.get(runId)?.at(-1);
-
-              if (latest === undefined) return undefined;
-              if (latest.record.payload._tag !== "RunContinuation")
-                return yield* storeError("append", "Invalid newest Run continuation");
-
-              return latest.record.payload;
-            }),
+          previous: (runId) => Effect.succeed(thread.executions.get(runId)?.progress),
           initial: (next) =>
             Effect.succeed((thread.runRecords.get(next.runId) ?? []).map((entry) => entry.record)),
         }),
       );
+    }
 
     const currentWork = (yield* Ref.get(workState)).get(request.threadId);
 
@@ -1386,6 +1445,7 @@ const makeThreadStore = Effect.gen(function* () {
       thread.tailSequence === request.expectedTailSequence &&
       thread.tailDigest === request.expectedTailDigest &&
       !thread.batches.has(request.batch.batchId) &&
+      !thread.executionCommits.has(request.batch.batchId) &&
       currentWork?.version === WORK_INDEX_VERSION &&
       currentWork.state === "ready" &&
       currentWork.through === thread.tailSequence &&
@@ -1425,6 +1485,31 @@ const makeThreadStore = Effect.gen(function* () {
                 actualEpoch: thread.producerEpoch,
                 attemptedEpoch: request.producerEpoch,
               }),
+            },
+            current,
+          ];
+        }
+        const priorExecution = thread.executionCommits.get(request.batch.batchId);
+
+        if (priorExecution !== undefined) {
+          if (priorExecution.intent !== executionIntent)
+            return [
+              {
+                _tag: "failure",
+                error: AppendConflict.make({
+                  threadId: request.threadId,
+                  batchId: request.batch.batchId,
+                  reason: "batch-digest",
+                }),
+              },
+              current,
+            ];
+
+          return [
+            {
+              _tag: "success",
+              result: AppendResult.make({ ...priorExecution.result, replayed: true }),
+              records: [],
             },
             current,
           ];
@@ -1506,7 +1591,9 @@ const makeThreadStore = Effect.gen(function* () {
         const lastSequence = decodeCanonicalSequence(thread.tailSequence + records.length);
 
         const result = AppendResult.make({
-          firstSequence: decodeCanonicalSequence(thread.tailSequence + 1),
+          firstSequence: decodeCanonicalSequence(
+            thread.tailSequence + (records.length > 0 ? 1 : 0),
+          ),
           lastSequence,
           tailDigest: digest,
           replayed: false,
@@ -1519,14 +1606,32 @@ const makeThreadStore = Effect.gen(function* () {
           ...indexes.indexes,
           tailSequence: lastSequence,
           tailDigest: digest,
+          executionRevision: thread.executionRevision + (request.executions?.length ?? 0),
         };
 
         // Every rejection and asynchronous validation precedes this synchronous publication.
-        thread.batches.set(request.batch.batchId, { digest, result, batchJson });
-        retainRange(thread, request.threadId, { digest, result, batchJson }, thread.tailDigest);
-        thread.batchesByFirst.set(result.firstSequence, request.batch.batchId);
-        thread.tailDigests.set(lastSequence, digest);
-        retainRecords(thread, records);
+        if (records.length > 0) {
+          thread.batches.set(request.batch.batchId, { digest, result, batchJson });
+          retainRange(thread, request.threadId, { digest, result, batchJson }, thread.tailDigest);
+          thread.batchesByFirst.set(result.firstSequence, request.batch.batchId);
+          thread.tailDigests.set(lastSequence, digest);
+          retainRecords(thread, records);
+        }
+        for (const update of request.executions ?? []) {
+          const runId = update.checkpoint.progress.runId;
+
+          if (update.retire) thread.executions.delete(runId);
+          else thread.executions.set(runId, update.checkpoint);
+        }
+        if (request.executions !== undefined)
+          thread.executionCommits.set(request.batch.batchId, {
+            intent: executionIntent,
+            result,
+            runIds: request.executions.map((update) => update.checkpoint.progress.runId),
+          });
+        for (const [id, receipt] of thread.executionCommits)
+          if (receipt.runIds.every((runId) => !thread.executions.has(runId)))
+            thread.executionCommits.delete(id);
         indexes.commit();
         if (preparedWork !== undefined) publishWork(request.threadId, preparedWork());
         current.threads.set(request.threadId, next);
@@ -1808,7 +1913,7 @@ const makeThreadStore = Effect.gen(function* () {
           case "WorkerExecution":
             sources = [
               thread.workerRecords.get("execution:UserInputRecorded") ?? [],
-              thread.workerRecords.get("execution:RunStarted") ?? [],
+              thread.workerRecords.get("execution:SubmissionSettled") ?? [],
             ];
             break;
           case "WorkerState":
@@ -1958,6 +2063,9 @@ const makeThreadStore = Effect.gen(function* () {
     openRange: {},
     chunks: new Map(),
     batches: new Map(),
+    executions: new Map(),
+    executionRevision: 0,
+    executionCommits: new Map(),
     batchesByFirst: new Map(),
     tailDigests: new Map([[ZERO_CANONICAL_SEQUENCE, EMPTY_TAIL_DIGEST]]),
     checkpoints: new Map(),
@@ -1986,7 +2094,7 @@ const makeThreadStore = Effect.gen(function* () {
       if (index.foreign.child > 0) foreign.add("child");
       if (index.foreign.worker > 0) foreign.add("worker");
       if (index.foreign.delivery > 0) foreign.add("message-delivery");
-      const revision = facts.revision + delivered.revision;
+      const revision = facts.revision + delivered.revision + (thread?.executionRevision ?? 0);
 
       if (!Number.isSafeInteger(revision))
         return yield* storeError("export", "Transfer revision is exhausted");
@@ -2003,6 +2111,7 @@ const makeThreadStore = Effect.gen(function* () {
           approvals: facts.approvals,
           resolutions: facts.resolutions,
           deliveries: delivered.deliveries,
+          executions: thread?.executions.size ?? 0,
         },
         ...(facts.workerSeal === undefined ? {} : { workerSeal: facts.workerSeal }),
         ...(foreign.size === 0 ? {} : { externalObligations: [...foreign] }),
@@ -2045,25 +2154,59 @@ const makeThreadStore = Effect.gen(function* () {
       return { batches: [{ batchId: batch.batchId, producerId: batch.producerId }], records };
     }),
     facts: (threadId, section, after) =>
-      section === "deliveries"
-        ? (deliveryTransfer?.facts(threadId, after) ??
-          Effect.succeed({
-            facts: {
-              admissions: [],
-              commands: { aborts: [], approvals: [], resolutions: [] },
-              deliveries: [],
-            },
-            after: after ?? "",
-          }))
-        : (ledgerTransfer?.facts(threadId, section, after) ??
-          Effect.succeed({
-            facts: {
-              admissions: [],
-              commands: { aborts: [], approvals: [], resolutions: [] },
-              deliveries: [],
-            },
-            after: after ?? "",
-          })),
+      section === "executions"
+        ? Effect.gen(function* () {
+            const thread = yield* findThread(MutableRef.get(state.ref), threadId).pipe(
+              Effect.mapError(() => storeError("export", "Thread is not materialized")),
+            );
+
+            const cursor = after === undefined ? 0 : Number(after);
+
+            if (!Number.isSafeInteger(cursor) || cursor < 0)
+              return yield* storeError("export", "Invalid active execution cursor");
+
+            const checkpoint = [...thread.executions.values()]
+              .filter((value) => value.originalSequence > cursor)
+              .sort((a, b) => a.originalSequence - b.originalSequence)[0];
+
+            return {
+              facts: {
+                admissions: [],
+                commands: { aborts: [], approvals: [], resolutions: [] },
+                deliveries: [],
+                executions:
+                  checkpoint === undefined
+                    ? []
+                    : [
+                        yield* executionTransferFact(checkpoint).pipe(
+                          Effect.provideService(Crypto.Crypto, crypto),
+                        ),
+                      ],
+              },
+              after: checkpoint === undefined ? (after ?? "") : String(checkpoint.originalSequence),
+            };
+          })
+        : section === "deliveries"
+          ? (deliveryTransfer?.facts(threadId, after) ??
+            Effect.succeed({
+              facts: {
+                admissions: [],
+                commands: { aborts: [], approvals: [], resolutions: [] },
+                deliveries: [],
+                executions: [],
+              },
+              after: after ?? "",
+            }))
+          : (ledgerTransfer?.facts(threadId, section, after) ??
+            Effect.succeed({
+              facts: {
+                admissions: [],
+                commands: { aborts: [], approvals: [], resolutions: [] },
+                deliveries: [],
+                executions: [],
+              },
+              after: after ?? "",
+            })),
   });
 
   const exportThread: ThreadStore["Service"]["export"] = (request) =>
@@ -2105,7 +2248,10 @@ const makeThreadStore = Effect.gen(function* () {
   const exactRecordReader = (
     threadId: ThreadId,
     thread: StoredThread,
-  ): Pick<ThreadImportReader["Service"], "read" | "record" | "runRecords" | "hasAgent"> => ({
+  ): Pick<
+    ThreadImportReader["Service"],
+    "read" | "record" | "runRecords" | "execution" | "hasAgent"
+  > => ({
     read: (input) =>
       Stream.unwrap(
         validate(ThreadReadRequest, "read snapshot", input).pipe(
@@ -2114,6 +2260,7 @@ const makeThreadStore = Effect.gen(function* () {
       ),
     record: (id) => Effect.succeed(thread.byId.get(id)),
     runRecords: (id) => exactRunRecords(thread, id),
+    execution: (id) => Effect.succeed(thread.executions.get(id)),
     hasAgent: (id) =>
       Effect.succeed(
         (thread.workerRecords.get("worker") ?? []).some(
@@ -2177,6 +2324,8 @@ const makeThreadStore = Effect.gen(function* () {
                     (existing !== undefined &&
                       (existing.tailSequence > 0 ||
                         existing.batches.size > 0 ||
+                        existing.executions.size > 0 ||
+                        existing.executionCommits.size > 0 ||
                         existing.checkpoints.size > 0 ||
                         existing.ranges.size > 0 ||
                         existing.archiveContents.size > 0)) ||
@@ -2289,6 +2438,12 @@ const makeThreadStore = Effect.gen(function* () {
                   staged.tailDigests.set(batch.lastSequence, batch.tailDigest);
                   stagedWork = commitWork();
                 }
+                for (const { checkpoint } of page.archive.executions) {
+                  if (staged.executions.has(checkpoint.progress.runId))
+                    return yield* invalidThreadArchive("Duplicate active execution identity", id);
+                  staged.executions.set(checkpoint.progress.runId, checkpoint);
+                  staged = { ...staged, executionRevision: staged.executionRevision + 1 };
+                }
                 if (stagedLedger !== undefined) yield* stagedLedger.stage(page);
                 if (stagedDelivery !== undefined) yield* stagedDelivery.stage(page);
                 for (const delivery of page.archive.deliveries) {
@@ -2339,17 +2494,19 @@ const makeThreadStore = Effect.gen(function* () {
             };
 
             return yield* Effect.gen(function* () {
-              for (const runId of restoredThread.runRecords.keys())
+              for (const runId of restoredThread.runRecords.keys()) {
                 yield* verifyRunContinuations(
                   yield* reader.runRecords(Schema.decodeSync(RunId)(runId)),
                   { verifyContext: false },
                 ).pipe(Effect.mapError((e) => invalidThreadArchive(e.message, id)));
-              for (const runId of restoredThread.continuations.keys())
-                if (!restoredThread.runRecords.has(runId))
-                  yield* verifyRunContinuations(
-                    yield* reader.runRecords(Schema.decodeSync(RunId)(runId)),
-                    { verifyContext: false },
-                  ).pipe(Effect.mapError((e) => invalidThreadArchive(e.message, id)));
+                yield* validateImportedRunExecution(
+                  id,
+                  Schema.decodeSync(RunId)(runId),
+                  result.tailSequence,
+                );
+              }
+              for (const checkpoint of restoredThread.executions.values())
+                yield* validateImportedExecution(id, checkpoint, result.tailSequence);
               let lastInputQueue = -1;
 
               for (let sequence = 1; sequence <= restoredThread.tailSequence; sequence++) {
@@ -2888,6 +3045,17 @@ const makeThreadStore = Effect.gen(function* () {
     countPeerMessages,
     materialize: (request) => withMutation(materialize(request)),
     append,
+    readExecution: (request) =>
+      withMutation(
+        Effect.gen(function* () {
+          const thread = (yield* Ref.get(state)).threads.get(request.threadId);
+
+          if (thread === undefined)
+            return yield* ThreadNotMaterialized.make({ threadId: request.threadId });
+
+          return Option.fromUndefinedOr(thread.executions.get(request.runId));
+        }),
+      ),
     read,
     readPrompt,
     observe,

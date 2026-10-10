@@ -9,6 +9,7 @@ import type {
   ThreadCommands,
   ThreadReadRequest,
   ThreadStoreError,
+  ExecutionCheckpoint,
 } from "../ThreadStore.ts";
 import { RunContextReader } from "./run-context-reader.ts";
 
@@ -40,6 +41,9 @@ export class ThreadImportReader extends Context.Service<
     readonly runRecords: (
       id: RunId,
     ) => Effect.Effect<ReadonlyArray<CanonicalRecordEnvelope>, ThreadStoreError>;
+    readonly execution: (
+      id: RunId,
+    ) => Effect.Effect<ExecutionCheckpoint | undefined, ThreadStoreError>;
     readonly commands: (
       id: SubmissionId,
     ) => Effect.Effect<typeof ThreadCommands.Type, ThreadStoreError>;

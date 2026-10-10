@@ -207,8 +207,8 @@ const withTemporaryDatabase = <A, E>(
   ).pipe(Effect.provide(NodeFileSystem.layer));
 
 describe("SqliteThreadStore", () => {
-  // #792 retired recovery-checkpoint writes. Layout 21 persists progress in the same
-  // append as its facts; run-continuation.test.ts covers process loss at compaction,
+  // Layout 22 replaces active progress in the same transaction as its facts;
+  // run-continuation.test.ts covers process loss at compaction,
   // while these restored rows cover rollback and acknowledgement loss at that append.
   for (const [location, mode] of [
     ["append:before", "failure"],
@@ -238,7 +238,7 @@ describe("SqliteThreadStore", () => {
             }),
           );
 
-          let prepared: CanonicalBatch | undefined;
+          let prepared: FencedAppendRequest | undefined;
           let reached = false;
 
           const failed = yield* Effect.gen(function* () {
@@ -253,11 +253,21 @@ describe("SqliteThreadStore", () => {
             yield* progress.commit(batch("crash-reopen", [input, start])).pipe(
               Effect.provideService(CurrentRunWriter, {
                 ...writer,
-                append: (compiled) => {
-                  prepared = compiled;
+                append: (compiled, executions) =>
+                  Effect.gen(function* () {
+                    const tail = yield* writer.tail;
 
-                  return writer.append(compiled);
-                },
+                    prepared = FencedAppendRequest.make({
+                      threadId,
+                      producerEpoch: epoch(1),
+                      expectedTailSequence: tail.sequence,
+                      expectedTailDigest: tail.digest,
+                      batch: compiled,
+                      ...(executions === undefined ? {} : { executions }),
+                    });
+
+                    return yield* writer.append(compiled, executions);
+                  }),
               }),
             );
           }).pipe(
@@ -287,17 +297,15 @@ describe("SqliteThreadStore", () => {
             const before = yield* store.export(ThreadExportRequest.make({ threadId }));
             const committed = location === "append:after";
 
-            expect(before.records).toHaveLength(committed ? 3 : 0);
+            expect(before.records).toHaveLength(committed ? 1 : 0);
             expect(
               Option.isSome(yield* readContinuation(threadId, nativeRunId, before.tailSequence)),
             ).toBe(committed);
-            expect((yield* append(store, compiled)).replayed).toBe(committed);
+            expect((yield* store.append(compiled)).replayed).toBe(committed);
             const after = yield* store.export(ThreadExportRequest.make({ threadId }));
 
             expect(after.records.map(({ record }) => record.payload._tag)).toEqual([
               "UserInputRecorded",
-              "RunStarted",
-              "RunContinuation",
             ]);
             expect(
               Option.getOrUndefined(
@@ -308,7 +316,10 @@ describe("SqliteThreadStore", () => {
               recordCount: 2,
               lastFact: { recordId: start.recordId },
             });
-            expect((yield* append(store, compiled)).replayed).toBe(true);
+            const active = yield* store.readExecution({ threadId, runId: nativeRunId });
+
+            expect((yield* store.append(compiled)).replayed).toBe(true);
+            expect(yield* store.readExecution({ threadId, runId: nativeRunId })).toEqual(active);
           }).pipe(Effect.provide(layer({ filename }).pipe(Layer.provideMerge(NodeCrypto.layer))));
         }),
       ),
@@ -884,7 +895,8 @@ describe("SqliteThreadStore", () => {
             }),
           );
 
-          let firstBatch: CanonicalBatch | undefined;
+          let firstRequest: FencedAppendRequest | undefined;
+          let reached: SqliteStorageFailpointLocation | undefined;
 
           const withFailpoints = <A, E>(
             effect: Effect.Effect<A, E, ThreadStore | ThreadReader | Crypto.Crypto>,
@@ -898,7 +910,13 @@ describe("SqliteThreadStore", () => {
                   Ref.get(active).pipe(
                     Effect.flatMap((selected) =>
                       selected === location
-                        ? Effect.fail(SqliteStorageFailpointError.make({ location }))
+                        ? Effect.sync(() => {
+                            reached = location;
+                          }).pipe(
+                            Effect.andThen(
+                              Effect.fail(SqliteStorageFailpointError.make({ location })),
+                            ),
+                          )
                         : Effect.void,
                     ),
                   ),
@@ -938,8 +956,8 @@ describe("SqliteThreadStore", () => {
                   Effect.gen(function* () {
                     const store = yield* ThreadStore;
 
-                    if (firstBatch !== undefined) {
-                      yield* append(store, firstBatch, seeded);
+                    if (firstRequest !== undefined) {
+                      yield* store.append(firstRequest);
 
                       return;
                     }
@@ -949,15 +967,27 @@ describe("SqliteThreadStore", () => {
                     yield* progress.commit(batch("failpoint-append", [start])).pipe(
                       Effect.provideService(CurrentRunWriter, {
                         ...writer,
-                        append: (prepared) =>
-                          Effect.sync(() => {
-                            firstBatch = prepared;
-                          }).pipe(Effect.andThen(writer.append(prepared))),
+                        append: (prepared, executions) =>
+                          Effect.gen(function* () {
+                            const tail = yield* writer.tail;
+
+                            firstRequest = FencedAppendRequest.make({
+                              threadId,
+                              producerEpoch: epoch(1),
+                              expectedTailSequence: tail.sequence,
+                              expectedTailDigest: tail.digest,
+                              batch: prepared,
+                              ...(executions === undefined ? {} : { executions }),
+                            });
+
+                            return yield* writer.append(prepared, executions);
+                          }),
                       }),
                     );
                   }),
                 ).pipe(Effect.exit);
 
+                expect(reached).toBe(location);
                 expect(Exit.isFailure(exit)).toBe(true);
                 if (Exit.isFailure(exit)) {
                   const error = Cause.squash(exit.cause);
@@ -1004,22 +1034,27 @@ describe("SqliteThreadStore", () => {
                 Effect.gen(function* () {
                   const store = yield* ThreadStore;
 
-                  if (firstBatch === undefined)
+                  if (firstRequest === undefined)
                     return yield* Effect.die("Start progress was not prepared");
-                  yield* append(store, firstBatch, seeded);
+                  yield* store.append(firstRequest);
                 }),
               ).pipe(Effect.exit),
             ),
           ).toBe(true);
+          expect(reached).toBe("append:after");
           yield* select(undefined);
 
           const recoveredAppend = yield* withFailpoints(
             Effect.gen(function* () {
               const store = yield* ThreadStore;
 
-              if (firstBatch === undefined)
+              if (firstRequest === undefined)
                 return yield* Effect.die("Start progress was not prepared");
-              const replayed = yield* append(store, firstBatch, seeded);
+              const replayed = yield* store.append(firstRequest);
+
+              expect(firstRequest.batch.records).toEqual([]);
+              expect(replayed.lastSequence).toBe(seeded.lastSequence);
+              expect(replayed.tailDigest).toBe(seeded.tailDigest);
 
               const continuation = yield* readContinuation(
                 threadId,

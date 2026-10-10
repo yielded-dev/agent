@@ -8,11 +8,7 @@ import { ThreadId, ToolCallId } from "@yielded/agent/identifiers";
 import { MessageDeliveryFailpoint, MessageDeliveryStore } from "@yielded/agent/message-delivery";
 import type { Receipt } from "@yielded/agent/receipt";
 import { DefinitionDigestInput } from "@yielded/agent/records";
-import {
-  canonicalRecordBytes,
-  readContinuation,
-  runEvidence,
-} from "@yielded/agent/run-continuation";
+import { canonicalRecordBytes, runEvidence } from "@yielded/agent/run-continuation";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
 import * as Subagent from "@yielded/agent/subagent";
@@ -150,6 +146,8 @@ it.effect(
         let independent: Subagent.Worker<"ownership"> | undefined;
         let conserved: Subagent.Worker<"ownership"> | undefined;
         let sourceCalls = 0;
+        let checkAccounting: Effect.Effect<void> = Effect.void;
+        let accountingChecks = 0;
 
         const handlers = toolkit.toLayer({
           coordinate: ({ action }) =>
@@ -242,6 +240,8 @@ it.effect(
             filename: `${directory}/runtime.sqlite`,
             deploymentId: "ownership",
             producerId: "node",
+            runtimeFailpoint: (location) =>
+              location === "terminalize:before-publication" ? checkAccounting : Effect.void,
           },
         ).pipe(Layer.provide([authority, handlers]));
 
@@ -276,19 +276,30 @@ it.effect(
             ThreadIdentityRequest.make({ threadId: sourceThreadId }),
           );
 
-          const continuation = Option.getOrThrow(
-            yield* readContinuation(
-              sourceThreadId,
-              runIdForSubmission(receipt.submissionId),
-              tail.tailSequence,
-            ),
-          );
+          expect(
+            yield* reader.readExecution({
+              threadId: sourceThreadId,
+              runId: runIdForSubmission(receipt.submissionId),
+            }),
+          ).toEqual(Option.none());
 
           const evidence = yield* Stream.runCollect(
             runEvidence(sourceThreadId, receipt.submissionId, tail.tailSequence),
           );
 
-          return { continuation, evidence };
+          const terminal = evidence.find(
+            ({ record: { payload } }) =>
+              payload._tag === "SubmissionSettled" && payload.submissionId === receipt.submissionId,
+          );
+
+          if (terminal?.record.payload._tag !== "SubmissionSettled")
+            return yield* Effect.die("Expected the settled Run's canonical outcome");
+
+          expect(terminal.record.payload.historyRecordCount).toBe(
+            evidence.filter((entry) => entry.sequence <= terminal.sequence).length,
+          );
+
+          return { terminal, evidence };
         });
 
         const before = yield* snapshot(launch).pipe(Effect.provideService(ThreadReader, reader));
@@ -341,14 +352,41 @@ it.effect(
           },
         );
 
+        checkAccounting = Effect.gen(function* () {
+          const tail = yield* reader.readIdentity(
+            ThreadIdentityRequest.make({ threadId: sourceThreadId }),
+          );
+
+          const execution = yield* reader.readExecution({
+            threadId: sourceThreadId,
+            runId: runIdForSubmission(next.submissionId),
+          });
+
+          if (Option.isNone(execution)) return yield* Effect.die("Missing active Run B accounting");
+
+          const evidence = yield* Stream.runCollect(
+            runEvidence(sourceThreadId, next.submissionId, tail.tailSequence),
+          ).pipe(Effect.provideService(ThreadReader, reader));
+
+          expect(execution.value.progress.recordBytes).toBe(
+            evidence.reduce((sum, entry) => sum + canonicalRecordBytes(entry.record), 0) +
+              execution.value.operational.reduce(
+                (sum, record) => sum + canonicalRecordBytes(record),
+                0,
+              ),
+          );
+          accountingChecks++;
+        }).pipe(Effect.orDie);
         yield* runtime.processThreadResolved(sourceThreadId);
         expect((yield* runtime.awaitSettlement(next)).outcome).toBe("completed");
+        expect(accountingChecks).toBe(1);
+        checkAccounting = Effect.void;
         yield* Scope.close(firstScope, Exit.void);
         const second = yield* Layer.build(hostLayer);
         const reopened = Context.get(second, ThreadReader);
         const after = yield* snapshot(launch).pipe(Effect.provideService(ThreadReader, reopened));
 
-        expect.soft(after.continuation).toEqual(before.continuation);
+        expect.soft(after.evidence).toEqual(before.evidence);
         expect
           .soft(after.evidence.map((entry) => entry.record.recordId))
           .toEqual(before.evidence.map((entry) => entry.record.recordId));
@@ -361,9 +399,6 @@ it.effect(
         expect(handoff?.record.payload).toMatchObject({
           admission: { parameters: { note: "Run B" } },
         });
-        expect(current.continuation.continuation.recordBytes).toBe(
-          current.evidence.reduce((sum, entry) => sum + canonicalRecordBytes(entry.record), 0),
-        );
 
         const workerState = yield* readWorkerState({
           threadId: sourceThreadId,
@@ -1146,6 +1181,18 @@ it.effect(
         expect(prompts).toEqual([["original"]]);
         expect(consentCalls).toEqual([]);
 
+        const heldExecution = yield* history.readExecution({
+          threadId: start.worker.threadId,
+          runId: runIdForSubmission(receipt.submissionId),
+        });
+
+        expect(Option.isSome(heldExecution)).toBe(true);
+        expect(
+          Option.getOrThrow(heldExecution).operational.filter(
+            ({ payload }) => payload._tag === "RunStarted",
+          ),
+        ).toHaveLength(1);
+
         const followUp = (question: string) =>
           withFacet(
             owner,
@@ -1230,7 +1277,44 @@ it.effect(
               : [],
           ),
         ).toHaveLength(1);
-        expect(payloads.filter((payload) => payload._tag === "RunStarted")).toHaveLength(2);
+
+        const settledRuns = payloads
+          .filter((payload) => payload._tag === "SubmissionSettled")
+          .filter((payload) => payload.runId === runIdForSubmission(payload.submissionId));
+
+        expect(settledRuns).toHaveLength(2);
+        if (newer.receipt === null) return yield* Effect.die("Expected an admitted newer input");
+        expect(settledRuns.map((settlement) => settlement.runId)).toEqual([
+          runIdForSubmission(receipt.submissionId),
+          runIdForSubmission(newer.receipt.submissionId),
+        ]);
+        expect(settledRuns).toMatchObject([
+          { outcome: "failed", result: { errorTag: "AgentToolAuthorizationDenied" } },
+          { outcome: "completed" },
+        ]);
+
+        // The denied navigation response is still unresolved, so its Run evidence remains available.
+        const deniedExecution = Option.getOrThrow(
+          yield* history.readExecution({
+            threadId: start.worker.threadId,
+            runId: runIdForSubmission(receipt.submissionId),
+          }),
+        );
+
+        expect(deniedExecution.progress.position).toBe("settled");
+        expect(
+          deniedExecution.operational.filter(({ payload }) => payload._tag === "RunStarted"),
+        ).toEqual(
+          Option.getOrThrow(heldExecution).operational.filter(
+            ({ payload }) => payload._tag === "RunStarted",
+          ),
+        );
+        expect(
+          yield* history.readExecution({
+            threadId: start.worker.threadId,
+            runId: runIdForSubmission(newer.receipt.submissionId),
+          }),
+        ).toEqual(Option.none());
 
         const sourceLog = yield* readTestThread(
           history,

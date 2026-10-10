@@ -88,10 +88,12 @@ concepts succinctly: what a feature does, how it fits, and how to use it.
    Effect AI `Tool`, `Toolkit`, `LanguageModel`, `Prompt`, `Response`, or `Model`.
 6. Provider SDK values never become canonical thread records. Effect AI values may be used
    by the interpreter, but durable records remain explicit, versioned Schemas.
-7. The canonical log is append-only, including Run continuations and their execution evidence.
-   Projections, lookup indexes, and cached recovery snapshots are disposable derivatives.
-   Continuations must be deterministically recomputable from their referenced facts, and `verify`
-   must recompute and compare them, failing closed on any mismatch as corruption.
+7. The canonical log is append-only and owns conversation content, operation evidence and terminal
+   outcomes. An unfinished Run's versioned checkpoint is authoritative operational state, committed
+   atomically with its new history under the same fence and revision check. Retire it only after
+   canonical settlement and closure of its execution obligations. Projections and lookup indexes
+   remain disposable. `verify` checks retained history and active checkpoints, including original
+   context integrity; it does not attest discarded intermediate checkpoint revisions.
 8. No code may claim exactly-once external side-effect execution.
 9. An unresolved ordinary tool call is never automatically replayed after ownership loss.
 10. Tool/model/subagent concurrency is bounded and deterministic at commit time. Tool batches use

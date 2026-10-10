@@ -217,42 +217,47 @@ it.effect("reprepares native settlement progress after a same-epoch administrati
 
       const publication = yield* settlementPublication(admitted, session.claim, lane, "aborted");
       let injected = false;
+      const [terminal, ...rest] = publication.append.batch.records;
 
-      const published = yield* progress.publish(publication.append.batch).pipe(
-        Effect.provideService(CurrentRunSettlement, {
-          threadId: session.threadId,
-          tail: session.tail,
-          publishSettlement: (prepared) =>
-            Effect.gen(function* () {
-              if (!injected) {
-                injected = true;
-                const administrative = yield* makeRunWriter(thread(lane), session.producerEpoch);
-                const repair = yield* makeProgressWriter(thread(lane), TEST_DEPLOYMENT);
+      if (terminal === undefined) return yield* Effect.die("Missing settlement fact");
 
-                const abort = record(
-                  submissionAbortRecordId(admitted.submissionId),
-                  AbortRequested.make({
-                    submissionId: admitted.submissionId,
-                    author: "operator",
-                    reason: "Abort raced settlement preparation",
-                  }),
-                );
+      const published = yield* progress
+        .publish(CanonicalBatch.make({ ...publication.append.batch, records: [terminal, ...rest] }))
+        .pipe(
+          Effect.provideService(CurrentRunSettlement, {
+            threadId: session.threadId,
+            tail: session.tail,
+            publishSettlement: (prepared, executions) =>
+              Effect.gen(function* () {
+                if (!injected) {
+                  injected = true;
+                  const administrative = yield* makeRunWriter(thread(lane), session.producerEpoch);
+                  const repair = yield* makeProgressWriter(thread(lane), TEST_DEPLOYMENT);
 
-                yield* repair
-                  .commit(
-                    CanonicalBatch.make({
-                      batchId: submissionAbortBatchId(admitted.submissionId),
-                      producerId: OTHER_PRODUCER,
-                      records: [abort],
+                  const abort = record(
+                    submissionAbortRecordId(admitted.submissionId),
+                    AbortRequested.make({
+                      submissionId: admitted.submissionId,
+                      author: "operator",
+                      reason: "Abort raced settlement preparation",
                     }),
-                  )
-                  .pipe(Effect.provideService(CurrentRunWriter, administrative));
-              }
+                  );
 
-              return yield* session.publishSettlement(prepared);
-            }),
-        }),
-      );
+                  yield* repair
+                    .commit(
+                      CanonicalBatch.make({
+                        batchId: submissionAbortBatchId(admitted.submissionId),
+                        producerId: OTHER_PRODUCER,
+                        records: [abort],
+                      }),
+                    )
+                    .pipe(Effect.provideService(CurrentRunWriter, administrative));
+                }
+
+                return yield* session.publishSettlement(prepared, executions);
+              }),
+          }),
+        );
 
       expect(published.replayed).toBe(false);
 
@@ -261,11 +266,13 @@ it.effect("reprepares native settlement progress after a same-epoch administrati
         ThreadExportRequest.make({ threadId: thread(lane) }),
       );
 
-      expect(
-        exported.records.flatMap(({ record }) =>
-          record.payload._tag === "RunContinuation" ? [record.payload.revision] : [],
-        ),
-      ).toEqual([1, 2, 3, 4]);
+      expect(injected).toBe(true);
+      expect(exported.records.map(({ record }) => record.payload._tag)).toEqual([
+        "UserInputRecorded",
+        "AbortRequested",
+        "SubmissionSettled",
+      ]);
+      expect(yield* store.readExecution({ threadId: thread(lane), runId })).toEqual(Option.none());
       expect(
         exported.records.filter(({ record }) => record.payload._tag === "SubmissionSettled"),
       ).toHaveLength(1);

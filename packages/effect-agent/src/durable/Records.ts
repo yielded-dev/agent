@@ -681,6 +681,8 @@ const RawSubmissionSettled = Schema.Struct({
   receiptId: ReceiptId,
   outcome: SettlementOutcome,
   runId: Schema.optionalKey(RunId),
+  /** Number of retained owning facts through this terminal commit, excluding mutable progress. */
+  historyRecordCount: Schema.optionalKey(Schema.Natural),
   result: Schema.optionalKey(PersistedJson),
   /**
    * Application-defined, Schema-encoded disposition for an ordinary completed
@@ -1106,7 +1108,7 @@ export class SubtreeBudgetReserved extends Schema.TaggedClass<SubtreeBudgetReser
   },
 ) {}
 
-/** Logical canonical identity and content integrity, independent of hot-storage location. */
+/** Fact identity and content integrity; active-only references resolve inside their Run checkpoint. */
 export const EvidenceReference = Schema.Struct({ recordId: RecordId, digest: Digest });
 export type EvidenceReference = typeof EvidenceReference.Type;
 
@@ -1215,12 +1217,12 @@ export const RunPosition = Schema.Literals([
 ]);
 
 /**
- * Canonical interpreter progress, co-committed with lastFact under the Thread fence.
- * lastFact is the exact accounted frontier in the same atomic batch; its logical
- * sequence is resolved from canonical evidence rather than predicted by a producer.
- * References resolve within this Thread. Operation results, call identities, approvals,
- * delivery obligations, and context payloads stay in their own canonical owners.
- * Neither this record nor its latest-record index grants execution authority.
+ * Current interpreter progress, replaced atomically with lastFact under the Thread fence.
+ * lastFact is the exact accounted frontier of the same commit. References resolve within this
+ * Thread's history or its authoritative active checkpoint. Results, operation declarations,
+ * approvals and delivery obligations remain canonical; evaluated context and validated completion
+ * belong to active state. Neither the checkpoint nor its revision grants execution authority.
+ * Retired intermediate revisions are not historical verification evidence.
  */
 export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
   "RunContinuation",
@@ -1233,11 +1235,11 @@ export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
     recordCount: Schema.Natural.check(
       Schema.isLessThanOrEqualTo(MAX_RUN_EVIDENCE_RECORDS + RUN_TERMINAL_RESERVE_RECORDS),
     ),
-    /** Cumulative owning fact bytes, excluding continuation records. */
+    /** Cumulative committed owning fact bytes, excluding progress; deletion never refunds them. */
     recordBytes: Schema.Natural.check(
       Schema.isLessThanOrEqualTo(MAX_RUN_EVIDENCE_BYTES + MAX_RUN_TERMINAL_BYTES),
     ),
-    /** Logical Turn whose incremental canonical bytes are currently being charged. */
+    /** Logical Turn whose incremental durable commit bytes are currently being charged. */
     turn: Schema.Natural,
     turnBytes: Schema.Natural.check(
       Schema.isLessThanOrEqualTo(MAX_TURN_CANONICAL_BYTES + MAX_RUN_TERMINAL_BYTES),
@@ -1258,10 +1260,10 @@ export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
 ) {}
 
 /** Bump only when the meaning of an existing record changes, independently of SQL layout. */
-export const CURRENT_RECORD_VERSION = 3;
-export const CURRENT_RECORD_FORMAT = "effect-agent/thread@3";
+export const CURRENT_RECORD_VERSION = 4;
+export const CURRENT_RECORD_FORMAT = "effect-agent/thread@4";
 
-/** Supported canonical facts. Unsupported control records must fail before execution. */
+/** Durable fact and execution-command schemas. Unsupported controls fail before execution. */
 export const KnownRecordPayload = Schema.Union([
   ThreadCreated,
   UserInputRecorded,
