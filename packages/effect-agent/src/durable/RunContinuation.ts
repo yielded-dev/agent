@@ -48,7 +48,6 @@ import {
   runIdForSubmission,
   runCompletedRecordId,
   toolCallSettledRecordId,
-  toolCallResultBatchId,
   subagentRequestedRecordId,
   subagentStartedRecordId,
 } from "./RunJournal.ts";
@@ -57,7 +56,6 @@ import {
   submissionAbortRecordId,
   submissionInputRecordId,
   submissionSettlementRecordId,
-  submissionSettlementBatchId,
 } from "./SubmissionLedger.ts";
 import { getRecord, getRunInput, ThreadReader, ThreadStoreError } from "./ThreadStore.ts";
 
@@ -122,6 +120,10 @@ const ContinuationBytes = Schema.Struct({
   turnBytes: RunContinuation.fields.turnBytes,
   terminalBytes: RunContinuation.fields.terminalBytes,
 });
+
+// Fenced revision validation makes this pair unique without repeating the batch identity.
+const continuationRecordId = (runId: RunId, revision: number) =>
+  RecordId.make(JSON.stringify(["continuation@1", runId, revision]));
 
 /** One private snapshot for every retry; callers cannot change facts while awaiting the gate. */
 const captureFacts = (batch: CanonicalBatch) =>
@@ -1168,10 +1170,10 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     const ref = (recordId: RecordId) =>
       EvidenceReference.make({ recordId, digest: progress.lastFact.digest });
 
-    const fits = (batchId: string, lastFact: EvidenceReference, terminal?: EvidenceReference) =>
+    const fits = (lastFact: EvidenceReference, terminal?: EvidenceReference) =>
       // Only these identities change. The fixed allowance covers scalar and timestamp growth.
       size +
-        textBytes(JSON.stringify(["continuation@1", progress.runId, batchId])) -
+        textBytes(continuationRecordId(progress.runId, progress.revision + 1)) -
         textBytes(state.record.recordId) +
         textBytes(deploymentId) -
         textBytes(state.record.deploymentId) +
@@ -1187,7 +1189,6 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
 
     if (
       !fits(
-        submissionSettlementBatchId(progress.submissionId),
         ref(submissionSettlementRecordId(progress.submissionId)),
         ref(runCompletedRecordId(progress.runId)),
       )
@@ -1202,7 +1203,6 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         if (state.results.has(operation.toolCallId)) continue;
         if (
           !fits(
-            toolCallResultBatchId(progress.runId, state.response.turn, operation.toolCallId),
             ref(toolCallSettledRecordId(progress.runId, state.response.turn, operation.toolCallId)),
           )
         )
@@ -1416,7 +1416,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
       );
 
       const header = {
-        recordId: RecordId.make(JSON.stringify(["continuation@1", runId, batch.batchId])),
+        recordId: continuationRecordId(runId, continuation.revision),
         family: "thread" as const,
         schemaVersion: 1 as const,
         createdAt: last.createdAt,
