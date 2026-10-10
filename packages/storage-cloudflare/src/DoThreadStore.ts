@@ -79,6 +79,7 @@ import {
 } from "./internal/do-journal.ts";
 import { readDoStorageHeader } from "./internal/migrations.ts";
 import { invalidateOwnedState, ownedState } from "./internal/owned-state.ts";
+import { makePromptCheckpoints } from "./internal/prompt-checkpoint.ts";
 import { isAppendContention, withStorageSpan } from "./internal/storage-span.ts";
 
 /**
@@ -702,6 +703,7 @@ const makeServices = Effect.fnUntraced(function* () {
     read,
     readPrompt: (request) => Stream.fromIterableEffect(selectedReads.readPrompt(request)),
     checkpoints: { save: saveCheckpoint, load: loadCheckpoint },
+    promptCheckpoints: makePromptCheckpoints(sql, journal, config.maxStoredValueBytes),
   });
 
   return Context.make(ThreadStore, threadStore).pipe(Context.add(ThreadImport, transfer.importer));
