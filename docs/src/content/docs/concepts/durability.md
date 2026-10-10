@@ -32,7 +32,7 @@ See the [Node.js](/platforms/node/) and [Cloudflare](/platforms/cloudflare/) gui
 Replay rebuilds state from canonical records without executing tools. Projections and checkpoints
 are disposable; retain canonical records when rebuilding them.
 
-The execution protocol uses `effect-agent/thread@3` records in fresh layout-21 stores.
+The execution protocol uses `effect-agent/thread@3` records in fresh layout-22 stores.
 This format is unreleased: install matching runtime and storage packages, and retain predecessor
 stores with their matching release. Opening or importing a predecessor format fails before mutation;
 this release has no converter, predecessor decoder, or layout upgrade.

@@ -60,6 +60,10 @@ import { canonicalRecordJson } from "./SqlThreadArchiveRange.ts";
 /** Closed library tags must match SQLite partial-index predicates at prepare time. */
 export const SQL_PROMPT_PREDICATE = `record_tag IN (${PROMPT_EVIDENCE_TAGS.map((tag) => `'${tag}'`).join(", ")})`;
 
+/** Keep parameterized worker reads inside the same partial-index membership as the layout. */
+export const SQL_WORKER_EXECUTION_PREDICATE =
+  "run_id IS NOT NULL AND record_tag IN ('UserInputRecorded', 'RunStarted')";
+
 const canonicalColumns = {
   tag: "record_tag",
   runId: "run_id",
@@ -812,7 +816,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
               break;
             case "RunInput":
               rows =
-                yield* sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json FROM ${relation("effect_agent_canonical_records")} WHERE thread_id = ${request.threadId} AND ${canonicalField(sql, "tag")} = 'UserInputRecorded' AND ${canonicalField(sql, "kind")} = 'user' AND ${canonicalField(sql, "runId")} = ${canonicalIdentifier(selection.runId)} LIMIT 2`.pipe(
+                yield* sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_run_input")} WHERE thread_id = ${request.threadId} AND ${canonicalField(sql, "tag")} = 'UserInputRecorded' AND ${canonicalField(sql, "kind")} = 'user' AND ${canonicalField(sql, "runId")} = ${canonicalIdentifier(selection.runId)} LIMIT 2`.pipe(
                   execute,
                 );
               break;
@@ -820,7 +824,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
               rows = (yield* Effect.forEach(["UserInputRecorded", "RunStarted"], (tag) =>
                 sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_worker_execution")}
                   WHERE thread_id = ${request.threadId} AND ${canonicalField(sql, "tag")} = ${tag}
-                    AND ${canonicalField(sql, "runId")} IS NOT NULL
+                    AND ${sql.literal(SQL_WORKER_EXECUTION_PREDICATE)}
                   ORDER BY sequence DESC LIMIT 1`.pipe(execute),
               )).flat();
               break;
@@ -882,6 +886,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                   SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
                   FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_call")}
                   WHERE thread_id=${request.threadId} AND record_tag='SubagentJoined' AND run_id=${canonicalIdentifier(runIdForSubmission(funding))}
+                    AND tool_call_id IS NOT NULL
                     AND sequence>${after} AND sequence<=${selection.expectedTailSequence}
                   ORDER BY sequence LIMIT ${request.page.limit}) AS joined_worker`);
               }

@@ -123,7 +123,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               Effect.gen(function* () {
                 const db = yield* openDatabase(site.db);
 
-                expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 21 });
+                expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 22 });
                 expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
                 expect(derivativeCounts(db)).toEqual({ ownership: 1, attempts: 1 });
               }),

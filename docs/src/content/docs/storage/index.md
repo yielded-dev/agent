@@ -71,7 +71,7 @@ also reserve page space for the complete admission, accepted command, or deliver
 acknowledging it, including repeated identities and transfer metadata. Oversized fresh facts fail
 before mutation; replay of accepted work preserves its original Receipt.
 
-The unreleased protocol accepts only fresh layout-21 stores and `effect-agent/thread@3` records.
+The unreleased protocol accepts only fresh layout-22 stores and `effect-agent/thread@3` records.
 Predecessor stores fail before mutation; no older layout upgrade or archive converter is included.
 See the [operator procedure and limits](/guide/operations/#adopting-these-contracts).
 
