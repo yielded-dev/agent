@@ -90,7 +90,7 @@ export const cloudflareWakeSchedulerLayer: Layer.Layer<
     return WakeScheduler.of({
       withProcessing: (threadId, body) =>
         placement.ownsThread(threadId)
-          ? alarm.withWakesDeferred(body).pipe(Effect.ensuring(scheduleLocal))
+          ? alarm.withHintsDeferred(body).pipe(Effect.ensuring(scheduleLocal))
           : body,
       notify: (threadId, kind) =>
         placement.ownsThread(threadId) ? notifyLocal(threadId, kind) : notifyRemote(threadId),

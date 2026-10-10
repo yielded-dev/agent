@@ -1025,17 +1025,11 @@ export const makeSubscriptionPartitionObjectClass = <E>(
     subscription: (encoded: unknown) => handleRequest(encoded),
   } satisfies EffectCfDurableObject.DurableObjectRpc<SubscriptionRuntimeServices>;
 
-  const Base = EffectCfDurableObject.make(runtime, {
+  const SubscriptionPartitionObject = EffectCfDurableObject.make(runtime, {
     initialize: Effect.void,
     rpc,
     alarms: alarmHandler(limits),
   });
-
-  class SubscriptionPartitionObject extends Base {
-    override alarm(alarmInfo?: AlarmInvocationInfo): Promise<void> | void {
-      return super.alarm?.(alarmInfo);
-    }
-  }
 
   return SubscriptionPartitionObject;
 };

@@ -12,6 +12,7 @@ import { readTestThread } from "@yielded/agent/testing/thread-store-conformance"
 import { ThreadStore, ThreadExportRequest } from "@yielded/agent/thread-store";
 import { env, runInDurableObject } from "cloudflare:test";
 import { Effect, Layer, Schema, Stream } from "effect";
+import { DurableObject } from "effect-cf";
 import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
 import { expect, it } from "vite-plus/test";
 
@@ -24,7 +25,7 @@ import { stubFor } from "./harness.ts";
 it("preserves a returned Tool result across an input-drain failure without replaying its handler", () => {
   const thread = "cf-returned-result-before-drain";
 
-  return runInDurableObject(stubFor(thread), (_instance, state) => {
+  return runInDurableObject(stubFor(thread), (instance, state) => {
     let toolCalls = 0;
     let drainFailures = 0;
 
@@ -119,7 +120,7 @@ it("preserves a returned Tool result across an input-drain failure without repla
       Layer.provide([DurableObjectContext.layer(state, env), threadNamespaceLayer(env, "THREADS")]),
     );
 
-    return Effect.runPromise(
+    return instance[DurableObject.RunSymbol](
       Effect.gen(function* () {
         const runtime = yield* DurableAgentRuntime;
         const store = yield* ThreadStore;
