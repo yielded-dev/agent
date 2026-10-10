@@ -24,7 +24,13 @@ import {
 import {
   atom,
   defineActor,
+  MethodCancelled,
+  MethodFailed,
   type Atom,
+  type MessageReceipt,
+  type MethodInput,
+  type MethodOutput,
+  type MethodResult,
   type ThreadCoordinate,
 } from "../../node_modules/tardie/src/core/index.ts";
 import {
@@ -137,9 +143,15 @@ export const actorWorker = createActorWorker({
 
 type Reference = {
   wait: Effect.Effect<void, Error>;
-  methods: {
-    message: (input: { text: string }, request: { id: string }) => Effect.Effect<unknown, Error>;
-  };
+  invoke: (
+    method: "message",
+    input: MethodInput<typeof agentMethods.message>,
+    request: { readonly id: string },
+  ) => Effect.Effect<MessageReceipt, Error>;
+  result: (
+    method: "message",
+    id: string,
+  ) => Effect.Effect<MethodResult<MethodOutput<typeof agentMethods.message>>, Error>;
 };
 type Internals = {
   identityReady: Promise<void>;
@@ -288,8 +300,24 @@ export class ThreadDO extends actorWorker.ThreadObject {
   private async turn({ id, text }: Turn) {
     const reference = await this.open();
 
-    await Effect.runPromise(reference.methods.message({ text }, { id }));
-    await Effect.runPromise(reference.wait);
+    // Preserve native result subscriptions while wait reports processing failures.
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* reference.invoke("message", { text }, { id });
+        const [state] = yield* Effect.all([reference.result("message", id), reference.wait], {
+          concurrency: 2,
+        });
+
+        switch (state.status) {
+          case "completed":
+            return;
+          case "failed":
+            return yield* Effect.fail(new MethodFailed(state.error));
+          case "cancelled":
+            return yield* Effect.fail(new MethodCancelled(state.reason));
+        }
+      }),
+    );
   }
   override fetch(request: Request) {
     if (
