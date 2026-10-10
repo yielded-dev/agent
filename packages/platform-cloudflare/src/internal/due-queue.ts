@@ -189,7 +189,10 @@ export const make = (storage: DurableObjectStorage) => {
   /** Own the flush inside the source transaction without changing the SQL service.
    * Acquire its shared connection permit through Effect requirements. Cleanup follows
    * native settlement, including commit rejection or interruption. */
-  const withTransaction = <A, E, R>(body: Effect.Effect<A, E, R>) =>
+  const withTransaction = <A, E, R>(
+    body: Effect.Effect<A, E, R>,
+    transaction?: SqlClient["withTransaction"],
+  ) =>
     Effect.flatMap(SqlClient, (client) =>
       Effect.flatMap(Effect.serviceOption(client.transactionService), (ambient) => {
         if (ambient._tag === "Some" && !ownsTransaction(storage, ambient.value[1]))
@@ -210,42 +213,40 @@ export const make = (storage: DurableObjectStorage) => {
           Effect.suspend(() => {
             let frame: Frame | undefined;
 
-            return client
-              .withTransaction(
-                Effect.flatMap(Effect.serviceOption(client.transactionService), (transaction) =>
-                  Effect.sync(() => {
-                    if (transaction._tag === "None") throw new Error("SQL transaction unavailable");
-                    frame = begin(transaction.value[1]);
-                  }),
-                ).pipe(
-                  Effect.andThen(restore(body)),
-                  Effect.tap(() =>
-                    Effect.try({
-                      try: () => {
-                        if (frame !== undefined) flush(frame);
-                      },
-                      catch: (cause) =>
-                        SqlError.make({
-                          reason: UnknownError.make({
-                            cause,
-                            operation: "flush maintenance due queue",
-                            message: "Maintenance intent could not commit",
-                          }),
+            return (transaction ?? client.withTransaction)(
+              Effect.flatMap(Effect.serviceOption(client.transactionService), (transaction) =>
+                Effect.sync(() => {
+                  if (transaction._tag === "None") throw new Error("SQL transaction unavailable");
+                  frame = begin(transaction.value[1]);
+                }),
+              ).pipe(
+                Effect.andThen(restore(body)),
+                Effect.tap(() =>
+                  Effect.try({
+                    try: () => {
+                      if (frame !== undefined) flush(frame);
+                    },
+                    catch: (cause) =>
+                      SqlError.make({
+                        reason: UnknownError.make({
+                          cause,
+                          operation: "flush maintenance due queue",
+                          message: "Maintenance intent could not commit",
                         }),
-                    }),
-                  ),
-                ),
-              )
-              .pipe(
-                Effect.onExit((exit) =>
-                  Effect.sync(() => {
-                    if (frame !== undefined) finish(frame, Exit.isSuccess(exit));
+                      }),
                   }),
                 ),
-                // A released permit can resume another transaction. Do not auto-yield
-                // between the driver's settlement and removing this transaction's frame.
-                Effect.provideService(Scheduler.PreventSchedulerYield, true),
-              );
+              ),
+            ).pipe(
+              Effect.onExit((exit) =>
+                Effect.sync(() => {
+                  if (frame !== undefined) finish(frame, Exit.isSuccess(exit));
+                }),
+              ),
+              // A released permit can resume another transaction. Do not auto-yield
+              // between the driver's settlement and removing this transaction's frame.
+              Effect.provideService(Scheduler.PreventSchedulerYield, true),
+            );
           }),
         );
       }),

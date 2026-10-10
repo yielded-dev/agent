@@ -116,7 +116,8 @@ it("coalesces source intent and reads it once even above the warm cache limit", 
             ).toMatchObject({ dueAt: future + 500, progressKey: "4" });
           }).pipe(Effect.provide(Layer.fresh(ThreadMutationGate.layer)));
         }).pipe(
-          Effect.provide(SqliteClient.layer({ storage })),
+          // The SQL client and alarm service share the native handle; only queue SQL is observed.
+          Effect.provide(SqliteClient.layer({ storage: context.ctx.storage })),
           Effect.provideService(DurableObjectContext, { ...context, ctx }),
         );
       }).pipe(Effect.ensuring(Effect.promise(() => state.storage.deleteAlarm()))),
