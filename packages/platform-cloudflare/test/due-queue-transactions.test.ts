@@ -1,6 +1,6 @@
 import { SqliteClient } from "@effect/sql-sqlite-do";
 import { runInDurableObject } from "cloudflare:test";
-import { Effect, Exit, Layer } from "effect";
+import { Effect, Exit, Fiber, Layer } from "effect";
 import { DurableObject } from "effect-cf";
 import { SqlClient } from "effect/sql/SqlClient";
 import { expect, it } from "vite-plus/test";
@@ -148,6 +148,13 @@ it("discards aborted intent and preserves parent intent across child rollback", 
         yield* gate.withTransaction(
           Effect.gen(function* () {
             yield* gate.schedule("test:parent", future + 700, 5n);
+
+            const child = yield* Effect.forkChild(
+              gate.schedule("test:forked", future + 50, 1n).pipe(Effect.exit),
+            );
+
+            // A caught ownership refusal cannot commit the child's buffered source intent.
+            expect(Exit.isFailure(yield* Fiber.join(child))).toBe(true);
             yield* gate
               .withTransaction(
                 Effect.gen(function* () {
@@ -182,6 +189,8 @@ it("discards aborted intent and preserves parent intent across child rollback", 
             expect(queue.read().find((row) => row.id === "test:grandchild")).toBeUndefined();
           }),
         );
+        DueQueue.invalidate(state.storage);
+        expect(queue.read().find((row) => row.id === "test:forked")).toBeUndefined();
         yield* sql
           .withTransaction(
             gate
