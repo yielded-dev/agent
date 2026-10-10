@@ -11,7 +11,7 @@ import { IdempotencyKey } from "@yielded/agent/submission-ledger";
 import { ThreadStore } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Effect, Layer, Schema, Stream } from "effect";
+import { Context, Effect, Layer, Schema, Stream } from "effect";
 import { LanguageModel, Model, Prompt, Toolkit } from "effect/ai";
 import { expect, it } from "vite-plus/test";
 
@@ -126,10 +126,14 @@ it("reopens a projected prefix with an identical prompt and rebuilds damaged der
           model,
         );
 
-        const runtime = yield* DurableAgentRuntime.pipe(
-          Effect.provide(DurableAgentRuntime.layer.pipe(Layer.provide(runStorageLayer()))),
-          Effect.provideService(ThreadStore, counted),
+        const services = yield* Layer.build(
+          DurableAgentRuntime.layer.pipe(
+            Layer.provide(runStorageLayer()),
+            Layer.provide(Layer.succeed(ThreadStore, counted)),
+          ),
         );
+
+        const runtime = Context.get(services, DurableAgentRuntime);
 
         const receipt = yield* runtime.submit(agent, `input ${turn}`, {
           threadId: thread(name),
@@ -169,7 +173,7 @@ it("reopens a projected prefix with an identical prompt and rebuilds damaged der
   for (let turn = 0; turn < 8; turn++) await run(reference, turn);
   const rebuilt = await run(reference, 8, "missing");
 
-  expect(rebuilt.promptRecords).toBeGreaterThan(4);
+  expect(rebuilt.promptRecords).toBeGreaterThan(8);
 
   for (const damage of [undefined, "json", "prompt", "head", "version"] as const) {
     const name = `prompt-${damage ?? "hit"}-${crypto.randomUUID()}`;
@@ -178,7 +182,7 @@ it("reopens a projected prefix with an identical prompt and rebuilds damaged der
     const observed = await run(name, 8, damage);
 
     expect(observed.transcript).toBe(rebuilt.transcript);
-    if (damage === undefined) expect(observed.promptRecords).toBeLessThanOrEqual(4);
-    else expect(observed.promptRecords).toBeGreaterThan(4);
+    if (damage === undefined) expect(observed.promptRecords).toBeLessThanOrEqual(8);
+    else expect(observed.promptRecords).toBeGreaterThan(8);
   }
 }, 60_000);

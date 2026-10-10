@@ -1,6 +1,7 @@
 import { utf8ByteLength } from "@yielded/agent/digest";
 import {
   MAX_PROMPT_CHECKPOINT_BYTES,
+  MAX_PROMPT_CHECKPOINT_RUNS,
   PromptCheckpoint,
   PromptCheckpointHead,
   PromptCheckpointRead,
@@ -74,7 +75,8 @@ export const makePromptCheckpoints = (
 
           if (
             header.threadId !== request.threadId ||
-            header.producerEpoch + 1 !== request.producerEpoch ||
+            request.producerEpoch <= header.producerEpoch ||
+            request.producerEpoch - header.producerEpoch > MAX_PROMPT_CHECKPOINT_RUNS ||
             header.chunks !== rows.length - 1 ||
             rows.some((row, index) => row.key !== keyFor(prefix, index))
           )
@@ -84,10 +86,12 @@ export const makePromptCheckpoints = (
           if (
             head === undefined ||
             head.producer_epoch !== request.producerEpoch ||
-            head.tail_sequence !== header.throughSequence ||
-            head.tail_digest !== header.tailDigest
+            head.tail_sequence < header.throughSequence
           )
             return Option.none();
+          const [anchor] = yield* journal.getTailDigestAt(request.threadId, header.throughSequence);
+
+          if (anchor !== header.tailDigest) return Option.none();
           let bytes = 0;
 
           for (const row of rows) {

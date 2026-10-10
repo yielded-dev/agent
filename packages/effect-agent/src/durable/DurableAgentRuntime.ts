@@ -136,7 +136,7 @@ import {
   type ObligationBlockedOn,
   type ObligationThresholds,
 } from "./Admin.ts";
-import { canonicalJson, digestCanonicalJson, digestJson, type DigestError } from "./Digest.ts";
+import { canonicalJson, digestJson, type DigestError } from "./Digest.ts";
 import {
   DurableRuntimeFailpoint,
   type DurableRuntimeFailpointError,
@@ -165,12 +165,14 @@ import {
 } from "./internal/journal-metadata.ts";
 import { makeMessagingRuntime } from "./internal/messaging-host.ts";
 import {
-  loadPromptCheckpoint,
-  savePromptCheckpoint,
-  type CheckpointPrompt,
-} from "./internal/prompt-checkpoint.ts";
+  digestPromptHistory,
+  makePromptHistoryCache,
+  preparePromptHistory,
+  type CachedPromptHistory,
+  type PromptHistory,
+} from "./internal/prompt-history-cache.ts";
 import { RunContextReader } from "./internal/run-context-reader.ts";
-import { encodeRunHistory, readRunContext } from "./internal/run-context.ts";
+import { readRunContext } from "./internal/run-context.ts";
 import * as ThreadInitialization from "./internal/thread-initialization.ts";
 import {
   initialDispatchBlockedTurns,
@@ -1373,8 +1375,8 @@ interface InitialJournalSource {
   readonly original: CanonicalRecordEnvelope;
   readonly suffix: ReadonlyArray<CanonicalRecordEnvelope>;
   cacheable: boolean;
-  readonly prefix?: CheckpointPrompt;
-  promptJson?: string;
+  readonly prefix?: CachedPromptHistory;
+  history?: PromptHistory;
 }
 
 const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBinding>) {
@@ -1385,6 +1387,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const submissionScheduling = yield* SubmissionScheduling;
   const store = yield* ThreadStore;
   const reader = ThreadReader.fromStore(store);
+  const promptHistory = yield* makePromptHistoryCache(store);
 
   const workDiscovery = yield* ThreadWorkDiscovery.pipe(
     Effect.provide(ThreadWorkDiscovery.layer),
@@ -5022,6 +5025,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       )
         initialJournal.cacheable = false;
 
+      if (initialJournal?.cacheable)
+        initialJournal.history =
+          initialJournal.prefix ?? preparePromptHistory(journal.historyBefore);
+
       // All startup passes (including cache hits) are complete. Release the startup source;
       // later compaction can reread the exact prefix.
       if (initialJournal !== undefined) initialJournal.records = undefined;
@@ -5824,25 +5831,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 initialHistory.content.slice(0, priorHistoryLength),
               );
 
-              const prefix = initialJournal?.prefix;
-
-              const historyJson =
-                prefix !== undefined &&
-                prefix.prompt.content.length === history.content.length &&
-                history.content.every((message, index) => message === prefix.prompt.content[index])
-                  ? prefix.json
-                  : yield* encodeRunHistory(history);
-
-              const historyDigest = yield* withCrypto(digestCanonicalJson(historyJson)).pipe(
-                Effect.mapError((cause) =>
-                  RunJournalError.make({
-                    message: "Original model history integrity is unavailable",
-                    cause,
-                  }),
-                ),
+              const historyDigest = yield* withCrypto(
+                digestPromptHistory(history, initialJournal?.history),
               );
-
-              if (initialJournal?.cacheable) initialJournal.promptJson = historyJson;
 
               const retained = yield* Effect.forEach(
                 [...historyEvidence.values()]
@@ -6418,7 +6409,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
             if (initialJournal !== undefined) {
               initialJournal.cacheable = false;
-              initialJournal.promptJson = undefined;
+              initialJournal.history = undefined;
             }
             if (commit.kind !== "summarize" || initialJournal?.prefix !== undefined) {
               // Results must be canonical before pruning or rollover can cover them. Newly committed
@@ -8226,11 +8217,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     yieldAfter?: DateTime.Utc,
   ) =>
     Effect.gen(function* () {
-      const checkpointPrompt = yield* loadPromptCheckpoint(session).pipe(
-        Effect.provideService(ThreadStore, store),
-        Effect.provideService(ThreadReader, reader),
-        Effect.provideService(Crypto.Crypto, crypto),
-      );
+      const checkpointPrompt = yield* promptHistory
+        .take(session)
+        .pipe(
+          Effect.provideService(ThreadStore, store),
+          Effect.provideService(ThreadReader, reader),
+          Effect.provideService(Crypto.Crypto, crypto),
+        );
 
       session = yield* withProgressSession(session);
       const { claim, threadId } = session;
@@ -8688,7 +8681,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               return { records, original, suffix, prefix: checkpointPrompt, cacheable: true };
             }
             const history = yield* readInitialJournal(original, suffix);
-            let cacheable = fresh && store.promptCheckpoints !== undefined;
+            let cacheable = fresh;
 
             journalMetadata = makeJournalMetadata(runIdForSubmission(submissionId));
             for (const entry of history) {
@@ -8889,13 +8882,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         if (
           outcome._tag === "completed" &&
           initialJournal?.cacheable &&
-          initialJournal.promptJson !== undefined
+          initialJournal.history !== undefined
         )
-          yield* savePromptCheckpoint(
-            session,
-            initialJournal.original,
-            initialJournal.promptJson,
-          ).pipe(Effect.provideService(ThreadStore, store));
+          yield* promptHistory
+            .complete(session, initialJournal.original, initialJournal.history)
+            .pipe(
+              Effect.provideService(ThreadStore, store),
+              Effect.provideService(ThreadReader, reader),
+            );
 
         return Option.some(settlement);
       }

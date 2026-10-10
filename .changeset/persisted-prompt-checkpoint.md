@@ -4,4 +4,4 @@
 "@yielded/agent-storage-sql": patch
 ---
 
-Reuse a verified persisted prompt checkpoint when starting a fresh Cloudflare Run after eviction. Rebuild from canonical history whenever the checkpoint cannot be reused.
+Reuse verified prompt history across consecutive durable Runs and seed it from a persisted Cloudflare checkpoint after eviction. Amortize checkpoint refreshes while rebuilding from canonical history whenever the cached prefix or suffix cannot be verified.
