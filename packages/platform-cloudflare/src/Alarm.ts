@@ -44,7 +44,7 @@ import {
 } from "effect";
 import { DurableObjectAlarm, DurableObjectStorage } from "effect-cf";
 import { SqlClient } from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
+import { SqlError, UnknownError } from "effect/sql/SqlError";
 
 import { DurableObjectContext } from "./CloudflareBindings.ts";
 import { AuxiliaryDispatchMillis, CloudflareDurableRuntimeConfig } from "./CloudflareConfig.ts";
@@ -211,21 +211,54 @@ type CheckpointIntent = {
   readonly cancel: () => void;
 };
 
-/** Keep the SQL owner and queue frame through the outer commit. Promise callbacks
- * record intent; only the owning Effect callback uses the alarm transaction handle. */
+type MaintenanceStorage = Pick<DurableObjectTransaction, "get" | "put" | "delete">;
+type MaintenanceCheckpoint = Parameters<
+  Parameters<ThreadMaintenanceAlarm["Service"]["transaction"]>[0]
+>[0];
+
+const CurrentCheckpoint = Context.Reference<MaintenanceCheckpoint | undefined>(
+  "@yielded/agent/cloudflare/CurrentCheckpoint",
+  { defaultValue: () => undefined },
+);
+
+/** One source transaction owns queue intent and the library checkpoint through commit. */
 const makeAlarmOperation = Effect.gen(function* () {
   const alarms = yield* ThreadMaintenanceAlarm;
   const sql = yield* SqlClient;
   const { ctx } = yield* DurableObjectContext;
   const queue = DueQueue.make(ctx.storage);
-  const run = yield* makeStorageEffect;
 
-  return <A>(
+  const transaction: SqlClient["withTransaction"] = (body) =>
+    alarms
+      .transaction((checkpoint) => Effect.provideService(body, CurrentCheckpoint, checkpoint), {
+        sqlClient: sql,
+      })
+      .pipe(
+        Effect.mapError((cause) =>
+          cause instanceof DurableObjectStorage.StorageOperationError
+            ? SqlError.make({
+                reason: UnknownError.make({
+                  operation: "commit maintenance checkpoint",
+                  message: "Source facts and maintenance checkpoint could not commit",
+                  cause,
+                }),
+              })
+            : cause,
+        ),
+      );
+
+  const withTransaction = <A, E, R>(body: Effect.Effect<A, E, R>) =>
+    queue.withTransaction(body, transaction).pipe(Effect.provideService(SqlClient, sql));
+
+  const run = <A>(
     operation: string,
-    execute: (transaction: DurableObjectTransaction, checkpoint: CheckpointIntent) => Promise<A>,
+    execute: (transaction: MaintenanceStorage, checkpoint: CheckpointIntent) => Promise<A>,
   ) => {
-    const commit = alarms.transaction((tx) =>
-      Effect.suspend(() => {
+    const commit = Effect.flatMap(CurrentCheckpoint, (tx) => {
+      if (tx === undefined)
+        return Effect.die(new Error("Maintenance checkpoint transaction unavailable"));
+
+      return Effect.suspend(() => {
         let checkpoint: ReturnType<DurableObjectAlarm.AlarmScheduler["scheduleAlarm"]> =
           Effect.void;
 
@@ -241,21 +274,30 @@ const makeAlarmOperation = Effect.gen(function* () {
           },
         };
 
+        // The SQL/alarm callback already owns the native transaction; KV uses the same storage.
         return Effect.tryPromise({
-          try: () => ctx.storage.transaction((transaction) => execute(transaction, intent)),
+          try: () => execute(ctx.storage, intent),
           catch: alarmFailure(operation),
         }).pipe(Effect.tap(() => checkpoint));
-      }),
-    );
+      });
+    });
 
-    return Effect.flatMap(Effect.serviceOption(sql.transactionService), (ambient) =>
-      ambient._tag === "Some" && !DueQueue.buffering(ctx.storage)
-        ? run(operation, commit.pipe(Effect.mapError(alarmFailure(operation))))
-        : queue
-            .withTransaction(Effect.uninterruptible(commit))
-            .pipe(Effect.provideService(SqlClient, sql), Effect.mapError(alarmFailure(operation))),
-    );
+    return Effect.gen(function* () {
+      const current = yield* CurrentCheckpoint;
+
+      if (current !== undefined) return yield* commit;
+      const ambient = yield* Effect.serviceOption(sql.transactionService);
+
+      // Preserve eager writes and invalidation for an unwrapped host SQL transaction.
+      return yield* ambient._tag === "Some" && !DueQueue.buffering(ctx.storage)
+        ? transaction(commit).pipe(
+            Effect.ensuring(Effect.sync(() => DueQueue.invalidate(ctx.storage))),
+          )
+        : withTransaction(commit);
+    }).pipe(Effect.uninterruptible, Effect.mapError(alarmFailure(operation)));
   };
+
+  return { run, withTransaction };
 });
 
 export class MaintenancePassReport extends Schema.Class<MaintenancePassReport>(
@@ -536,7 +578,7 @@ const readRecoveryRecipients = async (
 };
 
 const appendRecoveryRecipients = async (
-  transaction: DurableObjectTransaction,
+  transaction: MaintenanceStorage,
   threadId: ThreadId,
   count: number,
   added: ReadonlyArray<SubmissionId>,
@@ -802,7 +844,7 @@ export class ThreadMutationGate extends Context.Service<
       const minimumAlarmDelay = Math.max(1, Math.ceil(config.alarmBackoffBase / 2));
 
       const runTransaction = yield* makeStorageOperation;
-      const runAlarmTransaction = yield* makeAlarmOperation;
+      const { run: runAlarmTransaction, withTransaction } = yield* makeAlarmOperation;
 
       const validateSourceBoundary = Effect.flatMap(
         Effect.serviceOption(sql.transactionService),
@@ -832,10 +874,7 @@ export class ThreadMutationGate extends Context.Service<
         yield* validateSourceBoundary;
         const now = yield* Clock.currentTimeMillis;
 
-        const enroll = async (
-          transaction: DurableObjectTransaction,
-          checkpoint: CheckpointIntent,
-        ) => {
+        const enroll = async (transaction: MaintenanceStorage, checkpoint: CheckpointIntent) => {
           if (progressCursor === undefined) dueQueue.dirty(id, dueAt);
           else if (
             dueQueue.progress(id, dueAt, progressCursor) &&
@@ -1026,8 +1065,7 @@ export class ThreadMutationGate extends Context.Service<
       });
 
       return ThreadMutationGate.of({
-        withTransaction: <A, E, R>(body: Effect.Effect<A, E, R>) =>
-          dueQueue.withTransaction(body).pipe(Effect.provideService(SqlClient, sql)),
+        withTransaction,
         withMutation,
         schedule,
         recordProgress,
@@ -1150,7 +1188,7 @@ export class ThreadMaintenance extends Context.Service<
       const maintenancePassGate = yield* Semaphore.make(1);
       const minimumAlarmDelay = Math.max(1, Math.ceil(config.alarmBackoffBase / 2));
       const runTransaction = yield* makeStorageOperation;
-      const runAlarmTransaction = yield* makeAlarmOperation;
+      const { run: runAlarmTransaction } = yield* makeAlarmOperation;
 
       const queueSnapshot = runTransaction("read maintenance due queue", async () =>
         dueQueue.read(),
@@ -1300,7 +1338,7 @@ export class ThreadMaintenance extends Context.Service<
       };
 
       const appendRecoveryEvents = async (
-        transaction: DurableObjectTransaction,
+        transaction: MaintenanceStorage,
         events: ReadonlyArray<Omit<ThreadRecoveryFaultEvent, "sequence">>,
       ) => {
         if (events.length === 0) return;
@@ -1547,7 +1585,7 @@ export class ThreadMaintenance extends Context.Service<
 
       // Registry changes, including upgrades from timed binding retries, create one native
       // opportunity. Unchanged registries leave parked work dormant across Object eviction.
-      const readCurrentMaintenanceState = async (transaction: DurableObjectTransaction) => {
+      const readCurrentMaintenanceState = async (transaction: MaintenanceStorage) => {
         const current = await readMaintenanceState(transaction);
 
         if (current.state.bindingRegistryKey === runtime.bindingRegistryKey) return current;
