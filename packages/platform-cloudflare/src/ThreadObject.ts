@@ -53,15 +53,17 @@ import {
 } from "@yielded/agent/thread-store";
 import { WorkDiscoveryUnavailable } from "@yielded/agent/thread-work";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Effect, Layer, Option, Schema, Stream } from "effect";
+import { Effect, Layer, Option, Schema, Stream, type Scope } from "effect";
 import {
   DurableObject as EffectCfDurableObject,
+  DurableObjectAlarm,
   DurableObjectState as EffectCfDurableObjectState,
   WorkerEnvironment,
 } from "effect-cf";
 
 import {
   ThreadMaintenance,
+  ThreadMaintenanceAlarm,
   DurableAlarmError,
   DurableAlarmService,
   ThreadMutationGate,
@@ -151,11 +153,50 @@ export {
  * `runRecovery({ threadId })` BEFORE that Thread's claim; old recovery cannot gate fresh dispatch.
  */
 
+type ApplicationAlarmRegistration<ApplicationServices, EventServices, AlarmServices, AlarmError> =
+  DurableObjectAlarm.AlarmRegistration<
+    AlarmServices,
+    | RuntimeServices
+    | ApplicationServices
+    | EventServices
+    | NoInfer<AlarmServices>
+    | EffectCfDurableObjectState.DurableObjectState
+    | WorkerEnvironment
+    | Scope.Scope,
+    AlarmError
+  >;
+
 /** Construction options for one deployed Thread Object class. */
-export interface Options<
+export type Options<
   ApplicationServices = never,
   EventServices = never,
   EventLayerError = never,
+  AlarmServices = never,
+  AlarmError = never,
+> = BaseOptions<ApplicationServices, EventServices, EventLayerError, AlarmServices> &
+  ([AlarmServices] extends [never]
+    ? {
+        readonly alarms?: ApplicationAlarmRegistration<
+          ApplicationServices,
+          EventServices,
+          AlarmServices,
+          AlarmError
+        >;
+      }
+    : {
+        readonly alarms: ApplicationAlarmRegistration<
+          ApplicationServices,
+          EventServices,
+          AlarmServices,
+          AlarmError
+        >;
+      });
+
+interface BaseOptions<
+  ApplicationServices,
+  EventServices,
+  EventLayerError,
+  AlarmServices,
 > extends CloudflareDurableRuntimeOptions {
   /** Accept transient native RPC tracing through effect-cf; disabled by default. */
   readonly rpcTracing?: boolean;
@@ -171,6 +212,7 @@ export interface Options<
     EventLayerError,
     | RuntimeServices
     | ApplicationServices
+    | NoInfer<AlarmServices>
     | EffectCfDurableObjectState.DurableObjectState
     | WorkerEnvironment
   >;
@@ -451,7 +493,7 @@ export const submit = Effect.fnUntraced(function* (threadId: ThreadId, request: 
         definitions: request.definitions,
       })
       .pipe(
-        alarm.withWakesDeferred,
+        alarm.withHintsDeferred,
         Effect.tap(() => publishCommitted),
       ),
   );
@@ -464,6 +506,18 @@ const submitEndpoint = (encoded: unknown): Effect.Effect<unknown, never, Endpoin
       Effect.gen(function* () {
         const identity = yield* ThreadObjectIdentity;
         const receipt = yield* submit(identity.threadId, request);
+        const scheduling = yield* DurableObjectAlarm.ScheduleConfiguration;
+
+        if (scheduling.dispatchAfterEvent === true) {
+          const alarms = yield* DurableAlarmService;
+
+          // Make accepted work eligible for post-response dispatch without changing queue retry floors.
+          yield* alarms.scheduleNow.pipe(
+            Effect.catch((error) =>
+              Effect.logWarning("Post-admission maintenance hint failed", error),
+            ),
+          );
+        }
 
         return SubmitSucceeded.make({ receipt });
       }),
@@ -1073,15 +1127,11 @@ export const handleRpc = Effect.fnUntraced(function* (
   );
 });
 
-const alarmEndpoint: Effect.Effect<void, MaintenancePassFailure, EndpointServices> = Effect.gen(
-  function* () {
-    const maintenance = yield* ThreadMaintenance;
-
-    // Typed pass failures propagate: the rejected promise makes workerd retry the alarm
-    // (at-least-once delivery), and the dirty generation retains a committed slot meanwhile.
-    yield* maintenance.pass;
-  },
-);
+/** Compose with application registrations on a shared physical object. */
+export const alarms = ThreadMaintenanceAlarm.handlers({
+  "@yielded/agent/thread-maintenance": () =>
+    Effect.flatMap(ThreadMaintenance, (maintenance) => Effect.asVoid(maintenance.pass)),
+});
 
 const gateEndpoint: Effect.Effect<void, MaintenancePassFailure, EndpointServices> = Effect.gen(
   function* () {
@@ -1133,7 +1183,10 @@ const effectCfPlatformLayer = (
 
 /** The public endpoints and effect-cf invocation hook of one Thread Object instance. */
 export interface Instance<EventServices = never> extends InstanceType<
-  EffectCfDurableObject.DurableObjectClass<Record<never, never>, RuntimeServices | EventServices>
+  EffectCfDurableObject.DurableObjectClass<
+    Record<never, never>,
+    RuntimeServices | EventServices | ThreadMaintenanceAlarm
+  >
 > {
   submitEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
   submissionStatusEncoded(encoded: unknown, traceContext?: unknown): Promise<unknown>;
@@ -1176,18 +1229,22 @@ export const make = <
   ApplicationError,
   EventServices = never,
   EventLayerError = never,
+  AlarmServices = never,
+  AlarmError = never,
 >(
   applicationLayer: Layer.Layer<
     CloudflareDurableRuntimeServices | ApplicationServices,
     ApplicationError,
     | CloudflareBootstrapServices
+    | ThreadMaintenanceAlarm
+    | NoInfer<AlarmServices>
     | EffectCfDurableObjectState.DurableObjectState
     | WorkerEnvironment
     | DurableObjectContext
     | ThreadObjectNamespace
   >,
-  options: Options<ApplicationServices, EventServices, EventLayerError>,
-): Class<ApplicationServices | EventServices> => {
+  options: Options<ApplicationServices, EventServices, EventLayerError, AlarmServices, AlarmError>,
+): Class<ApplicationServices | EventServices | AlarmServices> => {
   const application = applicationLayer.pipe(
     Layer.provideMerge(layerConfig(options)),
     Layer.provideMerge(effectCfPlatformLayer(options.namespaceBinding, options.rpcTracing)),
@@ -1199,7 +1256,10 @@ export const make = <
   const runtime: Layer.Layer<
     RuntimeServices | ApplicationServices,
     ThreadObjectInitializationError | ApplicationError,
-    EffectCfDurableObjectState.DurableObjectState | WorkerEnvironment
+    | EffectCfDurableObjectState.DurableObjectState
+    | WorkerEnvironment
+    | ThreadMaintenanceAlarm
+    | AlarmServices
   > = Layer.effectContext(
     Effect.gen(function* () {
       const state = yield* EffectCfDurableObjectState.DurableObjectState;
@@ -1231,15 +1291,17 @@ export const make = <
     RuntimeServices | ApplicationServices,
     EventServices,
     EventLayerError,
-    typeof rpc
+    typeof rpc,
+    ThreadMaintenanceAlarm | AlarmServices
   >;
 
-  const EffectCfThreadObject = EffectCfDurableObject.make<
+  return EffectCfDurableObject.make<
     RuntimeServices | ApplicationServices,
     ThreadObjectInitializationError | ApplicationError,
     EventServices,
     EventLayerError,
-    typeof rpc
+    typeof rpc,
+    ThreadMaintenanceAlarm | AlarmServices
   >(runtime, {
     ...(options.rpcTracing === true ? { rpcTracing: { service: options.namespaceBinding } } : {}),
     ...(options.eventLayer === undefined ? {} : { eventLayer: options.eventLayer }),
@@ -1247,20 +1309,10 @@ export const make = <
     // in each bounded pass so cross-Object initialization cannot deadlock.
     initialize: Effect.void,
     rpc,
-    alarm: () => alarmEndpoint,
-    // This host owns the raw alarm and supplies event services through options.eventLayer.
+    alarms:
+      options.alarms === undefined ? alarms : DurableObjectAlarm.mergeAll(options.alarms, alarms),
+    // The named registration supplies its scheduler before the constructor builds application services.
     // Upstream's conditional alarm-registration check cannot reduce over generic application
     // services. Options and the rpc satisfies check above retain their Effect requirements.
   } as NativeOptions);
-
-  // effect-cf's class type keeps `alarm` optional even when the handler option is present. This
-  // concrete override reflects this factory's stronger contract while delegating execution to
-  // the effect-cf runtime unchanged.
-  class ThreadObject extends EffectCfThreadObject {
-    override alarm(alarmInfo?: AlarmInvocationInfo): Promise<void> | void {
-      return super.alarm?.(alarmInfo);
-    }
-  }
-
-  return ThreadObject;
 };

@@ -278,6 +278,7 @@ export class PublicationThreadObject extends ThreadObject.make(
   {
     ...baseOptions,
     namespaceBinding: "PUBLICATIONS",
+    eventLayer: maintenanceClockLayer,
     // Twelve acknowledged renewals span the no-progress retry window without replaying
     // thousands of heartbeat operations when the publication tests advance their clock.
     ownershipLeaseDuration: 60_000,
@@ -309,7 +310,7 @@ export class ProjectionThreadObject extends ThreadObject.make(
     ),
     Layer.provideMerge(maintenanceClockLayer),
   ),
-  { ...baseOptions, namespaceBinding: "PROJECTIONS" },
+  { ...baseOptions, namespaceBinding: "PROJECTIONS", eventLayer: maintenanceClockLayer },
 ) {}
 
 export class TestThreadObject extends ThreadObject.make(
@@ -369,6 +370,7 @@ export class TestThreadObject extends ThreadObject.make(
     ...baseOptions,
     // Scripted providers have no spend; explicit cost-bound scout Runs still require pricing.
     estimateCostMicrousd: () => Effect.succeed({ costMicrousd: 0 }),
+    eventLayer: maintenanceClockLayer,
   },
 ) {
   override async portCall(encoded: unknown, traceContext?: unknown): Promise<unknown> {

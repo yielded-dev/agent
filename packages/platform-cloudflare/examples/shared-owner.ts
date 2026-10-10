@@ -8,7 +8,7 @@ import { ThreadStore } from "@yielded/agent/thread-store";
 import { Context, Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 
-import { ThreadMutationGate } from "../src/Alarm.ts";
+import { ThreadMutationGate, ThreadMaintenanceAlarm } from "../src/Alarm.ts";
 import { DurableObjectContext, ThreadObjectNamespace } from "../src/CloudflareBindings.ts";
 import * as ThreadObject from "../src/ThreadObject.ts";
 
@@ -19,7 +19,7 @@ class LocalReads extends Context.Service<LocalReads, { readonly store: ThreadSto
 
 /**
  * Build once per physical incarnation. The host routes each logical Thread deterministically,
- * calls handleRpc with that identity, and owns one bounded ThreadMaintenance.pass per alarm.
+ * calls handleRpc with that identity, and registers ThreadObject.alarms on its effect-cf host.
  */
 export const sharedOwnerRuntime = (
   state: DurableObjectState,
@@ -27,6 +27,7 @@ export const sharedOwnerRuntime = (
   namespace: ThreadObjectNamespace["Service"],
   ownsThread: (threadId: ThreadId) => boolean,
   bindings: ReadonlyArray<ResolvedBinding>,
+  alarms: ThreadMaintenanceAlarm["Service"],
 ) => {
   const localReads = Layer.effect(LocalReads)(Effect.map(ThreadStore, (store) => ({ store })));
   const projection = Layer.merge(ThreadProjectionMaintenance.layer, localReads);
@@ -50,6 +51,7 @@ export const sharedOwnerRuntime = (
 
   return ManagedRuntime.make(
     ThreadObject.layerInHost(application, { projection }).pipe(
+      Layer.provide(Layer.succeed(ThreadMaintenanceAlarm, alarms)),
       Layer.provideMerge(SqliteClient.layer({ storage: state.storage })),
       Layer.provideMerge(
         ThreadObject.layerHostConfig(

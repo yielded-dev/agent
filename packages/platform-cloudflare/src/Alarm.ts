@@ -42,9 +42,9 @@ import {
   Stream,
   Struct,
 } from "effect";
-import { DurableObjectStorage } from "effect-cf";
+import { DurableObjectAlarm, DurableObjectStorage } from "effect-cf";
 import { SqlClient } from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
+import { SqlError, UnknownError } from "effect/sql/SqlError";
 
 import { DurableObjectContext } from "./CloudflareBindings.ts";
 import { AuxiliaryDispatchMillis, CloudflareDurableRuntimeConfig } from "./CloudflareConfig.ts";
@@ -52,10 +52,8 @@ import { safeCauseMessage } from "./internal/boundary.ts";
 import * as DueQueue from "./internal/due-queue.ts";
 
 /**
- * The single multiplexed Durable Object alarm (decision D-P6-2). A Durable Object has ONE
- * alarm slot; due work (lease expiry, settlement
- * and abort re-checks, retry backoff) multiplexes into one idempotent maintenance pass, and
- * the slot always holds the EARLIEST deadline any caller asked for.
+ * The maintenance queue owns lease expiry, settlement, retries and dirty generations.
+ * Its manual effect-cf alarm shares the native slot with other registered alarms.
  *
  * The alarm invariant (plan §1.4): every committed actionable mutation carries a newer durable
  * maintenance generation and a committed alarm. Stable externally-driven waits may be
@@ -123,114 +121,216 @@ const makeStorageOperation = Effect.map(
       run(operation, Effect.tryPromise({ try: execute, catch: alarmFailure(operation) })),
 );
 
-/** Native `ctx.storage` alarm slot owned by ThreadMaintenance; storage is truth. */
+/** One manual alarm for the entire consumer-owned maintenance queue. */
+export class ThreadMaintenanceAlarm extends DurableObjectAlarm.Tag<ThreadMaintenanceAlarm>()(
+  "@yielded/agent/thread-maintenance",
+  { "@yielded/agent/thread-maintenance": { payload: Schema.Null, lifecycle: "manual" } },
+) {}
+
+const maintenanceAlarmRef = { tag: "@yielded/agent/thread-maintenance", id: "queue" } as const;
+
+const maintenanceAlarmInput = (deadline: number) => ({
+  ...maintenanceAlarmRef,
+  payload: null,
+  runAt: DateTime.makeUnsafe(deadline),
+});
+
+/** Named maintenance checkpoint; the library owns the shared native alarm slot. */
 export class DurableAlarmService extends Context.Service<
   DurableAlarmService,
   {
-    /** The scheduled deadline in epoch milliseconds, if any. */
     readonly scheduled: Effect.Effect<Option.Option<number>, DurableAlarmError>;
-    /** Replace the slot with this deadline. */
     readonly scheduleAt: (epochMillis: number) => Effect.Effect<void, DurableAlarmError>;
-    /** Keep the EARLIER of the existing deadline and this one (the multiplexing rule). */
     readonly ensureScheduledBy: (epochMillis: number) => Effect.Effect<void, DurableAlarmError>;
-    /**
-     * Arm an immediate alarm (the durable, coalescing local wake) — DEFERRED while a
-     * maintenance pass or inline Thread processing is executing. Workerd cancels an in-flight
-     * alarm handler when a new EARLIER deadline is written during its execution (`requestScheduledAlarm`), and the
-     * maintenance pass runs INSIDE the alarm handler: an immediate wake landing mid-pass
-     * (a routed port mutation, a sibling's `wake()`, the coordinator's own local notify)
-     * would kill the running Attempt — manufacturing an ownership loss no real eviction
-     * caused, and routing open uncertain-class Tool Calls into spurious Unknown Outcomes.
-     * Deferral is contract-safe: wakes are droppable hints, every mutating entry point
-     * pre-arms BEFORE its first durable mutation (the alarm invariant never rests on this
-     * call). The pass's durable generation check observes any racing mutation, so the
-     * in-memory hint does not need to be flushed after a stable wait is acknowledged.
-     * Inline processing preserves those pre-armed deadlines and requests one immediate wake
-     * on exit for remaining due work. Inside a maintenance pass that request is still deferred.
-     */
+    /** Queue-aware promptness hint; idle queues stay idle and retry floors survive. */
     readonly scheduleNow: Effect.Effect<void, DurableAlarmError>;
-    /**
-     * Run pre-armed work with wake deferral (see `scheduleNow`); this never cancels the
-     * pre-armed alarm. Inline Thread processing must request `scheduleNow` after the body exits.
-     * A maintenance pass instead acknowledges its durable generation and owns the final alarm.
-     */
-    readonly withWakesDeferred: <A, E, R>(body: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
-    /** Clear the slot; correctness-sensitive clears live in maintenance generation transactions. */
+    /** Coalesce droppable inline hints without delaying committed deadlines or their delivery. */
+    readonly withHintsDeferred: <A, E, R>(body: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
     readonly cancel: Effect.Effect<void, DurableAlarmError>;
   }
 >()("@effect-agent/platform-cloudflare/DurableAlarmService") {
-  static readonly layer: Layer.Layer<DurableAlarmService, never, DurableObjectContext | SqlClient> =
-    Layer.effect(DurableAlarmService)(
-      Effect.gen(function* () {
-        const { ctx } = yield* DurableObjectContext;
-        /**
-         * In-memory deferral bookkeeping — a pure CACHE, never state: a fresh incarnation has no
-         * running body, and a deferred wake lost to eviction was only ever a promptness hint
-         * on top of the already-committed pre-armed alarm.
-         */
-        const runningPasses = yield* Ref.make(0);
+  static readonly layer = Layer.effect(DurableAlarmService)(
+    Effect.gen(function* () {
+      const alarms = yield* ThreadMaintenanceAlarm;
+      const { ctx } = yield* DurableObjectContext;
+      const run = yield* makeStorageEffect;
+      const inlineWork = yield* Ref.make(0);
 
-        const storageOperation = yield* makeStorageOperation;
+      const wrap = <A, E, R>(operation: string, effect: Effect.Effect<A, E, R>) =>
+        run(operation, effect.pipe(Effect.mapError(alarmFailure(operation))));
 
-        const scheduled = storageOperation("get alarm", () => ctx.storage.getAlarm()).pipe(
-          Effect.map((deadline) =>
-            deadline === null ? Option.none<number>() : Option.some(deadline),
+      return DurableAlarmService.of({
+        scheduled: wrap(
+          "read maintenance checkpoint",
+          alarms.getAlarmStatus(maintenanceAlarmRef),
+        ).pipe(
+          Effect.map((at) =>
+            at === undefined ? Option.none() : Option.some(DateTime.toEpochMillis(at.runAt)),
           ),
-        );
-
-        const scheduleAt = (epochMillis: number) =>
-          storageOperation("set alarm", () => ctx.storage.setAlarm(epochMillis));
-
-        const ensureScheduledBy = (epochMillis: number) =>
-          storageOperation("ensure alarm", () =>
-            ctx.storage.transaction(async (transaction) => {
-              const existing = await transaction.getAlarm();
-
-              if (existing === null || existing > epochMillis) {
-                await transaction.setAlarm(epochMillis);
-              }
-            }),
-          );
-
-        const armNow = Clock.currentTimeMillis.pipe(
-          Effect.flatMap((now) =>
-            storageOperation("wake maintenance lanes", () =>
-              ctx.storage.transaction(async (transaction) => {
-                const next = DueQueue.next(DueQueue.make(ctx.storage).read());
-
-                if (Number.isFinite(next))
-                  await ensureTransactionAlarmBy(transaction, Math.max(now, next));
-              }),
-            ),
+        ),
+        scheduleAt: (at) =>
+          wrap("replace maintenance checkpoint", alarms.scheduleAlarm(maintenanceAlarmInput(at))),
+        ensureScheduledBy: (at) =>
+          wrap(
+            "advance maintenance checkpoint",
+            alarms.scheduleAlarmEarlier(maintenanceAlarmInput(at)),
           ),
-        );
+        scheduleNow: Ref.get(inlineWork).pipe(
+          Effect.flatMap((active) =>
+            active > 0
+              ? Effect.void
+              : wrap(
+                  "hint maintenance checkpoint",
+                  alarms.transaction((tx) =>
+                    Effect.gen(function* () {
+                      const now = yield* Clock.currentTimeMillis;
+                      const next = DueQueue.next(DueQueue.make(ctx.storage).read());
 
-        const scheduleNow = Ref.get(runningPasses).pipe(
-          Effect.flatMap((passes) => (passes > 0 ? Effect.void : armNow)),
-        );
-
-        const withWakesDeferred = <A, E, R>(body: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+                      if (Number.isFinite(next))
+                        yield* tx.scheduleAlarmEarlier(maintenanceAlarmInput(Math.max(now, next)));
+                    }),
+                  ),
+                ),
+          ),
+        ),
+        withHintsDeferred: (body) =>
           Effect.acquireUseRelease(
-            Ref.update(runningPasses, (passes) => passes + 1),
+            Ref.update(inlineWork, (active) => active + 1),
             () => body,
-            () => Ref.update(runningPasses, (passes) => passes - 1),
-          );
-
-        const cancel = storageOperation("delete alarm", () => ctx.storage.deleteAlarm());
-
-        return DurableAlarmService.of({
-          scheduled,
-          scheduleAt,
-          ensureScheduledBy,
-          scheduleNow,
-          withWakesDeferred,
-          cancel,
-        });
-      }),
-    );
+            () => Ref.update(inlineWork, (active) => active - 1),
+          ),
+        cancel: wrap("cancel maintenance checkpoint", alarms.cancelAlarm(maintenanceAlarmRef)),
+      });
+    }),
+  );
 }
 
-/** What one maintenance pass did — auditable evidence mirroring `NodeDurableHost`'s report. */
+type CheckpointIntent = {
+  readonly at: (deadline: number) => void;
+  readonly earlier: (deadline: number) => void;
+  readonly cancel: () => void;
+};
+
+type MaintenanceStorage = Pick<DurableObjectTransaction, "get" | "put" | "delete">;
+type MaintenanceCheckpoint = {
+  readonly mutations: Parameters<
+    Parameters<ThreadMaintenanceAlarm["Service"]["transaction"]>[0]
+  >[0];
+  readonly requireActive: Effect.Effect<void, DurableAlarmError>;
+};
+
+const CurrentCheckpoint = Context.Reference<MaintenanceCheckpoint | undefined>(
+  "@yielded/agent/cloudflare/CurrentCheckpoint",
+  { defaultValue: () => undefined },
+);
+
+/** One source transaction owns queue intent and the library checkpoint through commit. */
+const makeAlarmOperation = Effect.gen(function* () {
+  const alarms = yield* ThreadMaintenanceAlarm;
+  const sql = yield* SqlClient;
+  const { ctx } = yield* DurableObjectContext;
+  const queue = DueQueue.make(ctx.storage);
+
+  const transaction: SqlClient["withTransaction"] = (body) =>
+    alarms
+      .transaction(
+        (mutations) =>
+          Effect.withFiber((owner) => {
+            let active = true;
+
+            const requireActive = Effect.withFiber((fiber) =>
+              active && fiber === owner
+                ? Effect.void
+                : Effect.fail(
+                    DurableAlarmError.make({
+                      operation: "enroll maintenance source",
+                      message: "Source intent requires its active transaction callback's fiber",
+                    }),
+                  ),
+            );
+
+            return body.pipe(
+              Effect.provideService(CurrentCheckpoint, { mutations, requireActive }),
+              Effect.ensuring(
+                Effect.sync(() => {
+                  active = false;
+                }),
+              ),
+            );
+          }),
+        { sqlClient: sql },
+      )
+      .pipe(
+        Effect.mapError((cause) =>
+          cause instanceof DurableObjectStorage.StorageOperationError
+            ? SqlError.make({
+                reason: UnknownError.make({
+                  operation: "commit maintenance checkpoint",
+                  message: "Source facts and maintenance checkpoint could not commit",
+                  cause,
+                }),
+              })
+            : cause,
+        ),
+      );
+
+  const withTransaction = <A, E, R>(body: Effect.Effect<A, E, R>) =>
+    queue.withTransaction(body, transaction).pipe(Effect.provideService(SqlClient, sql));
+
+  const run = <A>(
+    operation: string,
+    execute: (transaction: MaintenanceStorage, checkpoint: CheckpointIntent) => Promise<A>,
+  ) => {
+    const commit = Effect.flatMap(CurrentCheckpoint, (tx) => {
+      if (tx === undefined)
+        return Effect.die(new Error("Maintenance checkpoint transaction unavailable"));
+
+      return tx.requireActive.pipe(
+        Effect.andThen(
+          Effect.suspend(() => {
+            let checkpoint: ReturnType<DurableObjectAlarm.AlarmScheduler["scheduleAlarm"]> =
+              Effect.void;
+
+            const intent: CheckpointIntent = {
+              at: (at) => {
+                checkpoint = tx.mutations.scheduleAlarm(maintenanceAlarmInput(at));
+              },
+              earlier: (at) => {
+                checkpoint = tx.mutations.scheduleAlarmEarlier(maintenanceAlarmInput(at));
+              },
+              cancel: () => {
+                checkpoint = tx.mutations.cancelAlarm(maintenanceAlarmRef);
+              },
+            };
+
+            // The SQL/alarm callback already owns the native transaction; KV uses the same storage.
+            return Effect.tryPromise({
+              try: () => execute(ctx.storage, intent),
+              catch: alarmFailure(operation),
+            }).pipe(Effect.tap(() => checkpoint));
+          }),
+        ),
+      );
+    });
+
+    return Effect.gen(function* () {
+      const current = yield* CurrentCheckpoint;
+
+      if (current !== undefined) return yield* commit;
+      const ambient = yield* Effect.serviceOption(sql.transactionService);
+
+      // Preserve eager writes and invalidation for an unwrapped host SQL transaction.
+      return yield* ambient._tag === "Some" && !DueQueue.buffering(ctx.storage)
+        ? transaction(commit).pipe(
+            Effect.ensuring(Effect.sync(() => DueQueue.invalidate(ctx.storage))),
+          )
+        : withTransaction(commit);
+    }).pipe(Effect.uninterruptible, Effect.mapError(alarmFailure(operation)));
+  };
+
+  return { run, withTransaction };
+});
+
 export class MaintenancePassReport extends Schema.Class<MaintenancePassReport>(
   "@effect-agent/platform-cloudflare/MaintenancePassReport",
 )({
@@ -509,7 +609,7 @@ const readRecoveryRecipients = async (
 };
 
 const appendRecoveryRecipients = async (
-  transaction: DurableObjectTransaction,
+  transaction: MaintenanceStorage,
   threadId: ThreadId,
   count: number,
   added: ReadonlyArray<SubmissionId>,
@@ -659,17 +759,6 @@ const readMaintenanceState = async (
     : { state: decodeMaintenanceState(encoded), initialized: true };
 };
 
-const ensureTransactionAlarmBy = async (
-  transaction: Pick<DurableObjectTransaction, "getAlarm" | "setAlarm">,
-  deadline: number,
-): Promise<void> => {
-  const scheduled = await transaction.getAlarm();
-
-  if (scheduled === null || scheduled > deadline) {
-    await transaction.setAlarm(deadline);
-  }
-};
-
 const stableExternalWait = (
   snapshot: SubmissionWorkItem,
   reports: ReadonlyMap<string, RecoveryReport>,
@@ -713,8 +802,9 @@ const CurrentMutationLanes = Context.Reference<ReadonlyArray<string>>(
 export class ThreadMutationGate extends Context.Service<
   ThreadMutationGate,
   {
-    /** Commit source facts and their scheduling intent together. The flush runs before
-     * native commit; failed or interrupted transactions discard their queue view. */
+    /** Commit source facts and their scheduling intent together. Mutate from this callback's
+     * fiber, or use an explicit child transaction. The flush runs before native commit;
+     * failed or interrupted transactions discard their queue view. */
     readonly withTransaction: <A, E, R>(
       body: Effect.Effect<A, E, R>,
     ) => Effect.Effect<A, E | SqlError, R>;
@@ -786,6 +876,7 @@ export class ThreadMutationGate extends Context.Service<
       const minimumAlarmDelay = Math.max(1, Math.ceil(config.alarmBackoffBase / 2));
 
       const runTransaction = yield* makeStorageOperation;
+      const { run: runAlarmTransaction, withTransaction } = yield* makeAlarmOperation;
 
       const validateSourceBoundary = Effect.flatMap(
         Effect.serviceOption(sql.transactionService),
@@ -814,11 +905,8 @@ export class ThreadMutationGate extends Context.Service<
       ) {
         yield* validateSourceBoundary;
         const now = yield* Clock.currentTimeMillis;
-        const current = yield* Effect.serviceOption(sql.transactionService);
 
-        const enroll = async (
-          transaction: Pick<DurableObjectTransaction, "get" | "put" | "getAlarm" | "setAlarm">,
-        ) => {
+        const enroll = async (transaction: MaintenanceStorage, checkpoint: CheckpointIntent) => {
           if (progressCursor === undefined) dueQueue.dirty(id, dueAt);
           else if (
             dueQueue.progress(id, dueAt, progressCursor) &&
@@ -840,13 +928,10 @@ export class ThreadMutationGate extends Context.Service<
           }
           const next = DueQueue.next(dueQueue.read());
 
-          if (Number.isFinite(next))
-            await ensureTransactionAlarmBy(transaction, Math.max(next, now + minimumAlarmDelay));
+          if (Number.isFinite(next)) checkpoint.earlier(Math.max(next, now + minimumAlarmDelay));
         };
 
-        yield* runTransaction("schedule maintenance lane", () =>
-          Option.isSome(current) ? enroll(ctx.storage) : dueQueue.transaction(enroll),
-        );
+        yield* runAlarmTransaction("schedule maintenance lane", enroll);
         yield* notify;
       });
 
@@ -860,8 +945,9 @@ export class ThreadMutationGate extends Context.Service<
         const publicationRequired = yield* requiresPublication;
 
         if (invalidatesRecovery || lanes.length > 0)
-          yield* runTransaction("advance maintenance generation", () =>
-            dueQueue.transaction(async (transaction) => {
+          yield* runAlarmTransaction(
+            "advance maintenance generation",
+            async (transaction, checkpoint) => {
               const { state, initialized } = await readMaintenanceState(transaction);
 
               if (invalidatesRecovery) {
@@ -886,11 +972,8 @@ export class ThreadMutationGate extends Context.Service<
               const deadline = DueQueue.next(dueQueue.read());
 
               if (Number.isFinite(deadline))
-                await ensureTransactionAlarmBy(
-                  transaction,
-                  Math.max(deadline, now + minimumAlarmDelay),
-                );
-            }),
+                checkpoint.earlier(Math.max(deadline, now + minimumAlarmDelay));
+            },
           );
         yield* failpoint.hit("maintenance:dirty:after");
         yield* Ref.update(activeMutations, (active) => active + 1);
@@ -987,32 +1070,34 @@ export class ThreadMutationGate extends Context.Service<
         const now = yield* Clock.currentTimeMillis;
         const nativeSource = yield* CurrentNativeSource;
 
-        yield* runTransaction("record maintenance producer progress", async () => {
-          for (const id of affected) dueQueue.dirty(id, now, true);
-          if (affected.has(DueQueue.Native)) {
-            const { state, initialized } = await readMaintenanceState(ctx.storage);
+        yield* runAlarmTransaction(
+          "record maintenance producer progress",
+          async (transaction, checkpoint) => {
+            for (const id of affected) dueQueue.dirty(id, now, true);
+            if (affected.has(DueQueue.Native)) {
+              const { state, initialized } = await readMaintenanceState(transaction);
 
-            // Native progress already belongs to this generation. Persist only
-            // initialization, external progress, or the removal of a retry budget.
-            if (!initialized || !nativeSource || state.retry !== undefined)
-              await ctx.storage.put(
-                MAINTENANCE_STATE_KEY,
-                encodeMaintenanceState(
-                  ThreadMaintenanceState.make({
-                    ...Struct.omit(state, ["retry"]),
-                    dirty: state.dirty + (nativeSource ? 0n : 1n),
-                  }),
-                ),
-              );
-          }
-          await ensureTransactionAlarmBy(ctx.storage, now + minimumAlarmDelay);
-        });
+              // Native progress already belongs to this generation. Persist only
+              // initialization, external progress, or the removal of a retry budget.
+              if (!initialized || !nativeSource || state.retry !== undefined)
+                await transaction.put(
+                  MAINTENANCE_STATE_KEY,
+                  encodeMaintenanceState(
+                    ThreadMaintenanceState.make({
+                      ...Struct.omit(state, ["retry"]),
+                      dirty: state.dirty + (nativeSource ? 0n : 1n),
+                    }),
+                  ),
+                );
+            }
+            checkpoint.earlier(now + minimumAlarmDelay);
+          },
+        );
         yield* notify;
       });
 
       return ThreadMutationGate.of({
-        withTransaction: <A, E, R>(body: Effect.Effect<A, E, R>) =>
-          dueQueue.withTransaction(body).pipe(Effect.provideService(SqlClient, sql)),
+        withTransaction,
         withMutation,
         schedule,
         recordProgress,
@@ -1084,7 +1169,7 @@ export class ThreadMaintenance extends Context.Service<
     | DurableRuntimeConfig
     | SubmissionLedger
     | WakeScheduler
-    | DurableAlarmService
+    | ThreadMaintenanceAlarm
     | ThreadMaintenanceFailpoint
     | CloudflareDurableRuntimeConfig
     | DurableObjectContext
@@ -1095,7 +1180,7 @@ export class ThreadMaintenance extends Context.Service<
       const recoveryConfig = yield* DurableRuntimeConfig;
       const ledger = yield* SubmissionLedger;
       const wakes = yield* WakeScheduler;
-      const alarm = yield* DurableAlarmService;
+      const alarms = yield* ThreadMaintenanceAlarm;
       const config = yield* CloudflareDurableRuntimeConfig;
       const { ctx } = yield* DurableObjectContext;
       const dueQueue = DueQueue.make(ctx.storage);
@@ -1135,6 +1220,7 @@ export class ThreadMaintenance extends Context.Service<
       const maintenancePassGate = yield* Semaphore.make(1);
       const minimumAlarmDelay = Math.max(1, Math.ceil(config.alarmBackoffBase / 2));
       const runTransaction = yield* makeStorageOperation;
+      const { run: runAlarmTransaction } = yield* makeAlarmOperation;
 
       const queueSnapshot = runTransaction("read maintenance due queue", async () =>
         dueQueue.read(),
@@ -1206,17 +1292,17 @@ export class ThreadMaintenance extends Context.Service<
         return Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
 
-          const claimed = yield* runTransaction("charge maintenance attempt", () =>
-            dueQueue.transaction(async (transaction) => {
+          const claimed = yield* runAlarmTransaction(
+            "charge maintenance attempt",
+            async (_transaction, checkpoint) => {
               const claimed = dueQueue.claim(selected, now);
               const next = DueQueue.next(dueQueue.read());
 
-              if (Number.isFinite(next))
-                await transaction.setAlarm(Math.max(now + minimumAlarmDelay, next));
-              else await transaction.deleteAlarm();
+              if (Number.isFinite(next)) checkpoint.at(Math.max(now + minimumAlarmDelay, next));
+              else checkpoint.cancel();
 
               return claimed;
-            }),
+            },
           );
 
           if (claimed === undefined) return Option.none<number>();
@@ -1284,7 +1370,7 @@ export class ThreadMaintenance extends Context.Service<
       };
 
       const appendRecoveryEvents = async (
-        transaction: DurableObjectTransaction,
+        transaction: MaintenanceStorage,
         events: ReadonlyArray<Omit<ThreadRecoveryFaultEvent, "sequence">>,
       ) => {
         if (events.length === 0) return;
@@ -1531,7 +1617,7 @@ export class ThreadMaintenance extends Context.Service<
 
       // Registry changes, including upgrades from timed binding retries, create one native
       // opportunity. Unchanged registries leave parked work dormant across Object eviction.
-      const readCurrentMaintenanceState = async (transaction: DurableObjectTransaction) => {
+      const readCurrentMaintenanceState = async (transaction: MaintenanceStorage) => {
         const current = await readMaintenanceState(transaction);
 
         if (current.state.bindingRegistryKey === runtime.bindingRegistryKey) return current;
@@ -1553,33 +1639,29 @@ export class ThreadMaintenance extends Context.Service<
         yield* failpoint.hit("maintenance:ensure:before");
         const now = yield* Clock.currentTimeMillis;
 
-        yield* runTransaction("ensure maintenance alarm", () =>
-          dueQueue.transaction(async (transaction) => {
-            const { state, initialized } = await readCurrentMaintenanceState(transaction);
+        yield* runAlarmTransaction("ensure maintenance alarm", async (transaction, checkpoint) => {
+          const { state, initialized } = await readCurrentMaintenanceState(transaction);
 
-            recoveryEventsPending = hasRecoveryEvents(state);
-            const rows = dueQueue.read();
+          recoveryEventsPending = hasRecoveryEvents(state);
+          const rows = dueQueue.read();
 
-            if (recoveryEventsPending && !rows.some((row) => row.id === DueQueue.RecoveryEvents))
-              dueQueue.dirty(DueQueue.RecoveryEvents, now);
-            if (!initialized)
-              await transaction.put(MAINTENANCE_STATE_KEY, encodeMaintenanceState(state));
+          if (recoveryEventsPending && !rows.some((row) => row.id === DueQueue.RecoveryEvents))
+            dueQueue.dirty(DueQueue.RecoveryEvents, now);
+          if (!initialized)
+            await transaction.put(MAINTENANCE_STATE_KEY, encodeMaintenanceState(state));
 
-            const native =
-              state.dirty > state.processed
-                ? state.retry?.generation === state.dirty
-                  ? state.retry.notBefore
-                  : (rows.find((row) => row.id === DueQueue.Native)?.dueAt ??
-                    now + minimumAlarmDelay)
-                : null;
+          const native =
+            state.dirty > state.processed
+              ? state.retry?.generation === state.dirty
+                ? state.retry.notBefore
+                : (rows.find((row) => row.id === DueQueue.Native)?.dueAt ?? now + minimumAlarmDelay)
+              : null;
 
-            dueQueue.checkpointNative(native);
-            const next = DueQueue.next(dueQueue.read());
+          dueQueue.checkpointNative(native);
+          const next = DueQueue.next(dueQueue.read());
 
-            if (Number.isFinite(next))
-              await ensureTransactionAlarmBy(transaction, Math.max(now + minimumAlarmDelay, next));
-          }),
-        );
+          if (Number.isFinite(next)) checkpoint.earlier(Math.max(now + minimumAlarmDelay, next));
+        });
         yield* failpoint.hit("maintenance:ensure:after");
       });
 
@@ -1587,8 +1669,9 @@ export class ThreadMaintenance extends Context.Service<
         yield* failpoint.hit("maintenance:begin:before");
         const now = yield* Clock.currentTimeMillis;
 
-        const result = yield* runTransaction("begin maintenance pass", () =>
-          dueQueue.transaction(async (transaction) => {
+        const result = yield* runAlarmTransaction(
+          "begin maintenance pass",
+          async (transaction, checkpoint) => {
             const { state, initialized } = await readCurrentMaintenanceState(transaction);
 
             recoveryEventsPending = hasRecoveryEvents(state);
@@ -1629,8 +1712,8 @@ export class ThreadMaintenance extends Context.Service<
             const deadline = DueQueue.next(dueQueue.read());
 
             if (Number.isFinite(deadline))
-              await transaction.setAlarm(Math.max(now + minimumAlarmDelay, deadline));
-            else await transaction.deleteAlarm();
+              checkpoint.at(Math.max(now + minimumAlarmDelay, deadline));
+            else checkpoint.cancel();
 
             return {
               _tag: "Actionable" as const,
@@ -1639,7 +1722,7 @@ export class ThreadMaintenance extends Context.Service<
               nonterminal: state.nonterminal,
               stalls: charged.stalls,
             };
-          }),
+          },
         );
 
         yield* failpoint.hit("maintenance:begin:after");
@@ -1672,8 +1755,9 @@ export class ThreadMaintenance extends Context.Service<
 
             const jitter = yield* Random.next;
 
-            yield* runTransaction("back off failed maintenance", () =>
-              dueQueue.transaction(async (transaction) => {
+            yield* runAlarmTransaction(
+              "back off failed maintenance",
+              async (transaction, checkpoint) => {
                 const { state } = await readMaintenanceState(transaction);
 
                 const previous =
@@ -1724,10 +1808,9 @@ export class ThreadMaintenance extends Context.Service<
                 }
                 const next = DueQueue.next(dueQueue.read());
 
-                if (Number.isFinite(next))
-                  await transaction.setAlarm(Math.max(now + minimumAlarmDelay, next));
-                else await transaction.deleteAlarm();
-              }),
+                if (Number.isFinite(next)) checkpoint.at(Math.max(now + minimumAlarmDelay, next));
+                else checkpoint.cancel();
+              },
             );
           }),
         );
@@ -1935,12 +2018,19 @@ export class ThreadMaintenance extends Context.Service<
           activeAtStart: started.activeAtStart,
         });
 
-        const current = yield* Stream.runCollect(ledger.scanNonterminal);
-
-        const afterWorkThread = yield* runTransaction(
+        const { scannedGeneration, afterWorkThread } = yield* runTransaction(
           "read work discovery position",
-          async () => (await readMaintenanceState(ctx.storage)).state.lastRecoveredThreadId,
+          async () => {
+            const { state } = await readMaintenanceState(ctx.storage);
+
+            return {
+              scannedGeneration: state.dirty,
+              afterWorkThread: state.lastRecoveredThreadId,
+            };
+          },
         );
+
+        const current = yield* Stream.runCollect(ledger.scanNonterminal);
 
         let workOwners = yield* runtime
           .discoverWorkThreads({
@@ -2209,11 +2299,6 @@ export class ThreadMaintenance extends Context.Service<
           };
         }
 
-        const scannedGeneration = yield* runTransaction(
-          "observe native source generation",
-          async () => (await readMaintenanceState(ctx.storage)).state.dirty,
-        );
-
         const remaining = yield* Stream.runCollect(ledger.scanNonterminal);
         const waitingHeads = new Map<ThreadId, boolean>();
 
@@ -2273,10 +2358,14 @@ export class ThreadMaintenance extends Context.Service<
               const mutationOverlap =
                 observation.activeAtStart > 0 || started.activeAtStart > 0 || active > 0;
 
-              // An empty control scan needs no older recovery report. Certify its fresh
-              // snapshot only when no producer overlapped it or advanced the generation.
+              // Only a scan without ledger work or canonical obligations can certify a newer
+              // generation without another recovery wave. Read its generation before discovery
+              // so progress committed during the scan retains its own recovery opportunity.
               const generation =
-                remaining.length === 0 && !mutationOverlap && state.dirty === scannedGeneration
+                remaining.length === 0 &&
+                workOwners.threadIds.length === 0 &&
+                !mutationOverlap &&
+                state.dirty === scannedGeneration
                   ? scannedGeneration
                   : observation.generation;
 
@@ -2326,9 +2415,10 @@ export class ThreadMaintenance extends Context.Service<
         );
 
         yield* failpoint.hit("maintenance:checkpoint:after");
-        // Once this empty recovery wave is checkpointed, its producer overlap must not
-        // prevent a later fresh snapshot from acknowledging native quiescence.
-        if (remaining.length === 0 && recovery.pending.size === 0) delete recovery.observation;
+        // A fresh empty scan may clear earlier producer overlap, but this pass has only
+        // recovered its original generation. Retain that boundary for later canonical work.
+        if (remaining.length === 0 && recovery.pending.size === 0)
+          recovery.observation = { generation: observation.generation, activeAtStart: 0 };
         native.deferred.clear();
         native.progressed = false;
         native.needsCheckpoint = false;
@@ -2933,8 +3023,9 @@ export class ThreadMaintenance extends Context.Service<
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
 
-            return yield* runTransaction("finish maintenance event", () =>
-              dueQueue.transaction(async (transaction) => {
+            return yield* runAlarmTransaction(
+              "finish maintenance event",
+              async (transaction, checkpoint) => {
                 const { state } = await readMaintenanceState(transaction);
 
                 const native =
@@ -2950,14 +3041,14 @@ export class ThreadMaintenance extends Context.Service<
                 const next = DueQueue.next(dueQueue.read());
 
                 if (Number.isFinite(next)) {
-                  await transaction.setAlarm(Math.max(now + minimumAlarmDelay, next));
+                  checkpoint.at(Math.max(now + minimumAlarmDelay, next));
 
                   return "rearmed" as const;
                 }
-                await transaction.deleteAlarm();
+                checkpoint.cancel();
 
                 return "cleared" as const;
-              }),
+              },
             );
           }),
         );
@@ -2997,18 +3088,26 @@ export class ThreadMaintenance extends Context.Service<
             available: new Map(),
           };
 
-          return yield* alarm.withWakesDeferred(
-            maintenancePassGate.withPermit(
-              dueQueue.withView(Effect.scoped(pass(yieldAfter, dispatchUntil, observed))).pipe(
-                // Close event-owned auxiliary work and release Attempt ownership before
-                // failure rearming, while still holding the pass permit.
-                Effect.onErrorIf(
-                  () => true,
-                  () => rearmFailure(observed),
+          return yield* alarms
+            .deferWakes(
+              maintenancePassGate.withPermit(
+                dueQueue.withView(Effect.scoped(pass(yieldAfter, dispatchUntil, observed))).pipe(
+                  // Close event-owned auxiliary work and release Attempt ownership before
+                  // failure rearming, while still holding the pass permit.
+                  Effect.onErrorIf(
+                    () => true,
+                    () => rearmFailure(observed),
+                  ),
                 ),
               ),
-            ),
-          );
+            )
+            .pipe(
+              Effect.catchTags({
+                StorageOperationError: (error) => alarmFailure("defer maintenance wakes")(error),
+                InvalidScheduleConfigurationError: (error) =>
+                  alarmFailure("defer maintenance wakes")(error),
+              }),
+            );
         }).pipe(
           // Include permit waiting, recovery and acknowledgement in the event deadline.
           // Interruption releases Attempt ownership, leaving the prearmed dirty generation

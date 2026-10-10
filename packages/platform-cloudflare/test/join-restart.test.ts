@@ -12,6 +12,7 @@ import { readTestThread } from "@yielded/agent/testing/thread-store-conformance"
 import { ThreadStore, ThreadExportRequest } from "@yielded/agent/thread-store";
 import { env, runInDurableObject } from "cloudflare:test";
 import { Clock, Deferred, Effect, Fiber, Layer, Schema, Stream } from "effect";
+import { DurableObject } from "effect-cf";
 import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
 import { expect, it } from "vite-plus/test";
 
@@ -191,12 +192,12 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
     const run = <A, E>(
       body: Effect.Effect<A, E, DurableAgentRuntime | ThreadStore | DurableObjectContext>,
     ) =>
-      runInDurableObject(stubFor(thread), async (_instance, state) => {
+      runInDurableObject(stubFor(thread), async (instance, state) => {
         // The constructor arms an immediate alarm before this fixture's future clock applies.
         // Only the manually driven runtime owns this test's unregistered Agent.
         await state.storage.deleteAlarm();
 
-        return Effect.runPromise(
+        return instance[DurableObject.RunSymbol](
           body.pipe(
             Effect.provideService(DurableObjectContext, { ctx: state, env }),
             Effect.provide(

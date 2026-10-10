@@ -278,6 +278,7 @@ describe("live Thread projection and alarm backfill", () => {
           ThreadMutationGate.use((gate) => gate.schedule("test:cleanup", 0)),
         ),
       );
+      await advance(5);
 
       const running = alarm(thread).then(
         () => "unexpected success",
@@ -637,6 +638,7 @@ describe("live Thread projection and alarm backfill", () => {
     withThread(async (thread, _now, advance) => {
       const receipt = await submit(thread, approvalDefinition);
 
+      await advance(5);
       await drainAlarmsUntil(thread, anyInState(thread, "suspended", namespace), { namespace });
       await quiesce(thread, advance);
 

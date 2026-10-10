@@ -173,6 +173,12 @@ no worker loop is needed.
 Register the exported class as a SQLite Durable Object under `THREADS`.
 `ThreadObject.layer([])` registers no agents and refuses every agent identity.
 
+effect-cf owns alarm delivery. Pass application alarm registrations through `options.alarms`;
+`ThreadObject.make` composes them with its manual maintenance alarm. To check for due work after
+RPC or fetch responses, provide `DurableObjectAlarm.ScheduleConfiguration` from `effect-cf`
+with `{ dispatchAfterEvent: true }` through `RuntimeLive.pipe(Layer.provideMerge(...))`.
+This opt-in can start work sooner but can also delay receipt delivery on a cold Object.
+
 ## Configure the binding
 
 ```jsonc
@@ -376,10 +382,12 @@ The producer identity belongs to the physical Object. Native Thread and receipt 
 unchanged. Moving existing Threads between physical Objects requires a host-owned fenced transfer;
 changing the resolver alone does not move their durable records.
 
-Own one `SqlClient`, `ThreadMutationGate` and alarm slot per physical Object. Native migrations use
-their own migration history, leaving the application's migration rows intact. Call
-`ThreadMaintenance.ensureAlarm` in the local constructor gate and one bounded
-`ThreadMaintenance.pass` from `alarm()`. A single-Thread Object reserves one native slot; a shared
+Own one `SqlClient` and `ThreadMutationGate` per physical Object. Compose `ThreadObject.alarms`
+with application registrations using `DurableObjectAlarm.mergeAll` on the host's
+`DurableObject.make`, and supply its `ThreadMaintenanceAlarm` service to the shared runtime.
+Native migrations use their own migration history, leaving the application's migration rows
+intact. Call `ThreadMaintenance.ensureAlarm` in the local constructor gate; the registered handler
+runs one bounded maintenance pass. A single-Thread Object reserves one execution slot; a shared
 host runs at most two independent Thread Attempts concurrently, with one active FIFO head per
 Thread and a durable cursor rotating between Threads.
 A free slot admits newly ready Threads while another Attempt is busy. Remaining work retains the
@@ -937,15 +945,21 @@ withdraws the entire target. Do not discard receipts or suppression to admit mor
 
 ## Recovery and limits
 
-Alarms recover pending work after eviction without another user request.
-The host owns the Object's [single alarm](https://developers.cloudflare.com/durable-objects/api/alarms/);
-do not replace its handler or schedule unrelated alarms on that Object.
+effect-cf owns the Object's [single alarm](https://developers.cloudflare.com/durable-objects/api/alarms/).
+Compose logical registrations to share it; never write the native alarm or override its handler.
+Thread maintenance uses a manual alarm, keeping completion, claims and retry policy in its durable
+queue. Source mutations atomically enroll a logical deadline before fallible work.
+
+During maintenance, effect-cf coalesces native changes while retaining a short recovery alarm.
+`inFlightRecovery` defaults to one second. Cloudflare delivery and existing queue claims or
+leases can delay resumed work beyond that deadline. After a handler returns, an unchanged
+manual checkpoint uses the separate parked-recovery interval.
 
 Schedule Owners and Subscription Partitions use `effect-cf` logical alarms. Failed handlers and
 self-rearms use exponential backoff with a one-second minimum; after eight attempts without
 reported source progress, recovery runs hourly. Deadline changes and retry counters do not reset
 that budget. See the [logical alarm recovery guide](https://github.com/danieljvdm/effect-cf/blob/main/docs/durable-object-wakeups.md)
-for configuration and persisted schedule upgrades. Thread Objects retain their own native alarm
+for configuration and persisted schedule upgrades. Thread Objects retain their own queue retry
 policy described below.
 
 Each Thread alarm grants an initial head Attempt and can advance further heads while auxiliary

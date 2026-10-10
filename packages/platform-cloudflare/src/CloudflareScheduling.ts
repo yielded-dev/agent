@@ -727,17 +727,11 @@ export const makeScheduleOwnerObjectClass = <E>(
     schedule: (encoded: unknown) => handleScheduleRequest(encoded),
   } satisfies EffectCfDurableObject.DurableObjectRpc<ScheduleRuntimeServices>;
 
-  const Base = EffectCfDurableObject.make(runtime, {
+  const ScheduleOwnerObject = EffectCfDurableObject.make(runtime, {
     initialize: Effect.void,
     rpc,
     alarms: scheduleAlarmHandler(limits),
   });
-
-  class ScheduleOwnerObject extends Base {
-    override alarm(alarmInfo?: AlarmInvocationInfo): Promise<void> | void {
-      return super.alarm?.(alarmInfo);
-    }
-  }
 
   return ScheduleOwnerObject;
 };

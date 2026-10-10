@@ -10,7 +10,7 @@ import {
   UnknownResolutionCommand,
 } from "@yielded/agent/submission-ledger";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Cause, Clock, Deferred, Effect, Exit, Fiber, Scheduler, Schema } from "effect";
+import { Cause, Clock, Deferred, Effect, Exit, Fiber, Option, Scheduler, Schema } from "effect";
 import { DurableObject } from "effect-cf";
 import { SqlClient } from "effect/sql/SqlClient";
 import { TestClock } from "effect/testing";
@@ -233,6 +233,9 @@ describe("DC alarm semantics", () => {
         );
         const first = yield* Effect.promise(() => submitTo(plannerDefinition, thread));
 
+        // Submission retains the configured 5 ms prearm; named dispatch checks its deadline.
+        yield* TestClock.adjust(5);
+
         const pass = yield* Effect.promise(() => {
           const promise = runInDurableObject(stubFor(thread), (instance) =>
             Promise.resolve(instance.alarm()),
@@ -317,6 +320,8 @@ describe("DC alarm semantics", () => {
 
           expect(initializedAlarm).toBeGreaterThanOrEqual(yield* Clock.currentTimeMillis);
           const receipt = yield* Effect.promise(() => submitTo(plannerDefinition, thread));
+
+          yield* TestClock.adjust(5);
 
           const pass = yield* Effect.tryPromise({
             try: () =>
@@ -407,7 +412,8 @@ describe("DC alarm semantics", () => {
     // Only the explicitly forced event may own this paused race. A real-time automatic
     // delivery would consume the physical alarm while waiting behind that event's gate.
     const liveClock = Effect.runSync(Clock.Clock);
-    const nowMillis = () => Date.now() + 86_400_000;
+    let clockFloor = 0;
+    const nowMillis = () => Math.max(Date.now() + 86_400_000, clockFloor);
     const nowNanos = () => BigInt(nowMillis()) * 1_000_000n;
 
     maintenanceClocks.set(thread, {
@@ -455,6 +461,14 @@ describe("DC alarm semantics", () => {
 
       // Start a forced pass while the RPC is still between pre-arm and body. It snapshots both the
       // new generation and the active-mutation count, then pauses before recovery.
+      // The native helper delivers immediately, but named dispatch still checks its due time.
+      clockFloor = await runInDurableObject(stubFor(thread), (instance) =>
+        instance[DurableObject.RunSymbol](
+          Effect.flatMap(DurableAlarmService, (alarm) => alarm.scheduled).pipe(
+            Effect.map(Option.getOrThrow),
+          ),
+        ),
+      );
       const forcedPass = runDurableObjectAlarm(stubFor(thread)).catch(() => undefined);
 
       await awaitMaintenancePause(thread, "maintenance:begin:after");

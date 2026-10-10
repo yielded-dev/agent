@@ -68,6 +68,6 @@
   },
   "peerDependencies": {
     "effect": "^4.0.0",
-    "effect-cf": "^0.53.0"
+    "effect-cf": "^0.55.0"
   }
 }
