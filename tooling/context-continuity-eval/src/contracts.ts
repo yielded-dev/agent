@@ -1,3 +1,4 @@
+import { ExecutionCheckpoint } from "@yielded/agent/thread-store";
 import { Schema } from "effect";
 
 import { ProfileId } from "./profiles.ts";
@@ -90,16 +91,12 @@ export const RestartEvidence = Schema.Struct({
 
 export type RestartEvidence = typeof RestartEvidence.Type;
 
-/** Canonical progress observed alongside the independent full-transcript oracle. */
+/** Authoritative current execution observed separately from the full-transcript oracle. */
 export const RunContinuationEvidence = Schema.Union([
   Schema.Struct({ status: Schema.Literal("missing") }),
   Schema.Struct({
     status: Schema.Literal("present"),
-    sequence: Schema.Natural,
-    runId: Schema.String,
-    revision: Schema.Natural,
-    recordBytes: Schema.Natural,
-    turnBytes: Schema.Natural,
+    checkpoint: ExecutionCheckpoint,
   }),
 ]);
 
@@ -153,6 +150,7 @@ export const ResumeCheckpoint = Schema.Struct({
   report: EvaluationReport,
   phase: Schema.Natural,
   runId: Schema.String,
+  execution: ExecutionCheckpoint,
   processId: Schema.Natural,
   notes: Schema.Struct({ revision: Schema.NullOr(Schema.String), text: Schema.String }),
 });

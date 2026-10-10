@@ -26,15 +26,19 @@ boundaries occur immediately before and after a canonical rollover append. Proce
 reuses persisted usage and refuses any unsettled provider reservation. Cloudflare confirms its
 evaluator-state writes before eviction; the next incarnation reads the same native notes revision.
 
-Run recovery uses canonical `RunContinuation` records and their exact saved original context.
-Missing or invalid evidence leaves work owed and fails before execution; it requires explicit
-index repair. The evaluator inspects progress in `run-continuation.json` (SQLite) or
-`host-snapshot.json` (Cloudflare), alongside an independent full-transcript and original-source
-oracle. Its `resume.json` and Cloudflare phase bookkeeping belong only to the evaluator.
+Run recovery reads the authoritative active execution checkpoint and its exact saved original
+context. Missing or invalid active state or referenced history leaves work owed and fails before
+execution. Normal settlement retires the checkpoint and retains the canonical `SubmissionSettled`
+outcome. The evaluator captures active state before settlement in `active-run-continuation.json`
+(SQLite) or `host-snapshot.json`'s `activeBeforeSettlement` field (Cloudflare). The current-state
+snapshot separately reports checkpoint absence after settlement. Its `resume.json` and Cloudflare
+phase bookkeeping belong only to the evaluator, alongside an independent full-transcript and
+original-source oracle.
 
-The deterministic SIGKILL and workerd checks require canonical progress covering the last
-committed rollover, alongside recovery, usage and original-history checks. Progress presence
-alone does not establish bounded startup work or a latency/CPU improvement.
+The deterministic SIGKILL and workerd checks compare active state across recovery, including the
+original clock, context and cumulative accounting. Their active pre-settlement capture must cover
+the last committed rollover. These observations do not prove discarded historical checkpoints,
+bounded startup work or a latency/CPU improvement.
 Actual hosted Cloudflare invocation latency and CPU remain open under
 [#356](https://github.com/yielded-dev/agent/issues/356). The green live baseline in #372 is tied
 to `ad4b70a557b6e561e8471eae2fd3b57373bfdb3b`, before #380, and provides no live acceptance claim

@@ -139,7 +139,10 @@ export const gradePerformancePhase = Effect.fn("Performance.grade")(function* (
   );
 
   const completed = records.filter(
-    (record) => record._tag === "RunCompleted" && record.runId === runId,
+    (record) =>
+      record._tag === "SubmissionSettled" &&
+      record.runId === runId &&
+      record.outcome === "completed",
   );
 
   if (
@@ -150,14 +153,14 @@ export const gradePerformancePhase = Effect.fn("Performance.grade")(function* (
     failures.push("Exactly one completed canonical settlement required");
   if (
     completed.length !== 1 ||
-    completed[0]?._tag !== "RunCompleted" ||
+    completed[0]?._tag !== "SubmissionSettled" ||
     completed[0].finishReason !== undefined
   )
     failures.push("Exactly one unexhausted canonical completion required");
 
   const output =
-    completed[0]?._tag === "RunCompleted"
-      ? yield* Schema.decodeUnknownEffect(PerformanceOutput)(completed[0].output).pipe(
+    completed[0]?._tag === "SubmissionSettled"
+      ? yield* Schema.decodeUnknownEffect(PerformanceOutput)(completed[0].result).pipe(
           Effect.option,
         )
       : undefined;
@@ -218,12 +221,12 @@ export const gradePerformancePhase = Effect.fn("Performance.grade")(function* (
 
   if (phase > 0) {
     const previous = records.findLast(
-      (record) => record._tag === "RunCompleted" && record.runId !== runId,
+      (record) => record._tag === "SubmissionSettled" && record.runId !== runId,
     );
 
     const previousOutput =
-      previous?._tag === "RunCompleted"
-        ? Schema.decodeUnknownOption(PerformanceOutput)(previous.output)
+      previous?._tag === "SubmissionSettled" && previous.outcome === "completed"
+        ? Schema.decodeUnknownOption(PerformanceOutput)(previous.result)
         : undefined;
 
     const initialAssistantOutputs = requestParts(requests[0]?.json ?? "{}").flatMap((item) =>

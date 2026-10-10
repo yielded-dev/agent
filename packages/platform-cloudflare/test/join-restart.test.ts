@@ -5,13 +5,19 @@ import {
 import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
 import * as Agent from "@yielded/agent/agent";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
+import { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
 import type { Receipt } from "@yielded/agent/receipt";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
-import { ThreadStore, ThreadExportRequest } from "@yielded/agent/thread-store";
+import {
+  ThreadStore,
+  ThreadExportRequest,
+  type ExecutionCheckpoint,
+} from "@yielded/agent/thread-store";
 import { env, runInDurableObject } from "cloudflare:test";
-import { Clock, Deferred, Effect, Fiber, Layer, Schema, Stream } from "effect";
+import { Clock, Deferred, Effect, Fiber, Layer, Option, Schema, Stream } from "effect";
 import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
 import { expect, it } from "vite-plus/test";
 
@@ -30,6 +36,7 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
     const usesTools = scenario === "tools" || scenario === "eviction";
     const prompts: Array<string> = [];
     const executions: Array<string> = [];
+    const completing: Array<ExecutionCheckpoint> = [];
     const first = Deferred.makeUnsafe<void>();
     const replacement = Deferred.makeUnsafe<void>();
     const secondReplacement = Deferred.makeUnsafe<void>();
@@ -203,6 +210,34 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
               DurableAgentRuntime.layer.pipe(
                 Layer.provide(runStorageLayer()),
                 Layer.provide(observedLedger),
+                Layer.provide(
+                  Layer.effect(
+                    DurableRuntimeFailpoint,
+                    Effect.map(ThreadStore, (store) => ({
+                      hit: (location) =>
+                        Effect.gen(function* () {
+                          if (
+                            location !== "terminalize:before-publication" ||
+                            completing.length > 0
+                          )
+                            return;
+                          if (receipts === undefined)
+                            return yield* Effect.die(
+                              "Expected original admission before completion",
+                            );
+
+                          completing.push(
+                            Option.getOrThrow(
+                              yield* store.readExecution({
+                                threadId: receipts.receipt.threadId,
+                                runId: runIdForSubmission(receipts.receipt.submissionId),
+                              }),
+                            ),
+                          );
+                        }).pipe(Effect.orDie),
+                    })),
+                  ),
+                ),
                 Layer.provideMerge(ThreadObject.layer([])),
                 Layer.provide(
                   ThreadObject.layerConfig({
@@ -361,9 +396,44 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
             expect(yield* runtime.submissionStatus(joined)).toMatchObject({ _tag: "settled" });
         }
         expect(responses).toHaveLength(usesTools ? 2 : 1);
-        expect(records.filter(({ record }) => record.payload._tag === "RunCompleted")).toHaveLength(
-          1,
+        expect(completing).toHaveLength(1);
+
+        const completion = completing[0]!.operational.filter(
+          ({ payload }) => payload._tag === "RunCompleted",
         );
+
+        expect(completion).toHaveLength(1);
+        const completed = completion[0]!.payload;
+
+        if (completed._tag !== "RunCompleted") throw new Error("Expected validated completion");
+        expect(
+          records
+            .filter(
+              ({ record }) =>
+                record.payload._tag === "SubmissionSettled" &&
+                record.payload.submissionId === admitted.receipt.submissionId,
+            )
+            .map(({ record }) => record.payload),
+        ).toEqual([
+          expect.objectContaining({
+            runId: completed.runId,
+            outcome: "completed",
+            result: completed.output,
+          }),
+        ]);
+        expect(
+          yield* store.readExecution({
+            threadId: admitted.receipt.threadId,
+            runId: completed.runId,
+          }),
+        ).toEqual(Option.none());
+        expect(
+          records.filter(({ record }) =>
+            ["RunStarted", "RunContextRecorded", "RunCompleted", "RunContinuation"].includes(
+              record.payload._tag,
+            ),
+          ),
+        ).toEqual([]);
         expect(prompts[scenario === "rejected" ? 0 : 1]).toContain("first");
         if (scenario === "rejected") {
           expect(prompts).toHaveLength(1);
