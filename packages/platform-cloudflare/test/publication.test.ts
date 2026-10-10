@@ -13,7 +13,7 @@ import { DurableObject } from "effect-cf";
 import { TestClock } from "effect/testing";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { ThreadMaintenance, ThreadMutationGate } from "../src/Alarm.ts";
+import { DurableAlarmService, ThreadMaintenance, ThreadMutationGate } from "../src/Alarm.ts";
 import { CloudflareThreadClient } from "../src/CloudflareThreadClient.ts";
 import * as DueQueue from "../src/internal/due-queue.ts";
 import {
@@ -56,7 +56,18 @@ const namespace = "PUBLICATIONS";
 const stub = (thread: string) => stubFor(thread, namespace);
 
 const alarm = (thread: string) =>
-  runInDurableObject(stub(thread), (instance) => Promise.resolve(instance.alarm()));
+  runInDurableObject(stub(thread), async (instance) => {
+    // Forced delivery must make the registered checkpoint due, including idle-pass races.
+    await instance[DurableObject.RunSymbol](
+      Effect.gen(function* () {
+        const alarm = yield* DurableAlarmService;
+
+        yield* alarm.scheduleAt(yield* Clock.currentTimeMillis);
+      }),
+    );
+
+    await instance.alarm();
+  });
 
 const cursor = (thread: string) =>
   runInDurableObject(stub(thread), async (_, state) =>
@@ -580,6 +591,7 @@ describe("durable host publication", () => {
     withThread(async (thread, _now, advance) => {
       const receipt = await submit(thread, approvalDefinition);
 
+      await advance(5);
       await drainAlarmsUntil(thread, anyInState(thread, "suspended", namespace), { namespace });
       await quiesce(thread, advance);
       const before = await cursor(thread);
