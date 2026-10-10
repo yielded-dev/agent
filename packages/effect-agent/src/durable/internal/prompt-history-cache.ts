@@ -158,6 +158,7 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* (store: Thread
         return;
       const tail = yield* writer.tail;
       let after = original.sequence;
+      let remaining = MAX_BYTES - bytes;
       const records: Array<JournalRecordEnvelope> = [original];
 
       while (after < tail.sequence) {
@@ -167,12 +168,12 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* (store: Thread
               threadId: writer.threadId,
               afterSequence: after,
               throughSequence: tail.sequence,
-              limit: 256,
+              limit: 1,
             }),
           )
-          .pipe(Stream.take(257), Stream.runCollect);
+          .pipe(Stream.take(2), Stream.runCollect);
 
-        if (page.length > 256 || records.length + page.length > MAX_ENTRIES) return;
+        if (page.length > 1 || records.length + page.length > MAX_ENTRIES) return;
         for (const entry of page) {
           const payload = entry.record.payload;
 
@@ -180,15 +181,35 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* (store: Thread
             entry.threadId !== writer.threadId ||
             entry.sequence <= after ||
             entry.sequence > tail.sequence ||
+            payload._tag === "UserInputRecorded" ||
             payload._tag === "CompactionCreated" ||
             payload._tag === "ModelCompleted" ||
             payload.runId !== input.runId
           )
             return;
+
+          // Reserve space for six-character JSON escapes, UTF-16 text and encoding copies.
+          // Reading one fact at a time also avoids hydrating a page for an oversized Run.
+          const footprint = boundedValueFootprint(
+            {
+              ...entry,
+              record: {
+                ...entry.record,
+                payload:
+                  payload._tag === "ModelResponseRecorded"
+                    ? { ...payload, messages: payload.messages.content }
+                    : { ...payload },
+              },
+            },
+            Math.floor(remaining / 32),
+          );
+
+          if (footprint === undefined) return;
+          remaining -= 32 * footprint;
           after = entry.sequence;
           records.push(entry);
         }
-        if (page.length < 256) break;
+        if (page.length === 0) break;
       }
 
       const boundaries: Array<JournalBoundary> = [];
