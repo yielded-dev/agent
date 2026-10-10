@@ -758,6 +758,19 @@ describe("SqliteThreadStore", () => {
               }),
             );
 
+            const stale = yield* session.append(fact("session-fact")).pipe(Effect.exit);
+
+            expect(Exit.isFailure(stale)).toBe(true);
+            if (Exit.isSuccess(stale)) return yield* Effect.die("Stale append committed");
+            expect(Cause.squash(stale.cause)).toMatchObject({
+              _tag: "AppendConflict",
+              reason: "tail",
+            });
+            expect(yield* session.tail).toEqual({
+              sequence: external.lastSequence,
+              digest: external.tailDigest,
+            });
+
             const appended = yield* session.append(fact("session-fact"));
 
             expect(appended.firstSequence).toBe(external.lastSequence + 1);

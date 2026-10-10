@@ -87,6 +87,7 @@ export interface RunWriter {
   readonly threadId: ThreadId;
   readonly producerEpoch: ProducerEpoch;
   readonly tail: Effect.Effect<{ readonly sequence: CanonicalSequence; readonly digest: Digest }>;
+  /** Refresh the observed tail on a CAS conflict; the caller must reprepare before retrying. */
   readonly append: (batch: CanonicalBatch) => Effect.Effect<AppendResult, ThreadStoreFailure>;
   /** Recheck the writer fence after effectful preflight, before dispatch; append no record. */
   readonly checkFence: Effect.Effect<
@@ -218,43 +219,37 @@ export const makeRunWriter = Effect.fnUntraced(function* (
   const append = (batch: CanonicalBatch) =>
     gate.withPermits(1)(
       Effect.gen(function* () {
-        for (let retries = 0; ; retries++) {
-          const result = yield* store
-            .append(
-              FencedAppendRequest.make({
-                threadId,
-                producerEpoch,
-                batch,
-                expectedTailSequence: tail.sequence,
-                expectedTailDigest: tail.digest,
-              }),
-            )
-            .pipe(
-              Effect.catchTag("AppendConflict", (conflict) => {
-                // Same-epoch administrative repair may advance the tail. Only a failed tail CAS
-                // permits retry; epoch, batch-digest, and record-identity failures still propagate.
+        const result = yield* store
+          .append(
+            FencedAppendRequest.make({
+              threadId,
+              producerEpoch,
+              batch,
+              expectedTailSequence: tail.sequence,
+              expectedTailDigest: tail.digest,
+            }),
+          )
+          .pipe(
+            Effect.tapErrorTag("AppendConflict", (conflict) =>
+              Effect.sync(() => {
+                // Even the absence of a continuation depends on the prepared tail.
+                // Let the progress writer rebuild facts after an administrative append.
                 if (
-                  conflict.reason !== "tail" ||
-                  conflict.actualTailSequence === undefined ||
-                  conflict.actualTailDigest === undefined ||
-                  retries >= 8
+                  conflict.reason === "tail" &&
+                  conflict.actualTailSequence !== undefined &&
+                  conflict.actualTailDigest !== undefined
                 )
-                  return Effect.fail(conflict);
-                tail = { sequence: conflict.actualTailSequence, digest: conflict.actualTailDigest };
-
-                // Progress must be rebuilt from the winning revision, never resent verbatim.
-                if (batch.records.some(({ payload }) => payload._tag === "RunContinuation"))
-                  return Effect.fail(conflict);
-
-                return Effect.succeed(undefined);
+                  tail = {
+                    sequence: conflict.actualTailSequence,
+                    digest: conflict.actualTailDigest,
+                  };
               }),
-            );
+            ),
+          );
 
-          if (result === undefined) continue;
-          tail = { sequence: result.lastSequence, digest: result.tailDigest };
+        tail = { sequence: result.lastSequence, digest: result.tailDigest };
 
-          return result;
-        }
+        return result;
       }),
     );
 
