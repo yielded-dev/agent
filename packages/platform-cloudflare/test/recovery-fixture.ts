@@ -68,6 +68,10 @@ const replyHost = Layer.effectContext(
       const reply = recoveryReplies.get(threadId);
 
       if (reply === undefined) return;
+      const submission = yield* ledger.lookup(reply.lookup);
+
+      if (Option.isNone(submission) || submission.value.state !== "settled")
+        return yield* failure("reply admission is not settled");
 
       const records = yield* Stream.runCollect(
         store.read(
@@ -78,12 +82,19 @@ const replyHost = Layer.effectContext(
         ),
       );
 
-      const completed = records.find((record) => record.record.payload._tag === "RunCompleted")
-        ?.record.payload;
+      const settled = records.find(
+        ({ record }) =>
+          record.payload._tag === "SubmissionSettled" &&
+          record.payload.submissionId === submission.value.submissionId,
+      )?.record.payload;
 
-      if (completed?._tag !== "RunCompleted")
-        return yield* failure("settled reply has no completion");
-      reply.published.push(completed.output);
+      if (
+        settled?._tag !== "SubmissionSettled" ||
+        settled.outcome !== "completed" ||
+        settled.result === undefined
+      )
+        return yield* failure("settled reply has no completed outcome");
+      reply.published.push(settled.result);
     }).pipe(Effect.mapError(failure));
 
     return Context.make(ThreadHostMaintenance, {

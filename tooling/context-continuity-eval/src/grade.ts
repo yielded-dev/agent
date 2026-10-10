@@ -1,6 +1,7 @@
 import { ContextHistoryPage } from "@yielded/agent/context-history";
 import { type CanonicalRecordEnvelope } from "@yielded/agent/records";
 import { project } from "@yielded/agent/thread-context-history-projection";
+import type { ExecutionCheckpoint } from "@yielded/agent/thread-store";
 import { Effect, Option, Schema } from "effect";
 
 import { check, type Check, type ProjectStatus, type WindowEvidence } from "./contracts.ts";
@@ -13,6 +14,7 @@ export const gradePhase = Effect.fn("ContextContinuity.gradePhase")(function* (
     readonly runId: string;
     readonly notes: { readonly text: string };
     readonly output: ProjectStatus;
+    readonly execution: ExecutionCheckpoint;
   },
   records: ReadonlyArray<CanonicalRecordEnvelope>,
   windowsEvidence: ReadonlyArray<typeof WindowEvidence.Type>,
@@ -48,7 +50,9 @@ export const gradePhase = Effect.fn("ContextContinuity.gradePhase")(function* (
     check(`phase-${phase.index}/notes-written`, settledTool("write_notes").length > 0, true),
     check(
       `phase-${phase.index}/single-logical-run`,
-      runRecords.filter(({ record }) => record.payload._tag === "RunStarted").length,
+      result.execution.operational.filter(
+        ({ payload }) => payload._tag === "RunStarted" && payload.runId === result.runId,
+      ).length,
       1,
     ),
   ];

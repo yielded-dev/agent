@@ -142,10 +142,11 @@ it("runs the same pressure and evidence gate through the public Cloudflare host 
     expect(report.phases.flatMap((p) => p.checks.filter((c) => !c.passed))).toEqual([]);
     expect(report.checks.filter((c) => !c.passed)).toEqual([]);
     expect(report.status).toBe("passed");
-    expect(snapshot.runContinuation.status).toBe("present");
-    if (snapshot.runContinuation.status !== "present")
-      throw new Error("Canonical Cloudflare Run continuation absent");
-    expect(snapshot.runContinuation.sequence).toBeGreaterThanOrEqual(
+    expect(snapshot.runContinuation.status).toBe("missing");
+    if (snapshot.activeBeforeSettlement === null)
+      throw new Error("Active Cloudflare execution capture absent");
+    expect(snapshot.activeBeforeSettlement.progress.runId).toBe(report.phases.at(-1)?.runId);
+    expect(snapshot.activeBeforeSettlement.throughSequence).toBeGreaterThanOrEqual(
       report.windows.at(-1)?.sequence ?? 1,
     );
 

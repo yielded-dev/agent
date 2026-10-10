@@ -9,7 +9,9 @@ import {
 } from "@yielded/agent-platform-cloudflare/cloudflare-scheduling";
 import { CloudflareThreadClient } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import { SubmissionId } from "@yielded/agent/identifiers";
+import type { Receipt } from "@yielded/agent/receipt";
 import { type CanonicalRecordEnvelope } from "@yielded/agent/records";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { scheduleOwnerKey } from "@yielded/agent/schedule-transition";
 import { type Scheduling } from "@yielded/agent/scheduling";
 import { SubmissionLedger, SubmissionLookupById } from "@yielded/agent/submission-ledger";
@@ -305,6 +307,21 @@ export const readCanonical = (
         return yield* client.readAll(decodeThreadId(thread));
       }),
       namespace,
+    ),
+  );
+
+/** Current execution state for an original admission, read from the Object's real store. */
+export const readExecution = (receipt: Receipt, namespace: TestNamespace = "THREADS") =>
+  withAbortedInstanceRetry(() =>
+    runInDurableObject(stubFor(receipt.threadId, namespace), (instance) =>
+      instance[DurableObject.RunSymbol](
+        ThreadStore.use((store) =>
+          store.readExecution({
+            threadId: receipt.threadId,
+            runId: runIdForSubmission(receipt.submissionId),
+          }),
+        ),
+      ),
     ),
   );
 

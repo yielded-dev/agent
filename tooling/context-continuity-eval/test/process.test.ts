@@ -6,7 +6,7 @@ import { RunContinuationEvidence } from "../src/contracts.ts";
 import { supervise } from "../src/process-host.ts";
 
 it("recovers the real SQLite runtime after two SIGKILLs with pressure and cumulative accounting", async () => {
-  const { report, checkpoint } = await Effect.runPromise(
+  const { report, checkpoint, active } = await Effect.runPromise(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -33,7 +33,11 @@ it("recovers the real SQLite runtime after two SIGKILLs with pressure and cumula
         yield* fs.readFileString(path.join(outputDirectory, "run-continuation.json")),
       );
 
-      return { report, checkpoint };
+      const active = yield* Schema.decodeEffect(Schema.fromJsonString(RunContinuationEvidence))(
+        yield* fs.readFileString(path.join(outputDirectory, "active-run-continuation.json")),
+      );
+
+      return { report, checkpoint, active };
     }).pipe(
       Effect.scoped,
       Effect.provide(
@@ -46,9 +50,13 @@ it("recovers the real SQLite runtime after two SIGKILLs with pressure and cumula
   );
 
   expect(report.status).toBe("passed");
-  expect(checkpoint.status).toBe("present");
-  if (checkpoint.status !== "present") throw new Error("Canonical SQLite Run continuation absent");
-  expect(checkpoint.sequence).toBeGreaterThanOrEqual(report.windows.at(-1)?.sequence ?? 1);
+  expect(checkpoint.status).toBe("missing");
+  expect(active.status).toBe("present");
+  if (active.status !== "present") throw new Error("Active SQLite execution capture absent");
+  expect(active.checkpoint.progress.runId).toBe(report.phases.at(-1)?.runId);
+  expect(active.checkpoint.throughSequence).toBeGreaterThanOrEqual(
+    report.windows.at(-1)?.sequence ?? 1,
+  );
 
   expect(report.windows.length).toBeGreaterThanOrEqual(12);
   expect(report.restarts.map((r) => r.killConfirmed)).toEqual([true, true]);
