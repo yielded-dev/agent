@@ -1,7 +1,7 @@
 import { type Crypto, Effect, Schema, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
-import { digestJson } from "../Digest.ts";
+import { canonicalJson, digestCanonicalJson } from "../Digest.ts";
 import {
   CanonicalSequence,
   PromptRecord,
@@ -42,9 +42,17 @@ const projectHistoryRecord = (
   );
 };
 
-export const digestRunHistory = (prompt: Prompt.Prompt) =>
+export const encodeRunHistory = (prompt: Prompt.Prompt) =>
   encodePrompt(prompt).pipe(
-    Effect.flatMap(digestJson),
+    Effect.map(canonicalJson),
+    Effect.mapError((cause) =>
+      RunJournalError.make({ message: "Original model history integrity is unavailable", cause }),
+    ),
+  );
+
+export const digestRunHistory = (prompt: Prompt.Prompt) =>
+  encodeRunHistory(prompt).pipe(
+    Effect.flatMap(digestCanonicalJson),
     Effect.mapError((cause) =>
       RunJournalError.make({ message: "Original model history integrity is unavailable", cause }),
     ),

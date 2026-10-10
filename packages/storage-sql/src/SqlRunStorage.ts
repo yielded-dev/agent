@@ -240,6 +240,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
   });
 
   const checkpoints = rawStore.checkpoints;
+  const promptCheckpoints = rawStore.promptCheckpoints;
   const countPeerMessages = rawStore.countPeerMessages;
   const work = rawStore.work;
   const archives = rawStore.archives;
@@ -329,6 +330,13 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
         : {
             save: (request) => bind(checkpoints.save(request)),
             load: (request) => bind(checkpoints.load(request)),
+          },
+    promptCheckpoints:
+      promptCheckpoints === undefined
+        ? undefined
+        : {
+            save: (request) => bind(promptCheckpoints.save(request)),
+            load: (request) => bind(promptCheckpoints.load(request)),
           },
   };
 
