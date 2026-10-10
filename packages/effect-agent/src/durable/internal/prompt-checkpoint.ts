@@ -10,12 +10,7 @@ import {
 } from "../Records.ts";
 import { projectRunJournalStream } from "../RunJournal.ts";
 import type { RunWriter } from "../RunStorage.ts";
-import {
-  getRecord,
-  MAX_PROMPT_CHECKPOINT_BYTES,
-  ThreadReader,
-  type ThreadStore,
-} from "../ThreadStore.ts";
+import { getRecord, MAX_PROMPT_CHECKPOINT_BYTES, ThreadStore } from "../ThreadStore.ts";
 import type { JournalRecordEnvelope } from "./journal-metadata.ts";
 import { encodeRunHistory } from "./run-context.ts";
 
@@ -40,7 +35,9 @@ export interface CheckpointPrompt {
 
 /** No authority or execution state is cached. Unfinished Runs and explicit verify still rebuild. */
 export const loadPromptCheckpoint = Effect.fnUntraced(
-  function* (store: ThreadStore["Service"], writer: RunWriter) {
+  function* (writer: RunWriter) {
+    const store = yield* ThreadStore;
+
     if (store.promptCheckpoints === undefined) return undefined;
 
     const loaded = yield* store.promptCheckpoints.load({
@@ -54,7 +51,7 @@ export const loadPromptCheckpoint = Effect.fnUntraced(
     const saved = yield* getRecord({
       threadId: writer.threadId,
       recordId: checkpoint.contextRecordId,
-    }).pipe(Effect.provideService(ThreadReader, ThreadReader.fromStore(store)));
+    });
 
     if (Option.isNone(saved)) return undefined;
     const context = saved.value.record.payload;
@@ -150,12 +147,8 @@ export const loadPromptCheckpoint = Effect.fnUntraced(
 );
 
 export const savePromptCheckpoint = Effect.fnUntraced(
-  function* (
-    store: ThreadStore["Service"],
-    writer: RunWriter,
-    original: CanonicalRecordEnvelope,
-    promptJson: string,
-  ) {
+  function* (writer: RunWriter, original: CanonicalRecordEnvelope, promptJson: string) {
+    const store = yield* ThreadStore;
     const input = original.record.payload;
 
     if (

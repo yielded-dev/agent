@@ -51,6 +51,11 @@ export const makePromptCheckpoints = (
           const request = yield* decodeRead(input);
           const prefix = prefixFor(request.threadId);
 
+          // Every row repeats the Thread ID. Bound those known key bytes separately from
+          // the prompt and header so supported long IDs do not consume the prompt allowance.
+          const maxHydratedBytes =
+            MAX_PROMPT_CHECKPOINT_BYTES + 16_384 + 65 * utf8ByteLength(keyFor(prefix, 0));
+
           const rows = yield* decodeRows(
             yield* sql`
               SELECT key, value FROM effect_agent_meta
@@ -58,7 +63,7 @@ export const makePromptCheckpoints = (
                 AND (SELECT sum(length(CAST(key AS BLOB)) + length(CAST(value AS BLOB)))
                   FROM effect_agent_meta
                   WHERE key >= ${prefix} AND key < ${prefix + "~"})
-                    <= ${MAX_PROMPT_CHECKPOINT_BYTES + 16_384}
+                    <= ${maxHydratedBytes}
               ORDER BY key LIMIT 66`,
           );
 

@@ -8226,7 +8226,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     yieldAfter?: DateTime.Utc,
   ) =>
     Effect.gen(function* () {
-      const checkpointPrompt = yield* withCrypto(loadPromptCheckpoint(store, session));
+      const checkpointPrompt = yield* loadPromptCheckpoint(session).pipe(
+        Effect.provideService(ThreadStore, store),
+        Effect.provideService(ThreadReader, reader),
+        Effect.provideService(Crypto.Crypto, crypto),
+      );
 
       session = yield* withProgressSession(session);
       const { claim, threadId } = session;
@@ -8888,11 +8892,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           initialJournal.promptJson !== undefined
         )
           yield* savePromptCheckpoint(
-            store,
             session,
             initialJournal.original,
             initialJournal.promptJson,
-          );
+          ).pipe(Effect.provideService(ThreadStore, store));
 
         return Option.some(settlement);
       }
