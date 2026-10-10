@@ -1,9 +1,10 @@
 import { utf8ByteLength } from "../Digest.ts";
 
 /**
- * Count owned JSON from a Schema encoder or JSON parser, before retaining its native Prompt.
+ * Count JSON from an owned canonical projection or checkpoint parser before retaining a Prompt.
  * Keep the conservative object/property/string charges without probing arbitrary object brands.
- * This is not the guard for untrusted provider values, accessors, or other JavaScript objects.
+ * ThreadStore reads own their canonical JSON subgraphs; Schema encoding alone does not establish
+ * that ownership for Unknown/Json leaves. Never use this guard on arbitrary provider values.
  */
 export const promptJsonFootprint = (json: unknown, allowance: number): number | undefined => {
   let bytes = 0;

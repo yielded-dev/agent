@@ -994,11 +994,15 @@ export class ThreadStore extends Context.Service<
       AppendResult,
       ThreadStoreError | ThreadNotMaterialized | AppendConflict | FenceRejected
     >;
+    /** Return immutable values decoded from privately owned canonical JSON. Unknown/Json
+     * subgraphs must not retain caller/provider objects, accessors or oversized backing views.
+     * Schema validation without canonical capture does not establish this ownership. */
     readonly read: (
       request: ThreadReadRequest,
     ) => Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>;
     /** Decode only PromptRecord fields of PROMPT_EVIDENCE_TAGS, including archived ranges.
      * Bound raw hydration without shortening a page before its limit or captured range end.
+     * Preserve read's canonical ownership contract, including nested Unknown/Json values.
      * The immutable source was validated on write; use read for integrity or execution evidence. */
     readonly readPrompt: (
       request: ThreadPromptRead,
