@@ -42,7 +42,7 @@ import {
 } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Effect, Exit, Layer, Option, Schema, Stream } from "effect";
+import { Context, Effect, Exit, Layer, Option, Schema, Stream } from "effect";
 import type { Prompt, Response } from "effect/ai";
 import { LanguageModel, Model, Tool, Toolkit } from "effect/ai";
 
@@ -358,15 +358,15 @@ describe("retained Run recovery", () => {
         Effect.provide(handlers),
       );
 
-      const runtime = yield* DurableAgentRuntime.pipe(
-        Effect.provide(
-          DurableAgentRuntime.layerWithBindings([binding]).pipe(
-            Layer.provide(runStorageLayer()),
-            Layer.provide(
-              Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
-            ),
+      const runtime = yield* Layer.build(
+        DurableAgentRuntime.layerWithBindings([binding]).pipe(
+          Layer.provide(runStorageLayer()),
+          Layer.provide(
+            Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
           ),
         ),
+      ).pipe(
+        Effect.map((services) => Context.get(services, DurableAgentRuntime)),
         Effect.provideService(RunContextPreparation, {
           hook: {
             prepare: (request) =>

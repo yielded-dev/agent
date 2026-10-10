@@ -164,8 +164,15 @@ import {
   type JournalRecordEnvelope,
 } from "./internal/journal-metadata.ts";
 import { makeMessagingRuntime } from "./internal/messaging-host.ts";
+import {
+  digestPromptHistory,
+  makePromptHistoryCache,
+  preparePromptHistory,
+  type CachedPromptHistory,
+  type PromptHistory,
+} from "./internal/prompt-history-cache.ts";
 import { RunContextReader } from "./internal/run-context-reader.ts";
-import { digestRunHistory, readRunContext } from "./internal/run-context.ts";
+import { readRunContext } from "./internal/run-context.ts";
 import * as ThreadInitialization from "./internal/thread-initialization.ts";
 import {
   initialDispatchBlockedTurns,
@@ -1367,6 +1374,9 @@ interface InitialJournalSource {
   records: ReadonlyArray<JournalRecordEnvelope> | undefined;
   readonly original: CanonicalRecordEnvelope;
   readonly suffix: ReadonlyArray<CanonicalRecordEnvelope>;
+  readonly cacheable: boolean;
+  readonly prefix?: CachedPromptHistory;
+  history?: PromptHistory;
 }
 
 const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBinding>) {
@@ -1377,6 +1387,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const submissionScheduling = yield* SubmissionScheduling;
   const store = yield* ThreadStore;
   const reader = ThreadReader.fromStore(store);
+  const promptHistory = yield* makePromptHistoryCache(store);
 
   const workDiscovery = yield* ThreadWorkDiscovery.pipe(
     Effect.provide(ThreadWorkDiscovery.layer),
@@ -4882,7 +4893,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           historyEvidence.set(entry.record.recordId, entry);
       };
 
-      const journal =
+      let journal =
         cached !== undefined &&
         cached.threadId === ctx.threadId &&
         cached.through === projectionThrough &&
@@ -4899,6 +4910,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               journalMetadata,
               priorContext === undefined ? retainHistory : undefined,
             );
+
+      // Only a fresh input immediately following the verified cached head reaches this path.
+      // Its empty owner projection still supplies the ordinary initial accounting.
+      if (initialJournal?.prefix !== undefined) {
+        const prefix = initialJournal.prefix;
+
+        boundaries.push(...prefix.boundaries);
+        journal = { ...journal, prompt: prefix.prompt, historyBefore: prefix.prompt };
+      }
 
       // Do not retain the metadata snapshot across model or Tool waits, including cache hits.
       // The projected prompt owns its needed context.
@@ -4996,6 +5016,18 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               undefined,
               priorContext,
             );
+
+      if (
+        initialJournal?.cacheable &&
+        journal.committedTurns === 0 &&
+        journal.historyFrom === 1 &&
+        journal.contextWindowId === undefined &&
+        historyEvidence.size === 0 &&
+        pending === undefined
+      ) {
+        initialJournal.history =
+          initialJournal.prefix ?? preparePromptHistory(journal.historyBefore, boundaries);
+      }
 
       // All startup passes (including cache hits) are complete. Release the startup source;
       // later compaction can reread the exact prefix.
@@ -5796,8 +5828,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               );
 
               const historyDigest = yield* withCrypto(
-                digestRunHistory(
+                digestPromptHistory(
                   Prompt.fromMessages(initialHistory.content.slice(0, priorHistoryLength)),
+                  initialJournal?.history,
                 ),
               );
 
@@ -8179,6 +8212,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     yieldAfter?: DateTime.Utc,
   ) =>
     Effect.gen(function* () {
+      const cachedHistory = yield* promptHistory.take(session);
+
       session = yield* withProgressSession(session);
       const { claim, threadId } = session;
       const submissionId = claim.submissionId;
@@ -8613,14 +8648,48 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
           const suffix = currentRecords.filter((entry) => entry.sequence > original.sequence);
 
+          // Admission may share its batch with the verified continuation for that input.
+          const fresh =
+            !lineage.inputWasRecorded &&
+            (tail.sequence === original.sequence ||
+              (tail.sequence === original.sequence + 1 &&
+                view.progressThrough === original.sequence)) &&
+            suffix.every((entry) => entry.record.payload._tag === "RunContinuation");
+
           // Every replay stays bounded at the ORIGINAL admission, never the later Thread tail.
           const source: InitialJournalSource = yield* Effect.gen(function* () {
+            if (
+              cachedHistory !== undefined &&
+              original.sequence === cachedHistory.through + 1 &&
+              fresh
+            ) {
+              const records = [original, ...suffix];
+
+              journalMetadata = makeJournalMetadata(runIdForSubmission(submissionId));
+              for (const entry of records) journalMetadata.add(entry);
+
+              return {
+                records,
+                original,
+                suffix,
+                prefix: cachedHistory,
+                cacheable: true,
+              };
+            }
             const history = yield* readInitialJournal(original, suffix);
+            let cacheable = fresh;
 
             journalMetadata = makeJournalMetadata(runIdForSubmission(submissionId));
-            for (const entry of history) journalMetadata.add(entry);
+            for (const entry of history) {
+              journalMetadata.add(entry);
+              if (
+                entry.record.payload._tag === "CompactionCreated" ||
+                entry.record.payload._tag === "ModelCompleted"
+              )
+                cacheable = false;
+            }
 
-            return { records: history, original, suffix };
+            return { records: history, original, suffix, cacheable };
           });
 
           initialJournal = source;
@@ -8798,9 +8867,18 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           return Option.none<Settlement>();
         }
 
-        return Option.some(
-          yield* terminalize(ctx, submission, session.publishSettlement, outcome, true),
+        const settlement = yield* terminalize(
+          ctx,
+          submission,
+          session.publishSettlement,
+          outcome,
+          true,
         );
+
+        if (outcome._tag === "completed" && initialJournal?.history !== undefined)
+          yield* promptHistory.complete(session, initialJournal.original, initialJournal.history);
+
+        return Option.some(settlement);
       }
     }).pipe(Effect.scoped);
 

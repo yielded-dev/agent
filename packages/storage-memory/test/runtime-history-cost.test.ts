@@ -4,7 +4,7 @@ import { MemorySubmissionLedgerLive } from "@yielded/agent-storage-memory/memory
 import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { DurableAgentRuntime, DurableRuntimeConfig } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
 import { RunId, ThreadId } from "@yielded/agent/identifiers";
@@ -24,9 +24,11 @@ import {
   RepairAnnotated,
   ThreadCreated,
 } from "@yielded/agent/records";
+import { promptFromCanonicalRecords } from "@yielded/agent/run-journal";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
-import { layer as runStorageLayer } from "@yielded/agent/run-storage";
+import { layer as runStorageLayer, RunStorage } from "@yielded/agent/run-storage";
 import {
+  ClaimRequest,
   IdempotencyKey,
   Principal,
   RecoverySnapshotRequest,
@@ -37,11 +39,11 @@ import {
   ThreadMaterialization,
   ThreadStore,
   ThreadTailRequest,
-  type ThreadRead,
+  ThreadRead,
 } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Array, DateTime, Effect, Exit, Layer, Schema, Stream } from "effect";
+import { Array, Context, DateTime, Effect, Exit, Layer, Option, Schema, Stream } from "effect";
 import { LanguageModel, Model, Prompt, Toolkit, type Response } from "effect/ai";
 
 const digest = Schema.decodeSync(Digest)("a".repeat(64));
@@ -356,4 +358,170 @@ it.live("captures original context before racing later appends", () =>
     expect(result.openedPages).toBe(result.closedPages);
     expect(result.snapshot.ownership).toBeUndefined();
   }),
+);
+
+// Counting the complete Run prevents moving the repeated history read past model dispatch.
+it.live(
+  "reads only new history across verified local claims without changing the Prompt or digest",
+  () =>
+    Effect.gen(function* () {
+      const store = yield* ThreadStore;
+      const threadId = ThreadId.make("warm-history-cost");
+      let promptRecords = 0;
+      let observed = Prompt.empty;
+      const readSequences = new Set<number>();
+
+      const counted = ThreadStore.of({
+        ...store,
+        read: (request) =>
+          store
+            .read(request)
+            .pipe(Stream.tap((entry) => Effect.sync(() => readSequences.add(entry.sequence)))),
+        readPrompt: (request) =>
+          store.readPrompt(request).pipe(
+            Stream.tap((entry) =>
+              Effect.sync(() => {
+                promptRecords++;
+                readSequences.add(entry.sequence);
+              }),
+            ),
+          ),
+      });
+
+      const services = yield* Layer.build(
+        DurableAgentRuntime.layer.pipe(
+          Layer.provideMerge(runStorageLayer()),
+          Layer.provide(Layer.succeed(ThreadStore, counted)),
+        ),
+      );
+
+      const runtime = Context.get(services, DurableAgentRuntime);
+      const storage = Context.get(services, RunStorage);
+
+      const model = Model.make(
+        "scripted",
+        "warm-history-cost",
+        Layer.effect(
+          LanguageModel.LanguageModel,
+          LanguageModel.make({
+            generateText: () => Effect.succeed([]),
+            streamText: (request) => {
+              observed = request.prompt;
+
+              return Stream.fromIterable(response);
+            },
+          }),
+        ),
+      );
+
+      const agent = Agent.withModel(definition, model);
+      const encode = Schema.encodeSync(Schema.toCodecJson(Prompt.Prompt));
+      const counts: Array<number> = [];
+
+      for (let turn = 0; turn < 28; turn++) {
+        if (turn === 26) {
+          const before = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+
+          yield* store.append(
+            FencedAppendRequest.make({
+              threadId,
+              producerEpoch: before.producerEpoch,
+              expectedTailSequence: before.tailSequence,
+              expectedTailDigest: before.tailDigest,
+              batch: CanonicalBatch.make({
+                batchId: BatchId.make("external-history-append"),
+                producerId: ProducerId.make("independent-writer"),
+                records: [
+                  RecordEnvelope.make({
+                    recordId: RecordId.make("external-history-append"),
+                    family: "thread",
+                    schemaVersion: 1,
+                    deploymentId: DeploymentId.make("history-cost"),
+                    createdAt: yield* DateTime.now,
+                    payload: RepairAnnotated.make({ reason: "independent append", details: {} }),
+                  }),
+                ],
+              }),
+            }),
+          );
+        }
+
+        const prior =
+          turn === 0
+            ? []
+            : yield* store
+                .read(ThreadRead.make({ threadId, limit: 1_024 }))
+                .pipe(Stream.runCollect);
+
+        const expected = yield* promptFromCanonicalRecords(prior);
+        const before = promptRecords;
+        const input = `input ${turn}: café 😀`;
+
+        readSequences.clear();
+
+        yield* runtime.submit(agent, input, {
+          threadId,
+          principal: Principal.make("history-cost"),
+          idempotencyKey: IdempotencyKey.make(`warm-${turn}`),
+          definitions,
+        });
+        if (turn === 24) {
+          const beforeClaim = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+
+          const foreign = yield* storage
+            .claim(ClaimRequest.make({ threadId, producerId: ProducerId.make("foreign-owner") }))
+            .pipe(Effect.scoped);
+
+          if (Option.isNone(foreign)) return yield* Effect.die("Foreign claim was not granted");
+          const afterClaim = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+
+          expect(afterClaim.tailSequence).toBe(beforeClaim.tailSequence);
+          expect(afterClaim.tailDigest).toBe(beforeClaim.tailDigest);
+          expect(afterClaim.producerEpoch).toBe(beforeClaim.producerEpoch + 1);
+        }
+        const settled = yield* runtime.processThread(agent, threadId);
+
+        counts.push(promptRecords - before);
+        expect(settled).toHaveLength(1);
+        expect(settled[0]?.outcome).toBe("completed");
+        expect(
+          encode(
+            Prompt.fromMessages(observed.content.filter((message) => message.role !== "system")),
+          ),
+        ).toEqual(
+          encode(
+            Prompt.concat(
+              expected,
+              Prompt.make([{ role: "user", content: JSON.stringify(input) }]),
+            ),
+          ),
+        );
+        if (turn === 24 || turn === 26) {
+          const prefix = prior.find(
+            ({ record }) => record.payload._tag === "ModelResponseRecorded",
+          );
+
+          expect(prefix).toBeDefined();
+          if (prefix === undefined) return yield* Effect.die("Missing cached prefix record");
+          expect(readSequences.has(prefix.sequence)).toBe(true);
+        }
+
+        const records = yield* store
+          .read(ThreadRead.make({ threadId, limit: 1_024 }))
+          .pipe(Stream.runCollect);
+
+        const context = records.findLast(
+          ({ record }) => record.payload._tag === "RunContextRecorded",
+        )?.record.payload;
+
+        expect(context?._tag).toBe("RunContextRecorded");
+        if (context?._tag !== "RunContextRecorded")
+          return yield* Effect.die("Missing saved context");
+        expect(context.historyDigest).toBe(yield* digestJson(encode(expected)));
+      }
+      const warm = [...counts.slice(1, 24), counts[25], counts[27]];
+
+      expect(warm).toEqual(Array.makeBy(25, () => counts[1]));
+      expect(Math.max(...warm.map((count) => count ?? Infinity))).toBeLessThanOrEqual(8);
+    }).pipe(Effect.provide(base), Effect.scoped),
 );
