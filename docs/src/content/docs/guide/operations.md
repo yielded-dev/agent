@@ -478,9 +478,11 @@ uncertainty, payloads and transactional prearming; this extension defines no pro
 ### Adopting these contracts
 
 Table layout and record meaning have independent versions. The unreleased protocol accepts fresh
-layout-21 stores and `effect-agent/thread@3` records on SQLite, PostgreSQL, and Cloudflare. Opening
+layout-22 stores and `effect-agent/thread@3` records on SQLite, PostgreSQL, and Cloudflare. Opening
 predecessor or ambiguous stores fails before DDL or payload mutation. Keep them with their matching
 release; no historical decoder, layout upgrade, converter, or mixed-format runtime is included.
+To retain current-format history across layout versions, export with the source's matching release
+and import the archive into a fresh store with the destination release.
 
 Quiesce the source and retain a backup before transferring it. `streamExport({ threadId })`
 yields bounded pages through `ThreadExportSource`; provide its Layer from the source `ThreadStore`

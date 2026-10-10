@@ -1,5 +1,8 @@
 import { makeSqlQuery, SqlInteger } from "@yielded/agent-storage-sql/sql-storage";
-import { SQL_PROMPT_PREDICATE } from "@yielded/agent-storage-sql/sql-thread-native-reads";
+import {
+  SQL_PROMPT_PREDICATE,
+  SQL_WORKER_EXECUTION_PREDICATE,
+} from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { CURRENT_RECORD_FORMAT, PROMPT_EVIDENCE_TAGS } from "@yielded/agent/records";
 import { Effect, Schema } from "effect";
@@ -12,7 +15,7 @@ import {
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 21;
+export const CurrentPostgresStorageVersion = 22;
 
 /** Counter function body is frozen and checked on every layout inspection. */
 const transferFunctionBody = `
@@ -188,11 +191,11 @@ const layoutStatements = [
   'CREATE TABLE __NAMESPACE__."effect_agent_worker_stops" (thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, terminal TEXT COLLATE "C")',
   "CREATE INDEX effect_agent_worker_starts ON __NAMESPACE__.\"effect_agent_message_deliveries\"(owner_thread_id, (read_metadata ->> 'delegationId'), (read_metadata ->> 'targetAgentId'), message_id) WHERE (read_metadata ->> 'workerStart') = 'true'",
   "CREATE INDEX effect_agent_worker_pending ON __NAMESPACE__.\"effect_agent_message_deliveries\"(owner_thread_id, (read_metadata ->> 'threadId'), message_id) WHERE state IN ('pending', 'parked') AND (read_metadata ->> 'hasReceipt') = 'false'",
-  'CREATE INDEX effect_agent_records_call ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, record_tag, run_id, tool_call_id)',
+  'CREATE INDEX effect_agent_records_call ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, record_tag, run_id, tool_call_id) WHERE tool_call_id IS NOT NULL',
   "CREATE INDEX effect_agent_records_run_input ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, run_id) WHERE record_tag = 'UserInputRecorded' AND input_kind = 'user'",
   "CREATE INDEX effect_agent_records_subtree ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, source_submission_id, sequence) WHERE record_tag = 'SubtreeBudgetReserved'",
   "CREATE INDEX effect_agent_records_worker_input ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, message_id) WHERE record_tag = 'WorkerInputRequested'",
-  'CREATE INDEX effect_agent_worker_execution ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, record_tag, sequence) WHERE run_id IS NOT NULL',
+  `CREATE INDEX effect_agent_worker_execution ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, record_tag, sequence) WHERE ${SQL_WORKER_EXECUTION_PREDICATE}`,
   "CREATE INDEX effect_agent_message_deliveries_pending ON __NAMESPACE__.\"effect_agent_message_deliveries\"(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused')",
   "CREATE INDEX effect_agent_records_continuation ON __NAMESPACE__.\"effect_agent_canonical_records\"(thread_id, run_id, sequence) WHERE record_tag = 'RunContinuation'",
   'CREATE INDEX effect_agent_records_tag ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, record_tag, sequence)',
@@ -1047,6 +1050,7 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
   effect_agent_records_call: {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", "record_tag", "run_id", "tool_call_id"],
+    predicate: ["notNull", ["column", "tool_call_id"]],
   },
   effect_agent_records_run_input: {
     table: "effect_agent_canonical_records",
@@ -1137,7 +1141,13 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
   effect_agent_worker_execution: {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", "record_tag", "sequence"],
-    predicate: ["notNull", ["column", "run_id"]],
+    predicate: [
+      "and",
+      [
+        ["notNull", ["column", "run_id"]],
+        ["in", ["column", "record_tag"], ["UserInputRecorded", "RunStarted"]],
+      ],
+    ],
   },
   effect_agent_worker_pending: {
     table: "effect_agent_message_deliveries",
@@ -1610,10 +1620,10 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
   const { table, execute } = yield* makeSqlQuery(namespace);
 
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 21)`,
+    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 22)`,
   );
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 21, ${CURRENT_RECORD_FORMAT})`,
+    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 22, ${CURRENT_RECORD_FORMAT})`,
   );
 
   return yield* readPostgresStorageHeader(namespace);

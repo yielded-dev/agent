@@ -53,7 +53,7 @@ indexed after Run settlement; destination acknowledgement owns closure. An index
 execution authority, and missing required evidence is a typed fault, not an empty completed Run.
 See [Run continuations](/concepts/durability/#run-continuations) for recovery bounds.
 
-This unreleased format accepts only fresh layout-21 storage and `effect-agent/thread@3` archives.
+This unreleased format accepts only fresh layout-22 storage and `effect-agent/thread@3` archives.
 Refuse predecessor, newer, or ambiguous layouts before any DDL or record mutation. Preserve the
 rejected store; there is no layout upgrade or historical record decoder.
 
