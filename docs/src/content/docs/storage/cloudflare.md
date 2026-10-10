@@ -16,13 +16,14 @@ Memory stores
 over the same owner share its transaction gate and document, receipt, and usage views.
 Failed transactions discard cached state.
 
-Completed Runs can retain a disposable prompt checkpoint beside the canonical log. A fresh Run
-after eviction verifies its log head and saved prompt digest, then projects only the latest Run's
-records. Checkpoints retain at most 16 MiB of prompt JSON per Thread and replace their predecessor
-after settlement. Missing or incompatible checkpoints, changed fences, interleaved work, and
-compaction use canonical reconstruction. Unfinished Run recovery and explicit verification always
-rebuild from canonical facts; exports do not depend on checkpoints. The live prompt itself still
-grows with uncompacted conversation bytes.
+Completed Runs can retain a disposable prompt checkpoint beside the canonical log. A fresh
+sequential Run after eviction verifies its log head and saved prompt digest, then projects only
+the latest Run's records. Checkpoints retain at most 16 MiB of prompt JSON per Thread and replace
+their predecessor after settlement. Missing or incompatible checkpoints, changed fences,
+interleaved work, Threads with compaction, and suffixes above 1,024 prompt records use canonical
+reconstruction. Unfinished Run recovery and explicit verification always rebuild from canonical
+facts; exports do not depend on checkpoints. The live prompt itself still grows with uncompacted
+conversation bytes.
 
 ## Run durable agents
 

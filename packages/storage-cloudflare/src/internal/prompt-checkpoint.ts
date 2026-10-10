@@ -55,7 +55,8 @@ export const makePromptCheckpoints = (
             yield* sql`
               SELECT key, value FROM effect_agent_meta
               WHERE key >= ${prefix} AND key < ${prefix + "~"}
-                AND (SELECT sum(length(CAST(value AS BLOB))) FROM effect_agent_meta
+                AND (SELECT sum(length(CAST(key AS BLOB)) + length(CAST(value AS BLOB)))
+                  FROM effect_agent_meta
                   WHERE key >= ${prefix} AND key < ${prefix + "~"})
                     <= ${MAX_PROMPT_CHECKPOINT_BYTES + 16_384}
               ORDER BY key LIMIT 66`,
