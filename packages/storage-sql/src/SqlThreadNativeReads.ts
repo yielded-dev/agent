@@ -15,6 +15,7 @@ import {
   PromptRecord,
   type PromptRecordEnvelope,
   RecordId,
+  runContext,
 } from "@yielded/agent/records";
 import {
   canonicalRunIds,
@@ -59,6 +60,10 @@ import { canonicalRecordJson } from "./SqlThreadArchiveRange.ts";
 
 /** Closed library tags must match SQLite partial-index predicates at prepare time. */
 export const SQL_PROMPT_PREDICATE = `record_tag IN (${PROMPT_EVIDENCE_TAGS.map((tag) => `'${tag}'`).join(", ")})`;
+
+/** Both immutable context owners share the same bounded history-frontier lookup. */
+export const SQL_CONTEXT_PREDICATE =
+  "record_tag IN ('RunContextRecorded', 'RunStarted') AND context_through IS NOT NULL";
 
 const canonicalColumns = {
   tag: "record_tag",
@@ -111,6 +116,7 @@ export const canonicalRecordMetadata = (
   };
 
   const tag = record.canonical.payload._tag;
+  const context = runContext(record.canonical.payload);
 
   return Object.freeze({
     columns: Object.freeze({
@@ -136,8 +142,8 @@ export const canonicalRecordMetadata = (
           ? 1
           : 0,
       context_through:
-        record.canonical.payload._tag === "RunContextRecorded"
-          ? record.canonical.payload.historyThrough
+        context !== undefined
+          ? context.historyThrough
           : record.canonical.payload._tag === "CompactionCreated"
             ? record.canonical.payload.coversThrough
             : null,
@@ -504,7 +510,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
               rows =
                 yield* sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json
                 FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_context")}
-                WHERE thread_id=${request.threadId} AND record_tag='RunContextRecorded'
+                WHERE thread_id=${request.threadId} AND ${sql.literal(SQL_CONTEXT_PREDICATE)}
                   AND context_through<=${selection.throughSequence} AND sequence<=${selection.throughSequence}
                 ORDER BY context_through DESC, sequence DESC LIMIT 1`.pipe(execute);
               break;
@@ -989,12 +995,12 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                           ].includes(payload._tag))
                 )
                   return yield* failure("invalid Worker funding membership");
-                if (
-                  selection._tag === "LatestRunContext" &&
-                  (payload._tag !== "RunContextRecorded" ||
-                    payload.historyThrough > selection.throughSequence)
-                )
-                  return yield* failure("invalid Run context membership");
+                if (selection._tag === "LatestRunContext") {
+                  const context = runContext(payload);
+
+                  if (context === undefined || context.historyThrough > selection.throughSequence)
+                    return yield* failure("invalid Run context membership");
+                }
                 if (
                   selection._tag === "PromptEvidence" &&
                   !PROMPT_EVIDENCE_TAGS.some((tag) => tag === payload._tag)

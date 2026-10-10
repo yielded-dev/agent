@@ -41,6 +41,7 @@ import {
   RecordEnvelope,
   RecordId,
   RunContinuation,
+  runContext,
   type ModelResponseRecorded,
   type ToolCallSettled,
 } from "./Records.ts";
@@ -349,11 +350,9 @@ export const readRunEvidenceSnapshot = Effect.fnUntraced(function* (
     return yield* failure("Selected canonical evidence is incomplete or exceeds its suffix bound");
   if (cursor.savedContext !== undefined) {
     const context = yield* resolve(cursor.savedContext);
+    const saved = runContext(context.record.payload);
 
-    if (
-      context.record.payload._tag !== "RunContextRecorded" ||
-      context.record.payload.runId !== runId
-    )
+    if (saved === undefined || saved.runId !== runId)
       return yield* failure("Selected continuation has invalid saved context evidence");
   }
   if (cursor.latestResponse !== undefined) {
@@ -593,14 +592,15 @@ const advanceFacts = Effect.fnUntraced(function* (
   for (const fact of facts) {
     const payload = fact.payload;
 
+    if (runContext(payload) !== undefined) {
+      if (savedContext !== undefined)
+        return yield* failure("A Run's original context cannot be replaced");
+      savedContext = yield* reference(fact);
+    }
+
     switch (payload._tag) {
       case "RunStarted":
-        position = "awaiting-model";
-        break;
       case "RunContextRecorded":
-        if (savedContext !== undefined)
-          return yield* failure("A Run's original context cannot be replaced");
-        savedContext = yield* reference(fact);
         position = "awaiting-model";
         break;
       case "ModelResponseRecorded": {
@@ -897,9 +897,9 @@ export const verifyRunContinuations = Effect.fnUntraced(function* (
       if (initialBytes > MAX_RUN_RECOVERY_SUFFIX_BYTES)
         return yield* failure("Run preparation exceeds its byte bound");
       for (const entry of facts) {
-        const savedContext = entry.record.payload;
+        const savedContext = runContext(entry.record.payload);
 
-        if (savedContext._tag !== "RunContextRecorded") continue;
+        if (savedContext === undefined) continue;
 
         const originalEntry = byId.get(
           previous?.continuation.originalInput.recordId ?? original!.recordId,

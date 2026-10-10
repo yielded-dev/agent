@@ -1,5 +1,8 @@
 import { makeSqlTransaction } from "@yielded/agent-storage-sql/sql-storage";
-import { SQL_PROMPT_PREDICATE } from "@yielded/agent-storage-sql/sql-thread-native-reads";
+import {
+  SQL_PROMPT_PREDICATE,
+  SQL_CONTEXT_PREDICATE,
+} from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
@@ -13,7 +16,7 @@ import {
   SqliteStorageError,
 } from "../SqliteStorageError.ts";
 
-export const CurrentSqliteStorageVersion = 21;
+export const CurrentSqliteStorageVersion = 23;
 
 /** Fresh layout only. Unsupported stores are rejected before these statements execute. */
 const layoutStatements = [
@@ -67,7 +70,7 @@ const layoutStatements = [
   'CREATE INDEX effect_agent_records_handoff ON "effect_agent_canonical_records"(thread_id, sequence) WHERE handoff = 1',
   "CREATE INDEX effect_agent_records_run_identity ON effect_agent_canonical_records(thread_id, run_id) WHERE run_id IS NOT NULL",
   "CREATE INDEX effect_agent_records_application_input ON effect_agent_canonical_records(thread_id, sequence) WHERE application_input = 1",
-  "CREATE INDEX effect_agent_records_context ON effect_agent_canonical_records(thread_id, context_through, sequence) WHERE record_tag = 'RunContextRecorded'",
+  `CREATE INDEX effect_agent_records_context ON effect_agent_canonical_records(thread_id, context_through, sequence) WHERE ${SQL_CONTEXT_PREDICATE}`,
   `CREATE INDEX effect_agent_records_prompt ON effect_agent_canonical_records(thread_id, sequence) WHERE ${SQL_PROMPT_PREDICATE}`,
   "CREATE INDEX effect_agent_records_admitted_input ON effect_agent_canonical_records(thread_id, sequence) WHERE record_tag = 'UserInputRecorded' AND submission_id IS NOT NULL",
   // Prefix indexes let a coverage range produce at most 53 latest-visible candidates.
@@ -149,7 +152,7 @@ const storageError = (cause: SqlError) =>
   SqliteStorageError.make({ operation: "inspect storage layout", cause, message: cause.message });
 
 const { decode, readObjects, readHeader, readManagedTriggers } = makeSqliteLayoutInspection({
-  version: 21,
+  version: 23,
   statements: layoutStatements,
   objects: layoutObjects,
   headerStatement,
@@ -226,8 +229,8 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayo
         ),
       );
       yield* sql.unsafe(headerStatement).withoutTransform;
-      yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 21, ${CURRENT_RECORD_FORMAT})`;
-      yield* sql.unsafe("PRAGMA user_version = 21").withoutTransform;
+      yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 23, ${CURRENT_RECORD_FORMAT})`;
+      yield* sql.unsafe("PRAGMA user_version = 23").withoutTransform;
 
       return yield* readSqliteStorageHeader();
     }),

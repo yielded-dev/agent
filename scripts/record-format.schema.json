@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 5,
   "dialect": "draft-2020-12",
   "schema": {
     "type": "object",
@@ -711,6 +711,71 @@
         "maxDurationMillis": {
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "number",
+              "enum": [1]
+            },
+            "runScopedInput": {
+              "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
+            },
+            "historyFrom": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": 0
+            },
+            "historyThrough": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "retained": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "recordId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "digest": {
+                    "type": "string"
+                  },
+                  "sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": ["recordId", "digest", "sequence"],
+                "additionalProperties": true
+              },
+              "maxItems": 4096
+            },
+            "historyDigest": {
+              "type": "string"
+            },
+            "priorHistoryLength": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "contextWindowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "version",
+            "runScopedInput",
+            "historyFrom",
+            "historyThrough",
+            "retained",
+            "historyDigest",
+            "priorHistoryLength"
+          ],
+          "additionalProperties": true
         }
       },
       "required": ["_tag", "runId", "policyAccountingVersion", "maxDurationMillis"],
@@ -3284,10 +3349,6 @@
           "type": "number",
           "enum": [1]
         },
-        "runId": {
-          "type": "string",
-          "minLength": 1
-        },
         "runScopedInput": {
           "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
         },
@@ -3333,18 +3394,22 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [
         "_tag",
         "version",
-        "runId",
         "runScopedInput",
         "historyFrom",
         "historyThrough",
         "retained",
         "historyDigest",
-        "priorHistoryLength"
+        "priorHistoryLength",
+        "runId"
       ],
       "additionalProperties": true
     },

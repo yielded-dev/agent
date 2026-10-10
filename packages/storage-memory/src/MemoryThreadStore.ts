@@ -25,6 +25,7 @@ import {
   MAX_RUN_RECOVERY_SUFFIX_BYTES,
   MAX_RUN_CONTINUATION_BYTES,
   PromptRecord,
+  runContext,
   type PromptRecordEnvelope,
 } from "@yielded/agent/records";
 import {
@@ -587,7 +588,7 @@ const prepareIndexes = (
     byId.set(entry.record.recordId, entry);
     const payload = entry.record.payload;
 
-    if (payload._tag === "RunContextRecorded") nativeAdds.contexts.push(entry);
+    if (runContext(payload) !== undefined) nativeAdds.contexts.push(entry);
     if (payload._tag === "ModelResponseRecorded")
       for (const operation of payload.toolOperations) {
         const id = toolCallSettledRecordId(payload.runId, payload.turn, operation.toolCallId);
@@ -729,12 +730,13 @@ const prepareIndexes = (
       for (const [id, entry] of nativeAdds.toolDeclarations)
         previous.toolDeclarations.set(id, entry);
       for (const entry of nativeAdds.contexts) {
-        const payload = entry.record.payload;
-        const old = previous.contexts.at(-1)?.record.payload;
+        const context = runContext(entry.record.payload);
+        const previousPayload = previous.contexts.at(-1)?.record.payload;
+        const old = previousPayload === undefined ? undefined : runContext(previousPayload);
 
         if (
-          payload._tag === "RunContextRecorded" &&
-          (old?._tag !== "RunContextRecorded" || payload.historyThrough >= old.historyThrough)
+          context !== undefined &&
+          (old === undefined || context.historyThrough >= old.historyThrough)
         )
           previous.contexts.push(entry);
       }

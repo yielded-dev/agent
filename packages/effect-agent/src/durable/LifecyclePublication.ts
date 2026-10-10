@@ -1,4 +1,15 @@
-import { Cause, Clock, Context, Crypto, Effect, Layer, Option, Schema, type Scope } from "effect";
+import {
+  Cause,
+  Clock,
+  Context,
+  Crypto,
+  Effect,
+  Layer,
+  Option,
+  Schema,
+  Struct,
+  type Scope,
+} from "effect";
 
 import { SubmissionId, ThreadId } from "../core/Identifiers.ts";
 import { Receipt } from "../core/Receipt.ts";
@@ -81,7 +92,8 @@ export const LifecyclePublicationFact = Schema.Union([
   Schema.TaggedStruct("SubmissionResumed", { submissionId: SubmissionId }),
   Schema.TaggedStruct("AbortIntentRecorded", { intent: AbortIntent }),
   UserInputRecorded,
-  RunStartedRecord,
+  // Retain the small lifecycle fact; evaluated prompt context belongs only to its canonical owner.
+  Schema.Struct(Struct.omit(RunStartedRecord.fields, ["context"])),
   AgentUpdateEmitted,
   ToolApprovalRequested,
   ToolApprovalDecided,

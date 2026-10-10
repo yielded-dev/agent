@@ -96,7 +96,10 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                   accounting: { committedTurns: 2, modelCalls: 2 },
                 });
                 expect(
-                  records.filter(({ record }) => record.payload._tag === "RunContextRecorded"),
+                  records.filter(
+                    ({ record }) =>
+                      record.payload._tag === "RunStarted" && record.payload.context !== undefined,
+                  ),
                 ).toHaveLength(1);
                 expect(
                   records.filter(({ record }) => record.payload._tag === "ModelResponseRecorded"),

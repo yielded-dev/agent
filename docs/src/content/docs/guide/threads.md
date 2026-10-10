@@ -225,7 +225,7 @@ facts remain directly addressable while newer facts append. See the
 ## Choose storage
 
 The [Storage guides](/storage/) compare backends and show how to connect each one.
-SQLite, PostgreSQL, and Cloudflare accept fresh layout-21 stores and the current record format.
+SQLite, PostgreSQL, and Cloudflare accept fresh layout-23 stores and the current record format.
 Other layouts fail before mutation. See
 [adopting these contracts](/guide/operations/#adopting-these-contracts) for same-format transfer,
 and [Persistence & durability](/concepts/durability/) for execution recovery guarantees.

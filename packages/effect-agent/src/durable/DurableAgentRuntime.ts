@@ -202,6 +202,8 @@ import {
   RepairAnnotated,
   RunStartedRecord,
   RunContextRecorded,
+  RunContextData,
+  runContext,
   MAX_RUN_TOOL_CALL_IDENTITIES,
   MAX_PERSISTED_JSON_BYTES,
   MAX_RUN_CONTINUATION_BYTES,
@@ -1330,9 +1332,9 @@ class CurrentRunStart extends Context.Service<
   CurrentRunStart,
   {
     readonly commit: (
-      context?: RecordEnvelope,
+      context?: RunContextData,
     ) => Effect.Effect<
-      void,
+      RecordId,
       Effect.Error<ReturnType<RunWriter["append"]>> | DurableRuntimeFailpointError
     >;
   }
@@ -1746,13 +1748,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       if (cursor.savedContext !== undefined) {
         const savedEnvelope = yield* resolve(cursor.savedContext);
+        const initial = runContext(savedEnvelope.record.payload);
 
-        if (
-          savedEnvelope.record.payload._tag !== "RunContextRecorded" ||
-          savedEnvelope.sequence <= input.sequence
-        )
+        if (initial === undefined || savedEnvelope.sequence <= input.sequence)
           return yield* invalid("Run continuation has invalid saved original context");
-        const initial = savedEnvelope.record.payload;
         const cachedContext = resolvedContext;
 
         if (
@@ -1771,7 +1770,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           );
           resolvedContext = { threadId, digest: cursor.savedContext.digest, value: saved };
         }
-        if (own.filter(({ record }) => record.payload._tag === "RunContextRecorded").length !== 1)
+        if (own.filter(({ record }) => runContext(record.payload) !== undefined).length !== 1)
           return yield* invalid("Run has conflicting saved original contexts");
       }
       if (cursor.latestResponse !== undefined) {
@@ -3290,33 +3289,56 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       );
     }
 
-    // The first model dispatch commits start and evaluated context in one existing boundary.
-    // If preparation fails first, terminal handling still publishes the start exactly once.
-    const commit = Effect.fnUntraced(function* (context?: RecordEnvelope) {
+    // The first model dispatch owns its evaluated context in the start itself. A start already
+    // durable after preparation failure stays immutable; its later context is a separate fact.
+    const commit = Effect.fnUntraced(function* (context?: RunContextData) {
       if (committed) {
-        if (context !== undefined)
-          yield* appendBatch(
-            writer,
-            CanonicalBatch.make({
-              batchId: decodeBatchIdSync(context.recordId),
-              producerId: config.producerId,
-              records: [context],
-            }),
-          );
+        if (context === undefined) return start.recordId;
 
-        return;
+        const envelope = yield* makeEnvelope(
+          decodeRecordIdSync(JSON.stringify(["run-context@1", runId])),
+          RunContextRecorded.make({ ...context, runId }),
+        );
+
+        yield* appendBatch(
+          writer,
+          CanonicalBatch.make({
+            batchId: decodeBatchIdSync(envelope.recordId),
+            producerId: config.producerId,
+            records: [envelope],
+          }),
+        );
+
+        return envelope.recordId;
       }
+
+      // Preserve the bare start for terminal handling if adding context is refused for capacity.
+      const envelope =
+        context === undefined
+          ? start
+          : RecordEnvelope.make({
+              ...start,
+              payload: RunStartedRecord.make({
+                runId,
+                maxDurationMillis: allowance,
+                policyAccountingVersion: 1,
+                context,
+              }),
+            });
+
       yield* hit("run:before-start-append");
       yield* appendBatch(
         writer,
         CanonicalBatch.make({
           batchId: runStartedBatchId(runId),
           producerId: config.producerId,
-          records: [start, ...(context === undefined ? [] : [context])],
+          records: [envelope],
         }),
       );
       committed = true;
       yield* hit("run:after-start-append");
+
+      return start.recordId;
     });
 
     return {
@@ -5781,7 +5803,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 .slice(priorHistoryLength)
                 .filter((message) => message.role === "system");
               if (priorContext !== undefined) return;
-              const recordId = decodeRecordIdSync(JSON.stringify(["run-context@1", runId]));
 
               const prompt = yield* Schema.encodeEffect(Prompt.Prompt)(
                 Prompt.fromMessages(initialHistory.content.slice(priorHistoryLength)),
@@ -5824,9 +5845,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   }).pipe(Effect.provideService(ThreadReader, reader)),
               );
 
-              const payload = yield* RunContextRecorded.makeEffect({
+              const payload = yield* RunContextData.makeEffect({
                 version: 1,
-                runId,
                 runScopedInput: prompt,
                 historyFrom: journal.historyFrom,
                 historyThrough: CanonicalSequence.make(originalInput.sequence - 1),
@@ -5847,9 +5867,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
               const start = yield* CurrentRunStart;
 
-              yield* start.commit(yield* makeEnvelope(recordId, payload));
-              knownIds.add(runStartedRecordId(runId));
-              knownIds.add(recordId);
+              knownIds.add(yield* start.commit(payload));
               historyEvidence.clear();
               projectedJournal = undefined;
             }),

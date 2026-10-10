@@ -1,5 +1,8 @@
 import { makeSqlQuery, SqlInteger } from "@yielded/agent-storage-sql/sql-storage";
-import { SQL_PROMPT_PREDICATE } from "@yielded/agent-storage-sql/sql-thread-native-reads";
+import {
+  SQL_PROMPT_PREDICATE,
+  SQL_CONTEXT_PREDICATE,
+} from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { CURRENT_RECORD_FORMAT, PROMPT_EVIDENCE_TAGS } from "@yielded/agent/records";
 import { Effect, Schema } from "effect";
@@ -12,7 +15,7 @@ import {
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 21;
+export const CurrentPostgresStorageVersion = 23;
 
 /** Counter function body is frozen and checked on every layout inspection. */
 const transferFunctionBody = `
@@ -199,7 +202,7 @@ const layoutStatements = [
   'CREATE INDEX effect_agent_records_handoff ON __NAMESPACE__."effect_agent_canonical_records"(thread_id, sequence) WHERE handoff = 1',
   "CREATE INDEX effect_agent_records_run_identity ON __NAMESPACE__.effect_agent_canonical_records(thread_id, run_id) WHERE run_id IS NOT NULL",
   "CREATE INDEX effect_agent_records_application_input ON __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) WHERE application_input = 1",
-  "CREATE INDEX effect_agent_records_context ON __NAMESPACE__.effect_agent_canonical_records(thread_id, context_through, sequence) WHERE record_tag = 'RunContextRecorded'",
+  `CREATE INDEX effect_agent_records_context ON __NAMESPACE__.effect_agent_canonical_records(thread_id, context_through, sequence) WHERE ${SQL_CONTEXT_PREDICATE}`,
   `CREATE INDEX effect_agent_records_prompt ON __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) WHERE ${SQL_PROMPT_PREDICATE}`,
   "CREATE INDEX effect_agent_records_admitted_input ON __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) WHERE record_tag = 'UserInputRecorded' AND submission_id IS NOT NULL",
   // Prefix indexes let a coverage range produce at most 53 latest-visible candidates.
@@ -933,7 +936,13 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
   effect_agent_records_context: {
     table: "effect_agent_canonical_records",
     columns: ["thread_id", "context_through", "sequence"],
-    predicate: ["eq", ["column", "record_tag"], ["text", "RunContextRecorded"]],
+    predicate: [
+      "and",
+      [
+        ["in", ["column", "record_tag"], ["RunContextRecorded", "RunStarted"]],
+        ["notNull", ["column", "context_through"]],
+      ],
+    ],
   },
   effect_agent_records_prompt: {
     table: "effect_agent_canonical_records",
@@ -1610,10 +1619,10 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
   const { table, execute } = yield* makeSqlQuery(namespace);
 
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 21)`,
+    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 23)`,
   );
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 21, ${CURRENT_RECORD_FORMAT})`,
+    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 23, ${CURRENT_RECORD_FORMAT})`,
   );
 
   return yield* readPostgresStorageHeader(namespace);
