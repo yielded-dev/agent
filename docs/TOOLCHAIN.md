@@ -29,7 +29,7 @@ development version. Raise the peer minimum when code needs a newer API.
 Private examples declare Effect as a regular dependency. Adapters depend on the platform and
 SQL implementations they use.
 
-`platform-cloudflare` requires `effect-cf@^0.55.0` and `effect@^4.0.0` as host peers
+`platform-cloudflare` requires `effect-cf@^0.56.0` and `effect@^4.0.0` as host peers
 and uses the exact catalog versions for development. Supply Effect SQL packages compatible with
 4.0.0 for `effect-cf`. Consumers provide the shared runtime.
 
