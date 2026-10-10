@@ -61,6 +61,7 @@ export interface CachedPromptHistory extends PromptHistory {
   readonly historyDigest: Digest;
 }
 
+/** Internal canonical projection; ownership comes from the ThreadStore read contract. */
 export const preparePromptHistory = (prompt: Prompt.Prompt): PromptHistory | undefined =>
   prompt.content.length > MAX_ENTRIES
     ? undefined
@@ -81,6 +82,27 @@ const encodeHistory = Effect.fnUntraced(function* (prompt: Prompt.Prompt, allowa
 
   return { encoded, bytes: retainedBytes(value, encoded, allowance) };
 });
+
+// Finish parsing/decoding before suspending for suffix reads. Only the native prefix and its
+// canonical string leave this Effect; it does not keep a second parsed root in the outer Run.
+const decodeCheckpointPrefix = Effect.fnUntraced(function* (encoded: string, length: number) {
+  const value = yield* parseJson(encoded);
+  const bytes = retainedBytes(value, encoded, MAX_BYTES);
+
+  if (bytes === undefined) return undefined;
+  const decoded = yield* decodePrompt(value);
+
+  return decoded.content.length === length
+    ? { prompt: Prompt.fromMessages(decoded.content), encoded, bytes }
+    : undefined;
+});
+
+// A concatenated content index has at most five digits under MAX_ENTRIES. Relative to the
+// suffix's original one-or-more digits, reserve four extra bytes in both value estimates.
+const appendedBytes = (
+  prefix: number,
+  suffix: { readonly bytes: number; readonly prompt: Prompt.Prompt },
+) => prefix + suffix.bytes + 8 * suffix.prompt.content.length;
 
 /** The ordinary codec remains the oracle on canonical reconstruction and explicit verify. */
 export const digestPromptHistory = (prompt: Prompt.Prompt, history: PromptHistory | undefined) => {
@@ -297,19 +319,13 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* (store: Thread
         (yield* digestCanonicalJson(checkpoint.promptJson)) !== context.historyDigest
       )
         return undefined;
-      const value = yield* parseJson(checkpoint.promptJson);
-      const bytes = retainedBytes(value, checkpoint.promptJson, MAX_BYTES);
 
-      if (bytes === undefined) return undefined;
-      const decoded = yield* decodePrompt(value);
+      const prefix = yield* decodeCheckpointPrefix(
+        checkpoint.promptJson,
+        context.priorHistoryLength,
+      );
 
-      if (decoded.content.length !== context.priorHistoryLength) return undefined;
-
-      const prefix = {
-        prompt: Prompt.fromMessages(decoded.content),
-        encoded: checkpoint.promptJson,
-        bytes,
-      };
+      if (prefix === undefined) return undefined;
 
       const delta = yield* readSuffix(
         store,
@@ -317,12 +333,13 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* (store: Thread
         context.historyThrough,
         head.tailSequence,
         context.runId,
-        MAX_BYTES - bytes,
+        MAX_BYTES - prefix.bytes,
       );
 
       if (
         delta === undefined ||
         delta.runs !== writer.producerEpoch - checkpoint.producerEpoch ||
+        appendedBytes(prefix.bytes, delta) > MAX_BYTES ||
         prefix.prompt.content.length + delta.prompt.content.length > MAX_ENTRIES
       )
         return undefined;
@@ -337,7 +354,7 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* (store: Thread
         historyDigest: context.historyDigest,
         prompt: Prompt.concat(prefix.prompt, delta.prompt),
         encoded: appendJson(prefix, delta),
-        bytes: bytes + delta.bytes,
+        bytes: appendedBytes(prefix.bytes, delta),
       } satisfies CachedPromptHistory;
     },
     Effect.orElseSucceed(() => undefined),
@@ -371,6 +388,7 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* (store: Thread
       if (
         delta === undefined ||
         delta.runs !== 1 ||
+        appendedBytes(bytes, delta) > MAX_BYTES ||
         history.prompt.content.length + delta.prompt.content.length > MAX_ENTRIES
       )
         return;
@@ -412,7 +430,7 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* (store: Thread
         historyDigest: digest,
         prompt: Prompt.concat(history.prompt, delta.prompt),
         encoded: appendJson({ prompt: history.prompt, encoded }, delta),
-        bytes: bytes + delta.bytes,
+        bytes: appendedBytes(bytes, delta),
         refreshedAt: refresh ? writer.producerEpoch : history.refreshedAt,
       };
     },
