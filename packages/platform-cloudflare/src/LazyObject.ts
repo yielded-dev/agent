@@ -83,8 +83,8 @@ export function lazyObject<
     fetch(request: Request): Promise<Response> {
       return invoke(this, "fetch", [request]) as Promise<Response>;
     }
-    async alarm(info?: AlarmInvocationInfo): Promise<void> {
-      await invoke(this, "alarm", [info]);
+    async alarm(...args: [info?: AlarmInvocationInfo]): Promise<void> {
+      await invoke(this, "alarm", args);
     }
     async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
       await invoke(this, "webSocketMessage", [socket, message]);
