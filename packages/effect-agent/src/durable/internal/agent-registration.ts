@@ -1,4 +1,15 @@
-import { Crypto, Option, Scope, Context, Effect, Layer, References, Schema, Tracer } from "effect";
+import {
+  Crypto,
+  Option,
+  Scope,
+  Context,
+  Effect,
+  Layer,
+  References,
+  Schema,
+  Tracer,
+  Scheduler,
+} from "effect";
 import { Tool } from "effect/ai";
 
 import type * as Agent from "../../core/Agent.ts";
@@ -336,10 +347,11 @@ interface CapturedBinding {
   ) => Effect.Effect<Option.Option<Settlement>, DurableWorkerFailure | DurableBindingFailure>;
 }
 
-// Registrations outlive their construction span. Dependencies remain captured,
-// while every attempt/report inherits the invoking fiber's tracing state.
-const omitTraceContext = Context.omit(
+// Registrations outlive constructor gates and tracing spans. Capture dependencies,
+// while every attempt/report inherits the invoking fiber's scheduler and tracing state.
+const omitInvocationContext = Context.omit(
   Scope.Scope,
+  Scheduler.Scheduler,
   Tracer.ParentSpan,
   Tracer.Tracer,
   Tracer.MinimumTraceLevel,
@@ -356,14 +368,14 @@ const omitTraceContext = Context.omit(
   References.CurrentLogSpans,
 );
 
-// R describes captured application services; ParentSpan is supplied by the
-// live invocation rather than stored as a registration dependency.
-const withoutTraceContext = <R>(context: Context.Context<R>): Context.Context<R> =>
-  omitTraceContext(context) as Context.Context<R>;
+// R describes captured application services; scheduling and tracing belong to
+// the live invocation rather than the registration's construction context.
+const withoutInvocationContext = <R>(context: Context.Context<R>): Context.Context<R> =>
+  omitInvocationContext(context) as Context.Context<R>;
 
 const captureReporting = <R>(reports: ReadonlyArray<WorkerReporting<unknown, R>>) =>
   Effect.map(
-    Effect.context<Exclude<R, Scope.Scope>>().pipe(Effect.map(withoutTraceContext)),
+    Effect.context<Exclude<R, Scope.Scope>>().pipe(Effect.map(withoutInvocationContext)),
     (context) =>
       reports.map((report): WorkerReporting<WorkerReportPreparationFailure> => ({
         ...report,
@@ -411,7 +423,7 @@ const capture = <A extends ExecutableAgentBinding, Provides = never, Requires = 
 > =>
   Effect.map(
     Effect.context<Exclude<DurableWorkerRequirements<A>, Provides> | Requires>().pipe(
-      Effect.map(withoutTraceContext),
+      Effect.map(withoutInvocationContext),
     ),
     (context): CapturedBinding => ({
       agentId: agent.definition.id,

@@ -1,5 +1,5 @@
 import { expect, it } from "@effect/vitest";
-import { Context, DateTime, Effect, Layer, Option, Tracer, Schema } from "effect";
+import { Context, DateTime, Effect, Layer, Option, Tracer, Schema, Scheduler } from "effect";
 import { Toolkit } from "effect/ai";
 
 import * as Agent from "../../src/core/Agent.ts";
@@ -10,9 +10,9 @@ import { Claim, OwnershipToken } from "../../src/durable/SubmissionLedger.ts";
 
 class Dependency extends Context.Service<Dependency, string>()("test/registered-dependency") {}
 
-// Registration captures dependencies while each Attempt inherits its current trace and sampling.
+// Registration captures dependencies while each Attempt inherits its invocation context.
 it.effect(
-  "registered attempts use the current trace and sampling without losing dependencies",
+  "registered attempts use the current scheduler, trace and sampling without losing dependencies",
   () =>
     Effect.gen(function* () {
       const definition = Agent.make("traced-registration", {
@@ -48,6 +48,7 @@ it.effect(
         Effect.annotateSpans({ registrationOnly: true }),
         Effect.withTracer(registrationTracer),
         Effect.provideService(Dependency, "retained"),
+        Effect.provideService(Scheduler.Scheduler, new Scheduler.MixedScheduler("sync")),
       );
 
       const registration = registrationSpans[0]!;
@@ -57,6 +58,7 @@ it.effect(
 
       for (const sampled of [false, true]) {
         const attemptSpans: Array<Tracer.Span> = [];
+        const scheduler = new Scheduler.MixedScheduler("async");
 
         const tracer = Tracer.make({
           span: (options) => {
@@ -84,6 +86,7 @@ it.effect(
                 expect(span.attributes.get("registrationOnly")).toBeUndefined();
                 expect(span.attributes.get("currentInvocation")).toBe(true);
                 expect(yield* Effect.serviceOption(Dependency)).toEqual(Option.some("retained"));
+                expect(yield* Scheduler.Scheduler).toBe(scheduler);
 
                 return Option.none();
               }).pipe(Effect.withSpan("attempt-body")),
@@ -101,6 +104,7 @@ it.effect(
           Effect.withSpan("invocation", { root: true, sampled }),
           Effect.annotateSpans({ currentInvocation: true }),
           Effect.withTracer(tracer),
+          Effect.provideService(Scheduler.Scheduler, scheduler),
         );
         expect(attemptSpans.map((span) => span.name)).toEqual(["invocation", "attempt-body"]);
       }
