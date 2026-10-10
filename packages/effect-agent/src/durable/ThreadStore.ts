@@ -21,6 +21,7 @@ import {
   CanonicalBatch,
   CanonicalRecordEnvelope,
   CanonicalSequence,
+  CURRENT_RECORD_FORMAT,
   Digest,
   MAX_RUN_TOOL_CALL_IDENTITIES,
   ObservationOffset,
@@ -852,6 +853,47 @@ export class LoadCheckpointRequest extends Schema.Class<LoadCheckpointRequest>(
   atOrBeforeSequence: Schema.optionalKey(CanonicalSequence),
 }) {}
 
+/** A bounded, disposable prior Prompt. Its bytes must match the named canonical Run context. */
+export const MAX_PROMPT_CHECKPOINT_BYTES = 16 * 1024 * 1024;
+
+export const PromptCheckpointHead = Schema.Struct({
+  version: Schema.Literal(1),
+  recordFormat: Schema.Literal(CURRENT_RECORD_FORMAT),
+  threadId: ThreadId,
+  producerEpoch: ProducerEpoch,
+  throughSequence: CanonicalSequence,
+  tailDigest: Digest,
+  contextRecordId: RecordId,
+});
+
+export const PromptCheckpoint = Schema.Struct({
+  ...PromptCheckpointHead.fields,
+  /** Canonical JSON from Effect's Prompt codec; integrity is checked before decoding it. */
+  promptJson: Schema.String.check(Schema.isMaxLength(MAX_PROMPT_CHECKPOINT_BYTES)),
+});
+
+export type PromptCheckpoint = typeof PromptCheckpoint.Type;
+
+export const PromptCheckpointRead = Schema.Struct({
+  threadId: ThreadId,
+  producerEpoch: ProducerEpoch,
+});
+
+export type PromptCheckpointRead = typeof PromptCheckpointRead.Type;
+
+/**
+ * Optional cold-context acceleration, separate from application checkpoints. Save only after
+ * canonical settlement. Replace the prior value atomically, fenced at the exact supplied head.
+ * Load only at that head under its next ordinary producer epoch; any mismatch is a cache miss.
+ * Never export these bytes or use them as execution/compaction evidence.
+ */
+export interface PromptCheckpoints {
+  readonly save: (checkpoint: PromptCheckpoint) => Effect.Effect<void, ThreadStoreError>;
+  readonly load: (
+    request: PromptCheckpointRead,
+  ) => Effect.Effect<Option.Option<PromptCheckpoint>, ThreadStoreError>;
+}
+
 /**
  * Content-free storage provenance constructed by adapters from source-authored labels.
  * Raw foreign lookalikes are not trusted diagnostics. Never include rejected values, SQL,
@@ -973,6 +1015,7 @@ export class ThreadStore extends Context.Service<
     ) => Effect.Effect<ThreadWorkerCapacity, ThreadStoreError | ThreadNotMaterialized>;
     /** Absent when this adapter does not support disposable checkpoints. */
     readonly checkpoints?: ThreadCheckpoints | undefined;
+    readonly promptCheckpoints?: PromptCheckpoints | undefined;
     /** Indexed scalar count; unsupported adapters fail closed at the caller. */
     readonly countPeerMessages?:
       | ((

@@ -927,6 +927,7 @@ export const routedSettlementPublisherLayer = (options: RoutedPortOptions) =>
 const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPortOptions) {
   const local = yield* ThreadStore;
   const checkpoints = local.checkpoints;
+  const promptCheckpoints = local.promptCheckpoints;
   const lifecyclePublications = local.lifecyclePublications;
   const acknowledgeMany = lifecyclePublications?.acknowledgeMany;
   const transport = yield* ThreadPortTransport;
@@ -1302,6 +1303,20 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
               options.ownsThread(request.threadId)
                 ? checkpoints.load(request)
                 : Effect.fail(crossThreadStoreError("thread load checkpoint", request.threadId)),
+          },
+        }),
+    ...(promptCheckpoints === undefined
+      ? {}
+      : {
+          promptCheckpoints: {
+            save: (request) =>
+              options.ownsThread(request.threadId)
+                ? promptCheckpoints.save(request)
+                : Effect.fail(crossThreadStoreError("save prompt checkpoint", request.threadId)),
+            load: (request) =>
+              options.ownsThread(request.threadId)
+                ? promptCheckpoints.load(request)
+                : Effect.fail(crossThreadStoreError("load prompt checkpoint", request.threadId)),
           },
         }),
   });
