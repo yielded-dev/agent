@@ -173,6 +173,52 @@ no worker loop is needed.
 Register the exported class as a SQLite Durable Object under `THREADS`.
 `ThreadObject.layer([])` registers no agents and refuses every agent identity.
 
+### Defer the Object implementation module
+
+Keep the Object implementation in a separate module and export a native facade from the Worker
+entry. The facade loads that module when Cloudflare constructs the Object, then passes the
+original state and environment to one implementation instance. Its runtime, storage, alarms and
+initialization gates retain their existing owner.
+
+```ts
+// worker.ts; the implementation above lives in thread.ts.
+import { lazyObject } from "@yielded/agent-platform-cloudflare/lazy-object";
+
+export const TravelThread = lazyObject(
+  () => import("./thread.ts").then((module) => module.TravelThread),
+  [
+    "submitEncoded",
+    "submissionStatusEncoded",
+    "awaitSettlementEncoded",
+    "awaitSettlementRecordEncoded",
+    "awaitProgressEncoded",
+    "cancelProgressEncoded",
+    "watchTextEncoded",
+    "observePage",
+    "abortEncoded",
+    "resolveApprovalEncoded",
+    "resolveUnknownEncoded",
+    "explainEncoded",
+    "verifyEncoded",
+    "retryEncoded",
+    "obligationsEncoded",
+    "portCall",
+    "wake",
+  ],
+);
+```
+
+Use the direct `lazy-object` module in this entry and keep every runtime import of the
+implementation behind the dynamic import. Configure the bundler to emit and upload the implementation as a separate
+module, and verify the entry has no static path to its dependencies. Keep
+loading and construction local and bounded. The explicit RPC list preserves the methods callers
+need; fetch, alarm and hibernating WebSocket hooks are forwarded automatically. Keep the same
+exported class name, namespace binding and Object identity when replacing an existing export.
+
+A native Worker can authenticate and forward a Request to the facade's fetch method. The
+application-owned implementation handles HTTP using its existing Object runtime. The facade
+adds no authentication, request decoding or response-body lifetime policy.
+
 ## Configure the binding
 
 ```jsonc
@@ -228,6 +274,43 @@ Scope progress waits so interruption cancels them remotely.
 Cancellation is best effort and waits at most one second for the remote reply, so a lost reply
 does not prevent local shutdown. The Object retains bounded cancellation hints for late retries.
 Expose these Effects through your application's HTTP or RPC API.
+
+### Call the client inside its owning Object
+
+`makeClient(transport)` shares the existing business client with an explicit transport.
+`ThreadObject.localClientTransport` dispatches through `ThreadObject.handleRpc` in the current
+Object runtime. Placement, authorization, encoded protocol validation and mutation gates remain
+in those endpoints. The returned `Client<R>` keeps the transport's requirements on each Effect
+and Stream; the normal `CloudflareThreadClient` service remains the namespace-backed client.
+
+```ts
+import { makeClient } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
+import { localClientTransport } from "@yielded/agent-platform-cloudflare/thread-object";
+import type { ThreadId } from "@yielded/agent/identifiers";
+import { Effect } from "effect";
+
+const readOwned = Effect.fnUntraced(function* (threadId: ThreadId) {
+  const client = yield* makeClient(localClientTransport);
+
+  return yield* client.readPage(threadId);
+});
+```
+
+Run the authenticated application handler through the Object's existing
+`this[DurableObject.RunSymbol](handler, { event: "fetch" })` hook from `effect-cf`.
+Derive the Thread and principal from trusted application authentication and decode request data
+with Schema before calling the business client. Retain the real sibling namespace for
+cross-Object work. The local transport creates no runtime or SQL owner.
+
+`ClientTransport<R>.watchText` acquires in `R | Scope.Scope`; consume the stream in a Scope.
+`makeClient` retains its Crypto service, so the client must not outlive that service.
+
+An eventLayer closes when its event Effect returns. Complete operations requiring event services
+inside that event. A response body may continue after opening and authorization finish only when
+its remaining work uses Object-lived or stream-owned resources. `watchText` does not reconnect
+automatically. Caller retries and event-service transformations must remain within the event;
+reconnect through a new authenticated request. Converting a Stream to ReadableStream captures
+Context without extending service lifetimes.
 
 ### Preview live text
 
