@@ -204,7 +204,7 @@ it("reopens atomic start progress and pending lifecycle intent after rollback an
       expect(Option.getOrUndefined(continuation)?.continuation).toMatchObject({
         revision: 1,
         recordCount: 2,
-        lastFact: { recordId: start.recordId },
+        lastFact: { sequence: 2 },
       });
       const pending = yield* store.lifecyclePublications!.pending(1, 1, { retainedOnly: true });
 
@@ -365,7 +365,7 @@ describe("DoThreadStore", () => {
           ).toMatchObject({
             revision: 1,
             recordCount: 2,
-            lastFact: { recordId: start.recordId },
+            lastFact: { sequence: 2 },
           });
           expect((yield* store.append(request)).replayed).toBe(true);
         }).pipe(Effect.provide(layer({ storage }).pipe(Layer.provideMerge(BrowserCrypto.layer)))),

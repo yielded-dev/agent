@@ -41,6 +41,7 @@ export interface RecordEncoding {
 
 /** Private capture metadata, never caller-supplied wire data or execution authority. */
 export interface ProgressAppendRecord {
+  readonly record: RecordEnvelope;
   readonly recordId: RecordEnvelope["recordId"];
   readonly runIds: ReadonlyArray<RunId>;
   readonly recordBytes: number;
@@ -54,6 +55,7 @@ const progressRecord = (record: RecordEnvelope, bytes: number): ProgressAppendRe
   const payload = record.payload;
 
   return Object.freeze({
+    record,
     recordId: record.recordId,
     runIds: Object.freeze(executionRunIds(record)),
     recordBytes: bytes,

@@ -1,11 +1,12 @@
-import type { RecordEnvelope, RecordId } from "../Records.ts";
+import type { CanonicalSequence, RecordEnvelope, RecordId } from "../Records.ts";
 
-/** Exact references outside one complete canonical batch. */
+/** Exact references outside one complete batch. Unknown positions conservatively charge all references. */
 export const transferRecordDependencies = (
   records: ReadonlyArray<RecordEnvelope>,
-): ReadonlyArray<RecordId> => {
+  fromSequence?: CanonicalSequence,
+): ReadonlyArray<RecordId | CanonicalSequence> => {
   const local = new Set(records.map((record) => record.recordId));
-  const dependencies = new Set<RecordId>();
+  const dependencies = new Set<RecordId | CanonicalSequence>();
 
   for (const { payload } of records) {
     if (payload._tag === "WorkerInputRefused")
@@ -24,7 +25,13 @@ export const transferRecordDependencies = (
         payload.terminal,
         payload.lastFact,
       ])
-        if (ref !== undefined && !local.has(ref.recordId)) dependencies.add(ref.recordId);
+        if (
+          ref !== undefined &&
+          (fromSequence === undefined ||
+            ref.sequence < fromSequence ||
+            ref.sequence >= fromSequence + records.length)
+        )
+          dependencies.add(ref.sequence);
   }
 
   return [...dependencies].sort();

@@ -447,18 +447,19 @@ describe("retained Run recovery", () => {
 
       if (olderProgress?._tag !== "RunContinuation" || laterProgress?._tag !== "RunContinuation")
         return yield* Effect.die("Missing exact older/later Run continuation");
-      expect(olderProgress.originalInput.recordId).toBe(
-        submissionInputRecordId(older.submissionId),
-      );
-      expect(laterProgress.originalInput.recordId).toBe(
-        submissionInputRecordId(later.submissionId),
-      );
+      expect(
+        before.records.find((entry) => entry.sequence === olderProgress.originalInput.sequence)
+          ?.record.recordId,
+      ).toBe(submissionInputRecordId(older.submissionId));
+      expect(
+        before.records.find((entry) => entry.sequence === laterProgress.originalInput.sequence)
+          ?.record.recordId,
+      ).toBe(submissionInputRecordId(later.submissionId));
       expect(olderProgress.savedContext).toBeDefined();
       expect(olderProgress.savedContext).not.toEqual(laterProgress.savedContext);
       expect(
-        before.records.find(
-          (entry) => entry.record.recordId === olderProgress.savedContext?.recordId,
-        )?.record.payload,
+        before.records.find((entry) => entry.sequence === olderProgress.savedContext?.sequence)
+          ?.record.payload,
       ).toMatchObject({
         _tag: "RunContextRecorded",
         runId: runIdForSubmission(older.submissionId),
@@ -701,17 +702,17 @@ describe("retained Run recovery", () => {
 
       if (cursor?._tag !== "RunContinuation" || cursor.savedContext === undefined)
         return yield* Effect.die("Missing current Run continuation/context reference");
-      const contextId = cursor.savedContext.recordId;
+      const contextSequence = cursor.savedContext.sequence;
 
       const observed = ThreadStore.of({
         ...store,
         read: (request) =>
           store.read(request).pipe(
             Stream.filter(
-              (entry) => scenario !== "missing-evidence" || entry.record.recordId !== contextId,
+              (entry) => scenario !== "missing-evidence" || entry.sequence !== contextSequence,
             ),
             Stream.map((entry) =>
-              scenario === "corrupt-evidence" && entry.record.recordId === contextId
+              scenario === "corrupt-evidence" && entry.sequence === contextSequence
                 ? CanonicalRecordEnvelope.make({
                     ...entry,
                     record: CanonicalRecord.make({

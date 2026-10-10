@@ -761,8 +761,10 @@ export class ThreadExport extends Schema.Class<ThreadExport>("@effect-agent/thre
     Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS),
   ),
   cursor: Schema.optionalKey(ThreadExportCursor),
-  /** Exact reference-bearing records identify cross-range recovery dependencies. */
-  dependencies: Schema.Array(RecordId).check(Schema.isMaxLength(256 * 4_096)),
+  /** Cross-range dependencies: generic record IDs or Thread-local continuation sequences. */
+  dependencies: Schema.Array(
+    Schema.Union([RecordId, CanonicalSequence.check(Schema.isGreaterThan(0))]),
+  ).check(Schema.isMaxLength(256 * 4_096)),
   externalObligations: Schema.optionalKey(
     Schema.Array(ThreadExternalObligation).check(Schema.isMaxLength(3)),
   ),

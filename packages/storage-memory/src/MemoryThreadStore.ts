@@ -1361,7 +1361,11 @@ const makeThreadStore = Effect.gen(function* () {
       thread.tailDigest === request.expectedTailDigest &&
       !thread.batches.has(request.batch.batchId)
     )
-      yield* validateProgressAppend(prepareProgressAppend(request.batch.records)).pipe(
+      yield* validateProgressAppend(
+        prepareProgressAppend(request.batch.records),
+        request.expectedTailSequence,
+      ).pipe(
+        Effect.provideService(Crypto.Crypto, crypto),
         Effect.provideService(ProgressAppendReader, {
           previous: (runId) =>
             Effect.gen(function* () {
@@ -1373,8 +1377,7 @@ const makeThreadStore = Effect.gen(function* () {
 
               return latest.record.payload;
             }),
-          initial: (next) =>
-            Effect.succeed((thread.runRecords.get(next.runId) ?? []).map((entry) => entry.record)),
+          initial: (next) => Effect.succeed(thread.runRecords.get(next.runId) ?? []),
         }),
       );
 

@@ -1,9 +1,14 @@
-import { Effect, Option } from "effect";
+import { Effect, Option, Stream } from "effect";
 
 import type { ThreadId } from "../../core/Identifiers.ts";
 import { digestCanonicalJson } from "../Digest.ts";
-import { EvidenceReference, type RecordEnvelope } from "../Records.ts";
-import { getRecord, ThreadStoreError } from "../ThreadStore.ts";
+import {
+  type ContinuationReference,
+  CanonicalSequence,
+  EvidenceReference,
+  type RecordEnvelope,
+} from "../Records.ts";
+import { getRecord, ThreadRead, ThreadReader, ThreadStoreError } from "../ThreadStore.ts";
 import { recordEncoding, type RecordEncoding } from "./record-encoding.ts";
 
 const failure = (message: string, cause?: unknown) =>
@@ -49,4 +54,36 @@ export const resolveEvidence = Effect.fnUntraced(function* (
     return yield* failure("Required canonical evidence has invalid integrity");
 
   return found.value;
+});
+
+/** Read exactly one canonical position; a missing position must never select its successor. */
+export const resolveContinuationEvidence = Effect.fnUntraced(function* (
+  threadId: ThreadId,
+  ref: ContinuationReference,
+) {
+  const reader = yield* ThreadReader;
+
+  const records = yield* Stream.runCollect(
+    reader.read(
+      ThreadRead.make({
+        threadId,
+        afterSequence: CanonicalSequence.make(ref.sequence - 1),
+        limit: 1,
+      }),
+    ),
+  );
+
+  const found = records[0];
+
+  if (
+    records.length !== 1 ||
+    found === undefined ||
+    found.threadId !== threadId ||
+    found.sequence !== ref.sequence
+  )
+    return yield* failure("Required canonical position is unavailable");
+  if ((yield* reference(found.record)).digest !== ref.digest)
+    return yield* failure("Required canonical evidence has invalid integrity");
+
+  return found;
 });

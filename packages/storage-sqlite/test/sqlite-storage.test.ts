@@ -306,7 +306,7 @@ describe("SqliteThreadStore", () => {
             ).toMatchObject({
               revision: 1,
               recordCount: 2,
-              lastFact: { recordId: start.recordId },
+              lastFact: { sequence: 2 },
             });
             expect((yield* append(store, compiled)).replayed).toBe(true);
           }).pipe(Effect.provide(layer({ filename }).pipe(Layer.provideMerge(NodeCrypto.layer))));
@@ -1030,7 +1030,7 @@ describe("SqliteThreadStore", () => {
               expect(Option.getOrUndefined(continuation)?.continuation).toMatchObject({
                 revision: 1,
                 recordCount: 2,
-                lastFact: { recordId: start.recordId },
+                lastFact: { sequence: replayed.firstSequence },
               });
               expect(
                 (yield* store.lifecyclePublications!.pending(1, 1))

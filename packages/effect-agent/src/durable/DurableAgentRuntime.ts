@@ -256,6 +256,7 @@ import {
   readRunEvidenceSnapshot,
   reference,
   resolveEvidence,
+  resolveContinuationEvidence,
   runEvidence,
   validateSuffix,
   terminalUsageCharge,
@@ -1657,7 +1658,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         ? yield* selectedRange(threadId, submissionIds, throughSequence)
         : retained.filter((entry) => entry.sequence <= throughSequence);
 
-    const byId = new Map(selected.map((entry) => [entry.record.recordId, entry]));
+    const bySequence = new Map(selected.map((entry) => [entry.sequence, entry]));
     let context: RunJournalContext | undefined;
     let progress: RunContinuation | undefined;
     let progressThrough: CanonicalSequence | undefined;
@@ -1690,11 +1691,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         return yield* invalid("Run continuation differs from its admitted owner");
 
       const resolve = Effect.fnUntraced(function* (ref: typeof cursor.originalInput) {
-        const found = byId.get(ref.recordId);
+        const found = bySequence.get(ref.sequence);
 
         if (found === undefined) {
           // An exact lookup distinguishes missing evidence from an incomplete native index.
-          yield* resolveEvidence(threadId, ref).pipe(
+          yield* resolveContinuationEvidence(threadId, ref).pipe(
             Effect.provideService(ThreadReader, reader),
             Effect.provideService(Crypto.Crypto, crypto),
           );
@@ -1708,7 +1709,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             .digest !== ref.digest
         )
           return yield* invalid("Run continuation evidence has invalid integrity");
-        if (!canonicalRunIds(found.record).includes(runId))
+        if (found.threadId !== threadId || !canonicalRunIds(found.record).includes(runId))
           return yield* invalid("Run continuation references another owner");
 
         return found;
@@ -2648,13 +2649,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           Effect.provideService(CurrentRunWriter, {
             threadId: request.threadId,
             tail: Effect.sync(() => tail),
-            append: (batch) =>
+            append: (batch, frontier) =>
               store
                 .append(
                   FencedAppendRequest.make({
                     ...request,
-                    expectedTailSequence: tail.sequence,
-                    expectedTailDigest: tail.digest,
+                    expectedTailSequence: (frontier ?? tail).sequence,
+                    expectedTailDigest: (frontier ?? tail).digest,
                     batch,
                   }),
                 )
@@ -2719,7 +2720,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           Effect.provideService(CurrentRunSettlement, {
             threadId: ctx.threadId,
             tail: ctx.tail,
-            publishSettlement: (prepared) =>
+            publishSettlement: (prepared, frontier) =>
               Effect.gen(function* () {
                 let tail = yield* ctx.tail;
 
@@ -2732,8 +2733,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                         append: FencedAppendRequest.make({
                           threadId: ctx.threadId,
                           producerEpoch: ctx.producerEpoch,
-                          expectedTailSequence: tail.sequence,
-                          expectedTailDigest: tail.digest,
+                          expectedTailSequence: (frontier ?? tail).sequence,
+                          expectedTailDigest: (frontier ?? tail).digest,
                           batch: prepared,
                         }),
                       }),
@@ -2753,6 +2754,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                         };
 
                         if (
+                          frontier !== undefined ||
                           prepared.records.some(({ payload }) => payload._tag === "RunContinuation")
                         )
                           return ctx.checkFence.pipe(Effect.andThen(Effect.fail(conflict)));

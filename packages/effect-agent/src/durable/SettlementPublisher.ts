@@ -93,13 +93,15 @@ export const validatePublication = Effect.fnUntraced(function* (input: Settlemen
 
   const record = request.append.batch.records[0];
 
+  // Positions are checked inside append mutation after exact replay detection.
+  // An authorized replay retains its original positions even when the tail has advanced.
+
   if (
     request.append.batch.records
       .slice(1)
       .some(
         (progress) =>
           progress.payload._tag !== "RunContinuation" ||
-          progress.payload.lastFact.recordId !== record.recordId ||
           (progress.payload.runId !== runIdForSubmission(request.submissionId) &&
             (record.payload._tag !== "SubmissionSettled" ||
               progress.payload.runId !== record.payload.runId)),

@@ -19,7 +19,7 @@ import {
   RepairAnnotated,
   ThreadCreated,
 } from "@yielded/agent/records";
-import { canonicalRecordBytes } from "@yielded/agent/run-continuation";
+import { canonicalRecordBytes, resolveContinuationEvidence } from "@yielded/agent/run-continuation";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-options";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
@@ -355,12 +355,14 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
 
     if (cursor?._tag !== "RunContinuation" || cursor.savedContext === undefined)
       return yield* BenchmarkError.make({ message: "Missing original Run context references" });
-    const input = (yield* select({ _tag: "RecordId", recordId: cursor.originalInput.recordId }))[0];
 
-    const context = (yield* select({
-      _tag: "RecordId",
-      recordId: cursor.savedContext.recordId,
-    }))[0];
+    const input = yield* resolveContinuationEvidence(threadId, cursor.originalInput).pipe(
+      Effect.provideService(ThreadReader, raw),
+    );
+
+    const context = yield* resolveContinuationEvidence(threadId, cursor.savedContext).pipe(
+      Effect.provideService(ThreadReader, raw),
+    );
 
     if (input === undefined || context === undefined || raw.archives === undefined)
       return yield* BenchmarkError.make({
