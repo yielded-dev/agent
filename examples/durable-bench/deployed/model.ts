@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-import { Query, Target } from "./worker/protocol.ts";
+import { Identity, Query, SeedResult, Target } from "./worker/protocol.ts";
 
 export const ProfileType = Schema.Literals(["cpu", "memory"]);
 
@@ -19,6 +19,7 @@ export const Profile = Schema.Struct({
 export type Profile = typeof Profile.Type;
 
 export interface Options {
+  readonly buildHistory: boolean;
   readonly targets: readonly (typeof Target.Type)[];
   readonly sizes: readonly number[];
   readonly ttft: readonly (0 | 400)[];
@@ -62,6 +63,10 @@ export const Sample = Schema.Struct({
   firstText: Schema.optionalKey(Schema.String),
   firstTextSource: Schema.optionalKey(FirstTextSource),
   observationMs: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+  constructorAndProbeMs: Schema.optionalKey(Schema.Number),
+  primeMs: Schema.optionalKey(Schema.Number),
+  bytes: Schema.optionalKey(Schema.Natural),
+  providerColos: Schema.optionalKey(Schema.Array(Schema.String)),
   objectToFirstModelMs: Schema.optionalKey(Schema.Number),
   admissionMs: Schema.optionalKey(Schema.Number),
   gapMs: Schema.optionalKey(Schema.Number),
@@ -89,8 +94,38 @@ export const Cleanup = Schema.Struct({
 
 export type Cleanup = typeof Cleanup.Type;
 
+export const BuildEvent = Schema.Union([
+  Schema.TaggedStruct("Batch", {
+    result: SeedResult,
+    driverMs: Schema.Number,
+    colo: Schema.NullOr(Schema.String),
+  }),
+  Schema.TaggedStruct("Failed", {
+    completed: Schema.Natural,
+    driverMs: Schema.Number,
+    error: Schema.String,
+    colo: Schema.NullOr(Schema.String),
+  }),
+]);
+
+export type BuildEvent = typeof BuildEvent.Type;
+
+export const HistoryBuild = Schema.Struct({
+  target: Target,
+  object: Schema.String,
+  history: Schema.Int,
+  ttftMs: Query.fields.ttftMs,
+  status: Schema.Literals(["running", "ok", "failed"]),
+  completed: Schema.Natural,
+  driverMs: Schema.optionalKey(Schema.Number),
+  batches: Schema.Array(BuildEvent.members[0]),
+  error: Schema.optionalKey(Schema.String),
+});
+
+export type HistoryBuild = typeof HistoryBuild.Type;
+
 export const Result = Schema.Struct({
-  version: Schema.Literal(2),
+  version: Schema.Literal(3),
   run: Schema.String,
   revision: Schema.String,
   dirty: Schema.Boolean,
@@ -101,6 +136,8 @@ export const Result = Schema.Struct({
   builds: Schema.Array(
     Schema.Struct({ label: Schema.String, revision: Schema.String, sha256: Schema.String }),
   ),
+  versions: Schema.Record(Schema.String, Schema.String),
+  histories: Schema.Array(HistoryBuild),
   fixtures: Schema.Array(
     Schema.Struct({
       target: Target,
@@ -135,7 +172,13 @@ export const Result = Schema.Struct({
 
 export type Result = typeof Result.Type;
 
-export const MeasureRequest = Schema.Struct({ query: Query, targetUrl: Schema.String });
+export const DriverRequest = Schema.Struct({ query: Query, targetUrl: Schema.String });
+
+export const MeasureRequest = Schema.Struct({
+  ...DriverRequest.fields,
+  observeText: Schema.Boolean,
+  cold: Schema.Boolean,
+});
 
 export const MeasureResponse = Schema.Struct({
   ok: Schema.Literal(true),
@@ -145,6 +188,9 @@ export const MeasureResponse = Schema.Struct({
   firstText: Schema.optionalKey(Schema.String),
   firstTextSource: Schema.optionalKey(FirstTextSource),
   observationMs: Schema.NullOr(Schema.Number),
+  constructorAndProbeMs: Schema.Number,
+  primeMs: Schema.Number,
+  primed: Schema.optionalKey(Identity),
   admissionMs: Schema.optionalKey(Schema.Number),
   colo: Schema.NullOr(Schema.String),
 });

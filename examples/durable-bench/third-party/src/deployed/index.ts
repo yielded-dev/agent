@@ -11,7 +11,7 @@ import { Effect, Layer, ManagedRuntime, Schema, Stream } from "../../../node_mod
 import { history, MEASURED_TOOLS, turn } from "../../../src/plan.ts";
 import { COLD_ABORT } from "../../../deployed/worker/host.ts";
 import { PiDO } from "./pi.ts";
-import { BulkFixture, Identity, ProfileTarget, TextObservation, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
+import { BulkFixture, Identity, Metrics, ProfileTarget, SeedBatch, TextObservation, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
 import { FixtureError } from "../../../deployed/worker/storage.ts";
 import { ActorDO, ThreadDO, cloudflareThreadName, coordinate } from "./tardie.ts";
 import { agent, definitions, YieldedDO } from "../../../deployed/worker/yielded.ts";
@@ -111,7 +111,7 @@ export default {
         return Response.json({ ok: true, build: env.BUILD });
       }
       const query = readQuery(url);
-      if (["/import", "/submit", "/await", "/result", "/run", "/text", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
+      if (["/prime", "/seed", "/import", "/submit", "/await", "/result", "/run", "/text", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
         return Response.json(
           {
             ok: false,
@@ -120,7 +120,7 @@ export default {
           },
           { status: 503 },
         );
-      const mutating = ["/import", "/cold", "/submit", "/await", "/result", "/run"].includes(url.pathname);
+      const mutating = ["/prime", "/seed", "/import", "/cold", "/submit", "/await", "/result", "/run"].includes(url.pathname);
 
       if (url.pathname === "/profile-target") {
         if (query.target === "tardie") throw new Error("Profiling supports Yielded and pi");
@@ -136,7 +136,7 @@ export default {
 
       if (mutating && request.method !== "POST")
         return new Response("POST required", { status: 405 });
-      if (!["/import", "/cold", "/submit", "/await", "/result", "/run", "/text", "/metrics"].includes(url.pathname))
+      if (!["/prime", "/seed", "/import", "/cold", "/submit", "/await", "/result", "/run", "/text", "/metrics"].includes(url.pathname))
         return new Response("not found", { status: 404 });
 
       const actor =
@@ -254,8 +254,6 @@ export default {
         }
       }
 
-      if (url.pathname === "/run" && query.target === "yielded")
-        throw new Error("Yielded requires submit followed by await");
       let directoryTables: Readonly<Record<string, number>> | undefined;
 
       if (url.pathname === "/import" && query.target === "yielded") {
@@ -312,6 +310,13 @@ export default {
           throw new Error("Missing Tardie Actor fixture");
         directoryTables = await actor.importFixture(fixture.actor, query);
       }
+      if (url.pathname === "/seed" && actor) {
+        const batch = Schema.decodeUnknownSync(SeedBatch)(await request.clone().json());
+
+        if (batch.to <= batch.from || batch.to - batch.from > 50 || batch.to > query.history)
+          throw new Error("Invalid history batch");
+        if (batch.from === 0) await actor.prepareSeed(query);
+      }
       const response = await stub.fetch(request);
 
       if (url.pathname === "/import" && directoryTables && response.ok)
@@ -323,14 +328,17 @@ export default {
         });
 
       if (url.pathname === "/metrics" && actor && response.ok) {
-        const metrics = Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Unknown))(
+        const metrics = Schema.decodeUnknownSync(Metrics)(
           await response.json(),
         );
 
         const directoryUsed = Schema.decodeUnknownSync(Schema.Boolean)(metrics.directoryUsed);
+        const directoryBytes = await actor.bytes();
 
         return Response.json({
           ...metrics,
+          bytes: metrics.bytes + directoryBytes,
+          directoryBytes,
           directory: await actor.end(directoryUsed),
         });
       }

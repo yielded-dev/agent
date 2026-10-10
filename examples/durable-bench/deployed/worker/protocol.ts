@@ -111,6 +111,25 @@ export const Identity = Schema.Struct({
 
 export type Identity = typeof Identity.Type;
 
+export const SeedBatch = Schema.Struct({ from: Schema.Natural, to: History });
+
+export const SeedResult = Schema.Struct({
+  ok: Schema.Literal(true),
+  ...SeedBatch.fields,
+  fingerprint: Schema.NonEmptyString,
+  identity: Identity,
+  providerColos: Schema.Array(Schema.String),
+});
+
+export type SeedResult = typeof SeedResult.Type;
+
+/** Construction is primed outside the driver timer; this interval retains the clock probe's RTT. */
+export const PrimeResult = Schema.Struct({
+  ok: Schema.Literal(true),
+  identity: Identity,
+  constructorAndProbeMs: Schema.Number.check(Schema.isGreaterThan(0)),
+});
+
 export const ImportResult = Schema.Struct({
   ok: Schema.Literal(true),
   target: Target,
@@ -201,6 +220,7 @@ export const Metrics = Schema.Struct({
   calls: Schema.Array(ProviderCall),
   tables: Counts,
   bytes: Schema.Natural,
+  directoryBytes: Schema.optionalKey(Schema.Natural),
 });
 
 export type Metrics = typeof Metrics.Type;

@@ -11,17 +11,23 @@ const positive = (name: string) => Flag.Int(name).pipe(Flag.withSchema(History))
 export const command = Command.make(
   "deployed",
   {
+    buildHistory: Flag.Boolean("build-history").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription(
+        "Build real history in deployed Objects, then measure open + first turn and 9 warm turns",
+      ),
+    ),
     targets: Flag.String("targets").pipe(
       Flag.withDefault("yielded,pi,tardie"),
       Flag.withDescription("Comma-separated targets"),
     ),
     sizes: Flag.String("sizes").pipe(
-      Flag.withDefault("50,250"),
-      Flag.withDescription("Comma-separated seeded history lengths"),
+      Flag.optional,
+      Flag.withDescription("History lengths (quick: 50,250; build-history: 50,250,1000,3500)"),
     ),
     ttft: Flag.String("ttft").pipe(
-      Flag.withDefault("0,400"),
-      Flag.withDescription("Provider time to first token, in ms: 0,400"),
+      Flag.optional,
+      Flag.withDescription("Provider TTFT in ms (quick: 0,400; build-history: 0)"),
     ),
     textStreaming: Flag.Boolean("text-streaming").pipe(
       Flag.withDefault(false),
@@ -30,12 +36,12 @@ export const command = Command.make(
       ),
     ),
     objects: positive("objects").pipe(
-      Flag.withDefault(7),
-      Flag.withDescription("Objects per target/cell (default: 7)"),
+      Flag.optional,
+      Flag.withDescription("Objects per target/cell (quick: 7; build-history: 3)"),
     ),
     repeats: positive("repeats").pipe(
       Flag.optional,
-      Flag.withDescription("Warm turns per Object (quick: 4; rigorous: 6 per build pass)"),
+      Flag.withDescription("Warm turns per Object (quick: 4; rigorous: 6; build-history: 9)"),
     ),
     concurrency: positive("concurrency").pipe(
       Flag.withDefault(6),
@@ -93,11 +99,15 @@ export const command = Command.make(
     );
 
     const sizes = yield* Schema.decodeUnknownEffect(Schema.NonEmptyArray(History))(
-      flags.sizes.split(",").map(Number),
+      Option.getOrElse(flags.sizes, () => (flags.buildHistory ? "50,250,1000,3500" : "50,250"))
+        .split(",")
+        .map(Number),
     );
 
     const ttft = yield* Schema.decodeUnknownEffect(Schema.NonEmptyArray(Schema.Literals([0, 400])))(
-      flags.ttft.split(",").map(Number),
+      Option.getOrElse(flags.ttft, () => (flags.buildHistory ? "0" : "0,400"))
+        .split(",")
+        .map(Number),
     );
 
     if (flags.rigorous && !targets.includes("yielded"))
@@ -105,18 +115,27 @@ export const command = Command.make(
 
     const profiles = [...new Set(flags.profile.flat())];
 
+    if (flags.buildHistory && (flags.rigorous || flags.textStreaming || profiles.length > 0))
+      return yield* new BenchError({
+        message:
+          "--build-history measures completion without observers, profiling or A/B redeploys.",
+      });
+
     if (profiles.length > 0 && !targets.some((target) => target === "yielded" || target === "pi"))
       return yield* new BenchError({ message: "--profile requires the yielded or pi target." });
 
     return yield* run({
+      buildHistory: flags.buildHistory,
       targets: [...new Set(targets)],
       sizes: [...new Set(sizes)],
       ttft: [...new Set(ttft)],
       textStreaming: flags.textStreaming,
-      objects: flags.objects,
-      repeats: Option.getOrElse(flags.repeats, () => (flags.rigorous ? 6 : 4)),
+      objects: Option.getOrElse(flags.objects, () => (flags.buildHistory ? 3 : 7)),
+      repeats: Option.getOrElse(flags.repeats, () =>
+        flags.buildHistory ? 9 : flags.rigorous ? 6 : 4,
+      ),
       concurrency: flags.concurrency,
-      cold: flags.cold || flags.rigorous,
+      cold: flags.cold || flags.rigorous || flags.buildHistory,
       cpu: flags.cpu || flags.rigorous,
       profiles,
       keep: flags.keep,
@@ -127,6 +146,6 @@ export const command = Command.make(
   }),
 ).pipe(
   Command.withDescription(
-    "Bulk-import fixtures and compare real Cloudflare Durable Objects from a nearby driver Worker.",
+    "Build or import histories and compare deployed Durable Objects from a nearby driver Worker.",
   ),
 );

@@ -1,15 +1,22 @@
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai-compat";
+import { BrowserCrypto } from "@effect/platform-browser";
 import { ThreadObject } from "@yielded/agent-platform-cloudflare";
+import {
+  HostResponse,
+  SubmitRequest,
+} from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import * as Agent from "@yielded/agent/agent";
+import { digestDefinitions } from "@yielded/agent/digest";
 import { ToolExecutionClass } from "@yielded/agent/durable-step";
 import { text } from "@yielded/agent/output";
-import { DefinitionDigestInput } from "@yielded/agent/records";
+import { IdempotencyKey, Principal, Receipt } from "@yielded/agent/receipt";
+import { DefinitionDigestInput, PersistedJson } from "@yielded/agent/records";
 import { Effect, Layer, Schema } from "effect";
 import { DurableObjectState } from "effect-cf";
 import { Model, Tool, Toolkit } from "effect/ai";
 import { FetchHttpClient } from "effect/http";
 
-import { payload } from "../../src/plan.ts";
+import { payload, type Turn } from "../../src/plan.ts";
 import { Host } from "./host.ts";
 import { observation } from "./observe.ts";
 import { type Env, type Query } from "./protocol.ts";
@@ -59,6 +66,10 @@ export const definitions = DefinitionDigestInput.make({
 
 const replayStarted = "durable-bench/replay-started";
 
+const definitionDigests = Effect.runSync(
+  Effect.cached(digestDefinitions(definitions).pipe(Effect.provide(BrowserCrypto.layer))),
+);
+
 const application = ThreadObject.layer([{ agent, definitions }]).pipe(
   Layer.provide(tools.toLayer({ lookup: ({ n }) => Effect.succeed(payload(n)) })),
 );
@@ -70,8 +81,34 @@ export class YieldedDO extends ThreadObject.make(application, {
 }) {
   private readonly host: Host;
   constructor(ctx: globalThis.DurableObjectState, env: Env) {
+    const constructedMs = Date.now();
+
     super(ctx, env);
-    this.host = new Host(ctx, env, "yielded");
+    this.host = new Host(ctx, env, "yielded", constructedMs);
+  }
+  private async historyTurn(input: Turn): Promise<void> {
+    const encoded = Schema.encodeSync(SubmitRequest)(
+      SubmitRequest.make({
+        agentId: definition.id,
+        principal: Principal.make("bench"),
+        idempotencyKey: IdempotencyKey.make(input.id),
+        definitions: await Effect.runPromise(definitionDigests),
+        inputPayload: Schema.decodeUnknownSync(PersistedJson)(input.text),
+      }),
+    );
+
+    // Use the production admission and settlement endpoints inside the owning Object.
+    const submitted = Schema.decodeUnknownSync(HostResponse)(await super.submitEncoded(encoded));
+
+    if (submitted._tag !== "SubmitSucceeded")
+      throw new Error(`History admission failed: ${JSON.stringify(submitted)}`);
+
+    const settled = Schema.decodeUnknownSync(HostResponse)(
+      await super.awaitSettlementEncoded(Schema.encodeSync(Receipt)(submitted.receipt)),
+    );
+
+    if (settled._tag !== "SettlementReached" || settled.settlement.outcome !== "completed")
+      throw new Error(`History settlement failed: ${JSON.stringify(settled)}`);
   }
   async beginReplay(query: Query): Promise<void> {
     this.host.meter.assertBuild(query);
@@ -109,6 +146,7 @@ export class YieldedDO extends ThreadObject.make(application, {
   }
   override fetch(request: Request): Promise<Response> {
     return this.host.fetch(request, {
+      run: (input) => this.historyTurn(input),
       import: async (fixture, query) => {
         if (fixture.mode === "replay") {
           if ((await this.ctx.storage.get(replayStarted)) !== true)

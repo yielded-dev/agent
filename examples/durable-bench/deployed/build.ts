@@ -123,13 +123,13 @@ export const build = Effect.fnUntraced(function* (
 export const ensureVendor = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
 
-  const versions = [
-    ["tardie", "0.44.0"],
-    ["@earendil-works/pi-durable", "1.0.4"],
-  ] as const;
+  const { dependencies } = yield* read(
+    join(workspace, "third-party/package.json"),
+    Schema.Struct({ dependencies: Schema.Record(Schema.String, Schema.String) }),
+  );
 
   const installed = Effect.gen(function* () {
-    for (const [name, version] of versions) {
+    for (const [name, version] of Object.entries(dependencies)) {
       const file = join(workspace, "third-party/node_modules", name, "package.json");
 
       if (!(yield* fs.exists(file))) return false;

@@ -11,6 +11,8 @@ import {
   Fiber,
   FileSystem,
   Semaphore,
+  Schema,
+  Stream,
 } from "effect";
 
 import {
@@ -23,16 +25,17 @@ import {
   type Turn,
 } from "../src/plan.ts";
 import { build, ensureVendor } from "./build.ts";
-import { Cloudflare, request } from "./cloudflare.ts";
+import { Cloudflare, request, requestEvents } from "./cloudflare.ts";
 import { cpu } from "./cpu.ts";
 import { deployments } from "./deploy.ts";
 import { prepareFixtures } from "./fixtures.ts";
-import { MeasureResponse, type Options, type Result, type Sample } from "./model.ts";
+import { BuildEvent, MeasureResponse, type Options, type Result, type Sample } from "./model.ts";
 import {
   BenchError,
   git,
   hash,
   nonce,
+  read,
   redact,
   save,
   stateDirectory,
@@ -41,21 +44,27 @@ import {
 import { prepareProfile, profileBatches } from "./profile.ts";
 import { median, table } from "./report.ts";
 import { PREAMBLE, responseText } from "./text.ts";
-import { ColdResult, ImportResult, Metrics, type Query } from "./worker/protocol.ts";
+import { ColdResult, expectedSeed, ImportResult, Metrics, type Query } from "./worker/protocol.ts";
 
 const equalCounts = (a: Readonly<Record<string, number>>, b: Readonly<Record<string, number>>) =>
   Object.keys(a).length === Object.keys(b).length &&
   Object.keys(a).every((key) => a[key] === b[key]);
 
 // The reference transcript is independent of every framework and computed before timing.
-const append = (messages: Message[], input: Turn, textStreaming = false): string[] => {
+const append = (
+  messages: Message[],
+  input: Turn,
+  textStreaming = false,
+  capture = true,
+): string[] => {
   const hashes: string[] = [];
 
   messages.push({ role: "user", text: input.text });
   for (;;) {
-    hashes.push(
-      hash(JSON.stringify(messages.map((m) => [m.role, m.text, m.calls ?? []]))).slice(0, 16),
-    );
+    if (capture)
+      hashes.push(
+        hash(JSON.stringify(messages.map((m) => [m.role, m.text, m.calls ?? []]))).slice(0, 16),
+      );
     const step = next(messages);
 
     if ("answer" in step) {
@@ -90,7 +99,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
   const withProfileBatch = yield* profileBatches(options.profiles.length);
 
   let result: Result = {
-    version: 2,
+    version: 3,
     run: runName,
     revision: yield* git(["rev-parse", "HEAD"]),
     dirty: (yield* git(["status", "--porcelain"])).length > 0,
@@ -105,6 +114,8 @@ export const run = Effect.fnUntraced(function* (options: Options) {
       profiles: [...options.profiles],
     },
     builds: [],
+    versions: {},
+    histories: [],
     fixtures: [],
     samples: [],
     readiness: [],
@@ -133,7 +144,9 @@ export const run = Effect.fnUntraced(function* (options: Options) {
   let targetStarted = false;
   let telemetryFrom = started;
 
-  yield* Console.error(`Account: ${cloud.accountName}. Preparing fixtures…`);
+  yield* Console.error(
+    `Account: ${cloud.accountName}. Preparing ${options.buildHistory ? "deployed history builds" : "fixtures"}…`,
+  );
   yield* update((value) => value);
 
   const finish = (exit: Exit.Exit<unknown, unknown>) =>
@@ -148,6 +161,16 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                   ...row,
                   status: "failed",
                   error: "Controller interrupted; outcome unknown, input will not be replayed.",
+                }
+              : row,
+          ),
+          histories: result.histories.map((row) =>
+            row.status === "running"
+              ? {
+                  ...row,
+                  status: "failed",
+                  error:
+                    "Controller interrupted; history outcome unknown and will not be replayed.",
                 }
               : row,
           ),
@@ -211,10 +234,31 @@ export const run = Effect.fnUntraced(function* (options: Options) {
 
   yield* Effect.gen(function* () {
     yield* ensureVendor;
-    const fixtures = yield* prepareFixtures({ targets: options.targets, sizes: options.sizes });
+    const versions: Record<string, string> = {};
+
+    for (const file of [
+      "../../packages/effect-agent/package.json",
+      "../../node_modules/effect/package.json",
+      "third-party/node_modules/@earendil-works/pi-durable/package.json",
+      "third-party/node_modules/@earendil-works/pi-ai/package.json",
+      "third-party/node_modules/@earendil-works/chord/package.json",
+      "third-party/node_modules/tardie/package.json",
+    ]) {
+      const metadata = yield* read(
+        join(workspace, file),
+        Schema.Struct({ name: Schema.String, version: Schema.String }),
+      );
+
+      versions[metadata.name] = metadata.version;
+    }
+
+    const fixtures = options.buildHistory
+      ? []
+      : yield* prepareFixtures({ targets: options.targets, sizes: options.sizes });
 
     yield* update((value) => ({
       ...value,
+      versions,
       fixtures: fixtures.map(({ target, history, fingerprint, tables, mode, fallbackReason }) => ({
         target,
         history,
@@ -261,18 +305,36 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         : ["candidate", "baseline", "baseline", "candidate"]
       : ["working"];
 
-    const turnsPerEpoch = options.repeats + (options.cold ? 2 : 1);
+    const turnsPerEpoch = options.repeats + (options.buildHistory ? 1 : options.cold ? 2 : 1);
+
+    const sampleName = (epoch: number, index: number) =>
+      options.buildHistory ? `m${index}` : `e${epoch}-t${index}`;
+
     const references = new Map<number, Map<string, string[]>>();
+    const seedReferences = new Map<number, Map<number, string>>();
 
     for (const size of options.sizes) {
       const messages: Message[] = [];
 
-      for (const input of history(0, size)) append(messages, input);
+      const seeds = new Map<number, string>();
+
+      for (const [index, input] of history(0, size).entries()) {
+        const checkpoint = (index + 1) % 50 === 0 || index + 1 === size;
+        const hashes = append(messages, input, false, checkpoint);
+        const digest = hashes.at(-1);
+
+        if (digest) seeds.set(index + 1, digest);
+      }
+      if (expectedSeed[size] !== undefined && seeds.get(size) !== expectedSeed[size])
+        return yield* new BenchError({
+          message: "Independent history plan no longer matches the existing seed fingerprint.",
+        });
+      seedReferences.set(size, seeds);
       const expected = new Map<string, string[]>();
 
       for (let epoch = 0; epoch < epochs.length; epoch++)
         for (let index = 0; index < turnsPerEpoch; index++) {
-          const sample = `e${epoch}-t${index}`;
+          const sample = sampleName(epoch, index);
 
           expected.set(
             sample,
@@ -297,6 +359,11 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         ).flat(),
       ),
     );
+
+    const failedObjects = new Set<string>();
+
+    const objectKey = (cohort: Pick<Query, "target" | "object">) =>
+      `${cohort.target}/${cohort.object}`;
 
     for (const [epoch, label] of epochs.entries()) {
       const compiled = builds.get(label);
@@ -379,6 +446,89 @@ export const run = Effect.fnUntraced(function* (options: Options) {
           shuffle(cohorts),
           (cohort) =>
             Effect.gen(function* () {
+              if (options.buildHistory) {
+                yield* resetForBuild(cohort);
+                yield* update((value) => ({
+                  ...value,
+                  histories: [
+                    ...value.histories,
+                    {
+                      target: cohort.target,
+                      object: cohort.object,
+                      history: cohort.history,
+                      ttftMs: cohort.ttftMs,
+                      status: "running",
+                      completed: 0,
+                      batches: [],
+                    },
+                  ],
+                }));
+                yield* requestEvents(deploy.driver + "/build-history", deploy.token, BuildEvent, {
+                  query: { ...cohort, expectedBuild },
+                  targetUrl: endpoint,
+                }).pipe(
+                  Stream.runForEach((event) =>
+                    Effect.gen(function* () {
+                      if (event._tag === "Failed") {
+                        yield* update((value) => ({
+                          ...value,
+                          histories: value.histories.map((row) =>
+                            objectKey(row) === objectKey(cohort)
+                              ? {
+                                  ...row,
+                                  completed: event.completed,
+                                  driverMs: event.driverMs,
+                                }
+                              : row,
+                          ),
+                        }));
+
+                        return yield* new BenchError({ message: event.error });
+                      }
+                      const batch = event.result;
+
+                      if (
+                        batch.identity.build !== expectedBuild ||
+                        batch.fingerprint !== seedReferences.get(cohort.history)?.get(batch.to)
+                      )
+                        return yield* new BenchError({
+                          message: `History fingerprint or build mismatch at turn ${batch.to}.`,
+                        });
+                      yield* update((value) => ({
+                        ...value,
+                        histories: value.histories.map((row) =>
+                          objectKey(row) === objectKey(cohort)
+                            ? {
+                                ...row,
+                                status: batch.to === cohort.history ? "ok" : "running",
+                                completed: batch.to,
+                                driverMs: event.driverMs,
+                                batches: [...row.batches, event],
+                              }
+                            : row,
+                        ),
+                      }));
+                      yield* Console.error(
+                        `${cohort.target}/${cohort.history}/${cohort.object.split("-").at(-1)} built ${batch.to}/${cohort.history}`,
+                      );
+                    }),
+                  ),
+                  Effect.timeout("2 hours"),
+                );
+                if (
+                  !result.histories.some(
+                    (row) => objectKey(row) === objectKey(cohort) && row.status === "ok",
+                  )
+                )
+                  return yield* new BenchError({
+                    message: "History build ended before its final batch.",
+                  });
+                // Release the seeded runtime while the remaining Objects are built.
+                yield* resetForBuild(cohort);
+
+                return;
+              }
+
               const fixture = fixtures.find(
                 (item) => item.target === cohort.target && item.history === cohort.history,
               );
@@ -411,14 +561,27 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                     "Deployed seed fingerprint or complete table counts differ from the local fixture.",
                 });
             }).pipe(
-              Effect.tapCause((cause) =>
-                update((value) => ({
-                  ...value,
-                  failures: [
-                    ...value.failures,
-                    `${cohort.target}/${cohort.history}/${cohort.ttftMs} seed: ${message(cause)}`,
-                  ],
-                })),
+              Effect.catchCause((cause) =>
+                Effect.gen(function* () {
+                  failedObjects.add(objectKey(cohort));
+                  yield* update((value) => ({
+                    ...value,
+                    histories: value.histories.map((row) =>
+                      objectKey(row) === objectKey(cohort)
+                        ? {
+                            ...row,
+                            status: "failed",
+                            error: message(cause),
+                          }
+                        : row,
+                    ),
+                    failures: [
+                      ...value.failures,
+                      `${cohort.target}/${cohort.history}/${cohort.ttftMs} seed: ${message(cause)}`,
+                    ],
+                  }));
+                  if (!options.buildHistory) return yield* Effect.failCause(cause);
+                }),
               ),
             ),
           { concurrency: options.concurrency, discard: true },
@@ -429,7 +592,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
         `Measuring ${label}, pass ${epoch + 1}/${epochs.length}: ${cohorts.length} Objects, concurrency ${options.concurrency}…`,
       );
       yield* Effect.forEach(
-        shuffle(cohorts),
+        shuffle(cohorts.filter((cohort) => !failedObjects.has(objectKey(cohort)))),
         (cohort) => {
           const profiled =
             options.profiles.length > 0 &&
@@ -492,12 +655,12 @@ export const run = Effect.fnUntraced(function* (options: Options) {
             let directoryIncarnation: string | undefined;
 
             for (let index = 0; index < turnsPerEpoch; index++) {
-              const query = { ...cohort, sample: `e${epoch}-t${index}`, expectedBuild };
+              const query = { ...cohort, sample: sampleName(epoch, index), expectedBuild };
 
               const state =
                 options.cold && index === 0
                   ? "cold"
-                  : index < (options.cold ? 2 : 1)
+                  : !options.buildHistory && index < (options.cold ? 2 : 1)
                     ? "warmup"
                     : "warm";
 
@@ -523,7 +686,12 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                   deploy.driver + "/measure",
                   deploy.token,
                   MeasureResponse,
-                  { query, targetUrl: endpoint },
+                  {
+                    query,
+                    targetUrl: endpoint,
+                    observeText: !options.buildHistory,
+                    cold: options.buildHistory && index === 0,
+                  },
                 );
 
                 const after = yield* Clock.currentTimeMillis;
@@ -537,6 +705,7 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                 ];
 
                 if (
+                  !options.buildHistory &&
                   query.target !== "tardie" &&
                   (measured.value.firstTextMs === null ||
                     measured.value.firstTextMs < 0 ||
@@ -588,7 +757,9 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                   index === 0 &&
                   metrics.identity.incarnation !== reset.before.incarnation &&
                   metrics.identity.firstEntry &&
-                  metrics.identity.priorAlarms === 0;
+                  metrics.identity.priorAlarms === 0 &&
+                  (!options.buildHistory ||
+                    metrics.identity.incarnation === measured.value.primed?.incarnation);
 
                 const residentVerified = index > 0 && incarnation === metrics.identity.incarnation;
 
@@ -631,6 +802,16 @@ export const run = Effect.fnUntraced(function* (options: Options) {
                             ? {}
                             : { firstTextSource: measured.value.firstTextSource }),
                           observationMs: measured.value.observationMs,
+                          constructorAndProbeMs: measured.value.constructorAndProbeMs,
+                          primeMs: measured.value.primeMs,
+                          bytes: metrics.bytes,
+                          providerColos: [
+                            ...new Set(
+                              metrics.calls.flatMap((call) =>
+                                call.receipt?.colo ? [call.receipt.colo] : [],
+                              ),
+                            ),
+                          ],
                           ...(objectToFirstModelMs === undefined ? {} : { objectToFirstModelMs }),
                           ...(measured.value.admissionMs === undefined
                             ? {}
@@ -672,14 +853,17 @@ export const run = Effect.fnUntraced(function* (options: Options) {
           }).pipe(
             Effect.scoped,
             (batch) => (profiled ? withProfileBatch(batch) : batch),
-            Effect.tapCause((cause) =>
-              update((value) => ({
-                ...value,
-                failures: [
-                  ...value.failures,
-                  `${cohort.target}/${cohort.history}/${cohort.ttftMs}: ${message(cause)}`,
-                ],
-              })),
+            Effect.catchCause((cause) =>
+              Effect.gen(function* () {
+                yield* update((value) => ({
+                  ...value,
+                  failures: [
+                    ...value.failures,
+                    `${cohort.target}/${cohort.history}/${cohort.ttftMs}: ${message(cause)}`,
+                  ],
+                }));
+                if (!options.buildHistory) return yield* Effect.failCause(cause);
+              }),
             ),
           );
         },

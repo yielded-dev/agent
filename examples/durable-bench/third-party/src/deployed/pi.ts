@@ -22,15 +22,10 @@ import {
   type AgentEvent,
   type Conversation,
 } from "../../node_modules/@earendil-works/pi-durable/dist/index.js";
-import {
-  SqliteStorage,
-  type SqliteDatabase,
-  type SqliteExecutor,
-  type SqliteValue,
-} from "../../node_modules/@earendil-works/pi-durable/dist/storage/sqlite/index.js";
+import { openDurableObjectSqliteStorage } from "../../node_modules/@earendil-works/pi-durable/dist/storage/sqlite/cloudflare.js";
 import { Host } from "../../../deployed/worker/host.ts";
 import { type Observation } from "../../../deployed/worker/observe.ts";
-import { readQuery, type Env, type TextObservation } from "../../../deployed/worker/protocol.ts";
+import { readQuery, type Env, type Query, type TextObservation } from "../../../deployed/worker/protocol.ts";
 import { importRows } from "../../../deployed/worker/storage.ts";
 
 const SYSTEM = "You are a benchmark agent. Call lookup as instructed, then answer briefly.";
@@ -129,73 +124,21 @@ registry.install(
   }),
 );
 
-const bind = (params: SqliteValue[]) =>
-  params.map((p) =>
-    p instanceof Uint8Array ? p.slice().buffer : typeof p === "bigint" ? Number(p) : p,
-  );
-
-const read = <T>(row: Record<string, SqlStorageValue>) =>
-  Object.fromEntries(
-    Object.entries(row).map(([k, v]) => [k, v instanceof ArrayBuffer ? new Uint8Array(v) : v]),
-  ) as T;
-
-function database(storage: DurableObjectStorage): SqliteDatabase {
-  const sql = storage.sql;
-
-  const rows = <T>(query: string, params: SqliteValue[]) =>
-    sql
-      .exec(query, ...bind(params))
-      .toArray()
-      .map((row) => read<T>(row));
-
-  const executor: SqliteExecutor = {
-    exec: async (query) => {
-      sql.exec(query);
-    },
-    run: async (query, ...params) => {
-      sql.exec(query, ...bind(params));
-    },
-    async get<T extends object>(query: string, ...params: SqliteValue[]) {
-      return rows<T>(query, params)[0];
-    },
-    async all<T extends object>(query: string, ...params: SqliteValue[]) {
-      return rows<T>(query, params);
-    },
-  };
-
-  let queue: Promise<unknown> = Promise.resolve();
-
-  const serial = <T>(work: () => Promise<T>) => {
-    const result = queue.then(work);
-
-    queue = result.catch(() => {});
-
-    return result;
-  };
-
-  return {
-    exec: (query) => serial(() => executor.exec(query)),
-    run: (query, ...params) => serial(() => executor.run(query, ...params)),
-    get: (query, ...params) => serial(() => executor.get(query, ...params)),
-    all: (query, ...params) => serial(() => executor.all(query, ...params)),
-    transaction: (callback) => serial(() => storage.transaction(() => callback(executor))),
-    close: async () => {},
-  };
-}
-
 export class PiDO extends DurableObject<Env> {
   private opened?: { harness: Harness; root: Conversation };
   private readonly host: Host;
   constructor(ctx: DurableObjectState, env: Env) {
+    const constructedMs = Date.now();
+
     super(ctx, env);
-    this.host = new Host(ctx, env, "pi");
+    this.host = new Host(ctx, env, "pi", constructedMs);
   }
   private async open() {
     if (this.opened) return this.opened;
     const models = modelCollection(this.env, this.host.meter);
 
     const harness = await Harness.open(
-      await SqliteStorage.open(database(this.ctx.storage)),
+      await openDurableObjectSqliteStorage(this.ctx.storage),
       {
         models,
         registry,
@@ -283,7 +226,7 @@ export class PiDO extends DurableObject<Env> {
         if (!fixture.thread) throw new Error("Missing pi SQLite fixture");
         importRows(this.ctx.storage, fixture.thread);
       },
-      run: (input) => this.turn(input),
+      run: (input, _query?: Query) => this.turn(input),
     });
   }
 }

@@ -1,6 +1,6 @@
 # Durable thread benchmark
 
-Compare Yielded's production `ThreadObject` path with pi-durable 1.0.4 and tardie 0.44.0
+Compare Yielded's production `ThreadObject` path with pi-durable 1.1.0 and tardie 0.45.2
 on deployed Cloudflare. A driver Worker measures a complete user turn against a networked,
 scripted OpenAI-compatible provider. No model API key or paid model is involved.
 
@@ -44,6 +44,49 @@ Object medians. This unpaired spread is descriptive, not a confidence interval.
 JSON and the printed tables go to gitignored `results/durable-bench-*.{json,md}`. JSON also
 records subscription setup, the first text fragment, admission, model-call gaps, the last response-to-client interval, ingress colos,
 fingerprint/build checks, cold setup attempts, failures and cleanup. No timing evidence is committed.
+
+## Build history on deployed Objects
+
+`--build-history` measures the four cards in
+[Mario Zechner's pi-durable comparison](https://github.com/badlogic/durable-bench/tree/main/pi-vs-tardigrade):
+building history, cold turn, warm turn and SQLite storage. It skips local fixtures entirely.
+
+```sh
+vp run deployed -- --build-history
+```
+
+Defaults are 50, 250, 1,000 and 3,500 historical turns, three independent Objects per
+target and size, zero provider TTFT, one cold turn and nine warm turns. `--sizes`,
+`--objects`, `--repeats`, `--ttft` and `--concurrency` remain configurable. Each Object
+starts empty and runs real historical turns inside its owning runtime in batches of 50. The history provider always has zero delays. Sizes use separate Objects, so measured
+turns never enter another size's history. The driver restarts each Object between
+batches over its retained storage, matching the original seeder's disposal of each
+runtime. These restarts count toward build time.
+
+The nearby driver times the complete build across all batches, including network and
+storage acknowledgement. Every batch records its final model-visible fingerprint;
+every measured model request must match the independent reference transcript. Failed
+or uncertain batches are never resubmitted. Failure invalidates that Object while the
+remaining Objects continue; partial build progress and errors stay in the result JSON.
+
+After an acknowledged Object abort, an untimed request constructs the new Object
+without opening pi's Harness or tardie's native reference. Cold adds the Object-local
+constructor-and-clock-probe interval to the driver's native open-and-first-turn interval.
+This includes Yielded's eager constructor initialization while excluding isolate startup
+and priming transport. JSON retains both intervals and the primed identity; the timed
+turn must use that same instance. A real request to the existing provider's health endpoint
+advances [Cloudflare's otherwise frozen clock](https://developers.cloudflare.com/workers/runtime-apis/performance/).
+Its roundtrip remains in cold time; the harness does not estimate or subtract it.
+This is an observable interval, not an isolated constructor CPU measurement.
+No text observer opens an agent before timing.
+
+There is no extra warmup: warm pools the next nine turns from each complete Object,
+each with eight tool calls. Build and cold values are medians across Objects. Storage
+is the median SQLite size after the last measured turn in decimal MB, including tardie's
+Actor directory. Tables include Yielded ÷ pi and tardie ÷ pi for all four cards.
+The mode excludes text observation, profiling and A/B redeployment; use the original
+mode for those workflows. Deployed absolute times include network hops and cannot be
+compared with Miniflare timings; compare ratios within a matched deployment.
 
 `--profile cpu|memory` accepts repeats or a comma-separated list. It captures the first
 Yielded Object and, when selected, the first pi Object in every history/TTFT cell and build
