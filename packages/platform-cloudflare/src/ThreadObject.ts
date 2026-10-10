@@ -103,7 +103,9 @@ import {
   type HostFailure,
   type HostResponse,
   type SubmitRequest,
+  type ClientTransport,
 } from "./CloudflareThreadClient.ts";
+import { hostRpcMethods } from "./internal/client-transport.ts";
 import {
   layerConfig,
   ThreadObjectPorts,
@@ -1072,6 +1074,28 @@ export const handleRpc = Effect.fnUntraced(function* (
     Effect.provideService(ThreadObjectIdentity, { threadId, producerId }),
   );
 });
+
+/**
+ * Use the same encoded endpoints in this Object's existing runtime. Placement,
+ * authorization, receipts and mutation gates are still checked by handleRpc.
+ * Operations resolve their services when run; no event Context is captured.
+ * watchText uses the caller's stream Scope and never reconnects automatically.
+ */
+export const localClientTransport: ClientTransport<Effect.Services<ReturnType<typeof handleRpc>>> =
+  {
+    request: (threadId, operation, encoded) =>
+      handleRpc(threadId, hostRpcMethods[operation], encoded),
+    watchText: (threadId, encoded) =>
+      Effect.acquireRelease(handleRpc(threadId, "watchTextEncoded", encoded), (raw) =>
+        raw instanceof ReadableStream && !raw.locked
+          ? Effect.tryPromise({ try: () => raw.cancel(), catch: () => undefined }).pipe(
+              Effect.interruptible,
+              Effect.timeout("1 second"),
+              Effect.ignore,
+            )
+          : Effect.void,
+      ),
+  };
 
 const alarmEndpoint: Effect.Effect<void, MaintenancePassFailure, EndpointServices> = Effect.gen(
   function* () {

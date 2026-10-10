@@ -54,6 +54,7 @@ export default defineConfig({
       "src/BrowserSession.ts",
       "src/BrowserUse.ts",
       "src/BrowserCredentials.ts",
+      "src/LazyObject.ts",
       "src/ThreadObject.ts",
       "src/WakeScheduler.ts",
     ],

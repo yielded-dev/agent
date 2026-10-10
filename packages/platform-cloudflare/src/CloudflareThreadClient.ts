@@ -44,7 +44,17 @@ import {
   ThreadStoreError,
   FenceRejected,
 } from "@yielded/agent/thread-store";
-import { Context, Crypto, Duration, Effect, Layer, Predicate, Schema, Stream } from "effect";
+import {
+  Context,
+  Crypto,
+  Duration,
+  Effect,
+  Layer,
+  Predicate,
+  Schema,
+  Stream,
+  type Scope,
+} from "effect";
 import { RpcTargets, RpcTracing } from "effect-cf";
 
 import { DurableAlarmError } from "./Alarm.ts";
@@ -55,6 +65,7 @@ import {
 } from "./CloudflareBindings.ts";
 import { AdmissionLimitExceeded } from "./CloudflareConfig.ts";
 import { cloudflareFailureSignals, safeCauseMessage } from "./internal/boundary.ts";
+import { hostRpcMethods } from "./internal/client-transport.ts";
 import { cloudflareCryptoLayer } from "./internal/crypto.ts";
 import {
   Frame as LiveTextFrame,
@@ -497,94 +508,10 @@ const outOfContract = (threadId: string, operation: string, observed: string): T
     ),
   });
 
-const hostRpcMethods = {
-  submit: "submitEncoded",
-  awaitSettlement: "awaitSettlementEncoded",
-  awaitSettlementRecord: "awaitSettlementRecordEncoded",
-  submissionStatus: "submissionStatusEncoded",
-  awaitProgress: "awaitProgressEncoded",
-  cancelProgress: "cancelProgressEncoded",
-  observePage: "observePage",
-  abort: "abortEncoded",
-  resolveApproval: "resolveApprovalEncoded",
-  resolveUnknown: "resolveUnknownEncoded",
-} as const satisfies Record<string, keyof ThreadObjectRpc>;
-
 /** Worker-side client over the Thread Object namespace (DEPLOY-010). */
-export class CloudflareThreadClient extends Context.Service<
-  CloudflareThreadClient,
-  {
-    /** Encode the input client-side, then durably submit to the owning Object. */
-    readonly submit: <InputSchema extends Schema.Top>(
-      agent: DurableSubmitAgent<InputSchema>,
-      input: InputSchema["Type"],
-      options: DurableSubmitOptions,
-    ) => Effect.Effect<Receipt, ClientSubmitFailure, InputSchema["EncodingServices"]>;
-    /** Wake-hinted, poll-guaranteed settlement wait executed inside the owning Object. */
-    readonly submissionStatus: (
-      receipt: Receipt,
-    ) => Effect.Effect<SubmissionStatus, ClientAwaitFailure>;
-    readonly awaitSettlement: (receipt: Receipt) => Effect.Effect<Settlement, ClientAwaitFailure>;
-    /**
-     * Wait for finalization and return this Receipt's canonical terminal record in one RPC.
-     * Requires both settlement and observation authority. Decode an ordinary completed
-     * record's result through the Agent output Schema; joined completion may have no result.
-     */
-    readonly awaitSettlementRecord: (
-      receipt: Receipt,
-    ) => Effect.Effect<SubmissionSettledRecord, ClientAwaitFailure>;
-    /**
-     * Wait without polling until progress after `afterSequence` is already durable or hinted.
-     * The result is deliberately void: canonical records remain authoritative and must be read.
-     * Interruption waits at most one second for best-effort remote cancellation.
-     */
-    readonly awaitProgress: (
-      threadId: ThreadId,
-      afterSequence: CanonicalSequence,
-    ) => Effect.Effect<void, ClientProgressFailure>;
-    /**
-     * Current provisional text followed by native deltas. Reset starts a replacement snapshot,
-     * including when a slow consumer exceeds the fixed backlog. Reconcile by
-     * Run/Turn identity to canonical records; discard drafts on Discard, AttemptEnded,
-     * Reset or stream failure. Snapshots exist only in the Object incarnation's memory.
-     * Scope the stream: interruption cancels its remote subscription.
-     */
-    readonly watchText: (threadId: ThreadId) => Stream.Stream<LiveTextFrame, ClientObserveFailure>;
-    /** One bounded page of canonical records. */
-    readonly readPage: (
-      threadId: ThreadId,
-      options?: {
-        readonly afterSequence?: CanonicalSequence | undefined;
-        readonly limit?: number | undefined;
-      },
-    ) => Effect.Effect<ReadonlyArray<CanonicalRecordEnvelope>, ClientObserveFailure>;
-    /**
-     * Every canonical record up to the CURRENT committed tail, via repeated pages. A
-     * snapshot read, not a live observation — callers wanting liveness re-read after
-     * `awaitSettlement`.
-     */
-    readonly readAll: (
-      threadId: ThreadId,
-    ) => Effect.Effect<ReadonlyArray<CanonicalRecordEnvelope>, ClientObserveFailure>;
-    /**
-     * Submission-addressed operations take the owning Thread explicitly (from the
-     * Receipt): minted Submission identities stay OPAQUE outside the storage adapter that
-     * minted them (D-P6-5), so the client never parses one to find the lane.
-     */
-    readonly abort: (
-      threadId: ThreadId,
-      command: AbortCommand,
-    ) => Effect.Effect<AbortIntent, ClientAbortFailure>;
-    readonly resolveApproval: (
-      threadId: ThreadId,
-      command: ApprovalDecisionCommand,
-    ) => Effect.Effect<ApprovalDecisionIntent, ClientApprovalFailure>;
-    readonly resolveUnknown: (
-      threadId: ThreadId,
-      command: UnknownResolutionCommand,
-    ) => Effect.Effect<UnknownResolutionIntent, ClientUnknownFailure>;
-  }
->()("@effect-agent/platform-cloudflare/CloudflareThreadClient") {
+export class CloudflareThreadClient extends Context.Service<CloudflareThreadClient, Client>()(
+  "@effect-agent/platform-cloudflare/CloudflareThreadClient",
+) {
   /**
    * Assemble the client from a resolved namespace and the platform Crypto implementation.
    * rpcTracing is the binding name and remains opt-in. Caller authentication, principals,
@@ -602,484 +529,600 @@ export class CloudflareThreadClient extends Context.Service<
     );
   }
 
-  static readonly layer: Layer.Layer<
-    CloudflareThreadClient,
-    never,
-    ThreadObjectNamespace | Crypto.Crypto
-  > = Layer.effect(CloudflareThreadClient)(
+  static readonly layer = Layer.effect(CloudflareThreadClient)(
+    Effect.flatMap(ThreadObjectNamespace, (namespace) => makeClient(nativeTransport(namespace))),
+  );
+}
+
+/**
+ * Client operations with their transport requirements visible at each use.
+ * A client retains the Crypto service supplied to makeClient; keep it within
+ * that service's lifetime. Supplying R does not extend any service's Scope.
+ */
+export interface Client<R = never> {
+  /** Encode the input client-side, then durably submit to the owning Object. */
+  readonly submit: <InputSchema extends Schema.Top>(
+    agent: DurableSubmitAgent<InputSchema>,
+    input: InputSchema["Type"],
+    options: DurableSubmitOptions,
+  ) => Effect.Effect<Receipt, ClientSubmitFailure, InputSchema["EncodingServices"] | R>;
+  /** Wake-hinted, poll-guaranteed settlement wait executed inside the owning Object. */
+  readonly submissionStatus: (
+    receipt: Receipt,
+  ) => Effect.Effect<SubmissionStatus, ClientAwaitFailure, R>;
+  readonly awaitSettlement: (receipt: Receipt) => Effect.Effect<Settlement, ClientAwaitFailure, R>;
+  /**
+   * Wait for finalization and return this Receipt's canonical terminal record in one endpoint call.
+   * Requires both settlement and observation authority. Decode an ordinary completed
+   * record's result through the Agent output Schema; joined completion may have no result.
+   */
+  readonly awaitSettlementRecord: (
+    receipt: Receipt,
+  ) => Effect.Effect<SubmissionSettledRecord, ClientAwaitFailure, R>;
+  /**
+   * Wait without polling until progress after `afterSequence` is already durable or hinted.
+   * The result is deliberately void: canonical records remain authoritative and must be read.
+   * Interruption waits at most one second for best-effort cancellation.
+   */
+  readonly awaitProgress: (
+    threadId: ThreadId,
+    afterSequence: CanonicalSequence,
+  ) => Effect.Effect<void, ClientProgressFailure, R>;
+  /**
+   * Current provisional text followed by native deltas. Reset starts a replacement snapshot,
+   * including when a slow consumer exceeds the fixed backlog. Reconcile by
+   * Run/Turn identity to canonical records; discard drafts on Discard, AttemptEnded,
+   * Reset or stream failure. Snapshots exist only in the Object incarnation's memory.
+   * Scope the stream: interruption cancels its subscription. There is no automatic
+   * reconnect. R is required again for each new subscription or caller retry;
+   * event-scoped services must still be live when that opening runs.
+   */
+  readonly watchText: (threadId: ThreadId) => Stream.Stream<LiveTextFrame, ClientObserveFailure, R>;
+  /** One bounded page of canonical records. */
+  readonly readPage: (
+    threadId: ThreadId,
+    options?: {
+      readonly afterSequence?: CanonicalSequence | undefined;
+      readonly limit?: number | undefined;
+    },
+  ) => Effect.Effect<ReadonlyArray<CanonicalRecordEnvelope>, ClientObserveFailure, R>;
+  /**
+   * Every canonical record up to the CURRENT committed tail, via repeated pages. A
+   * snapshot read, not a live observation — callers wanting liveness re-read after
+   * `awaitSettlement`.
+   */
+  readonly readAll: (
+    threadId: ThreadId,
+  ) => Effect.Effect<ReadonlyArray<CanonicalRecordEnvelope>, ClientObserveFailure, R>;
+  /**
+   * Submission-addressed operations take the owning Thread explicitly (from the
+   * Receipt): minted Submission identities stay OPAQUE outside the storage adapter that
+   * minted them (D-P6-5), so the client never parses one to find the lane.
+   */
+  readonly abort: (
+    threadId: ThreadId,
+    command: AbortCommand,
+  ) => Effect.Effect<AbortIntent, ClientAbortFailure, R>;
+  readonly resolveApproval: (
+    threadId: ThreadId,
+    command: ApprovalDecisionCommand,
+  ) => Effect.Effect<ApprovalDecisionIntent, ClientApprovalFailure, R>;
+  readonly resolveUnknown: (
+    threadId: ThreadId,
+    command: UnknownResolutionCommand,
+  ) => Effect.Effect<UnknownResolutionIntent, ClientUnknownFailure, R>;
+}
+
+/**
+ * Encoded transport used by the shared client implementation. The client owns
+ * Schema encoding/decoding and typed host failures; the endpoint owns authority.
+ * watchText must acquire its subscription in the supplied Scope, which closes
+ * after the decoder releases its reader. Resolve R when operations run; do not
+ * capture a transient event Context to make the client appear dependency-free.
+ */
+export interface ClientTransport<R> {
+  readonly rpcTracing?: string;
+  readonly request: (
+    threadId: ThreadId,
+    operation: keyof typeof hostRpcMethods,
+    encoded: unknown,
+  ) => Effect.Effect<unknown, ThreadClientError | HostProtocolError, R>;
+  readonly watchText: (
+    threadId: ThreadId,
+    encoded: unknown,
+  ) => Effect.Effect<unknown, ThreadClientError | HostProtocolError, R | Scope.Scope>;
+}
+
+const nativeTransport = (namespace: ThreadObjectNamespace["Service"]): ClientTransport<never> => ({
+  rpcTracing: namespace.rpcTracing,
+  request: (threadId, operation, encoded) =>
     Effect.gen(function* () {
-      const namespace = yield* ThreadObjectNamespace;
       const { rpcTracing } = namespace;
-      const crypto = yield* Crypto.Crypto;
+      // Empty arguments preserve native arity. Passing `undefined` still adds an argument.
+      const traceArgs = rpcTracing === undefined ? [] : yield* RpcTracing.withRpcTraceContext([]);
 
-      const call = Effect.fnUntraced(
-        function* (
-          threadId: ThreadId,
-          operation: keyof typeof hostRpcMethods,
-          encoded: unknown,
-        ): Effect.fn.Return<HostResponse, ThreadClientError | HostProtocolError> {
-          // Empty arguments preserve native arity. Passing `undefined` still adds an argument.
-          const traceArgs =
-            rpcTracing === undefined ? [] : yield* RpcTracing.withRpcTraceContext([]);
-
-          const raw = yield* callThreadObject(
+      const raw = yield* callThreadObject(
+        threadId,
+        (stub) => stub[hostRpcMethods[operation]](encoded, ...traceArgs),
+        (cause) =>
+          ThreadClientError.make({
             threadId,
-            (stub) => stub[hostRpcMethods[operation]](encoded, ...traceArgs),
-            (cause) =>
-              ThreadClientError.make({
-                threadId,
-                message: boundHostDiagnostic(
-                  `${operation} did not reach the Thread Object: ${safeCauseMessage(
-                    cause,
-                    "the RPC failed without a diagnostic",
-                  )}`,
-                ),
+            message: boundHostDiagnostic(
+              `${operation} did not reach the Thread Object: ${safeCauseMessage(
                 cause,
-                ...cloudflareFailureSignals(cause),
-              }),
-          ).pipe(Effect.provideService(ThreadObjectNamespace, namespace));
-
-          return yield* decodeHostResponse(raw).pipe(
-            Effect.mapError((error): HostProtocolError =>
-              HostProtocolError.make({
-                message: boundHostDiagnostic(
-                  `The ${operation} answer could not be decoded: ${error.message}`,
-                ),
-              }),
+                "the RPC failed without a diagnostic",
+              )}`,
             ),
-          );
-        },
-        (effect, threadId, operation) =>
-          rpcTracing === undefined
-            ? Effect.withSpan(effect, "CloudflareThreadClient.call", {
-                attributes: { threadId, operation },
-              })
-            : RpcTracing.withRpcClientSpan(effect, rpcTracing, hostRpcMethods[operation]),
-      );
+            cause,
+            ...cloudflareFailureSignals(cause),
+          }),
+      ).pipe(Effect.provideService(ThreadObjectNamespace, namespace));
 
-      const expect = <ResultSchema extends Schema.Top, FailureSchema extends Schema.Top>(
-        threadId: string,
-        operation: string,
-        resultSchema: ResultSchema,
-        failureSchema: FailureSchema,
-      ) => {
-        const isExpectedResult = Schema.is(resultSchema);
-        const isExpectedFailure = Schema.is(failureSchema);
+      return raw;
+    }),
+  watchText: (threadId, encoded) =>
+    Effect.gen(function* () {
+      const { rpcTracing } = namespace;
+      const traceArgs = rpcTracing === undefined ? [] : yield* RpcTracing.withRpcTraceContext([]);
 
-        return (
-          response: HostResponse,
-        ): Effect.Effect<ResultSchema["Type"], FailureSchema["Type"] | ThreadClientError> => {
-          if (response._tag === "HostFailed") {
-            const failure = response.failure;
-
-            return isExpectedFailure(failure)
-              ? Effect.fail(failure)
-              : Effect.fail(outOfContract(threadId, operation, `failure ${failure._tag}`));
-          }
-          if (!isExpectedResult(response)) {
-            return Effect.fail(outOfContract(threadId, operation, `result ${response._tag}`));
-          }
-
-          return Effect.succeed(response);
-        };
-      };
-
-      const readPage = (
-        threadId: ThreadId,
-        options?: {
-          readonly afterSequence?: CanonicalSequence | undefined;
-          readonly limit?: number | undefined;
-        },
-      ) =>
-        Effect.gen(function* () {
-          const request = ObservePageRequest.make({
-            ...(options?.afterSequence === undefined
-              ? {}
-              : { afterSequence: options.afterSequence }),
-            limit: options?.limit ?? 256,
-          });
-
-          const encoded = yield* encodeObservePageRequest(request).pipe(
-            Effect.mapError((error) =>
-              HostProtocolError.make({
-                message: boundHostDiagnostic(`observePage request encode failed: ${error.message}`),
-              }),
-            ),
-          );
-
-          const response = yield* call(threadId, "observePage", encoded);
-
-          const page = yield* expect(
-            threadId,
-            "observePage",
-            ObservedPage,
-            ClientObserveHostFailure,
-          )(response);
-
-          return page.records;
+      const openingFailure = (cause: unknown) =>
+        ThreadClientError.make({
+          threadId,
+          message: "Provisional text observation could not reach the Thread Object",
+          cause,
+          ...cloudflareFailureSignals(cause),
         });
 
-      const cancelProgress = (threadId: ThreadId, waiterId: string): Effect.Effect<void> =>
-        encodeCancelProgressRequest(CancelProgressRequest.make({ waiterId })).pipe(
-          Effect.mapError(() => undefined),
-          Effect.flatMap((encoded) => call(threadId, "cancelProgress", encoded)),
-          // Finalizers are uninterruptible; only the foreign RPC branch must remain
-          // interruptible so a lost cancellation reply cannot prevent local shutdown.
-          Effect.interruptible,
-          Effect.timeout(PROGRESS_CANCELLATION_TIMEOUT),
-          Effect.asVoid,
+      // Retain the original RPC promise: resolving through callThreadObject would
+      // erase its optional native disposer before an interrupted opening can use it.
+      const target = yield* RpcTargets.get(namespace, threadId, () => namespace.get(threadId)).pipe(
+        Effect.mapError(openingFailure),
+      );
+
+      let request: Promise<unknown> | undefined;
+      let received: unknown;
+      let closed = false;
+
+      const cancel = () => {
+        const value = received;
+
+        received = undefined;
+
+        return value instanceof ReadableStream && !value.locked
+          ? value.cancel().catch(() => undefined)
+          : Promise.resolve();
+      };
+
+      // Install ownership before invoking foreign code, not after its promise settles.
+      yield* Effect.addFinalizer(() =>
+        Effect.try({
+          try: () => {
+            closed = true;
+            if (Predicate.hasProperty(request, Symbol.dispose)) {
+              const dispose = request[Symbol.dispose];
+
+              if (typeof dispose === "function") dispose.call(request);
+            }
+          },
+          catch: () => undefined,
+        }).pipe(
           Effect.ignore,
-        );
+          Effect.andThen(
+            Effect.tryPromise({ try: cancel, catch: () => undefined }).pipe(
+              Effect.interruptible,
+              Effect.timeout(PROGRESS_CANCELLATION_TIMEOUT),
+              Effect.ignore,
+            ),
+          ),
+        ),
+      );
 
-      return CloudflareThreadClient.of({
-        submit: <InputSchema extends Schema.Top>(
-          agent: DurableSubmitAgent<InputSchema>,
-          input: InputSchema["Type"],
-          options: DurableSubmitOptions,
-        ) =>
-          Effect.gen(function* () {
-            // Client-side half of `DurableAgentRuntime.submit`'s input boundary: encode
-            // through the Agent's input schema and prove the canonical persistence bounds.
-            const encodedInput = yield* Schema.encodeEffect(agent.definition.input)(input).pipe(
-              Effect.mapError((cause) =>
-                AgentInputError.make({ message: `Unable to encode Agent input: ${cause.message}` }),
+      const raw = yield* Effect.tryPromise({
+        try: () => {
+          request = target.watchTextEncoded(encoded, ...traceArgs);
+
+          return request.then((value) => {
+            received = value;
+
+            // A custom endpoint may return a plain, non-cancellable promise. Keep
+            // late cleanup on that native promise chain; it starts no Effect fiber.
+            return closed ? cancel().then(() => value) : value;
+          });
+        },
+        catch: openingFailure,
+      }).pipe(
+        Effect.interruptible,
+        Effect.tapCause(() => RpcTargets.invalidate(target)),
+      );
+
+      return raw;
+    }),
+});
+
+/**
+ * Share the existing client protocol over a native or Object-local transport.
+ * Acquires Crypto only; transport services remain in R on every operation.
+ * Run operations using event services before that event finishes. A response
+ * body must not reopen a subscription or use those services after finalization.
+ */
+export function makeClient<R>(
+  transport: ClientTransport<R>,
+): Effect.Effect<Client<R>, never, Crypto.Crypto> {
+  return Effect.gen(function* () {
+    const { rpcTracing } = transport;
+    const crypto = yield* Crypto.Crypto;
+
+    const call = Effect.fnUntraced(
+      function* (
+        threadId: ThreadId,
+        operation: keyof typeof hostRpcMethods,
+        encoded: unknown,
+      ): Effect.fn.Return<HostResponse, ThreadClientError | HostProtocolError, R> {
+        const raw = yield* transport.request(threadId, operation, encoded);
+
+        return yield* decodeHostResponse(raw).pipe(
+          Effect.mapError((error): HostProtocolError =>
+            HostProtocolError.make({
+              message: boundHostDiagnostic(
+                `The ${operation} answer could not be decoded: ${error.message}`,
               ),
-            );
-
-            const inputPayload = yield* Schema.decodeUnknownEffect(PersistedJson)(
-              encodedInput,
-            ).pipe(
-              Effect.mapError(() =>
-                AgentInputError.make({
-                  message: "Agent input does not satisfy the canonical persistence bounds",
-                }),
-              ),
-            );
-
-            const request = SubmitRequest.make({
-              agentId: agent.definition.id,
-              principal: options.principal,
-              idempotencyKey: options.idempotencyKey,
-              ...(options.admissionGroup === undefined
-                ? {}
-                : { admissionGroup: options.admissionGroup }),
-              ...(options.admissionFence === undefined
-                ? {}
-                : { admissionFence: options.admissionFence }),
-              ...(options.workerAdmission === undefined
-                ? {}
-                : { workerAdmission: options.workerAdmission }),
-              ...(options.messageAdmission === undefined
-                ? {}
-                : { messageAdmission: options.messageAdmission }),
-              definitions: options.definitions,
-              inputPayload,
-            });
-
-            const encoded = yield* encodeSubmitRequest(request).pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(`submit request encode failed: ${error.message}`),
-                }),
-              ),
-            );
-
-            const response = yield* call(options.threadId, "submit", encoded);
-
-            const succeeded = yield* expect(
-              options.threadId,
-              "submit",
-              SubmitSucceeded,
-              ClientSubmitHostFailure,
-            )(response);
-
-            return succeeded.receipt;
-          }),
-
-        submissionStatus: (receipt) =>
-          Effect.gen(function* () {
-            const encoded = yield* encodeReceipt(receipt).pipe(
-              Effect.mapError(() => HostProtocolError.make({ message: "Invalid receipt" })),
-            );
-
-            const response = yield* call(receipt.threadId, "submissionStatus", encoded);
-
-            const result = yield* expect(
-              receipt.threadId,
-              "submissionStatus",
-              SubmissionStatusResponse,
-              ClientAwaitHostFailure,
-            )(response);
-
-            return result.status;
-          }),
-        awaitSettlement: (receipt) =>
-          Effect.gen(function* () {
-            const encoded = yield* encodeReceipt(receipt).pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(`receipt encode failed: ${error.message}`),
-                }),
-              ),
-            );
-
-            const response = yield* call(receipt.threadId, "awaitSettlement", encoded);
-
-            const settled = yield* expect(
-              receipt.threadId,
-              "awaitSettlement",
-              SettlementReached,
-              ClientAwaitHostFailure,
-            )(response);
-
-            return settled.settlement;
-          }),
-
-        awaitSettlementRecord: (receipt) =>
-          Effect.gen(function* () {
-            const encoded = yield* encodeReceipt(receipt).pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(`receipt encode failed: ${error.message}`),
-                }),
-              ),
-            );
-
-            const response = yield* call(receipt.threadId, "awaitSettlementRecord", encoded);
-
-            const settled = yield* expect(
-              receipt.threadId,
-              "awaitSettlementRecord",
-              SettlementRecordReached,
-              ClientAwaitHostFailure,
-            )(response);
-
-            return settled.record;
-          }),
-
-        awaitProgress: (threadId, afterSequence) =>
-          Effect.gen(function* () {
-            const waiterId = yield* crypto.randomUUIDv4.pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(
-                    `awaitProgress cancellation identity generation failed: ${error.message}`,
-                  ),
-                }),
-              ),
-            );
-
-            const request = AwaitProgressRequest.make({ afterSequence, waiterId });
-
-            const encoded = yield* encodeAwaitProgressRequest(request).pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(
-                    `awaitProgress request encode failed: ${error.message}`,
-                  ),
-                }),
-              ),
-            );
-
-            const attempt = (retry: number): Effect.Effect<void, ClientProgressFailure> =>
-              call(threadId, "awaitProgress", encoded).pipe(
-                Effect.flatMap(
-                  expect(threadId, "awaitProgress", ProgressObserved, ClientObserveHostFailure),
-                ),
-                Effect.asVoid,
-                Effect.catchTag("ThreadClientError", (error) =>
-                  error.retryable === true && error.overloaded !== true && retry < 5
-                    ? Effect.sleep(Duration.millis(10 * 2 ** retry)).pipe(
-                        Effect.andThen(attempt(retry + 1)),
-                      )
-                    : Effect.fail(error),
-                ),
-              );
-
-            yield* attempt(0).pipe(Effect.onInterrupt(() => cancelProgress(threadId, waiterId)));
-          }),
-
-        watchText: (threadId) =>
-          Stream.unwrap(
-            Effect.gen(function* () {
-              const traceArgs =
-                rpcTracing === undefined ? [] : yield* RpcTracing.withRpcTraceContext([]);
-
-              const openingFailure = (cause: unknown) =>
-                ThreadClientError.make({
-                  threadId,
-                  message: "Provisional text observation could not reach the Thread Object",
-                  cause,
-                  ...cloudflareFailureSignals(cause),
-                });
-
-              // Retain the original RPC promise: resolving through callThreadObject would
-              // erase its optional native disposer before an interrupted opening can use it.
-              const target = yield* RpcTargets.get(namespace, threadId, () =>
-                namespace.get(threadId),
-              ).pipe(Effect.mapError(openingFailure));
-
-              let request: Promise<unknown> | undefined;
-              let received: unknown;
-              let closed = false;
-
-              const cancel = () => {
-                const value = received;
-
-                received = undefined;
-
-                return value instanceof ReadableStream && !value.locked
-                  ? value.cancel().catch(() => undefined)
-                  : Promise.resolve();
-              };
-
-              // Install ownership before invoking foreign code, not after its promise settles.
-              yield* Effect.addFinalizer(() =>
-                Effect.try({
-                  try: () => {
-                    closed = true;
-                    if (Predicate.hasProperty(request, Symbol.dispose)) {
-                      const dispose = request[Symbol.dispose];
-
-                      if (typeof dispose === "function") dispose.call(request);
-                    }
-                  },
-                  catch: () => undefined,
-                }).pipe(
-                  Effect.ignore,
-                  Effect.andThen(
-                    Effect.tryPromise({ try: cancel, catch: () => undefined }).pipe(
-                      Effect.interruptible,
-                      Effect.timeout(PROGRESS_CANCELLATION_TIMEOUT),
-                      Effect.ignore,
-                    ),
-                  ),
-                ),
-              );
-
-              const raw = yield* Effect.tryPromise({
-                try: () => {
-                  request = target.watchTextEncoded(
-                    Schema.encodeSync(WatchTextRequest)({ schemaVersion: 1 }),
-                    ...traceArgs,
-                  );
-
-                  return request.then((value) => {
-                    received = value;
-
-                    // A custom endpoint may return a plain, non-cancellable promise. Keep
-                    // late cleanup on that native promise chain; it starts no Effect fiber.
-                    return closed ? cancel().then(() => value) : value;
-                  });
-                },
-                catch: openingFailure,
-              }).pipe(
-                Effect.interruptible,
-                Effect.tapCause(() => RpcTargets.invalidate(target)),
-              );
-
-              if (raw instanceof ReadableStream) return decodeLiveText(threadId, raw);
-
-              const response = yield* decodeHostResponse(raw).pipe(
-                Effect.mapError(liveTextProtocolFailure),
-              );
-
-              if (
-                response._tag === "HostFailed" &&
-                Schema.is(ClientObserveHostFailure)(response.failure)
-              )
-                return yield* response.failure;
-
-              return yield* liveTextProtocolFailure();
             }),
           ),
+        );
+      },
+      (effect, threadId, operation) =>
+        rpcTracing === undefined
+          ? Effect.withSpan(effect, "CloudflareThreadClient.call", {
+              attributes: { threadId, operation },
+            })
+          : RpcTracing.withRpcClientSpan(effect, rpcTracing, hostRpcMethods[operation]),
+    );
 
-        readPage,
+    const expect = <ResultSchema extends Schema.Top, FailureSchema extends Schema.Top>(
+      threadId: string,
+      operation: string,
+      resultSchema: ResultSchema,
+      failureSchema: FailureSchema,
+    ) => {
+      const isExpectedResult = Schema.is(resultSchema);
+      const isExpectedFailure = Schema.is(failureSchema);
 
-        readAll: (threadId) =>
-          Effect.gen(function* () {
-            const all: Array<CanonicalRecordEnvelope> = [];
-            let after: CanonicalSequence | undefined;
+      return (
+        response: HostResponse,
+      ): Effect.Effect<ResultSchema["Type"], FailureSchema["Type"] | ThreadClientError> => {
+        if (response._tag === "HostFailed") {
+          const failure = response.failure;
 
-            for (;;) {
-              const page = yield* readPage(threadId, { afterSequence: after, limit: 1_024 });
+          return isExpectedFailure(failure)
+            ? Effect.fail(failure)
+            : Effect.fail(outOfContract(threadId, operation, `failure ${failure._tag}`));
+        }
+        if (!isExpectedResult(response)) {
+          return Effect.fail(outOfContract(threadId, operation, `result ${response._tag}`));
+        }
 
-              all.push(...page);
-              const last = page.at(-1);
+        return Effect.succeed(response);
+      };
+    };
 
-              if (page.length < 1_024 || last === undefined) return all;
-              after = last.sequence;
-            }
-          }),
+    const readPage = (
+      threadId: ThreadId,
+      options?: {
+        readonly afterSequence?: CanonicalSequence | undefined;
+        readonly limit?: number | undefined;
+      },
+    ) =>
+      Effect.gen(function* () {
+        const request = ObservePageRequest.make({
+          ...(options?.afterSequence === undefined ? {} : { afterSequence: options.afterSequence }),
+          limit: options?.limit ?? 256,
+        });
 
-        abort: (threadId, command) =>
-          Effect.gen(function* () {
-            const encoded = yield* encodeAbortCommand(command).pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(`abort command encode failed: ${error.message}`),
-                }),
-              ),
-            );
+        const encoded = yield* encodeObservePageRequest(request).pipe(
+          Effect.mapError((error) =>
+            HostProtocolError.make({
+              message: boundHostDiagnostic(`observePage request encode failed: ${error.message}`),
+            }),
+          ),
+        );
 
-            const response = yield* call(threadId, "abort", encoded);
+        const response = yield* call(threadId, "observePage", encoded);
 
-            const recorded = yield* expect(
-              threadId,
-              "abort",
-              AbortRecorded,
-              ClientAbortHostFailure,
-            )(response);
+        const page = yield* expect(
+          threadId,
+          "observePage",
+          ObservedPage,
+          ClientObserveHostFailure,
+        )(response);
 
-            return recorded.intent;
-          }),
-
-        resolveApproval: (threadId, command) =>
-          Effect.gen(function* () {
-            const encoded = yield* encodeApprovalDecisionCommand(command).pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(`approval command encode failed: ${error.message}`),
-                }),
-              ),
-            );
-
-            const response = yield* call(threadId, "resolveApproval", encoded);
-
-            const recorded = yield* expect(
-              threadId,
-              "resolveApproval",
-              ApprovalRecorded,
-              ClientApprovalHostFailure,
-            )(response);
-
-            return recorded.intent;
-          }),
-
-        resolveUnknown: (threadId, command) =>
-          Effect.gen(function* () {
-            const encoded = yield* encodeUnknownResolutionCommand(command).pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(
-                    `resolution command encode failed: ${error.message}`,
-                  ),
-                }),
-              ),
-            );
-
-            const response = yield* call(threadId, "resolveUnknown", encoded);
-
-            const recorded = yield* expect(
-              threadId,
-              "resolveUnknown",
-              UnknownResolutionRecorded,
-              ClientUnknownHostFailure,
-            )(response);
-
-            return recorded.intent;
-          }),
+        return page.records;
       });
-    }),
-  );
+
+    const cancelProgress = (threadId: ThreadId, waiterId: string): Effect.Effect<void, never, R> =>
+      encodeCancelProgressRequest(CancelProgressRequest.make({ waiterId })).pipe(
+        Effect.mapError(() => undefined),
+        Effect.flatMap((encoded) => call(threadId, "cancelProgress", encoded)),
+        // Finalizers are uninterruptible; only the foreign RPC branch must remain
+        // interruptible so a lost cancellation reply cannot prevent local shutdown.
+        Effect.interruptible,
+        Effect.timeout(PROGRESS_CANCELLATION_TIMEOUT),
+        Effect.asVoid,
+        Effect.ignore,
+      );
+
+    return {
+      submit: <InputSchema extends Schema.Top>(
+        agent: DurableSubmitAgent<InputSchema>,
+        input: InputSchema["Type"],
+        options: DurableSubmitOptions,
+      ) =>
+        Effect.gen(function* () {
+          // Client-side half of `DurableAgentRuntime.submit`'s input boundary: encode
+          // through the Agent's input schema and prove the canonical persistence bounds.
+          const encodedInput = yield* Schema.encodeEffect(agent.definition.input)(input).pipe(
+            Effect.mapError((cause) =>
+              AgentInputError.make({ message: `Unable to encode Agent input: ${cause.message}` }),
+            ),
+          );
+
+          const inputPayload = yield* Schema.decodeUnknownEffect(PersistedJson)(encodedInput).pipe(
+            Effect.mapError(() =>
+              AgentInputError.make({
+                message: "Agent input does not satisfy the canonical persistence bounds",
+              }),
+            ),
+          );
+
+          const request = SubmitRequest.make({
+            agentId: agent.definition.id,
+            principal: options.principal,
+            idempotencyKey: options.idempotencyKey,
+            ...(options.admissionGroup === undefined
+              ? {}
+              : { admissionGroup: options.admissionGroup }),
+            ...(options.admissionFence === undefined
+              ? {}
+              : { admissionFence: options.admissionFence }),
+            ...(options.workerAdmission === undefined
+              ? {}
+              : { workerAdmission: options.workerAdmission }),
+            ...(options.messageAdmission === undefined
+              ? {}
+              : { messageAdmission: options.messageAdmission }),
+            definitions: options.definitions,
+            inputPayload,
+          });
+
+          const encoded = yield* encodeSubmitRequest(request).pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(`submit request encode failed: ${error.message}`),
+              }),
+            ),
+          );
+
+          const response = yield* call(options.threadId, "submit", encoded);
+
+          const succeeded = yield* expect(
+            options.threadId,
+            "submit",
+            SubmitSucceeded,
+            ClientSubmitHostFailure,
+          )(response);
+
+          return succeeded.receipt;
+        }),
+
+      submissionStatus: (receipt) =>
+        Effect.gen(function* () {
+          const encoded = yield* encodeReceipt(receipt).pipe(
+            Effect.mapError(() => HostProtocolError.make({ message: "Invalid receipt" })),
+          );
+
+          const response = yield* call(receipt.threadId, "submissionStatus", encoded);
+
+          const result = yield* expect(
+            receipt.threadId,
+            "submissionStatus",
+            SubmissionStatusResponse,
+            ClientAwaitHostFailure,
+          )(response);
+
+          return result.status;
+        }),
+      awaitSettlement: (receipt) =>
+        Effect.gen(function* () {
+          const encoded = yield* encodeReceipt(receipt).pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(`receipt encode failed: ${error.message}`),
+              }),
+            ),
+          );
+
+          const response = yield* call(receipt.threadId, "awaitSettlement", encoded);
+
+          const settled = yield* expect(
+            receipt.threadId,
+            "awaitSettlement",
+            SettlementReached,
+            ClientAwaitHostFailure,
+          )(response);
+
+          return settled.settlement;
+        }),
+
+      awaitSettlementRecord: (receipt) =>
+        Effect.gen(function* () {
+          const encoded = yield* encodeReceipt(receipt).pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(`receipt encode failed: ${error.message}`),
+              }),
+            ),
+          );
+
+          const response = yield* call(receipt.threadId, "awaitSettlementRecord", encoded);
+
+          const settled = yield* expect(
+            receipt.threadId,
+            "awaitSettlementRecord",
+            SettlementRecordReached,
+            ClientAwaitHostFailure,
+          )(response);
+
+          return settled.record;
+        }),
+
+      awaitProgress: (threadId, afterSequence) =>
+        Effect.gen(function* () {
+          const waiterId = yield* crypto.randomUUIDv4.pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(
+                  `awaitProgress cancellation identity generation failed: ${error.message}`,
+                ),
+              }),
+            ),
+          );
+
+          const request = AwaitProgressRequest.make({ afterSequence, waiterId });
+
+          const encoded = yield* encodeAwaitProgressRequest(request).pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(
+                  `awaitProgress request encode failed: ${error.message}`,
+                ),
+              }),
+            ),
+          );
+
+          const attempt = (retry: number): Effect.Effect<void, ClientProgressFailure, R> =>
+            call(threadId, "awaitProgress", encoded).pipe(
+              Effect.flatMap(
+                expect(threadId, "awaitProgress", ProgressObserved, ClientObserveHostFailure),
+              ),
+              Effect.asVoid,
+              Effect.catchTag("ThreadClientError", (error) =>
+                error.retryable === true && error.overloaded !== true && retry < 5
+                  ? Effect.sleep(Duration.millis(10 * 2 ** retry)).pipe(
+                      Effect.andThen(attempt(retry + 1)),
+                    )
+                  : Effect.fail(error),
+              ),
+            );
+
+          yield* attempt(0).pipe(Effect.onInterrupt(() => cancelProgress(threadId, waiterId)));
+        }),
+
+      watchText: (threadId) =>
+        Stream.unwrap(
+          Effect.gen(function* () {
+            const raw = yield* transport.watchText(
+              threadId,
+              Schema.encodeSync(WatchTextRequest)({ schemaVersion: 1 }),
+            );
+
+            if (raw instanceof ReadableStream) return decodeLiveText(threadId, raw);
+
+            const response = yield* decodeHostResponse(raw).pipe(
+              Effect.mapError(liveTextProtocolFailure),
+            );
+
+            if (
+              response._tag === "HostFailed" &&
+              Schema.is(ClientObserveHostFailure)(response.failure)
+            )
+              return yield* response.failure;
+
+            return yield* liveTextProtocolFailure();
+          }),
+        ),
+
+      readPage,
+
+      readAll: (threadId) =>
+        Effect.gen(function* () {
+          const all: Array<CanonicalRecordEnvelope> = [];
+          let after: CanonicalSequence | undefined;
+
+          for (;;) {
+            const page = yield* readPage(threadId, { afterSequence: after, limit: 1_024 });
+
+            all.push(...page);
+            const last = page.at(-1);
+
+            if (page.length < 1_024 || last === undefined) return all;
+            after = last.sequence;
+          }
+        }),
+
+      abort: (threadId, command) =>
+        Effect.gen(function* () {
+          const encoded = yield* encodeAbortCommand(command).pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(`abort command encode failed: ${error.message}`),
+              }),
+            ),
+          );
+
+          const response = yield* call(threadId, "abort", encoded);
+
+          const recorded = yield* expect(
+            threadId,
+            "abort",
+            AbortRecorded,
+            ClientAbortHostFailure,
+          )(response);
+
+          return recorded.intent;
+        }),
+
+      resolveApproval: (threadId, command) =>
+        Effect.gen(function* () {
+          const encoded = yield* encodeApprovalDecisionCommand(command).pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(`approval command encode failed: ${error.message}`),
+              }),
+            ),
+          );
+
+          const response = yield* call(threadId, "resolveApproval", encoded);
+
+          const recorded = yield* expect(
+            threadId,
+            "resolveApproval",
+            ApprovalRecorded,
+            ClientApprovalHostFailure,
+          )(response);
+
+          return recorded.intent;
+        }),
+
+      resolveUnknown: (threadId, command) =>
+        Effect.gen(function* () {
+          const encoded = yield* encodeUnknownResolutionCommand(command).pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(`resolution command encode failed: ${error.message}`),
+              }),
+            ),
+          );
+
+          const response = yield* call(threadId, "resolveUnknown", encoded);
+
+          const recorded = yield* expect(
+            threadId,
+            "resolveUnknown",
+            UnknownResolutionRecorded,
+            ClientUnknownHostFailure,
+          )(response);
+
+          return recorded.intent;
+        }),
+    } satisfies Client<R>;
+  });
 }

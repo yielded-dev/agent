@@ -33,7 +33,8 @@
     "./thread-object": "./src/ThreadObject.ts",
     "./wake-scheduler": "./src/WakeScheduler.ts",
     "./cloudflare-ai-gateway": "./src/CloudflareAiGateway.ts",
-    "./browser-use": "./src/BrowserUse.ts"
+    "./browser-use": "./src/BrowserUse.ts",
+    "./lazy-object": "./src/LazyObject.ts"
   },
   "publishConfig": {
     "access": "public"
