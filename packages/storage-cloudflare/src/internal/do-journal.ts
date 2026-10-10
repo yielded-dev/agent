@@ -89,7 +89,6 @@ const threadRows = ownedRows(
 );
 
 class BatchRow extends Schema.Class<BatchRow>("BatchRow")({
-  batch_digest: BoundedStoredText,
   batch_id: BoundedIdentifier,
   batch_json: BoundedStoredText,
   thread_id: BoundedIdentifier,
@@ -659,11 +658,6 @@ const makeJournal = (
       yield* checkValueBound("append canonical batch", request.batchJson, request.batchBytes);
       yield* checkValueBound(
         "append canonical batch",
-        request.batchDigest,
-        request.batchDigest.length,
-      );
-      yield* checkValueBound(
-        "append canonical batch",
         request.tailDigest,
         request.tailDigest.length,
       );
@@ -722,7 +716,6 @@ const makeJournal = (
             batch_id,
             first_sequence,
             last_sequence,
-            batch_digest,
             tail_digest,
             '' AS batch_json
           FROM effect_agent_canonical_batches
@@ -747,7 +740,7 @@ const makeJournal = (
       if (batches.length === 1) {
         const existing = batches[0];
 
-        if (existing.batch_digest !== request.batchDigest) {
+        if (existing.tail_digest !== request.tailDigest) {
           return yield* DoAppendConflict.make({
             message: `Batch ${request.batchId} already exists with different canonical content.`,
             reason: "batch-digest",
@@ -844,7 +837,6 @@ const makeJournal = (
             batch_id,
             first_sequence,
             last_sequence,
-            batch_digest,
             tail_digest,
             batch_header_json
           ) VALUES (
@@ -852,7 +844,6 @@ const makeJournal = (
             ${request.batchId},
             ${firstSequence},
             ${lastSequence},
-            ${request.batchDigest},
             ${request.tailDigest},
             ${request.batchHeaderJson}
           )
@@ -1257,7 +1248,6 @@ const makeJournal = (
         batch_id,
         first_sequence,
         last_sequence,
-        batch_digest,
         tail_digest,
         '' AS batch_json
       FROM effect_agent_canonical_batches

@@ -611,7 +611,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         );
 
       const stored =
-        yield* query(sql`SELECT b.batch_id, b.first_sequence, b.last_sequence, b.batch_digest, b.tail_digest, b.batch_header_json, ${batchJson} AS batch_json
+        yield* query(sql`SELECT b.batch_id, b.first_sequence, b.last_sequence, b.tail_digest, b.batch_header_json, ${batchJson} AS batch_json
         FROM ${table("effect_agent_canonical_batches")} b WHERE b.thread_id=${threadId} AND b.first_sequence=${fromSequence} LIMIT 2`).pipe(
           Effect.flatMap((r) =>
             decode(
@@ -1163,8 +1163,8 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                   yield* checkValues([batch.batchJson, ...batch.recordJson]);
                   const batchHeaderJson = canonicalBatchHeaderJson(batch.batch);
 
-                  yield* query(sql`INSERT INTO ${table("effect_agent_canonical_batches")} (thread_id, batch_id, first_sequence, last_sequence, batch_digest, tail_digest, batch_header_json)
-          VALUES (${threadId}, ${batch.batch.batchId}, ${batch.firstSequence}, ${batch.lastSequence}, ${batch.tailDigest}, ${batch.tailDigest}, ${batchHeaderJson})`);
+                  yield* query(sql`INSERT INTO ${table("effect_agent_canonical_batches")} (thread_id, batch_id, first_sequence, last_sequence, tail_digest, batch_header_json)
+          VALUES (${threadId}, ${batch.batch.batchId}, ${batch.firstSequence}, ${batch.lastSequence}, ${batch.tailDigest}, ${batchHeaderJson})`);
                   const captured = [];
 
                   for (const [index, record] of batch.batch.records.entries()) {
@@ -1218,7 +1218,6 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                       batchJson: batch.batchJson,
                       batchHeaderJson,
                       batchBytes: utf8ByteLength(batch.batchJson),
-                      batchDigest: batch.tailDigest,
                       expectedTailSequence: CanonicalSequence.make(batch.firstSequence - 1),
                       expectedTailDigest: batch.previousTailDigest,
                       tailDigest: batch.tailDigest,

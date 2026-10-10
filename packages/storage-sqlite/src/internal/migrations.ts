@@ -13,12 +13,12 @@ import {
   SqliteStorageError,
 } from "../SqliteStorageError.ts";
 
-export const CurrentSqliteStorageVersion = 21;
+export const CurrentSqliteStorageVersion = 25;
 
 /** Fresh layout only. Unsupported stores are rejected before these statements execute. */
 const layoutStatements = [
   'CREATE TABLE "effect_agent_threads" ( thread_id TEXT PRIMARY KEY NOT NULL, created_at TEXT NOT NULL, tail_sequence INTEGER NOT NULL, tail_digest TEXT NOT NULL, producer_epoch INTEGER NOT NULL )',
-  'CREATE TABLE "effect_agent_canonical_batches" ( thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, batch_digest TEXT NOT NULL, tail_digest TEXT NOT NULL, batch_header_json TEXT NOT NULL, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES "effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
+  'CREATE TABLE "effect_agent_canonical_batches" ( thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, tail_digest TEXT NOT NULL, batch_header_json TEXT NOT NULL, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES "effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   'CREATE TABLE "effect_agent_canonical_records" ( thread_id TEXT NOT NULL, sequence INTEGER NOT NULL, record_id TEXT NOT NULL, batch_id TEXT NOT NULL, record_json TEXT, record_tag TEXT NOT NULL, run_id TEXT, tool_call_id TEXT, input_kind TEXT, source_submission_id TEXT, message_id TEXT, submission_id TEXT, application_input INTEGER NOT NULL, context_through INTEGER, context_kind TEXT, worker_thread_id TEXT, handoff INTEGER NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id, batch_id) REFERENCES "effect_agent_canonical_batches"(thread_id, batch_id) ON DELETE RESTRICT )',
   'CREATE TABLE "effect_agent_record_runs" ( thread_id TEXT NOT NULL, run_id TEXT NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY (thread_id, run_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES "effect_agent_canonical_records"(thread_id, sequence) ON DELETE RESTRICT )',
   "CREATE TABLE effect_agent_tool_declarations (thread_id TEXT NOT NULL, settlement_record_id TEXT NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY (thread_id, settlement_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)",
@@ -149,7 +149,7 @@ const storageError = (cause: SqlError) =>
   SqliteStorageError.make({ operation: "inspect storage layout", cause, message: cause.message });
 
 const { decode, readObjects, readHeader, readManagedTriggers } = makeSqliteLayoutInspection({
-  version: 21,
+  version: 25,
   statements: layoutStatements,
   objects: layoutObjects,
   headerStatement,
@@ -226,8 +226,8 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayo
         ),
       );
       yield* sql.unsafe(headerStatement).withoutTransform;
-      yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 21, ${CURRENT_RECORD_FORMAT})`;
-      yield* sql.unsafe("PRAGMA user_version = 21").withoutTransform;
+      yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 25, ${CURRENT_RECORD_FORMAT})`;
+      yield* sql.unsafe("PRAGMA user_version = 25").withoutTransform;
 
       return yield* readSqliteStorageHeader();
     }),

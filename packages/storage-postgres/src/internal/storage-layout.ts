@@ -12,7 +12,7 @@ import {
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 21;
+export const CurrentPostgresStorageVersion = 25;
 
 /** Counter function body is frozen and checked on every layout inspection. */
 const transferFunctionBody = `
@@ -150,7 +150,7 @@ const transferTriggers = [
 const layoutStatements = [
   'CREATE TABLE __NAMESPACE__."effect_agent_storage_version" ( id BOOLEAN PRIMARY KEY NOT NULL, version BIGINT NOT NULL, CONSTRAINT effect_agent_storage_version_single_row CHECK (id) )',
   'CREATE TABLE __NAMESPACE__."effect_agent_threads" ( thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, created_at TEXT COLLATE "C" NOT NULL, tail_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, producer_epoch BIGINT NOT NULL )',
-  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_batches" ( thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, batch_digest TEXT COLLATE "C" NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, batch_header_json TEXT COLLATE "C" NOT NULL, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
+  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_batches" ( thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, batch_header_json TEXT COLLATE "C" NOT NULL, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__."effect_agent_canonical_records" ( thread_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, record_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, record_json TEXT COLLATE "C", record_tag TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C", tool_call_id TEXT COLLATE "C", input_kind TEXT COLLATE "C", source_submission_id TEXT COLLATE "C", message_id TEXT COLLATE "C", submission_id TEXT COLLATE "C", application_input BIGINT NOT NULL, context_through BIGINT, context_kind TEXT COLLATE "C", worker_thread_id TEXT COLLATE "C", handoff BIGINT NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id, batch_id) REFERENCES __NAMESPACE__."effect_agent_canonical_batches"(thread_id, batch_id) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__."effect_agent_record_runs" ( thread_id TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, run_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__."effect_agent_canonical_records"(thread_id, sequence) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__.effect_agent_tool_declarations (thread_id TEXT COLLATE "C" NOT NULL, settlement_record_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, settlement_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)',
@@ -407,7 +407,6 @@ const layoutShape: Readonly<
       "batch_id:text:true",
       "first_sequence:bigint:true",
       "last_sequence:bigint:true",
-      "batch_digest:text:true",
       "tail_digest:text:true",
       "batch_header_json:text:true",
     ],
@@ -1610,10 +1609,10 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
   const { table, execute } = yield* makeSqlQuery(namespace);
 
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 21)`,
+    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 25)`,
   );
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 21, ${CURRENT_RECORD_FORMAT})`,
+    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 25, ${CURRENT_RECORD_FORMAT})`,
   );
 
   return yield* readPostgresStorageHeader(namespace);
