@@ -1,4 +1,5 @@
 import type { RawAppendRequest } from "@yielded/agent-storage-sql/sql-journal";
+import { makeSqlExecutions } from "@yielded/agent-storage-sql/sql-journal";
 import {
   makeSqlLifecyclePublication,
   type SqlLifecycleRetainMany,
@@ -19,7 +20,11 @@ import {
 } from "@yielded/agent/lifecycle-publication";
 import { CanonicalRecord, CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
-import { ThreadStoreDiagnostic, ThreadStoreError } from "@yielded/agent/thread-store";
+import {
+  type AppendConflict,
+  ThreadStoreDiagnostic,
+  ThreadStoreError,
+} from "@yielded/agent/thread-store";
 import { Cause, Clock, Effect, Option, Schema, Stream } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { SqlError } from "effect/sql/SqlError";
@@ -90,6 +95,7 @@ const threadRows = ownedRows(
 
 class BatchRow extends Schema.Class<BatchRow>("BatchRow")({
   batch_digest: BoundedStoredText,
+  commit_digest: BoundedStoredText,
   batch_id: BoundedIdentifier,
   batch_json: BoundedStoredText,
   thread_id: BoundedIdentifier,
@@ -407,6 +413,28 @@ const makeJournal = (
       Effect.provideService(SqlClient.SqlClient, sql),
     );
 
+    const executions = yield* makeSqlExecutions().pipe(
+      Effect.provideService(SqlClient.SqlClient, sql),
+    );
+
+    const executionConflict = <A>(effect: Effect.Effect<A, AppendConflict | ThreadStoreError>) =>
+      effect.pipe(
+        Effect.catchTag("AppendConflict", (error) =>
+          Effect.fail(
+            DoAppendConflict.make({
+              reason: error.reason,
+              message: "Active execution conflicts with the captured commit",
+              ...(error.actualTailSequence === undefined
+                ? {}
+                : { actualTailSequence: error.actualTailSequence }),
+              ...(error.actualTailDigest === undefined
+                ? {}
+                : { actualTailDigest: error.actualTailDigest }),
+            }),
+          ),
+        ),
+      );
+
     const threads = threadRows(state, sql);
     const cursors = lifecycleCursorRows(state, sql);
     let records = recordCaches.get(state);
@@ -568,8 +596,8 @@ const makeJournal = (
               );
 
               yield* sql`INSERT INTO effect_agent_transfer_state
-                (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count)
-                VALUES (${threadId}, 0, 0, 0, 0, 0, 0) ON CONFLICT(thread_id) DO NOTHING`.pipe(
+                (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count, executions_count)
+                VALUES (${threadId}, 0, 0, 0, 0, 0, 0, 0) ON CONFLICT(thread_id) DO NOTHING`.pipe(
                 Effect.mapError(storageError("initialize transfer counters")),
               );
 
@@ -647,6 +675,9 @@ const makeJournal = (
       if (
         request.threadId.length > MAX_IDENTIFIER_LENGTH ||
         request.batchId.length > MAX_IDENTIFIER_LENGTH ||
+        request.executionWrites.some(
+          ({ update }) => update.checkpoint.progress.runId.length > MAX_IDENTIFIER_LENGTH,
+        ) ||
         request.records.some((record) => record.recordId.length > MAX_IDENTIFIER_LENGTH)
       ) {
         return yield* DoStorageError.make({
@@ -675,6 +706,8 @@ const makeJournal = (
             operation: "append canonical record",
           });
       }
+      for (const write of request.executionWrites)
+        yield* checkValueBound("commit active execution", write.json, write.bytes);
 
       const recordIds: Array<string> = request.records.map((record) => record.recordId);
 
@@ -713,6 +746,10 @@ const makeJournal = (
 
       const prefix = recordCache.prefix(request.threadId, thread.tail_sequence);
 
+      const replay = yield* executionConflict(executions.replay(request));
+
+      if (replay !== undefined) return RawAppendResult.make(replay);
+
       const batchRows =
         prefix !== undefined && !prefix.some((row) => row.batch_id === request.batchId)
           ? []
@@ -723,6 +760,7 @@ const makeJournal = (
             first_sequence,
             last_sequence,
             batch_digest,
+            commit_digest,
             tail_digest,
             '' AS batch_json
           FROM effect_agent_canonical_batches
@@ -747,7 +785,7 @@ const makeJournal = (
       if (batches.length === 1) {
         const existing = batches[0];
 
-        if (existing.batch_digest !== request.batchDigest) {
+        if (existing.commit_digest !== request.commitDigest) {
           return yield* DoAppendConflict.make({
             message: `Batch ${request.batchId} already exists with different canonical content.`,
             reason: "batch-digest",
@@ -813,7 +851,7 @@ const makeJournal = (
       }
 
       const firstSequence = yield* Schema.decodeEffect(CanonicalSequence)(
-        thread.tail_sequence + 1,
+        thread.tail_sequence + (request.records.length === 0 ? 0 : 1),
       ).pipe(
         Effect.mapError((error) =>
           DoStorageError.make({
@@ -825,7 +863,7 @@ const makeJournal = (
       );
 
       const lastSequence = yield* Schema.decodeEffect(CanonicalSequence)(
-        firstSequence + request.records.length - 1,
+        thread.tail_sequence + request.records.length,
       ).pipe(
         Effect.mapError((error) =>
           DoStorageError.make({
@@ -836,15 +874,26 @@ const makeJournal = (
         ),
       );
 
+      yield* executionConflict(executions.validate(request));
       yield* validateProgress(request);
-      yield* archives.append(request, firstSequence, lastSequence);
-      yield* sql`
+
+      const result = RawAppendResult.make({
+        firstSequence,
+        lastSequence,
+        replayed: false,
+        tailDigest: request.tailDigest,
+      });
+
+      if (request.records.length > 0) {
+        yield* archives.append(request, firstSequence, lastSequence);
+        yield* sql`
           INSERT INTO effect_agent_canonical_batches (
             thread_id,
             batch_id,
             first_sequence,
             last_sequence,
             batch_digest,
+            commit_digest,
             tail_digest,
             batch_header_json
           ) VALUES (
@@ -853,10 +902,12 @@ const makeJournal = (
             ${firstSequence},
             ${lastSequence},
             ${request.batchDigest},
+            ${request.commitDigest},
             ${request.tailDigest},
             ${request.batchHeaderJson}
           )
         `.pipe(Effect.mapError(storageError("insert canonical batch")));
+      }
       yield* failpoint("append:after-batch-insert");
 
       const records = request.records.map((record, index) => ({
@@ -903,7 +954,8 @@ const makeJournal = (
         }
       }
 
-      yield* sql`
+      if (request.records.length > 0) {
+        yield* sql`
           UPDATE effect_agent_threads
           SET
             tail_sequence = ${lastSequence},
@@ -911,18 +963,64 @@ const makeJournal = (
             producer_epoch = ${request.producerEpoch}
           WHERE thread_id = ${request.threadId}
          RETURNING *`.pipe(
-        threads.write,
-        Effect.mapError((error) =>
-          error._tag === "SqlError" ? storageError("advance thread tail")(error) : error,
-        ),
-      );
-      yield* work
-        .apply(
-          yield* Schema.decodeEffect(ThreadId)(request.threadId).pipe(Effect.mapError(workFailure)),
-          firstSequence,
-          request.records.map((record) => record.canonical),
+          threads.write,
+          Effect.mapError((error) =>
+            error._tag === "SqlError" ? storageError("advance thread tail")(error) : error,
+          ),
+        );
+        yield* work
+          .apply(
+            yield* Schema.decodeEffect(ThreadId)(request.threadId).pipe(
+              Effect.mapError(workFailure),
+            ),
+            firstSequence,
+            request.records.map((record) => record.canonical),
+          )
+          .pipe(Effect.mapError(workFailure));
+      }
+      yield* executionConflict(executions.commit(request, result));
+      if (request.executionWrites.length > 0) yield* failpoint("append:after-record-insert");
+      if (
+        lifecycle !== undefined &&
+        request.executionWrites.some(({ update }) =>
+          update.facts.some(({ payload }) => payload._tag === "RunStarted"),
         )
-        .pipe(Effect.mapError(workFailure));
+      )
+        yield* flushCanonical(request.threadId).pipe(
+          Effect.provideService(SqlLifecycleRetainer, { retainMany: lifecycle.retainMany }),
+          Effect.mapError((cause) =>
+            DoStorageError.make({
+              operation: "retain lifecycle start prefix",
+              message: "Lifecycle start intent could not be retained",
+              cause,
+            }),
+          ),
+        );
+      for (const { update } of request.executionWrites) {
+        for (const fact of update.facts) {
+          if (
+            lifecycle !== undefined &&
+            Schema.is(Schema.toType(LifecyclePublicationFact))(fact.payload)
+          )
+            yield* lifecycle
+              .retain({
+                id: JSON.stringify([request.threadId, "record", fact.recordId]),
+                ownerThreadId: request.threadId,
+                canonicalSequence: lastSequence,
+                createdAt: fact.createdAt,
+                fact: fact.payload,
+              })
+              .pipe(
+                Effect.mapError((cause) =>
+                  DoStorageError.make({
+                    operation: "retain operational lifecycle",
+                    message: cause.message,
+                    cause,
+                  }),
+                ),
+              );
+        }
+      }
       yield* failpoint("append:after-tail-update");
 
       // Retain one start prefix atomically with its canonical proof, before model/tool
@@ -959,12 +1057,7 @@ const makeJournal = (
         ),
       );
 
-      return RawAppendResult.make({
-        firstSequence,
-        lastSequence,
-        replayed: false,
-        tailDigest: request.tailDigest,
-      });
+      return result;
     });
 
     const append = Effect.fnUntraced(
@@ -990,6 +1083,9 @@ const makeJournal = (
           const batches = yield* sql`
           SELECT batch_id FROM effect_agent_canonical_batches
           WHERE thread_id = ${request.threadId} AND batch_id = ${request.batchId}
+          UNION ALL SELECT batch_id FROM effect_agent_execution_receipts
+          WHERE thread_id = ${request.threadId} AND batch_id = ${request.batchId}
+          LIMIT 1
         `.pipe(Effect.mapError(storageError("preflight append replay")));
 
           // A possible replay still checks the current epoch and digest in the transaction.
@@ -1258,6 +1354,7 @@ const makeJournal = (
         first_sequence,
         last_sequence,
         batch_digest,
+        commit_digest,
         tail_digest,
         '' AS batch_json
       FROM effect_agent_canonical_batches
@@ -1456,6 +1553,9 @@ const makeJournal = (
       append,
       prepareAppend,
       appendPrepared,
+      checkCommitIntent: (request: RawAppendRequest) =>
+        executionConflict(executions.checkCommitIntent(request)),
+      readExecution: executions.read,
       checkValueBound,
       getThread,
       hasRecord,

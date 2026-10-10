@@ -99,6 +99,7 @@ import { PendingSubmission, SettledSubmission } from "../../src/durable/Submissi
 import {
   AppendConflict,
   AppendResult,
+  type ExecutionCheckpoint,
   FenceRejected,
   ThreadIdentity,
   ThreadNotMaterialized,
@@ -215,6 +216,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
   const now = yield* Clock.currentTimeMillis;
   const crypto = yield* Crypto.Crypto;
   const logs = new Map<ThreadId, Array<CanonicalRecordEnvelope>>();
+  const executions = new Map<RunId, ExecutionCheckpoint>();
   const epochs = new Map<ThreadId, ProducerEpoch>();
   const appendAttempts: Array<{ readonly threadId: ThreadId; readonly epoch: ProducerEpoch }> = [];
   const rejectedAppends = { tail: 0, epoch: 0 };
@@ -378,6 +380,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
 
         return snapshot;
       }),
+    readExecution: ({ runId }) => Effect.sync(() => Option.fromNullishOr(executions.get(runId))),
     read: (request) =>
       Stream.suspend(() => {
         const all = logs.get(request.threadId) ?? [];
@@ -387,7 +390,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
         if (selection?._tag === "RecordId") {
           records = all.filter((entry) => entry.record.recordId === selection.recordId);
         } else if (selection?._tag === "WorkerExecution") {
-          records = ["UserInputRecorded", "RunStarted"]
+          records = ["UserInputRecorded", "SubmissionSettled"]
             .flatMap((tag) =>
               all
                 .filter(
@@ -536,10 +539,26 @@ const harness = Effect.fn("workerHostHarness")(function* (
             reason: "tail",
           });
         }
-        const first = records.length + 1;
+        for (const update of request.executions ?? []) {
+          if (
+            (executions.get(update.checkpoint.progress.runId)?.progress.revision ?? 0) !==
+            update.previousRevision
+          )
+            return yield* AppendConflict.make({
+              threadId: request.threadId,
+              batchId: request.batch.batchId,
+              reason: "tail",
+            });
+        }
+        const first = records.length + (request.batch.records.length > 0 ? 1 : 0);
 
         for (const record of request.batch.records)
           push(request.threadId, record.payload, record.recordId, request.batch.batchId);
+
+        for (const update of request.executions ?? []) {
+          if (update.retire) executions.delete(update.checkpoint.progress.runId);
+          else executions.set(update.checkpoint.progress.runId, update.checkpoint);
+        }
 
         return AppendResult.make({
           firstSequence: Schema.decodeSync(CanonicalSequence)(first),
@@ -569,7 +588,8 @@ const harness = Effect.fn("workerHostHarness")(function* (
               sequence: request.expectedTailSequence,
               digest: request.expectedTailDigest,
             }),
-            append: (batch) => fixtureStore.append({ ...request, batch }),
+            append: (batch, updates) =>
+              fixtureStore.append({ ...request, batch, executions: updates }),
           }),
         );
       }),
@@ -930,10 +950,11 @@ const harness = Effect.fn("workerHostHarness")(function* (
             sequence: CanonicalSequence.make(logs.get(threadId)?.length ?? 0),
             digest,
           })),
-          append: (batch) =>
+          append: (batch, updates) =>
             Effect.flatMap(store.inspectTail({ threadId: threadId }), (tail) =>
               store.append({
                 threadId: threadId,
+                executions: updates,
                 producerEpoch: tail.producerEpoch,
                 expectedTailSequence: tail.tailSequence,
                 expectedTailDigest: tail.tailDigest,

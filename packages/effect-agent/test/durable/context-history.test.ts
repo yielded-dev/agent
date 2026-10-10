@@ -65,6 +65,7 @@ const probe = (initial: ReadonlyArray<CanonicalRecordEnvelope>) => {
   const state = { records: [...initial], pages: [] as Array<number> };
 
   const store = ThreadStore.of({
+    readExecution: () => Effect.die("History lookup does not read active execution state"),
     readPrompt: () => Stream.die("History lookup requires full canonical evidence"),
     readIdentity: () => Effect.die("History lookup must not read worker identity"),
     materialize: () => Effect.die("History lookup cannot materialize Threads"),

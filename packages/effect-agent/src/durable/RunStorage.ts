@@ -30,6 +30,8 @@ import {
 } from "./SubmissionLedger.ts";
 import {
   type AppendResult,
+  type CommitBatch,
+  type ExecutionUpdate,
   FenceRejected,
   FencedAppendRequest,
   ThreadMaterialization,
@@ -87,7 +89,10 @@ export interface RunWriter {
   readonly threadId: ThreadId;
   readonly producerEpoch: ProducerEpoch;
   readonly tail: Effect.Effect<{ readonly sequence: CanonicalSequence; readonly digest: Digest }>;
-  readonly append: (batch: CanonicalBatch) => Effect.Effect<AppendResult, ThreadStoreFailure>;
+  readonly append: (
+    batch: CommitBatch,
+    executions?: ReadonlyArray<ExecutionUpdate>,
+  ) => Effect.Effect<AppendResult, ThreadStoreFailure>;
   /** Recheck the writer fence after effectful preflight, before dispatch; append no record. */
   readonly checkFence: Effect.Effect<
     void,
@@ -99,6 +104,7 @@ export interface RunWriter {
 export interface RunStorageSession extends RunWriter, RunOwnership {
   readonly publishSettlement: (
     batch: CanonicalBatch,
+    executions?: ReadonlyArray<ExecutionUpdate>,
   ) => Effect.Effect<SettlementPublicationResult, SettlementPublicationFailure>;
   /** Initial grant for binding identity. Its token is not an authority for subsequent commands. */
   readonly claim: Claim;
@@ -215,7 +221,7 @@ export const makeRunWriter = Effect.fnUntraced(function* (
     }),
   );
 
-  const append = (batch: CanonicalBatch) =>
+  const append: RunWriter["append"] = (batch, executions) =>
     gate.withPermits(1)(
       Effect.gen(function* () {
         for (let retries = 0; ; retries++) {
@@ -225,6 +231,7 @@ export const makeRunWriter = Effect.fnUntraced(function* (
                 threadId,
                 producerEpoch,
                 batch,
+                ...(executions === undefined ? {} : { executions }),
                 expectedTailSequence: tail.sequence,
                 expectedTailDigest: tail.digest,
               }),
@@ -243,8 +250,7 @@ export const makeRunWriter = Effect.fnUntraced(function* (
                 tail = { sequence: conflict.actualTailSequence, digest: conflict.actualTailDigest };
 
                 // Progress must be rebuilt from the winning revision, never resent verbatim.
-                if (batch.records.some(({ payload }) => payload._tag === "RunContinuation"))
-                  return Effect.fail(conflict);
+                if (executions !== undefined) return Effect.fail(conflict);
 
                 return Effect.succeed(undefined);
               }),
@@ -402,7 +408,7 @@ export const make = Effect.gen(function* () {
               claim: claimed,
               release,
               renew,
-              append: (batch) => canonical(writer.append(batch)),
+              append: (batch, executions) => canonical(writer.append(batch, executions)),
               checkFence: canonical(writer.checkFence),
               refresh: canonical(writer.refresh),
               maintain: (interval) =>
@@ -438,7 +444,7 @@ export const make = Effect.gen(function* () {
                     Effect.uninterruptible,
                   ),
                 ),
-              publishSettlement: (batch) =>
+              publishSettlement: (batch, executions) =>
                 command<SettlementPublicationResult, SettlementPublicationFailure>(
                   Effect.gen(function* () {
                     let tail = yield* writer.tail;
@@ -457,6 +463,7 @@ export const make = Effect.gen(function* () {
                                   expectedTailSequence: tail.sequence,
                                   expectedTailDigest: tail.digest,
                                   batch,
+                                  ...(executions === undefined ? {} : { executions }),
                                 }),
                               }),
                             ),
@@ -476,11 +483,7 @@ export const make = Effect.gen(function* () {
                               digest: conflict.actualTailDigest,
                             };
 
-                            if (
-                              batch.records.some(
-                                ({ payload }) => payload._tag === "RunContinuation",
-                              )
-                            )
+                            if (executions !== undefined)
                               return writer.refresh.pipe(Effect.andThen(Effect.fail(conflict)));
 
                             return Effect.succeed(undefined);

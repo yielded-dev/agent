@@ -29,20 +29,22 @@ See the [Node.js](/platforms/node/) and [Cloudflare](/platforms/cloudflare/) gui
 
 ## Rebuild from the log
 
-Replay rebuilds state from canonical records without executing tools. Projections and checkpoints
-are disposable; retain canonical records when rebuilding them.
+Replay rebuilds conversation projections from canonical records without executing tools. Application
+checkpoints and indexes are disposable. An unfinished Run's execution checkpoint is authoritative
+operational state and must be retained with its history.
 
-The execution protocol uses `effect-agent/thread@3` records in fresh layout-21 stores.
+The execution protocol uses `effect-agent/thread@4` records in fresh layout-22 stores.
 This format is unreleased: install matching runtime and storage packages, and retain predecessor
 stores with their matching release. Opening or importing a predecessor format fails before mutation;
 this release has no converter, predecessor decoder, or layout upgrade.
 
-Same-format archives preserve canonical records, immutable admission facts, and accepted commands.
+Same-format archives preserve canonical records, immutable admission facts, accepted commands and
+current execution checkpoints in `effect-agent/thread-transfer@2` pages.
 Pending admissions need not have reached the log. Import validates every reference and rebuilds
 operational state in an empty Thread without importing execution ownership. Unresolved ordinary
 mutating calls remain Unknown. See [backup and restore](/guide/operations/#adopting-these-contracts).
 
-A selected Run recovers from its canonical continuation and exact Run evidence at one captured
+A selected Run recovers from its current checkpoint and exact Run evidence at one captured
 tail. Later facts enter through a bounded selected-Run suffix. Unrelated later Thread history never
 becomes recovery input. Missing or invalid evidence leaves the work owed with a typed failure;
 there is no full-Thread replay fallback.
@@ -62,8 +64,8 @@ SQL adapters finalize plain-root submissions in the publication transaction; sub
 delivery or parent obligations retain recoverable finalization after those obligations complete.
 SQLite's opt-in WAL `synchronous: "NORMAL"` survives process crashes, but power loss or an OS crash can lose acknowledged commits and cause external effects to repeat during recovery.
 
-A crash before publication resumes from existing execution facts: a committed `RunCompleted`
-retains its output, while unresolved ordinary tools remain uncertain. A crash after publication
+A crash before publication resumes from existing execution facts: the active checkpoint's committed
+`RunCompleted` intent retains its output, while unresolved ordinary tools remain uncertain. A crash after publication
 repeats notifications and finalization without choosing another outcome. There is no separate
 settlement reservation or reserved-record recovery phase.
 
@@ -71,22 +73,28 @@ Completion-tool results commit before the runtime drains new input at the turn b
 If a crash occurs before `RunCompleted`, recovery reuses the recorded result without executing
 the handler again. It may reevaluate the completion projection, so keep that function pure and
 deterministic. `RunCompleted` fixes the output and disposition for subsequent recovery. A final
-response with no application tool calls commits atomically with its `RunCompleted` record.
+response with no application tool calls commits atomically with that active completion intent.
 
 ## Run continuations
 
-`RunContinuation` records a semantic boundary: preparing context, awaiting a model, processing
-declared operations, waiting, uncertain, or settling. It commits in the same fenced transaction
-as the execution facts it references. Its latest-record index is disposable; the ledger alone
-admits work and grants ownership.
-Offline `verify` recomputes each continuation from its referenced facts, including accounting.
+`ExecutionCheckpoint` holds the current `RunContinuation`: preparing context, awaiting a model,
+processing declared operations, waiting, uncertain, or settling. Its revision advances in the same
+fenced transaction as new history facts; a progress-only commit leaves the history tail unchanged.
+The ledger alone admits work and grants ownership. Normal settlement removes the checkpoint and
+its retry receipts atomically with the terminal fact. Unresolved operations retain their checkpoint
+until their obligations close. Terminal delivery reports can append without restarting a Run.
+
+Offline `verify` checks the history hash chain, retained fact counts and references, and each active
+checkpoint's original context digest. It cannot replay discarded checkpoint revisions or verify
+the evaluated context of a settled Run. The history log remains the terminal outcome authority.
 
 ```mermaid
 flowchart LR
   A[Accepted input in ledger] --> B[Current fenced Attempt]
-  B --> C[Execution facts + RunContinuation]
-  C --> D[Exact input, context, and operation evidence]
+  B --> C[Append history + replace active checkpoint]
+  C --> D[Exact input, saved context, and operation evidence]
   D --> B
+  C --> E[Settlement: retain history, retire closed execution]
 ```
 
 The continuation contains cumulative policy and model charges plus bounded, integrity-checked
@@ -95,7 +103,7 @@ facts. Results, Durable Steps, approval decisions, and original operation contra
 canonical identities. Recovery reuses those facts; it neither replenishes allowances nor repeats
 recorded results. An unresolved ordinary mutating call still requires reconciliation.
 
-`RunContextRecorded` preserves evaluated instructions and this Run's input, plus a canonical
+The checkpoint's `RunContextRecorded` preserves evaluated instructions and this Run's input, plus a canonical
 history range and the digest of its projected prior Prompt. It retains exact references only to
 earlier facts still needed after compaction. It shares the start transaction without copying prior
 Prompt payloads or a per-record history manifest. Compaction changes the model view independently.
@@ -108,9 +116,10 @@ operation semantics also leave work owed.
 
 Execution dispatch is bounded at 16,384 facts and 32 MiB, in pages of eight records.
 Preparations before the first continuation and a post-continuation suffix each have a limit of
-64 records and 2 MiB. The continuation record is limited to 8 KiB; incremental record JSON is
-capped at 4 MiB per Turn, including continuations and the first Turn's initial context and retained
-preparations. Individual persisted JSON payloads remain limited to 1 MiB; whole record wire has a
+64 records and 2 MiB. The continuation is limited to 8 KiB; logical committed record JSON is
+capped at 4 MiB per Turn, including checkpoint transitions and the first Turn's initial context and retained
+preparations. Replacing or deleting operational state never refunds these capacity charges.
+Individual persisted JSON payloads remain limited to 1 MiB; whole record wire has a
 4 MiB limit to include its envelope. Indexes have separate storage costs.
 Dispatch reserves bounded Tool outcomes and a full valid Step result before a new Step body
 starts. Concurrent Steps share that capacity. Every dispatch retains room for a bounded failure
@@ -134,9 +143,8 @@ Reading a typed view never changes the content pinned by an evidence digest.
 New Runs read only history-relevant fields of the selected range and project them once. They
 trust immutable history validated at write, archive, and import boundaries; they do not reverify
 every earlier Run's original context. Late Tool results outside the selected declarations still
-require their full original evidence. Import checks saved admission boundaries and retained
-references without reprojecting each range; cold recovery and explicit `verify` recompute the
-saved Prompt before trusting it.
+require their full original evidence. Import, cold recovery and explicit `verify` check active
+admission boundaries and retained references and recompute the saved Prompt before trusting it.
 
 Without compaction, history reads and the live Prompt remain linear in conversation length.
 Configure context limits for the model and host. Later compaction never rewrites an older Run's

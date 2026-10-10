@@ -97,7 +97,7 @@ it("reopens atomic start progress and pending lifecycle intent after rollback an
   });
 
   const lifecycleLayer = lifecyclePublicationLayer.pipe(Layer.provideMerge(BrowserCrypto.layer));
-  let prepared: CanonicalBatch | undefined;
+  let prepared: FencedAppendRequest | undefined;
   let reachedCanonicalCut = false;
 
   await withThreadStorage(name, (storage) =>
@@ -113,10 +113,21 @@ it("reopens atomic start progress and pending lifecycle intent after rollback an
       const failed = yield* progress.commit(batch("start-prefix-batch", [accepted, start])).pipe(
         Effect.provideService(CurrentRunWriter, {
           ...writer,
-          append: (compiled) =>
-            Effect.sync(() => {
-              prepared = compiled;
-            }).pipe(Effect.andThen(writer.append(compiled))),
+          append: (compiled, executions) =>
+            Effect.gen(function* () {
+              const tail = yield* writer.tail;
+
+              prepared = FencedAppendRequest.make({
+                threadId,
+                producerEpoch: epoch(1),
+                expectedTailSequence: tail.sequence,
+                expectedTailDigest: tail.digest,
+                batch: compiled,
+                ...(executions === undefined ? {} : { executions }),
+              });
+
+              return yield* writer.append(compiled, executions);
+            }),
         }),
         Effect.exit,
       );
@@ -166,13 +177,7 @@ it("reopens atomic start progress and pending lifecycle intent after rollback an
   );
   if (prepared === undefined) throw new Error("Production progress writer did not prepare start");
 
-  const appendRequest = FencedAppendRequest.make({
-    threadId,
-    producerEpoch: epoch(1),
-    expectedTailSequence: sequence(0),
-    expectedTailDigest: EMPTY_TAIL_DIGEST,
-    batch: prepared,
-  });
+  const appendRequest = prepared;
 
   const retired = await withThreadStorage(name, (storage, state) =>
     Effect.flatMap(ThreadStore, (store) => store.append(appendRequest)).pipe(
@@ -198,7 +203,7 @@ it("reopens atomic start progress and pending lifecycle intent after rollback an
       const store = yield* ThreadStore;
       const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
-      expect(tail.tailSequence).toBe(3);
+      expect(tail.tailSequence).toBe(1);
       const continuation = yield* readContinuation(threadId, runId, tail.tailSequence);
 
       expect(Option.getOrUndefined(continuation)?.continuation).toMatchObject({
@@ -217,7 +222,7 @@ it("reopens atomic start progress and pending lifecycle intent after rollback an
           "SELECT through_sequence FROM effect_agent_lifecycle_cursors WHERE thread_id = ?",
           threadId,
         ),
-      ]).toEqual([{ through_sequence: 3 }]);
+      ]).toEqual([{ through_sequence: 1 }]);
       expect((yield* store.append(appendRequest)).replayed).toBe(true);
       expect(yield* store.lifecyclePublications!.pending(1, 1, { retainedOnly: true })).toEqual(
         pending,
@@ -258,8 +263,8 @@ const batch = (
   });
 
 describe("DoThreadStore", () => {
-  // #792 retired recovery-checkpoint writes. Layout 21 appends progress with its
-  // facts; the Node run-continuation.test.ts compaction rows cannot prove DO reopen.
+  // Layout 22 replaces active progress in the same transaction as its facts;
+  // the Node run-continuation.test.ts compaction rows cannot prove DO reopen.
   // The retirement case above separately covers actual Object/cache destruction.
   for (const [location, mode] of [
     ["append:before", "failure"],
@@ -286,7 +291,7 @@ describe("DoThreadStore", () => {
         }),
       });
 
-      let prepared: CanonicalBatch | undefined;
+      let prepared: FencedAppendRequest | undefined;
       let reached = false;
 
       const failed = await withThreadStorage(name, (storage) =>
@@ -302,11 +307,21 @@ describe("DoThreadStore", () => {
           yield* progress.commit(batch("crash-reopen", [input, start])).pipe(
             Effect.provideService(CurrentRunWriter, {
               ...writer,
-              append: (compiled) => {
-                prepared = compiled;
+              append: (compiled, executions) =>
+                Effect.gen(function* () {
+                  const tail = yield* writer.tail;
 
-                return writer.append(compiled);
-              },
+                  prepared = FencedAppendRequest.make({
+                    threadId,
+                    producerEpoch: epoch(1),
+                    expectedTailSequence: tail.sequence,
+                    expectedTailDigest: tail.digest,
+                    batch: compiled,
+                    ...(executions === undefined ? {} : { executions }),
+                  });
+
+                  return yield* writer.append(compiled, executions);
+                }),
             }),
           );
         }).pipe(
@@ -338,26 +353,18 @@ describe("DoThreadStore", () => {
           const before = yield* store.export(ThreadExportRequest.make({ threadId }));
           const committed = location === "append:after";
 
-          expect(before.records).toHaveLength(committed ? 3 : 0);
+          expect(before.records).toHaveLength(committed ? 1 : 0);
           expect(Option.isSome(yield* readContinuation(threadId, runId, before.tailSequence))).toBe(
             committed,
           );
 
-          const request = FencedAppendRequest.make({
-            threadId,
-            producerEpoch: epoch(1),
-            expectedTailSequence: sequence(0),
-            expectedTailDigest: EMPTY_TAIL_DIGEST,
-            batch: compiled,
-          });
+          const request = compiled;
 
           expect((yield* store.append(request)).replayed).toBe(committed);
           const after = yield* store.export(ThreadExportRequest.make({ threadId }));
 
           expect(after.records.map(({ record }) => record.payload._tag)).toEqual([
             "UserInputRecorded",
-            "RunStarted",
-            "RunContinuation",
           ]);
           expect(
             Option.getOrUndefined(yield* readContinuation(threadId, runId, after.tailSequence))
@@ -367,7 +374,10 @@ describe("DoThreadStore", () => {
             recordCount: 2,
             lastFact: { recordId: start.recordId },
           });
+          const active = yield* store.readExecution({ threadId, runId });
+
           expect((yield* store.append(request)).replayed).toBe(true);
+          expect(yield* store.readExecution({ threadId, runId })).toEqual(active);
         }).pipe(Effect.provide(layer({ storage }).pipe(Layer.provideMerge(BrowserCrypto.layer)))),
       );
     });

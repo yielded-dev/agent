@@ -151,9 +151,16 @@ export const reduceThreadRecord = (
       ? [...projection.modelOutputs, payload.output]
       : projection.modelOutputs;
 
-  const completedRuns =
+  const completedRun =
     payload._tag === "RunCompleted"
-      ? [...projection.completedRuns, payload.runId]
+      ? payload.runId
+      : payload._tag === "SubmissionSettled" && payload.outcome === "completed"
+        ? payload.runId
+        : undefined;
+
+  const completedRuns =
+    completedRun !== undefined && !projection.completedRuns.includes(completedRun)
+      ? [...projection.completedRuns, completedRun]
       : projection.completedRuns;
 
   const failedRuns =

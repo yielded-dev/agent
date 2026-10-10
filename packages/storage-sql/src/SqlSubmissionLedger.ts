@@ -2124,6 +2124,14 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
         }
 
         if (Option.isSome(existing)) {
+          yield* journal
+            .checkCommitIntent(prepared)
+            .pipe(
+              Effect.mapError((error) =>
+                Schema.is(AppendConflict)(error) ? error : internalFailure(operation)(error),
+              ),
+            );
+
           const threads = yield* journal
             .getThread(request.append.threadId)
             .pipe(Effect.mapError(internalFailure(operation)));

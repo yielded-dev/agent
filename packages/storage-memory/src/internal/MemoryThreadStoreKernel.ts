@@ -46,7 +46,7 @@ export interface MemoryLedgerImport {
 
 export interface MemoryLedgerTransfer {
   readonly snapshot: (threadId: ThreadId) => Effect.Effect<
-    Omit<typeof ThreadExportSnapshot.Type, "deliveries"> & {
+    Omit<typeof ThreadExportSnapshot.Type, "deliveries" | "executions"> & {
       readonly externalObligations?: ThreadExport["externalObligations"];
       readonly workerSeal?: Pick<WorkerLedgerState, "terminal">;
     },
@@ -54,7 +54,7 @@ export interface MemoryLedgerTransfer {
   >;
   readonly facts: (
     threadId: ThreadId,
-    section: Exclude<TransferSection, "deliveries">,
+    section: Exclude<TransferSection, "deliveries" | "executions">,
     after: string | undefined,
   ) => Effect.Effect<{ readonly facts: TransferFacts; readonly after: string }, ThreadStoreError>;
   readonly startImport: (

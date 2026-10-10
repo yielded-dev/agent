@@ -1,11 +1,10 @@
-import { decodeExportRecord, ExportRecord } from "@yielded/agent/record-format";
+import { decodeExportRecord } from "@yielded/agent/record-format";
 import {
   type CanonicalRecord,
   CURRENT_RECORD_FORMAT,
   MAX_CANONICAL_RECORD_BYTES,
   MAX_RUN_RECOVERY_SUFFIX_RECORDS,
   MAX_RUN_RECOVERY_SUFFIX_BYTES,
-  MAX_RUN_CONTINUATION_BYTES,
   RecordJson,
   ObservationOffset,
   CanonicalRecordEnvelope,
@@ -37,6 +36,8 @@ import {
 import type { PreparedAppend, ThreadStore } from "@yielded/agent/thread-store";
 import {
   SelectedThreadRead,
+  ExecutionCheckpoint,
+  ExecutionRead,
   ThreadPromptRead,
   ThreadPeerCountRequest,
   ThreadWorkerCapacityRequest,
@@ -48,7 +49,7 @@ import {
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
 import { WORK_INDEX_VERSION } from "@yielded/agent/thread-work";
-import { Context, Effect, Predicate, Schema } from "effect";
+import { Context, Effect, Option, Predicate, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 import type { Fragment } from "effect/sql/Statement";
@@ -188,7 +189,6 @@ const failure = (operation: string, cause?: unknown) =>
     ...(cause === undefined ? {} : { cause }),
   });
 
-const decodeRecordJson = Schema.decodeEffect(Schema.fromJsonString(ExportRecord));
 const decodeRecordWire = Schema.decodeEffect(Schema.fromJsonString(RecordJson));
 const decodeIdentityRequest = Schema.decodeEffect(Schema.toType(ThreadIdentityRequest));
 
@@ -229,49 +229,73 @@ const boundedCandidates = (
   return join(groups);
 };
 
+/** One authoritative active value; this read never synthesizes canonical history. */
+export const makeExecutionRead = Effect.fnUntraced(function* (namespace?: string) {
+  const sql = yield* SqlClient.SqlClient;
+  const { table, execute } = yield* makeSqlQuery(namespace);
+
+  const decodeRows = Schema.decodeUnknownEffect(
+    Schema.Array(
+      Schema.Struct({
+        input_sequence: SqlInteger.pipe(
+          Schema.decodeTo(CanonicalSequence.check(Schema.isGreaterThan(0))),
+        ),
+        revision: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
+        checkpoint_json: Schema.String.check(Schema.isMaxLength(16 * 1024 * 1024)),
+      }),
+    ).check(Schema.isMaxLength(1)),
+  );
+
+  const decodeCheckpoint = Schema.decodeEffect(Schema.fromJsonString(ExecutionCheckpoint));
+
+  return Effect.fnUntraced(
+    function* (input: ExecutionRead) {
+      const request = yield* Schema.decodeEffect(ExecutionRead)(input);
+
+      const rows =
+        yield* sql`SELECT input_sequence, revision, checkpoint_json FROM ${table("effect_agent_executions")}
+      WHERE thread_id=${request.threadId} AND run_id=${JSON.stringify(request.runId)}`.pipe(
+          execute,
+        );
+
+      const [row] = yield* decodeRows(rows);
+
+      if (row === undefined) return Option.none();
+      const checkpoint = yield* decodeCheckpoint(row.checkpoint_json);
+
+      if (
+        checkpoint.progress.runId !== request.runId ||
+        checkpoint.originalSequence !== row.input_sequence ||
+        checkpoint.progress.revision !== row.revision
+      )
+        return yield* failure("read execution identity");
+
+      return Option.some(checkpoint);
+    },
+    Effect.mapError((cause) => failure("read active execution", cause)),
+  );
+});
+
 /** Caller owns the existing append transaction; no snapshot or nested transaction here. */
 export const makeProgressAppendValidation = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
-  const { table, execute } = yield* makeSqlQuery(namespace);
-  const recordJson = canonicalRecordJson(sql, namespace);
-
-  const decode = Schema.decodeUnknownEffect(
-    Schema.Array(
-      Schema.Struct({
-        record_id: RecordId,
-        record_json: Schema.String,
-      }),
-    ),
-  );
+  const readExecution = yield* makeExecutionRead(namespace);
 
   return Effect.fnUntraced(function* (request: RawAppendRequest) {
-    if (!request.progress.some((record) => record.continuation !== undefined)) return;
-    yield* validateProgressAppend(request.progress).pipe(
+    yield* validateProgressAppend(
+      request.progress,
+      request.executionWrites.map(({ update }) => update),
+    ).pipe(
       Effect.provideService(ProgressAppendReader, {
         previous: (runId) =>
-          Effect.gen(function* () {
-            const rows =
-              yield* sql`SELECT record_id, ${recordJson} AS record_json FROM ${table("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_continuation")}
-        WHERE thread_id = ${request.threadId} AND ${canonicalField(sql, "runId")} = ${canonicalIdentifier(runId)}
-          AND ${canonicalField(sql, "tag")} = 'RunContinuation'
-        ORDER BY sequence DESC LIMIT 1`.pipe(execute);
-
-            const [row] = yield* decode(rows);
-
-            if (row === undefined) return undefined;
-
-            const record = yield* decodeRecordJson(row.record_json);
-
-            if (
-              record.recordId !== row.record_id ||
-              record.payload._tag !== "RunContinuation" ||
-              record.payload.runId !== runId ||
-              canonicalRecordBytes(record) > MAX_RUN_CONTINUATION_BYTES
-            )
-              return yield* failure("invalid newest Run continuation");
-
-            return record.payload;
-          }).pipe(Effect.mapError((cause) => failure("read canonical Run continuation", cause))),
+          readExecution({ threadId: request.threadId, runId }).pipe(
+            Effect.map(
+              Option.match({
+                onNone: () => undefined,
+                onSome: (checkpoint) => checkpoint.progress,
+              }),
+            ),
+          ),
         initial: (next) =>
           Effect.gen(function* () {
             const selected = yield* makeSelectedReads(
@@ -817,7 +841,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                 );
               break;
             case "WorkerExecution":
-              rows = (yield* Effect.forEach(["UserInputRecorded", "RunStarted"], (tag) =>
+              rows = (yield* Effect.forEach(["UserInputRecorded", "SubmissionSettled"], (tag) =>
                 sql`SELECT thread_id, sequence, record_id, batch_id, ${recordJson} AS record_json FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_worker_execution")}
                   WHERE thread_id = ${request.threadId} AND ${canonicalField(sql, "tag")} = ${tag}
                     AND ${canonicalField(sql, "runId")} IS NOT NULL

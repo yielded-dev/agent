@@ -447,7 +447,7 @@ layer(baseLayer)("approval suspension with attempt resources", (it) => {
 
       expect(tags.filter((tag) => tag === "ToolApprovalRequested")).toHaveLength(1);
       expect(tags.filter((tag) => tag === "ToolApprovalDecided")).toHaveLength(1);
-      expect(tags.filter((tag) => tag === "RunStarted")).toHaveLength(1);
+      expect(tags.filter((tag) => tag === "RunStarted")).toHaveLength(0);
     }),
   );
 

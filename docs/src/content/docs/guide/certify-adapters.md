@@ -41,19 +41,23 @@ to a canonical batch tail; consumers decode `state` and decide whether its proje
 supports suffix replay. `ThreadProjection` uses version 3 and rejects older snapshots so
 consumers can rebuild from canonical records.
 
-Canonical execution progress is separate from application checkpoints. Implement native
-`RunContinuation` reads for the newest owner record at or before a captured tail, bounded sorted
-`RunEvidence` pages, and retained `WorkHandoffs` pages. Publish their indexes with the canonical
-facts under the same epoch, expected-tail, and idempotency checks. Exact evidence references use
+Authoritative execution progress is separate from application checkpoints. Implement
+`ThreadStore.readExecution` for the current versioned Run checkpoint, bounded sorted `RunEvidence`
+pages, and retained `WorkHandoffs` pages. Commit checkpoint replacements and history facts in one
+transaction under the same epoch, expected-tail, and idempotency checks. Progress-only commits
+do not advance the canonical tail, so checkpoint revision comparisons are mandatory.
+Exact evidence references use
 logical record identities and content digests; physical storage layout cannot change their meaning.
 
 An append containing progress must reject conflicting revisions, changed original references,
-regressed accounting, or a frontier outside the same batch before writing. Preparations stay
+regressed accounting, or a frontier outside the same commit before writing. Remove active state
+only with canonical terminal proof and resolved execution obligations. Include active checkpoints
+in snapshot-fenced exports and fresh imports, without copying claims or leases. Preparations stay
 indexed after Run settlement; destination acknowledgement owns closure. An index grants no
 execution authority, and missing required evidence is a typed fault, not an empty completed Run.
 See [Run continuations](/concepts/durability/#run-continuations) for recovery bounds.
 
-This unreleased format accepts only fresh layout-21 storage and `effect-agent/thread@3` archives.
+This unreleased format accepts only fresh layout-22 storage and `effect-agent/thread@4` archives.
 Refuse predecessor, newer, or ambiguous layouts before any DDL or record mutation. Preserve the
 rejected store; there is no layout upgrade or historical record decoder.
 

@@ -1,4 +1,4 @@
-import { EMPTY_TAIL_DIGEST, utf8ByteLength } from "@yielded/agent/digest";
+import { EMPTY_TAIL_DIGEST, utf8ByteLength, digestCanonicalJson } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import { ExportRecord } from "@yielded/agent/record-format";
@@ -7,7 +7,9 @@ import {
   CanonicalSequence,
   Digest,
   ObservationOffset,
+  RecordEnvelope,
 } from "@yielded/agent/records";
+import { isOperationalRecord } from "@yielded/agent/run-continuation";
 import {
   ThreadArchive,
   makeThreadImportProgress,
@@ -16,6 +18,7 @@ import {
 } from "@yielded/agent/thread-import";
 import {
   AppendConflict,
+  ExecutionCheckpoint,
   AppendResult,
   CheckpointRejected,
   ThreadCheckpoint,
@@ -50,7 +53,11 @@ import type { Diagnostic, SqlStorageErrors, SqlStorageFailpoint } from "./SqlSto
 import type { SqlStorageFailpointLocation } from "./SqlStorageFailpoint.ts";
 import { canonicalBatchHeaderJson, makeSqlThreadArchiveRange } from "./SqlThreadArchiveRange.ts";
 import { makeSqlThreadImport } from "./SqlThreadImport.ts";
-import { canonicalRecordMetadata, makeSelectedReads } from "./SqlThreadNativeReads.ts";
+import {
+  canonicalRecordMetadata,
+  makeSelectedReads,
+  makeExecutionRead,
+} from "./SqlThreadNativeReads.ts";
 
 export interface SqlThreadStoreOptions<
   S extends Diagnostic,
@@ -65,6 +72,16 @@ export interface SqlThreadStoreOptions<
   readonly offsetPrefix: string;
 }
 
+const encodeExecutionCheckpoint = Schema.encodeSync(Schema.fromJsonString(ExecutionCheckpoint));
+
+const encodeOperationalFacts = Schema.encodeSync(
+  Schema.fromJsonString(Schema.Array(RecordEnvelope)),
+);
+
+/** Stable retry intent; derived progress and the caller's newly observed tail are excluded. */
+export const sqlCommitIntentDigest = (batchJson: string, facts: ReadonlyArray<RecordEnvelope>) =>
+  digestCanonicalJson(JSON.stringify([batchJson, encodeOperationalFacts(facts)]));
+
 /** Prepare owned wire and its digest before the adapter acquires its writer transaction. */
 export const prepareSqlAppend = Effect.fnUntraced(function* (
   request: FencedAppendRequest,
@@ -74,6 +91,18 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
     ThreadStoreError.make({ operation, message: cause.message, cause });
 
   const captured = yield* PreparedAppend.capture(request);
+
+  if (
+    captured.records.some(
+      ({ canonical }) =>
+        (isOperationalRecord(canonical) && canonical.payload._tag !== "RunCompleted") ||
+        canonical.payload._tag === "RunContinuation",
+    )
+  )
+    return yield* ThreadStoreError.make({
+      operation: "prepare durable commit",
+      message: "Execution records must be committed as active execution state",
+    });
 
   const offsetBytes =
     utf8ByteLength(JSON.stringify(offsetPrefix)) + 3 * utf8ByteLength(captured.threadId) + 25;
@@ -90,9 +119,21 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
     Object.freeze({ ...record, readMetadata: canonicalRecordMetadata(record) }),
   );
 
+  const executionWrites = captured.executionWrites.map((write) =>
+    Object.freeze({
+      ...write,
+      checkpointJson: encodeExecutionCheckpoint(write.update.checkpoint),
+    }),
+  );
+
   const tailDigest = yield* captured
     .digest()
     .pipe(Effect.mapError(invalid("digest canonical append")));
+
+  const commitDigest = yield* sqlCommitIntentDigest(
+    captured.batchJson,
+    executionWrites.flatMap(({ update }) => update.facts),
+  ).pipe(Effect.mapError(invalid("digest execution commit")));
 
   return {
     threadId: captured.threadId,
@@ -106,6 +147,8 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
     producerEpoch: captured.producerEpoch,
     records,
     progress: captured.progress,
+    executionWrites,
+    commitDigest,
     tailDigest,
   } satisfies RawAppendRequest;
 });
@@ -800,6 +843,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   });
 
   const selectedReads = yield* makeSelectedReads(decodeEnvelope, options.namespace);
+  const readExecution = yield* makeExecutionRead(options.namespace);
 
   const store = ThreadStore.of({
     work: journal.work.storage,
@@ -810,6 +854,8 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     countPeerMessages: selectedReads.countPeerMessages,
     readWorkerCapacity: selectedReads.readWorkerCapacity,
     readIdentity: selectedReads.readIdentity,
+    readExecution: (request) =>
+      requireThread(journal, request.threadId).pipe(Effect.andThen(readExecution(request))),
     append: makeAppend(journal.append, true),
     export: transfer.export,
     verification: transfer.verification,

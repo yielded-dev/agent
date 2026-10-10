@@ -71,9 +71,13 @@ flowchart LR
   that publication; ledger finalization records a stable receipt timestamp and releases the
   lane. An adapter may finalize inside publication when no recoverable delivery remains.
   Recovery completes outstanding obligations from the same canonical record.
-- The append-only journal owns execution facts; the ledger owns what is still owed and who may
-  advance it. Canonical continuations preserve semantic progress and exact original context;
-  projections, work inventories, latest-record indexes, and application checkpoints are disposable. Current bindings select queued and
+- The append-only journal owns conversation content, operation evidence and terminal outcomes;
+  the ledger owns what is still owed and who may advance it. One current Run checkpoint preserves
+  semantic progress, accounting, exact original context and validated completion until settlement
+  and closure of its execution obligations. It is authoritative operational state, replaced in the
+  same fenced transaction as new journal facts. Historical checkpoint revisions are not retained
+  or attested by `verify`. Projections, work inventories, lookup indexes and application checkpoints
+  are disposable. Current bindings select queued and
   resumed work; each committed model response owns its normalized tool arguments and original
   operation contracts. A declared mutating call without a result may have executed, including when
   ownership is lost before its handler starts. Initial blocked approvals and parameter rejections
@@ -83,7 +87,7 @@ flowchart LR
   and recovery state, not a second application query model. Measure a statement budget for a
   representative turn when changing storage; fewer queries must not weaken fencing or receipts.
 - Keep synchronous work bounded so single-threaded Objects can receive input. Reuse codecs and
-  committed views. Unfinished Runs read their exact canonical continuation and bounded selected
+  committed views. Unfinished Runs read their current authoritative checkpoint and bounded selected
   evidence, independently of unrelated Thread history. Original context reconstruction reads its
   fixed saved range and verifies the projected Prompt digest. Fresh Cloudflare Runs can restore
   a verified [disposable prompt checkpoint](/storage/cloudflare/); decoding and sending the
@@ -123,7 +127,7 @@ establish a CPU budget. Preserve original failure causes where the error contrac
 some storage boundaries retain only diagnostic classifications. Keep scheduling reports content-free.
 The interpreter supplies validated response and closed tool-result facts directly to the canonical
 journal. Events, history callbacks, and disposable drafts help observers follow execution; they do
-not reconstruct durable commits. Only canonical records establish recovery facts.
+not reconstruct durable commits. Recovery uses canonical records and authoritative active Run state.
 Execution captures its services when it starts; changing a stream consumer's Context between pulls
 does not change the running model, tools, or hooks.
 

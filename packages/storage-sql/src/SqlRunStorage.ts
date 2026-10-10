@@ -322,6 +322,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
     export: (request) => bind(rawStore.export(request)),
     inspectTail: (request) => bind(rawStore.inspectTail(request)),
     readIdentity: (request) => bind(rawStore.readIdentity(request)),
+    readExecution: (request) => bind(rawStore.readExecution(request)),
     countPeerMessages:
       countPeerMessages === undefined ? undefined : (request) => bind(countPeerMessages(request)),
     checkpoints:
@@ -560,15 +561,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
         if (
           !authority.owned ||
           authority.submission.input_applied_record_id !== null ||
-          raw.records
-            .slice(1)
-            .some(
-              ({ canonical: sidecar }) =>
-                sidecar.payload._tag !== "RunContinuation" ||
-                sidecar.payload.runId !== runIdForSubmission(submissionId) ||
-                sidecar.payload.submissionId !== submissionId ||
-                sidecar.payload.lastFact.recordId !== record?.recordId,
-            ) ||
+          raw.records.length !== 1 ||
           raw.batchId !== submissionInputBatchId(submissionId) ||
           record?.recordId !== submissionInputRecordId(submissionId) ||
           record.payload._tag !== "UserInputRecorded" ||
@@ -616,7 +609,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
       }),
     );
 
-    const append: RunStorageSession["append"] = (batch) =>
+    const append: RunStorageSession["append"] = (batch, executions) =>
       bind(
         gate.withPermits(1)(
           Effect.uninterruptibleMask((restore) =>
@@ -634,6 +627,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
                   expectedTailSequence: writerTail.sequence,
                   expectedTailDigest: writerTail.digest,
                   batch,
+                  ...(executions === undefined ? {} : { executions }),
                 });
 
                 const result = yield* restore(appendOwned(request)).pipe(Effect.exit);
@@ -644,11 +638,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
 
                     return yield* result;
                   }
-                  if (
-                    retries >= 8 ||
-                    batch.records.some(({ payload }) => payload._tag === "RunContinuation")
-                  )
-                    return yield* result;
+                  if (retries >= 8 || (executions?.length ?? 0) > 0) return yield* result;
                   continue;
                 }
                 if (!result.value.replayed) {
@@ -750,7 +740,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
             owned.releaseNeeded = false;
           }
         }),
-      publishSettlement: (batch) =>
+      publishSettlement: (batch, executions) =>
         command(
           Effect.suspend(() =>
             ledgerKernel.publishWithState(
@@ -763,6 +753,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
                   expectedTailSequence: writerTail.sequence,
                   expectedTailDigest: writerTail.digest,
                   batch,
+                  ...(executions === undefined ? {} : { executions }),
                 }),
               }),
             ),

@@ -527,6 +527,7 @@ export const memoryMessageDeliveryStoreLayer = (
             facts: {
               admissions: [],
               commands: { aborts: [], approvals: [], resolutions: [] },
+              executions: [],
               deliveries:
                 record === undefined
                   ? []

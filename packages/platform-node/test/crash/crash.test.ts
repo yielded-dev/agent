@@ -3,7 +3,11 @@ import { expect, layer } from "@effect/vitest";
 import { NodeDurableHost } from "@yielded/agent-platform-node/node-durable-host";
 import * as Agent from "@yielded/agent/agent";
 import { DurableAgentRuntime, recoveryRepairRecordId } from "@yielded/agent/durable-agent-runtime";
-import { ProducerId, type CanonicalRecordEnvelope } from "@yielded/agent/records";
+import {
+  ProducerId,
+  type CanonicalRecordEnvelope,
+  type RecordEnvelope,
+} from "@yielded/agent/records";
 import {
   modelResponseInterruptedRecordId,
   modelResponseRecordId,
@@ -25,6 +29,7 @@ import {
   submissionInputRecordId,
   submissionSettlementRecordId,
 } from "@yielded/agent/submission-ledger";
+import { ThreadStore } from "@yielded/agent/thread-store";
 import { Effect, Option, Schema } from "effect";
 import { Prompt } from "effect/ai";
 
@@ -271,7 +276,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
     );
 
     it.effect(
-      "RUN-030: process loss after Run-start append preserves the committed canonical clock",
+      "RUN-030: process loss after Run-start append preserves the committed Run clock",
       () =>
         Effect.forEach(
           ["run:after-start-append"] as const,
@@ -291,29 +296,71 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                     leaseMillis: CHILD_LEASE_MS,
                   }),
                 );
+
+                const before = yield* withRuntime(
+                  site.db,
+                  Effect.gen(function* () {
+                    const snapshot = yield* lookupByKey(thread, key);
+                    const store = yield* ThreadStore;
+
+                    const execution = Option.getOrThrow(
+                      yield* store.readExecution({
+                        threadId: decodeThreadId(thread),
+                        runId: runIdForSubmission(snapshot.submissionId),
+                      }),
+                    );
+
+                    const starts = execution.operational.filter(
+                      ({ payload }) => payload._tag === "RunStarted",
+                    );
+
+                    expect(starts).toHaveLength(1);
+
+                    return { starts, submissionId: snapshot.submissionId };
+                  }),
+                );
+
+                const completingStarts: Array<RecordEnvelope> = [];
+                let inspectStart: Effect.Effect<void> = Effect.void;
+
                 yield* waitAfterChildExit;
                 yield* withHost(
                   site.db,
                   Effect.gen(function* () {
-                    const snapshot = yield* lookupByKey(thread, key);
+                    const store = yield* ThreadStore;
 
-                    const before = (yield* readLog(thread)).filter(
-                      ({ record }) => record.payload._tag === "RunStarted",
-                    );
-
-                    expect(before).toHaveLength(1);
+                    inspectStart = store
+                      .readExecution({
+                        threadId: decodeThreadId(thread),
+                        runId: runIdForSubmission(before.submissionId),
+                      })
+                      .pipe(
+                        Effect.map((execution) => {
+                          completingStarts.push(
+                            ...Option.getOrThrow(execution).operational.filter(
+                              ({ payload }) => payload._tag === "RunStarted",
+                            ),
+                          );
+                        }),
+                        Effect.orDie,
+                      );
                     expect(
                       (yield* drainPlanner(thread, CHILD_ANSWER)).map((entry) => entry.outcome),
                     ).toEqual(["completed"]);
-
-                    const after = (yield* readLog(thread)).filter(
-                      ({ record }) => record.payload._tag === "RunStarted",
-                    );
-
-                    expect(after).toHaveLength(1);
-                    expect(after).toEqual(before);
-                    yield* assertConvergence(thread, [snapshot.submissionId]);
+                    expect(completingStarts).toHaveLength(1);
+                    expect(completingStarts).toEqual(before.starts);
+                    expect(
+                      yield* store.readExecution({
+                        threadId: decodeThreadId(thread),
+                        runId: runIdForSubmission(before.submissionId),
+                      }),
+                    ).toEqual(Option.none());
+                    yield* assertConvergence(thread, [before.submissionId]);
                   }),
+                  {
+                    runtimeFailpoint: (location) =>
+                      location === "terminalize:before-publication" ? inspectStart : Effect.void,
+                  },
                 );
               }),
             ),
@@ -556,7 +603,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
     );
 
     it.effect(
-      "kill before settlement publication: canonical completion avoids another model call and settles once",
+      "kill before settlement publication: durable completion avoids another model call and settles once",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
@@ -573,12 +620,40 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
             });
 
             expectKilled(result);
+
+            const before = yield* withRuntime(
+              site.db,
+              Effect.gen(function* () {
+                const snapshot = yield* lookupByKey(thread, key);
+                const store = yield* ThreadStore;
+
+                const execution = Option.getOrThrow(
+                  yield* store.readExecution({
+                    threadId: decodeThreadId(thread),
+                    runId: runIdForSubmission(snapshot.submissionId),
+                  }),
+                );
+
+                const completions = execution.operational.flatMap(({ payload }) =>
+                  payload._tag === "RunCompleted" ? [payload] : [],
+                );
+
+                expect(completions).toHaveLength(1);
+
+                return {
+                  records: yield* readLog(thread),
+                  completions,
+                  submissionId: snapshot.submissionId,
+                };
+              }),
+            );
+
             yield* waitAfterChildExit;
 
             yield* withHost(
               site.db,
               Effect.gen(function* () {
-                const snapshot = yield* lookupByKey(thread, key);
+                const store = yield* ThreadStore;
 
                 const settlements = yield* drainPlanner(thread, FRESH_ANSWER);
 
@@ -589,14 +664,25 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                 // publication, so recovery terminalizes without another model call.
                 const records = yield* readLog(thread);
 
+                expect(records.slice(0, before.records.length)).toEqual(before.records);
                 expect(
                   logTags(records).filter((tag) => tag === "ModelResponseRecorded"),
                 ).toHaveLength(1);
-                expect(logTags(records).filter((tag) => tag === "RunCompleted")).toHaveLength(1);
                 expect(logTags(records).filter((tag) => tag === "SubmissionSettled")).toHaveLength(
                   1,
                 );
-                yield* assertConvergence(thread, [snapshot.submissionId]);
+                expect(
+                  records.flatMap(({ record: { payload } }) =>
+                    payload._tag === "SubmissionSettled" ? [payload.result] : [],
+                  ),
+                ).toEqual(before.completions.map((completion) => completion.output));
+                expect(
+                  yield* store.readExecution({
+                    threadId: decodeThreadId(thread),
+                    runId: runIdForSubmission(before.submissionId),
+                  }),
+                ).toEqual(Option.none());
+                yield* assertConvergence(thread, [before.submissionId]);
               }),
             );
           }),
