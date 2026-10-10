@@ -45,6 +45,12 @@ export const prepareFixtures = Effect.fn("durableBench.prepareFixtures")(
     const fs = yield* FileSystem.FileSystem;
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
+    const { dependencies } = yield* Schema.decodeUnknownEffect(
+      Schema.fromJsonString(
+        Schema.Struct({ dependencies: Schema.Record(Schema.String, Schema.String) }),
+      ),
+    )(yield* fs.readFileString(`${root}third-party/package.json`));
+
     const sizes = [
       ...new Set(yield* Schema.decodeUnknownEffect(Schema.Array(History))(options.sizes)),
     ].sort((a, b) => a - b);
@@ -165,8 +171,8 @@ export const prepareFixtures = Effect.fn("durableBench.prepareFixtures")(
         );
 
         if (
-          (target === "pi" && meta.version !== "1.0.4") ||
-          (target === "tardie" && meta.version !== "0.44.0")
+          (target === "pi" && meta.version !== dependencies["@earendil-works/pi-durable"]) ||
+          (target === "tardie" && meta.version !== dependencies.tardie)
         )
           return yield* new FixtureError({
             message: `Unexpected ${target} fixture version ${meta.version}`,

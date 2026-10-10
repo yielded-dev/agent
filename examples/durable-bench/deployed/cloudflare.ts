@@ -1,4 +1,5 @@
-import { Config, Context, Effect, Layer, Redacted, Schema, type Duration } from "effect";
+import { Config, Context, Effect, Layer, Redacted, Schema, Stream, type Duration } from "effect";
+import { Ndjson } from "effect/encoding";
 
 import { BenchError, redact } from "./platform.ts";
 
@@ -73,11 +74,13 @@ const connect = Effect.gen(function* () {
   const resources = Effect.fnUntraced(function* (workerName?: string) {
     // Prefixes may contain hyphens, so match the complete names emitted by run/deploy.
     const generatedName = new RegExp(
-      `^${prefix}-(?:shared-[a-f0-9]{8}-(?:driver|provider)|[a-z0-9]+-[a-f0-9]{8})$`,
+      `^${prefix}-(?:shared-[a-f0-9]{8}-(?:driver|provider)|[a-z0-9]+-[a-f0-9]{8}(?:-[a-z0-9-]+)?)$`,
     );
 
     const matches = (name: string) =>
-      workerName === undefined ? generatedName.test(name) : name === workerName;
+      workerName === undefined
+        ? generatedName.test(name)
+        : name === workerName || name.startsWith(workerName + "-");
 
     const workers = (yield* api("workers/scripts", Workers))
       .filter((w) => matches(w.id))
@@ -123,11 +126,10 @@ export class Cloudflare extends Context.Service<Cloudflare, Effect.Success<typeo
   static readonly layer = Layer.effect(Cloudflare, connect);
 }
 
-/** One transport attempt. Measurement and import calls are never automatically replayed. */
-export const request = <S extends Schema.Top & { readonly DecodingServices: never }>(
+/** One transport attempt. Measurement, build and import inputs are never automatically replayed. */
+const fetchResponse = (
   url: URL | string,
   token: string,
-  schema: S,
   body?: unknown,
   timeout: Duration.Input = "3 minutes",
 ) =>
@@ -162,6 +164,19 @@ export const request = <S extends Schema.Top & { readonly DecodingServices: neve
       });
     }
 
+    return response;
+  });
+
+export const request = <S extends Schema.Top & { readonly DecodingServices: never }>(
+  url: URL | string,
+  token: string,
+  schema: S,
+  body?: unknown,
+  timeout: Duration.Input = "3 minutes",
+) =>
+  Effect.gen(function* () {
+    const response = yield* fetchResponse(url, token, body, timeout);
+
     const raw = yield* Effect.tryPromise({
       try: () => response.json(),
       catch: () => new BenchError({ message: "Worker returned invalid JSON." }),
@@ -175,3 +190,34 @@ export const request = <S extends Schema.Top & { readonly DecodingServices: neve
 
     return { value, colo: response.headers.get("cf-ray")?.split("-").at(-1) ?? null };
   });
+
+export const requestEvents = <S extends Schema.Top & { readonly DecodingServices: never }>(
+  url: URL | string,
+  token: string,
+  schema: S,
+  body: unknown,
+) =>
+  Stream.unwrap(
+    Effect.gen(function* () {
+      const response = yield* fetchResponse(url, token, body, "10 minutes");
+      const stream = response.body;
+
+      if (!stream)
+        return yield* new BenchError({ message: "Worker response has no event stream." });
+
+      return Stream.fromReadableStream({
+        evaluate: () => stream,
+        onError: () =>
+          new BenchError({
+            message: "History build response was lost; input will not be replayed.",
+          }),
+      }).pipe(
+        Stream.pipeThroughChannel(Ndjson.decodeSchema(schema)({ ignoreEmptyLines: true })),
+        Stream.mapError((cause) =>
+          cause instanceof BenchError
+            ? cause
+            : new BenchError({ message: "Invalid history build event." }),
+        ),
+      );
+    }),
+  );

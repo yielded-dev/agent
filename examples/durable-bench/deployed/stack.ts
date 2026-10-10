@@ -1,6 +1,6 @@
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
-import { Config, Effect } from "effect";
+import { Config, Effect, Schema } from "effect";
 
 export default Alchemy.Stack(
   "durable-bench",
@@ -64,23 +64,47 @@ export default Alchemy.Stack(
       return { driver: driver.url, provider: provider.url };
     }
 
-    const worker = yield* Cloudflare.Worker("durable-bench-target", {
-      ...options,
-      name,
-      main: bundle,
-      rules: [{ globs: ["*.mjs.map"] }],
-      placement: { region: "aws:us-west-1" },
-      env: {
-        ...env,
-        CPU: cpu,
-        PROVIDER_URL: yield* Config.NonEmptyString("DURABLE_BENCH_PROVIDER"),
-        YIELDED: Cloudflare.DurableObject("durable-bench-yielded", { className: "YieldedDO" }),
-        PI: Cloudflare.DurableObject("durable-bench-pi", { className: "PiDO" }),
-        ACTORS: Cloudflare.DurableObject("durable-bench-actors", { className: "ActorDO" }),
-        THREADS: Cloudflare.DurableObject("durable-bench-threads", { className: "ThreadDO" }),
-      },
-    });
+    const names = yield* Config.schema(
+      Schema.fromJsonString(
+        Schema.NonEmptyArray(
+          Schema.String.check(Schema.isPattern(new RegExp(`^${name}(?:-[a-z0-9-]+)?$`))),
+        ).check(Schema.isUnique()),
+      ),
+      "DURABLE_BENCH_WORKERS",
+    ).pipe(Config.withDefault([name]));
 
-    return { target: worker.url };
+    const provider = yield* Config.NonEmptyString("DURABLE_BENCH_PROVIDER");
+
+    const workers = yield* Effect.forEach(
+      names,
+      Effect.fnUntraced(function* (workerName) {
+        const worker = yield* Cloudflare.Worker(
+          workerName === name ? "durable-bench-target" : `durable-bench-target-${workerName}`,
+          {
+            ...options,
+            name: workerName,
+            main: bundle,
+            rules: [{ globs: ["*.mjs.map"] }],
+            placement: { region: "aws:us-west-1" },
+            env: {
+              ...env,
+              CPU: cpu,
+              PROVIDER_URL: provider,
+              YIELDED: Cloudflare.DurableObject("durable-bench-yielded", {
+                className: "YieldedDO",
+              }),
+              PI: Cloudflare.DurableObject("durable-bench-pi", { className: "PiDO" }),
+              ACTORS: Cloudflare.DurableObject("durable-bench-actors", { className: "ActorDO" }),
+              THREADS: Cloudflare.DurableObject("durable-bench-threads", { className: "ThreadDO" }),
+            },
+          },
+        );
+
+        return { name: workerName, url: worker.url };
+      }),
+      { concurrency: 6 },
+    );
+
+    return { targets: Object.fromEntries(workers.map((worker) => [worker.name, worker.url])) };
   }),
 );

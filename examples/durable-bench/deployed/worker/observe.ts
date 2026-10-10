@@ -14,6 +14,8 @@ import {
 } from "./protocol.ts";
 
 const meters = new WeakMap<DurableObjectStorage, Observation>();
+// Lazily draw randomness in a request context, then retain one token per Worker isolate.
+let isolate: string | undefined;
 
 export const observation = (storage: DurableObjectStorage): Observation => {
   const meter = meters.get(storage);
@@ -23,8 +25,12 @@ export const observation = (storage: DurableObjectStorage): Observation => {
   return meter;
 };
 
-export const attach = (state: DurableObjectState, env: Env): Observation => {
-  const meter = new Observation(env);
+export const attach = (
+  state: DurableObjectState,
+  env: Env,
+  constructedMs = Date.now(),
+): Observation => {
+  const meter = new Observation(env, constructedMs);
 
   meters.set(state.storage, meter);
 
@@ -33,17 +39,20 @@ export const attach = (state: DurableObjectState, env: Env): Observation => {
 
 export class Observation {
   readonly incarnation = crypto.randomUUID();
-  readonly constructedMs = Date.now();
   private entries = 0;
   private alarms = 0;
   private entryMs = 0;
   query?: Query;
   entry?: Identity;
   calls: Array<{ -readonly [K in keyof ProviderCall]: ProviderCall[K] }> = [];
-  constructor(readonly env: Env) {}
+  constructor(
+    readonly env: Env,
+    readonly constructedMs = Date.now(),
+  ) {}
   identity(): Identity {
     return {
       build: this.env.BUILD,
+      isolate: (isolate ??= crypto.randomUUID()),
       incarnation: this.incarnation,
       constructedMs: this.constructedMs,
       firstEntry: this.entries === 0,

@@ -21,12 +21,15 @@ const interval = (values: readonly number[]) =>
     : "n/a";
 
 const group = <A>(rows: readonly A[], key: (row: A) => string) => {
-  const result = new Map<string, A[]>();
+  const result = new Map<string, [A, ...A[]]>();
 
   for (const row of rows) {
     const name = key(row);
 
-    result.set(name, [...(result.get(name) ?? []), row]);
+    const items = result.get(name);
+
+    if (items) items.push(row);
+    else result.set(name, [row]);
   }
 
   return result;
@@ -61,7 +64,162 @@ const ratio = (samples: readonly Sample[], metric: Metric): string => {
     : "n/a";
 };
 
+/** Match the slide: pool the nine warm turns from each complete Object, not their medians. */
+export const historySummary = (result: Result) => {
+  const { repeats } = Schema.decodeUnknownSync(Schema.Struct({ repeats: Schema.Int }))(
+    result.options,
+  );
+
+  return [
+    ...group(result.histories, (row) => `${row.history}/${row.ttftMs}/${row.target}`).values(),
+  ]
+    .map((builds) => {
+      const first = builds[0];
+
+      const batches = [
+        ...group(
+          result.samples.filter(
+            (row) =>
+              row.target === first.target &&
+              row.history === first.history &&
+              row.ttftMs === first.ttftMs,
+          ),
+          (row) => row.object,
+        ).values(),
+      ].filter(
+        (rows) =>
+          rows.length === repeats + 1 &&
+          rows.every((row) => row.status === "ok") &&
+          rows.filter((row) => row.state === "cold").length === 1 &&
+          rows.filter((row) => row.state === "warm").length === repeats,
+      );
+
+      const samples = batches.flat();
+
+      const values = (state: Sample["state"]) =>
+        samples.flatMap((row) =>
+          row.state === state && row.driverMs !== undefined ? [row.driverMs] : [],
+        );
+
+      return {
+        history: first.history,
+        ttftMs: first.ttftMs,
+        target: first.target,
+        attempted: builds.length,
+        built: builds.filter((row) => row.status === "ok").length,
+        objects: batches.length,
+        buildMs: median(
+          builds.flatMap((row) =>
+            row.status === "ok" && row.driverMs !== undefined ? [row.driverMs] : [],
+          ),
+        ),
+        coldMs: median(values("cold")),
+        warmMs: median(values("warm")),
+        bytes: median(
+          batches.flatMap((rows) => {
+            const last = rows.toSorted((a, b) => b.repeat - a.repeat)[0];
+
+            return last?.bytes === undefined ? [] : [last.bytes];
+          }),
+        ),
+      };
+    })
+    .sort(
+      (a, b) =>
+        a.history - b.history ||
+        a.ttftMs - b.ttftMs ||
+        TARGETS.indexOf(a.target) - TARGETS.indexOf(b.target),
+    );
+};
+
+const historyTable = (result: Result): string => {
+  const rows = historySummary(result);
+
+  const decimal = (value: number, digits: number) =>
+    Number.isFinite(value) ? value.toFixed(digits) : "n/a";
+
+  const lines = [
+    ...(result.complete ? [] : ["INCOMPLETE RUN — failed Objects are retained below.", ""]),
+    ...(result.profiles.length
+      ? [
+          "Profiled diagnostic: timing includes profiling overhead; exclude it from comparisons.",
+          "",
+        ]
+      : []),
+    "Independent Objects per size; real one-tool, one-tool, zero-tool turns in batches of 50 at zero provider TTFT, with runtime restarts between batches.",
+    "Each logical sample has a dedicated Worker. Batch isolate tokens are checked for sharing across build cohorts; shared cohorts are rejected.",
+    ...(result.resumeCount
+      ? [`Resumed ${result.resumeCount} time(s); resumed build times include controller downtime.`]
+      : []),
+    "Build: end-to-end driver elapsed. Cold: constructor + clock-probe roundtrip + native open and first turn; isolate startup and priming transport are excluded.",
+    "Warm: pooled median of the next warm turns, with no extra warmup. Storage: median after the last measured turn, including Tardie's Actor directory.",
+    "Network hops are included. Compare ratios within this deployment; absolute times are not comparable to Miniflare.",
+    "",
+    `Revision: ${result.revision}. Versions: ${Object.entries(result.versions)
+      .map(([name, version]) => `${name} ${version}`)
+      .join(", ")}.`,
+    "",
+  ];
+
+  for (const [cell, targets] of group(
+    rows,
+    (row) => `${row.history} turns · ${row.ttftMs} ms TTFT`,
+  )) {
+    lines.push(
+      cell,
+      "",
+      "| Target | Build s | Cold ms | Warm ms | DB MB | Objects built / measured / attempted |",
+      "|---|---:|---:|---:|---:|---:|",
+    );
+    for (const row of targets)
+      lines.push(
+        `| ${row.target} | ${decimal(row.buildMs / 1000, 2)} | ${n(row.coldMs)} | ${n(row.warmMs)} | ${decimal(row.bytes / 1e6, 3)} | ${row.built} / ${row.objects} / ${row.attempted} |`,
+      );
+    const pi = targets.find((row) => row.target === "pi");
+
+    if (pi)
+      for (const row of targets.filter((row) => row.target !== "pi")) {
+        const ratios = (["buildMs", "coldMs", "warmMs", "bytes"] as const).map((metric) =>
+          Number.isFinite(row[metric] / pi[metric]) && pi[metric] > 0
+            ? `${(row[metric] / pi[metric]).toFixed(2)}×`
+            : "n/a",
+        );
+
+        lines.push(`| ${row.target} ÷ pi | ${ratios.join(" | ")} | |`);
+      }
+    lines.push("");
+  }
+
+  const driverColos = [
+    ...new Set(
+      result.histories.flatMap((row) =>
+        row.batches.flatMap((batch) => (batch.colo ? [batch.colo] : [])),
+      ),
+    ),
+  ];
+
+  const providerColos = [
+    ...new Set(
+      result.histories.flatMap((row) => row.batches.flatMap((batch) => batch.result.providerColos)),
+    ),
+  ];
+
+  lines.push(
+    `Driver ingress colos: ${driverColos.join(", ") || "unknown"}. Provider ingress colos: ${providerColos.join(", ") || "unknown"}. Object placement hint: wnam; Object colo is not exposed.`,
+    "",
+  );
+  for (const failure of result.failures) lines.push(`- ${failure}`);
+  lines.push(
+    "",
+    `Failures: ${result.failures.length}. Target cleanup: ${result.kept ? "kept (--keep)" : result.cleanup?.verified ? "verified" : "NOT VERIFIED"}.`,
+  );
+
+  return lines.join("\n") + "\n";
+};
+
 export const table = (result: Result): string => {
+  if (result.histories.length) return historyTable(result);
+
   const rows = result.samples
     .filter((row) => row.status === "ok" && row.state !== "warmup")
     .sort(
@@ -183,3 +341,5 @@ export const table = (result: Result): string => {
 
   return lines.join("\n") + "\n";
 };
+
+import { Schema } from "effect";

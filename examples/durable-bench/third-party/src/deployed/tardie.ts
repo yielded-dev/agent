@@ -24,7 +24,13 @@ import {
 import {
   atom,
   defineActor,
+  MethodCancelled,
+  MethodFailed,
   type Atom,
+  type MessageReceipt,
+  type MethodInput,
+  type MethodOutput,
+  type MethodResult,
   type ThreadCoordinate,
 } from "../../node_modules/tardie/src/core/index.ts";
 import {
@@ -66,7 +72,7 @@ const actor = defineActor(
   "bench-agent",
   Effect.gen(function* () {
     const toolView = yield* tools([kv]);
-    // Tardie 0.44.0 loses compact() generics through NativeAtom.withLabel.
+    // Tardie 0.45.2 loses compact() generics through NativeAtom.withLabel.
     // Its implementation returns this ContextView; no stored value is cast.
     const context = (yield* compact(messages)) as Atom<ContextView>;
 
@@ -137,9 +143,15 @@ export const actorWorker = createActorWorker({
 
 type Reference = {
   wait: Effect.Effect<void, Error>;
-  methods: {
-    message: (input: { text: string }, request: { id: string }) => Effect.Effect<unknown, Error>;
-  };
+  invoke: (
+    method: "message",
+    input: MethodInput<typeof agentMethods.message>,
+    request: { readonly id: string },
+  ) => Effect.Effect<MessageReceipt, Error>;
+  result: (
+    method: "message",
+    id: string,
+  ) => Effect.Effect<MethodResult<MethodOutput<typeof agentMethods.message>>, Error>;
 };
 type Internals = {
   identityReady: Promise<void>;
@@ -213,6 +225,21 @@ export class ActorDO extends actorWorker.ActorObject {
   identity() {
     return this.meter.identity();
   }
+  bytes() {
+    return this.ctx.storage.sql.databaseSize;
+  }
+  async prepareSeed(query: Query) {
+    this.meter.assertBuild(query);
+    const expected = coordinate(query.object);
+    const allocated = await this.allocate({ instance: expected.instance, name: expected.thread });
+
+    if (
+      allocated.actor !== expected.actor ||
+      allocated.instance !== expected.instance ||
+      allocated.thread !== expected.thread
+    )
+      throw new Error("Tardie provisioned a different benchmark thread");
+  }
   end(requireEvidence: boolean) {
     if (requireEvidence && !this.nativeEntry) throw new Error("No Actor lookup evidence for this incarnation");
 
@@ -220,6 +247,7 @@ export class ActorDO extends actorWorker.ActorObject {
     return this.nativeEntry ?? this.meter.identity();
   }
   async abortCold(): Promise<void> {
+    await super.dispose();
     await this.ctx.storage.sync();
     this.ctx.abort(COLD_ABORT);
   }
@@ -242,11 +270,12 @@ export class ThreadDO extends actorWorker.ThreadObject {
     ctx: DurableObjectState,
     env: ConstructorParameters<typeof actorWorker.ThreadObject>[1],
   ) {
+    const constructedMs = Date.now();
     const directoryUsage = { used: false };
 
     super(ctx, withLocation(env, () => { directoryUsage.used = true; }));
     this.directoryUsage = directoryUsage;
-    this.host = new Host(ctx, env, "tardie");
+    this.host = new Host(ctx, env, "tardie", constructedMs);
   }
   override async alarm(
     ...args: Parameters<InstanceType<typeof actorWorker.ThreadObject>["alarm"]>
@@ -258,7 +287,7 @@ export class ThreadDO extends actorWorker.ThreadObject {
   private async open() {
     if (this.importedHere) throw new Error("Tardie requires /cold after bulk import");
     if (this.reference) return this.reference;
-    // Pinned Tardie 0.44.0 native reference bridge, shared with the existing seed.
+    // Pinned Tardie 0.45.2 native reference bridge, shared with the existing seed.
     const self = this as unknown as Internals;
 
     await self.identityReady;
@@ -271,12 +300,28 @@ export class ThreadDO extends actorWorker.ThreadObject {
   private async turn({ id, text }: Turn) {
     const reference = await this.open();
 
-    await Effect.runPromise(reference.methods.message({ text }, { id }));
-    await Effect.runPromise(reference.wait);
+    // Preserve native result subscriptions while wait reports processing failures.
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* reference.invoke("message", { text }, { id });
+        const [state] = yield* Effect.all([reference.result("message", id), reference.wait], {
+          concurrency: 2,
+        });
+
+        switch (state.status) {
+          case "completed":
+            return;
+          case "failed":
+            return yield* Effect.fail(new MethodFailed(state.error));
+          case "cancelled":
+            return yield* Effect.fail(new MethodCancelled(state.reason));
+        }
+      }),
+    );
   }
   override fetch(request: Request) {
     if (
-      !["/identity", "/import", "/run", "/metrics", "/cold"].includes(new URL(request.url).pathname)
+      !["/identity", "/prime", "/seed", "/seed-progress", "/import", "/run", "/metrics", "/cold"].includes(new URL(request.url).pathname)
     )
       return super.fetch(request);
 
@@ -288,7 +333,11 @@ export class ThreadDO extends actorWorker.ThreadObject {
         await this.ctx.storage.put("tardie:thread:coordinate", coordinate(query.object));
         this.importedHere = true;
       },
-      run: (input) => this.turn(input),
+      run: (input, _query?: Query) => this.turn(input),
+      close: async () => {
+        this.reference = undefined;
+        await super.dispose();
+      },
     });
   }
 }
