@@ -212,9 +212,12 @@ type CheckpointIntent = {
 };
 
 type MaintenanceStorage = Pick<DurableObjectTransaction, "get" | "put" | "delete">;
-type MaintenanceCheckpoint = Parameters<
-  Parameters<ThreadMaintenanceAlarm["Service"]["transaction"]>[0]
->[0];
+type MaintenanceCheckpoint = {
+  readonly mutations: Parameters<
+    Parameters<ThreadMaintenanceAlarm["Service"]["transaction"]>[0]
+  >[0];
+  readonly requireActive: Effect.Effect<void, DurableAlarmError>;
+};
 
 const CurrentCheckpoint = Context.Reference<MaintenanceCheckpoint | undefined>(
   "@yielded/agent/cloudflare/CurrentCheckpoint",
@@ -230,9 +233,33 @@ const makeAlarmOperation = Effect.gen(function* () {
 
   const transaction: SqlClient["withTransaction"] = (body) =>
     alarms
-      .transaction((checkpoint) => Effect.provideService(body, CurrentCheckpoint, checkpoint), {
-        sqlClient: sql,
-      })
+      .transaction(
+        (mutations) =>
+          Effect.withFiber((owner) => {
+            let active = true;
+
+            const requireActive = Effect.withFiber((fiber) =>
+              active && fiber === owner
+                ? Effect.void
+                : Effect.fail(
+                    DurableAlarmError.make({
+                      operation: "enroll maintenance source",
+                      message: "Source intent requires its active transaction callback's fiber",
+                    }),
+                  ),
+            );
+
+            return body.pipe(
+              Effect.provideService(CurrentCheckpoint, { mutations, requireActive }),
+              Effect.ensuring(
+                Effect.sync(() => {
+                  active = false;
+                }),
+              ),
+            );
+          }),
+        { sqlClient: sql },
+      )
       .pipe(
         Effect.mapError((cause) =>
           cause instanceof DurableObjectStorage.StorageOperationError
@@ -258,28 +285,32 @@ const makeAlarmOperation = Effect.gen(function* () {
       if (tx === undefined)
         return Effect.die(new Error("Maintenance checkpoint transaction unavailable"));
 
-      return Effect.suspend(() => {
-        let checkpoint: ReturnType<DurableObjectAlarm.AlarmScheduler["scheduleAlarm"]> =
-          Effect.void;
+      return tx.requireActive.pipe(
+        Effect.andThen(
+          Effect.suspend(() => {
+            let checkpoint: ReturnType<DurableObjectAlarm.AlarmScheduler["scheduleAlarm"]> =
+              Effect.void;
 
-        const intent: CheckpointIntent = {
-          at: (at) => {
-            checkpoint = tx.scheduleAlarm(maintenanceAlarmInput(at));
-          },
-          earlier: (at) => {
-            checkpoint = tx.scheduleAlarmEarlier(maintenanceAlarmInput(at));
-          },
-          cancel: () => {
-            checkpoint = tx.cancelAlarm(maintenanceAlarmRef);
-          },
-        };
+            const intent: CheckpointIntent = {
+              at: (at) => {
+                checkpoint = tx.mutations.scheduleAlarm(maintenanceAlarmInput(at));
+              },
+              earlier: (at) => {
+                checkpoint = tx.mutations.scheduleAlarmEarlier(maintenanceAlarmInput(at));
+              },
+              cancel: () => {
+                checkpoint = tx.mutations.cancelAlarm(maintenanceAlarmRef);
+              },
+            };
 
-        // The SQL/alarm callback already owns the native transaction; KV uses the same storage.
-        return Effect.tryPromise({
-          try: () => execute(ctx.storage, intent),
-          catch: alarmFailure(operation),
-        }).pipe(Effect.tap(() => checkpoint));
-      });
+            // The SQL/alarm callback already owns the native transaction; KV uses the same storage.
+            return Effect.tryPromise({
+              try: () => execute(ctx.storage, intent),
+              catch: alarmFailure(operation),
+            }).pipe(Effect.tap(() => checkpoint));
+          }),
+        ),
+      );
     });
 
     return Effect.gen(function* () {
@@ -771,8 +802,9 @@ const CurrentMutationLanes = Context.Reference<ReadonlyArray<string>>(
 export class ThreadMutationGate extends Context.Service<
   ThreadMutationGate,
   {
-    /** Commit source facts and their scheduling intent together. The flush runs before
-     * native commit; failed or interrupted transactions discard their queue view. */
+    /** Commit source facts and their scheduling intent together. Mutate from this callback's
+     * fiber, or use an explicit child transaction. The flush runs before native commit;
+     * failed or interrupted transactions discard their queue view. */
     readonly withTransaction: <A, E, R>(
       body: Effect.Effect<A, E, R>,
     ) => Effect.Effect<A, E | SqlError, R>;
