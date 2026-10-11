@@ -13,6 +13,7 @@ import { DefinitionDigestInput, DeploymentId } from "@yielded/agent/records";
 import { AdmissionRequest, SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { env, runInDurableObject } from "cloudflare:test";
 import { Context, Effect, Layer, Option } from "effect";
+import { DurableObject } from "effect-cf";
 import { Statement } from "effect/sql";
 import { SqlClient } from "effect/sql/SqlClient";
 import { expect, it } from "vite-plus/test";
@@ -27,8 +28,8 @@ it("keeps local submission lookups inside the physical owner, including corrupt 
   const colocated = ThreadId.make(`${thread}:colocated`);
   const foreign = ThreadId.make(`${thread}:foreign`);
 
-  await runInDurableObject(stubFor(thread), (_instance, state) =>
-    Effect.runPromise(
+  await runInDurableObject(stubFor(thread), (instance, state) =>
+    instance[DurableObject.RunSymbol](
       Effect.gen(function* () {
         const runtime = ThreadObject.layer([]).pipe(
           Layer.provide(
