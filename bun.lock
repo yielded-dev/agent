@@ -621,6 +621,7 @@
   ],
   "patchedDependencies": {
     "effect@4.0.3": "patches/effect@4.0.3-stream-decoder.patch",
+    "@yielded/auth@0.1.0-beta.12": "patches/auth@0.1.0-beta.12-effect-403.patch",
   },
   "overrides": {
     "@effect/platform-browser": "catalog:",

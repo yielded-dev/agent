@@ -32,7 +32,7 @@ SQL implementations they use.
 
 `platform-cloudflare` requires `effect-cf@^0.53.0` and `effect@^4.0.3` as host peers
 and uses the exact catalog versions for development. Supply Effect SQL packages compatible with
-4.0.0 for `effect-cf`. Consumers provide the shared runtime.
+4.0.3 for `effect-cf`. Consumers provide the shared runtime.
 
 Root overrides keep Effect, its Node/browser platforms, shared SQL adapters, and test packages
 on the catalog versions, including dependencies of published consumers. Published consumers must use Effect's current import paths;
@@ -50,6 +50,9 @@ The root temporarily patches Effect 4.0.3 to reuse streaming response decoders w
 tool declarations stay unchanged. This applies to repository installations; published
 libraries still resolve their consumer's Effect peer. Remove the patch when adopting
 an upstream release containing the change.
+
+The repository also patches seven UUID calls in `@yielded/auth@0.1.0-beta.12` for
+Effect 4.0.3. Remove that patch when auth ships compatible calls.
 
 Astro uses its own Vite dependency. Keep the root Vite+ core alias required by Vite+;
 do not add a global Vite override.

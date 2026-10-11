@@ -1,0 +1,131 @@
+diff --git a/src/oauth/signInModule.ts b/src/oauth/signInModule.ts
+--- a/src/oauth/signInModule.ts
++++ b/src/oauth/signInModule.ts
+@@ -888,11 +888,11 @@
+ 
+     const crypto = yield* Crypto.Crypto;
+ 
+-    const flowId = yield* crypto.randomUUIDv4.pipe(
++    const flowId = yield* crypto.randomUUIDv4().pipe(
+       Effect.mapError(() => OAuthUnavailable.make({})),
+     );
+ 
+-    const commandId = yield* crypto.randomUUIDv4.pipe(
++    const commandId = yield* crypto.randomUUIDv4().pipe(
+       Effect.mapError(() => OAuthUnavailable.make({})),
+     );
+ 
+diff --git a/src/phone/module.ts b/src/phone/module.ts
+--- a/src/phone/module.ts
++++ b/src/phone/module.ts
+@@ -337,8 +337,8 @@
+           input: { readonly phoneNumber: string; readonly locale?: string },
+         ) {
+           const crypto = yield* Crypto.Crypto;
+-          const flowId = yield* crypto.randomUUIDv4.pipe(Effect.mapError(phoneFailure));
+-          const requestId = yield* crypto.randomUUIDv4.pipe(Effect.mapError(phoneFailure));
++          const flowId = yield* crypto.randomUUIDv4().pipe(Effect.mapError(phoneFailure));
++          const requestId = yield* crypto.randomUUIDv4().pipe(Effect.mapError(phoneFailure));
+ 
+           return yield* SignIn.invoke(invocation, {
+             ...input,
+diff --git a/src/phone/admission.ts b/src/phone/admission.ts
+--- a/src/phone/admission.ts
++++ b/src/phone/admission.ts
+@@ -46,7 +46,7 @@
+   flowId: string,
+   proofId: string,
+ ) {
+-  const requestId = yield* (yield* Crypto.Crypto).randomUUIDv4.pipe(Effect.mapError(phoneFailure));
++  const requestId = yield* (yield* Crypto.Crypto).randomUUIDv4().pipe(Effect.mapError(phoneFailure));
+ 
+   if (
+     !(yield* phoneAdmission(
+diff --git a/src/password/methods/module.ts b/src/password/methods/module.ts
+--- a/src/password/methods/module.ts
++++ b/src/password/methods/module.ts
+@@ -916,7 +916,7 @@
+         ) {
+           const crypto = yield* Crypto.Crypto;
+ 
+-          const flowId = yield* crypto.randomUUIDv4.pipe(
++          const flowId = yield* crypto.randomUUIDv4().pipe(
+             Effect.mapError(() => PasswordUnavailable.make({})),
+           );
+ 
+diff --git a/src/password/methods/signIn.ts b/src/password/methods/signIn.ts
+--- a/src/password/methods/signIn.ts
++++ b/src/password/methods/signIn.ts
+@@ -128,7 +128,7 @@
+           invocation: AuthInvocation,
+           request: Omit<typeof Input.Encoded, "flowId">,
+         ) {
+-          const flowId = yield* (yield* Crypto.Crypto).randomUUIDv4.pipe(
++          const flowId = yield* (yield* Crypto.Crypto).randomUUIDv4().pipe(
+             Effect.mapError(() => PasswordUnavailable.make({})),
+           );
+ 
+diff --git a/dist/oauth/signInModule.mjs b/dist/oauth/signInModule.mjs
+--- a/dist/oauth/signInModule.mjs
++++ b/dist/oauth/signInModule.mjs
+@@ -414,8 +414,8 @@
+ 	const signIn = Effect.fn("OAuth.signInRequest")(function* (invocation, raw) {
+ 		const input = yield* Schema.decodeEffect(OAuthSignInInput)(raw).pipe(Effect.mapError(() => InvalidOperationInput.make({})));
+ 		const crypto = yield* Crypto.Crypto;
+-		const flowId = yield* crypto.randomUUIDv4.pipe(Effect.mapError(() => OAuthUnavailable.make({})));
+-		const commandId = yield* crypto.randomUUIDv4.pipe(Effect.mapError(() => OAuthUnavailable.make({})));
++		const flowId = yield* crypto.randomUUIDv4().pipe(Effect.mapError(() => OAuthUnavailable.make({})));
++		const commandId = yield* crypto.randomUUIDv4().pipe(Effect.mapError(() => OAuthUnavailable.make({})));
+ 		return yield* Begin.invoke(invocation, {
+ 			...input,
+ 			flowId,
+diff --git a/dist/phone/module.mjs b/dist/phone/module.mjs
+--- a/dist/phone/module.mjs
++++ b/dist/phone/module.mjs
+@@ -233,8 +233,8 @@
+ 		strategy: makeAuthStrategy({
+ 			signIn: Effect.fn("PhoneOtp.signInRequest")(function* (invocation, input) {
+ 				const crypto = yield* Crypto.Crypto;
+-				const flowId = yield* crypto.randomUUIDv4.pipe(Effect.mapError(phoneFailure));
+-				const requestId = yield* crypto.randomUUIDv4.pipe(Effect.mapError(phoneFailure));
++				const flowId = yield* crypto.randomUUIDv4().pipe(Effect.mapError(phoneFailure));
++				const requestId = yield* crypto.randomUUIDv4().pipe(Effect.mapError(phoneFailure));
+ 				return yield* SignIn.invoke(invocation, {
+ 					...input,
+ 					flowId,
+diff --git a/dist/phone/admission.mjs b/dist/phone/admission.mjs
+--- a/dist/phone/admission.mjs
++++ b/dist/phone/admission.mjs
+@@ -24,7 +24,7 @@
+ 	});
+ });
+ const phoneAttemptAdmission = Effect.fn("Phone.admitAttempt")(function* (moduleId, flowId, proofId) {
+-	const requestId = yield* (yield* Crypto.Crypto).randomUUIDv4.pipe(Effect.mapError(phoneFailure));
++	const requestId = yield* (yield* Crypto.Crypto).randomUUIDv4().pipe(Effect.mapError(phoneFailure));
+ 	if (!(yield* phoneAdmission(moduleId, "attempt", requestId, yield* phoneDigest([
+ 		"attempt",
+ 		flowId,
+diff --git a/dist/password/methods/module.mjs b/dist/password/methods/module.mjs
+--- a/dist/password/methods/module.mjs
++++ b/dist/password/methods/module.mjs
+@@ -521,7 +521,7 @@
+ 		}),
+ 		strategy: makeAuthStrategy({
+ 			signIn: Effect.fn("Passwords.signInRequest")(function* (invocation, request) {
+-				const flowId = yield* (yield* Crypto.Crypto).randomUUIDv4.pipe(Effect.mapError(() => PasswordUnavailable.make({})));
++				const flowId = yield* (yield* Crypto.Crypto).randomUUIDv4().pipe(Effect.mapError(() => PasswordUnavailable.make({})));
+ 				return yield* SignIn.invoke(invocation, {
+ 					...request,
+ 					flowId
+diff --git a/dist/password/methods/signIn.mjs b/dist/password/methods/signIn.mjs
+--- a/dist/password/methods/signIn.mjs
++++ b/dist/password/methods/signIn.mjs
+@@ -68,7 +68,7 @@
+ 		operations: { SignIn },
+ 		group: operationGroup(SignIn),
+ 		strategy: makeAuthStrategy({ signIn: Effect.fn("Passwords.signInRequest")(function* (invocation, request) {
+-			const flowId = yield* (yield* Crypto.Crypto).randomUUIDv4.pipe(Effect.mapError(() => PasswordUnavailable.make({})));
++			const flowId = yield* (yield* Crypto.Crypto).randomUUIDv4().pipe(Effect.mapError(() => PasswordUnavailable.make({})));
+ 			return yield* SignIn.invoke(invocation, {
+ 				...request,
+ 				flowId

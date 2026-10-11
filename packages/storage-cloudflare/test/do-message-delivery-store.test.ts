@@ -125,7 +125,7 @@ it("reuses complete lifecycle heads and rebuilds them after rollback", () => {
       expect(yield* lifecycle.storage.pendingDeadline).toEqual(Option.some(1));
 
       const warmQueries = spans
-        .filter((span) => span.name === "sql.execute")
+        .filter((span) => span.name === "sqlite")
         .map((span) => span.attributes.get("db.query.text"));
 
       yield* journal.state
