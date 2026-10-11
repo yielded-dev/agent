@@ -261,6 +261,8 @@ For Yielded and pi, pre-subscription opens the new Object before a cold turn's s
 after restart with observation prepared, and are not comparable to earlier unobserved cold
 completion timings. Tardie's cold timer still includes opening its native reference.
 
+Cold completion, first text and admission receipt share the logical start `driver submit start − constructorAndProbeMs`; the constructor/probe interval is also reported separately, while priming transport and observer attachment remain excluded.
+
 Request decoding, transcript normalization and fingerprinting run in the provider Worker,
 not the measured Object. The Object records response chunks and timestamps; it validates
 SSE and receipts only when post-turn metrics are collected. Every provider fingerprint

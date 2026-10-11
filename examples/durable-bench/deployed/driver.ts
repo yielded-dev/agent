@@ -282,6 +282,7 @@ export default {
             }
 
             const startedMs = yield* Clock.currentTimeMillis;
+            const metricStartMs = startedMs - constructorAndProbeMs;
             let admissionMs: number | undefined;
             let receipt: SubmitResult["receipt"] | undefined;
 
@@ -290,7 +291,7 @@ export default {
                 Schema.decodeUnknownSync(SubmitResult)(await (await invoke("/submit")).json()),
               );
 
-              admissionMs = (yield* Clock.currentTimeMillis) - startedMs;
+              admissionMs = (yield* Clock.currentTimeMillis) - metricStartMs;
               receipt = admission.receipt;
               input = admission.receipt.submissionId;
               const seen = visible.get(input);
@@ -338,10 +339,10 @@ export default {
 
             return {
               ok: true,
-              driverMs: constructorAndProbeMs + observedMs - startedMs,
+              driverMs: observedMs - metricStartMs,
               observedMs,
               admissionMs,
-              firstTextMs: text === undefined ? null : text.atMs - startedMs,
+              firstTextMs: text === undefined ? null : text.atMs - metricStartMs,
               ...(text === undefined ? {} : { firstText: text.text, firstTextSource: text.source }),
               observationMs,
               constructorAndProbeMs,

@@ -38,6 +38,7 @@ const group = <A>(rows: readonly A[], key: (row: A) => string) => {
 type Metric =
   | "driverMs"
   | "firstTextMs"
+  | "constructorAndProbeMs"
   | "objectToFirstModelMs"
   | "providerFirstTokenMs"
   | "firstTextForwardedMs"
@@ -256,8 +257,8 @@ export const table = (result: Result): string => {
     lines.push(
       cell,
       "",
-      `| Target | ${firstTextLabel} ms | Turn ms | Object → model ms | Turn median range | Turn repeat range, median / max | Objects |`,
-      "|---|---:|---:|---:|---:|---:|---:|",
+      `| Target | ${firstTextLabel} ms | Turn ms | Constructor / probe ms | Object → model ms | Turn median range | Turn repeat range, median / max | Objects |`,
+      "|---|---:|---:|---:|---:|---:|---:|---:|",
     );
     for (const target of TARGETS) {
       const turns = samples.filter((row) => row.target === target);
@@ -272,7 +273,7 @@ export const table = (result: Result): string => {
       });
 
       lines.push(
-        `| ${target} | ${interval(objectMedians(turns, "firstTextMs"))} | ${interval(medians)} | ${interval(objectMedians(turns, "objectToFirstModelMs"))} | ${n(Math.min(...medians))}–${n(Math.max(...medians))} | ${n(median(spreads))} / ${n(Math.max(...spreads))} | ${medians.length} |`,
+        `| ${target} | ${interval(objectMedians(turns, "firstTextMs"))} | ${interval(medians)} | ${interval(objectMedians(turns, "constructorAndProbeMs"))} | ${interval(objectMedians(turns, "objectToFirstModelMs"))} | ${n(Math.min(...medians))}–${n(Math.max(...medians))} | ${n(median(spreads))} / ${n(Math.max(...spreads))} | ${medians.length} |`,
       );
     }
 
@@ -281,7 +282,7 @@ export const table = (result: Result): string => {
       samples.some((row) => row.target === "pi")
     ) {
       lines.push(
-        `| Yielded ÷ pi | ${ratio(samples, "firstTextMs")} | ${ratio(samples, "driverMs")} | ${ratio(samples, "objectToFirstModelMs")} | | | |`,
+        `| Yielded ÷ pi | ${ratio(samples, "firstTextMs")} | ${ratio(samples, "driverMs")} | | ${ratio(samples, "objectToFirstModelMs")} | | | |`,
       );
     }
     lines.push("");
