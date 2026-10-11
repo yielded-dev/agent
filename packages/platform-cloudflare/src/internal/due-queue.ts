@@ -1,6 +1,4 @@
-import { Effect, Exit, Scheduler, Schema } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
-import { SqlError, UnknownError } from "effect/sql/SqlError";
+import { Effect, Schema } from "effect";
 
 export const LaneId = Schema.NonEmptyString.check(Schema.isMaxLength(256));
 
@@ -185,72 +183,6 @@ export const make = (storage: DurableObjectStorage) => {
     for (let offset = 0; offset < changes.length; offset += 11)
       write(changes.slice(offset, offset + 11));
   };
-
-  /** Own the flush inside the source transaction without changing the SQL service.
-   * Acquire its shared connection permit through Effect requirements. Cleanup follows
-   * native settlement, including commit rejection or interruption. */
-  const withTransaction = <A, E, R>(
-    body: Effect.Effect<A, E, R>,
-    transaction?: SqlClient["withTransaction"],
-  ) =>
-    Effect.flatMap(SqlClient, (client) =>
-      Effect.flatMap(Effect.serviceOption(client.transactionService), (ambient) => {
-        if (ambient._tag === "Some" && !ownsTransaction(storage, ambient.value[1]))
-          return Effect.fail(
-            SqlError.make({
-              reason: UnknownError.make({
-                operation: "begin maintenance source transaction",
-                message:
-                  "Use ThreadMutationGate.withTransaction at the outermost source transaction",
-                cause: new Error(
-                  "Unwrapped SQL transaction cannot own buffered maintenance intent",
-                ),
-              }),
-            }),
-          );
-
-        return Effect.uninterruptibleMask((restore) =>
-          Effect.suspend(() => {
-            let frame: Frame | undefined;
-
-            return (transaction ?? client.withTransaction)(
-              Effect.flatMap(Effect.serviceOption(client.transactionService), (transaction) =>
-                Effect.sync(() => {
-                  if (transaction._tag === "None") throw new Error("SQL transaction unavailable");
-                  frame = begin(transaction.value[1]);
-                }),
-              ).pipe(
-                Effect.andThen(restore(body)),
-                Effect.tap(() =>
-                  Effect.try({
-                    try: () => {
-                      if (frame !== undefined) flush(frame);
-                    },
-                    catch: (cause) =>
-                      SqlError.make({
-                        reason: UnknownError.make({
-                          cause,
-                          operation: "flush maintenance due queue",
-                          message: "Maintenance intent could not commit",
-                        }),
-                      }),
-                  }),
-                ),
-              ),
-            ).pipe(
-              Effect.onExit((exit) =>
-                Effect.sync(() => {
-                  if (frame !== undefined) finish(frame, Exit.isSuccess(exit));
-                }),
-              ),
-              // A released permit can resume another transaction. Do not auto-yield
-              // between the driver's settlement and removing this transaction's frame.
-              Effect.provideService(Scheduler.PreventSchedulerYield, true),
-            );
-          }),
-        );
-      }),
-    );
 
   const transaction = async <A>(
     body: (transaction: DurableObjectTransaction) => Promise<A>,
@@ -477,7 +409,10 @@ export const make = (storage: DurableObjectStorage) => {
   return {
     initialize,
     withView,
-    withTransaction,
+    // The host begins inside its transaction, flushes before commit, and finishes after settlement.
+    begin,
+    flush,
+    finish,
     transaction,
     read,
     dirty,

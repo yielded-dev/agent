@@ -36,6 +36,7 @@ import {
   Random,
   Ref,
   Result,
+  Scheduler,
   Schema,
   Scope,
   Semaphore,
@@ -275,7 +276,59 @@ const makeAlarmOperation = Effect.gen(function* () {
       );
 
   const withTransaction = <A, E, R>(body: Effect.Effect<A, E, R>) =>
-    queue.withTransaction(body, transaction).pipe(Effect.provideService(SqlClient, sql));
+    Effect.flatMap(Effect.serviceOption(sql.transactionService), (ambient) => {
+      if (ambient._tag === "Some" && !DueQueue.ownsTransaction(ctx.storage, ambient.value[1]))
+        return Effect.fail(
+          SqlError.make({
+            reason: UnknownError.make({
+              operation: "begin maintenance source transaction",
+              message: "Use ThreadMutationGate.withTransaction at the outermost source transaction",
+              cause: new Error("Unwrapped SQL transaction cannot own buffered maintenance intent"),
+            }),
+          }),
+        );
+
+      return Effect.uninterruptibleMask((restore) =>
+        Effect.suspend(() => {
+          let frame: ReturnType<typeof queue.begin> | undefined;
+
+          return transaction(
+            Effect.flatMap(Effect.serviceOption(sql.transactionService), (transaction) =>
+              Effect.sync(() => {
+                if (transaction._tag === "None") throw new Error("SQL transaction unavailable");
+                frame = queue.begin(transaction.value[1]);
+              }),
+            ).pipe(
+              Effect.andThen(restore(body)),
+              Effect.tap(() =>
+                Effect.try({
+                  try: () => {
+                    if (frame !== undefined) queue.flush(frame);
+                  },
+                  catch: (cause) =>
+                    SqlError.make({
+                      reason: UnknownError.make({
+                        cause,
+                        operation: "flush maintenance due queue",
+                        message: "Maintenance intent could not commit",
+                      }),
+                    }),
+                }),
+              ),
+            ),
+          ).pipe(
+            Effect.onExit((exit) =>
+              Effect.sync(() => {
+                if (frame !== undefined) queue.finish(frame, Exit.isSuccess(exit));
+              }),
+            ),
+            // A released permit can resume another transaction. Do not auto-yield
+            // between the driver's settlement and removing this transaction's frame.
+            Effect.provideService(Scheduler.PreventSchedulerYield, true),
+          );
+        }),
+      );
+    }).pipe(Effect.provideService(SqlClient, sql));
 
   const run = <A>(
     operation: string,
