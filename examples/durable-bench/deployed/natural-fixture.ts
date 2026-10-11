@@ -157,7 +157,14 @@ export const naturalFixture = Effect.fnUntraced(function* (target: Target, outpu
 
   // The runtime scope closes before copying so SQLite and its WAL are flushed.
   yield* fs.makeDirectory(join(output, ".."), { recursive: true });
-  const copied = yield* execute(["exec", "cp", "-cR", persist, output]);
+
+  const copied = yield* execute([
+    "exec",
+    "cp",
+    ...(process.platform === "darwin" ? ["-cR"] : ["-R"]),
+    persist,
+    output,
+  ]);
 
   if (copied.code !== 0)
     return yield* new BenchError({ message: "Cannot save the natural fixture." });

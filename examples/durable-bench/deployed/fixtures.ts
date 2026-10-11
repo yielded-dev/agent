@@ -153,7 +153,14 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
           if (seeded.code !== 0) return yield* new FixtureError({ message: `Seed ${name} failed` });
         }
         yield* fs.makeDirectory(directory, { recursive: true });
-        const copied = yield* execute(["exec", "cp", "-cR", local, source]);
+
+        const copied = yield* execute([
+          "exec",
+          "cp",
+          ...(process.platform === "darwin" ? ["-cR"] : ["-R"]),
+          local,
+          source,
+        ]);
 
         if (copied.code !== 0) return yield* new FixtureError({ message: `Cache ${name} failed` });
         yield* fs.copyFile(local + ".json", source + ".json");
@@ -326,6 +333,10 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
         thread: exported,
         ...(actor === undefined ? {} : { actor }),
       });
+      if (Buffer.byteLength(JSON.stringify(fixtures.at(-1))) > requestBytes)
+        return yield* new FixtureError({
+          message: `Saved ${name} restore schema envelope exceeds --restore-bytes (${requestBytes})`,
+        });
       chunks.set(name, paths);
     }
   }

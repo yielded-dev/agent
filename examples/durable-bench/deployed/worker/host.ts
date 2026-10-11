@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 
 import { CYCLE, history, MEASURED_TOOLS, turn } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";
@@ -14,7 +14,7 @@ import {
   type Target,
   type SqlDump,
 } from "./protocol.ts";
-import { restore } from "./restore.ts";
+import { restore, RestoreStorage } from "./restore.ts";
 import { importRows } from "./storage.ts";
 
 export const COLD_ABORT = "durable-bench explicit cold";
@@ -64,7 +64,10 @@ export class Host {
     try {
       if (url.pathname.startsWith("/restore/")) {
         this.meter.assertBuild(query);
-        const restored = await restore(this.ctx.storage, request, query);
+
+        const restored = await Effect.runPromise(
+          restore(request, query).pipe(Effect.provideService(RestoreStorage, this.ctx.storage)),
+        );
 
         if (url.pathname === "/restore/finalize") await handlers.restored?.();
 
