@@ -19,7 +19,7 @@ Commit the Bun lockfile; CI installs with `--frozen-lockfile`.
 | Vite+                                                   | `1.1.0`              |
 | Alchemy and its Cloudflare runtime                      | `2.0.0-beta.80`      |
 | Effect and its provider/platform/SQL/Atom/test packages | `4.0.0`              |
-| `effect-cf`                                             | `0.56.1`             |
+| `effect-cf`                                             | `0.56.2`             |
 | TypeScript                                              | `7.0.2`              |
 | `@effect/tsgo`                                          | `0.48.1`             |
 | Node.js                                                 | `22.18+` or `24.11+` |
