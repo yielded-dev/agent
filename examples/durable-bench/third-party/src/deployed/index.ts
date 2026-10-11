@@ -8,11 +8,10 @@ import { Settlement } from "@yielded/agent/submission-ledger";
 // The router uses the checkout's Effect; Tardie's adapter uses its isolated SDK version.
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "../../../node_modules/effect/dist/index.js";
 
-import { history, MEASURED_TOOLS, turn } from "../../../src/plan.ts";
+import { MEASURED_TOOLS, turn } from "../../../src/plan.ts";
 import { COLD_ABORT } from "../../../deployed/worker/host.ts";
 import { PiDO } from "./pi.ts";
-import { BulkFixture, Identity, Metrics, ProfileTarget, SeedBatch, TextObservation, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
-import { FixtureError } from "../../../deployed/worker/storage.ts";
+import { BulkFixture, Identity, ObjectIdentity, Metrics, measurementPaths, ProfileTarget, SeedBatch, TextObservation, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
 import { ActorDO, ThreadDO, cloudflareThreadName, coordinate } from "./tardie.ts";
 import { agent, definitions, YieldedDO } from "../../../deployed/worker/yielded.ts";
 
@@ -111,7 +110,9 @@ export default {
         return Response.json({ ok: true, build: env.BUILD });
       }
       const query = readQuery(url);
-      if (["/prime", "/seed", "/seed-progress", "/import", "/submit", "/await", "/result", "/run", "/text", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
+      if (request.method === "GET" && url.searchParams.get("readiness") === "1" && measurementPaths(query.target).includes(url.pathname))
+        return Response.json({ ok: true, build: env.BUILD });
+      if (["/prime", "/seed", "/seed-progress", "/submit", "/await", "/result", "/run", "/text", "/metrics", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
         return Response.json(
           {
             ok: false,
@@ -120,11 +121,11 @@ export default {
           },
           { status: 503 },
         );
-      const mutating = ["/prime", "/seed", "/import", "/cold", "/submit", "/await", "/result", "/run"].includes(url.pathname);
+      const mutating = url.pathname.startsWith("/restore/") || ["/prime", "/seed", "/cold", "/submit", "/await", "/result", "/run"].includes(url.pathname);
 
       if (url.pathname === "/profile-target") {
         const namespace = query.target === "yielded" ? env.YIELDED : query.target === "pi" ? env.PI : env.THREADS;
-        const name = query.target === "tardie" ? cloudflareThreadName(coordinate(query.object)) : query.object;
+        const name = query.target === "tardie" ? cloudflareThreadName(coordinate((query.storageObject ?? query.object))) : (query.storageObject ?? query.object);
 
         return Response.json(Schema.decodeUnknownSync(ProfileTarget)({
           actorId: namespace.idFromName(name).toString(),
@@ -136,20 +137,20 @@ export default {
 
       if (mutating && request.method !== "POST")
         return new Response("POST required", { status: 405 });
-      if (!["/prime", "/seed", "/seed-progress", "/import", "/cold", "/submit", "/await", "/result", "/run", "/text", "/metrics"].includes(url.pathname))
+      if (!url.pathname.startsWith("/restore/") && !["/identity", "/prime", "/seed", "/seed-progress", "/cold", "/submit", "/await", "/result", "/run", "/text", "/metrics"].includes(url.pathname))
         return new Response("not found", { status: 404 });
 
       const actor =
         query.target === "tardie"
-          ? env.ACTORS.getByName(query.object, { locationHint: "wnam" })
+          ? env.ACTORS.getByName((query.storageObject ?? query.object), { locationHint: "wnam" })
           : undefined;
 
       const stub =
         query.target === "yielded"
-          ? env.YIELDED.getByName(query.object, { locationHint: "wnam" })
+          ? env.YIELDED.getByName((query.storageObject ?? query.object), { locationHint: "wnam" })
           : query.target === "pi"
-            ? env.PI.getByName(query.object, { locationHint: "wnam" })
-            : env.THREADS.getByName(cloudflareThreadName(coordinate(query.object)), {
+            ? env.PI.getByName((query.storageObject ?? query.object), { locationHint: "wnam" })
+            : env.THREADS.getByName(cloudflareThreadName(coordinate((query.storageObject ?? query.object))), {
                 locationHint: "wnam",
               });
 
@@ -158,7 +159,7 @@ export default {
         const { client } = await cached.ready;
         const encoder = new TextEncoder();
         const encode = Schema.encodeSync(Schema.fromJsonString(TextObservation));
-        const body = await cached.runtime.runPromise(client.watchText(ThreadId.make(query.object)).pipe(
+        const body = await cached.runtime.runPromise(client.watchText(ThreadId.make((query.storageObject ?? query.object))).pipe(
           Stream.map((frame): readonly TextObservation[] => {
             if (frame._tag === "Reset") return [{ _tag: "Ready" }];
             const event = frame.event;
@@ -175,6 +176,17 @@ export default {
         return new Response(body, {
           headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
         });
+      }
+
+      if (url.pathname === "/identity") {
+        const response = await stub.fetch(new Request(url, { headers: request.headers }));
+
+        if (!response.ok) throw new Error("Object identity probe failed");
+
+        return Response.json(Schema.decodeUnknownSync(ObjectIdentity)({
+          identity: await response.json(),
+          ...(actor === undefined ? {} : { directory: await actor.identity() }),
+        }));
       }
 
       if (url.pathname === "/cold") {
@@ -211,9 +223,9 @@ export default {
         const { client, digests } = await cached.ready;
         const submitting = url.pathname === "/submit";
 
-        if (submitting && cached.queries.has(query.object))
+        if (submitting && cached.queries.has((query.storageObject ?? query.object)))
           throw new Error("Concurrent submission to one benchmark Object");
-        if (submitting) cached.queries.set(query.object, query);
+        if (submitting) cached.queries.set((query.storageObject ?? query.object), query);
         try {
           const result = await cached.runtime.runPromise(
             Effect.gen(function* () {
@@ -221,7 +233,7 @@ export default {
                 const input = turn(query.sample, MEASURED_TOOLS);
 
                 const receipt = yield* client.submit(agent, input.text, {
-                  threadId: ThreadId.make(query.object),
+                  threadId: ThreadId.make((query.storageObject ?? query.object)),
                   principal: Principal.make("bench"),
                   idempotencyKey: IdempotencyKey.make(input.id),
                   definitions: digests,
@@ -231,7 +243,7 @@ export default {
               }
               const receipt = yield* Schema.decodeUnknownEffect(Receipt)(receiptWire);
 
-              if (receipt.threadId !== query.object)
+              if (receipt.threadId !== (query.storageObject ?? query.object))
                 return yield* Effect.die("Receipt belongs to another Object");
               if (url.pathname === "/result") {
                 const record = yield* client.awaitSettlementRecord(receipt);
@@ -249,60 +261,14 @@ export default {
 
           return Response.json(result);
         } finally {
-          if (submitting) cached.queries.delete(query.object);
+          if (submitting) cached.queries.delete((query.storageObject ?? query.object));
         }
       }
 
       let directoryTables: Readonly<Record<string, number>> | undefined;
 
-      if (url.pathname === "/import" && query.target === "yielded") {
-        const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.clone().json());
-
-        if (fixture.target !== query.target || fixture.history !== query.history)
-          throw new Error("Fixture/query mismatch");
-        if (fixture.mode === "replay") {
-          if (!fixture.fallbackReason) throw new Error("Replay requires a fallback reason");
-          const cached = getClient(env);
-          const { client, digests } = await cached.ready;
-
-          if (cached.queries.has(query.object))
-            throw new Error("Concurrent submission to one benchmark Object");
-          cached.queries.set(query.object, query);
-          try {
-            await env.YIELDED.getByName(query.object, { locationHint: "wnam" }).beginReplay(query);
-            await cached.runtime.runPromise(
-              Effect.gen(function* () {
-                for (const input of history(0, fixture.history)) {
-                  cached.queries.set(query.object, {
-                    ...query,
-                    sample: input.id,
-                    ttftMs: 0,
-                    chunkDelayMs: 0,
-                    textStreaming: false,
-                  });
-
-                  const receipt = yield* client.submit(agent, input.text, {
-                    threadId: ThreadId.make(query.object),
-                    principal: Principal.make("bench"),
-                    idempotencyKey: IdempotencyKey.make(input.id),
-                    definitions: digests,
-                  });
-
-                  const settlement = yield* client.awaitSettlement(receipt);
-
-                  if (settlement.outcome !== "completed")
-                    return yield* new FixtureError({
-                      message: `Seed ${input.id} did not complete; initialization will not be retried`,
-                    });
-                }
-              }),
-            );
-          } finally {
-            cached.queries.delete(query.object);
-          }
-        }
-      }
-      if (url.pathname === "/import" && actor) {
+      if (url.pathname === "/restore/clear" && actor) await actor.clearFixture(query);
+      if (url.pathname === "/restore/start" && actor) {
         const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.clone().json());
 
         if (!fixture.actor || fixture.target !== "tardie")
@@ -318,7 +284,7 @@ export default {
       }
       const response = await stub.fetch(request);
 
-      if (url.pathname === "/import" && directoryTables && response.ok)
+      if (url.pathname === "/restore/start" && directoryTables && response.ok)
         return Response.json({
           ...Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Unknown))(
             await response.json(),

@@ -24,24 +24,29 @@ const Capture = Schema.Struct({
   actor_id: ProfileTarget.fields.actorId,
 });
 
-/** Reserve the five-capture / five-minute API quota before an Object's warmup. */
+/** Space captures by five minutes before warming the next profiling Object. */
 export const profileBatches = Effect.fnUntraced(function* (size: number) {
   const lock = yield* Semaphore.make(1);
-  let used = 0;
+
+  if (size > 1)
+    return yield* new BenchError({
+      message:
+        "Select one profile type per run; captures must be spaced at least five minutes apart.",
+    });
   let finishedAt = 0;
 
   return <A, E, R>(batch: Effect.Effect<A, E, R>) =>
     lock.withPermit(
       Effect.gen(function* () {
-        const remainingMs = 300_000 - ((yield* Clock.currentTimeMillis) - finishedAt);
+        while (finishedAt > 0) {
+          const remainingMs = 300_000 - ((yield* Clock.currentTimeMillis) - finishedAt);
 
-        if (remainingMs <= 0) used = 0;
-        if (used + size > 5) {
-          yield* Console.error("Waiting for the profiling quota before the next Object's warmup…");
-          yield* Effect.sleep(remainingMs);
-          used = 0;
+          if (remainingMs <= 0) break;
+          yield* Console.error(
+            "Waiting five minutes between profile captures before warming the next Object…",
+          );
+          yield* Effect.sleep(Math.min(remainingMs, 60_000));
         }
-        used += size;
 
         return yield* batch.pipe(
           Effect.ensuring(

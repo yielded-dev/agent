@@ -71,6 +71,58 @@ const connect = Effect.gen(function* () {
     Schema.Struct({ subdomain: Schema.NonEmptyString }),
   );
 
+  const listNamespaces = Effect.gen(function* () {
+    const namespaces: (typeof Namespaces.Type)[number][] = [];
+
+    for (let page = 1; page <= 100; page++) {
+      const rows = yield* api(
+        `workers/durable_objects/namespaces?page=${page}&per_page=100`,
+        Namespaces,
+      );
+
+      namespaces.push(...rows);
+      if (rows.length < 100) return namespaces;
+    }
+
+    return yield* new BenchError({
+      message: "Cloudflare namespace pagination exceeded its bound.",
+    });
+  });
+
+  /** Reserve production headroom; count the entire account, mutate only our owned stacks. */
+  const namespaceHeadroom = Effect.fnUntraced(function* (workers: readonly string[]) {
+    const namespaces = yield* listNamespaces;
+
+    if (workers.some((worker) => !/-(yielded|pi|tardie)$/.test(worker)))
+      return yield* new BenchError({ message: "Unknown benchmark Worker target" });
+
+    const required = workers.flatMap((worker) => {
+      const target = worker.split("-").at(-1);
+
+      const classes =
+        target === "yielded"
+          ? ["YieldedDO"]
+          : target === "pi"
+            ? ["PiDO"]
+            : target === "tardie"
+              ? ["ActorDO", "ThreadDO"]
+              : [];
+
+      return classes.map((name) => `${worker}_${name}`);
+    });
+
+    const existing = new Set(namespaces.map((namespace) => namespace.name));
+    const additional = required.filter((name) => !existing.has(name)).length;
+    const free = 500 - namespaces.length - additional;
+
+    if (free < 50)
+      return yield* new BenchError({
+        message: `Durable Object namespace headroom: account has ${namespaces.length}/500; this run needs ${additional} additional namespaces and would leave ${free} free. At least 50 must remain free. Tear down unused bench pools with their owning prefixes before retrying.`,
+      });
+
+    return { existing: namespaces.length, additional, free };
+  });
+
   const resources = Effect.fnUntraced(function* (workerName?: string) {
     // Prefixes may contain hyphens, so match the complete names emitted by run/deploy.
     const generatedName = new RegExp(
@@ -86,27 +138,11 @@ const connect = Effect.gen(function* () {
       .filter((w) => matches(w.id))
       .map((w) => w.id);
 
-    const namespaces: string[] = [];
+    const namespaces = (yield* listNamespaces)
+      .filter((n) => matches(n.name.split("_", 1)[0] ?? "") || matches(n.script ?? ""))
+      .map((n) => `${n.script ?? ""}/${n.name}`);
 
-    for (let page = 1; page <= 100; page++) {
-      const rows = yield* api(
-        `workers/durable_objects/namespaces?page=${page}&per_page=100`,
-        Namespaces,
-      );
-
-      namespaces.push(
-        ...rows
-          // Namespace names are <worker>_<class>, including when script is absent.
-          .filter((n) => matches(n.name.split("_", 1)[0] ?? "") || matches(n.script ?? ""))
-          .map((n) => `${n.script ?? ""}/${n.name}`),
-      );
-      if (rows.length < 100)
-        return { verified: workers.length === 0 && namespaces.length === 0, workers, namespaces };
-    }
-
-    return yield* new BenchError({
-      message: "Cloudflare namespace pagination exceeded its bound.",
-    });
+    return { verified: workers.length === 0 && namespaces.length === 0, workers, namespaces };
   });
 
   return {
@@ -117,6 +153,7 @@ const connect = Effect.gen(function* () {
     subdomain: domain.subdomain,
     api,
     resources,
+    namespaceHeadroom,
   };
 });
 
@@ -160,7 +197,7 @@ const fetchResponse = (
       });
 
       return yield* new BenchError({
-        message: `Worker returned HTTP ${response.status}; the input will not be retried. ${redact(text, [token]).slice(0, 1200)}`,
+        message: `Worker ${new URL(url).pathname} returned HTTP ${response.status}; the input will not be retried. ${redact(text, [token]).slice(0, 1200)}`,
       });
     }
 

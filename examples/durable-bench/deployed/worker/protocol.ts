@@ -10,6 +10,7 @@ export const History = Schema.Int.check(Schema.isGreaterThan(0));
 export const Query = Schema.Struct({
   target: Target,
   object: Schema.NonEmptyString,
+  storageObject: Schema.optionalKey(Schema.NonEmptyString),
   history: History,
   sample: Schema.NonEmptyString,
   expectedBuild: Schema.NonEmptyString,
@@ -19,6 +20,26 @@ export const Query = Schema.Struct({
 });
 
 export type Query = typeof Query.Type;
+
+/** Router-only GET probes; none may dispatch a turn or open an observer. */
+export const measurementPaths = (target: Target): ReadonlyArray<string> =>
+  target === "yielded"
+    ? ["/text", "/submit", "/await", "/result", "/prime", "/metrics"]
+    : target === "pi"
+      ? ["/text", "/run", "/prime", "/metrics"]
+      : ["/run", "/prime", "/metrics"];
+
+export const RouteProbe = Schema.Struct({
+  path: Schema.String,
+  status: Schema.Int,
+  build: Schema.optionalKey(Schema.String),
+  error: Schema.optionalKey(Schema.String),
+});
+
+export const RouteReadiness = Schema.Struct({
+  build: Schema.String,
+  routes: Schema.Array(RouteProbe),
+});
 
 export const ProfileTarget = Schema.Struct({
   actorId: Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/)),
@@ -31,6 +52,9 @@ export const readQuery = (url: URL): Query =>
   Schema.decodeUnknownSync(Query)({
     target: url.searchParams.get("target"),
     object: url.searchParams.get("object"),
+    ...(url.searchParams.has("storageObject")
+      ? { storageObject: url.searchParams.get("storageObject") }
+      : {}),
     history: Number(url.searchParams.get("history")),
     sample: url.searchParams.get("sample") ?? "import",
     expectedBuild: url.searchParams.get("expectedBuild"),
@@ -78,23 +102,22 @@ export const SqlTable = Schema.Struct({
 export const SqlDump = Schema.Struct({
   tables: Schema.Array(SqlTable),
   indexes: Schema.Array(Schema.String),
+  triggers: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
 export type SqlDump = typeof SqlDump.Type;
 
-export const FixtureMode = Schema.Literals(["import", "replay"]);
+export const FixtureMode = Schema.Literal("import");
 
 export const BulkFixture = Schema.Struct({
   version: Schema.Literal(1),
   target: Target,
   history: History,
   fingerprint: Schema.NonEmptyString,
+  threadId: Schema.NonEmptyString,
   sourceVersion: Schema.NonEmptyString,
   tables: Counts,
   mode: FixtureMode,
-  fallbackReason: Schema.optionalKey(Schema.NonEmptyString),
-  // Canonical pages stay encoded until the storage importer decodes their schema.
-  archive: Schema.optionalKey(Schema.Array(Schema.Json)),
   thread: Schema.optionalKey(SqlDump),
   actor: Schema.optionalKey(SqlDump),
 });
@@ -154,12 +177,16 @@ export const ImportResult = Schema.Struct({
   fingerprint: Schema.String,
   tables: Counts,
   mode: FixtureMode,
-  fallbackReason: Schema.optionalKey(Schema.NonEmptyString),
   directoryTables: Schema.optionalKey(Counts),
   identity: Identity,
 });
 
 export type ImportResult = typeof ImportResult.Type;
+
+export const ObjectIdentity = Schema.Struct({
+  identity: Identity,
+  directory: Schema.optionalKey(Identity),
+});
 
 export const ColdResult = Schema.Struct({
   ok: Schema.Boolean,
@@ -220,6 +247,7 @@ export const ProviderCall = Schema.Struct({
   fingerprint: Schema.String,
   startMs: Schema.Number,
   sinceEntryMs: Schema.Number,
+  firstTokenMs: Schema.optionalKey(Schema.Number),
   endMs: Schema.optionalKey(Schema.Number),
   status: Schema.optionalKey(Schema.Int),
   receipt: Schema.optionalKey(ProviderReceipt),
@@ -228,6 +256,13 @@ export const ProviderCall = Schema.Struct({
 
 export type ProviderCall = typeof ProviderCall.Type;
 
+/** Timestamps from one Object clock; never subtract them from driver/provider clocks. */
+export const ObjectPhases = Schema.Struct({
+  entryMs: Schema.Number,
+  firstTextForwardedMs: Schema.optionalKey(Schema.Number),
+  settlementMs: Schema.optionalKey(Schema.Number),
+});
+
 export const Metrics = Schema.Struct({
   ok: Schema.Literal(true),
   query: Query,
@@ -235,6 +270,7 @@ export const Metrics = Schema.Struct({
   directory: Schema.optionalKey(Identity),
   directoryUsed: Schema.optionalKey(Schema.Boolean),
   calls: Schema.Array(ProviderCall),
+  phases: Schema.optionalKey(ObjectPhases),
   tables: Counts,
   bytes: Schema.Natural,
   directoryBytes: Schema.optionalKey(Schema.Natural),
@@ -258,8 +294,33 @@ export interface Env {
   VERSION?: { id: string };
 }
 
-export const errorText = (cause: unknown): string =>
-  cause instanceof Error ? cause.message : String(cause);
+export const errorText = (cause: unknown): string => {
+  const messages: string[] = [];
+  const seen = new Set<unknown>();
+  let current = cause;
+
+  for (let depth = 0; depth < 8 && current !== undefined && !seen.has(current); depth++) {
+    seen.add(current);
+
+    const message =
+      typeof current === "object" &&
+      current !== null &&
+      "message" in current &&
+      typeof current.message === "string"
+        ? current.message
+        : typeof current === "string"
+          ? current
+          : "Unknown error";
+
+    if (!messages.includes(message)) messages.push(message);
+    current =
+      typeof current === "object" && current !== null && "cause" in current
+        ? current.cause
+        : undefined;
+  }
+
+  return messages.join(": ");
+};
 
 // Preserve SDK options and tool identifiers when adjusting the streaming wire layout.
 const jsonStruct = <const Fields extends Schema.Struct.Fields>(fields: Fields) =>
@@ -293,7 +354,7 @@ export const decodeChat = Schema.decodeUnknownSync(Chat);
 const argument = Schema.decodeUnknownSync(Schema.Struct({ n: Schema.Int }));
 
 // Match the pinned Effect provider's adjacent text/tool messages on every target.
-// This changes the forwarded request, not just its fingerprint.
+// Applied by the provider Worker before interpreting the request and fingerprinting it.
 export const separateTextAndTools = (chat: typeof Chat.Type): typeof Chat.Type => ({
   ...chat,
   messages: chat.messages.flatMap((message) => {
@@ -327,3 +388,24 @@ export const chatTranscript = (chat: typeof Chat.Type) =>
 
     return [{ role: message.role, text, ...(calls?.length ? { calls } : {}) }];
   });
+
+/** Setup requests are bounded independently of the database size. */
+export const RESTORE_BYTES = 4 * 1024 * 1024;
+
+export const RestoreChunk = Schema.Struct({
+  sequence: Schema.Natural,
+  parts: Schema.Array(
+    Schema.Struct({
+      table: Schema.NonEmptyString,
+      offset: Schema.Natural,
+      rows: SqlTable.fields.rows,
+    }),
+  ),
+});
+
+export type RestoreChunk = typeof RestoreChunk.Type;
+
+export const RestoreAck = Schema.Struct({
+  ok: Schema.Literal(true),
+  directoryTables: Schema.optionalKey(Counts),
+});

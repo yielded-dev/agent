@@ -230,7 +230,7 @@ export class ActorDO extends actorWorker.ActorObject {
   }
   async prepareSeed(query: Query) {
     this.meter.assertBuild(query);
-    const expected = coordinate(query.object);
+    const expected = coordinate((query.storageObject ?? query.object));
     const allocated = await this.allocate({ instance: expected.instance, name: expected.thread });
 
     if (
@@ -253,11 +253,17 @@ export class ActorDO extends actorWorker.ActorObject {
   }
   async importFixture(dump: SqlDump, query: Query) {
     this.meter.assertBuild(query);
-    const counts = await Host.importTardie(this.ctx.storage, dump, query.object);
+    const counts = await Host.importTardie(this.ctx.storage, dump, (query.storageObject ?? query.object));
 
-    await this.ctx.storage.put("tardie:actor:instance", query.object);
+    await this.ctx.storage.put("tardie:actor:instance", (query.storageObject ?? query.object));
 
     return counts;
+  }
+  async clearFixture(query: Query) {
+    this.meter.assertBuild(query);
+    await super.dispose();
+    await this.ctx.storage.deleteAll();
+    await this.ctx.storage.sync();
   }
 }
 
@@ -321,16 +327,14 @@ export class ThreadDO extends actorWorker.ThreadObject {
   }
   override fetch(request: Request) {
     if (
-      !["/identity", "/prime", "/seed", "/seed-progress", "/import", "/run", "/metrics", "/cold"].includes(new URL(request.url).pathname)
+      !new URL(request.url).pathname.startsWith("/restore/") && !["/identity", "/prime", "/seed", "/seed-progress", "/run", "/metrics", "/cold"].includes(new URL(request.url).pathname)
     )
       return super.fetch(request);
 
     return this.host.fetch(request, {
       directoryUsed: this.directoryUsage.used,
-      import: async (fixture, query) => {
-        if (!fixture.thread) throw new Error("Missing Tardie Thread fixture");
-        await Host.importTardie(this.ctx.storage, fixture.thread, query.object);
-        await this.ctx.storage.put("tardie:thread:coordinate", coordinate(query.object));
+      restored: async () => {
+        await this.ctx.storage.put("tardie:thread:coordinate", coordinate("main"));
         this.importedHere = true;
       },
       run: (input, _query?: Query) => this.turn(input),

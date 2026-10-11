@@ -32,7 +32,12 @@ const Page = Schema.Struct({
   events: Schema.Struct({ count: Schema.Natural, events: Schema.Array(Event) }),
 });
 
-export const cpu = Effect.fnUntraced(function* (name: string, from: number, to: number) {
+export const cpu = Effect.fnUntraced(function* (
+  name: string,
+  from: number,
+  to: number,
+  owner?: { readonly target: typeof Target.Type; readonly object: string },
+) {
   const cloud = yield* Cloudflare;
   const pending = [{ from, to }];
   const events = new Map<string, typeof Event.Type>();
@@ -89,7 +94,20 @@ export const cpu = Effect.fnUntraced(function* (name: string, from: number, to: 
     const matching = id === undefined ? [] : (markers.get(id) ?? []);
     const marker = matching.length === 1 ? matching[0] : undefined;
 
+    if (
+      owner &&
+      marker &&
+      ((marker.target !== undefined && marker.target !== owner.target) ||
+        (marker.object !== undefined && marker.object !== owner.object))
+    )
+      return yield* new BenchError({
+        message: "CPU marker disagrees with its dedicated Worker cohort",
+      });
     invocations.push({
+      ...(event.$workers.eventType === undefined
+        ? {}
+        : { invocationType: event.$workers.eventType }),
+      ...owner,
       kind:
         marker?.kind ??
         (matching.length > 1 ? "ambiguous" : (event.$workers.eventType ?? "unattributed")),

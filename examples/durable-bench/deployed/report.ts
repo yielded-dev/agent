@@ -35,7 +35,15 @@ const group = <A>(rows: readonly A[], key: (row: A) => string) => {
   return result;
 };
 
-type Metric = "driverMs" | "firstTextMs" | "objectToFirstModelMs";
+type Metric =
+  | "driverMs"
+  | "firstTextMs"
+  | "constructorAndProbeMs"
+  | "objectToFirstModelMs"
+  | "providerFirstTokenMs"
+  | "firstTextForwardedMs"
+  | "settlementMs"
+  | "admissionMs";
 
 export const objectMedians = (rows: readonly Sample[], metric: Metric = "driverMs") =>
   [...group(rows, (row) => row.object).values()].flatMap((items) => {
@@ -211,7 +219,7 @@ const historyTable = (result: Result): string => {
   for (const failure of result.failures) lines.push(`- ${failure}`);
   lines.push(
     "",
-    `Failures: ${result.failures.length}. Target cleanup: ${result.kept ? "kept (--keep)" : result.cleanup?.verified ? "verified" : "NOT VERIFIED"}.`,
+    `Failures: ${result.failures.length}. Target cleanup: ${result.workerPool ? "Worker pool retained (--teardown to remove)" : result.kept ? "kept" : result.cleanup?.verified ? "verified" : "NOT VERIFIED"}.`,
   );
 
   return lines.join("\n") + "\n";
@@ -221,7 +229,7 @@ export const table = (result: Result): string => {
   if (result.histories.length) return historyTable(result);
 
   const rows = result.samples
-    .filter((row) => row.status === "ok" && row.state !== "warmup")
+    .filter((row) => row.status === "ok" && (row.state === "cold" || row.state === "warm"))
     .sort(
       (a, b) =>
         a.history - b.history ||
@@ -249,8 +257,8 @@ export const table = (result: Result): string => {
     lines.push(
       cell,
       "",
-      `| Target | ${firstTextLabel} ms | Turn ms | Object → model ms | Turn median range | Turn repeat range, median / max | Objects |`,
-      "|---|---:|---:|---:|---:|---:|---:|",
+      `| Target | ${firstTextLabel} ms | Turn ms | Constructor / probe ms | Object → model ms | Turn median range | Turn repeat range, median / max | Objects |`,
+      "|---|---:|---:|---:|---:|---:|---:|---:|",
     );
     for (const target of TARGETS) {
       const turns = samples.filter((row) => row.target === target);
@@ -265,7 +273,7 @@ export const table = (result: Result): string => {
       });
 
       lines.push(
-        `| ${target} | ${interval(objectMedians(turns, "firstTextMs"))} | ${interval(medians)} | ${interval(objectMedians(turns, "objectToFirstModelMs"))} | ${n(Math.min(...medians))}–${n(Math.max(...medians))} | ${n(median(spreads))} / ${n(Math.max(...spreads))} | ${medians.length} |`,
+        `| ${target} | ${interval(objectMedians(turns, "firstTextMs"))} | ${interval(medians)} | ${interval(objectMedians(turns, "constructorAndProbeMs"))} | ${interval(objectMedians(turns, "objectToFirstModelMs"))} | ${n(Math.min(...medians))}–${n(Math.max(...medians))} | ${n(median(spreads))} / ${n(Math.max(...spreads))} | ${medians.length} |`,
       );
     }
 
@@ -274,69 +282,168 @@ export const table = (result: Result): string => {
       samples.some((row) => row.target === "pi")
     ) {
       lines.push(
-        `| Yielded ÷ pi | ${ratio(samples, "firstTextMs")} | ${ratio(samples, "driverMs")} | ${ratio(samples, "objectToFirstModelMs")} | | | |`,
+        `| Yielded ÷ pi | ${ratio(samples, "firstTextMs")} | ${ratio(samples, "driverMs")} | | ${ratio(samples, "objectToFirstModelMs")} | | | |`,
       );
     }
     lines.push("");
   }
+  lines.push(
+    "Turn phases: Object-clock milliseconds since submission entry; receipt is driver admission latency. Missing markers are not zero.",
+    "",
+    "| Cell / target / build | Provider first token | First text forwarded | Settlement | Receipt (driver) |",
+    "|---|---:|---:|---:|---:|",
+  );
+  for (const [cell, samples] of group(
+    rows,
+    (row) => `${row.history}/${row.ttftMs}/${row.state}/${row.target}/${row.build}`,
+  )) {
+    lines.push(
+      `| ${cell} | ${(["providerFirstTokenMs", "firstTextForwardedMs", "settlementMs", "admissionMs"] as const).map((metric) => interval(objectMedians(samples, metric))).join(" | ")} |`,
+    );
+  }
+  lines.push("");
   if (rows.some((row) => row.build === "baseline")) {
     lines.push(
-      "Same-Object Yielded A/B (candidate ÷ baseline; <1 is faster):",
+      "Same-Object paired medians; delta is candidate − baseline. 95% percentile bootstrap CI resamples whole Objects (10,000 draws).",
       "",
-      "| Cell | Paired ratio, median | Baseline repeat drift, median / max |",
-      "|---|---:|---:|",
+      "| Cell / metric | Baseline ms | Candidate ms | Paired delta ms [95% CI] | Paired ratio [95% CI] | First − second pass ms [95% CI] |",
+      "|---|---:|---:|---:|---:|---:|",
     );
     for (const [cell, samples] of group(
-      rows.filter((row) => row.target === "yielded"),
-      (row) => `${row.history}/${row.ttftMs}/${row.state}`,
+      rows,
+      (row) => `${row.target}/${row.history}/${row.ttftMs}/${row.state}`,
     )) {
-      const ratios: number[] = [];
-      const drifts: number[] = [];
+      for (const metric of ["driverMs", "firstTextMs"] as const) {
+        const pairs = [...group(samples, (row) => row.object).values()].flatMap((turns) => {
+          const baseline = objectMedians(
+            turns.filter((row) => row.build === "baseline"),
+            metric,
+          );
 
-      for (const turns of group(samples, (row) => row.object).values()) {
-        const a = turns.filter((row) => row.build === "baseline");
-        const b = turns.filter((row) => row.build === "candidate");
+          const candidate = objectMedians(
+            turns.filter((row) => row.build === "candidate"),
+            metric,
+          );
 
-        const epochs = [...group(a, (row) => String(row.epoch)).values()].map((epoch) =>
+          const first = objectMedians(
+            turns.filter((row) => row.order !== undefined && row.epoch === 0),
+            metric,
+          )[0];
+
+          const second = objectMedians(
+            turns.filter((row) => row.order !== undefined && row.epoch === 1),
+            metric,
+          )[0];
+
+          return baseline.length === 1 && candidate.length === 1
+            ? [
+                {
+                  baseline: baseline[0]!,
+                  candidate: candidate[0]!,
+                  orderDelta:
+                    first === undefined || second === undefined ? undefined : first - second,
+                },
+              ]
+            : [];
+        });
+
+        if (!pairs.length) continue;
+        const deltas = pairs.map((pair) => pair.candidate - pair.baseline);
+        const ratios = pairs.map((pair) => pair.candidate / pair.baseline);
+
+        const orderDeltas = pairs.flatMap((pair) =>
+          pair.orderDelta === undefined ? [] : [pair.orderDelta],
+        );
+
+        const balanced = orderDeltas.length === pairs.length;
+        let seed = 0x12345678;
+
+        const draws = Array.from({ length: 10000 }, () => {
+          const indices = Array.from({ length: pairs.length }, () => {
+            seed ^= seed << 13;
+            seed ^= seed >>> 17;
+            seed ^= seed << 5;
+
+            return (seed >>> 0) % pairs.length;
+          });
+
+          return {
+            delta: median(indices.map((index) => deltas[index]!)),
+            ratio: median(indices.map((index) => ratios[index]!)),
+            order: balanced ? median(indices.map((index) => orderDeltas[index]!)) : NaN,
+          };
+        });
+
+        const deltaDraws = draws.map((draw) => draw.delta);
+        const ratioDraws = draws.map((draw) => draw.ratio);
+        const orderDraws = draws.map((draw) => draw.order);
+
+        const orderInterval = balanced
+          ? `${n(median(orderDeltas))} [${n(quantile(orderDraws, 0.025))}, ${n(quantile(orderDraws, 0.975))}]`
+          : "n/a";
+
+        lines.push(
+          `| ${cell}/${metric === "driverMs" ? "completion" : "first text"} | ${n(median(pairs.map((pair) => pair.baseline)))} | ${n(median(pairs.map((pair) => pair.candidate)))} | ${n(median(deltas))} [${n(quantile(deltaDraws, 0.025))}, ${n(quantile(deltaDraws, 0.975))}] | ${median(ratios).toFixed(3)}× [${quantile(ratioDraws, 0.025).toFixed(3)}, ${quantile(ratioDraws, 0.975).toFixed(3)}] | ${orderInterval} |`,
+        );
+      }
+    }
+
+    const driftRows = [
+      ...group(
+        rows.filter((row) => row.target === "yielded" && row.build === "baseline"),
+        (row) => `${row.history}/${row.ttftMs}/${row.state}`,
+      ).entries(),
+    ].flatMap(([cell, samples]) => {
+      const drifts = [...group(samples, (row) => row.object).values()].flatMap((turns) => {
+        const epochs = [...group(turns, (row) => String(row.epoch)).values()].map((epoch) =>
           median(objectMedians(epoch)),
         );
 
-        ratios.push(median(objectMedians(b)) / median(objectMedians(a)));
-        drifts.push(Math.max(...epochs) / Math.min(...epochs) - 1);
-      }
+        return epochs.length > 1 ? [Math.max(...epochs) / Math.min(...epochs) - 1] : [];
+      });
+
+      return drifts.length
+        ? [
+            `| ${cell} | ${(median(drifts) * 100).toFixed(1)}% / ${(Math.max(...drifts) * 100).toFixed(1)}% |`,
+          ]
+        : [];
+    });
+
+    if (driftRows.length)
+      lines.push("", "| Cell | Baseline repeat drift, median / max |", "|---|---:|", ...driftRows);
+    lines.push("");
+  }
+  if (result.phases) {
+    lines.push("| Phase | Wall seconds |", "|---|---:|");
+    for (const [phase, rows] of group(result.phases, (row) => row.phase))
       lines.push(
-        `| ${cell} | ${median(ratios).toFixed(3)}× | ${(median(drifts) * 100).toFixed(1)}% / ${(Math.max(...drifts) * 100).toFixed(1)}% |`,
+        `| ${phase} | ${(rows.reduce((sum, row) => sum + row.ms, 0) / 1000).toFixed(1)} |`,
       );
-    }
-    lines.push(
-      "",
-      "Do not claim gains smaller than the repeat/control spread. Histories grow across the balanced build sequence.",
-      "",
-    );
+    lines.push("");
   }
   if (result.cpu) {
     lines.push(
       "Observed invocation CPU (telemetry may be sampled or delayed):",
       "",
-      "| Target / invocation | CPU ms | Observed | Non-ok outcomes |",
+      "| Target / event / marker | CPU ms | Observed | Non-ok outcomes |",
       "|---|---:|---:|---:|",
     );
     for (const [kind, calls] of group(
       result.cpu,
       (row) =>
-        `${row.target ?? "unattributed"}/${row.sample?.match(/^h\d+$/) ? "seed-" : ""}${row.kind}`,
+        `${row.target ?? "unattributed"}/${row.invocationType ?? "unknown"}/${row.sample?.match(/^h\d+$/) ? "seed-" : ""}${row.kind}`,
     ))
       lines.push(
         `| ${kind} | ${interval(calls.flatMap((row) => (row.cpuMs === null ? [] : [row.cpuMs])))} | ${calls.length} | ${calls.filter((row) => row.outcome !== "ok").length} |`,
       );
     lines.push(
       "",
-      `Unmatched invocation markers: ${result.unmatchedCpuMarkers ?? "unknown"}. CPU totals are not inferred from missing rows.`,
+      `Unmatched invocation markers: ${result.unmatchedCpuMarkers ?? "unknown"}. Invocations without sample attribution: ${result.cpu.filter((row) => row.sample === undefined).length}/${result.cpu.length}. Owning Objects observed: ${new Set(result.cpu.flatMap((row) => (row.object === undefined ? [] : [row.object + "/" + row.target]))).size}. CPU totals are not inferred from missing rows.`,
       "",
     );
   }
   lines.push(
-    `Failures: ${result.failures.length}. Target cleanup: ${result.kept ? "kept (--keep)" : result.cleanup?.verified ? "verified" : "NOT VERIFIED"}.`,
+    `Failures: ${result.failures.length}. Target cleanup: ${result.workerPool ? "Worker pool retained (--teardown to remove)" : result.kept ? "kept" : result.cleanup?.verified ? "verified" : "NOT VERIFIED"}.`,
   );
 
   return lines.join("\n") + "\n";

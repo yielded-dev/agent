@@ -1,10 +1,10 @@
-import { Effect, Schema } from "effect";
+import { exportThread } from "@yielded/agent-storage-cloudflare/do-thread-store";
+import { Effect, Layer, Schema } from "effect";
 
 import { CYCLE, history, MEASURED_TOOLS, turn } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";
 import { attach, type Observation } from "./observe.ts";
 import {
-  BulkFixture,
   errorText,
   readQuery,
   SeedBatch,
@@ -15,13 +15,15 @@ import {
   type Target,
   type SqlDump,
 } from "./protocol.ts";
-import { addressTardie, importRows, verifyFixture } from "./storage.ts";
+import { restore } from "./restore.ts";
+import { FixtureExport, importRows, RestoreStorage } from "./storage.ts";
 
 export const COLD_ABORT = "durable-bench explicit cold";
 
 export class Host {
   static async importTardie(storage: DurableObjectStorage, dump: SqlDump, object: string) {
-    importRows(storage, await Effect.runPromise(addressTardie(dump, object)));
+    if (object !== "main") throw new Error("Snapshot identity must remain main");
+    importRows(storage, dump);
     const actual = tables(storage.sql);
 
     for (const table of dump.tables)
@@ -44,9 +46,9 @@ export class Host {
   async fetch(
     request: Request,
     handlers: {
-      import: (fixture: BulkFixture, query: Query) => Promise<void>;
       run?: (input: { id: string; text: string }, query: Query) => Promise<void>;
       close?: () => Promise<void>;
+      restored?: () => Promise<void>;
       directoryUsed?: boolean;
     },
   ): Promise<Response> {
@@ -61,6 +63,34 @@ export class Host {
       this.ctx.abort(COLD_ABORT);
     }
     try {
+      if (url.pathname.startsWith("/restore/")) {
+        this.meter.assertBuild(query);
+
+        if (url.pathname === "/restore/clear") {
+          if (request.method !== "POST") throw new Error("Restore reset requires POST");
+          await handlers.close?.();
+          await this.ctx.storage.deleteAll();
+          await this.ctx.storage.sync();
+
+          return Response.json({ ok: true, identity: this.meter.identity() });
+        }
+
+        const restored = await Effect.runPromise(
+          restore(request, query).pipe(
+            Effect.provideService(RestoreStorage, this.ctx.storage),
+            Effect.provide(
+              Layer.succeed(FixtureExport, {
+                page: (input) => exportThread({ storage: this.ctx.storage }, input),
+              }),
+            ),
+            Effect.scoped,
+          ),
+        );
+
+        if (url.pathname === "/restore/finalize") await handlers.restored?.();
+
+        return Response.json({ ...restored, identity: this.meter.identity() });
+      }
       if (url.pathname === "/seed-progress") {
         this.meter.assertBuild(query);
         const stored = await this.ctx.storage.get("durable-bench/history");
@@ -129,6 +159,7 @@ export class Host {
 
           this.meter.begin(seedQuery);
           await handlers.run(input, seedQuery);
+          this.meter.validateCalls();
           if (
             this.meter.calls.length !== (CYCLE[(from + offset) % CYCLE.length] ?? 0) + 1 ||
             this.meter.calls.some(
@@ -164,40 +195,25 @@ export class Host {
 
         return Response.json(batch);
       }
-      if (url.pathname === "/import") {
-        this.meter.assertBuild(query);
-        const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.json());
-
-        if (fixture.target !== query.target || fixture.history !== query.history)
-          throw new Error("Fixture/query mismatch");
-        if (fixture.mode === "replay" && fixture.target !== "yielded")
-          throw new Error("Only Yielded supports the fixture replay fallback");
-        await handlers.import(fixture, query);
-        const verified = await Effect.runPromise(verifyFixture(this.ctx.storage, fixture));
-
-        return Response.json({
-          ok: true,
-          target: query.target,
-          history: query.history,
-          ...verified,
-          mode: fixture.mode,
-          ...(fixture.fallbackReason === undefined
-            ? {}
-            : { fallbackReason: fixture.fallbackReason }),
-          identity: this.meter.identity(),
-        });
-      }
       if (url.pathname === "/run") {
         if (!handlers.run) throw new Error("Yielded uses submit and await");
         this.meter.begin(query);
         this.meter.marker("run");
         await handlers.run(turn(query.sample, MEASURED_TOOLS), query);
+        this.meter.settled();
 
         return Response.json({ ok: true, outcome: "completed", identity: this.meter.entry });
       }
       if (url.pathname === "/metrics") {
         if (!this.meter.query || this.meter.query.sample !== query.sample)
           throw new Error("No metrics for this sample/incarnation");
+
+        if (url.searchParams.get("quiescent") === "true") {
+          await handlers.close?.();
+          await this.ctx.storage.sync();
+        }
+
+        this.meter.validateCalls();
 
         return Response.json({
           ok: true,
@@ -207,6 +223,7 @@ export class Host {
             ? {}
             : { directoryUsed: handlers.directoryUsed }),
           calls: this.meter.calls,
+          phases: this.meter.phases(),
           tables: tables(this.ctx.storage.sql),
           bytes: this.ctx.storage.sql.databaseSize,
         });

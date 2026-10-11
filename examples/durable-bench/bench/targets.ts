@@ -46,7 +46,8 @@ export const target = (name: string | undefined): Target => {
   throw new Error("target: yielded | yielded-inline | pi | tardie");
 };
 
-export const fixture = (name: Target, turns: number) => `fixtures/${name}-${turns}`;
+export const fixtureDirectory = process.env.DURABLE_BENCH_FIXTURE_DIRECTORY ?? "fixtures";
+export const fixture = (name: Target, turns: number) => join(fixtureDirectory, `${name}-${turns}`);
 
 const bundles = new Map<Target, Promise<string>>();
 

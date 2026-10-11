@@ -3,6 +3,7 @@ import { BrowserCrypto } from "@effect/platform-browser";
 import { ThreadObject } from "@yielded/agent-platform-cloudflare";
 import {
   HostResponse,
+  LiveTextFrame,
   SubmitRequest,
 } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import * as Agent from "@yielded/agent/agent";
@@ -20,7 +21,6 @@ import { payload, type Turn } from "../../src/plan.ts";
 import { Host } from "./host.ts";
 import { observation } from "./observe.ts";
 import { type Env, type Query } from "./protocol.ts";
-import { importCanonical } from "./storage.ts";
 
 const tools = Toolkit.make(
   Tool.make("lookup", {
@@ -64,8 +64,6 @@ export const definitions = DefinitionDigestInput.make({
   tools: { lookup: { revision: 1, executionClass: "readonly" } },
 });
 
-const replayStarted = "durable-bench/replay-started";
-
 const definitionDigests = Effect.runSync(
   Effect.cached(digestDefinitions(definitions).pipe(Effect.provide(BrowserCrypto.layer))),
 );
@@ -80,6 +78,7 @@ export class YieldedDO extends ThreadObject.make(application, {
   producerPrefix: "durable-bench",
 }) {
   private readonly host: Host;
+  private readonly activeAlarms = new Set<Promise<void>>();
   constructor(ctx: globalThis.DurableObjectState, env: Env) {
     const constructedMs = Date.now();
 
@@ -110,26 +109,16 @@ export class YieldedDO extends ThreadObject.make(application, {
     if (settled._tag !== "SettlementReached" || settled.settlement.outcome !== "completed")
       throw new Error(`History settlement failed: ${JSON.stringify(settled)}`);
   }
-  async beginReplay(query: Query): Promise<void> {
-    this.host.meter.assertBuild(query);
-    await this.ctx.blockConcurrencyWhile(async () => {
-      if (
-        (await this.ctx.storage.get(replayStarted)) !== undefined ||
-        this.ctx.storage.sql
-          .exec<{ n: number }>(
-            "SELECT (SELECT COUNT(*) FROM effect_agent_submissions) + (SELECT COUNT(*) FROM effect_agent_canonical_records) AS n",
-          )
-          .one().n !== 0
-      )
-        throw new Error("Seed replay requires a fresh Object and is never retried");
-      await this.ctx.storage.put(replayStarted, true);
-    });
-  }
   async benchSubmit(encoded: unknown, query: Query): Promise<unknown> {
     this.host.meter.begin(query);
     this.host.meter.marker("submit");
 
-    return super.submitEncoded(encoded);
+    const response = await super.submitEncoded(encoded);
+    const decoded = Schema.decodeUnknownSync(HostResponse)(response);
+
+    if (decoded._tag === "SubmitSucceeded") this.host.meter.admitted(decoded.receipt.submissionId);
+
+    return response;
   }
   override async awaitSettlementEncoded(
     encoded: unknown,
@@ -137,26 +126,64 @@ export class YieldedDO extends ThreadObject.make(application, {
   ): Promise<unknown> {
     this.host.meter.marker("await");
 
-    return super.awaitSettlementEncoded(encoded, ...trace);
+    const response = await super.awaitSettlementEncoded(encoded, ...trace);
+
+    if (Schema.decodeUnknownSync(HostResponse)(response)._tag === "SettlementReached")
+      this.host.meter.settled();
+
+    return response;
+  }
+  override async watchTextEncoded(encoded: unknown, ...trace: [] | [unknown]): Promise<unknown> {
+    const stream = await super.watchTextEncoded(encoded, ...trace);
+
+    if (!(stream instanceof ReadableStream)) return stream;
+    const meter = this.host.meter;
+    const decoder = new TextDecoder();
+    let pending = "";
+
+    return stream.pipeThrough(
+      new TransformStream<Uint8Array, Uint8Array>({
+        transform(bytes, controller) {
+          pending += decoder.decode(bytes, { stream: true });
+          const lines = pending.split("\n");
+
+          pending = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line) continue;
+            const frame = Schema.decodeUnknownSync(Schema.fromJsonString(LiveTextFrame))(line);
+
+            if (
+              frame._tag === "Event" &&
+              frame.event._tag === "Text" &&
+              frame.event.part.type === "text-delta" &&
+              frame.event.part.delta.trim()
+            )
+              meter.forwardText(frame.event.submissionId);
+          }
+          controller.enqueue(bytes);
+        },
+      }),
+    );
   }
   override async alarm(...args: Parameters<ThreadObject.Instance["alarm"]>): Promise<void> {
     this.host.meter.alarm();
     this.host.meter.marker("alarm");
-    await super.alarm(...args);
+    const running = Promise.resolve(super.alarm(...args));
+
+    this.activeAlarms.add(running);
+    try {
+      await running;
+    } finally {
+      this.activeAlarms.delete(running);
+    }
   }
   override fetch(request: Request): Promise<Response> {
     return this.host.fetch(request, {
-      run: (input) => this.historyTurn(input),
-      import: async (fixture, query) => {
-        if (fixture.mode === "replay") {
-          if ((await this.ctx.storage.get(replayStarted)) !== true)
-            throw new Error("Seed replay was not started");
-
-          return;
-        }
-        if (!fixture.archive) throw new Error("Missing canonical fixture");
-        await Effect.runPromise(importCanonical(this.ctx.storage, fixture.archive, query.object));
+      close: async () => {
+        // Native post-settlement checkpoint writers must finish before cold eviction.
+        while (this.activeAlarms.size) await Promise.all(this.activeAlarms);
       },
+      run: (input) => this.historyTurn(input),
     });
   }
 }

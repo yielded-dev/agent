@@ -2,7 +2,13 @@ import { Schema } from "effect";
 
 import { fingerprint, history, MEASURED_TOOLS, next, turn } from "../src/plan.ts";
 import { PREAMBLE, responseText } from "./text.ts";
-import { chatTranscript, decodeChat, readQuery, type ProviderReceipt } from "./worker/protocol.ts";
+import {
+  chatTranscript,
+  decodeChat,
+  separateTextAndTools,
+  readQuery,
+  type ProviderReceipt,
+} from "./worker/protocol.ts";
 
 const encoder = new TextEncoder();
 const sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
@@ -34,7 +40,11 @@ export default {
       const raw = await request.text();
       const json: unknown = JSON.parse(raw);
       const { model } = Schema.decodeUnknownSync(Header)(json);
-      const messages = chatTranscript(decodeChat(json));
+      const decoded = decodeChat(json);
+
+      const messages = chatTranscript(
+        query.textStreaming ? separateTextAndTools(decoded) : decoded,
+      );
 
       const seed = /^h(\d+)$/.exec(query.sample);
       const seedIndex = Number(seed?.[1]);

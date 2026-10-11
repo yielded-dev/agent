@@ -1,6 +1,17 @@
 import { Schema } from "effect";
 
-import { History, Identity, Query, SeedCheckpoint, SeedResult, Target } from "./worker/protocol.ts";
+import {
+  Counts,
+  ObjectPhases,
+  ProviderCall,
+  History,
+  Identity,
+  Query,
+  RouteProbe,
+  SeedCheckpoint,
+  SeedResult,
+  Target,
+} from "./worker/protocol.ts";
 
 export const ProfileType = Schema.Literals(["cpu", "memory"]);
 
@@ -21,6 +32,9 @@ export const Profile = Schema.Struct({
 export type Profile = typeof Profile.Type;
 
 export const Options = Schema.Struct({
+  fixtureDirectory: Schema.optionalKey(Schema.String),
+  restoreBytes: Schema.optionalKey(Schema.Int),
+  restoreEachPass: Schema.optionalKey(Schema.Boolean),
   buildHistory: Schema.Boolean,
   targets: Schema.Array(Target).check(Schema.isMinLength(1)),
   sizes: Schema.Array(History).check(Schema.isMinLength(1)),
@@ -44,6 +58,7 @@ export type Options = typeof Options.Type;
 
 export const Invocation = Schema.Struct({
   kind: Schema.String,
+  invocationType: Schema.optionalKey(Schema.String),
   outcome: Schema.String,
   cpuMs: Schema.NullOr(Schema.Number),
   wallMs: Schema.NullOr(Schema.Number),
@@ -57,12 +72,17 @@ export type Invocation = typeof Invocation.Type;
 export const FirstTextSource = Schema.Literals(["watchText", "watchEvents", "settlementRecord"]);
 export type FirstTextSource = typeof FirstTextSource.Type;
 
+export const WorkerBuild = Schema.Struct({ bundle: Schema.String, build: Schema.String });
+export type WorkerBuild = typeof WorkerBuild.Type;
+
 export const Sample = Schema.Struct({
   ...Query.fields,
   build: Schema.Literals(["working", "baseline", "candidate"]),
   epoch: Schema.Natural,
+  order: Schema.optionalKey(Schema.Literals(["AB", "BA"])),
   repeat: Schema.Natural,
-  state: Schema.Literals(["cold", "warmup", "warm"]),
+  state: Schema.Literals(["cold", "warmup", "warm", "preparation"]),
+  preparationTables: Schema.optionalKey(Counts),
   status: Schema.Literals(["running", "ok", "failed"]),
   driverMs: Schema.optionalKey(Schema.Number),
   firstTextMs: Schema.optionalKey(Schema.NullOr(Schema.Number)),
@@ -74,6 +94,11 @@ export const Sample = Schema.Struct({
   bytes: Schema.optionalKey(Schema.Natural),
   providerColos: Schema.optionalKey(Schema.Array(Schema.String)),
   objectToFirstModelMs: Schema.optionalKey(Schema.Number),
+  providerCalls: Schema.optionalKey(Schema.Array(ProviderCall)),
+  objectPhases: Schema.optionalKey(ObjectPhases),
+  providerFirstTokenMs: Schema.optionalKey(Schema.Number),
+  firstTextForwardedMs: Schema.optionalKey(Schema.Number),
+  settlementMs: Schema.optionalKey(Schema.Number),
   admissionMs: Schema.optionalKey(Schema.Number),
   gapMs: Schema.optionalKey(Schema.Number),
   lastResponseToClientMs: Schema.optionalKey(Schema.Number),
@@ -140,6 +165,9 @@ export const Result = Schema.Struct({
   dirty: Schema.Boolean,
   startedAt: Schema.String,
   wallMs: Schema.Number,
+  phases: Schema.optionalKey(
+    Schema.Array(Schema.Struct({ phase: Schema.String, ms: Schema.Number })),
+  ),
   infrastructureReused: Schema.Boolean,
   infrastructureBuild: Schema.optionalKey(Schema.String),
   resumeCount: Schema.optionalKey(Schema.Natural),
@@ -148,6 +176,19 @@ export const Result = Schema.Struct({
     Schema.Struct({ label: Schema.String, revision: Schema.String, sha256: Schema.String }),
   ),
   versions: Schema.Record(Schema.String, Schema.String),
+  restores: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        object: Schema.String,
+        target: Target,
+        history: Schema.Int,
+        epoch: Schema.optionalKey(Schema.Natural),
+        build: Schema.optionalKey(Schema.String),
+        requests: Schema.Int,
+        ms: Schema.Number,
+      }),
+    ),
+  ),
   histories: Schema.Array(HistoryBuild),
   fixtures: Schema.Array(
     Schema.Struct({
@@ -156,6 +197,8 @@ export const Result = Schema.Struct({
       fingerprint: Schema.String,
       tables: Schema.Record(Schema.String, Schema.Natural),
       mode: Schema.Literals(["import", "replay"]),
+      label: Schema.optionalKey(Schema.String),
+      formatKey: Schema.optionalKey(Schema.String),
       fallbackReason: Schema.optionalKey(Schema.String),
     }),
   ),
@@ -166,8 +209,15 @@ export const Result = Schema.Struct({
       object: Schema.String,
       epoch: Schema.Natural,
       expectedBuild: Schema.String,
-      objectBuild: Schema.String,
+      objectBuild: Schema.optionalKey(Schema.String),
       directoryBuild: Schema.optionalKey(Schema.String),
+      phase: Schema.optionalKey(Schema.Literals(["routes", "identity", "reset"])),
+      outcome: Schema.optionalKey(
+        Schema.Literals(["ready", "placeholder", "wrong-build", "unavailable"]),
+      ),
+      routes: Schema.optionalKey(Schema.Array(RouteProbe)),
+      driverBuild: Schema.optionalKey(Schema.String),
+      error: Schema.optionalKey(Schema.String),
       attempt: Schema.Natural,
       waitMs: Schema.Number,
     }),
@@ -178,6 +228,7 @@ export const Result = Schema.Struct({
   unmatchedCpuMarkers: Schema.optionalKey(Schema.Natural),
   cleanup: Schema.optionalKey(Cleanup),
   kept: Schema.Boolean,
+  workerPool: Schema.optionalKey(Schema.String),
   complete: Schema.Boolean,
 });
 
@@ -197,6 +248,7 @@ export const HistoryCheckpoint = Schema.Struct({
 });
 
 export const MeasureRequest = Schema.Struct({
+  expectedDriverBuild: Schema.String,
   ...DriverRequest.fields,
   observeText: Schema.Boolean,
   cold: Schema.Boolean,

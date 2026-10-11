@@ -1,16 +1,18 @@
-import { Clock, Deferred, Effect, Schema, Stream } from "effect";
+import { Cause, Clock, Deferred, Effect, Schema, Stream } from "effect";
 import { Ndjson } from "effect/encoding";
 
 import {
   BuildEvent,
   BuildRequest,
   DriverRequest,
+  Health,
   MeasureRequest,
   type FirstTextSource,
 } from "./model.ts";
 import {
   AwaitResult,
   ColdResult,
+  measurementPaths,
   errorText,
   PrimeResult,
   RunResult,
@@ -24,6 +26,12 @@ import {
 class ObservationError extends Schema.TaggedError<ObservationError>()("ObservationError", {
   message: Schema.String,
 }) {}
+
+const attempt = <A>(body: () => Promise<A>) =>
+  Effect.tryPromise({
+    try: body,
+    catch: (cause) => new ObservationError({ message: errorText(cause) }),
+  });
 
 interface Env {
   BENCH_TOKEN: string;
@@ -39,7 +47,19 @@ export default {
     if (new URL(request.url).pathname === "/health")
       return Response.json({ ok: true, build: env.BUILD });
     try {
-      const input: unknown = await request.json();
+      const address = new URL(request.url);
+
+      const readiness =
+        address.pathname === "/measure" &&
+        request.method === "GET" &&
+        address.searchParams.has("readiness");
+
+      // GET is safe against an older driver: its empty JSON body fails before dispatch.
+      const input: unknown = readiness
+        ? Schema.decodeUnknownSync(Schema.fromJsonString(DriverRequest))(
+            address.searchParams.get("readiness"),
+          )
+        : await request.json();
 
       const { targetUrl } = Schema.decodeUnknownSync(Schema.Struct({ targetUrl: Schema.String }))(
         input,
@@ -60,6 +80,50 @@ export default {
           headers: { authorization: `Bearer ${env.BENCH_TOKEN}`, "cache-control": "no-store" },
         });
       const { query } = Schema.decodeUnknownSync(DriverRequest)(input);
+
+      if (readiness) {
+        const routes = await Effect.runPromise(
+          Effect.forEach(
+            measurementPaths(query.target),
+            (path) =>
+              attempt(async () => {
+                const url = new URL(path, target);
+
+                for (const [key, value] of Object.entries(query))
+                  url.searchParams.set(key, String(value));
+                url.searchParams.set("readiness", "1");
+
+                const response = await fetch(url, {
+                  method: "GET",
+                  headers: {
+                    authorization: `Bearer ${env.BENCH_TOKEN}`,
+                    "cache-control": "no-store",
+                  },
+                  signal: AbortSignal.any([request.signal, AbortSignal.timeout(10_000)]),
+                });
+
+                if (
+                  !response.ok ||
+                  !response.headers.get("content-type")?.includes("application/json")
+                ) {
+                  await response.body?.cancel();
+
+                  return { path, status: response.status };
+                }
+                const health = Schema.decodeUnknownSync(Health)(await response.json());
+
+                return { path, status: response.status, build: health.build };
+              }).pipe(
+                Effect.catchTag("ObservationError", (error) =>
+                  Effect.succeed({ path, status: 0, error: error.message }),
+                ),
+              ),
+            { concurrency: 6 },
+          ),
+        );
+
+        return Response.json({ build: env.BUILD, routes });
+      }
       const cancellation = new AbortController();
 
       const invoke = async (path: string, body?: unknown, timeoutMs = 180_000) => {
@@ -187,7 +251,15 @@ export default {
           headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
         });
       }
-      const { observeText, cold } = Schema.decodeUnknownSync(MeasureRequest)(input);
+
+      const { observeText, cold, expectedDriverBuild } =
+        Schema.decodeUnknownSync(MeasureRequest)(input);
+
+      if (expectedDriverBuild !== env.BUILD)
+        return Response.json(
+          { ok: false, error: "Driver build mismatch; request was not dispatched" },
+          { status: 503 },
+        );
 
       return Response.json(
         await Effect.runPromise(
@@ -195,7 +267,7 @@ export default {
             const primeAt = yield* Clock.currentTimeMillis;
 
             const primed = cold
-              ? yield* Effect.tryPromise(async () =>
+              ? yield* attempt(async () =>
                   Schema.decodeUnknownSync(PrimeResult)(await (await invoke("/prime")).json()),
                 )
               : undefined;
@@ -222,7 +294,7 @@ export default {
 
             if (observeText && query.target !== "tardie") {
               const opening = yield* Clock.currentTimeMillis;
-              const response = yield* Effect.tryPromise(() => invoke("/text"));
+              const response = yield* attempt(() => invoke("/text"));
               const body = response.body;
 
               if (!body)
@@ -259,10 +331,10 @@ export default {
                     if (frame.input === input) yield* Deferred.succeed(first, seen);
                   }),
                 ),
-                Effect.catchCause(() =>
+                Effect.catchCause((cause) =>
                   Effect.gen(function* () {
                     const error = new ObservationError({
-                      message: "Public text observation failed; no first-text result is available.",
+                      message: `Public text observation failed: ${Cause.pretty(cause)}`,
                     });
 
                     yield* Deferred.fail(ready, error);
@@ -276,22 +348,23 @@ export default {
             }
 
             const startedMs = yield* Clock.currentTimeMillis;
+            const metricStartMs = startedMs - constructorAndProbeMs;
             let admissionMs: number | undefined;
             let receipt: SubmitResult["receipt"] | undefined;
 
             if (query.target === "yielded") {
-              const admission = yield* Effect.tryPromise(async () =>
+              const admission = yield* attempt(async () =>
                 Schema.decodeUnknownSync(SubmitResult)(await (await invoke("/submit")).json()),
               );
 
-              admissionMs = (yield* Clock.currentTimeMillis) - startedMs;
+              admissionMs = (yield* Clock.currentTimeMillis) - metricStartMs;
               receipt = admission.receipt;
               input = admission.receipt.submissionId;
               const seen = visible.get(input);
 
               if (seen) yield* Deferred.succeed(first, seen);
 
-              const settled = yield* Effect.tryPromise(async () =>
+              const settled = yield* attempt(async () =>
                 Schema.decodeUnknownSync(AwaitResult)(
                   await (await invoke("/await", admission.receipt)).json(),
                 ),
@@ -302,7 +375,7 @@ export default {
                   message: "Yielded did not complete the turn.",
                 });
             } else {
-              yield* Effect.tryPromise(async () =>
+              yield* attempt(async () =>
                 Schema.decodeUnknownSync(RunResult)(await (await invoke("/run")).json()),
               );
             }
@@ -312,7 +385,7 @@ export default {
 
             // Overflow can replace an instant reply with an empty draft snapshot after settlement.
             if (observeText && receipt !== undefined && !(yield* Deferred.isDone(first))) {
-              const result = yield* Effect.tryPromise(async () =>
+              const result = yield* attempt(async () =>
                 Schema.decodeUnknownSync(SettledTextResult)(
                   await (await invoke("/result", receipt)).json(),
                 ),
@@ -332,10 +405,10 @@ export default {
 
             return {
               ok: true,
-              driverMs: constructorAndProbeMs + observedMs - startedMs,
+              driverMs: observedMs - metricStartMs,
               observedMs,
               admissionMs,
-              firstTextMs: text === undefined ? null : text.atMs - startedMs,
+              firstTextMs: text === undefined ? null : text.atMs - metricStartMs,
               ...(text === undefined ? {} : { firstText: text.text, firstTextSource: text.source }),
               observationMs,
               constructorAndProbeMs,
@@ -350,10 +423,7 @@ export default {
       return Response.json(
         {
           ok: false,
-          error:
-            cause instanceof Error
-              ? cause.message
-              : "Turn failed or response was lost; do not resubmit this input.",
+          error: errorText(cause),
         },
         { status: 502 },
       );
