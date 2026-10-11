@@ -190,10 +190,10 @@ const failure = (operation: string, cause?: unknown) =>
 const decodeRecordWire = Schema.decodeEffect(Schema.fromJsonString(RecordJson));
 const decodeIdentityRequest = Schema.decodeEffect(Schema.toType(ThreadIdentityRequest));
 
-const decodeIdentityFacts = Schema.decodeUnknownEffect(
-  Schema.Tuple([
-    Schema.Struct({ admissions_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)) }),
-  ]),
+const decodeAdmissionPresence = Schema.decodeUnknownEffect(
+  Schema.Array(
+    Schema.Struct({ admission_present: SqlInteger.pipe(Schema.decodeTo(Schema.Literal(1))) }),
+  ).check(Schema.isMaxLength(1)),
 );
 
 const decodeReadyWork = Schema.decodeUnknownEffect(
@@ -1182,8 +1182,8 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
         Effect.gen(function* () {
           const tail = yield* requireThread(request.threadId);
 
-          const [facts] = yield* decodeIdentityFacts(
-            yield* sql`SELECT COUNT(*) AS admissions_count FROM ${relation("effect_agent_submissions")} WHERE thread_id=${request.threadId}`.pipe(
+          const admissions = yield* decodeAdmissionPresence(
+            yield* sql`SELECT 1 AS admission_present FROM ${relation("effect_agent_submissions")} WHERE thread_id=${request.threadId} LIMIT 1`.pipe(
               execute,
             ),
           );
@@ -1219,7 +1219,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
           return yield* ThreadIdentity.makeEffect({
             threadId: request.threadId,
             tailSequence: tail.tail_sequence,
-            admissions: facts.admissions_count,
+            hasAdmissions: admissions.length > 0,
             records,
           });
         }),

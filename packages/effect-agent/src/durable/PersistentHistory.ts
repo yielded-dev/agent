@@ -101,7 +101,7 @@ export const layer = Layer.effect(
             Effect.mapError((cause) => storageError(threadId, cause)),
           );
 
-      if (base.admissions > 0 || (yield* selected("DurableHistoryOwner")).length > 0)
+      if (base.hasAdmissions || (yield* selected("DurableHistoryOwner")).length > 0)
         return yield* historyError(
           threadId,
           "incompatible",

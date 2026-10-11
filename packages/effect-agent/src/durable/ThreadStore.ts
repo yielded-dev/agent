@@ -685,7 +685,7 @@ export class ThreadIdentityRequest extends Schema.Class<ThreadIdentityRequest>(
 )({ threadId: ThreadId }) {}
 
 /**
- * One consistent snapshot: Thread ID, canonical tail, admission count, first record,
+ * One consistent snapshot: Thread ID, canonical tail, admission presence, first record,
  * exact worker origin, then exact subagent lineage. A row selected twice appears only
  * once. Missing identity records remain absent; the snapshot grants no execution authority.
  */
@@ -694,8 +694,8 @@ export class ThreadIdentity extends Schema.Class<ThreadIdentity>(
 )(
   Schema.Struct({
     ...ThreadTail.fields,
-    /** Immutable admissions, including accepted inputs not yet materialized in the log. */
-    admissions: Schema.Natural,
+    /** Whether any admission is retained, including settled inputs and inputs not yet canonical. */
+    hasAdmissions: Schema.Boolean,
     records: Schema.Array(CanonicalRecordEnvelope).check(Schema.isMaxLength(3)),
   }).check(
     Schema.makeFilter((snapshot) => {
