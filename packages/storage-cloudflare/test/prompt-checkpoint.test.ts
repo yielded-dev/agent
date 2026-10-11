@@ -62,16 +62,13 @@ it("reopens a projected prefix with an identical prompt and rebuilds damaged der
             else if (damage === "head" && row.key.endsWith("00000"))
               storage.sql.exec(
                 "UPDATE effect_agent_meta SET value = ? WHERE key = ?",
-                row.value.replace(
-                  /"tailDigest":"[a-f0-9]+"/,
-                  '"tailDigest":"' + "0".repeat(64) + '"',
-                ),
+                row.value.replace(/"throughSequence":\d+/, '"throughSequence":2147483647'),
                 row.key,
               );
             else if (damage === "version" && row.key.endsWith("00000"))
               storage.sql.exec(
                 "UPDATE effect_agent_meta SET value = ? WHERE key = ?",
-                row.value.replace('"version":1', '"version":999'),
+                row.value.replace(/"version":\d+/, '"version":999'),
                 row.key,
               );
           }

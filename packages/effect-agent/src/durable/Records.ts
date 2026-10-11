@@ -1363,6 +1363,7 @@ export const PromptRecordPayload = Schema.TaggedUnion({
   SubmissionSettled: {
     runId: Schema.optionalKey(RunId),
     submissionId: SubmissionId,
+    outcome: SettlementOutcome,
   },
 });
 

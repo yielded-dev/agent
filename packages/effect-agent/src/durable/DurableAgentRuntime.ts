@@ -8587,11 +8587,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           const suffix = currentRecords.filter((entry) => entry.sequence > original.sequence);
 
           const fresh =
-            !lineage.inputWasRecorded &&
-            (tail.sequence === original.sequence ||
-              (tail.sequence === original.sequence + 1 &&
-                view.progressThrough === original.sequence)) &&
-            suffix.every((entry) => entry.record.payload._tag === "RunContinuation");
+            !lineage.inputWasRecorded && tail.sequence === original.sequence && suffix.length === 0;
 
           // Every replay stays bounded at the ORIGINAL admission, never the later Thread tail.
           const source: InitialJournalSource = yield* Effect.gen(function* () {

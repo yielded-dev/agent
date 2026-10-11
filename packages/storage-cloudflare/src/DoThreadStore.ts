@@ -65,7 +65,7 @@ import {
 } from "./internal/do-journal.ts";
 import { readDoStorageHeader } from "./internal/migrations.ts";
 import { invalidateOwnedState, ownedState } from "./internal/owned-state.ts";
-import { makePromptCheckpoints } from "./internal/prompt-checkpoint.ts";
+import { makePromptCheckpoints, promptCheckpointPrefix } from "./internal/prompt-checkpoint.ts";
 import { isAppendContention, withStorageSpan } from "./internal/storage-span.ts";
 
 /**
@@ -473,14 +473,18 @@ const makeServices = Effect.fnUntraced(function* () {
     owner: journal.state.owner,
     offsetPrefix: DO_OFFSET_PREFIX,
     maxValueBytes: config.maxStoredValueBytes,
-    // Closed imported history must not emit historical lifecycle notifications again.
+    // Import establishes a new sequence space; discard derivatives in this same transaction.
     afterImport: ({ result }) =>
-      journal.lifecycle === undefined
-        ? Effect.void
-        : sql`INSERT INTO effect_agent_lifecycle_cursors(thread_id, through_sequence) VALUES (${result.threadId}, ${result.tailSequence})`.pipe(
-            Effect.asVoid,
-            Effect.catchTag("SqlError", (cause) => storeError("rebuild lifecycle cursor", cause)),
-          ),
+      Effect.gen(function* () {
+        const prefix = promptCheckpointPrefix(result.threadId);
+
+        yield* sql`DELETE FROM effect_agent_meta WHERE key >= ${prefix} AND key < ${prefix + "~"}`;
+        // Closed imported history must not emit historical lifecycle notifications again.
+        if (journal.lifecycle !== undefined)
+          yield* sql`INSERT INTO effect_agent_lifecycle_cursors(thread_id, through_sequence) VALUES (${result.threadId}, ${result.tailSequence})`;
+      }).pipe(
+        Effect.catchTag("SqlError", (cause) => storeError("rebuild imported derivatives", cause)),
+      ),
     afterThreadRead: hitFailpoint("export:after-thread-read"),
     read: (body) =>
       journal.owner.transaction(body).pipe(
