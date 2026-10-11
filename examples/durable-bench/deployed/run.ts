@@ -58,6 +58,8 @@ import {
   ImportResult,
   Metrics,
   ObjectIdentity,
+  RouteReadiness,
+  measurementPaths,
   RestoreAck,
   RestoreChunk,
   type Query,
@@ -676,6 +678,79 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       const resetForBuild = Effect.fnUntraced(function* (cohort: Omit<Query, "expectedBuild">) {
         const expectedBuild = expectedFor(cohort);
         const started = yield* Clock.currentTimeMillis;
+        const probeUrl = new URL("/measure", deploy.driver);
+
+        probeUrl.searchParams.set(
+          "readiness",
+          JSON.stringify({ query: { ...cohort, expectedBuild }, targetUrl: endpointFor(cohort) }),
+        );
+        let healthySince: number | undefined;
+
+        for (let attempt = 1; ; attempt++) {
+          const remaining = 180_000 - ((yield* Clock.currentTimeMillis) - started);
+
+          if (remaining <= 0)
+            return yield* new BenchError({
+              message: "Timed routes did not propagate before the cold reset; no input was sent.",
+            });
+
+          const probe = yield* request(
+            probeUrl,
+            deploy.token,
+            RouteReadiness,
+            undefined,
+            Math.min(15_000, remaining),
+          ).pipe(
+            Effect.map(({ value }) => ({ value, error: undefined })),
+            Effect.catchCause((cause) =>
+              Effect.succeed({ value: undefined, error: message(cause) }),
+            ),
+          );
+
+          const now = yield* Clock.currentTimeMillis;
+          const routes = probe.value?.routes ?? [];
+          const paths = measurementPaths(cohort.target);
+
+          const ready =
+            probe.value?.build === result.infrastructureBuild &&
+            routes.length === paths.length &&
+            paths.every((path) =>
+              routes.some(
+                (route) =>
+                  route.path === path && route.status === 200 && route.build === expectedBuild,
+              ),
+            );
+
+          healthySince = ready ? (healthySince ?? now) : undefined;
+          yield* update((value) => ({
+            ...value,
+            readiness: [
+              ...value.readiness,
+              {
+                target: cohort.target,
+                object: cohort.object,
+                epoch,
+                expectedBuild,
+                phase: "routes",
+                outcome: ready
+                  ? "ready"
+                  : probe.value === undefined
+                    ? "unavailable"
+                    : "wrong-build",
+                ...(probe.value === undefined ? {} : { driverBuild: probe.value.build, routes }),
+                ...(probe.error === undefined ? {} : { error: probe.error }),
+                attempt,
+                waitMs: now - started,
+              },
+            ],
+          }));
+          if (healthySince !== undefined && now - healthySince >= 5000) break;
+          if (!ready)
+            yield* Console.error(
+              `Timed routes pending: ${cohort.target}/${cohort.object}, attempt ${attempt}, ${now - started} ms`,
+            );
+          yield* Effect.sleep("2 seconds");
+        }
 
         for (let attempt = 1; attempt <= 90; attempt++) {
           const remaining = 180_000 - ((yield* Clock.currentTimeMillis) - started);
@@ -1369,6 +1444,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                     query,
                     targetUrl: endpointFor(cohort),
                     observeText: !options.buildHistory,
+                    expectedDriverBuild: result.infrastructureBuild,
                     cold: options.buildHistory && index === 0,
                   },
                 );

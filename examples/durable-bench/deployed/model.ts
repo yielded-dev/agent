@@ -7,6 +7,7 @@ import {
   History,
   Identity,
   Query,
+  RouteProbe,
   SeedCheckpoint,
   SeedResult,
   Target,
@@ -210,8 +211,13 @@ export const Result = Schema.Struct({
       expectedBuild: Schema.String,
       objectBuild: Schema.optionalKey(Schema.String),
       directoryBuild: Schema.optionalKey(Schema.String),
-      phase: Schema.optionalKey(Schema.Literals(["identity", "reset"])),
-      outcome: Schema.optionalKey(Schema.Literals(["ready", "placeholder", "wrong-build"])),
+      phase: Schema.optionalKey(Schema.Literals(["routes", "identity", "reset"])),
+      outcome: Schema.optionalKey(
+        Schema.Literals(["ready", "placeholder", "wrong-build", "unavailable"]),
+      ),
+      routes: Schema.optionalKey(Schema.Array(RouteProbe)),
+      driverBuild: Schema.optionalKey(Schema.String),
+      error: Schema.optionalKey(Schema.String),
       attempt: Schema.Natural,
       waitMs: Schema.Number,
     }),
@@ -242,6 +248,7 @@ export const HistoryCheckpoint = Schema.Struct({
 });
 
 export const MeasureRequest = Schema.Struct({
+  expectedDriverBuild: Schema.String,
   ...DriverRequest.fields,
   observeText: Schema.Boolean,
   cold: Schema.Boolean,

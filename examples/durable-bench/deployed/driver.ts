@@ -5,12 +5,14 @@ import {
   BuildEvent,
   BuildRequest,
   DriverRequest,
+  Health,
   MeasureRequest,
   type FirstTextSource,
 } from "./model.ts";
 import {
   AwaitResult,
   ColdResult,
+  measurementPaths,
   errorText,
   PrimeResult,
   RunResult,
@@ -45,7 +47,19 @@ export default {
     if (new URL(request.url).pathname === "/health")
       return Response.json({ ok: true, build: env.BUILD });
     try {
-      const input: unknown = await request.json();
+      const address = new URL(request.url);
+
+      const readiness =
+        address.pathname === "/measure" &&
+        request.method === "GET" &&
+        address.searchParams.has("readiness");
+
+      // GET is safe against an older driver: its empty JSON body fails before dispatch.
+      const input: unknown = readiness
+        ? Schema.decodeUnknownSync(Schema.fromJsonString(DriverRequest))(
+            address.searchParams.get("readiness"),
+          )
+        : await request.json();
 
       const { targetUrl } = Schema.decodeUnknownSync(Schema.Struct({ targetUrl: Schema.String }))(
         input,
@@ -66,6 +80,50 @@ export default {
           headers: { authorization: `Bearer ${env.BENCH_TOKEN}`, "cache-control": "no-store" },
         });
       const { query } = Schema.decodeUnknownSync(DriverRequest)(input);
+
+      if (readiness) {
+        const routes = await Effect.runPromise(
+          Effect.forEach(
+            measurementPaths(query.target),
+            (path) =>
+              attempt(async () => {
+                const url = new URL(path, target);
+
+                for (const [key, value] of Object.entries(query))
+                  url.searchParams.set(key, String(value));
+                url.searchParams.set("readiness", "1");
+
+                const response = await fetch(url, {
+                  method: "GET",
+                  headers: {
+                    authorization: `Bearer ${env.BENCH_TOKEN}`,
+                    "cache-control": "no-store",
+                  },
+                  signal: AbortSignal.any([request.signal, AbortSignal.timeout(10_000)]),
+                });
+
+                if (
+                  !response.ok ||
+                  !response.headers.get("content-type")?.includes("application/json")
+                ) {
+                  await response.body?.cancel();
+
+                  return { path, status: response.status };
+                }
+                const health = Schema.decodeUnknownSync(Health)(await response.json());
+
+                return { path, status: response.status, build: health.build };
+              }).pipe(
+                Effect.catchTag("ObservationError", (error) =>
+                  Effect.succeed({ path, status: 0, error: error.message }),
+                ),
+              ),
+            { concurrency: 6 },
+          ),
+        );
+
+        return Response.json({ build: env.BUILD, routes });
+      }
       const cancellation = new AbortController();
 
       const invoke = async (path: string, body?: unknown, timeoutMs = 180_000) => {
@@ -193,7 +251,15 @@ export default {
           headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
         });
       }
-      const { observeText, cold } = Schema.decodeUnknownSync(MeasureRequest)(input);
+
+      const { observeText, cold, expectedDriverBuild } =
+        Schema.decodeUnknownSync(MeasureRequest)(input);
+
+      if (expectedDriverBuild !== env.BUILD)
+        return Response.json(
+          { ok: false, error: "Driver build mismatch; request was not dispatched" },
+          { status: 503 },
+        );
 
       return Response.json(
         await Effect.runPromise(

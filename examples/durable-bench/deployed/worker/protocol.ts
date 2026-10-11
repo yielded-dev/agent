@@ -21,6 +21,26 @@ export const Query = Schema.Struct({
 
 export type Query = typeof Query.Type;
 
+/** Router-only GET probes; none may dispatch a turn or open an observer. */
+export const measurementPaths = (target: Target): ReadonlyArray<string> =>
+  target === "yielded"
+    ? ["/text", "/submit", "/await", "/result", "/prime", "/metrics"]
+    : target === "pi"
+      ? ["/text", "/run", "/prime", "/metrics"]
+      : ["/run", "/prime", "/metrics"];
+
+export const RouteProbe = Schema.Struct({
+  path: Schema.String,
+  status: Schema.Int,
+  build: Schema.optionalKey(Schema.String),
+  error: Schema.optionalKey(Schema.String),
+});
+
+export const RouteReadiness = Schema.Struct({
+  build: Schema.String,
+  routes: Schema.Array(RouteProbe),
+});
+
 export const ProfileTarget = Schema.Struct({
   actorId: Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/)),
   binding: Schema.Literals(["YIELDED", "PI", "THREADS"]),

@@ -11,7 +11,7 @@ import { Effect, Layer, ManagedRuntime, Schema, Stream } from "../../../node_mod
 import { MEASURED_TOOLS, turn } from "../../../src/plan.ts";
 import { COLD_ABORT } from "../../../deployed/worker/host.ts";
 import { PiDO } from "./pi.ts";
-import { BulkFixture, Identity, ObjectIdentity, Metrics, ProfileTarget, SeedBatch, TextObservation, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
+import { BulkFixture, Identity, ObjectIdentity, Metrics, measurementPaths, ProfileTarget, SeedBatch, TextObservation, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
 import { ActorDO, ThreadDO, cloudflareThreadName, coordinate } from "./tardie.ts";
 import { agent, definitions, YieldedDO } from "../../../deployed/worker/yielded.ts";
 
@@ -110,7 +110,9 @@ export default {
         return Response.json({ ok: true, build: env.BUILD });
       }
       const query = readQuery(url);
-      if (["/prime", "/seed", "/seed-progress", "/submit", "/await", "/result", "/run", "/text", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
+      if (request.method === "GET" && url.searchParams.get("readiness") === "1" && measurementPaths(query.target).includes(url.pathname))
+        return Response.json({ ok: true, build: env.BUILD });
+      if (["/prime", "/seed", "/seed-progress", "/submit", "/await", "/result", "/run", "/text", "/metrics", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
         return Response.json(
           {
             ok: false,

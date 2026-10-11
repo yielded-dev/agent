@@ -253,7 +253,15 @@ Worker readiness requires five seconds of continuously successful build probes f
 controller and deployed driver; a failed probe restarts that stability window.
 
 Worker and Object [code updates propagate separately](https://developers.cloudflare.com/durable-objects/platform/known-issues/#code-updates).
-Cold setup first probes the physical Object's identity (including Tardie's Actor directory),
+Before the final cold reset, setup probes `/measure` and every target route it uses
+(`/text`, `/submit`, `/await`, `/result`, `/run`, `/prime`, `/metrics`, as applicable)
+through the deployed driver. Router-only GET probes must report the expected driver and
+target builds continuously for five seconds; they do not dispatch inputs or attach observers.
+Route status, build, errors and retries are saved in `readiness`. These checks share the
+three-minute setup bound with the physical Object identity check and cannot guarantee
+later propagation stability: a wrong build during observation or timing still fails the run.
+
+Cold setup then probes the physical Object's identity (including Tardie's Actor directory),
 retrying only a missing placeholder fetch handler or a wrong `BUILD` within a three-minute
 setup bound. An acknowledged cold reset retires a responding old incarnation before
 probing its replacement; placeholders are never reset. Every identity attempt and reset
