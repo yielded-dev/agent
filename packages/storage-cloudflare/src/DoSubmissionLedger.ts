@@ -2283,7 +2283,7 @@ const makeServices = Effect.fnUntraced(function* () {
             message: `Host submission ${validated.hostSubmissionId} does not belong to thread ${validated.threadId}.`,
           });
         }
-        // The host Attempt already owns the lane; no epoch bump happens here (plan §2.5).
+        // The host Attempt retains its local ownership while the ready prefix joins it.
         yield* requireOwner(operation, host);
 
         const stopped = yield* cached(

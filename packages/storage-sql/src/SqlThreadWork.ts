@@ -510,7 +510,8 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       workerMode = folded.workerMode;
       count += folded.delta;
       if (workerMode !== "none") {
-        if (record.payload._tag === "UserInputRecorded") input = through;
+        if (record.payload._tag === "UserInputRecorded" && record.payload.runId !== undefined)
+          input = through;
         if (record.payload._tag === "SubmissionSettled" && record.payload.runId !== undefined)
           settlement = through;
       }
@@ -935,7 +936,8 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
             workerMode = folded.workerMode;
             count += folded.delta;
             if (workerMode !== "none") {
-              if (record.payload._tag === "UserInputRecorded") input = row.sequence;
+              if (record.payload._tag === "UserInputRecorded" && record.payload.runId !== undefined)
+                input = row.sequence;
               if (record.payload._tag === "SubmissionSettled" && record.payload.runId !== undefined)
                 settlement = row.sequence;
             }
