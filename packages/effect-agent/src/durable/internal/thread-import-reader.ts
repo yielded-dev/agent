@@ -13,13 +13,6 @@ import type {
 } from "../ThreadStore.ts";
 import { RunContextReader } from "./run-context-reader.ts";
 
-export interface ThreadSettlementPredecessorRequest {
-  readonly submissionId: SubmissionId;
-  readonly queueSequence: number;
-  readonly inputSequence: number;
-  readonly settlementSequence: number;
-}
-
 /** Exact indexes for one captured Thread transaction. Run records and commands enforce count and byte bounds. */
 export class ThreadImportReader extends Context.Service<
   ThreadImportReader,
@@ -48,9 +41,6 @@ export class ThreadImportReader extends Context.Service<
       id: SubmissionId,
     ) => Effect.Effect<typeof ThreadCommands.Type, ThreadStoreError>;
     readonly hasAgent: (id: AgentId) => Effect.Effect<boolean, ThreadStoreError>;
-    readonly settlementPredecessors: (
-      request: ThreadSettlementPredecessorRequest,
-    ) => Stream.Stream<Pick<ThreadAdmission, "submissionId">, ThreadStoreError>;
   }
 >()("@effect-agent/thread/ThreadImportReader") {
   /** Bind context reconstruction to this same captured transaction. */

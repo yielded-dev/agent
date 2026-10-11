@@ -1,4 +1,5 @@
 import { makeSqlActivityStore } from "@yielded/agent-storage-sql/sql-activity-store";
+import { sqlStorageOwner } from "@yielded/agent-storage-sql/sql-journal";
 import { makeSqlMessageDeliveryStore } from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import { makeSqlScheduleStore } from "@yielded/agent-storage-sql/sql-schedule-store";
 import { makeSqlTransaction } from "@yielded/agent-storage-sql/sql-storage";
@@ -23,6 +24,7 @@ import { SubscriptionError, SubscriptionStore, SourcePartition } from "@yielded/
 import { ThreadImport } from "@yielded/agent/thread-import";
 import type { ThreadExportRequest } from "@yielded/agent/thread-store";
 import { ThreadReader, ThreadStore } from "@yielded/agent/thread-store";
+import { checkExportSource } from "@yielded/agent/thread-transfer";
 import { Context, Effect, Layer, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
@@ -175,32 +177,42 @@ export const exportThread = Effect.fn("PostgresStorage.exportThread")(function* 
   request: ThreadExportRequest,
   options: PostgresStorageOptions = {},
 ) {
+  yield* checkExportSource(request.threadId);
   const config = yield* settings(options);
   const sql = yield* SqlClient.SqlClient;
 
-  return yield* makeSqlTransaction(sql, {
-    begin: "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
-  })(
+  return yield* Effect.scoped(
     Effect.gen(function* () {
-      yield* readPostgresStorageHeader(config.schema);
+      const owner = yield* sqlStorageOwner(sql, config.schema);
 
-      const transfer = yield* makeSqlThreadImport({
-        namespace: config.schema,
-        offsetPrefix: "effect-agent-postgres@1:",
-        read: (body) => body,
-        write: () => Effect.die("A read-only exporter cannot import"),
-      });
+      return yield* owner.withMutation(
+        makeSqlTransaction(sql, {
+          begin: "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
+        })(
+          Effect.gen(function* () {
+            yield* readPostgresStorageHeader(config.schema);
 
-      return yield* transfer.export(request);
+            const transfer = yield* makeSqlThreadImport({
+              owner,
+              namespace: config.schema,
+              offsetPrefix: "effect-agent-postgres@1:",
+              read: (body) => body,
+              write: () => Effect.die("A read-only exporter cannot import"),
+            });
+
+            return yield* transfer.export(request);
+          }),
+        ).pipe(
+          Effect.catchTag("SqlError", (cause) =>
+            PostgresStorageError.make({
+              operation: "export Thread snapshot",
+              message: cause.message,
+              cause,
+            }),
+          ),
+        ),
+      );
     }),
-  ).pipe(
-    Effect.catchTag("SqlError", (cause) =>
-      PostgresStorageError.make({
-        operation: "export Thread snapshot",
-        message: cause.message,
-        cause,
-      }),
-    ),
   );
 });
 

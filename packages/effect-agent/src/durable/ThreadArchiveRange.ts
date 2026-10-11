@@ -77,6 +77,7 @@ export interface ThreadArchiveStorage {
   readonly page: (
     request: ThreadArchiveRangeRead,
   ) => Effect.Effect<ThreadArchiveRangePage, ReadFailure>;
+  /** Explicitly seal the next bounded complete-batch range. Ordinary appends create no range rows. */
   readonly seal: (
     request: ThreadArchiveRangeSeal,
   ) => Effect.Effect<Option.Option<ThreadArchiveRange>, ReadFailure>;

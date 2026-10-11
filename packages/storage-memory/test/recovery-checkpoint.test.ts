@@ -34,6 +34,7 @@ import { DurableRuntimeFailpointTestControl } from "@yielded/agent/testing/durab
 import { reencodeThread } from "@yielded/agent/thread-import";
 import {
   ThreadExportRequest,
+  ThreadTailRequest,
   ThreadStore,
   ThreadRead,
   streamExport,
@@ -42,7 +43,7 @@ import {
 } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Context, Effect, Exit, Layer, Option, Schema, Stream } from "effect";
+import { Context, Effect, Exit, Layer, Option, Result, Schema, Stream } from "effect";
 import type { Prompt, Response } from "effect/ai";
 import { LanguageModel, Model, Tool, Toolkit } from "effect/ai";
 
@@ -56,7 +57,7 @@ const fixtureHistory = Effect.fnUntraced(function* (
   store: ThreadStore["Service"],
   request: ThreadExportRequest,
 ) {
-  const page = yield* store.export(request);
+  const page = yield* store.inspectTail(ThreadTailRequest.make({ threadId: request.threadId }));
 
   if (page.tailSequence > 1024) return yield* Effect.die("Fixture history exceeds 1024 records");
   let bytes = 0;
@@ -276,11 +277,15 @@ describe("retained Run recovery", () => {
       expect(JSON.stringify(requests.at(-1))).not.toContain("Retained handoff.");
       const archive = yield* fixtureHistory(store, ThreadExportRequest.make({ threadId }));
 
-      const imported = yield* reencodeThread(
+      const pages = yield* Stream.runCollect(
         streamExport({ threadId }).pipe(
           Stream.provideService(ThreadExportSource, { export: store.export }),
         ),
-      ).pipe(Effect.provide(Layer.fresh(base)));
+      );
+
+      const imported = yield* reencodeThread(Stream.fromIterable(pages)).pipe(
+        Effect.provide(Layer.fresh(base)),
+      );
 
       expect(imported.recordCount).toBe(archive.tailSequence);
     }).pipe(Effect.provide(base)),
@@ -713,6 +718,18 @@ describe("retained Run recovery", () => {
       );
 
       expect(snapshot.hasOwner).toBe(false);
+      if (scenario === "uncertain" || scenario === "approval") {
+        const refused = yield* Effect.result(
+          store.export(ThreadExportRequest.make({ threadId: receipt.threadId })),
+        );
+
+        expect(Result.isFailure(refused)).toBe(true);
+        if (Result.isFailure(refused))
+          expect(refused.failure).toMatchObject({
+            _tag: "ThreadExportRejected",
+            reason: "non-idle",
+          });
+      }
 
       const original = yield* fixtureHistory(
         store,

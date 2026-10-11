@@ -12,7 +12,6 @@ import {
 import { DurableAgentRuntime, type RecoveryReport } from "@yielded/agent/durable-agent-runtime";
 import { ThreadId, SubmissionId } from "@yielded/agent/identifiers";
 import {
-  reencodeThread,
   ThreadArchive,
   ThreadImport,
   ThreadImportRejected,
@@ -325,11 +324,30 @@ const obligationsCommand = CliCommand.make(
   ),
 );
 
-/** Each source page pins the same canonical tail and independent fact revision. */
+/** The caller keeps the source idle and quiescent until every page has been saved. */
 const sourcePages = (filename: string, threadId: ThreadId) =>
   streamExport({ threadId }).pipe(
     Stream.provide(SqliteThreadStore.exportSourceLayer({ filename })),
   );
+
+const writeSource = Effect.fnUntraced(function* (
+  filename: string,
+  threadId: ThreadId,
+  file: FileSystem.File,
+) {
+  let records = 0;
+
+  yield* Stream.runForEach(sourcePages(filename, threadId), (page) =>
+    Effect.gen(function* () {
+      const text = yield* Schema.encodeEffect(Schema.fromJsonString(ThreadExport))(page);
+
+      yield* file.writeAll(new TextEncoder().encode(`${text}\n`));
+      records += page.records.length;
+    }),
+  );
+
+  return records;
+});
 
 /** NDJSON framing bounds an unfinished line before decoding its Schema. */
 const archivePages = (input: string) =>
@@ -398,19 +416,12 @@ const exportCommand = CliCommand.make(
         Effect.gen(function* () {
           const file = yield* fs.open(output, { flag: "wx" });
           let complete = false;
-          let records = 0;
 
           yield* Effect.addFinalizer(() =>
             complete ? Effect.void : fs.remove(output).pipe(Effect.ignore),
           );
-          yield* Stream.runForEach(sourcePages(filename, threadId), (page) =>
-            Effect.gen(function* () {
-              const text = yield* Schema.encodeEffect(Schema.fromJsonString(ThreadExport))(page);
+          const records = yield* writeSource(filename, threadId, file);
 
-              yield* file.writeAll(new TextEncoder().encode(`${text}\n`));
-              records += page.records.length;
-            }),
-          );
           complete = true;
           yield* Console.log(`Exported ${records} records to ${output}`);
         }),
@@ -480,9 +491,22 @@ const reencodeCommand = CliCommand.make(
         }
       }
 
-      const result = yield* reencodeThread(sourcePages(source, threadId)).pipe(
-        Effect.provide(SqliteThreadStore.layer({ filename })),
+      const archive = yield* fs.makeTempFileScoped({
+        prefix: "yielded-thread-",
+        suffix: ".ndjson",
+      });
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const file = yield* fs.open(archive, { flag: "w" });
+
+          yield* writeSource(source, threadId, file);
+        }),
       );
+
+      const result = yield* Effect.flatMap(ThreadImport, (target) =>
+        target.import(archivePages(archive)),
+      ).pipe(Effect.provide(SqliteThreadStore.layer({ filename })));
 
       yield* Console.log(
         yield* Schema.encodeEffect(Schema.fromJsonString(ThreadImportResult))(result),
@@ -490,7 +514,7 @@ const reencodeCommand = CliCommand.make(
     }),
 ).pipe(
   CliCommand.withDescription(
-    "Export a quiesced source and import its current-format records into an empty destination Thread.",
+    "Capture a quiesced idle Thread and import its history and receipts into an empty destination Thread.",
   ),
 );
 

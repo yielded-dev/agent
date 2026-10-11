@@ -48,6 +48,7 @@ import {
   SubmissionLedger,
 } from "@yielded/agent/submission-ledger";
 import {
+  readTestThread,
   threadStoreConformanceCases,
   threadCheckpointConformanceCases,
 } from "@yielded/agent/testing/thread-store-conformance";
@@ -282,7 +283,7 @@ describe("SqliteThreadStore", () => {
           if (compiled === undefined) return yield* Effect.die("Progress append was not prepared");
           yield* Effect.gen(function* () {
             const store = yield* ThreadStore;
-            const before = yield* store.export(ThreadExportRequest.make({ threadId }));
+            const before = yield* readTestThread(store, { threadId });
             const committed = location === "append:after";
 
             expect(before.records).toHaveLength(committed ? 1 : 0);
@@ -290,7 +291,7 @@ describe("SqliteThreadStore", () => {
               Option.isSome(yield* readContinuation(threadId, nativeRunId, before.tailSequence)),
             ).toBe(committed);
             expect((yield* store.append(compiled)).replayed).toBe(committed);
-            const after = yield* store.export(ThreadExportRequest.make({ threadId }));
+            const after = yield* readTestThread(store, { threadId });
 
             expect(after.records.map(({ record }) => record.payload._tag)).toEqual([
               "UserInputRecorded",
@@ -330,7 +331,7 @@ describe("SqliteThreadStore", () => {
         );
         const sql = yield* SqlClientService.SqlClient;
 
-        yield* sql`UPDATE effect_agent_threads SET tail_sequence=0 WHERE thread_id=${threadId}`;
+        yield* sql`UPDATE effect_agent_threads SET tail_sequence=0, work_through_sequence=0 WHERE thread_id=${threadId}`;
         expect(
           yield* store.export(ThreadExportRequest.make({ threadId })).pipe(Effect.flip),
         ).toMatchObject({
@@ -587,7 +588,16 @@ describe("SqliteThreadStore", () => {
 
           const first = yield* append(
             store,
-            batch("snapshot-1", [inputRecord("snapshot-record-1", "before")]),
+            batch("snapshot-1", [
+              canonicalRecord(
+                "snapshot-record-1",
+                UserInputRecorded.make({
+                  submissionId,
+                  kind: "user",
+                  input: "before",
+                }),
+              ),
+            ]),
           );
 
           const exporting = yield* store
@@ -977,7 +987,7 @@ describe("SqliteThreadStore", () => {
                       "UserInputRecorded",
                     ]);
 
-                    return yield* store.export(ThreadExportRequest.make({ threadId }));
+                    return yield* readTestThread(store, { threadId });
                   }),
                 );
 

@@ -270,7 +270,10 @@ const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number)
 /** Comparison-only adaptation: retain historical export semantics without changing adapters. */
 const exportArchive = (): Stream.Stream<
   ThreadStorage.ThreadExport,
-  ThreadStorage.ThreadStoreError | ThreadStorage.ThreadNotMaterialized | BenchmarkError,
+  | ThreadStorage.ThreadStoreError
+  | ThreadStorage.ThreadNotMaterialized
+  | ThreadStorage.ThreadExportRejected
+  | BenchmarkError,
   ThreadStorage.ThreadStore | ThreadStorage.ThreadExportSource
 > => {
   const request = ThreadStorage.ThreadExportRequest.make({ threadId });

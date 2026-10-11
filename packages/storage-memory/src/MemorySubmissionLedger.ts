@@ -105,8 +105,7 @@ import {
   type SuspensionReason,
 } from "@yielded/agent/submission-ledger";
 import {
-  rebuildImportedSubmission,
-  verifyImportedSettlementOrder,
+  rebuildClosedSubmission,
   invalidThreadArchive,
   RebuiltSubmission,
   ThreadImportRejected,
@@ -252,10 +251,6 @@ interface ThreadDirectory {
     readonly approvals: Array<CommandLocator>;
     readonly resolutions: Array<CommandLocator>;
   };
-  revision: number;
-  aborts: number;
-  approvals: number;
-  resolutions: number;
   children: number;
   workers: number;
   reservations: number;
@@ -463,12 +458,14 @@ const fromRebuilt = (rebuilt: RebuiltSubmission): StoredSubmission => {
     },
     inputApplied: rebuilt.inputApplied,
     finalization:
-      settlement === undefined || rebuilt.settlement === undefined
+      settlement === undefined ||
+      rebuilt.settlement === undefined ||
+      admission.settledAt === undefined
         ? undefined
         : {
             settlementId: settlement.settlementId,
             recordId: rebuilt.settlement.recordId,
-            finalizedAtMillis: DateTime.toEpochMillis(rebuilt.settlement.createdAt),
+            finalizedAtMillis: DateTime.toEpochMillis(admission.settledAt),
           },
     abortIntent: rebuilt.abort,
     joinedHostSubmissionId: rebuilt.joinedHostSubmissionId,
@@ -519,10 +516,6 @@ const withSubmission = (state: LedgerState, stored: StoredSubmission): LedgerSta
     directory = {
       ordered: [],
       commands: { aborts: [], approvals: [], resolutions: [] },
-      revision: 0,
-      aborts: 0,
-      approvals: 0,
-      resolutions: 0,
       children: 0,
       workers: 0,
       reservations: 0,
@@ -555,7 +548,6 @@ const withSubmission = (state: LedgerState, stored: StoredSubmission): LedgerSta
     )
       state.latestByThread.set(row.threadId, row.submissionId);
   }
-  directory.revision++;
   directory.children +=
     Number(row.state !== "settled" && row.parentLinkage !== undefined) -
     Number(
@@ -570,11 +562,6 @@ const withSubmission = (state: LedgerState, stored: StoredSubmission): LedgerSta
         previous.row.state !== "settled" &&
         previous.row.workerAdmissionJson !== undefined,
     );
-  directory.aborts +=
-    Number(stored.abortIntent !== undefined) - Number(previous?.abortIntent !== undefined);
-  directory.approvals += stored.approvalDecisions.size - (previous?.approvalDecisions.size ?? 0);
-  directory.resolutions +=
-    stored.unknownResolutions.size - (previous?.unknownResolutions.size ?? 0);
   if (stored.abortIntent !== undefined && previous?.abortIntent === undefined)
     retainCommand(directory.commands.aborts, row.submissionId);
   if (stored.approvalDecisions !== previous?.approvalDecisions)
@@ -630,7 +617,6 @@ const withChildReservation = (
     const directory = state.byThread.get(parent.row.threadId);
 
     if (directory !== undefined) {
-      directory.revision++;
       directory.reservations +=
         Number(reservation.status !== "released") -
         Number(previous !== undefined && previous.status !== "released");
@@ -3161,7 +3147,11 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       readAbortIntent,
     });
 
-    const toAdmission = (row: SubmissionRow) => ThreadAdmission.make(toSnapshot(row));
+    const toAdmission = (row: SubmissionRow, settledAtMillis?: number) =>
+      ThreadAdmission.make({
+        ...toSnapshot(row),
+        ...(settledAtMillis === undefined ? {} : { settledAt: utc(settledAtMillis) }),
+      });
 
     const cleanCommand = <A extends { readonly canonicalRecordId?: RecordEnvelope["recordId"] }>(
       value: A,
@@ -3227,7 +3217,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       Effect.sync(() => {
         const stored = MutableRef.get(state.ref).submissions.get(submissionId);
 
-        return stored?.row.threadId === threadId ? toAdmission(stored.row) : undefined;
+        return stored?.row.threadId === threadId
+          ? toAdmission(stored.row, stored.finalization?.finalizedAtMillis)
+          : undefined;
       });
 
     yield* journal.registerLedgerTransfer({
@@ -3237,22 +3229,15 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         Effect.sync(() => {
           const current = MutableRef.get(state.ref);
           const directory = current.byThread.get(threadId);
-          const live = new Set<"child" | "worker">();
-
-          if (
-            current.stoppedWorkers.has(threadId) &&
-            (current.activeByThread.get(threadId)?.size ?? 0) > 0
-          )
-            live.add("worker");
-          if ((directory?.children ?? 0) + (directory?.reservations ?? 0) > 0) live.add("child");
-          if ((directory?.workers ?? 0) > 0) live.add("worker");
 
           return {
-            revision: directory?.revision ?? 0,
+            idle:
+              (current.activeByThread.get(threadId)?.size ?? 0) === 0 &&
+              (directory?.reservations ?? 0) === 0,
             admissions: directory?.ordered.length ?? 0,
-            aborts: directory?.aborts ?? 0,
-            approvals: directory?.approvals ?? 0,
-            resolutions: directory?.resolutions ?? 0,
+            aborts: directory?.commands.aborts.length ?? 0,
+            approvals: directory?.commands.approvals.length ?? 0,
+            resolutions: directory?.commands.resolutions.length ?? 0,
             ...(current.stoppedWorkers.has(threadId)
               ? {
                   workerSeal:
@@ -3261,7 +3246,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                       : { terminal: current.stoppedWorkers.get(threadId) },
                 }
               : {}),
-            ...(live.size === 0 ? {} : { externalObligations: [...live] }),
           };
         }),
       facts: (threadId, section, after) =>
@@ -3272,7 +3256,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             admissions: new Array<ThreadAdmission>(),
             commands: commands(undefined),
             deliveries: [],
-            executions: [],
           };
 
           let next = after ?? "";
@@ -3285,7 +3268,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             ).next().value;
 
             if (stored !== undefined) {
-              facts.admissions.push(toAdmission(stored.row));
+              facts.admissions.push(
+                toAdmission(stored.row, stored.finalization?.finalizedAtMillis),
+              );
               next = String(stored.row.queueSequence);
             }
           } else {
@@ -3355,6 +3340,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         };
 
         const commandBytes = new Map<SubmissionId, number>();
+        const settledTimes = new Map<SubmissionId, number>();
 
         const retainCommandBytes = Effect.fnUntraced(function* <A, I>(
           schema: Schema.Codec<A, I>,
@@ -3380,7 +3366,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             Effect.sync(() => {
               const stored = staged.submissions.get(id);
 
-              return stored === undefined ? undefined : toAdmission(stored.row);
+              return stored === undefined
+                ? undefined
+                : toAdmission(stored.row, settledTimes.get(id));
             }),
           runOwner: (runId: import("@yielded/agent/identifiers").RunId) =>
             Effect.sync(() => {
@@ -3388,7 +3376,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               const id = Schema.decodeSync(SubmissionId)(runId.slice(4));
               const stored = staged.submissions.get(id);
 
-              return stored === undefined ? undefined : toAdmission(stored.row);
+              return stored === undefined
+                ? undefined
+                : toAdmission(stored.row, settledTimes.get(id));
             }),
           commands: (id: SubmissionId) => readCommands(staged.submissions.get(id)),
         };
@@ -3416,6 +3406,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
 
               if (previous?.row.queueSequence === a.queueSequence)
                 return yield* invalidThreadArchive("Duplicate admission queue position", threadId);
+              if (a.settledAt !== undefined)
+                settledTimes.set(a.submissionId, DateTime.toEpochMillis(a.settledAt));
               withSubmission(
                 staged,
                 fromRebuilt(
@@ -3487,16 +3479,12 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             }
           }),
           prepareCommit: Effect.fnUntraced(function* (workerSeal) {
-            const services = yield* Effect.context<never>();
-            const activeGroups = new Set<string>();
             let lastQueue = 0;
             let terminalEvidence = workerSeal?.terminal === undefined;
 
             for (const stored of threadRows(staged, threadId)) {
-              const a = toAdmission(stored.row);
-              const rebuilt = yield* rebuildImportedSubmission(a);
-
-              yield* verifyImportedSettlementOrder(a);
+              const a = toAdmission(stored.row, settledTimes.get(stored.row.submissionId));
+              const rebuilt = yield* rebuildClosedSubmission(a);
 
               if (
                 rebuilt.settlement !== undefined &&
@@ -3504,40 +3492,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                   workerSeal?.terminal
               )
                 terminalEvidence = true;
-              if (rebuilt.state !== "settled") {
-                if (
-                  workerSeal !== undefined ||
-                  a.parentLinkage !== undefined ||
-                  a.workerAdmission !== undefined
-                )
-                  return yield* ThreadImportRejected.make({
-                    threadId,
-                    reason: "unsupported-obligations",
-                    message: "Live foreign child or worker admission cannot be restored",
-                  });
-                const checked = Effect.runSyncExitWith(services)(admissionFence.check(a));
-
-                if (Exit.isFailure(checked)) {
-                  for (const reason of checked.cause.reasons)
-                    if (Cause.isDieReason(reason) && Cause.isAsyncFiberError(reason.defect))
-                      yield* Fiber.interrupt(reason.defect.fiber);
-
-                  return yield* ThreadImportRejected.make({
-                    threadId,
-                    reason: "admission-policy-unavailable",
-                    message: "Destination admission policy rejected restore",
-                  });
-                }
-                if (a.admissionGroup !== undefined) {
-                  if (activeGroups.has(a.admissionGroup))
-                    return yield* ThreadImportRejected.make({
-                      threadId,
-                      reason: "admission-policy-conflict",
-                      message: "Active admission group conflict",
-                    });
-                  activeGroups.add(a.admissionGroup);
-                }
-              }
               withSubmission(staged, fromRebuilt(rebuilt));
               lastQueue = Math.max(lastQueue, a.queueSequence);
             }

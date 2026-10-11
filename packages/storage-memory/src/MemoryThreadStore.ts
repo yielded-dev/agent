@@ -62,9 +62,8 @@ import {
   prepareImportPage,
   finishThreadImport,
   verifyImportedReferences,
-  validateImportedExecution,
-  validateImportedRunExecution,
-  type ThreadSettlementPredecessorRequest,
+  validateClosedRun,
+  rebuildClosedSubmission,
   invalidThreadArchive,
   ThreadImportReader,
   ThreadDeliveryImportReader,
@@ -83,6 +82,7 @@ import {
   AppendResult,
   CheckpointRejected,
   ThreadExportRecord,
+  ThreadExportRejected,
   ThreadMaterialization,
   ThreadNotMaterialized,
   ThreadObservation,
@@ -108,9 +108,10 @@ import {
   transferPageFits,
 } from "@yielded/agent/thread-store";
 import {
-  executionTransferFact,
+  checkExportSource,
   exportThreadPage,
   ThreadExporterReader,
+  type TransferManifest,
 } from "@yielded/agent/thread-transfer";
 import {
   WORK_INDEX_VERSION,
@@ -171,63 +172,6 @@ interface StoredBatch {
   readonly result: AppendResult;
 }
 
-interface SettlementInterval {
-  maximum: number;
-  left?: SettlementInterval;
-  right?: SettlementInterval;
-}
-
-// Native metadata over the canonical address space. Closed historical prefixes prune in one
-// lookup; an open input keeps Infinity until its own canonical settlement is published.
-const updateSettlementInterval = (
-  root: SettlementInterval,
-  sequence: number,
-  settlement: number,
-) => {
-  let node = root;
-  let lower = 0;
-  let width = 2 ** 53;
-  const path = [node];
-
-  while (width > 1) {
-    width /= 2;
-    if (sequence - 1 < lower + width) node = node.left ??= { maximum: 0 };
-    else {
-      lower += width;
-      node = node.right ??= { maximum: 0 };
-    }
-    path.push(node);
-  }
-  node.maximum = settlement;
-  for (let at = path.length - 2; at >= 0; at--) {
-    const parent = path[at];
-
-    parent.maximum = Math.max(parent.left?.maximum ?? 0, parent.right?.maximum ?? 0);
-  }
-};
-
-function* earlierSettlementInputs(
-  root: SettlementInterval,
-  before: number,
-  settledThrough: number,
-) {
-  const stack: Array<readonly [SettlementInterval, number, number]> = [[root, 0, 2 ** 53]];
-
-  while (stack.length > 0) {
-    const next = stack.pop();
-
-    if (next === undefined) return;
-    const [node, lower, width] = next;
-
-    if (lower + 1 >= before || node.maximum <= settledThrough) continue;
-    if (width === 1) yield lower + 1;
-    else {
-      if (node.right !== undefined) stack.push([node.right, lower + width / 2, width / 2]);
-      if (node.left !== undefined) stack.push([node.left, lower, width / 2]);
-    }
-  }
-}
-
 interface StoredThread {
   /** Append-only owner indexes; readers must constrain them to their captured canonical tail. */
   readonly runRecords: Map<string, Array<CanonicalRecordEnvelope>>;
@@ -239,7 +183,6 @@ interface StoredThread {
   readonly promptEvidence: Array<CanonicalRecordEnvelope>;
   readonly modelCompletions: Array<CanonicalRecordEnvelope>;
   readonly applicationInputs: Array<CanonicalRecordEnvelope>;
-  readonly settlementIntervals: SettlementInterval;
   readonly durableOwners: Array<CanonicalRecordEnvelope>;
   readonly windowBoundaries: Map<string, Array<CanonicalRecordEnvelope>>;
   readonly peerCount: number;
@@ -250,14 +193,12 @@ interface StoredThread {
   readonly ranges: Map<number, ThreadArchiveRange>;
   readonly rangeStarts: Array<number>;
   readonly archiveContents: Map<number, Map<BatchId, string>>;
-  readonly openRange: { current?: ThreadArchiveRange };
   readonly chunks: Map<
     number,
     { readonly records: Array<CanonicalRecordEnvelope>; readonly bytes: Array<number> }
   >;
   readonly batches: Map<BatchId, StoredBatch>;
   readonly executions: Map<RunId, ExecutionCheckpoint>;
-  readonly executionRevision: number;
   readonly executionCommits: Map<
     RunId,
     { readonly batchId: BatchId; readonly intent: string; readonly result: AppendResult }
@@ -331,7 +272,6 @@ type NativeIndexes = Pick<
   | "promptEvidence"
   | "modelCompletions"
   | "applicationInputs"
-  | "settlementIntervals"
   | "durableOwners"
   | "windowBoundaries"
   | "peerCount"
@@ -350,7 +290,6 @@ const emptyIndexes = (): NativeIndexes => ({
   promptEvidence: [],
   modelCompletions: [],
   applicationInputs: [],
-  settlementIntervals: { maximum: 0 },
   durableOwners: [],
   windowBoundaries: new Map(),
   peerCount: 0,
@@ -581,6 +520,29 @@ const prepareIndexes = (
   // Latest execution entries are replaced in this private map; owner histories only append.
   // Rebuild staging is private: reuse it only in the synchronous cursor publication step.
   const workerRecords = new Map<string, Array<CanonicalRecordEnvelope>>();
+
+  const wasWorker = (previous.workerRecords.get("worker") ?? []).some(
+    ({ record }) => record.payload._tag === "WorkerOriginRecorded",
+  );
+
+  const isWorker =
+    wasWorker || records.some(({ record }) => record.payload._tag === "WorkerOriginRecorded");
+
+  // A Thread can gain a Worker origin after its initial history. Initialize once on that boundary.
+  if (isWorker && !wasWorker)
+    for (const entry of previous.byId.values()) {
+      const payload = entry.record.payload;
+
+      if (
+        (payload._tag === "UserInputRecorded" || payload._tag === "SubmissionSettled") &&
+        payload.runId !== undefined
+      ) {
+        const key = `execution:${payload._tag}`;
+
+        if ((workerRecords.get(key)?.[0]?.sequence ?? 0) < entry.sequence)
+          workerRecords.set(key, [entry]);
+      }
+    }
   const workerAppends = new Map<string, Array<CanonicalRecordEnvelope>>();
   const byId = new Map<string, CanonicalRecordEnvelope>();
   const runInputs = new Map<string, CanonicalRecordEnvelope | null>();
@@ -664,6 +626,7 @@ const prepareIndexes = (
 
     if (payload._tag === "PeerMessagePrepared") peerCount++;
     if (
+      isWorker &&
       (payload._tag === "UserInputRecorded" || payload._tag === "SubmissionSettled") &&
       payload.runId !== undefined
     )
@@ -740,24 +703,6 @@ const prepareIndexes = (
       if (previous.durableOwners.length === 0 && nativeAdds.durableOwners[0] !== undefined)
         previous.durableOwners.push(nativeAdds.durableOwners[0]);
       for (const [id, entry] of byId) previous.byId.set(id, entry);
-      for (const entry of records) {
-        const payload = entry.record.payload;
-
-        if (
-          (payload._tag !== "UserInputRecorded" && payload._tag !== "SubmissionSettled") ||
-          payload.submissionId === undefined
-        )
-          continue;
-        const input = previous.byId.get(submissionInputRecordId(payload.submissionId));
-
-        if (input !== undefined)
-          updateSettlementInterval(
-            previous.settlementIntervals,
-            input.sequence,
-            previous.byId.get(submissionSettlementRecordId(payload.submissionId))?.sequence ??
-              Infinity,
-          );
-      }
       for (const [id, entry] of runInputs) previous.runInputs.set(id, entry);
       for (const [key, entries] of workerRecords) previous.workerRecords.set(key, entries);
       commitIndex(previous.workerRecords, workerAppends);
@@ -1220,18 +1165,15 @@ const makeThreadStore = Effect.gen(function* () {
             promptEvidence: [],
             modelCompletions: [],
             applicationInputs: [],
-            settlementIntervals: { maximum: 0 },
             durableOwners: [],
             windowBoundaries: new Map(),
             ranges: new Map(),
             rangeStarts: [],
             archiveContents: new Map(),
-            openRange: {},
             chunks: new Map(),
             batchesByFirst: new Map(),
             batches: new Map(),
             executions: new Map(),
-            executionRevision: 0,
             executionCommits: new Map(),
             checkpoints: new Map(),
           });
@@ -1245,32 +1187,6 @@ const makeThreadStore = Effect.gen(function* () {
       if (decision._tag === "failure") return yield* decision.error;
     },
   );
-
-  const retainRange = (thread: StoredThread, threadId: ThreadId, batch: StoredBatch) => {
-    const bytes = new TextEncoder().encode(batch.batchJson).byteLength;
-    const count = batch.result.lastSequence - batch.result.firstSequence + 1;
-    let open = thread.openRange.current;
-
-    if (
-      open !== undefined &&
-      (open.recordCount + count > MAX_ARCHIVE_RANGE_RECORDS ||
-        open.byteCount + bytes > MAX_ARCHIVE_RANGE_BYTES)
-    ) {
-      thread.ranges.set(open.firstSequence, open);
-      thread.rangeStarts.push(open.firstSequence);
-      open = undefined;
-    }
-    thread.openRange.current = ThreadArchiveRange.make({
-      format: "effect-agent/thread-range@2",
-      threadId,
-      firstSequence: open?.firstSequence ?? batch.result.firstSequence,
-      lastSequence: batch.result.lastSequence,
-      recordCount: (open?.recordCount ?? 0) + count,
-      batchCount: (open?.batchCount ?? 0) + 1,
-      byteCount: (open?.byteCount ?? 0) + bytes,
-      state: "sealed",
-    });
-  };
 
   const prepareAppend = Effect.fnUntraced(function* (unvalidated: AppendRequest) {
     const captured = yield* PreparedAppend.capture(unvalidated);
@@ -1343,10 +1259,9 @@ const makeThreadStore = Effect.gen(function* () {
 
       if (
         new Set(executions.map((update) => update.checkpoint.progress.runId)).size !==
-          executions.length ||
-        !Number.isSafeInteger(thread.executionRevision + executions.length)
+        executions.length
       )
-        return yield* storeError("append", "Invalid active execution revision");
+        return yield* storeError("append", "Duplicate active execution identity");
       for (const update of request.executions ?? []) {
         const prior = thread.executions.get(update.checkpoint.progress.runId);
 
@@ -1545,13 +1460,11 @@ const makeThreadStore = Effect.gen(function* () {
           ...thread,
           ...indexes.indexes,
           tailSequence: lastSequence,
-          executionRevision: thread.executionRevision + (request.executions?.length ?? 0),
         };
 
         // Every rejection and asynchronous validation precedes this synchronous publication.
         if (records.length > 0) {
           thread.batches.set(request.batch.batchId, { result, batchJson });
-          retainRange(thread, request.threadId, { result, batchJson });
           thread.batchesByFirst.set(result.firstSequence, request.batch.batchId);
           retainRecords(thread, records);
         }
@@ -1991,158 +1904,145 @@ const makeThreadStore = Effect.gen(function* () {
     ranges: new Map(),
     rangeStarts: [],
     archiveContents: new Map(),
-    openRange: {},
     chunks: new Map(),
     batches: new Map(),
     executions: new Map(),
-    executionRevision: 0,
     executionCommits: new Map(),
     batchesByFirst: new Map(),
     checkpoints: new Map(),
   });
 
-  const exportReader = ThreadExporterReader.of({
-    snapshot: Effect.fnUntraced(function* (threadId: ThreadId) {
-      const thread = MutableRef.get(state.ref).threads.get(threadId);
+  const makeExportReader = (idleOnly: boolean) =>
+    ThreadExporterReader.of({
+      snapshot: Effect.fnUntraced(function* (threadId: ThreadId, captured?: TransferManifest) {
+        const thread = MutableRef.get(state.ref).threads.get(threadId);
 
-      const facts =
-        ledgerTransfer === undefined
-          ? { revision: 0, admissions: 0, aborts: 0, approvals: 0, resolutions: 0 }
-          : yield* ledgerTransfer.snapshot(threadId);
+        const facts =
+          ledgerTransfer === undefined
+            ? { idle: true, admissions: 0, aborts: 0, approvals: 0, resolutions: 0 }
+            : yield* ledgerTransfer.snapshot(threadId);
 
-      const delivered = deliveryTransfer?.snapshot(threadId) ?? { revision: 0, deliveries: 0 };
+        const delivered = deliveryTransfer?.snapshot(threadId) ?? { idle: true, deliveries: 0 };
 
-      if (thread === undefined && facts.admissions === 0 && delivered.deliveries === 0)
-        return yield* ThreadNotMaterialized.make({ threadId });
+        if (thread === undefined && facts.admissions === 0 && delivered.deliveries === 0)
+          return yield* ThreadNotMaterialized.make({ threadId });
+        if (idleOnly) {
+          const index = yield* readyIndex(threadId, thread?.tailSequence ?? 0).pipe(
+            Effect.mapError((e) => storeError("export", e.message)),
+          );
 
-      const index = yield* readyIndex(threadId, thread?.tailSequence ?? 0).pipe(
-        Effect.mapError((e) => storeError("export", e.message)),
-      );
+          if (
+            owner.hasOwner(threadId) ||
+            (thread?.executions.size ?? 0) > 0 ||
+            index.entries.size > 0 ||
+            !facts.idle ||
+            !delivered.idle
+          )
+            return yield* ThreadExportRejected.make({ threadId, reason: "non-idle" });
+          // Only the first page performs the full closed-receipt proof. The caller keeps
+          // the source quiescent; subsequent pages still check current work and the tail.
+          if (captured === undefined && thread !== undefined) {
+            yield* Effect.gen(function* () {
+              for (const runId of thread.runRecords.keys())
+                yield* validateClosedRun(threadId, Schema.decodeSync(RunId)(runId));
+              if (ledgerTransfer !== undefined) {
+                const ledger = ledgerTransfer;
 
-      const foreign = new Set(facts.externalObligations ?? []);
+                yield* Stream.runForEach(ledger.submissions(threadId), (submission) =>
+                  Effect.gen(function* () {
+                    const admission = yield* ledger.admission(threadId, submission.submissionId);
 
-      if (index.foreign.child > 0) foreign.add("child");
-      if (index.foreign.worker > 0) foreign.add("worker");
-      if (index.foreign.delivery > 0) foreign.add("message-delivery");
-      const revision = facts.revision + delivered.revision + (thread?.executionRevision ?? 0);
+                    if (admission === undefined)
+                      return yield* storeError("export", "Missing immutable admission");
+                    yield* rebuildClosedSubmission(admission);
+                  }),
+                );
+              }
+            }).pipe(
+              Effect.provide(ThreadImportReader.layer(importReader(threadId, thread))),
+              Effect.mapError((cause) =>
+                Schema.is(ThreadImportRejected)(cause)
+                  ? ThreadExportRejected.make({ threadId, reason: "non-idle" })
+                  : cause,
+              ),
+            );
+          }
+        }
 
-      if (!Number.isSafeInteger(revision))
-        return yield* storeError("export", "Transfer revision is exhausted");
-
-      return {
-        format: CURRENT_RECORD_FORMAT,
-        threadId,
-        tailSequence: thread?.tailSequence ?? ZERO_CANONICAL_SEQUENCE,
-        snapshot: {
-          revision,
-          admissions: facts.admissions,
-          aborts: facts.aborts,
-          approvals: facts.approvals,
-          resolutions: facts.resolutions,
-          deliveries: delivered.deliveries,
-          executions: thread?.executions.size ?? 0,
-        },
-        ...(facts.workerSeal === undefined ? {} : { workerSeal: facts.workerSeal }),
-        ...(foreign.size === 0 ? {} : { externalObligations: [...foreign] }),
-      };
-    }),
-    batch: Effect.fnUntraced(function* (threadId: ThreadId, fromSequence: number) {
-      const thread = yield* findThread(MutableRef.get(state.ref), threadId);
-      const batchId = thread.batchesByFirst.get(fromSequence);
-      const stored = batchId === undefined ? undefined : thread.batches.get(batchId);
-
-      if (
-        stored === undefined ||
-        new TextEncoder().encode(stored.batchJson).byteLength > 16 * 1024 * 1024
-      )
-        return yield* storeError("export", "Missing or oversized canonical batch wire");
-      const batch = yield* decodeStoredBatch(stored.batchJson, "export");
-      const records: Array<ThreadExportRecord> = [];
-
-      for (const [index, record] of batch.records.entries()) {
-        const sequence = decodeCanonicalSequence(fromSequence + index);
-        const exact = storedRecord(thread, sequence);
+        return {
+          format: CURRENT_RECORD_FORMAT,
+          threadId,
+          tailSequence: thread?.tailSequence ?? ZERO_CANONICAL_SEQUENCE,
+          snapshot: {
+            admissions: facts.admissions,
+            aborts: facts.aborts,
+            approvals: facts.approvals,
+            resolutions: facts.resolutions,
+            deliveries: delivered.deliveries,
+          },
+          ...(facts.workerSeal === undefined ? {} : { workerSeal: facts.workerSeal }),
+        };
+      }),
+      batch: Effect.fnUntraced(function* (threadId: ThreadId, fromSequence: number) {
+        const thread = yield* findThread(MutableRef.get(state.ref), threadId);
+        const batchId = thread.batchesByFirst.get(fromSequence);
+        const stored = batchId === undefined ? undefined : thread.batches.get(batchId);
 
         if (
-          exact === undefined ||
-          exact.batchId !== batch.batchId ||
-          exact.record.recordId !== record.recordId
+          stored === undefined ||
+          new TextEncoder().encode(stored.batchJson).byteLength > 16 * 1024 * 1024
         )
-          return yield* storeError("export", "Canonical batch index differs from its wire");
-        records.push(
-          ThreadExportRecord.make({
-            threadId,
-            batchId: batch.batchId,
-            sequence,
-            offset: observationOffset(threadId, sequence),
-            record,
-          }),
-        );
-      }
+          return yield* storeError("export", "Missing or oversized canonical batch wire");
+        const batch = yield* decodeStoredBatch(stored.batchJson, "export");
+        const records: Array<ThreadExportRecord> = [];
 
-      return { batches: [{ batchId: batch.batchId, producerId: batch.producerId }], records };
-    }),
-    facts: (threadId, section, after) =>
-      section === "executions"
-        ? Effect.gen(function* () {
-            const thread = yield* findThread(MutableRef.get(state.ref), threadId).pipe(
-              Effect.mapError(() => storeError("export", "Thread is not materialized")),
-            );
+        for (const [index, record] of batch.records.entries()) {
+          const sequence = decodeCanonicalSequence(fromSequence + index);
+          const exact = storedRecord(thread, sequence);
 
-            const cursor = after === undefined ? 0 : Number(after);
+          if (
+            exact === undefined ||
+            exact.batchId !== batch.batchId ||
+            exact.record.recordId !== record.recordId
+          )
+            return yield* storeError("export", "Canonical batch index differs from its wire");
+          records.push(
+            ThreadExportRecord.make({
+              threadId,
+              batchId: batch.batchId,
+              sequence,
+              offset: observationOffset(threadId, sequence),
+              record,
+            }),
+          );
+        }
 
-            if (!Number.isSafeInteger(cursor) || cursor < 0)
-              return yield* storeError("export", "Invalid active execution cursor");
+        return { batches: [{ batchId: batch.batchId, producerId: batch.producerId }], records };
+      }),
+      facts: (threadId, section, after) => {
+        const empty = Effect.succeed({
+          facts: {
+            admissions: [],
+            commands: { aborts: [], approvals: [], resolutions: [] },
+            deliveries: [],
+          },
+          after: after ?? "",
+        });
 
-            const checkpoint = [...thread.executions.values()]
-              .filter((value) => value.originalSequence > cursor)
-              .sort((a, b) => a.originalSequence - b.originalSequence)[0];
+        return section === "deliveries"
+          ? (deliveryTransfer?.facts(threadId, after) ?? empty)
+          : (ledgerTransfer?.facts(threadId, section, after) ?? empty);
+      },
+    });
 
-            return {
-              facts: {
-                admissions: [],
-                commands: { aborts: [], approvals: [], resolutions: [] },
-                deliveries: [],
-                executions:
-                  checkpoint === undefined
-                    ? []
-                    : [
-                        yield* executionTransferFact(checkpoint).pipe(
-                          Effect.provideService(Crypto.Crypto, crypto),
-                        ),
-                      ],
-              },
-              after: checkpoint === undefined ? (after ?? "") : String(checkpoint.originalSequence),
-            };
-          })
-        : section === "deliveries"
-          ? (deliveryTransfer?.facts(threadId, after) ??
-            Effect.succeed({
-              facts: {
-                admissions: [],
-                commands: { aborts: [], approvals: [], resolutions: [] },
-                deliveries: [],
-                executions: [],
-              },
-              after: after ?? "",
-            }))
-          : (ledgerTransfer?.facts(threadId, section, after) ??
-            Effect.succeed({
-              facts: {
-                admissions: [],
-                commands: { aborts: [], approvals: [], resolutions: [] },
-                deliveries: [],
-                executions: [],
-              },
-              after: after ?? "",
-            })),
-  });
+  const exportReader = makeExportReader(true);
+  const verificationReader = makeExportReader(false);
 
   const exportThread: ThreadStore["Service"]["export"] = (request) =>
-    exportThreadPage(request).pipe(
-      Effect.provideService(ThreadExporterReader, exportReader),
-      Effect.provideService(Crypto.Crypto, crypto),
-    );
+    exportThreadPage(request).pipe(Effect.provideService(ThreadExporterReader, exportReader));
+
+  const verificationPage: ThreadStore["Service"]["export"] = (request) =>
+    exportThreadPage(request).pipe(Effect.provideService(ThreadExporterReader, verificationReader));
 
   const exactRunRecords = (thread: StoredThread, runId: RunId) =>
     Effect.gen(function* () {
@@ -2189,323 +2089,278 @@ const makeThreadStore = Effect.gen(function* () {
       ),
   });
 
-  const settlementInputs = (thread: StoredThread, request: ThreadSettlementPredecessorRequest) =>
-    Stream.fromIterable(
-      earlierSettlementInputs(
-        thread.settlementIntervals,
-        request.inputSequence,
-        request.settlementSequence,
-      ),
-    ).pipe(
-      Stream.mapEffect((sequence) =>
-        Effect.gen(function* () {
-          const input = storedRecord(thread, sequence)?.record.payload;
-
-          if (input?._tag !== "UserInputRecorded" || input.submissionId === undefined)
-            return yield* storeError(
-              "settlement predecessors",
-              "Indexed input evidence is missing",
-            );
-
-          return input.submissionId;
-        }),
-      ),
-    );
+  const importReader = (id: ThreadId, thread: StoredThread): ThreadImportReader["Service"] => ({
+    ...exactRecordReader(id, thread),
+    admission: (sid) => ledgerTransfer?.admission(id, sid) ?? Effect.succeed(undefined),
+    runOwner: (runId) =>
+      runId.startsWith("run:")
+        ? (ledgerTransfer?.admission(id, Schema.decodeSync(importSubmissionId)(runId.slice(4))) ??
+          Effect.succeed(undefined))
+        : Effect.succeed(undefined),
+    commands: (sid) =>
+      ledgerTransfer?.commands(sid) ??
+      Effect.succeed({ aborts: [], approvals: [], resolutions: [] }),
+    delivery: (messageId) => deliveryTransfer?.record(id, messageId) ?? Effect.succeed(undefined),
+  });
 
   const importThread: ThreadImport["Service"]["import"] = (pages) =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const captured = yield* captureImportSource(pages);
+    captureImportSource(pages, (captured) =>
+      withMutation(
+        Effect.gen(function* () {
+          const progress = makeThreadImportProgress();
+          let staged: StoredThread | undefined;
+          let stagedWork = emptyWorkIndex();
+          let stagedLedger: MemoryLedgerImport | undefined;
+          let stagedDelivery: MemoryDeliveryImport | undefined;
+          let existing: StoredThread | undefined;
 
-        return yield* withMutation(
-          Effect.gen(function* () {
-            const progress = makeThreadImportProgress();
-            let staged: StoredThread | undefined;
-            let stagedWork = emptyWorkIndex();
-            let stagedLedger: MemoryLedgerImport | undefined;
-            let stagedDelivery: MemoryDeliveryImport | undefined;
-            let existing: StoredThread | undefined;
+          yield* Stream.runForEach(captured, (input) =>
+            Effect.gen(function* () {
+              const page = yield* prepareImportPage(progress, input).pipe(
+                Effect.provideService(Crypto.Crypto, crypto),
+              );
 
-            yield* Stream.runForEach(captured, (input) =>
-              Effect.gen(function* () {
-                const page = yield* prepareImportPage(progress, input).pipe(
-                  Effect.provideService(Crypto.Crypto, crypto),
-                );
+              const id = page.archive.threadId;
 
-                const id = page.archive.threadId;
+              if (staged === undefined) {
+                const current = MutableRef.get(state.ref);
 
-                if (staged === undefined) {
-                  const current = MutableRef.get(state.ref);
+                existing = current.threads.get(id);
+                const existingWork = MutableRef.get(workState.ref).get(id);
 
-                  existing = current.threads.get(id);
-                  const existingWork = MutableRef.get(workState.ref).get(id);
-
-                  if (
-                    (existing !== undefined &&
-                      (existing.tailSequence > 0 ||
-                        existing.batches.size > 0 ||
-                        existing.executions.size > 0 ||
-                        existing.executionCommits.size > 0 ||
-                        existing.checkpoints.size > 0 ||
-                        existing.ranges.size > 0 ||
-                        existing.archiveContents.size > 0)) ||
-                    (existingWork !== undefined &&
-                      (existingWork.entries.size > 0 ||
-                        existingWork.state !== "ready" ||
-                        existingWork.through !== 0))
-                  )
-                    return yield* ThreadImportRejected.make({
-                      threadId: id,
-                      reason: "target-not-empty",
-                      message: "Destination canonical Thread is not empty",
-                    });
-                  if (
-                    !MutableRef.get(workState.ref).has(id) &&
-                    MutableRef.get(workState.ref).size >= maxThreads
-                  )
-                    return yield* storeError("import", "Destination Thread capacity exceeded");
-                  staged = emptyThread();
-                  stagedLedger =
-                    ledgerTransfer === undefined
-                      ? undefined
-                      : yield* ledgerTransfer.startImport(id);
-                  stagedDelivery =
-                    deliveryTransfer === undefined
-                      ? undefined
-                      : yield* deliveryTransfer.startImport(id);
-                  if (page.archive.workerSeal !== undefined && stagedLedger === undefined)
-                    return yield* ThreadImportRejected.make({
-                      threadId: id,
-                      reason: "unsupported-obligations",
-                      message: "A paired ledger is required to preserve the worker seal",
-                    });
-                }
-                if (page.archive.admissions.length > 0 && stagedLedger === undefined)
+                if (
+                  (existing !== undefined &&
+                    (existing.tailSequence > 0 ||
+                      existing.batches.size > 0 ||
+                      existing.executions.size > 0 ||
+                      existing.executionCommits.size > 0 ||
+                      existing.checkpoints.size > 0 ||
+                      existing.ranges.size > 0 ||
+                      existing.archiveContents.size > 0)) ||
+                  (existingWork !== undefined &&
+                    (existingWork.entries.size > 0 ||
+                      existingWork.state !== "ready" ||
+                      existingWork.through !== 0))
+                )
+                  return yield* ThreadImportRejected.make({
+                    threadId: id,
+                    reason: "target-not-empty",
+                    message: "Destination canonical Thread is not empty",
+                  });
+                if (
+                  !MutableRef.get(workState.ref).has(id) &&
+                  MutableRef.get(workState.ref).size >= maxThreads
+                )
+                  return yield* storeError("import", "Destination Thread capacity exceeded");
+                staged = emptyThread();
+                stagedLedger =
+                  ledgerTransfer === undefined ? undefined : yield* ledgerTransfer.startImport(id);
+                stagedDelivery =
+                  deliveryTransfer === undefined
+                    ? undefined
+                    : yield* deliveryTransfer.startImport(id);
+                if (page.archive.workerSeal !== undefined && stagedLedger === undefined)
                   return yield* ThreadImportRejected.make({
                     threadId: id,
                     reason: "unsupported-obligations",
-                    message: "A paired ledger is required for admission restore",
+                    message: "A paired ledger is required to preserve the worker seal",
                   });
-                if (page.archive.deliveries.length > 0 && stagedDelivery === undefined)
-                  return yield* ThreadImportRejected.make({
-                    threadId: id,
-                    reason: "unsupported-obligations",
-                    message: "A paired delivery store is required for delivery restore",
-                  });
-                for (const batch of page.batches) {
-                  if (
-                    !canonicalBatchFitsTransfer(
-                      id,
-                      batch.batch,
-                      utf8ByteLength(batch.batchJson),
-                      4 * Math.ceil(utf8ByteLength(id) / 3) + 36,
-                    )
-                  )
-                    return yield* ThreadImportRejected.make({
-                      threadId: id,
-                      reason: "unsupported-capacity",
-                      message: "Canonical batch exceeds its bounded transfer representation",
-                    });
-
-                  if (staged.batches.has(batch.batch.batchId))
-                    return yield* invalidThreadArchive("Duplicate canonical batch identity", id);
-
-                  const records = page.records
-                    .filter((entry) => entry.batchId === batch.batch.batchId)
-                    .map((entry) =>
-                      CanonicalRecordEnvelope.make({
-                        ...entry,
-                        offset: observationOffset(id, entry.sequence),
-                      }),
-                    );
-
-                  for (const entry of records)
-                    if (staged.byId.has(entry.record.recordId))
-                      return yield* invalidThreadArchive("Duplicate canonical record identity", id);
-                  const native = prepareIndexes(staged, records);
-
-                  const commitWork = yield* prepareWork(
-                    stagedWork,
-                    records,
-                    (_, messageId) => stagedDelivery?.has(messageId) ?? false,
-                  ).pipe(Effect.provideService(Crypto.Crypto, crypto));
-
-                  retainRecords(staged, records);
-                  native.commit();
-                  staged = {
-                    ...staged,
-                    ...native.indexes,
-                    tailSequence: batch.lastSequence,
-                  };
-                  staged.batches.set(batch.batch.batchId, {
-                    batchJson: batch.batchJson,
-                    result: AppendResult.make({
-                      firstSequence: batch.firstSequence,
-                      lastSequence: batch.lastSequence,
-                      replayed: false,
-                    }),
-                  });
-                  retainRange(staged, id, staged.batches.get(batch.batch.batchId)!);
-                  staged.batchesByFirst.set(batch.firstSequence, batch.batch.batchId);
-                  stagedWork = commitWork();
-                }
-                for (const { checkpoint } of page.archive.executions) {
-                  if (staged.executions.has(checkpoint.progress.runId))
-                    return yield* invalidThreadArchive("Duplicate active execution identity", id);
-                  staged.executions.set(checkpoint.progress.runId, checkpoint);
-                  staged = { ...staged, executionRevision: staged.executionRevision + 1 };
-                }
-                if (stagedLedger !== undefined) yield* stagedLedger.stage(page);
-                if (stagedDelivery !== undefined) yield* stagedDelivery.stage(page);
-                for (const delivery of page.archive.deliveries) {
-                  for (const workId of stagedWork.messages.get(delivery.key.messageId) ?? []) {
-                    const entry = stagedWork.entries.get(workId);
-
-                    if (entry !== undefined) changeWorkCounts(stagedWork, entry, -1);
-                    stagedWork.entries.delete(workId);
-                  }
-                  stagedWork.messages.delete(delivery.key.messageId);
-                  stagedWork = { ...stagedWork, entryCount: stagedWork.entries.size };
-                }
-              }),
-            );
-            const result = yield* finishThreadImport(progress);
-
-            if (staged === undefined) return yield* invalidThreadArchive("Missing transfer pages");
-            const restoredThread = staged;
-            const id = result.threadId;
-
-            const fallback = {
-              admission: () => Effect.succeed(undefined),
-              runOwner: () => Effect.succeed(undefined),
-              commands: () => Effect.succeed({ aborts: [], approvals: [], resolutions: [] }),
-            };
-
-            const reader: ThreadImportReader["Service"] = {
-              ...exactRecordReader(id, restoredThread),
-              ...(stagedLedger?.reader ?? fallback),
-              delivery: stagedDelivery?.record ?? (() => Effect.succeed(undefined)),
-              settlementPredecessors: (request) =>
-                settlementInputs(restoredThread, request).pipe(
-                  Stream.mapEffect((sid) =>
-                    reader.admission(sid).pipe(
-                      Effect.filterOrFail(
-                        (admission) => admission !== undefined,
-                        () =>
-                          storeError(
-                            "settlement predecessors",
-                            "Indexed input admission is missing",
-                          ),
-                      ),
-                    ),
-                  ),
-                  Stream.filter((admission) => admission.queueSequence < request.queueSequence),
-                  Stream.map(({ submissionId }) => ({ submissionId })),
-                ),
-            };
-
-            return yield* Effect.gen(function* () {
-              for (const runId of restoredThread.runRecords.keys()) {
-                yield* verifyRunContinuations(
-                  yield* reader.runRecords(Schema.decodeSync(RunId)(runId)),
-                  { verifyContext: false },
-                ).pipe(Effect.mapError((e) => invalidThreadArchive(e.message, id)));
-                yield* validateImportedRunExecution(
-                  id,
-                  Schema.decodeSync(RunId)(runId),
-                  result.tailSequence,
-                );
               }
-              for (const checkpoint of restoredThread.executions.values())
-                yield* validateImportedExecution(id, checkpoint, result.tailSequence);
-              let lastInputQueue = -1;
-
-              for (let sequence = 1; sequence <= restoredThread.tailSequence; sequence++) {
-                const entry = storedRecord(restoredThread, sequence);
-
-                if (entry === undefined)
-                  return yield* invalidThreadArchive("Incomplete canonical staging", id);
-                yield* verifyImportedReferences(entry);
-                const payload = entry.record.payload;
-
-                if (payload._tag === "UserInputRecorded" && payload.submissionId !== undefined) {
-                  const admission = yield* reader.admission(payload.submissionId);
-
-                  if (admission === undefined || admission.queueSequence <= lastInputQueue)
-                    return yield* invalidThreadArchive(
-                      "Canonical inputs violate immutable admission order",
-                      id,
-                    );
-                  lastInputQueue = admission.queueSequence;
-                }
-
-                if (
-                  payload._tag === "UserInputRecorded" &&
-                  payload.submissionId !== undefined &&
-                  entry.record.recordId !== submissionInputRecordId(payload.submissionId)
-                )
-                  return yield* invalidThreadArchive("Canonical input identity is ambiguous", id);
-                if (
-                  payload._tag === "SubmissionSettled" &&
-                  entry.record.recordId !== submissionSettlementRecordId(payload.submissionId)
-                )
-                  return yield* invalidThreadArchive(
-                    "Canonical settlement identity is ambiguous",
-                    id,
-                  );
-                if (
-                  payload._tag !== "WorkerInputCompleted" &&
-                  "submissionId" in payload &&
-                  payload.submissionId !== undefined &&
-                  (yield* reader.admission(payload.submissionId)) === undefined
-                )
-                  return yield* invalidThreadArchive("Canonical submission has no admission", id);
-              }
-              if (Object.values(stagedWork.foreign).some((count) => count > 0))
+              if (page.archive.admissions.length > 0 && stagedLedger === undefined)
                 return yield* ThreadImportRejected.make({
                   threadId: id,
                   reason: "unsupported-obligations",
-                  message: "Live foreign ownership cannot be restored",
+                  message: "A paired ledger is required for admission restore",
                 });
+              if (page.archive.deliveries.length > 0 && stagedDelivery === undefined)
+                return yield* ThreadImportRejected.make({
+                  threadId: id,
+                  reason: "unsupported-obligations",
+                  message: "A paired delivery store is required for delivery restore",
+                });
+              for (const batch of page.batches) {
+                if (
+                  !canonicalBatchFitsTransfer(
+                    id,
+                    batch.batch,
+                    utf8ByteLength(batch.batchJson),
+                    4 * Math.ceil(utf8ByteLength(id) / 3) + 36,
+                  )
+                )
+                  return yield* ThreadImportRejected.make({
+                    threadId: id,
+                    reason: "unsupported-capacity",
+                    message: "Canonical batch exceeds its bounded transfer representation",
+                  });
 
-              const commitLedger =
-                stagedLedger === undefined
-                  ? undefined
-                  : yield* stagedLedger.prepareCommit(progress.manifest?.workerSeal);
+                if (staged.batches.has(batch.batch.batchId))
+                  return yield* invalidThreadArchive("Duplicate canonical batch identity", id);
 
-              const commitDelivery =
-                stagedDelivery === undefined ? undefined : yield* stagedDelivery.prepareCommit();
+                const records = page.records
+                  .filter((entry) => entry.batchId === batch.batch.batchId)
+                  .map((entry) =>
+                    CanonicalRecordEnvelope.make({
+                      ...entry,
+                      offset: observationOffset(id, entry.sequence),
+                    }),
+                  );
 
-              const installed = restoredThread;
+                for (const entry of records)
+                  if (staged.byId.has(entry.record.recordId))
+                    return yield* invalidThreadArchive("Duplicate canonical record identity", id);
+                const native = prepareIndexes(staged, records);
 
-              yield* Effect.uninterruptible(
-                Effect.sync(() => {
-                  commitLedger?.();
-                  commitDelivery?.();
-                  publishWork(id, stagedWork);
-                  MutableRef.get(state.ref).threads.set(id, installed);
-                }).pipe(Effect.andThen(PubSub.publish(updates, undefined))),
-              );
+                const commitWork = yield* prepareWork(
+                  stagedWork,
+                  records,
+                  (_, messageId) => stagedDelivery?.has(messageId) ?? false,
+                ).pipe(Effect.provideService(Crypto.Crypto, crypto));
 
-              return result;
-            }).pipe(
-              Effect.provide(ThreadImportReader.layer(reader)),
-              Effect.provideService(ThreadDeliveryImportReader, {
-                admission: (threadId, sid) =>
-                  threadId === id
-                    ? reader.admission(sid)
-                    : (ledgerTransfer?.admission(threadId, sid) ?? Effect.succeed(undefined)),
-                record: (threadId, recordId) =>
-                  Effect.succeed(
-                    threadId === id
-                      ? restoredThread.byId.get(recordId)?.record
-                      : MutableRef.get(state.ref).threads.get(threadId)?.byId.get(recordId)?.record,
-                  ),
-              }),
+                retainRecords(staged, records);
+                native.commit();
+                staged = {
+                  ...staged,
+                  ...native.indexes,
+                  tailSequence: batch.lastSequence,
+                };
+                staged.batches.set(batch.batch.batchId, {
+                  batchJson: batch.batchJson,
+                  result: AppendResult.make({
+                    firstSequence: batch.firstSequence,
+                    lastSequence: batch.lastSequence,
+                    replayed: false,
+                  }),
+                });
+                staged.batchesByFirst.set(batch.firstSequence, batch.batch.batchId);
+                stagedWork = commitWork();
+              }
+              if (stagedLedger !== undefined) yield* stagedLedger.stage(page);
+              if (stagedDelivery !== undefined) yield* stagedDelivery.stage(page);
+              for (const delivery of page.archive.deliveries) {
+                for (const workId of stagedWork.messages.get(delivery.key.messageId) ?? []) {
+                  const entry = stagedWork.entries.get(workId);
+
+                  if (entry !== undefined) changeWorkCounts(stagedWork, entry, -1);
+                  stagedWork.entries.delete(workId);
+                }
+                stagedWork.messages.delete(delivery.key.messageId);
+                stagedWork = { ...stagedWork, entryCount: stagedWork.entries.size };
+              }
+            }),
+          );
+          const result = yield* finishThreadImport(progress);
+
+          if (staged === undefined) return yield* invalidThreadArchive("Missing transfer pages");
+          const restoredThread = staged;
+          const id = result.threadId;
+
+          const fallback = {
+            admission: () => Effect.succeed(undefined),
+            runOwner: () => Effect.succeed(undefined),
+            commands: () => Effect.succeed({ aborts: [], approvals: [], resolutions: [] }),
+          };
+
+          const reader: ThreadImportReader["Service"] = {
+            ...exactRecordReader(id, restoredThread),
+            ...(stagedLedger?.reader ?? fallback),
+            delivery: stagedDelivery?.record ?? (() => Effect.succeed(undefined)),
+          };
+
+          return yield* Effect.gen(function* () {
+            for (const runId of restoredThread.runRecords.keys()) {
+              yield* verifyRunContinuations(
+                yield* reader.runRecords(Schema.decodeSync(RunId)(runId)),
+                { verifyContext: false },
+              ).pipe(Effect.mapError((e) => invalidThreadArchive(e.message, id)));
+              yield* validateClosedRun(id, Schema.decodeSync(RunId)(runId));
+            }
+            let lastInputQueue = -1;
+
+            for (let sequence = 1; sequence <= restoredThread.tailSequence; sequence++) {
+              const entry = storedRecord(restoredThread, sequence);
+
+              if (entry === undefined)
+                return yield* invalidThreadArchive("Incomplete canonical staging", id);
+              yield* verifyImportedReferences(entry);
+              const payload = entry.record.payload;
+
+              if (payload._tag === "UserInputRecorded" && payload.submissionId !== undefined) {
+                const admission = yield* reader.admission(payload.submissionId);
+
+                if (admission === undefined || admission.queueSequence <= lastInputQueue)
+                  return yield* invalidThreadArchive(
+                    "Canonical inputs violate immutable admission order",
+                    id,
+                  );
+                lastInputQueue = admission.queueSequence;
+              }
+
+              if (
+                payload._tag === "UserInputRecorded" &&
+                payload.submissionId !== undefined &&
+                entry.record.recordId !== submissionInputRecordId(payload.submissionId)
+              )
+                return yield* invalidThreadArchive("Canonical input identity is ambiguous", id);
+              if (
+                payload._tag === "SubmissionSettled" &&
+                entry.record.recordId !== submissionSettlementRecordId(payload.submissionId)
+              )
+                return yield* invalidThreadArchive(
+                  "Canonical settlement identity is ambiguous",
+                  id,
+                );
+              if (
+                payload._tag !== "WorkerInputCompleted" &&
+                "submissionId" in payload &&
+                payload.submissionId !== undefined &&
+                (yield* reader.admission(payload.submissionId)) === undefined
+              )
+                return yield* invalidThreadArchive("Canonical submission has no admission", id);
+            }
+            if (stagedWork.entries.size > 0)
+              return yield* ThreadImportRejected.make({
+                threadId: id,
+                reason: "unsupported-obligations",
+                message: "Transfer contains unresolved work",
+              });
+
+            const commitLedger =
+              stagedLedger === undefined
+                ? undefined
+                : yield* stagedLedger.prepareCommit(progress.manifest?.workerSeal);
+
+            const commitDelivery =
+              stagedDelivery === undefined ? undefined : yield* stagedDelivery.prepareCommit();
+
+            const installed = restoredThread;
+
+            yield* Effect.uninterruptible(
+              Effect.sync(() => {
+                commitLedger?.();
+                commitDelivery?.();
+                publishWork(id, stagedWork);
+                MutableRef.get(state.ref).threads.set(id, installed);
+              }).pipe(Effect.andThen(PubSub.publish(updates, undefined))),
             );
-          }).pipe(Effect.provideService(Crypto.Crypto, crypto)),
-        );
-      }),
+
+            return result;
+          }).pipe(
+            Effect.provide(ThreadImportReader.layer(reader)),
+            Effect.provideService(ThreadDeliveryImportReader, {
+              admission: (threadId, sid) =>
+                threadId === id
+                  ? reader.admission(sid)
+                  : (ledgerTransfer?.admission(threadId, sid) ?? Effect.succeed(undefined)),
+              record: (threadId, recordId) =>
+                Effect.succeed(
+                  threadId === id
+                    ? restoredThread.byId.get(recordId)?.record
+                    : MutableRef.get(state.ref).threads.get(threadId)?.byId.get(recordId)?.record,
+                ),
+            }),
+          );
+        }).pipe(Effect.provideService(Crypto.Crypto, crypto)),
+      ),
     );
 
   const inspectTail: ThreadStore["Service"]["inspectTail"] = Effect.fnUntraced(
@@ -2772,15 +2627,55 @@ const makeThreadStore = Effect.gen(function* () {
         Effect.gen(function* () {
           const request = yield* validate(ThreadArchiveRangeSeal, "seal range", unvalidated);
           const thread = yield* archiveTarget(request);
-          const open = thread.openRange.current;
+          const previousStart = thread.rangeStarts.at(-1);
 
-          if (open === undefined) return Option.none<ThreadArchiveRange>();
-          yield* verifyRange(thread, open);
-          thread.ranges.set(open.firstSequence, open);
-          thread.rangeStarts.push(open.firstSequence);
-          delete thread.openRange.current;
+          const previous =
+            previousStart === undefined ? undefined : thread.ranges.get(previousStart);
 
-          return Option.some(open);
+          if (previousStart !== undefined && previous === undefined)
+            return yield* storeError("seal range", "Range locator has no exact range");
+          const firstSequence = (previous?.lastSequence ?? 0) + 1;
+
+          if (firstSequence > thread.tailSequence) return Option.none<ThreadArchiveRange>();
+          let nextSequence = firstSequence;
+          let byteCount = 0;
+          let batchCount = 0;
+
+          while (nextSequence <= thread.tailSequence) {
+            const batchId = thread.batchesByFirst.get(nextSequence);
+            const batch = batchId === undefined ? undefined : thread.batches.get(batchId);
+
+            if (batch === undefined)
+              return yield* storeError("seal range", "Missing exact canonical batch");
+            const bytes = utf8ByteLength(batch.batchJson);
+
+            if (
+              batchCount > 0 &&
+              (batch.result.lastSequence - firstSequence + 1 > MAX_ARCHIVE_RANGE_RECORDS ||
+                byteCount + bytes > MAX_ARCHIVE_RANGE_BYTES)
+            )
+              break;
+            byteCount += bytes;
+            batchCount++;
+            nextSequence = batch.result.lastSequence + 1;
+          }
+
+          const range = ThreadArchiveRange.make({
+            format: "effect-agent/thread-range@2",
+            threadId: request.threadId,
+            firstSequence: decodeCanonicalSequence(firstSequence),
+            lastSequence: decodeCanonicalSequence(nextSequence - 1),
+            recordCount: nextSequence - firstSequence,
+            batchCount,
+            byteCount,
+            state: "sealed",
+          });
+
+          yield* verifyRange(thread, range);
+          thread.ranges.set(firstSequence, range);
+          thread.rangeStarts.push(firstSequence);
+
+          return Option.some(range);
         }),
       ),
     verify: Effect.fnUntraced(function* (unvalidated) {
@@ -2869,36 +2764,7 @@ const makeThreadStore = Effect.gen(function* () {
           const thread = yield* findThread(MutableRef.get(state.ref), request.threadId);
           const id = request.threadId;
 
-          const reader: ThreadImportReader["Service"] = {
-            ...exactRecordReader(id, thread),
-            admission: (sid) => ledgerTransfer?.admission(id, sid) ?? Effect.succeed(undefined),
-            runOwner: (runId) =>
-              runId.startsWith("run:")
-                ? (ledgerTransfer?.admission(
-                    id,
-                    Schema.decodeSync(importSubmissionId)(runId.slice(4)),
-                  ) ?? Effect.succeed(undefined))
-                : Effect.succeed(undefined),
-            commands: (sid) =>
-              ledgerTransfer?.commands(sid) ??
-              Effect.succeed({ aborts: [], approvals: [], resolutions: [] }),
-            delivery: (messageId) =>
-              deliveryTransfer?.record(id, messageId) ?? Effect.succeed(undefined),
-            settlementPredecessors: (request) =>
-              settlementInputs(thread, request).pipe(
-                Stream.mapEffect((sid) =>
-                  reader.admission(sid).pipe(
-                    Effect.filterOrFail(
-                      (admission) => admission !== undefined,
-                      () =>
-                        storeError("settlement predecessors", "Indexed input admission is missing"),
-                    ),
-                  ),
-                ),
-                Stream.filter((admission) => admission.queueSequence < request.queueSequence),
-                Stream.map(({ submissionId }) => ({ submissionId })),
-              ),
-          };
+          const reader = importReader(id, thread);
 
           const submissions = () => ledgerTransfer?.submissions(id) ?? Stream.empty;
 
@@ -2919,9 +2785,15 @@ const makeThreadStore = Effect.gen(function* () {
           return yield* verifyThreadInvariants({
             threadId: id,
             runs,
+            executions: Stream.fromIterable(thread.executions.values()),
             submissions: submissions(),
             pages: streamExport({ threadId: id }).pipe(
-              Stream.provideService(ThreadExportSource, { export: exportThread }),
+              Stream.provideService(ThreadExportSource, { export: verificationPage }),
+              Stream.mapError((cause) =>
+                Schema.is(ThreadExportRejected)(cause)
+                  ? storeError("verify Thread", "Internal verification snapshot changed")
+                  : cause,
+              ),
             ),
             ...(Option.isNone(checkpoint) ? {} : { checkpoint: checkpoint.value }),
             checkpointsSupported: true,
@@ -2959,7 +2831,8 @@ const makeThreadStore = Effect.gen(function* () {
     read,
     readPrompt,
     observe,
-    export: (request) => withMutation(exportThread(request)),
+    export: (request) =>
+      checkExportSource(request.threadId).pipe(Effect.andThen(withMutation(exportThread(request)))),
     inspectTail,
     checkpoints: { save: (request) => withMutation(saveCheckpoint(request)), load: loadCheckpoint },
   });
