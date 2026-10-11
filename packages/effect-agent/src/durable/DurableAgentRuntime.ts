@@ -991,7 +991,7 @@ export const DurableApprovalResolver: Context.Reference<RunApprovalHook<never, n
 /**
  * Optional attempt-local retention before an unresolved approval releases ownership. Supply
  * this from the Attempt's Layer, capturing its live resources. The canonical approval request
- * already exists; claim renewal and abort observation remain active while this operation runs.
+ * already exists; local ownership and abort observation remain active while this operation runs.
  * Return only after retention is confirmed. Failure leaves the accepted work owed and preserves
  * its cause; interruption keeps normal resource cleanup. No approval-gated Tool runs here.
  *
@@ -6787,8 +6787,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
        *    ownership (DUR-015). A `joining` row WITHOUT canonical input was never consumed and
        *    is recovery's to revert — the hook never guesses at it (fail-closed).
        * 2. Claim fresh — `claimJoining` atomically transitions the contiguous ready prefix of
-       *    strictly-later queue sequences to `joining` under the host's ownership token (no
-       *    epoch bump; an admitted-not-ready row breaks the prefix). Per fresh claim: honor a
+       *    strictly-later queue sequences to `joining` under the host's local generation (an
+       *    admitted-not-ready row breaks the prefix). Per fresh claim: honor a
        *    pre-consumption abort intent by reverting (revert-then-abort), else append the
        *    deterministic `UserInputRecorded` (batch `submission-input:{sid}`, record
        *    `input:{sid}`, `runId` = host Run, kind `steering`) → `join:after-canonical-append`

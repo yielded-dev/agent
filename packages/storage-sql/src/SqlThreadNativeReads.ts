@@ -997,7 +997,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                   return yield* failure("invalid original Tool declaration pointer");
                 if (
                   selection._tag === "WorkerExecution" &&
-                  payload._tag !== "UserInputRecorded" &&
+                  !(payload._tag === "UserInputRecorded" && payload.runId !== undefined) &&
                   !(payload._tag === "SubmissionSettled" && payload.runId !== undefined)
                 )
                   return yield* failure("invalid Worker execution membership");
