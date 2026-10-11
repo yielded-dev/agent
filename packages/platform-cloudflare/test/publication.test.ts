@@ -690,8 +690,8 @@ describe("durable host publication", () => {
       expect(state.dirty).toBeGreaterThan(state.processed);
       expect(await scheduledAlarm(thread, namespace)).not.toBeNull();
 
-      await drainAlarmsUntil(thread, allSettled(thread, namespace), { namespace });
       await quiesce(thread, advance);
+      expect(await allSettled(thread, namespace)()).toBe(true);
       expect((await cursor(thread)).tail).toBe(
         (await readCanonical(thread, namespace)).at(-1)?.sequence,
       );
