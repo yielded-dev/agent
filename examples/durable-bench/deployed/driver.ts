@@ -12,6 +12,7 @@ import {
 import {
   AwaitResult,
   ColdResult,
+  MetricsResult,
   measurementPaths,
   errorText,
   PrimeResult,
@@ -252,7 +253,7 @@ export default {
         });
       }
 
-      const { observeText, cold, expectedDriverBuild } =
+      const { observeText, cold, expectedDriverBuild, quiescent, resetBeforeMetrics } =
         Schema.decodeUnknownSync(MeasureRequest)(input);
 
       if (expectedDriverBuild !== env.BUILD)
@@ -403,8 +404,27 @@ export default {
             const text =
               !observeText || query.target === "tardie" ? undefined : yield* Deferred.await(first);
 
+            if (resetBeforeMetrics) {
+              const reset = yield* attempt(async () =>
+                Schema.decodeUnknownSync(ColdResult)(await (await invoke("/cold")).json()),
+              );
+
+              if (!reset.ok || !reset.threadAborted || reset.before.build !== query.expectedBuild)
+                return yield* new ObservationError({
+                  message: "Diagnostic reset was not acknowledged.",
+                });
+            }
+
+            // Capture volatile evidence before cancelling the observer, after both timer endpoints.
+            const metrics = yield* attempt(async () =>
+              Schema.decodeUnknownSync(MetricsResult)(
+                await (await invoke(quiescent ? "/metrics?quiescent=true" : "/metrics")).json(),
+              ),
+            );
+
             return {
               ok: true,
+              metrics,
               driverMs: observedMs - metricStartMs,
               observedMs,
               admissionMs,

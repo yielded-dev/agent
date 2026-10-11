@@ -2,6 +2,7 @@ import { Schema } from "effect";
 
 import {
   Counts,
+  MetricsResult,
   ObjectPhases,
   ProviderCall,
   History,
@@ -32,6 +33,7 @@ export const Profile = Schema.Struct({
 export type Profile = typeof Profile.Type;
 
 export const Options = Schema.Struct({
+  verifyIncarnationRecovery: Schema.optionalKey(Schema.Boolean),
   fixtureDirectory: Schema.optionalKey(Schema.String),
   restoreBytes: Schema.optionalKey(Schema.Int),
   restoreEachPass: Schema.optionalKey(Schema.Boolean),
@@ -83,7 +85,7 @@ export const Sample = Schema.Struct({
   repeat: Schema.Natural,
   state: Schema.Literals(["cold", "warmup", "warm", "preparation"]),
   preparationTables: Schema.optionalKey(Counts),
-  status: Schema.Literals(["running", "ok", "failed"]),
+  status: Schema.Literals(["running", "ok", "failed", "invalidated"]),
   driverMs: Schema.optionalKey(Schema.Number),
   firstTextMs: Schema.optionalKey(Schema.NullOr(Schema.Number)),
   firstText: Schema.optionalKey(Schema.String),
@@ -252,9 +254,12 @@ export const MeasureRequest = Schema.Struct({
   ...DriverRequest.fields,
   observeText: Schema.Boolean,
   cold: Schema.Boolean,
+  quiescent: Schema.Boolean,
+  resetBeforeMetrics: Schema.optionalKey(Schema.Boolean),
 });
 
 export const MeasureResponse = Schema.Struct({
+  metrics: MetricsResult,
   ok: Schema.Literal(true),
   driverMs: Schema.Number,
   observedMs: Schema.Number,

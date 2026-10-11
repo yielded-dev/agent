@@ -28,6 +28,12 @@ export const command = Command.make(
         "Restore each pass (default through 1,000 turns; always across storage formats)",
       ),
     ),
+    verifyIncarnationRecovery: Flag.Boolean("verify-incarnation-recovery").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription(
+        "Diagnostic: abort one settled Object per target before metrics, then verify pass recovery",
+      ),
+    ),
     fixtureDirectory: Flag.String("fixture-directory").pipe(
       Flag.optional,
       Flag.withDescription("Read saved fixtures from this directory"),
@@ -66,9 +72,7 @@ export const command = Command.make(
     ),
     concurrency: positive("concurrency").pipe(
       Flag.optional,
-      Flag.withDescription(
-        "Concurrent measured Objects (quick: 12; full: 6); turns stay sequential",
-      ),
+      Flag.withDescription("Concurrent measured Objects (quick/full: 12); turns stay sequential"),
     ),
     buildConcurrency: positive("build-concurrency").pipe(
       Flag.optional,
@@ -159,6 +163,17 @@ export const command = Command.make(
     if (!flags.buildHistory && !targets.includes("yielded"))
       return yield* new BenchError({ message: "Paired A/B requires the yielded target." });
 
+    if (
+      flags.verifyIncarnationRecovery &&
+      (flags.buildHistory ||
+        flags.profile.flat().length > 0 ||
+        Option.getOrElse(flags.restoreEachPass, () => true) === false)
+    )
+      return yield* new BenchError({
+        message:
+          "Recovery diagnostics require unprofiled, snapshot-backed passes with --restore-each-pass.",
+      });
+
     const profiles = [...new Set(flags.profile.flat())];
     const profileAfter = Option.getOrUndefined(flags.profileAfter);
 
@@ -166,9 +181,7 @@ export const command = Command.make(
       flags.buildHistory ? 3 : rigorous ? 30 : 12,
     );
 
-    const concurrency = Option.getOrElse(flags.concurrency, () =>
-      flags.buildHistory || rigorous ? 6 : 12,
-    );
+    const concurrency = Option.getOrElse(flags.concurrency, () => (flags.buildHistory ? 6 : 12));
 
     const buildConcurrency = Option.getOrElse(flags.buildConcurrency, () =>
       flags.buildHistory
@@ -210,6 +223,7 @@ export const command = Command.make(
         flags.restoreEachPass,
         () => !flags.buildHistory && sizes.every((size) => size <= 1000),
       ),
+      verifyIncarnationRecovery: flags.verifyIncarnationRecovery,
       buildHistory: flags.buildHistory,
       targets: [...new Set(targets)],
       sizes: [...new Set(sizes)],
