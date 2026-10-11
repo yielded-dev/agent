@@ -499,18 +499,19 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         }
       }
       // Recovery uses fresh input IDs with the same shape, after restoring the original fixture.
-      for (let epoch = 0; epoch < epochs.length; epoch++) {
-        const retryMessages = [...seededMessages];
+      if (!options.buildHistory)
+        for (let epoch = 0; epoch < epochs.length; epoch++) {
+          const retryMessages = [...seededMessages];
 
-        for (let index = 0; index < turnsPerEpoch; index++) {
-          const sample = sampleName(epoch, index, 1);
+          for (let index = 0; index < turnsPerEpoch; index++) {
+            const sample = sampleName(epoch, index, 1);
 
-          expected.set(
-            sample,
-            append(retryMessages, turn(sample, MEASURED_TOOLS), options.textStreaming),
-          );
+            expected.set(
+              sample,
+              append(retryMessages, turn(sample, MEASURED_TOOLS), options.textStreaming),
+            );
+          }
         }
-      }
       references.set(size, expected);
     }
 
@@ -1670,6 +1671,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                           buildVerified: true,
                           objectBuild: metrics.identity.build,
                           isolate: metrics.identity.isolate,
+                          incarnation: metrics.identity.incarnation,
                           ...(metrics.directoryUsed === undefined
                             ? {}
                             : { directoryUsed: metrics.directoryUsed }),
@@ -1729,7 +1731,12 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   ...value,
                   samples: value.samples.map((row) =>
                     objectKey(row) === objectKey(cohort) && row.epoch === epoch
-                      ? { ...row, status: "invalidated", error: error.message }
+                      ? {
+                          ...row,
+                          status: "invalidated",
+                          error: error.message,
+                          invalidatedIdentity: error.identity,
+                        }
                       : row,
                   ),
                 }));

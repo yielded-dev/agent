@@ -167,7 +167,7 @@ export const command = Command.make(
       flags.verifyIncarnationRecovery &&
       (flags.buildHistory ||
         flags.profile.flat().length > 0 ||
-        Option.getOrElse(flags.restoreEachPass, () => true) === false)
+        !Option.getOrElse(flags.restoreEachPass, () => sizes.every((size) => size <= 1000)))
     )
       return yield* new BenchError({
         message:

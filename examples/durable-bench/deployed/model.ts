@@ -113,6 +113,8 @@ export const Sample = Schema.Struct({
   buildVerified: Schema.optionalKey(Schema.Boolean),
   objectBuild: Schema.optionalKey(Schema.String),
   isolate: Schema.optionalKey(Schema.String),
+  incarnation: Schema.optionalKey(Schema.String),
+  invalidatedIdentity: Schema.optionalKey(Identity),
   directoryUsed: Schema.optionalKey(Schema.Boolean),
   fingerprints: Schema.optionalKey(Schema.Array(Schema.String)),
   error: Schema.optionalKey(Schema.String),

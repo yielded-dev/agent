@@ -289,6 +289,7 @@ Request decoding, transcript normalization and fingerprinting run in the provide
 not the measured Object. The Object records response chunks and timestamps; it validates
 SSE and receipts only when post-turn metrics are collected. Every provider fingerprint
 must still match the independent expected transcript.
+Deployment uploads contain executable modules; profiling artifacts retain the source maps locally.
 
 Object-clock markers record provider first token received, first text forwarded and
 settlement relative to entry; receipt latency remains the driver-clock `admissionMs`.
