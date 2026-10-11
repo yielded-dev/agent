@@ -55,6 +55,7 @@ import {
   Clock,
   DateTime,
   Deferred,
+  Duration,
   Effect,
   Fiber,
   Layer,
@@ -1332,6 +1333,7 @@ describe("recovery faults independent of execution history", () => {
           const reads: Array<string> = [];
           const errors: Array<Cause.Cause<unknown>> = [];
           const entered = yield* Deferred.make<void>();
+          const timeoutStarted = yield* Deferred.make<void>();
           let retainedId: string | undefined;
           let abortReads = 0;
           let active = 0;
@@ -1366,7 +1368,23 @@ describe("recovery faults independent of execution history", () => {
           );
 
           yield* TestClock.setTime(Date.now() + 86_400_000);
-          maintenanceClocks.set(owner, yield* Clock.Clock);
+          const clock = yield* Clock.Clock;
+
+          maintenanceClocks.set(owner, {
+            ...clock,
+            sleep: (duration) =>
+              Duration.toMillis(duration) === 30_000
+                ? Effect.gen(function* () {
+                    const sleeping = yield* Effect.forkChild(clock.sleep(duration), {
+                      startImmediately: true,
+                    });
+
+                    yield* Deferred.succeed(timeoutStarted, undefined);
+
+                    return yield* Fiber.join(sleeping);
+                  })
+                : clock.sleep(duration),
+          });
           yield* Effect.addFinalizer(() => Effect.sync(() => maintenanceClocks.delete(owner)));
           const receipt = yield* run(submit(old, "retained"));
 
@@ -1399,6 +1417,8 @@ describe("recovery faults independent of execution history", () => {
           {
             yield* Deferred.await(entered);
             expect(active).toBe(1);
+            // Read entry can precede the sibling timer in the Object's Effect root.
+            yield* Deferred.await(timeoutStarted);
             yield* TestClock.adjust(30_000);
           }
           yield* Fiber.join(running);
