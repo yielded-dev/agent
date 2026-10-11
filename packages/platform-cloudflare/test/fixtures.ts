@@ -148,32 +148,33 @@ export const runtimeEvictionFailpoint =
       const name = ctx.id.name;
 
       if (name === undefined) return Effect.void;
+
+      const evict = Effect.sync(() => {
+        const queue = armedRuntimeEvictions.get(name);
+
+        if (queue === undefined || queue[0] !== location) return;
+        queue.shift();
+        if (queue.length === 0) armedRuntimeEvictions.delete(name);
+        ctx.abort("armed runtime eviction failpoint");
+        // `ctx.abort()` never returns; this defensive throw keeps the guarantee even if a
+        // harness runtime lets it return.
+        throw new Error(`Durable Object eviction did not interrupt execution at ${location}.`);
+      });
+
       const hold = alarmAttemptHolds.get(name);
 
       if (hold !== undefined && location === hold.location) {
         alarmAttemptHolds.delete(name);
 
+        // A released hold resumes the same hit, including its already-armed native eviction.
         return Effect.acquireUseRelease(
           hold.entered,
           () => hold.release ?? Effect.never,
           () => hold.finished,
-        );
-      }
-      const queue = armedRuntimeEvictions.get(name);
-
-      if (queue !== undefined && queue[0] === location) {
-        queue.shift();
-        if (queue.length === 0) armedRuntimeEvictions.delete(name);
-
-        return Effect.sync((): never => {
-          ctx.abort("armed runtime eviction failpoint");
-          // `ctx.abort()` never returns; this defensive throw keeps the guarantee even if a
-          // harness runtime lets it return.
-          throw new Error(`Durable Object eviction did not interrupt execution at ${location}.`);
-        });
+        ).pipe(Effect.andThen(evict));
       }
 
-      return Effect.void;
+      return evict;
     });
 
 // ---------------------------------------------------------------------------
