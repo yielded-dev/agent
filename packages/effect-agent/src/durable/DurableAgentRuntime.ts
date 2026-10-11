@@ -7773,14 +7773,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 ),
               ),
               Effect.andThen(() =>
-                updateRuntime.emit({
-                  updateId: update.updateId,
-                  value: update.value,
-                  submission,
-                  runId,
-                  writer: ctx,
-                  definitions: submission.agentDigests,
-                }),
+                updateRuntime
+                  .emit({
+                    updateId: update.updateId,
+                    value: update.value,
+                    submission,
+                    runId,
+                    definitions: submission.agentDigests,
+                  })
+                  .pipe(Effect.provideService(CurrentRunWriter, ctx)),
               ),
               Effect.catchTag(["LedgerError", "DurableRuntimeFailpointError"], (failure) =>
                 // Preserve the original infrastructure failure at the coordinator boundary;
