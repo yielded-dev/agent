@@ -21,6 +21,7 @@ import {
   CanonicalBatch,
   CanonicalRecordEnvelope,
   CanonicalSequence,
+  CURRENT_RECORD_FORMAT,
   Digest,
   MAX_RUN_TOOL_CALL_IDENTITIES,
   ObservationOffset,
@@ -852,6 +853,52 @@ export class LoadCheckpointRequest extends Schema.Class<LoadCheckpointRequest>(
   atOrBeforeSequence: Schema.optionalKey(CanonicalSequence),
 }) {}
 
+/** A bounded, disposable prior Prompt. Its bytes must match the named canonical Run context. */
+export const MAX_PROMPT_CHECKPOINT_BYTES = 16 * 1024 * 1024;
+
+/** Maximum ordinary Runs between full prompt replacements and in a cold catch-up suffix. */
+export const MAX_PROMPT_CHECKPOINT_RUNS = 16;
+
+export const PromptCheckpointHead = Schema.Struct({
+  version: Schema.Literal(1),
+  recordFormat: Schema.Literal(CURRENT_RECORD_FORMAT),
+  threadId: ThreadId,
+  producerEpoch: ProducerEpoch,
+  throughSequence: CanonicalSequence,
+  tailDigest: Digest,
+  contextRecordId: RecordId,
+});
+
+export const PromptCheckpoint = Schema.Struct({
+  ...PromptCheckpointHead.fields,
+  /** Canonical JSON from Effect's Prompt codec; integrity is checked before decoding it. */
+  promptJson: Schema.String.check(Schema.isMaxLength(MAX_PROMPT_CHECKPOINT_BYTES)),
+});
+
+export type PromptCheckpoint = typeof PromptCheckpoint.Type;
+
+export const PromptCheckpointRead = Schema.Struct({
+  threadId: ThreadId,
+  producerEpoch: ProducerEpoch,
+});
+
+export type PromptCheckpointRead = typeof PromptCheckpointRead.Type;
+
+/**
+ * Optional cold-context acceleration, separate from application checkpoints. Save only after
+ * canonical settlement. Replace the prior value atomically, fenced at the exact supplied head.
+ * Load only under the current producer epoch, authenticating the saved historical batch head.
+ * The runtime validates the bounded suffix and one ordinary claim per intervening completed Run.
+ * Any incompatible head, fence, context digest or suffix is a cache miss.
+ * Never export these bytes or use them as execution/compaction evidence.
+ */
+export interface PromptCheckpoints {
+  readonly save: (checkpoint: PromptCheckpoint) => Effect.Effect<void, ThreadStoreError>;
+  readonly load: (
+    request: PromptCheckpointRead,
+  ) => Effect.Effect<Option.Option<PromptCheckpoint>, ThreadStoreError>;
+}
+
 /**
  * Content-free storage provenance constructed by adapters from source-authored labels.
  * Raw foreign lookalikes are not trusted diagnostics. Never include rejected values, SQL,
@@ -947,11 +994,15 @@ export class ThreadStore extends Context.Service<
       AppendResult,
       ThreadStoreError | ThreadNotMaterialized | AppendConflict | FenceRejected
     >;
+    /** Return immutable values decoded from privately owned canonical JSON. Unknown/Json
+     * subgraphs must not retain caller/provider objects, accessors or oversized backing views.
+     * Schema validation without canonical capture does not establish this ownership. */
     readonly read: (
       request: ThreadReadRequest,
     ) => Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>;
     /** Decode only PromptRecord fields of PROMPT_EVIDENCE_TAGS, including archived ranges.
      * Bound raw hydration without shortening a page before its limit or captured range end.
+     * Preserve read's canonical ownership contract, including nested Unknown/Json values.
      * The immutable source was validated on write; use read for integrity or execution evidence. */
     readonly readPrompt: (
       request: ThreadPromptRead,
@@ -973,6 +1024,7 @@ export class ThreadStore extends Context.Service<
     ) => Effect.Effect<ThreadWorkerCapacity, ThreadStoreError | ThreadNotMaterialized>;
     /** Absent when this adapter does not support disposable checkpoints. */
     readonly checkpoints?: ThreadCheckpoints | undefined;
+    readonly promptCheckpoints?: PromptCheckpoints | undefined;
     /** Indexed scalar count; unsupported adapters fail closed at the caller. */
     readonly countPeerMessages?:
       | ((

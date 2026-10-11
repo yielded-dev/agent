@@ -164,8 +164,15 @@ import {
   type JournalRecordEnvelope,
 } from "./internal/journal-metadata.ts";
 import { makeMessagingRuntime } from "./internal/messaging-host.ts";
+import {
+  digestPromptHistory,
+  makePromptHistoryCache,
+  preparePromptHistory,
+  type CachedPromptHistory,
+  type PromptHistory,
+} from "./internal/prompt-history-cache.ts";
 import { RunContextReader } from "./internal/run-context-reader.ts";
-import { digestRunHistory, readRunContext } from "./internal/run-context.ts";
+import { readRunContext } from "./internal/run-context.ts";
 import * as ThreadInitialization from "./internal/thread-initialization.ts";
 import {
   initialDispatchBlockedTurns,
@@ -1367,6 +1374,9 @@ interface InitialJournalSource {
   records: ReadonlyArray<JournalRecordEnvelope> | undefined;
   readonly original: CanonicalRecordEnvelope;
   readonly suffix: ReadonlyArray<CanonicalRecordEnvelope>;
+  cacheable: boolean;
+  readonly prefix?: CachedPromptHistory;
+  history?: PromptHistory;
 }
 
 const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBinding>) {
@@ -1377,6 +1387,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const submissionScheduling = yield* SubmissionScheduling;
   const store = yield* ThreadStore;
   const reader = ThreadReader.fromStore(store);
+  const promptHistory = yield* makePromptHistoryCache();
 
   const workDiscovery = yield* ThreadWorkDiscovery.pipe(
     Effect.provide(ThreadWorkDiscovery.layer),
@@ -4882,7 +4893,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           historyEvidence.set(entry.record.recordId, entry);
       };
 
-      const journal =
+      let journal =
         cached !== undefined &&
         cached.threadId === ctx.threadId &&
         cached.through === projectionThrough &&
@@ -4899,6 +4910,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               journalMetadata,
               priorContext === undefined ? retainHistory : undefined,
             );
+
+      if (initialJournal?.prefix !== undefined) {
+        const prompt = initialJournal.prefix.prompt;
+
+        journal = { ...journal, prompt, historyBefore: prompt };
+      }
 
       // Do not retain the metadata snapshot across model or Tool waits, including cache hits.
       // The projected prompt owns its needed context.
@@ -4996,6 +5013,21 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               undefined,
               priorContext,
             );
+
+      if (
+        initialJournal !== undefined &&
+        (journal.committedTurns !== 0 ||
+          journal.historyFrom !== 1 ||
+          journal.contextWindowId !== undefined ||
+          historyEvidence.size !== 0 ||
+          pending !== undefined ||
+          boundaries.some((boundary) => boundary.incomplete))
+      )
+        initialJournal.cacheable = false;
+
+      if (initialJournal?.cacheable)
+        initialJournal.history =
+          initialJournal.prefix ?? preparePromptHistory(journal.historyBefore);
 
       // All startup passes (including cache hits) are complete. Release the startup source;
       // later compaction can reread the exact prefix.
@@ -5795,10 +5827,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 ),
               );
 
+              const history = Prompt.fromMessages(
+                initialHistory.content.slice(0, priorHistoryLength),
+              );
+
               const historyDigest = yield* withCrypto(
-                digestRunHistory(
-                  Prompt.fromMessages(initialHistory.content.slice(0, priorHistoryLength)),
-                ),
+                digestPromptHistory(history, initialJournal?.history),
               );
 
               const retained = yield* Effect.forEach(
@@ -6373,7 +6407,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             let sourceJournal = journal;
             let sourceBoundaries = boundaries;
 
-            if (commit.kind !== "summarize") {
+            if (initialJournal !== undefined) {
+              initialJournal.cacheable = false;
+              initialJournal.history = undefined;
+            }
+            if (commit.kind !== "summarize" || initialJournal?.prefix !== undefined) {
               // Results must be canonical before pruning or rollover can cover them. Newly committed
               // compactions remain overlays on this Attempt's append-only source, so omit those
               // overlays while reconstructing the exact source-to-record mapping.
@@ -8179,6 +8217,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     yieldAfter?: DateTime.Utc,
   ) =>
     Effect.gen(function* () {
+      const checkpointPrompt = yield* promptHistory
+        .take({ threadId: session.threadId, producerEpoch: session.producerEpoch })
+        .pipe(
+          Effect.provideService(ThreadStore, store),
+          Effect.provideService(ThreadReader, reader),
+          Effect.provideService(Crypto.Crypto, crypto),
+        );
+
       session = yield* withProgressSession(session);
       const { claim, threadId } = session;
       const submissionId = claim.submissionId;
@@ -8613,14 +8659,41 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
           const suffix = currentRecords.filter((entry) => entry.sequence > original.sequence);
 
+          const fresh =
+            !lineage.inputWasRecorded &&
+            (tail.sequence === original.sequence ||
+              (tail.sequence === original.sequence + 1 &&
+                view.progressThrough === original.sequence)) &&
+            suffix.every((entry) => entry.record.payload._tag === "RunContinuation");
+
           // Every replay stays bounded at the ORIGINAL admission, never the later Thread tail.
           const source: InitialJournalSource = yield* Effect.gen(function* () {
+            if (
+              checkpointPrompt !== undefined &&
+              fresh &&
+              original.sequence === checkpointPrompt.through + 1
+            ) {
+              const records = [original, ...suffix];
+
+              journalMetadata = makeJournalMetadata(runIdForSubmission(submissionId));
+              for (const entry of records) journalMetadata.add(entry);
+
+              return { records, original, suffix, prefix: checkpointPrompt, cacheable: true };
+            }
             const history = yield* readInitialJournal(original, suffix);
+            let cacheable = fresh;
 
             journalMetadata = makeJournalMetadata(runIdForSubmission(submissionId));
-            for (const entry of history) journalMetadata.add(entry);
+            for (const entry of history) {
+              journalMetadata.add(entry);
+              if (
+                entry.record.payload._tag === "CompactionCreated" ||
+                entry.record.payload._tag === "ModelCompleted"
+              )
+                cacheable = false;
+            }
 
-            return { records: history, original, suffix };
+            return { records: history, original, suffix, cacheable };
           });
 
           initialJournal = source;
@@ -8798,9 +8871,32 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           return Option.none<Settlement>();
         }
 
-        return Option.some(
-          yield* terminalize(ctx, submission, session.publishSettlement, outcome, true),
+        const settlement = yield* terminalize(
+          ctx,
+          submission,
+          session.publishSettlement,
+          outcome,
+          true,
         );
+
+        if (
+          outcome._tag === "completed" &&
+          initialJournal?.cacheable &&
+          initialJournal.history !== undefined
+        )
+          yield* promptHistory
+            .complete(
+              { threadId: session.threadId, producerEpoch: session.producerEpoch },
+              initialJournal.original,
+              initialJournal.history,
+            )
+            .pipe(
+              Effect.provideService(CurrentRunWriter, session),
+              Effect.provideService(ThreadStore, store),
+              Effect.provideService(ThreadReader, reader),
+            );
+
+        return Option.some(settlement);
       }
     }).pipe(Effect.scoped);
 

@@ -16,6 +16,18 @@ Memory stores
 over the same owner share its transaction gate and document, receipt, and usage views.
 Failed transactions discard cached state.
 
+Sequential Runs reuse one verified prompt in the runtime's Scope. After eviction, a disposable
+checkpoint seeds the same cache by authenticating its historical log head and canonical
+`historyDigest`, then projecting a bounded suffix. Warm Runs replace the checkpoint every 16
+Runs; a cold load refreshes it after settlement. No separate alarm is required.
+
+The resident cache has a 16 MiB retention estimate and a 16,384-message bound; persisted prompt
+JSON is limited to 16 MiB. Missing or incompatible checkpoints, intervening claims, interleaved
+work, compaction, and suffixes above the memory allowance or 1,024 prompt records use canonical
+reconstruction. Compaction reconstructs canonical boundaries on demand. Unfinished Run recovery
+and explicit verification always rebuild from canonical facts; exports omit these derivatives.
+The active model prompt still grows with uncompacted conversation bytes.
+
 ## Run durable agents
 
 Use [`@yielded/agent-platform-cloudflare`](/platforms/cloudflare/) for the complete

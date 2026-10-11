@@ -85,7 +85,9 @@ flowchart LR
 - Keep synchronous work bounded so single-threaded Objects can receive input. Reuse codecs and
   committed views. Unfinished Runs read their exact canonical continuation and bounded selected
   evidence, independently of unrelated Thread history. Original context reconstruction reads its
-  fixed saved range and verifies the projected Prompt digest; uncompacted history remains linear.
+  fixed saved range and verifies the projected Prompt digest. Fresh Cloudflare Runs can restore
+  a verified [disposable prompt checkpoint](/storage/cloudflare/); decoding and sending the
+  uncompacted Prompt still scales with its bytes.
   Missing or corrupt progress fails typed and leaves accepted work owed; it cannot silently fall
   back to a full-Thread scan. First context assembly, explicit index reconstruction, and exports
   have separate history costs and bounds.
