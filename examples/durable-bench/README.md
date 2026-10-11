@@ -14,24 +14,42 @@ Observability read access if `--cpu` is selected. Dependencies for pi and tardie
 in the isolated `third-party` workspace automatically on first use. Repository checks do not
 require that optional install.
 
-From the repository root:
+From the repository root, screen a candidate against `origin/main`:
 
 ```sh
-vp run -F @yielded/agent-example-durable-bench deployed -- --targets yielded,pi,tardie --sizes 50,250
+DURABLE_BENCH_PREFIX=bench-change vp run -F @yielded/agent-example-durable-bench deployed -- --preset quick --candidate HEAD
 ```
 
-Or run `vp run deployed` in this directory. Quick mode defaults to seven Objects per
-target/cell, four sequential warm turns per Object after an excluded warmup, 0 and 400 ms
-time to first token, and six concurrent Objects. Fixtures are imported in bulk when the
-native import reproduces their table counts; Yielded currently needs the replay fallback
-described below. All seeding finishes before timing. Increase `--concurrency` to run more Objects
-at once; changing it can also change contention and the numbers being compared.
+Quick defaults to Yielded, 1,000 historical turns, TTFT 0 and 12 Objects. Each build
+runs one excluded preparation turn, resets the isolate, then measures a cold turn,
+four sequential warm turns and a second cold turn after another reset. Preparation
+awaits native post-settlement writers so revision-specific derived state exists. Both builds
+measure the same Objects. `--baseline <ref>` selects another baseline. The report
+includes Object medians, paired differences and ratios with Object-level bootstrap 95% CIs,
+and setup, measurement and teardown wall times. Screening does not establish a small
+optimization when the interval includes zero.
+
+Quick runs retain their per-Object Workers and uploaded versions. Every run clears and restores
+its Objects, then measures both revisions on those same Objects; earlier samples are never reused.
+Bundle hashes select cached Worker versions, so subsequent passes activate them without uploading
+again. Full, profiling and tardie runs use fresh Workers. Remove all retained resources when done:
 
 ```sh
-vp run deployed -- --ttft 0 --objects 7 --repeats 4 --concurrency 6
-vp run deployed -- --text-streaming --ttft 400 --objects 2 --repeats 2
-vp run deployed -- --cold --cpu
-vp run deployed -- --profile cpu,memory
+DURABLE_BENCH_PREFIX=bench-change vp run -F @yielded/agent-example-durable-bench deployed -- --teardown
+```
+
+Use `--preset full` (or `--rigorous`) for 30 Objects, six warm repeats, invocation CPU
+and the balanced ABBA/BAAB sequence. Both presets preserve the driver timer, cold
+restart acknowledgement, warm residency and transcript checks. Each cohort has a
+separate Worker; isolate sharing rejects its measurements. Independent cells run
+concurrently, with `--concurrency` limiting measured Objects and `--build-concurrency`
+limiting restore work. Turns within an Object remain sequential.
+
+```sh
+vp run deployed -- --preset full --baseline origin/main --candidate HEAD
+vp run deployed -- --sizes 1000,10000 --ttft 0,400
+vp run deployed -- --targets yielded,pi --text-streaming --ttft 400
+vp run deployed -- --profile cpu
 ```
 
 The output has one table per cell: **first text (final answer)** in default mode or
@@ -114,7 +132,7 @@ workflows. Deployed absolute times include network hops and cannot be
 compared with Miniflare timings; compare ratios within a matched deployment.
 
 `--profile cpu|memory` accepts repeats or a comma-separated list. It captures the first
-Object of each selected target in every history/TTFT cell and build pass (tardie targets
+Object of each selected target in every history/TTFT cell on the first build pass (tardie targets
 its Thread Object). Captures start after warmup, alongside the warm turns, for an estimated batch duration
 (5–50 seconds). Cloudflare profiles the running isolate containing that Object, which may
 also contain other Objects. Only already-running isolates can be captured; the bench supplies
@@ -138,7 +156,7 @@ quota waits happen before warmup. Other account activity can still cause HTTP 42
 for the reported `Retry-After` before rerunning.
 The token needs Workers Scripts Read permission and the account must support profiling.
 Saved `.pprof` paths are printed at completion; filenames and result JSON identify
-the cell, target, build and Object. Unminified bundles and linked source maps are uploaded;
+the cell, target, build and Object. Bundles and linked source maps are uploaded;
 copies remain beside the profiles in `results/` after cleanup. Inspect with
 `go tool pprof -http=:8080 results/<run>/<profile>.pprof`, or use Cloudflare's Observability →
 Flamegraph view while the Worker is retained with `--keep`.
@@ -149,8 +167,7 @@ The shared `durable-bench-infrastructure` Alchemy stage keeps
 `durable-bench-shared-<installation>-driver` and `durable-bench-shared-<installation>-provider`
 deployed between runs. Fresh installations use fresh names to avoid recently deleted endpoints.
 Run-specific `durable-bench-*` target stages contain the run's Workers and SQLite Durable Object
-namespaces. History builds use dedicated Workers per logical sample; quick mode uses one
-target Worker. Each normal run destroys its target stages and verifies deletion through the
+namespaces. Every cohort uses a dedicated Worker in both measurement presets and history builds. Full and profiling runs destroy their target stages and verify deletion through the
 Cloudflare API, including after failure. `--keep` retains it for inspection. Interrupted
 history-build runs retain their resources for `--resume`; other interruptions attempt cleanup.
 Use `--teardown` to discard retained runs or finish interrupted cleanup.
@@ -243,34 +260,35 @@ are retained. CPU tables describe observed invocations, not billing totals.
 
 ## Fixtures
 
-Missing fixtures are generated once by the existing local `seed` command. To regenerate:
+The default fixture directory is `~/.cache/yielded-durable-bench/fixtures/<format-key>/`;
+`--fixture-directory <path>` selects an existing directory. The format key is the SHA-256
+prefix of the Cloudflare adapter migrations and canonical record schema files.
+Historical `main-<revision>` caches are adopted only when those files match exactly.
+For 1,000-turn Yielded and pi cells, both presets use `<format-key>-natural-id50-v1/`:
+the deployed history protocol generates this cache locally with 50-character Thread IDs,
+the networked mock provider and the same historical tool cycle. Historical turns have no
+text preamble or delay, matching deployed history construction; `--text-streaming` controls
+measured turns. Larger capacity fixtures retain their original workload and identities.
+Missing fixtures are generated locally and cloned into the cache; saved histories are
+never deleted or overwritten. Miniflare is used for deterministic fixture generation,
+never performance evidence.
 
-```sh
-vp run seed -- yielded 50 250
-vp run seed -- pi 50 250
-vp run seed -- tardie 50 250
-```
+Every ordinary cell restores the original idle SQLite snapshot, including historical
+attempt rows, indexes and triggers. Cohorts use separate namespaces so each can retain
+the original Thread identity and stored bytes. Bounded uploads run concurrently
+across Objects. Yielded restores through a seed-only Worker before deploying the measured
+runtime onto the same Objects. No canonical import normalization, history replay or identity rewriting
+runs during setup. Each Object's complete table counts and transcript fingerprint must
+match the saved source before timing. Every subsequent model request is checked against
+an independent reference transcript. Failed or uncertain mutations are never replayed.
 
-Miniflare is used only for deterministic seeding, canonical transfer and table counts;
-its timings are not performance evidence. Local timing/report/chart commands have been
-removed. Fixtures and results are disposable and gitignored.
-
-Yielded uses the canonical storage-sql thread import when it reproduces the local fixture's
-table counts. That public transfer contract currently omits historical attempt rows, so
-Yielded alone falls back to untimed public submit/await replay with the instant provider.
-The fallback reason is recorded in JSON. Attempt, claim and lease rows are never copied
-around the canonical importer. pi and tardie bulk-insert their complete SQLite table/index
-dumps in synchronous transactions, including tardie's Actor directory.
-
-Each deployed Object must match the local fixture's complete table counts and transcript
-fingerprint before timing. The 50/250 fingerprints are `b017b487524e44a4` and
-`dcea9f30b0917245`. Every subsequent model request is also checked against an independent
-reference transcript. A failed or uncertain input is recorded and never resubmitted.
+Use `--build-history` only to measure real deployed history construction, as described
+below. This explicit mode retains its native submission/settlement path and checkpoints.
 
 ## Comparing a change
 
-Quick mode answers where the targets stand, with a small sample. Different Objects and
-deployments can vary substantially; do not claim a small optimization from that table.
+Quick mode screens a candidate with a paired comparison. Use full mode to check repeat
+drift before claiming a small optimization.
 
 ```sh
 vp run deployed -- --rigorous --baseline origin/main --candidate HEAD
@@ -279,8 +297,7 @@ vp run deployed -- --rigorous --baseline origin/main --candidate HEAD
 Rigorous mode enables cold turns, CPU and six warm repeats per pass. It randomly chooses
 ABBA or BAAB, redeploying the **same Worker and namespaces** with the two Yielded builds.
 Each pass restarts the same stored Objects; history grows identically for all targets.
-Repeated baselines reveal deployment/time/history drift. The output includes paired
-candidate ÷ baseline ratios and baseline repeat spread. Do not claim gains smaller than
+Repeated baselines reveal deployment/time/history drift. The output includes paired differences and confidence intervals. Do not claim gains smaller than
 the control or within-Object repeat spread; inspect all Objects, not just the median.
 
 Refs supply `packages/` sources; both builds use this harness and the checkout's installed

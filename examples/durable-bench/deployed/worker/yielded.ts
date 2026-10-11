@@ -20,7 +20,6 @@ import { payload, type Turn } from "../../src/plan.ts";
 import { Host } from "./host.ts";
 import { observation } from "./observe.ts";
 import { type Env, type Query } from "./protocol.ts";
-import { importCanonical } from "./storage.ts";
 
 const tools = Toolkit.make(
   Tool.make("lookup", {
@@ -64,8 +63,6 @@ export const definitions = DefinitionDigestInput.make({
   tools: { lookup: { revision: 1, executionClass: "readonly" } },
 });
 
-const replayStarted = "durable-bench/replay-started";
-
 const definitionDigests = Effect.runSync(
   Effect.cached(digestDefinitions(definitions).pipe(Effect.provide(BrowserCrypto.layer))),
 );
@@ -80,6 +77,7 @@ export class YieldedDO extends ThreadObject.make(application, {
   producerPrefix: "durable-bench",
 }) {
   private readonly host: Host;
+  private readonly activeAlarms = new Set<Promise<void>>();
   constructor(ctx: globalThis.DurableObjectState, env: Env) {
     const constructedMs = Date.now();
 
@@ -110,21 +108,6 @@ export class YieldedDO extends ThreadObject.make(application, {
     if (settled._tag !== "SettlementReached" || settled.settlement.outcome !== "completed")
       throw new Error(`History settlement failed: ${JSON.stringify(settled)}`);
   }
-  async beginReplay(query: Query): Promise<void> {
-    this.host.meter.assertBuild(query);
-    await this.ctx.blockConcurrencyWhile(async () => {
-      if (
-        (await this.ctx.storage.get(replayStarted)) !== undefined ||
-        this.ctx.storage.sql
-          .exec<{ n: number }>(
-            "SELECT (SELECT COUNT(*) FROM effect_agent_submissions) + (SELECT COUNT(*) FROM effect_agent_canonical_records) AS n",
-          )
-          .one().n !== 0
-      )
-        throw new Error("Seed replay requires a fresh Object and is never retried");
-      await this.ctx.storage.put(replayStarted, true);
-    });
-  }
   async benchSubmit(encoded: unknown, query: Query): Promise<unknown> {
     this.host.meter.begin(query);
     this.host.meter.marker("submit");
@@ -142,21 +125,22 @@ export class YieldedDO extends ThreadObject.make(application, {
   override async alarm(...args: Parameters<ThreadObject.Instance["alarm"]>): Promise<void> {
     this.host.meter.alarm();
     this.host.meter.marker("alarm");
-    await super.alarm(...args);
+    const running = Promise.resolve(super.alarm(...args));
+
+    this.activeAlarms.add(running);
+    try {
+      await running;
+    } finally {
+      this.activeAlarms.delete(running);
+    }
   }
   override fetch(request: Request): Promise<Response> {
     return this.host.fetch(request, {
-      run: (input) => this.historyTurn(input),
-      import: async (fixture, query) => {
-        if (fixture.mode === "replay") {
-          if ((await this.ctx.storage.get(replayStarted)) !== true)
-            throw new Error("Seed replay was not started");
-
-          return;
-        }
-        if (!fixture.archive) throw new Error("Missing canonical fixture");
-        await Effect.runPromise(importCanonical(this.ctx.storage, fixture.archive, query.object));
+      close: async () => {
+        // Native post-settlement checkpoint writers must finish before cold eviction.
+        while (this.activeAlarms.size) await Promise.all(this.activeAlarms);
       },
+      run: (input) => this.historyTurn(input),
     });
   }
 }

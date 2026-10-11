@@ -1,6 +1,14 @@
 import { Schema } from "effect";
 
-import { History, Identity, Query, SeedCheckpoint, SeedResult, Target } from "./worker/protocol.ts";
+import {
+  Counts,
+  History,
+  Identity,
+  Query,
+  SeedCheckpoint,
+  SeedResult,
+  Target,
+} from "./worker/protocol.ts";
 
 export const ProfileType = Schema.Literals(["cpu", "memory"]);
 
@@ -21,6 +29,8 @@ export const Profile = Schema.Struct({
 export type Profile = typeof Profile.Type;
 
 export const Options = Schema.Struct({
+  fixtureDirectory: Schema.optionalKey(Schema.String),
+  restoreBytes: Schema.optionalKey(Schema.Int),
   buildHistory: Schema.Boolean,
   targets: Schema.Array(Target).check(Schema.isMinLength(1)),
   sizes: Schema.Array(History).check(Schema.isMinLength(1)),
@@ -62,7 +72,8 @@ export const Sample = Schema.Struct({
   build: Schema.Literals(["working", "baseline", "candidate"]),
   epoch: Schema.Natural,
   repeat: Schema.Natural,
-  state: Schema.Literals(["cold", "warmup", "warm"]),
+  state: Schema.Literals(["cold", "warmup", "warm", "preparation"]),
+  preparationTables: Schema.optionalKey(Counts),
   status: Schema.Literals(["running", "ok", "failed"]),
   driverMs: Schema.optionalKey(Schema.Number),
   firstTextMs: Schema.optionalKey(Schema.NullOr(Schema.Number)),
@@ -140,6 +151,9 @@ export const Result = Schema.Struct({
   dirty: Schema.Boolean,
   startedAt: Schema.String,
   wallMs: Schema.Number,
+  phases: Schema.optionalKey(
+    Schema.Array(Schema.Struct({ phase: Schema.String, ms: Schema.Number })),
+  ),
   infrastructureReused: Schema.Boolean,
   infrastructureBuild: Schema.optionalKey(Schema.String),
   resumeCount: Schema.optionalKey(Schema.Natural),
@@ -148,6 +162,17 @@ export const Result = Schema.Struct({
     Schema.Struct({ label: Schema.String, revision: Schema.String, sha256: Schema.String }),
   ),
   versions: Schema.Record(Schema.String, Schema.String),
+  restores: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        object: Schema.String,
+        target: Target,
+        history: Schema.Int,
+        requests: Schema.Int,
+        ms: Schema.Number,
+      }),
+    ),
+  ),
   histories: Schema.Array(HistoryBuild),
   fixtures: Schema.Array(
     Schema.Struct({
@@ -178,6 +203,7 @@ export const Result = Schema.Struct({
   unmatchedCpuMarkers: Schema.optionalKey(Schema.Natural),
   cleanup: Schema.optionalKey(Cleanup),
   kept: Schema.Boolean,
+  workerPool: Schema.optionalKey(Schema.String),
   complete: Schema.Boolean,
 });
 

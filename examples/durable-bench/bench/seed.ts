@@ -1,14 +1,14 @@
-import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 
 import { history, type Stats } from "../src/plan.ts";
-import { call, fixture, SIZES, start, target, version } from "./targets.ts";
+import { call, fixture, fixtureDirectory, SIZES, start, target, version } from "./targets.ts";
 
 const BATCH = 50;
 
 const [nameArg, ...sizeArgs] = process.argv.slice(2).filter((arg: string) => arg !== "--");
 const name = target(nameArg);
 const sizes = sizeArgs.length ? sizeArgs.map(Number) : [...SIZES];
-const work = `fixtures/${name}-work`;
+const work = `${fixtureDirectory}/${name}-work-${process.pid}`;
 
 rmSync(work, { recursive: true, force: true });
 mkdirSync(work, { recursive: true });
@@ -17,6 +17,7 @@ let done = 0;
 let digest = "";
 
 for (const size of sizes) {
+  if (existsSync(`${fixture(name, size)}.json`)) continue;
   const started = performance.now();
 
   while (done < size) {
@@ -35,7 +36,6 @@ for (const size of sizes) {
   await mf.dispose();
   const out = fixture(name, size);
 
-  rmSync(out, { recursive: true, force: true });
   cpSync(work, out, { recursive: true });
 
   const meta = {

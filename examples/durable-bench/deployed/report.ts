@@ -211,7 +211,7 @@ const historyTable = (result: Result): string => {
   for (const failure of result.failures) lines.push(`- ${failure}`);
   lines.push(
     "",
-    `Failures: ${result.failures.length}. Target cleanup: ${result.kept ? "kept (--keep)" : result.cleanup?.verified ? "verified" : "NOT VERIFIED"}.`,
+    `Failures: ${result.failures.length}. Target cleanup: ${result.workerPool ? "Worker pool retained (--teardown to remove)" : result.kept ? "kept" : result.cleanup?.verified ? "verified" : "NOT VERIFIED"}.`,
   );
 
   return lines.join("\n") + "\n";
@@ -221,7 +221,7 @@ export const table = (result: Result): string => {
   if (result.histories.length) return historyTable(result);
 
   const rows = result.samples
-    .filter((row) => row.status === "ok" && row.state !== "warmup")
+    .filter((row) => row.status === "ok" && (row.state === "cold" || row.state === "warm"))
     .sort(
       (a, b) =>
         a.history - b.history ||
@@ -281,38 +281,93 @@ export const table = (result: Result): string => {
   }
   if (rows.some((row) => row.build === "baseline")) {
     lines.push(
-      "Same-Object Yielded A/B (candidate ÷ baseline; <1 is faster):",
+      "Same-Object paired medians; delta is candidate − baseline. 95% percentile bootstrap CI resamples whole Objects (10,000 draws).",
       "",
-      "| Cell | Paired ratio, median | Baseline repeat drift, median / max |",
-      "|---|---:|---:|",
+      "| Cell / metric | Baseline ms | Candidate ms | Paired delta ms [95% CI] | Paired ratio [95% CI] |",
+      "|---|---:|---:|---:|---:|",
     );
     for (const [cell, samples] of group(
       rows.filter((row) => row.target === "yielded"),
       (row) => `${row.history}/${row.ttftMs}/${row.state}`,
     )) {
-      const ratios: number[] = [];
-      const drifts: number[] = [];
+      for (const metric of ["driverMs", "firstTextMs"] as const) {
+        const pairs = [...group(samples, (row) => row.object).values()].flatMap((turns) => {
+          const baseline = objectMedians(
+            turns.filter((row) => row.build === "baseline"),
+            metric,
+          );
 
-      for (const turns of group(samples, (row) => row.object).values()) {
-        const a = turns.filter((row) => row.build === "baseline");
-        const b = turns.filter((row) => row.build === "candidate");
+          const candidate = objectMedians(
+            turns.filter((row) => row.build === "candidate"),
+            metric,
+          );
 
-        const epochs = [...group(a, (row) => String(row.epoch)).values()].map((epoch) =>
+          return baseline.length === 1 && candidate.length === 1
+            ? [{ baseline: baseline[0]!, candidate: candidate[0]! }]
+            : [];
+        });
+
+        if (!pairs.length) continue;
+        const deltas = pairs.map((pair) => pair.candidate - pair.baseline);
+        const ratios = pairs.map((pair) => pair.candidate / pair.baseline);
+        let seed = 0x12345678;
+
+        const draws = Array.from({ length: 10000 }, () => {
+          const indices = Array.from({ length: pairs.length }, () => {
+            seed ^= seed << 13;
+            seed ^= seed >>> 17;
+            seed ^= seed << 5;
+
+            return (seed >>> 0) % pairs.length;
+          });
+
+          return {
+            delta: median(indices.map((index) => deltas[index]!)),
+            ratio: median(indices.map((index) => ratios[index]!)),
+          };
+        });
+
+        const deltaDraws = draws.map((draw) => draw.delta);
+        const ratioDraws = draws.map((draw) => draw.ratio);
+
+        lines.push(
+          `| ${cell}/${metric === "driverMs" ? "completion" : "first text"} | ${n(median(pairs.map((pair) => pair.baseline)))} | ${n(median(pairs.map((pair) => pair.candidate)))} | ${n(median(deltas))} [${n(quantile(deltaDraws, 0.025))}, ${n(quantile(deltaDraws, 0.975))}] | ${median(ratios).toFixed(3)}× [${quantile(ratioDraws, 0.025).toFixed(3)}, ${quantile(ratioDraws, 0.975).toFixed(3)}] |`,
+        );
+      }
+    }
+
+    const driftRows = [
+      ...group(
+        rows.filter((row) => row.target === "yielded" && row.build === "baseline"),
+        (row) => `${row.history}/${row.ttftMs}/${row.state}`,
+      ).entries(),
+    ].flatMap(([cell, samples]) => {
+      const drifts = [...group(samples, (row) => row.object).values()].flatMap((turns) => {
+        const epochs = [...group(turns, (row) => String(row.epoch)).values()].map((epoch) =>
           median(objectMedians(epoch)),
         );
 
-        ratios.push(median(objectMedians(b)) / median(objectMedians(a)));
-        drifts.push(Math.max(...epochs) / Math.min(...epochs) - 1);
-      }
+        return epochs.length > 1 ? [Math.max(...epochs) / Math.min(...epochs) - 1] : [];
+      });
+
+      return drifts.length
+        ? [
+            `| ${cell} | ${(median(drifts) * 100).toFixed(1)}% / ${(Math.max(...drifts) * 100).toFixed(1)}% |`,
+          ]
+        : [];
+    });
+
+    if (driftRows.length)
+      lines.push("", "| Cell | Baseline repeat drift, median / max |", "|---|---:|", ...driftRows);
+    lines.push("");
+  }
+  if (result.phases) {
+    lines.push("| Phase | Wall seconds |", "|---|---:|");
+    for (const [phase, rows] of group(result.phases, (row) => row.phase))
       lines.push(
-        `| ${cell} | ${median(ratios).toFixed(3)}× | ${(median(drifts) * 100).toFixed(1)}% / ${(Math.max(...drifts) * 100).toFixed(1)}% |`,
+        `| ${phase} | ${(rows.reduce((sum, row) => sum + row.ms, 0) / 1000).toFixed(1)} |`,
       );
-    }
-    lines.push(
-      "",
-      "Do not claim gains smaller than the repeat/control spread. Histories grow across the balanced build sequence.",
-      "",
-    );
+    lines.push("");
   }
   if (result.cpu) {
     lines.push(
@@ -336,7 +391,7 @@ export const table = (result: Result): string => {
     );
   }
   lines.push(
-    `Failures: ${result.failures.length}. Target cleanup: ${result.kept ? "kept (--keep)" : result.cleanup?.verified ? "verified" : "NOT VERIFIED"}.`,
+    `Failures: ${result.failures.length}. Target cleanup: ${result.workerPool ? "Worker pool retained (--teardown to remove)" : result.kept ? "kept" : result.cleanup?.verified ? "verified" : "NOT VERIFIED"}.`,
   );
 
   return lines.join("\n") + "\n";

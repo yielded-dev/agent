@@ -1,18 +1,20 @@
-import { builtinModules } from "node:module";
-import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
+import { CurrentDoStorageVersion } from "@yielded/agent-storage-cloudflare/do-storage-version";
+import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { Effect, FileSystem, Schema } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import { build } from "esbuild";
-import { convertV4MiniflareOptions, Log, LogLevel, Miniflare } from "miniflare";
 
+import { naturalFixture } from "./natural-fixture.ts";
+import { execute, git, hash, read, repository, workspace } from "./platform.ts";
 import {
   type BulkFixture,
   Counts,
-  expectedSeed,
-  History,
+  RESTORE_BYTES,
   SqlDump,
-  TARGETS,
+  SqlValue,
+  type RestoreChunk,
   type Target,
 } from "./worker/protocol.ts";
 
@@ -20,243 +22,313 @@ export class FixtureError extends Schema.TaggedError<FixtureError>()("FixtureErr
   message: Schema.String,
 }) {}
 
-const root = fileURLToPath(new URL("../", import.meta.url));
-const failure = (message: string) => (_cause: unknown) => new FixtureError({ message });
-
-const boundary = <A>(message: string, run: () => Promise<A>) =>
-  Effect.tryPromise({ try: run, catch: failure(message) });
-
-const Meta = Schema.Struct({ version: Schema.String, fingerprint: Schema.String, tables: Counts });
-
-const Export = Schema.Struct({
+const Meta = Schema.Struct({
+  version: Schema.String,
+  fingerprint: Schema.String,
   tables: Counts,
-  fingerprint: Schema.optionalKey(Schema.String),
-  archive: Schema.optionalKey(Schema.Array(Schema.Json)),
-  dump: Schema.optionalKey(SqlDump),
+  threadId: Schema.optionalKey(Schema.NonEmptyString),
 });
 
-/** Seed once; use bulk import only when its complete table counts reproduce the source. */
-export const prepareFixtures = Effect.fn("durableBench.prepareFixtures")(
-  function* (options: {
-    readonly sizes: readonly number[];
-    readonly targets?: readonly Target[];
-    readonly directory?: string;
-  }) {
-    const fs = yield* FileSystem.FileSystem;
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+const Definition = Schema.Struct({ name: Schema.String, sql: Schema.String, type: Schema.String });
+const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
-    const { dependencies } = yield* Schema.decodeUnknownEffect(
-      Schema.fromJsonString(
-        Schema.Struct({ dependencies: Schema.Record(Schema.String, Schema.String) }),
-      ),
-    )(yield* fs.readFileString(`${root}third-party/package.json`));
+const formatFiles = [
+  "packages/storage-cloudflare/src/internal/migrations.ts",
+  "packages/effect-agent/src/durable/Records.ts",
+];
 
-    const sizes = [
-      ...new Set(yield* Schema.decodeUnknownEffect(Schema.Array(History))(options.sizes)),
-    ].sort((a, b) => a - b);
+const dumpDatabase = (db: DatabaseSync, includeRows = false): SqlDump => {
+  const definitions = Schema.decodeUnknownSync(Schema.Array(Definition))(
+    db
+      .prepare(
+        "SELECT name, sql, type FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY rowid",
+      )
+      .all(),
+  );
 
-    const targets = options.targets ?? TARGETS;
-    const directory = options.directory ?? `${root}fixtures`;
-    const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "durable-bench-transfer-" });
-    const script = `${scratch}/fixture.mjs`;
+  const tables = definitions
+    .filter((row) => row.type === "table")
+    .map((table) => ({
+      name: table.name,
+      sql: table.sql,
+      columns: Schema.decodeUnknownSync(Schema.Array(Schema.Struct({ name: Schema.String })))(
+        db.prepare(`PRAGMA table_info(${quote(table.name)})`).all(),
+      ).map((row) => row.name),
+      rows: includeRows
+        ? db
+            .prepare(`SELECT * FROM ${quote(table.name)}`)
+            .all()
+            .map((record) =>
+              Object.values(record).map((value) =>
+                value instanceof Uint8Array
+                  ? { blob: Buffer.from(value).toString("base64") }
+                  : value,
+              ),
+            )
+        : [],
+    }));
 
-    yield* boundary("Build local fixture transfer", () =>
-      build({
-        entryPoints: [fileURLToPath(new URL("./worker/fixture-worker.ts", import.meta.url))],
-        outfile: script,
-        bundle: true,
-        format: "esm",
-        platform: "neutral",
-        target: "es2024",
-        conditions: ["workerd", "worker", "browser", "import"],
-        mainFields: ["module", "main"],
-        external: ["cloudflare:*", "node:*", ...builtinModules],
-        logLevel: "silent",
-      }),
-    );
+  return Schema.decodeUnknownSync(SqlDump)({
+    tables,
+    indexes: definitions.filter((row) => row.type === "index").map((row) => row.sql),
+    triggers: definitions.filter((row) => row.type === "trigger").map((row) => row.sql),
+  });
+};
 
-    const scriptContent = yield* fs.readFileString(script);
+/** The format key hashes adapter migrations and the canonical record schema. */
+export const fixtureDirectory = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
 
-    const read = Effect.fnUntraced(function* (
-      target: Target,
-      persist: string,
-      path: string,
-      body?: BulkFixture,
-      actor = false,
-    ) {
-      const className =
-        target === "yielded"
-          ? path === "/import"
-            ? "NormalizedYieldedDO"
-            : "YieldedDO"
-          : target === "pi"
-            ? "PiDO"
-            : actor
-              ? "ActorDO"
-              : "ThreadDO";
+  const contents = yield* Effect.forEach(formatFiles, (file) =>
+    fs.readFileString(join(repository, file)),
+  );
 
-      return yield* Effect.gen(function* () {
-        const mf = yield* Effect.acquireRelease(
-          boundary("Open local transfer Worker", async () => {
-            const mf = new Miniflare(
-              convertV4MiniflareOptions({
-                modules: true,
-                script: scriptContent,
-                compatibilityDate: "2026-08-18",
-                compatibilityFlags: ["nodejs_compat"],
-                log: new Log(LogLevel.NONE),
-                handleStructuredLogs: () => {},
-                durableObjects: {
-                  OBJECT: { className, useSQLite: true },
-                  YIELDED: { className: "NormalizedYieldedDO", useSQLite: true },
-                },
-                bindings: {
-                  BUILD: "local-fixture",
-                  BENCH_TOKEN: "local-fixture",
-                  PROVIDER_URL: "http://unused/v1",
-                },
-                resourcePersistencePath: persist,
-              }),
+  return join(
+    homedir(),
+    ".cache/yielded-durable-bench/fixtures",
+    hash(contents.join("\n")).slice(0, 16),
+  );
+});
+
+/** Read saved SQLite without opening a host or rewriting any history. */
+export const prepareFixtures = Effect.fnUntraced(function* (options: {
+  readonly sizes: readonly number[];
+  readonly targets?: readonly Target[];
+  readonly directory?: string;
+  readonly requestBytes?: number;
+}) {
+  const fs = yield* FileSystem.FileSystem;
+  const requestBytes = options.requestBytes ?? RESTORE_BYTES;
+
+  const { dependencies } = yield* read(
+    join(workspace, "third-party/package.json"),
+    Schema.Struct({ dependencies: Schema.Record(Schema.String, Schema.String) }),
+  );
+
+  const baseDirectory = options.directory ?? (yield* fixtureDirectory);
+  const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "durable-bench-restore-" });
+  const fixtures: BulkFixture[] = [];
+  const chunks = new Map<string, string[]>();
+
+  for (const target of options.targets ?? ["yielded"]) {
+    for (const history of options.sizes) {
+      const name: string = `${target}-${history}`;
+      const natural = options.directory === undefined && history === 1000 && target !== "tardie";
+      const directory = natural ? baseDirectory + "-natural-id50-v1" : baseDirectory;
+      const source = join(directory, name);
+
+      if (natural && !(yield* fs.exists(source + ".json"))) yield* naturalFixture(target, source);
+
+      if (!(yield* fs.exists(source + ".json"))) {
+        let local = join(scratch, "seed", name);
+        // Adopt historical caches only after proving their writer has this exact format key.
+        const cacheRoot = join(homedir(), ".cache/yielded-durable-bench/fixtures");
+
+        if (options.directory === undefined && (yield* fs.exists(cacheRoot))) {
+          for (const legacy of yield* fs.readDirectory(cacheRoot)) {
+            const ref = /^main-([a-f0-9]+)$/.exec(legacy)?.[1];
+
+            if (!ref || !(yield* fs.exists(join(cacheRoot, legacy, name + ".json")))) continue;
+
+            const contents = yield* Effect.forEach(formatFiles, (file) =>
+              git(["show", `${ref}:${file}`]),
             );
 
-            return mf;
-          }),
-          (mf) => Effect.promise(() => mf.dispose()),
-        );
-
-        yield* boundary("Start local transfer Worker", () => mf.ready);
-
-        return yield* boundary("Transfer local fixture", async () => {
-          const response = await mf.dispatchFetch(
-            `http://fixture${path}?target=${target}&actor=${actor}`,
-            body === undefined ? {} : { method: "POST", body: JSON.stringify(body) },
-          );
-
-          if (!response.ok) throw new Error(await response.text());
-
-          return Schema.decodeUnknownSync(Export)(await response.json());
-        });
-      }).pipe(Effect.scoped);
-    });
-
-    const result: BulkFixture[] = [];
-
-    for (const target of targets) {
-      const present = yield* Effect.forEach(sizes, (size) =>
-        fs.exists(`${directory}/${target}-${size}.json`),
-      );
-
-      const missing = sizes.filter((_size, index) => !present[index]);
-
-      if (missing.length) {
-        if (directory !== `${root}fixtures`)
-          return yield* new FixtureError({ message: `Missing seed fixture in ${directory}` });
-
-        const code = yield* spawner.exitCode(
-          ChildProcess.make("vp", ["run", "seed", target, ...missing.map(String)], {
-            cwd: root,
-            stdout: "inherit",
-            stderr: "inherit",
-          }),
-        );
-
-        if (Number(code) !== 0)
-          return yield* new FixtureError({ message: `Seed ${target} failed with exit ${code}` });
-      }
-      for (const history of sizes) {
-        const source = `${directory}/${target}-${history}`;
-
-        const meta = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Meta))(
-          yield* fs.readFileString(`${source}.json`),
-        );
-
-        if (
-          (target === "pi" && meta.version !== dependencies["@earendil-works/pi-durable"]) ||
-          (target === "tardie" && meta.version !== dependencies.tardie)
-        )
-          return yield* new FixtureError({
-            message: `Unexpected ${target} fixture version ${meta.version}`,
-          });
-        const snapshot = `${scratch}/${target}-${history}`;
-
-        yield* fs.copy(source, snapshot);
-        const exported = yield* read(target, snapshot, "/export");
-
-        if (
-          exported.fingerprint !== meta.fingerprint ||
-          (expectedSeed[history] !== undefined && meta.fingerprint !== expectedSeed[history])
-        )
-          return yield* new FixtureError({
-            message: `Local ${target}/${history} fingerprint mismatch`,
-          });
-        if (
-          Object.keys(exported.tables).sort().join("\n") !==
-          Object.keys(meta.tables).sort().join("\n")
-        )
-          return yield* new FixtureError({
-            message: `Local ${target}/${history} table inventory changed after seed`,
-          });
-        for (const [name, count] of Object.entries(meta.tables))
-          if (exported.tables[name] !== count)
-            return yield* new FixtureError({
-              message: `Local ${target}/${history} table ${name} changed after seed`,
-            });
-
-        let fixture: BulkFixture = {
-          version: 1,
-          target,
-          history,
-          sourceVersion: meta.version,
-          fingerprint: meta.fingerprint,
-          mode: "import",
-          tables: exported.tables,
-          ...(exported.archive === undefined ? {} : { archive: exported.archive }),
-          ...(exported.dump === undefined ? {} : { thread: exported.dump }),
-        };
-
-        if (target === "yielded") {
-          const normalized = yield* read(
-            target,
-            `${scratch}/normalized-${history}`,
-            "/import",
-            fixture,
-          );
-
-          if (normalized.fingerprint !== fixture.fingerprint)
-            return yield* new FixtureError({ message: "Canonical import changed transcript" });
-
-          const differences = Object.keys({ ...fixture.tables, ...normalized.tables })
-            .filter((table) => fixture.tables[table] !== normalized.tables[table])
-            .map(
-              (table) =>
-                `${table} ${fixture.tables[table] ?? "absent"} -> ${normalized.tables[table] ?? "absent"}`,
+            const current = yield* Effect.forEach(formatFiles, (file) =>
+              fs.readFileString(join(repository, file)),
             );
 
-          if (differences.length > 0) {
-            const { archive: _archive, ...source } = fixture;
-
-            fixture = {
-              ...source,
-              mode: "replay",
-              fallbackReason: `Canonical import changes source table counts: ${differences.join(", ")}`,
-            };
+            if (contents.every((content, index) => content.trim() === current[index]?.trim())) {
+              local = join(cacheRoot, legacy, name);
+              break;
+            }
           }
         }
-        if (target === "tardie") {
-          const actor = yield* read(target, snapshot, "/export", undefined, true);
 
-          if (!actor.dump)
-            return yield* new FixtureError({ message: "Missing Tardie Actor fixture" });
-          fixture = { ...fixture, actor: actor.dump };
+        if (!(yield* fs.exists(local + ".json"))) {
+          const seeded = yield* execute(["run", "seed", target, String(history)], workspace, {
+            DURABLE_BENCH_FIXTURE_DIRECTORY: join(scratch, "seed"),
+          });
+
+          if (seeded.code !== 0) return yield* new FixtureError({ message: `Seed ${name} failed` });
         }
-        result.push(fixture);
-      }
-    }
+        yield* fs.makeDirectory(directory, { recursive: true });
+        const copied = yield* execute(["exec", "cp", "-cR", local, source]);
 
-    return result;
-  },
-  Effect.scoped,
-  Effect.mapError((cause) =>
-    cause instanceof FixtureError ? cause : failure("Prepare local fixtures")(cause),
-  ),
-);
+        if (copied.code !== 0) return yield* new FixtureError({ message: `Cache ${name} failed` });
+        yield* fs.copyFile(local + ".json", source + ".json");
+      }
+      const meta = yield* read(source + ".json", Meta);
+
+      if (
+        (target === "pi" && meta.version !== dependencies["@earendil-works/pi-durable"]) ||
+        (target === "tardie" && meta.version !== dependencies.tardie)
+      )
+        return yield* new FixtureError({ message: `Unexpected ${target} fixture version` });
+
+      const classDirectory = join(
+        source,
+        "do",
+        target === "yielded" ? "-YieldedDO" : target === "pi" ? "-PiDO" : "-ThreadDO",
+      );
+
+      const databases = (yield* fs.readDirectory(classDirectory)).filter((file) =>
+        /^[a-f0-9]{64}\.sqlite$/.test(file),
+      );
+
+      if (databases.length !== 1)
+        return yield* new FixtureError({ message: `Ambiguous ${name} snapshot` });
+
+      const db: DatabaseSync = yield* Effect.acquireRelease(
+        Effect.try({
+          try: () => new DatabaseSync(join(classDirectory, databases[0]!), { readOnly: true }),
+          catch: () => new FixtureError({ message: `Open ${name} snapshot` }),
+        }),
+        (db) => Effect.sync(() => db.close()),
+      );
+
+      if (target === "yielded") {
+        yield* Effect.try({
+          try: () => {
+            Schema.decodeUnknownSync(
+              Schema.Struct({
+                layout_version: Schema.Literal(CurrentDoStorageVersion),
+                record_format: Schema.Literal(CURRENT_RECORD_FORMAT),
+              }),
+            )(
+              db
+                .prepare(
+                  "SELECT layout_version, record_format FROM effect_agent_schema WHERE singleton = 1",
+                )
+                .get(),
+            );
+            Schema.decodeUnknownSync(
+              Schema.Tuple([Schema.Struct({ thread_id: Schema.Literal(meta.threadId ?? "main") })]),
+            )(db.prepare("SELECT thread_id FROM effect_agent_threads").all());
+
+            const { n } = Schema.decodeUnknownSync(Schema.Struct({ n: Schema.Literal(0) }))(
+              db
+                .prepare(
+                  "SELECT (SELECT COUNT(*) FROM effect_agent_submissions WHERE state != 'settled') + (SELECT COUNT(*) FROM effect_agent_submission_ownership) AS n",
+                )
+                .get(),
+            );
+
+            return n;
+          },
+          catch: () =>
+            new FixtureError({
+              message: `Snapshot ${name} must be idle and use the current storage format`,
+            }),
+        });
+      }
+
+      const exported: SqlDump = yield* Effect.try({
+        try: () => dumpDatabase(db),
+        catch: () => new FixtureError({ message: `Read ${name} schema` }),
+      });
+
+      if (
+        exported.tables
+          .map((table) => table.name)
+          .sort()
+          .join() !== Object.keys(meta.tables).sort().join()
+      )
+        return yield* new FixtureError({ message: `Saved ${name} table inventory mismatch` });
+      const paths: string[] = [];
+      let parts: RestoreChunk["parts"][number][] = [];
+      let bytes = 64;
+
+      const flush = Effect.fnUntraced(function* () {
+        if (!parts.length) return;
+        const path = join(scratch, `${name}-${paths.length}.json`);
+        const text = JSON.stringify({ sequence: paths.length, parts });
+
+        if (Buffer.byteLength(text) > requestBytes)
+          return yield* new FixtureError({ message: "Restore framing exceeds byte bound" });
+        yield* fs.writeFileString(path, text);
+        paths.push(path);
+        parts = [];
+        bytes = 64;
+      });
+
+      for (const table of exported.tables) {
+        let count = 0;
+        let rows: (typeof table.rows)[number][] = [];
+        let offset = 0;
+
+        for (const record of db.prepare(`SELECT * FROM ${quote(table.name)}`).iterate()) {
+          // SQLite values are decoded at the wire boundary below.
+          const values = table.columns.map((column) => {
+            const value = record[column];
+
+            return value instanceof Uint8Array
+              ? { blob: Buffer.from(value).toString("base64") }
+              : value;
+          });
+
+          const decoded = Schema.decodeUnknownSync(Schema.Array(SqlValue))(values);
+          const size = Buffer.byteLength(JSON.stringify(decoded)) + 1;
+
+          if (size + 256 > requestBytes)
+            return yield* new FixtureError({ message: "Snapshot row exceeds restore byte bound" });
+          if (bytes + size + 256 > requestBytes) {
+            if (rows.length) parts.push({ table: table.name, offset, rows });
+            yield* flush();
+            rows = [];
+            offset = count;
+          }
+          rows.push(decoded);
+          count++;
+          bytes += size;
+        }
+        if (rows.length) {
+          parts.push({ table: table.name, offset, rows });
+          bytes += 256;
+        }
+        if (count !== meta.tables[table.name])
+          return yield* new FixtureError({ message: `Saved ${name}/${table.name} count mismatch` });
+      }
+      yield* flush();
+      let actor: SqlDump | undefined;
+
+      if (target === "tardie") {
+        const actorDirectory = join(source, "do", "-ActorDO");
+
+        const databases = (yield* fs.readDirectory(actorDirectory)).filter((file) =>
+          /^[a-f0-9]{64}\.sqlite$/.test(file),
+        );
+
+        if (databases.length !== 1)
+          return yield* new FixtureError({ message: "Ambiguous Actor snapshot" });
+        actor = yield* Effect.try({
+          try: () => {
+            const db = new DatabaseSync(join(actorDirectory, databases[0]!), { readOnly: true });
+
+            try {
+              return dumpDatabase(db, true);
+            } finally {
+              db.close();
+            }
+          },
+          catch: () => new FixtureError({ message: "Read Actor snapshot" }),
+        });
+      }
+      fixtures.push({
+        version: 1,
+        target,
+        history,
+        sourceVersion: meta.version,
+        fingerprint: meta.fingerprint,
+        threadId: meta.threadId ?? "main",
+        tables: meta.tables,
+        mode: "import",
+        thread: exported,
+        ...(actor === undefined ? {} : { actor }),
+      });
+      chunks.set(name, paths);
+    }
+  }
+
+  return { fixtures, chunks };
+});

@@ -4,13 +4,28 @@ import { Command, Flag } from "effect/cli";
 import { ProfileType } from "./model.ts";
 import { BenchError } from "./platform.ts";
 import { resume, run, teardown } from "./run.ts";
-import { History, Target } from "./worker/protocol.ts";
+import { History, RESTORE_BYTES, Target } from "./worker/protocol.ts";
 
 const positive = (name: string) => Flag.Int(name).pipe(Flag.withSchema(History));
 
 export const command = Command.make(
   "deployed",
   {
+    preset: Flag.Literals("preset", ["quick", "full"]).pipe(
+      Flag.withDefault("quick"),
+      Flag.withDescription("Paired screening (12 Objects) or balanced final matrix (30 Objects)"),
+    ),
+    restoreBytes: Flag.Int("restore-bytes").pipe(
+      Flag.withSchema(
+        Schema.Int.check(Schema.isBetween({ minimum: 1024, maximum: RESTORE_BYTES })),
+      ),
+      Flag.withDefault(RESTORE_BYTES),
+      Flag.withDescription("Maximum bytes per snapshot request (default: 4 MiB)"),
+    ),
+    fixtureDirectory: Flag.String("fixture-directory").pipe(
+      Flag.optional,
+      Flag.withDescription("Read saved fixtures from this directory"),
+    ),
     buildHistory: Flag.Boolean("build-history").pipe(
       Flag.withDefault(false),
       Flag.withDescription(
@@ -18,16 +33,16 @@ export const command = Command.make(
       ),
     ),
     targets: Flag.String("targets").pipe(
-      Flag.withDefault("yielded,pi,tardie"),
-      Flag.withDescription("Comma-separated targets"),
+      Flag.optional,
+      Flag.withDescription("Comma-separated targets (quick/full: yielded; build-history: all)"),
     ),
     sizes: Flag.String("sizes").pipe(
       Flag.optional,
-      Flag.withDescription("History lengths (quick: 50,250; build-history: 50,250,1000,3500)"),
+      Flag.withDescription("History lengths (quick/full: 1000; build-history: 50,250,1000,3500)"),
     ),
     ttft: Flag.String("ttft").pipe(
       Flag.optional,
-      Flag.withDescription("Provider TTFT in ms (quick: 0,400; build-history: 0)"),
+      Flag.withDescription("Provider TTFT in ms (default: 0)"),
     ),
     textStreaming: Flag.Boolean("text-streaming").pipe(
       Flag.withDefault(false),
@@ -37,7 +52,7 @@ export const command = Command.make(
     ),
     objects: positive("objects").pipe(
       Flag.optional,
-      Flag.withDescription("Objects per target/cell (quick: 7; build-history: 3)"),
+      Flag.withDescription("Objects per target/cell (quick: 12; full: 30; build-history: 3)"),
     ),
     repeats: positive("repeats").pipe(
       Flag.optional,
@@ -83,7 +98,7 @@ export const command = Command.make(
     ),
     rigorous: Flag.Boolean("rigorous").pipe(
       Flag.withDefault(false),
-      Flag.withDescription("Cold + CPU + same-Object balanced A/B; requires both refs"),
+      Flag.withDescription("Alias for --preset full: cold + CPU + same-Object balanced A/B"),
     ),
     baseline: Flag.String("baseline").pipe(Flag.optional),
     candidate: Flag.String("candidate").pipe(Flag.optional),
@@ -105,48 +120,53 @@ export const command = Command.make(
     const runName = Option.getOrUndefined(flags.resume);
 
     if (runName !== undefined) return yield* resume(runName);
-    const baseline = Option.getOrUndefined(flags.baseline);
-    const candidate = Option.getOrUndefined(flags.candidate);
+    const rigorous = flags.rigorous || flags.preset === "full";
 
-    if (
-      flags.rigorous ? !baseline || !candidate : baseline !== undefined || candidate !== undefined
-    )
-      return yield* new BenchError({
-        message: "Use --rigorous with both --baseline <ref> and --candidate <ref>.",
-      });
+    const baseline = flags.buildHistory
+      ? undefined
+      : Option.getOrElse(flags.baseline, () => "origin/main");
+
+    const candidate = flags.buildHistory
+      ? undefined
+      : Option.getOrElse(flags.candidate, () => "HEAD");
 
     const targets = yield* Schema.decodeUnknownEffect(Schema.NonEmptyArray(Target))(
-      flags.targets.split(","),
+      Option.getOrElse(flags.targets, () =>
+        flags.buildHistory ? "yielded,pi,tardie" : "yielded",
+      ).split(","),
     );
 
     const sizes = yield* Schema.decodeUnknownEffect(Schema.NonEmptyArray(History))(
-      Option.getOrElse(flags.sizes, () => (flags.buildHistory ? "50,250,1000,3500" : "50,250"))
+      Option.getOrElse(flags.sizes, () => (flags.buildHistory ? "50,250,1000,3500" : "1000"))
         .split(",")
         .map(Number),
     );
 
     const ttft = yield* Schema.decodeUnknownEffect(Schema.NonEmptyArray(Schema.Literals([0, 400])))(
-      Option.getOrElse(flags.ttft, () => (flags.buildHistory ? "0" : "0,400"))
+      Option.getOrElse(flags.ttft, () => "0")
         .split(",")
         .map(Number),
     );
 
-    if (flags.rigorous && !targets.includes("yielded"))
-      return yield* new BenchError({ message: "Rigorous A/B requires the yielded target." });
+    if (!flags.buildHistory && !targets.includes("yielded"))
+      return yield* new BenchError({ message: "Paired A/B requires the yielded target." });
 
     const profiles = [...new Set(flags.profile.flat())];
     const profileAfter = Option.getOrUndefined(flags.profileAfter);
-    const objects = Option.getOrElse(flags.objects, () => (flags.buildHistory ? 3 : 7));
+
+    const objects = Option.getOrElse(flags.objects, () =>
+      flags.buildHistory ? 3 : rigorous ? 30 : 12,
+    );
+
     const concurrency = Option.getOrElse(flags.concurrency, () => 6);
 
-    const buildConcurrency = flags.buildHistory
-      ? Option.getOrElse(
-          flags.buildConcurrency,
-          () => new Set(targets).size * new Set(sizes).size * new Set(ttft).size * objects,
-        )
-      : concurrency;
+    const buildConcurrency = Option.getOrElse(flags.buildConcurrency, () =>
+      flags.buildHistory
+        ? new Set(targets).size * new Set(sizes).size * new Set(ttft).size * objects
+        : concurrency,
+    );
 
-    if (flags.buildHistory && (flags.rigorous || flags.textStreaming))
+    if (flags.buildHistory && (rigorous || flags.textStreaming))
       return yield* new BenchError({
         message: "--build-history measures completion without observers or A/B redeploys.",
       });
@@ -172,23 +192,25 @@ export const command = Command.make(
       return yield* new BenchError({ message: "History profiling requires --profile-after." });
 
     return yield* run({
+      ...(Option.isSome(flags.fixtureDirectory)
+        ? { fixtureDirectory: flags.fixtureDirectory.value }
+        : {}),
+      restoreBytes: flags.restoreBytes,
       buildHistory: flags.buildHistory,
       targets: [...new Set(targets)],
       sizes: [...new Set(sizes)],
       ttft: [...new Set(ttft)],
       textStreaming: flags.textStreaming,
       objects,
-      repeats: Option.getOrElse(flags.repeats, () =>
-        flags.buildHistory ? 9 : flags.rigorous ? 6 : 4,
-      ),
+      repeats: Option.getOrElse(flags.repeats, () => (flags.buildHistory ? 9 : rigorous ? 6 : 4)),
       concurrency,
       buildConcurrency,
-      cold: flags.cold || flags.rigorous || flags.buildHistory,
-      cpu: flags.cpu || flags.rigorous,
+      cold: true,
+      cpu: flags.cpu || rigorous,
       profiles,
       ...(profileAfter === undefined ? {} : { profileAfter }),
       keep: flags.keep,
-      rigorous: flags.rigorous,
+      rigorous,
       ...(baseline === undefined ? {} : { baseline }),
       ...(candidate === undefined ? {} : { candidate }),
     });

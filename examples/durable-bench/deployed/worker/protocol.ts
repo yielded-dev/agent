@@ -10,6 +10,7 @@ export const History = Schema.Int.check(Schema.isGreaterThan(0));
 export const Query = Schema.Struct({
   target: Target,
   object: Schema.NonEmptyString,
+  storageObject: Schema.optionalKey(Schema.NonEmptyString),
   history: History,
   sample: Schema.NonEmptyString,
   expectedBuild: Schema.NonEmptyString,
@@ -31,6 +32,9 @@ export const readQuery = (url: URL): Query =>
   Schema.decodeUnknownSync(Query)({
     target: url.searchParams.get("target"),
     object: url.searchParams.get("object"),
+    ...(url.searchParams.has("storageObject")
+      ? { storageObject: url.searchParams.get("storageObject") }
+      : {}),
     history: Number(url.searchParams.get("history")),
     sample: url.searchParams.get("sample") ?? "import",
     expectedBuild: url.searchParams.get("expectedBuild"),
@@ -78,23 +82,22 @@ export const SqlTable = Schema.Struct({
 export const SqlDump = Schema.Struct({
   tables: Schema.Array(SqlTable),
   indexes: Schema.Array(Schema.String),
+  triggers: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
 export type SqlDump = typeof SqlDump.Type;
 
-export const FixtureMode = Schema.Literals(["import", "replay"]);
+export const FixtureMode = Schema.Literal("import");
 
 export const BulkFixture = Schema.Struct({
   version: Schema.Literal(1),
   target: Target,
   history: History,
   fingerprint: Schema.NonEmptyString,
+  threadId: Schema.NonEmptyString,
   sourceVersion: Schema.NonEmptyString,
   tables: Counts,
   mode: FixtureMode,
-  fallbackReason: Schema.optionalKey(Schema.NonEmptyString),
-  // Canonical pages stay encoded until the storage importer decodes their schema.
-  archive: Schema.optionalKey(Schema.Array(Schema.Json)),
   thread: Schema.optionalKey(SqlDump),
   actor: Schema.optionalKey(SqlDump),
 });
@@ -154,7 +157,6 @@ export const ImportResult = Schema.Struct({
   fingerprint: Schema.String,
   tables: Counts,
   mode: FixtureMode,
-  fallbackReason: Schema.optionalKey(Schema.NonEmptyString),
   directoryTables: Schema.optionalKey(Counts),
   identity: Identity,
 });
@@ -327,3 +329,24 @@ export const chatTranscript = (chat: typeof Chat.Type) =>
 
     return [{ role: message.role, text, ...(calls?.length ? { calls } : {}) }];
   });
+
+/** Setup requests are bounded independently of the database size. */
+export const RESTORE_BYTES = 4 * 1024 * 1024;
+
+export const RestoreChunk = Schema.Struct({
+  sequence: Schema.Natural,
+  parts: Schema.Array(
+    Schema.Struct({
+      table: Schema.NonEmptyString,
+      offset: Schema.Natural,
+      rows: SqlTable.fields.rows,
+    }),
+  ),
+});
+
+export type RestoreChunk = typeof RestoreChunk.Type;
+
+export const RestoreAck = Schema.Struct({
+  ok: Schema.Literal(true),
+  directoryTables: Schema.optionalKey(Counts),
+});

@@ -23,6 +23,7 @@ const entries = {
   driver: "driver.ts",
   provider: "provider.ts",
   target: "../third-party/src/deployed/index.ts",
+  restore: "worker/restore-worker.ts",
 };
 
 /** A ref supplies framework sources; both builds use this checkout's harness and pinned dependencies. */
@@ -101,13 +102,16 @@ export const build = Effect.fnUntraced(function* (
         entryPoints: [join(directory, entries[entry])],
         outfile,
         bundle: true,
-        sourcemap: entry === "target" ? "linked" : false,
+        // Remove source-path comments so equal bundles hash equally across run directories.
+        minifyWhitespace: true,
+        sourcemap: entry === "target" || entry === "restore" ? "linked" : false,
         format: "esm",
         platform: "neutral",
         target: "es2024",
         conditions: ["workerd", "worker", "browser", "import"],
         mainFields: ["module", "main"],
-        external: ["cloudflare:*", "node:*", ...builtinModules],
+        // Bun lists ws as built-in; workerd needs its browser export bundled.
+        external: ["cloudflare:*", "node:*", ...builtinModules.filter((name) => name !== "ws")],
         logLevel: "silent",
         plugins: [resolver],
       }),

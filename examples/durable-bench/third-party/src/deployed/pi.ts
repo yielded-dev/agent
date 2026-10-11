@@ -26,7 +26,6 @@ import { openDurableObjectSqliteStorage } from "../../node_modules/@earendil-wor
 import { Host } from "../../../deployed/worker/host.ts";
 import { type Observation } from "../../../deployed/worker/observe.ts";
 import { readQuery, type Env, type Query, type TextObservation } from "../../../deployed/worker/protocol.ts";
-import { importRows } from "../../../deployed/worker/storage.ts";
 
 const SYSTEM = "You are a benchmark agent. Call lookup as instructed, then answer briefly.";
 
@@ -222,10 +221,6 @@ export class PiDO extends DurableObject<Env> {
     if (new URL(request.url).pathname === "/text") return this.textResponse(request);
 
     return this.host.fetch(request, {
-      import: async (fixture) => {
-        if (!fixture.thread) throw new Error("Missing pi SQLite fixture");
-        importRows(this.ctx.storage, fixture.thread);
-      },
       run: (input, _query?: Query) => this.turn(input),
       close: async () => {
         const opened = this.opened;

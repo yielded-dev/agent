@@ -52,7 +52,15 @@ import {
 import { prepareProfile, profileBatches } from "./profile.ts";
 import { median, table } from "./report.ts";
 import { PREAMBLE, responseText } from "./text.ts";
-import { ColdResult, expectedSeed, ImportResult, Metrics, type Query } from "./worker/protocol.ts";
+import {
+  ColdResult,
+  expectedSeed,
+  ImportResult,
+  Metrics,
+  RestoreAck,
+  RestoreChunk,
+  type Query,
+} from "./worker/protocol.ts";
 
 const equalCounts = (a: Readonly<Record<string, number>>, b: Readonly<Record<string, number>>) =>
   Object.keys(a).length === Object.keys(b).length &&
@@ -104,6 +112,17 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
   const fs = yield* FileSystem.FileSystem;
   const privateDirectory = stateDirectory(cloud.prefix);
   const runName = resumed?.run ?? `${cloud.prefix}-${started.toString(36)}-${nonce().slice(0, 8)}`;
+
+  const persistent =
+    !options.buildHistory &&
+    !options.rigorous &&
+    options.profiles.length === 0 &&
+    !options.targets.includes("tardie");
+
+  const targetStack = persistent
+    ? `${cloud.prefix}-pool-${hash(JSON.stringify([options.targets, options.sizes, options.ttft, options.objects, options.cpu])).slice(0, 8)}`
+    : runName;
+
   const output = join(workspace, "results", runName);
   const lock = yield* Semaphore.make(1);
   const withProfileBatch = yield* profileBatches(options.profiles.length);
@@ -139,6 +158,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         failures: [],
         profiles: [],
         kept: options.keep,
+        ...(persistent ? { workerPool: targetStack } : {}),
         complete: false,
       };
 
@@ -157,6 +177,20 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         yield* save(output + ".json", result);
       }),
     );
+
+  let phaseStarted = started;
+  let phaseName = "preparation";
+
+  const phase = Effect.fnUntraced(function* (next: string) {
+    const now = yield* Clock.currentTimeMillis;
+
+    result = {
+      ...result,
+      phases: [...(result.phases ?? []), { phase: phaseName, ms: now - phaseStarted }],
+    };
+    phaseStarted = now;
+    phaseName = next;
+  });
 
   let targetStarted = false;
   let targetWorkers: readonly string[] = [runName];
@@ -221,9 +255,10 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           }),
         );
       }
-      if (!options.keep && !preserved) {
+      yield* phase("teardown");
+      if (!options.keep && !preserved && !persistent) {
         yield* Console.error("Destroying target stack and verifying cleanup…");
-        yield* deploy.destroy(runName).pipe(
+        yield* deploy.destroy(targetStack).pipe(
           Effect.matchCauseEffect({
             onFailure: (cause) =>
               Effect.sync(() => {
@@ -236,14 +271,15 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           }),
         );
       }
+      yield* phase("report");
       result = {
         ...result,
-        kept: options.keep || preserved,
+        kept: options.keep || preserved || persistent,
         wallMs: (yield* Clock.currentTimeMillis) - Date.parse(result.startedAt),
         complete:
           Exit.isSuccess(exit) &&
           result.failures.length === 0 &&
-          (options.keep || result.cleanup?.verified === true),
+          (options.keep || persistent || result.cleanup?.verified === true),
       };
       yield* save(output + ".json", result);
       yield* fs.writeFileString(output + ".md", table(result));
@@ -251,6 +287,10 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       yield* Console.error(
         `Wall time ${(result.wallMs / 1000).toFixed(1)} s; infrastructure ${result.infrastructureReused ? "reused" : "deployed"}. Results: results/${runName}.json`,
       );
+      if (persistent)
+        yield* Console.error(
+          "Worker versions retained for reuse; --teardown destroys and verifies all resources for this prefix.",
+        );
       for (const profile of result.profiles) yield* Console.error(`Profile: ${profile.file}`);
       if (preserved)
         yield* Console.error(
@@ -284,22 +324,33 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       versions[metadata.name] = metadata.version;
     }
 
-    const fixtures = options.buildHistory
-      ? []
-      : yield* prepareFixtures({ targets: options.targets, sizes: options.sizes });
+    yield* phase("local fixture");
+
+    const prepared = options.buildHistory
+      ? { fixtures: [], chunks: new Map<string, string[]>() }
+      : yield* prepareFixtures({
+          targets: options.targets,
+          sizes: options.sizes,
+          ...(options.restoreBytes === undefined ? {} : { requestBytes: options.restoreBytes }),
+          ...(options.fixtureDirectory === undefined
+            ? {}
+            : { directory: options.fixtureDirectory }),
+        });
+
+    const { fixtures, chunks } = prepared;
 
     yield* update((value) => ({
       ...value,
       versions: resumed ? value.versions : versions,
-      fixtures: fixtures.map(({ target, history, fingerprint, tables, mode, fallbackReason }) => ({
+      fixtures: fixtures.map(({ target, history, fingerprint, tables, mode }) => ({
         target,
         history,
         fingerprint,
         tables,
         mode,
-        ...(fallbackReason === undefined ? {} : { fallbackReason }),
       })),
     }));
+    yield* phase("infrastructure");
     if (!resumed) {
       const reused = yield* deploy.infrastructure;
       const infrastructureBuild = yield* deploy.infrastructureBuild();
@@ -311,9 +362,10 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       }));
     }
     type Label = Sample["build"];
-    const labels: readonly Label[] = options.rigorous ? ["baseline", "candidate"] : ["working"];
+    const labels: readonly Label[] = options.baseline ? ["baseline", "candidate"] : ["working"];
     const builds = new Map<Label, Effect.Success<ReturnType<typeof build>>>();
 
+    yield* phase("build");
     for (const label of labels) {
       if (resumed) {
         const previous = resumed.builds.find((item) => item.label === label);
@@ -349,13 +401,21 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       }));
     }
 
+    const restoreBuild = options.buildHistory
+      ? undefined
+      : yield* build(join(privateDirectory, runName, "restore"), "restore");
+
+    yield* phase("reference transcript");
+
     const epochs: readonly Label[] = options.rigorous
       ? nonce().charAt(0) < "8"
         ? ["baseline", "candidate", "candidate", "baseline"]
         : ["candidate", "baseline", "baseline", "candidate"]
-      : ["working"];
+      : options.baseline
+        ? ["baseline", "candidate"]
+        : ["working"];
 
-    const turnsPerEpoch = options.repeats + (options.buildHistory ? 1 : options.cold ? 2 : 1);
+    const turnsPerEpoch = options.repeats + (options.buildHistory ? 1 : 3);
 
     const sampleName = (epoch: number, index: number) =>
       options.buildHistory ? `m${index}` : `e${epoch}-t${index}`;
@@ -369,7 +429,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       const seeds = new Map<number, string>();
 
       for (const [index, input] of history(0, size).entries()) {
-        const checkpoint = (index + 1) % 50 === 0 || index + 1 === size;
+        const checkpoint = (options.buildHistory && (index + 1) % 50 === 0) || index + 1 === size;
         const hashes = append(messages, input, false, checkpoint);
         const digest = hashes.at(-1);
 
@@ -400,6 +460,14 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           options.targets.map((target): Omit<Query, "expectedBuild"> => ({
             target,
             object: `${runName}-h${size}-d${ttftMs}-o${object}`,
+            ...(options.buildHistory
+              ? {}
+              : {
+                  storageObject:
+                    fixtures.find(
+                      (fixture) => fixture.target === target && fixture.history === size,
+                    )?.threadId ?? "main",
+                }),
             history: size,
             ttftMs,
             chunkDelayMs: ttftMs === 400 ? 10 : 0,
@@ -417,7 +485,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       `${cohort.target}/${cohort.object}`;
 
     const workerName = (cohort: Pick<Query, "target" | "object">) =>
-      options.buildHistory ? `${cohort.object}-${cohort.target}` : runName;
+      `${persistent ? cohort.object.replace(runName, targetStack) : cohort.object}-${cohort.target}`;
 
     if (resumed) {
       for (const cohort of cohorts) {
@@ -450,14 +518,22 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       if (!compiled) return yield* new BenchError({ message: "Missing target build." });
       telemetryFrom = Math.min(telemetryFrom, yield* Clock.currentTimeMillis);
       targetStarted = true;
-      const expectedBuild = compiled.sha256 + `-e${epoch}`;
+      const initialBuild = epoch === 0 && restoreBuild ? restoreBuild : compiled;
+      let expectedBuild = initialBuild.sha256 + (persistent ? "" : `-e${epoch}`);
 
-      const endpoints = resumed
+      yield* phase("deploy");
+
+      let endpoints = resumed
         ? (yield* deploy.attach(runName, expectedBuild, resumed.infrastructureBuild ?? ""))
             .endpoints
-        : yield* deploy.targets(runName, compiled.file, expectedBuild, options.cpu, [
-            ...new Set(cohorts.map(workerName)),
-          ]);
+        : yield* deploy.targets(
+            targetStack,
+            initialBuild.file,
+            expectedBuild,
+            options.cpu,
+            [...new Set(cohorts.map(workerName))],
+            persistent,
+          );
 
       targetWorkers = Object.keys(endpoints);
 
@@ -533,6 +609,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         });
       });
 
+      yield* phase("deployed seed");
       // Seeding and its count scans must not contend with timed turns, including the first A/B pass.
       if (epoch === 0) {
         yield* Console.error(`Seeding and verifying ${cohorts.length} Objects…`);
@@ -800,31 +877,58 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
               if (!fixture) return yield* new BenchError({ message: "Missing fixture." });
 
-              const seeded = (yield* request(
-                url("/import", cohort),
-                deploy.token,
-                ImportResult,
-                fixture,
-                "10 minutes",
-              )).value;
+              const restoreStarted = yield* Clock.currentTimeMillis;
 
-              if (seeded.identity.build !== expectedBuild)
-                return yield* new BenchError({
-                  message: "Seeded Object reported the wrong build.",
-                });
+              if (persistent) {
+                yield* resetForBuild(cohort);
+                yield* request(url("/restore/clear", cohort), deploy.token, RestoreAck, {});
+              }
+
+              const start = yield* request(
+                url("/restore/start", cohort),
+                deploy.token,
+                RestoreAck,
+                fixture,
+              );
+
               if (
-                seeded.fingerprint !== fixture.fingerprint ||
-                !equalCounts(seeded.tables, fixture.tables) ||
-                (fixture.actor &&
-                  !equalCounts(
-                    seeded.directoryTables ?? {},
-                    Object.fromEntries(fixture.actor.tables.map((t) => [t.name, t.rows.length])),
-                  ))
+                fixture.actor &&
+                !equalCounts(
+                  start.value.directoryTables ?? {},
+                  Object.fromEntries(
+                    fixture.actor.tables.map((table) => [table.name, table.rows.length]),
+                  ),
+                )
               )
                 return yield* new BenchError({
-                  message:
-                    "Deployed seed fingerprint or complete table counts differ from the local fixture.",
+                  message: "Restored Actor table counts differ from source",
                 });
+              for (const path of chunks.get(`${cohort.target}-${cohort.history}`) ?? []) {
+                yield* request(
+                  url("/restore/rows", cohort),
+                  deploy.token,
+                  RestoreAck,
+                  yield* read(path, RestoreChunk),
+                );
+              }
+
+              const restoreMs = (yield* Clock.currentTimeMillis) - restoreStarted;
+
+              yield* update((value) => ({
+                ...value,
+                restores: [
+                  ...(value.restores ?? []),
+                  {
+                    object: cohort.object,
+                    target: cohort.target,
+                    history: cohort.history,
+                    requests:
+                      (persistent ? 2 : 1) +
+                      (chunks.get(`${cohort.target}-${cohort.history}`)?.length ?? 0),
+                    ms: restoreMs,
+                  },
+                ],
+              }));
             }).pipe(
               Effect.scoped,
               (batch) => (options.profileAfter === undefined ? batch : withProfileBatch(batch)),
@@ -856,6 +960,56 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         );
       }
 
+      if (epoch === 0 && !options.buildHistory) {
+        yield* phase("verify");
+        yield* Effect.forEach(
+          cohorts,
+          Effect.fnUntraced(function* (cohort) {
+            const fixture = fixtures.find(
+              (item) => item.target === cohort.target && item.history === cohort.history,
+            );
+
+            if (!fixture) return yield* new BenchError({ message: "Missing restore fixture" });
+
+            const seeded = (yield* request(
+              url("/restore/finalize", cohort),
+              deploy.token,
+              ImportResult,
+              {},
+              "10 minutes",
+            )).value;
+
+            if (seeded.identity.build !== expectedBuild)
+              return yield* new BenchError({
+                message: "Seeded Object reported the wrong build.",
+              });
+            if (
+              seeded.fingerprint !== fixture.fingerprint ||
+              !equalCounts(seeded.tables, fixture.tables)
+            )
+              return yield* new BenchError({
+                message:
+                  "Deployed seed fingerprint or complete table counts differ from the local fixture.",
+              });
+          }),
+          { concurrency: options.buildConcurrency, discard: true },
+        );
+      }
+
+      yield* phase("measurement");
+      if (epoch === 0 && restoreBuild) {
+        yield* phase("deploy");
+        expectedBuild = compiled.sha256 + (persistent ? "" : `-e${epoch}`);
+        endpoints = yield* deploy.targets(
+          targetStack,
+          compiled.file,
+          expectedBuild,
+          options.cpu,
+          [...new Set(cohorts.map(workerName))],
+          persistent,
+        );
+        yield* phase("measurement");
+      }
       const isolateOwners = new Map<string, Set<string>>();
 
       for (const row of result.histories)
@@ -904,6 +1058,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         ),
         (cohort) => {
           const profiled =
+            epoch === 0 &&
             options.profileAfter === undefined &&
             options.profiles.length > 0 &&
             cohort.object.endsWith("-o0");
@@ -959,18 +1114,23 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
               : undefined;
 
             // Discard constructor caches after import, and restart the same stored Object after every build change.
-            const reset = yield* resetForBuild(cohort);
+            let reset = yield* resetForBuild(cohort);
             let incarnation = "";
             let directoryIncarnation: string | undefined;
 
             for (let index = 0; index < turnsPerEpoch; index++) {
+              const firstAfterReset =
+                index === 0 ||
+                (!options.buildHistory && (index === 1 || index === turnsPerEpoch - 1));
+
+              if (index > 0 && firstAfterReset) reset = yield* resetForBuild(cohort);
               const query = { ...cohort, sample: sampleName(epoch, index), expectedBuild };
 
               const state =
-                options.cold && index === 0
-                  ? "cold"
-                  : !options.buildHistory && index < (options.cold ? 2 : 1)
-                    ? "warmup"
+                !options.buildHistory && index === 0
+                  ? "preparation"
+                  : firstAfterReset
+                    ? "cold"
                     : "warm";
 
               const sample: Sample = {
@@ -1026,8 +1186,11 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                       "First visible text did not match the submitted turn's assistant reply.",
                   });
 
-                const metrics = (yield* request(url("/metrics", query), deploy.token, Metrics))
-                  .value;
+                const metricsUrl = url("/metrics", query);
+
+                if (state === "preparation" || index === turnsPerEpoch - 1)
+                  metricsUrl.searchParams.set("quiescent", "true");
+                const metrics = (yield* request(metricsUrl, deploy.token, Metrics)).value;
 
                 const expected = references.get(query.history)?.get(query.sample);
 
@@ -1039,6 +1202,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   return yield* new BenchError({
                     message: "Measured isolate also hosted another build cohort; timing rejected.",
                   });
+
+                isolateOwners.set(metrics.identity.isolate, new Set([objectKey(cohort)]));
 
                 if (
                   metrics.query.expectedBuild !== expectedBuild ||
@@ -1072,24 +1237,25 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   });
 
                 const coldVerified =
-                  index === 0 &&
+                  firstAfterReset &&
                   metrics.identity.incarnation !== reset.before.incarnation &&
                   metrics.identity.firstEntry &&
                   metrics.identity.priorAlarms === 0 &&
                   (!options.buildHistory ||
                     metrics.identity.incarnation === measured.value.primed?.incarnation);
 
-                const residentVerified = index > 0 && incarnation === metrics.identity.incarnation;
+                const residentVerified =
+                  !firstAfterReset && incarnation === metrics.identity.incarnation;
 
                 const actorVerified =
                   cohort.target !== "tardie" ||
-                  (index === 0
+                  (firstAfterReset
                     ? metrics.directory?.incarnation !== reset.directoryBefore?.incarnation &&
                       metrics.directory?.firstEntry === true &&
                       metrics.directory.priorAlarms === 0
                     : metrics.directory?.incarnation === directoryIncarnation);
 
-                if (!(index === 0 ? coldVerified : residentVerified) || !actorVerified)
+                if (!(firstAfterReset ? coldVerified : residentVerified) || !actorVerified)
                   return yield* new BenchError({
                     message:
                       "Object residency changed; sample is not valid for its cold/warm label.",
@@ -1123,6 +1289,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                           constructorAndProbeMs: measured.value.constructorAndProbeMs,
                           primeMs: measured.value.primeMs,
                           bytes: metrics.bytes,
+                          ...(state === "preparation" ? { preparationTables: metrics.tables } : {}),
                           providerColos: [
                             ...new Set(
                               metrics.calls.flatMap((call) =>
@@ -1155,7 +1322,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                       : row,
                   ),
                 }));
-                if (state === "warmup") yield* Deferred.succeed(warmed, measured.value.driverMs);
+                if (index === 1) yield* Deferred.succeed(warmed, measured.value.driverMs);
               }).pipe(
                 Effect.tapCause((cause) =>
                   update((value) => ({
