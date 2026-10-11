@@ -2039,14 +2039,15 @@ layer(NodeCrypto.layer)((it) => {
         const runId = Schema.decodeSync(RunId)(`run:${submission.submissionId}`);
 
         yield* h.startRun(scout.delivery.receipt!);
-        yield* h.updates.emit({
-          submission,
-          runId,
-          writer: yield* h.writer(submission.threadId),
-          definitions,
-          updateId: Schema.decodeSync(IdempotencyKey)("scout-finding"),
-          value: { finding: "area concern" },
-        });
+        yield* h.updates
+          .emit({
+            submission,
+            runId,
+            definitions,
+            updateId: Schema.decodeSync(IdempotencyKey)("scout-finding"),
+            value: { finding: "area concern" },
+          })
+          .pipe(Effect.provideService(CurrentRunWriter, yield* h.writer(submission.threadId)));
 
         const update = [...h.deliveries.values()].find((row) =>
           Schema.is(WorkerUpdate)(row.envelope.messageAdmission),

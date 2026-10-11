@@ -22,9 +22,8 @@ import {
   RecordEnvelope,
   RecordId,
 } from "../Records.ts";
-import { readRunEvidenceSnapshot } from "../RunContinuation.ts";
+import { CurrentRunWriter, readRunEvidenceSnapshot } from "../RunContinuation.ts";
 import { runIdForSubmission } from "../RunJournal.ts";
-import type { RunWriter } from "../RunStorage.ts";
 import { LedgerError, type SubmissionSnapshot } from "../SubmissionLedger.ts";
 import { PreparedInput } from "../Subscription.ts";
 import { ThreadReader, ThreadStore, ThreadTailRequest } from "../ThreadStore.ts";
@@ -170,7 +169,6 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
     function* (request: {
       readonly submission: SubmissionSnapshot;
       readonly runId: RunId;
-      readonly writer: RunWriter;
       readonly definitions: DefinitionDigests;
       readonly updateId: IdempotencyKey;
       readonly value: Schema.Json;
@@ -205,6 +203,8 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
         maxBytes < 1
       )
         return yield* rejected("validation");
+
+      const writer = yield* CurrentRunWriter;
 
       for (let attempt = 0; attempt < 32; attempt++) {
         const history = yield* readRun(
@@ -307,11 +307,12 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
           .inspectTail(ThreadTailRequest.make({ threadId: request.submission.threadId }))
           .pipe(Effect.mapError(storage));
 
-        yield* request.writer.checkActive.pipe(Effect.mapError(storage));
+        // Reenter the progress guard to recheck this Attempt's generation after preflight.
+        yield* writer.withProgress(Effect.void).pipe(Effect.mapError(storage));
         if (tail.tailSequence !== history.tailSequence) continue;
         yield* failpoint.hit("update:before-canonical-append");
 
-        const appended = yield* request.writer
+        const appended = yield* writer
           .append(
             CanonicalBatch.make({
               batchId: Schema.decodeSync(BatchId)(id),
@@ -345,14 +346,16 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
 
       return yield* storage();
     },
-    (effect, request) =>
-      request.writer.withProgress(effect).pipe(
-        Effect.catchTags({
-          OwnershipLost: () => storage(),
-          ThreadStoreError: () => storage(),
-          ThreadNotMaterialized: () => storage(),
-          AppendConflict: () => storage(),
-        }),
+    (effect) =>
+      Effect.flatMap(CurrentRunWriter, (writer) =>
+        writer.withProgress(effect).pipe(
+          Effect.catchTags({
+            OwnershipLost: () => storage(),
+            ThreadStoreError: () => storage(),
+            ThreadNotMaterialized: () => storage(),
+            AppendConflict: () => storage(),
+          }),
+        ),
       ),
   );
 
