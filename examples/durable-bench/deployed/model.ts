@@ -2,6 +2,8 @@ import { Schema } from "effect";
 
 import {
   Counts,
+  ObjectPhases,
+  ProviderCall,
   History,
   Identity,
   Query,
@@ -31,6 +33,7 @@ export type Profile = typeof Profile.Type;
 export const Options = Schema.Struct({
   fixtureDirectory: Schema.optionalKey(Schema.String),
   restoreBytes: Schema.optionalKey(Schema.Int),
+  restoreEachPass: Schema.optionalKey(Schema.Boolean),
   buildHistory: Schema.Boolean,
   targets: Schema.Array(Target).check(Schema.isMinLength(1)),
   sizes: Schema.Array(History).check(Schema.isMinLength(1)),
@@ -54,6 +57,7 @@ export type Options = typeof Options.Type;
 
 export const Invocation = Schema.Struct({
   kind: Schema.String,
+  invocationType: Schema.optionalKey(Schema.String),
   outcome: Schema.String,
   cpuMs: Schema.NullOr(Schema.Number),
   wallMs: Schema.NullOr(Schema.Number),
@@ -85,6 +89,11 @@ export const Sample = Schema.Struct({
   bytes: Schema.optionalKey(Schema.Natural),
   providerColos: Schema.optionalKey(Schema.Array(Schema.String)),
   objectToFirstModelMs: Schema.optionalKey(Schema.Number),
+  providerCalls: Schema.optionalKey(Schema.Array(ProviderCall)),
+  objectPhases: Schema.optionalKey(ObjectPhases),
+  providerFirstTokenMs: Schema.optionalKey(Schema.Number),
+  firstTextForwardedMs: Schema.optionalKey(Schema.Number),
+  settlementMs: Schema.optionalKey(Schema.Number),
   admissionMs: Schema.optionalKey(Schema.Number),
   gapMs: Schema.optionalKey(Schema.Number),
   lastResponseToClientMs: Schema.optionalKey(Schema.Number),
@@ -168,6 +177,8 @@ export const Result = Schema.Struct({
         object: Schema.String,
         target: Target,
         history: Schema.Int,
+        epoch: Schema.optionalKey(Schema.Natural),
+        build: Schema.optionalKey(Schema.String),
         requests: Schema.Int,
         ms: Schema.Number,
       }),
@@ -181,6 +192,8 @@ export const Result = Schema.Struct({
       fingerprint: Schema.String,
       tables: Schema.Record(Schema.String, Schema.Natural),
       mode: Schema.Literals(["import", "replay"]),
+      label: Schema.optionalKey(Schema.String),
+      formatKey: Schema.optionalKey(Schema.String),
       fallbackReason: Schema.optionalKey(Schema.String),
     }),
   ),

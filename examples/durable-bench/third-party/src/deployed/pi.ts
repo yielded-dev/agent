@@ -194,7 +194,7 @@ export class PiDO extends DurableObject<Env> {
                     .flatMap((entry) => entry.model ?? []).map(messageText).join("")
                 : eventText(event);
 
-              if (text) await write({ _tag: "Text", input: query.sample, text });
+              if (text) { this.host.meter.forwardText(query.sample); await write({ _tag: "Text", input: query.sample, text }); }
             }
           })();
           return delivery;

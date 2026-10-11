@@ -22,6 +22,12 @@ export const command = Command.make(
       Flag.withDefault(RESTORE_BYTES),
       Flag.withDescription("Maximum bytes per snapshot request (default: 4 MiB)"),
     ),
+    restoreEachPass: Flag.Boolean("restore-each-pass").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription(
+        "Restore identical saved history before every pass (automatic for different storage formats)",
+      ),
+    ),
     fixtureDirectory: Flag.String("fixture-directory").pipe(
       Flag.optional,
       Flag.withDescription("Read saved fixtures from this directory"),
@@ -196,6 +202,7 @@ export const command = Command.make(
         ? { fixtureDirectory: flags.fixtureDirectory.value }
         : {}),
       restoreBytes: flags.restoreBytes,
+      restoreEachPass: flags.restoreEachPass,
       buildHistory: flags.buildHistory,
       targets: [...new Set(targets)],
       sizes: [...new Set(sizes)],

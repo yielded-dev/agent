@@ -35,7 +35,14 @@ const group = <A>(rows: readonly A[], key: (row: A) => string) => {
   return result;
 };
 
-type Metric = "driverMs" | "firstTextMs" | "objectToFirstModelMs";
+type Metric =
+  | "driverMs"
+  | "firstTextMs"
+  | "objectToFirstModelMs"
+  | "providerFirstTokenMs"
+  | "firstTextForwardedMs"
+  | "settlementMs"
+  | "admissionMs";
 
 export const objectMedians = (rows: readonly Sample[], metric: Metric = "driverMs") =>
   [...group(rows, (row) => row.object).values()].flatMap((items) => {
@@ -279,6 +286,21 @@ export const table = (result: Result): string => {
     }
     lines.push("");
   }
+  lines.push(
+    "Turn phases: Object-clock milliseconds since submission entry; receipt is driver admission latency. Missing markers are not zero.",
+    "",
+    "| Cell / target / build | Provider first token | First text forwarded | Settlement | Receipt (driver) |",
+    "|---|---:|---:|---:|---:|",
+  );
+  for (const [cell, samples] of group(
+    rows,
+    (row) => `${row.history}/${row.ttftMs}/${row.state}/${row.target}/${row.build}`,
+  )) {
+    lines.push(
+      `| ${cell} | ${(["providerFirstTokenMs", "firstTextForwardedMs", "settlementMs", "admissionMs"] as const).map((metric) => interval(objectMedians(samples, metric))).join(" | ")} |`,
+    );
+  }
+  lines.push("");
   if (rows.some((row) => row.build === "baseline")) {
     lines.push(
       "Same-Object paired medians; delta is candidate − baseline. 95% percentile bootstrap CI resamples whole Objects (10,000 draws).",
@@ -373,20 +395,20 @@ export const table = (result: Result): string => {
     lines.push(
       "Observed invocation CPU (telemetry may be sampled or delayed):",
       "",
-      "| Target / invocation | CPU ms | Observed | Non-ok outcomes |",
+      "| Target / event / marker | CPU ms | Observed | Non-ok outcomes |",
       "|---|---:|---:|---:|",
     );
     for (const [kind, calls] of group(
       result.cpu,
       (row) =>
-        `${row.target ?? "unattributed"}/${row.sample?.match(/^h\d+$/) ? "seed-" : ""}${row.kind}`,
+        `${row.target ?? "unattributed"}/${row.invocationType ?? "unknown"}/${row.sample?.match(/^h\d+$/) ? "seed-" : ""}${row.kind}`,
     ))
       lines.push(
         `| ${kind} | ${interval(calls.flatMap((row) => (row.cpuMs === null ? [] : [row.cpuMs])))} | ${calls.length} | ${calls.filter((row) => row.outcome !== "ok").length} |`,
       );
     lines.push(
       "",
-      `Unmatched invocation markers: ${result.unmatchedCpuMarkers ?? "unknown"}. CPU totals are not inferred from missing rows.`,
+      `Unmatched invocation markers: ${result.unmatchedCpuMarkers ?? "unknown"}. Invocations without sample attribution: ${result.cpu.filter((row) => row.sample === undefined).length}/${result.cpu.length}. Owning Objects observed: ${new Set(result.cpu.flatMap((row) => (row.object === undefined ? [] : [row.object + "/" + row.target]))).size}. CPU totals are not inferred from missing rows.`,
       "",
     );
   }

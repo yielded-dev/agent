@@ -4,14 +4,19 @@ import { Console, Effect, FileSystem, Schema } from "effect";
 import { convertV4MiniflareOptions, Log, LogLevel, Miniflare } from "miniflare";
 
 import { build } from "./build.ts";
-import { BenchError, execute, read, repository, save, workspace } from "./platform.ts";
+import { BenchError, execute, git, read, repository, save, workspace } from "./platform.ts";
 import { ColdResult, Metrics, SeedResult, type Target } from "./worker/protocol.ts";
 
 // Same prefix/run/hash/cell/replica shape and 50-character identity as the natural matrix.
 export const NATURAL_THREAD = "durable-bench-cache-00000000-00000000-h1000-d0-o00";
 
 /** Fixture generation only: run the deployed protocol locally; never report local timings. */
-export const naturalFixture = Effect.fnUntraced(function* (target: Target, output: string) {
+export const naturalFixture = Effect.fnUntraced(function* (
+  target: Target,
+  output: string,
+  ref?: string,
+  formatKey?: string,
+) {
   const fs = yield* FileSystem.FileSystem;
 
   if (yield* fs.exists(output + ".json")) return;
@@ -21,7 +26,7 @@ export const naturalFixture = Effect.fnUntraced(function* (target: Target, outpu
     });
   const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "durable-bench-natural-" });
 
-  const compiled = yield* build(join(scratch, "target"), "target");
+  const compiled = yield* build(join(scratch, "target"), "target", ref);
 
   const provider = yield* build(join(scratch, "provider"), "provider");
   const targetScript = yield* fs.readFileString(compiled.file);
@@ -145,15 +150,20 @@ export const naturalFixture = Effect.fnUntraced(function* (target: Target, outpu
     return { fingerprint, metrics };
   }).pipe(Effect.scoped);
 
-  const metadata = yield* read(
-    join(
-      target === "yielded" ? repository : workspace,
-      target === "yielded"
-        ? "packages/effect-agent/package.json"
-        : `third-party/node_modules/${target === "pi" ? "@earendil-works/pi-durable" : "tardie"}/package.json`,
-    ),
-    Schema.Struct({ version: Schema.String }),
-  );
+  const metadata =
+    target === "yielded" && ref
+      ? yield* Schema.decodeUnknownEffect(
+          Schema.fromJsonString(Schema.Struct({ version: Schema.String })),
+        )(yield* git(["show", `${ref}:packages/effect-agent/package.json`]))
+      : yield* read(
+          join(
+            target === "yielded" ? repository : workspace,
+            target === "yielded"
+              ? "packages/effect-agent/package.json"
+              : `third-party/node_modules/${target === "pi" ? "@earendil-works/pi-durable" : "tardie"}/package.json`,
+          ),
+          Schema.Struct({ version: Schema.String }),
+        );
 
   // The runtime scope closes before copying so SQLite and its WAL are flushed.
   yield* fs.makeDirectory(join(output, ".."), { recursive: true });
@@ -174,6 +184,7 @@ export const naturalFixture = Effect.fnUntraced(function* (target: Target, outpu
     turns: 1000,
     threadId: NATURAL_THREAD,
     workload: "natural-id50-v1",
+    formatKey,
     fingerprint,
     tables: metrics.tables,
     bytes: metrics.bytes,

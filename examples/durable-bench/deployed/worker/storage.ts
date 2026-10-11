@@ -1,10 +1,18 @@
-import { RecordEnvelope } from "@yielded/agent/records";
-import { Effect, Schema } from "effect";
+import { CurrentDoStorageVersion } from "@yielded/agent-storage-cloudflare/do-storage-version";
+import { exportThread } from "@yielded/agent-storage-cloudflare/do-thread-store";
+import { CURRENT_RECORD_FORMAT, RecordEnvelope } from "@yielded/agent/records";
+import { ThreadExportRequest, type ThreadExportCursor } from "@yielded/agent/thread-store";
+import { Context, Effect, Schema } from "effect";
 import { Prompt } from "effect/ai";
 
 import { fingerprint, type Message } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";
 import { expectedSeed, type BulkFixture, type SqlDump, type Target } from "./protocol.ts";
+
+/** Native storage is supplied only by the Durable Object request boundary. */
+export class RestoreStorage extends Context.Service<RestoreStorage, DurableObjectStorage>()(
+  "durable-bench/RestoreStorage",
+) {}
 
 export class FixtureError extends Schema.TaggedError<FixtureError>()("FixtureError", {
   message: Schema.String,
@@ -95,6 +103,53 @@ const tardieTool = Schema.decodeUnknownSync(
   Schema.Struct({ event: Schema.Struct({ output: Schema.String }) }),
 );
 
+const appendYielded = (result: Message[], record: typeof RecordEnvelope.Type) => {
+  const p = record.payload;
+
+  if (p._tag === "UserInputRecorded") result.push({ role: "user", text: string(p.input) });
+  if (p._tag === "ToolCallSettled") result.push({ role: "tool", text: string(p.result) });
+  if (p._tag !== "ModelResponseRecorded") return;
+  for (const message of Schema.decodeUnknownSync(Prompt.Prompt)(p.messages).content) {
+    if (message.role !== "assistant") continue;
+
+    const calls = message.content.flatMap((part) =>
+      part.type === "tool-call" ? [args(part.params).n] : [],
+    );
+
+    result.push({
+      role: "assistant",
+      text: contentText(message.content),
+      ...(calls.length ? { calls } : {}),
+    });
+  }
+};
+
+/** Use the revision's read-only exporter for compact layouts; never canonical-import the fixture. */
+const compactTranscript = Effect.fnUntraced(function* (fixture: BulkFixture) {
+  const storage = yield* RestoreStorage;
+
+  const request = yield* Schema.decodeUnknownEffect(ThreadExportRequest)({
+    threadId: fixture.threadId,
+  });
+
+  const messages: Message[] = [];
+  let cursor: typeof ThreadExportCursor.Type | undefined;
+
+  do {
+    const page = yield* exportThread(
+      { storage },
+      { ...request, ...(cursor === undefined ? {} : { cursor }) },
+    );
+
+    for (const entry of page.records) appendYielded(messages, entry.record);
+    cursor = page.cursor;
+  } while (cursor !== undefined);
+  if (messages.at(-1)?.role !== "assistant" || messages.at(-1)?.calls?.length)
+    return yield* fail("Fixture is not settled");
+
+  return messages.slice(0, -1);
+});
+
 /** Reconstruct the last seeded model request; the seed digest excludes its final answer. */
 export const transcript = (sql: SqlStorage, target: Target): readonly Message[] => {
   const result: Message[] = [];
@@ -148,24 +203,8 @@ export const transcript = (sql: SqlStorage, target: Target): readonly Message[] 
       "SELECT record_json FROM effect_agent_canonical_records ORDER BY sequence",
     )) {
       const record = Schema.decodeUnknownSync(RecordEnvelope)(JSON.parse(row.record_json));
-      const p = record.payload;
 
-      if (p._tag === "UserInputRecorded") result.push({ role: "user", text: string(p.input) });
-      if (p._tag === "ToolCallSettled") result.push({ role: "tool", text: string(p.result) });
-      if (p._tag !== "ModelResponseRecorded") continue;
-      for (const message of Schema.decodeUnknownSync(Prompt.Prompt)(p.messages).content) {
-        if (message.role !== "assistant") continue;
-
-        const calls = message.content.flatMap((part) =>
-          part.type === "tool-call" ? [args(part.params).n] : [],
-        );
-
-        result.push({
-          role: "assistant",
-          text: contentText(message.content),
-          ...(calls.length ? { calls } : {}),
-        });
-      }
+      appendYielded(result, record);
     }
   }
   if (result.at(-1)?.role !== "assistant" || result.at(-1)?.calls?.length)
@@ -174,12 +213,41 @@ export const transcript = (sql: SqlStorage, target: Target): readonly Message[] 
   return result.slice(0, -1);
 };
 
-export const verifyFixture = Effect.fnUntraced(function* (
-  storage: DurableObjectStorage,
-  fixture: BulkFixture,
-) {
+export const verifyFixture = Effect.fnUntraced(function* (fixture: BulkFixture) {
+  const storage = yield* RestoreStorage;
+
+  if (fixture.target === "yielded") {
+    yield* Effect.try({
+      try: () =>
+        Schema.decodeUnknownSync(
+          Schema.Struct({
+            layout_version: Schema.Literal(CurrentDoStorageVersion),
+            record_format: Schema.Literal(CURRENT_RECORD_FORMAT),
+          }),
+        )(
+          storage.sql
+            .exec(
+              "SELECT layout_version, record_format FROM effect_agent_schema WHERE singleton = 1",
+            )
+            .one(),
+        ),
+      catch: (cause) =>
+        new FixtureError({ message: "Fixture storage format differs from this revision", cause }),
+    });
+  }
+
+  const compact =
+    fixture.target === "yielded" &&
+    !fixture.thread?.tables
+      .find((table) => table.name === "effect_agent_canonical_records")
+      ?.columns.includes("record_json");
+
+  const messages = compact
+    ? yield* compactTranscript(fixture)
+    : transcript(storage.sql, fixture.target);
+
   const digest = yield* Effect.tryPromise({
-    try: () => fingerprint(transcript(storage.sql, fixture.target)),
+    try: () => fingerprint(messages),
     catch: (cause) => new FixtureError({ message: "Read fixture transcript", cause }),
   });
 

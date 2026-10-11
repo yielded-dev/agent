@@ -3,6 +3,7 @@ import { BrowserCrypto } from "@effect/platform-browser";
 import { ThreadObject } from "@yielded/agent-platform-cloudflare";
 import {
   HostResponse,
+  LiveTextFrame,
   SubmitRequest,
 } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import * as Agent from "@yielded/agent/agent";
@@ -112,7 +113,12 @@ export class YieldedDO extends ThreadObject.make(application, {
     this.host.meter.begin(query);
     this.host.meter.marker("submit");
 
-    return super.submitEncoded(encoded);
+    const response = await super.submitEncoded(encoded);
+    const decoded = Schema.decodeUnknownSync(HostResponse)(response);
+
+    if (decoded._tag === "SubmitSucceeded") this.host.meter.admitted(decoded.receipt.submissionId);
+
+    return response;
   }
   override async awaitSettlementEncoded(
     encoded: unknown,
@@ -120,7 +126,44 @@ export class YieldedDO extends ThreadObject.make(application, {
   ): Promise<unknown> {
     this.host.meter.marker("await");
 
-    return super.awaitSettlementEncoded(encoded, ...trace);
+    const response = await super.awaitSettlementEncoded(encoded, ...trace);
+
+    if (Schema.decodeUnknownSync(HostResponse)(response)._tag === "SettlementReached")
+      this.host.meter.settled();
+
+    return response;
+  }
+  override async watchTextEncoded(encoded: unknown, ...trace: [] | [unknown]): Promise<unknown> {
+    const stream = await super.watchTextEncoded(encoded, ...trace);
+
+    if (!(stream instanceof ReadableStream)) return stream;
+    const meter = this.host.meter;
+    const decoder = new TextDecoder();
+    let pending = "";
+
+    return stream.pipeThrough(
+      new TransformStream<Uint8Array, Uint8Array>({
+        transform(bytes, controller) {
+          pending += decoder.decode(bytes, { stream: true });
+          const lines = pending.split("\n");
+
+          pending = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line) continue;
+            const frame = Schema.decodeUnknownSync(Schema.fromJsonString(LiveTextFrame))(line);
+
+            if (
+              frame._tag === "Event" &&
+              frame.event._tag === "Text" &&
+              frame.event.part.type === "text-delta" &&
+              frame.event.part.delta.trim()
+            )
+              meter.forwardText(frame.event.submissionId);
+          }
+          controller.enqueue(bytes);
+        },
+      }),
+    );
   }
   override async alarm(...args: Parameters<ThreadObject.Instance["alarm"]>): Promise<void> {
     this.host.meter.alarm();

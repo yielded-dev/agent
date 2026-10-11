@@ -222,6 +222,7 @@ export const ProviderCall = Schema.Struct({
   fingerprint: Schema.String,
   startMs: Schema.Number,
   sinceEntryMs: Schema.Number,
+  firstTokenMs: Schema.optionalKey(Schema.Number),
   endMs: Schema.optionalKey(Schema.Number),
   status: Schema.optionalKey(Schema.Int),
   receipt: Schema.optionalKey(ProviderReceipt),
@@ -230,6 +231,13 @@ export const ProviderCall = Schema.Struct({
 
 export type ProviderCall = typeof ProviderCall.Type;
 
+/** Timestamps from one Object clock; never subtract them from driver/provider clocks. */
+export const ObjectPhases = Schema.Struct({
+  entryMs: Schema.Number,
+  firstTextForwardedMs: Schema.optionalKey(Schema.Number),
+  settlementMs: Schema.optionalKey(Schema.Number),
+});
+
 export const Metrics = Schema.Struct({
   ok: Schema.Literal(true),
   query: Query,
@@ -237,6 +245,7 @@ export const Metrics = Schema.Struct({
   directory: Schema.optionalKey(Identity),
   directoryUsed: Schema.optionalKey(Schema.Boolean),
   calls: Schema.Array(ProviderCall),
+  phases: Schema.optionalKey(ObjectPhases),
   tables: Counts,
   bytes: Schema.Natural,
   directoryBytes: Schema.optionalKey(Schema.Natural),
@@ -260,8 +269,33 @@ export interface Env {
   VERSION?: { id: string };
 }
 
-export const errorText = (cause: unknown): string =>
-  cause instanceof Error ? cause.message : String(cause);
+export const errorText = (cause: unknown): string => {
+  const messages: string[] = [];
+  const seen = new Set<unknown>();
+  let current = cause;
+
+  for (let depth = 0; depth < 8 && current !== undefined && !seen.has(current); depth++) {
+    seen.add(current);
+
+    const message =
+      typeof current === "object" &&
+      current !== null &&
+      "message" in current &&
+      typeof current.message === "string"
+        ? current.message
+        : typeof current === "string"
+          ? current
+          : "Unknown error";
+
+    if (!messages.includes(message)) messages.push(message);
+    current =
+      typeof current === "object" && current !== null && "cause" in current
+        ? current.cause
+        : undefined;
+  }
+
+  return messages.join(": ");
+};
 
 // Preserve SDK options and tool identifiers when adjusting the streaming wire layout.
 const jsonStruct = <const Fields extends Schema.Struct.Fields>(fields: Fields) =>
@@ -295,7 +329,7 @@ export const decodeChat = Schema.decodeUnknownSync(Chat);
 const argument = Schema.decodeUnknownSync(Schema.Struct({ n: Schema.Int }));
 
 // Match the pinned Effect provider's adjacent text/tool messages on every target.
-// This changes the forwarded request, not just its fingerprint.
+// Applied by the provider Worker before interpreting the request and fingerprinting it.
 export const separateTextAndTools = (chat: typeof Chat.Type): typeof Chat.Type => ({
   ...chat,
   messages: chat.messages.flatMap((message) => {

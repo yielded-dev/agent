@@ -2,8 +2,6 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { CurrentDoStorageVersion } from "@yielded/agent-storage-cloudflare/do-storage-version";
-import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
 import { Effect, FileSystem, Schema } from "effect";
 
 import { naturalFixture } from "./natural-fixture.ts";
@@ -24,6 +22,7 @@ export class FixtureError extends Schema.TaggedError<FixtureError>()("FixtureErr
 
 const Meta = Schema.Struct({
   version: Schema.String,
+  formatKey: Schema.optionalKey(Schema.String),
   fingerprint: Schema.String,
   tables: Counts,
   threadId: Schema.optionalKey(Schema.NonEmptyString),
@@ -75,19 +74,17 @@ const dumpDatabase = (db: DatabaseSync, includeRows = false): SqlDump => {
   });
 };
 
-/** The format key hashes adapter migrations and the canonical record schema. */
-export const fixtureDirectory = Effect.gen(function* () {
+/** The format key hashes adapter migrations and the canonical record schema at the build ref. */
+export const fixtureFormat = Effect.fnUntraced(function* (ref?: string) {
   const fs = yield* FileSystem.FileSystem;
 
   const contents = yield* Effect.forEach(formatFiles, (file) =>
-    fs.readFileString(join(repository, file)),
+    ref
+      ? git(["show", `${ref}:${file}`]).pipe(Effect.map((text) => text + "\n"))
+      : fs.readFileString(join(repository, file)),
   );
 
-  return join(
-    homedir(),
-    ".cache/yielded-durable-bench/fixtures",
-    hash(contents.join("\n")).slice(0, 16),
-  );
+  return hash(contents.join("\n")).slice(0, 16);
 });
 
 /** Read saved SQLite without opening a host or rewriting any history. */
@@ -96,6 +93,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
   readonly targets?: readonly Target[];
   readonly directory?: string;
   readonly requestBytes?: number;
+  readonly ref?: string;
 }) {
   const fs = yield* FileSystem.FileSystem;
   const requestBytes = options.requestBytes ?? RESTORE_BYTES;
@@ -105,7 +103,11 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
     Schema.Struct({ dependencies: Schema.Record(Schema.String, Schema.String) }),
   );
 
-  const baseDirectory = options.directory ?? (yield* fixtureDirectory);
+  const formatKey = yield* fixtureFormat(options.ref);
+
+  const baseDirectory =
+    options.directory ?? join(homedir(), ".cache/yielded-durable-bench/fixtures", formatKey);
+
   const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "durable-bench-restore-" });
   const fixtures: BulkFixture[] = [];
   const chunks = new Map<string, string[]>();
@@ -117,7 +119,8 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
       const directory = natural ? baseDirectory + "-natural-id50-v1" : baseDirectory;
       const source = join(directory, name);
 
-      if (natural && !(yield* fs.exists(source + ".json"))) yield* naturalFixture(target, source);
+      if (natural && !(yield* fs.exists(source + ".json")))
+        yield* naturalFixture(target, source, options.ref, formatKey);
 
       if (!(yield* fs.exists(source + ".json"))) {
         let local = join(scratch, "seed", name);
@@ -135,7 +138,9 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
             );
 
             const current = yield* Effect.forEach(formatFiles, (file) =>
-              fs.readFileString(join(repository, file)),
+              options.ref
+                ? git(["show", `${options.ref}:${file}`])
+                : fs.readFileString(join(repository, file)),
             );
 
             if (contents.every((content, index) => content.trim() === current[index]?.trim())) {
@@ -146,6 +151,12 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
         }
 
         if (!(yield* fs.exists(local + ".json"))) {
+          if (options.ref && formatKey !== (yield* fixtureFormat()))
+            return yield* new FixtureError({
+              message:
+                "A new format requires a natural 1,000-turn fixture; select --sizes 1000 first or supply a matching saved fixture directory.",
+            });
+
           const seeded = yield* execute(["run", "seed", target, String(history)], workspace, {
             DURABLE_BENCH_FIXTURE_DIRECTORY: join(scratch, "seed"),
           });
@@ -166,6 +177,11 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
         yield* fs.copyFile(local + ".json", source + ".json");
       }
       const meta = yield* read(source + ".json", Meta);
+
+      if (meta.formatKey !== undefined && meta.formatKey !== formatKey)
+        return yield* new FixtureError({
+          message: `Saved ${name} belongs to another storage format`,
+        });
 
       if (
         (target === "pi" && meta.version !== dependencies["@earendil-works/pi-durable"]) ||
@@ -199,8 +215,8 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
           try: () => {
             Schema.decodeUnknownSync(
               Schema.Struct({
-                layout_version: Schema.Literal(CurrentDoStorageVersion),
-                record_format: Schema.Literal(CURRENT_RECORD_FORMAT),
+                layout_version: Schema.Natural,
+                record_format: Schema.NonEmptyString,
               }),
             )(
               db
@@ -216,7 +232,13 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
             const { n } = Schema.decodeUnknownSync(Schema.Struct({ n: Schema.Literal(0) }))(
               db
                 .prepare(
-                  "SELECT (SELECT COUNT(*) FROM effect_agent_submissions WHERE state != 'settled') + (SELECT COUNT(*) FROM effect_agent_submission_ownership) AS n",
+                  `SELECT (SELECT COUNT(*) FROM effect_agent_submissions WHERE state != 'settled')${[
+                    "effect_agent_submission_ownership",
+                    "effect_agent_executions",
+                  ]
+                    .filter((table) => table in meta.tables)
+                    .map((table) => ` + (SELECT COUNT(*) FROM ${quote(table)})`)
+                    .join("")} AS n`,
                 )
                 .get(),
             );
@@ -225,7 +247,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
           },
           catch: () =>
             new FixtureError({
-              message: `Snapshot ${name} must be idle and use the current storage format`,
+              message: `Snapshot ${name} must be idle and have a recognized storage header`,
             }),
         });
       }
@@ -341,5 +363,5 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
     }
   }
 
-  return { fixtures, chunks };
+  return { fixtures, chunks, formatKey };
 });

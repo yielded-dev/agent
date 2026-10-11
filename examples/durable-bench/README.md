@@ -29,7 +29,11 @@ includes Object medians, paired differences and ratios with Object-level bootstr
 and setup, measurement and teardown wall times. Screening does not establish a small
 optimization when the interval includes zero.
 
-Quick runs retain their per-Object Workers. Every run clears and restores
+Quick runs retain one per-Object Worker pool per prefix. Changing pool options destroys
+the previous pool before allocating its replacement. Each Worker declares only its target's
+namespaces (one for Yielded or pi, two for Tardie). A pre-deploy account inventory rejects
+runs that would leave fewer than 50 of the account's 500 namespace slots free.
+Every run clears and restores
 its Objects, then measures both revisions on those same Objects; earlier samples are never reused.
 Each pass uploads a fresh version and rejects Worker-isolate reuse across passes. Activating an
 already uploaded version can retain the previous isolate, including in an A/A control, so version
@@ -132,12 +136,12 @@ The mode excludes text observation and A/B redeployment; use the original mode f
 workflows. Deployed absolute times include network hops and cannot be
 compared with Miniflare timings; compare ratios within a matched deployment.
 
-`--profile cpu|memory` accepts repeats or a comma-separated list. It captures the first
+`--profile cpu|memory` selects one profile type per run. It captures the first
 Object of each selected target in every history/TTFT cell on the first build pass (tardie targets
 its Thread Object). Captures start after warmup, alongside the warm turns, for an estimated batch duration
-(5–50 seconds). Cloudflare profiles the running isolate containing that Object, which may
+(1–50 seconds). Cloudflare profiles the running isolate containing that Object, which may
 also contain other Objects. Only already-running isolates can be captured; the bench supplies
-traffic. Short batches may finish before capture does. Memory profiles contain allocations
+traffic. Captures are spaced at least five minutes apart, and the final cold reset waits for capture to finish. A capture that outlives its warm workload is incomplete. Memory profiles contain allocations
 made during the window, not retained memory or a heap snapshot.
 
 For history-build diagnostics, add `--profile-after <turns>` to start a ten-second capture
@@ -203,7 +207,7 @@ its tool call. This preamble and a longer final reply stream in word-sized fragm
 Tool-only responses retain their original pacing; the 0 ms cell emits the same text without
 delays. Every target receives the same preamble and reply, and subsequent requests are
 checked against the extended reference transcript. Before forwarding streaming requests, the
-common bridge splits mixed assistant text/tool messages to match the pinned Effect provider's layout.
+provider Worker splits mixed assistant text/tool messages to match the pinned Effect provider's layout.
 The flag keeps the original completion workload available; compare tables with the same workload label.
 All Objects request `locationHint: "wnam"`; the driver and target Workers request
 `aws:us-west-1` placement. Placement is a hint, not a guarantee.
@@ -252,25 +256,35 @@ For Yielded and pi, pre-subscription opens the new Object before a cold turn's s
 after restart with observation prepared, and are not comparable to earlier unobserved cold
 completion timings. Tardie's cold timer still includes opening its native reference.
 
+Request decoding, transcript normalization and fingerprinting run in the provider Worker,
+not the measured Object. The Object records response chunks and timestamps; it validates
+SSE and receipts only when post-turn metrics are collected. Every provider fingerprint
+must still match the independent expected transcript.
+
+Object-clock markers record provider first token received, first text forwarded and
+settlement relative to entry; receipt latency remains the driver-clock `admissionMs`.
+Raw provider calls and these markers are included in result JSON and the quick table.
+
 The gap is measured between outgoing model requests and consumed responses on one Object
 clock. Last-response-to-client crosses Object/driver clocks and is approximate; it is
 not an exact settlement-notification decomposition. CPU is opt-in. Invocation markers join
 Cloudflare invocation events; missing/sampled rows stay missing, never zero. All observed
 outcomes, including `exceededCpu`, `exceededMemory` and intentional cold-abort exceptions,
-are retained. CPU tables describe observed invocations, not billing totals.
+are retained. Unmarked invocations retain their owning target/Object and raw invocation type;
+they have no sample assignment. CPU tables describe observed invocations, not billing totals.
 
 ## Fixtures
 
 The default fixture directory is `~/.cache/yielded-durable-bench/fixtures/<format-key>/`;
 `--fixture-directory <path>` selects an existing directory. The format key is the SHA-256
-prefix of the Cloudflare adapter migrations and canonical record schema files.
+prefix of the Cloudflare adapter migrations and canonical record schema files at each build ref.
 Historical `main-<revision>` caches are adopted only when those files match exactly.
 For 1,000-turn Yielded and pi cells, both presets use `<format-key>-natural-id50-v1/`:
 the deployed history protocol generates this cache locally with 50-character Thread IDs,
 the networked mock provider and the same historical tool cycle. Historical turns have no
 text preamble or delay, matching deployed history construction; `--text-streaming` controls
 measured turns. Larger capacity fixtures retain their original workload and identities.
-Missing fixtures are generated locally and cloned into the cache; saved histories are
+Missing natural fixtures are generated with their build revision and copied into the cache (clone-copy on macOS); saved histories are
 never deleted or overwritten. Miniflare is used for deterministic fixture generation,
 never performance evidence.
 
@@ -297,11 +311,14 @@ vp run deployed -- --rigorous --baseline origin/main --candidate HEAD
 
 Rigorous mode enables cold turns, CPU and six warm repeats per pass. It randomly chooses
 ABBA or BAAB, redeploying the **same Worker and namespaces** with the two Yielded builds.
-Each pass restarts the same stored Objects; history grows identically for all targets.
+Each pass restarts the same physical Objects. Different storage-format keys automatically
+restore each revision's own fixture before every pass. `--restore-each-pass` also restores
+matching formats; otherwise their histories grow across passes. All restores preserve
+original SQLite rows and table counts, then run an excluded preparation turn.
 Repeated baselines reveal deployment/time/history drift. The output includes paired differences and confidence intervals. Do not claim gains smaller than
 the control or within-Object repeat spread; inspect all Objects, not just the median.
 
 Refs supply `packages/` sources; both builds use this harness and the checkout's installed
-catalog dependencies. They must support the current fixture and each other's persisted
-state. Import, recovery, transcript, build or residency failures invalidate the affected Object;
-the command does not reset history or bypass durability checks to force a comparison.
+catalog dependencies. Each revision must support its selected fixture. Import, recovery,
+transcript, build or residency failures invalidate the affected Object; the command never
+bypasses durability checks to force a comparison.

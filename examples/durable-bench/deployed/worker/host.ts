@@ -14,8 +14,8 @@ import {
   type Target,
   type SqlDump,
 } from "./protocol.ts";
-import { restore, RestoreStorage } from "./restore.ts";
-import { importRows } from "./storage.ts";
+import { restore } from "./restore.ts";
+import { importRows, RestoreStorage } from "./storage.ts";
 
 export const COLD_ABORT = "durable-bench explicit cold";
 
@@ -66,7 +66,10 @@ export class Host {
         this.meter.assertBuild(query);
 
         const restored = await Effect.runPromise(
-          restore(request, query).pipe(Effect.provideService(RestoreStorage, this.ctx.storage)),
+          restore(request, query).pipe(
+            Effect.provideService(RestoreStorage, this.ctx.storage),
+            Effect.scoped,
+          ),
         );
 
         if (url.pathname === "/restore/finalize") await handlers.restored?.();
@@ -141,6 +144,7 @@ export class Host {
 
           this.meter.begin(seedQuery);
           await handlers.run(input, seedQuery);
+          this.meter.validateCalls();
           if (
             this.meter.calls.length !== (CYCLE[(from + offset) % CYCLE.length] ?? 0) + 1 ||
             this.meter.calls.some(
@@ -181,6 +185,7 @@ export class Host {
         this.meter.begin(query);
         this.meter.marker("run");
         await handlers.run(turn(query.sample, MEASURED_TOOLS), query);
+        this.meter.settled();
 
         return Response.json({ ok: true, outcome: "completed", identity: this.meter.entry });
       }
@@ -193,6 +198,8 @@ export class Host {
           await this.ctx.storage.sync();
         }
 
+        this.meter.validateCalls();
+
         return Response.json({
           ok: true,
           query: this.meter.query,
@@ -201,6 +208,7 @@ export class Host {
             ? {}
             : { directoryUsed: handlers.directoryUsed }),
           calls: this.meter.calls,
+          phases: this.meter.phases(),
           tables: tables(this.ctx.storage.sql),
           bytes: this.ctx.storage.sql.databaseSize,
         });

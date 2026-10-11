@@ -1,17 +1,35 @@
 import { Schema } from "effect";
 
-import { fingerprint } from "../../src/plan.ts";
 import {
-  chatTranscript,
-  decodeChat,
   errorText,
   ProviderReceipt,
-  separateTextAndTools,
   type Env,
   type Identity,
   type ProviderCall,
   type Query,
 } from "./protocol.ts";
+
+const Token = Schema.Struct({
+  choices: Schema.Array(
+    Schema.Struct({
+      delta: Schema.Struct({
+        content: Schema.optionalKey(Schema.NullOr(Schema.String)),
+        tool_calls: Schema.optionalKey(
+          Schema.Array(
+            Schema.Struct({
+              function: Schema.optionalKey(
+                Schema.Struct({
+                  name: Schema.optionalKey(Schema.String),
+                  arguments: Schema.optionalKey(Schema.String),
+                }),
+              ),
+            }),
+          ),
+        ),
+      }),
+    }),
+  ),
+});
 
 const meters = new WeakMap<DurableObjectStorage, Observation>();
 // Lazily draw randomness in a request context, then retain one token per Worker isolate.
@@ -42,6 +60,33 @@ export class Observation {
   private entries = 0;
   private alarms = 0;
   private entryMs = 0;
+  private admittedInput?: string;
+  private readonly forwarded = new Map<string, number>();
+  private settlementMs?: number;
+  private validations: Array<() => void> = [];
+  /** Called after the driver timer stops, or after an untimed history turn settles. */
+  validateCalls() {
+    for (const validate of this.validations.splice(0)) validate();
+  }
+  admitted(input: string) {
+    this.admittedInput = input;
+  }
+  forwardText(input: string) {
+    if (!this.forwarded.has(input)) this.forwarded.set(input, Date.now());
+  }
+  settled() {
+    this.settlementMs ??= Date.now();
+  }
+  phases() {
+    const firstTextForwardedMs =
+      this.admittedInput === undefined ? undefined : this.forwarded.get(this.admittedInput);
+
+    return {
+      entryMs: this.entryMs,
+      ...(firstTextForwardedMs === undefined ? {} : { firstTextForwardedMs }),
+      ...(this.settlementMs === undefined ? {} : { settlementMs: this.settlementMs }),
+    };
+  }
   query?: Query;
   entry?: Identity;
   calls: Array<{ -readonly [K in keyof ProviderCall]: ProviderCall[K] }> = [];
@@ -70,6 +115,10 @@ export class Observation {
     this.entries++;
     this.query = query;
     this.calls = [];
+    this.validations = [];
+    this.admittedInput = query.sample;
+    this.forwarded.clear();
+    this.settlementMs = undefined;
   }
   alarm() {
     this.alarms++;
@@ -98,16 +147,11 @@ export class Observation {
       url.pathname !== `${base.pathname.replace(/\/$/, "")}/chat/completions`
     )
       throw new Error("Unexpected provider destination");
-    const decoded = decodeChat(await original.clone().json());
-    const chat = query.textStreaming ? separateTextAndTools(decoded) : decoded;
-    const transcript = chatTranscript(chat);
-
-    const digest = await fingerprint(transcript);
     const startMs = Date.now();
 
     const call: (typeof this.calls)[number] = {
       call: this.calls.length,
-      fingerprint: digest,
+      fingerprint: "",
       startMs,
       // The Object and driver clocks cannot be subtracted to obtain submit latency.
       sinceEntryMs: startMs - this.entryMs,
@@ -120,31 +164,79 @@ export class Observation {
     const headers = new Headers(original.headers);
 
     headers.set("authorization", `Bearer ${this.env.BENCH_TOKEN}`);
-    if (query.textStreaming) headers.delete("content-length");
     try {
-      const response = await globalThis.fetch(
-        new Request(
-          url,
-          new Request(original, {
-            headers,
-            ...(query.textStreaming ? { body: JSON.stringify(chat) } : {}),
-          }),
-        ),
-      );
+      const response = await globalThis.fetch(new Request(url, new Request(original, { headers })));
 
       call.status = response.status;
       if (!response.body) throw new Error("Provider response has no body");
       const requestId = response.headers.get("x-rebench-request");
       const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let pending = "";
-      let done = false;
+      const chunks: Array<{ bytes: Uint8Array; receivedMs: number }> = [];
+      let responseBytes = 0;
       let cancelled = false;
+      let terminalError: unknown;
 
       const finish = (cause?: unknown) => {
         call.endMs ??= Date.now();
-        if (cause !== undefined && !done) call.error = errorText(cause);
+        terminalError ??= cause;
       };
+
+      // Keep only small response chunks on the measured path. Decode and verify after settlement.
+      this.validations.push(() => {
+        const decoder = new TextDecoder();
+        let pending = "";
+        let done = false;
+
+        for (const chunk of chunks) {
+          pending += decoder.decode(chunk.bytes, { stream: true });
+          const lines = pending.split("\n");
+
+          pending = lines.pop() ?? "";
+          for (const raw of lines) {
+            const line = raw.trimEnd();
+
+            if (
+              call.firstTokenMs === undefined &&
+              line.startsWith("data: ") &&
+              line !== "data: [DONE]"
+            ) {
+              const token = Schema.decodeUnknownSync(Token)(JSON.parse(line.slice(6)));
+
+              if (
+                token.choices.some(
+                  ({ delta }) =>
+                    delta.content ||
+                    delta.tool_calls?.some(
+                      (tool) => tool.function?.name || tool.function?.arguments,
+                    ),
+                )
+              )
+                call.firstTokenMs = chunk.receivedMs;
+            }
+            if (line === "data: [DONE]") done = true;
+            if (line.startsWith(": rebench-receipt ")) {
+              if (call.receipt) throw new Error("Duplicate provider receipt");
+              call.receipt = Schema.decodeUnknownSync(ProviderReceipt)(
+                JSON.parse(line.slice(": rebench-receipt ".length)),
+              );
+              if (
+                call.receipt.call !== call.call ||
+                call.receipt.requestId !== requestId ||
+                call.receipt.sample !== query.sample ||
+                call.receipt.object !== query.object ||
+                call.receipt.target !== query.target ||
+                call.receipt.expectedBuild !== query.expectedBuild ||
+                call.receipt.objectBuild !== objectBuild
+              )
+                throw new Error("Provider receipt mismatch");
+              call.fingerprint = call.receipt.fingerprint;
+            }
+          }
+        }
+        chunks.length = 0;
+        if (!done) call.error = errorText(terminalError ?? "EOF before [DONE]");
+        if (!call.receipt) call.error ??= "Missing provider receipt";
+      });
 
       return new Response(
         new ReadableStream<Uint8Array>({
@@ -154,44 +246,22 @@ export class Observation {
 
               if (cancelled) return;
               if (item.done) {
-                finish(done ? undefined : "EOF before [DONE]");
+                finish();
                 reader.releaseLock();
                 controller.close();
 
                 return;
               }
-              pending += decoder.decode(item.value, { stream: true });
-              const lines = pending.split("\n");
-
-              pending = lines.pop() ?? "";
-              for (const raw of lines) {
-                const line = raw.trimEnd();
-
-                if (line === "data: [DONE]") done = true;
-                if (line.startsWith(": rebench-receipt ")) {
-                  if (call.receipt) throw new Error("Duplicate provider receipt");
-                  call.receipt = Schema.decodeUnknownSync(ProviderReceipt)(
-                    JSON.parse(line.slice(": rebench-receipt ".length)),
-                  );
-                  if (
-                    call.receipt.call !== call.call ||
-                    call.receipt.requestId !== requestId ||
-                    call.receipt.fingerprint !== call.fingerprint ||
-                    call.receipt.sample !== query.sample ||
-                    call.receipt.object !== query.object ||
-                    call.receipt.expectedBuild !== query.expectedBuild ||
-                    call.receipt.objectBuild !== objectBuild
-                  )
-                    throw new Error("Provider receipt mismatch");
-                }
-              }
+              responseBytes += item.value.byteLength;
+              if (responseBytes > 4 * 1024 * 1024)
+                throw new Error("Benchmark provider response exceeded 4 MiB");
+              chunks.push({ bytes: item.value, receivedMs: Date.now() });
               controller.enqueue(item.value);
             } catch (cause) {
               if (cancelled) return;
               finish(cause);
               reader.releaseLock();
-              if (done) controller.close();
-              else controller.error(cause);
+              controller.error(cause);
             }
           },
           async cancel(reason) {

@@ -1,4 +1,4 @@
-import { Clock, Deferred, Effect, Schema, Stream } from "effect";
+import { Cause, Clock, Deferred, Effect, Schema, Stream } from "effect";
 import { Ndjson } from "effect/encoding";
 
 import {
@@ -24,6 +24,12 @@ import {
 class ObservationError extends Schema.TaggedError<ObservationError>()("ObservationError", {
   message: Schema.String,
 }) {}
+
+const attempt = <A>(body: () => Promise<A>) =>
+  Effect.tryPromise({
+    try: body,
+    catch: (cause) => new ObservationError({ message: errorText(cause) }),
+  });
 
 interface Env {
   BENCH_TOKEN: string;
@@ -195,7 +201,7 @@ export default {
             const primeAt = yield* Clock.currentTimeMillis;
 
             const primed = cold
-              ? yield* Effect.tryPromise(async () =>
+              ? yield* attempt(async () =>
                   Schema.decodeUnknownSync(PrimeResult)(await (await invoke("/prime")).json()),
                 )
               : undefined;
@@ -222,7 +228,7 @@ export default {
 
             if (observeText && query.target !== "tardie") {
               const opening = yield* Clock.currentTimeMillis;
-              const response = yield* Effect.tryPromise(() => invoke("/text"));
+              const response = yield* attempt(() => invoke("/text"));
               const body = response.body;
 
               if (!body)
@@ -259,10 +265,10 @@ export default {
                     if (frame.input === input) yield* Deferred.succeed(first, seen);
                   }),
                 ),
-                Effect.catchCause(() =>
+                Effect.catchCause((cause) =>
                   Effect.gen(function* () {
                     const error = new ObservationError({
-                      message: "Public text observation failed; no first-text result is available.",
+                      message: `Public text observation failed: ${Cause.pretty(cause)}`,
                     });
 
                     yield* Deferred.fail(ready, error);
@@ -280,7 +286,7 @@ export default {
             let receipt: SubmitResult["receipt"] | undefined;
 
             if (query.target === "yielded") {
-              const admission = yield* Effect.tryPromise(async () =>
+              const admission = yield* attempt(async () =>
                 Schema.decodeUnknownSync(SubmitResult)(await (await invoke("/submit")).json()),
               );
 
@@ -291,7 +297,7 @@ export default {
 
               if (seen) yield* Deferred.succeed(first, seen);
 
-              const settled = yield* Effect.tryPromise(async () =>
+              const settled = yield* attempt(async () =>
                 Schema.decodeUnknownSync(AwaitResult)(
                   await (await invoke("/await", admission.receipt)).json(),
                 ),
@@ -302,7 +308,7 @@ export default {
                   message: "Yielded did not complete the turn.",
                 });
             } else {
-              yield* Effect.tryPromise(async () =>
+              yield* attempt(async () =>
                 Schema.decodeUnknownSync(RunResult)(await (await invoke("/run")).json()),
               );
             }
@@ -312,7 +318,7 @@ export default {
 
             // Overflow can replace an instant reply with an empty draft snapshot after settlement.
             if (observeText && receipt !== undefined && !(yield* Deferred.isDone(first))) {
-              const result = yield* Effect.tryPromise(async () =>
+              const result = yield* attempt(async () =>
                 Schema.decodeUnknownSync(SettledTextResult)(
                   await (await invoke("/result", receipt)).json(),
                 ),
@@ -350,10 +356,7 @@ export default {
       return Response.json(
         {
           ok: false,
-          error:
-            cause instanceof Error
-              ? cause.message
-              : "Turn failed or response was lost; do not resubmit this input.",
+          error: errorText(cause),
         },
         { status: 502 },
       );

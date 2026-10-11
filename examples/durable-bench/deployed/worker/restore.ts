@@ -1,23 +1,18 @@
 /** Restore idle fixture bytes before acquiring the production runtime. */
-import { Context, Effect, Schema } from "effect";
+import { Effect, Schema } from "effect";
 
 import { tables } from "../../src/serve.ts";
-import { BulkFixture, RESTORE_BYTES, RestoreChunk, type Query } from "./protocol.ts";
-import { FixtureError, importRows, verifyFixture } from "./storage.ts";
+import { BulkFixture, errorText, RESTORE_BYTES, RestoreChunk, type Query } from "./protocol.ts";
+import { FixtureError, importRows, RestoreStorage, verifyFixture } from "./storage.ts";
 
 const key = "durable-bench/restore";
 const Session = Schema.Struct({ fixture: BulkFixture, next: Schema.Natural });
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
-/** Supplied only at the Durable Object fetch boundary. */
-export class RestoreStorage extends Context.Service<RestoreStorage, DurableObjectStorage>()(
-  "durable-bench/RestoreStorage",
-) {}
-
 export const restore = Effect.fnUntraced(function* (request: Request, query: Query) {
   const storage = yield* RestoreStorage;
 
-  return yield* Effect.tryPromise({
+  const restored = yield* Effect.tryPromise({
     try: async () => {
       const path = new URL(request.url).pathname;
 
@@ -128,19 +123,30 @@ export const restore = Effect.fnUntraced(function* (request: Request, query: Que
         storage.transactionSync(() => storage.sql.exec(sql));
         await storage.sync();
       }
-      const verified = await Effect.runPromise(verifyFixture(storage, fixture));
 
+      return { finalize: fixture };
+    },
+    catch: (cause) =>
+      new FixtureError({ message: `Snapshot restore failed: ${errorText(cause)}`, cause }),
+  });
+
+  if (restored.finalize === undefined) return restored;
+  const fixture = restored.finalize;
+  const verified = yield* verifyFixture(fixture);
+
+  yield* Effect.tryPromise({
+    try: async () => {
       await storage.delete(key);
       await storage.sync();
-
-      return {
-        ok: true,
-        target: fixture.target,
-        history: fixture.history,
-        mode: fixture.mode,
-        ...verified,
-      };
     },
-    catch: (cause) => new FixtureError({ message: "Snapshot restore failed", cause }),
+    catch: (cause) => new FixtureError({ message: "Finish snapshot restore", cause }),
   });
+
+  return {
+    ok: true,
+    target: fixture.target,
+    history: fixture.history,
+    mode: fixture.mode,
+    ...verified,
+  };
 });

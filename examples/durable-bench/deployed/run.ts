@@ -28,7 +28,7 @@ import { build, ensureVendor } from "./build.ts";
 import { Cloudflare, request, requestEvents } from "./cloudflare.ts";
 import { cpu } from "./cpu.ts";
 import { deployments } from "./deploy.ts";
-import { prepareFixtures } from "./fixtures.ts";
+import { fixtureFormat, prepareFixtures } from "./fixtures.ts";
 import {
   BuildEvent,
   HistoryCheckpoint,
@@ -194,6 +194,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
   let targetStarted = false;
   let targetWorkers: readonly string[] = [runName];
+  const targetOwners = new Map<string, Pick<Query, "target" | "object">>();
   let telemetryFrom = started;
 
   yield* Console.error(
@@ -236,9 +237,13 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         yield* Effect.sleep("15 seconds");
         const upper = yield* Clock.currentTimeMillis;
 
-        yield* Effect.forEach(targetWorkers, (worker) => cpu(worker, telemetryFrom, upper), {
-          concurrency: 3,
-        }).pipe(
+        yield* Effect.forEach(
+          targetWorkers,
+          (worker) => cpu(worker, telemetryFrom, upper, targetOwners.get(worker)),
+          {
+            concurrency: 3,
+          },
+        ).pipe(
           Effect.matchCauseEffect({
             onFailure: (cause) =>
               Effect.sync(() => {
@@ -324,43 +329,6 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       versions[metadata.name] = metadata.version;
     }
 
-    yield* phase("local fixture");
-
-    const prepared = options.buildHistory
-      ? { fixtures: [], chunks: new Map<string, string[]>() }
-      : yield* prepareFixtures({
-          targets: options.targets,
-          sizes: options.sizes,
-          ...(options.restoreBytes === undefined ? {} : { requestBytes: options.restoreBytes }),
-          ...(options.fixtureDirectory === undefined
-            ? {}
-            : { directory: options.fixtureDirectory }),
-        });
-
-    const { fixtures, chunks } = prepared;
-
-    yield* update((value) => ({
-      ...value,
-      versions: resumed ? value.versions : versions,
-      fixtures: fixtures.map(({ target, history, fingerprint, tables, mode }) => ({
-        target,
-        history,
-        fingerprint,
-        tables,
-        mode,
-      })),
-    }));
-    yield* phase("infrastructure");
-    if (!resumed) {
-      const reused = yield* deploy.infrastructure;
-      const infrastructureBuild = yield* deploy.infrastructureBuild();
-
-      yield* update((value) => ({
-        ...value,
-        infrastructureReused: reused,
-        infrastructureBuild,
-      }));
-    }
     type Label = Sample["build"];
     const labels: readonly Label[] = options.baseline ? ["baseline", "candidate"] : ["working"];
     const builds = new Map<Label, Effect.Success<ReturnType<typeof build>>>();
@@ -401,9 +369,72 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       }));
     }
 
-    const restoreBuild = options.buildHistory
-      ? undefined
-      : yield* build(join(privateDirectory, runName, "restore"), "restore");
+    yield* phase("local fixture");
+    const preparedByBuild = new Map<Label, Effect.Success<ReturnType<typeof prepareFixtures>>>();
+    const preparedByFormat = new Map<string, Effect.Success<ReturnType<typeof prepareFixtures>>>();
+    const restoreBuilds = new Map<Label, Effect.Success<ReturnType<typeof build>>>();
+
+    if (!options.buildHistory) {
+      for (const label of labels) {
+        const ref = builds.get(label)?.revision;
+        const formatKey = yield* fixtureFormat(ref);
+        let prepared = preparedByFormat.get(formatKey);
+
+        if (!prepared) {
+          prepared = yield* prepareFixtures({
+            targets: options.targets,
+            sizes: options.sizes,
+            ref,
+            ...(options.restoreBytes === undefined ? {} : { requestBytes: options.restoreBytes }),
+            ...(options.fixtureDirectory === undefined
+              ? {}
+              : { directory: options.fixtureDirectory }),
+          });
+          preparedByFormat.set(formatKey, prepared);
+        }
+        preparedByBuild.set(label, prepared);
+        restoreBuilds.set(
+          label,
+          yield* build(join(privateDirectory, runName, `${label}-restore`), "restore", ref),
+        );
+      }
+    }
+    const firstFixtures = preparedByBuild.values().next().value?.fixtures ?? [];
+
+    // Every revision must name the same physical Object; no Thread-ID rewriting is permitted.
+    for (const prepared of preparedByBuild.values())
+      for (const fixture of prepared.fixtures)
+        if (
+          firstFixtures.find(
+            (item) => item.target === fixture.target && item.history === fixture.history,
+          )?.threadId !== fixture.threadId
+        )
+          return yield* new BenchError({
+            message: "Paired fixtures must retain the same Thread identity",
+          });
+
+    yield* update((value) => ({
+      ...value,
+      versions: resumed ? value.versions : versions,
+      fixtures: [...preparedByBuild].flatMap(([label, prepared]) =>
+        prepared.fixtures.map(({ target, history, fingerprint, tables, mode }) => ({
+          label,
+          formatKey: prepared.formatKey,
+          target,
+          history,
+          fingerprint,
+          tables,
+          mode,
+        })),
+      ),
+    }));
+    yield* phase("infrastructure");
+    if (!resumed) {
+      const reused = yield* deploy.infrastructure;
+      const infrastructureBuild = yield* deploy.infrastructureBuild();
+
+      yield* update((value) => ({ ...value, infrastructureReused: reused, infrastructureBuild }));
+    }
 
     yield* phase("reference transcript");
 
@@ -424,7 +455,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     const seedReferences = new Map<number, Map<number, string>>();
 
     for (const size of options.sizes) {
-      const messages: Message[] = [];
+      let messages: Message[] = [];
 
       const seeds = new Map<number, string>();
 
@@ -442,7 +473,14 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       seedReferences.set(size, seeds);
       const expected = new Map<string, string[]>();
 
-      for (let epoch = 0; epoch < epochs.length; epoch++)
+      const seededMessages = [...messages];
+
+      for (let epoch = 0; epoch < epochs.length; epoch++) {
+        if (
+          !options.buildHistory &&
+          (preparedByFormat.size > 1 || options.restoreEachPass === true)
+        )
+          messages = [...seededMessages];
         for (let index = 0; index < turnsPerEpoch; index++) {
           const sample = sampleName(epoch, index);
 
@@ -451,6 +489,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             append(messages, turn(sample, MEASURED_TOOLS), options.textStreaming),
           );
         }
+      }
       references.set(size, expected);
     }
 
@@ -464,7 +503,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
               ? {}
               : {
                   storageObject:
-                    fixtures.find(
+                    firstFixtures.find(
                       (fixture) => fixture.target === target && fixture.history === size,
                     )?.threadId ?? "main",
                 }),
@@ -486,6 +525,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
     const workerName = (cohort: Pick<Query, "target" | "object">) =>
       `${persistent ? cohort.object.replace(runName, targetStack) : cohort.object}-${cohort.target}`;
+
+    for (const cohort of cohorts)
+      targetOwners.set(workerName(cohort), { target: cohort.target, object: cohort.object });
 
     if (resumed) {
       for (const cohort of cohorts) {
@@ -517,10 +559,20 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     for (const [epoch, label] of epochs.entries()) {
       const compiled = builds.get(label);
 
+      const { fixtures = [], chunks = new Map<string, string[]>() } =
+        preparedByBuild.get(label) ?? {};
+
+      const restoreBuild = restoreBuilds.get(label);
+
+      // Different formats cannot share persisted state; matching formats can opt into identical pass inputs.
+      const restorePass =
+        !options.buildHistory &&
+        (epoch === 0 || preparedByFormat.size > 1 || options.restoreEachPass === true);
+
       if (!compiled) return yield* new BenchError({ message: "Missing target build." });
       telemetryFrom = Math.min(telemetryFrom, yield* Clock.currentTimeMillis);
       targetStarted = true;
-      const initialBuild = epoch === 0 && restoreBuild ? restoreBuild : compiled;
+      const initialBuild = restorePass && restoreBuild ? restoreBuild : compiled;
       let expectedBuild = `${initialBuild.sha256}-${runName}-e${epoch}`;
 
       yield* phase("deploy");
@@ -613,7 +665,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
       yield* phase("deployed seed");
       // Seeding and its count scans must not contend with timed turns, including the first A/B pass.
-      if (epoch === 0) {
+      if (epoch === 0 || restorePass) {
         yield* Console.error(`Seeding and verifying ${cohorts.length} Objects…`);
         yield* Effect.forEach(
           shuffle(
@@ -881,7 +933,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
               const restoreStarted = yield* Clock.currentTimeMillis;
 
-              if (persistent) {
+              if (persistent || epoch > 0) {
                 yield* resetForBuild(cohort);
                 yield* request(url("/restore/clear", cohort), deploy.token, RestoreAck, {});
               }
@@ -924,8 +976,10 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                     object: cohort.object,
                     target: cohort.target,
                     history: cohort.history,
+                    epoch,
+                    build: label,
                     requests:
-                      (persistent ? 2 : 1) +
+                      (persistent || epoch > 0 ? 2 : 1) +
                       (chunks.get(`${cohort.target}-${cohort.history}`)?.length ?? 0),
                     ms: restoreMs,
                   },
@@ -962,7 +1016,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         );
       }
 
-      if (epoch === 0 && !options.buildHistory) {
+      if (restorePass) {
         yield* phase("verify");
         yield* Effect.forEach(
           cohorts,
@@ -999,7 +1053,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       }
 
       yield* phase("measurement");
-      if (epoch === 0 && restoreBuild) {
+      if (restorePass && restoreBuild) {
         yield* phase("deploy");
         expectedBuild = `${compiled.sha256}-${runName}-e${epoch}`;
         endpoints = yield* deploy.targets(
@@ -1078,6 +1132,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
               : undefined;
 
             const warmed = yield* Deferred.make<number>();
+            let warmWorkEnded = false;
 
             const profiling = capture
               ? yield* Deferred.await(warmed).pipe(
@@ -1089,7 +1144,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                           type,
                           Math.min(
                             50_000,
-                            Math.max(5000, Math.ceil(warmupMs * options.repeats * 1.25)),
+                            Math.max(1000, Math.floor(warmupMs * options.repeats * 0.5)),
                           ),
                         ).pipe(
                           Effect.matchCauseEffect({
@@ -1104,7 +1159,15 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                             onSuccess: (profile) =>
                               update((value) => ({
                                 ...value,
-                                profiles: [...value.profiles, profile],
+                                profiles: warmWorkEnded
+                                  ? value.profiles
+                                  : [...value.profiles, profile],
+                                failures: warmWorkEnded
+                                  ? [
+                                      ...value.failures,
+                                      "Profile capture outlived its warm workload; capture is incomplete.",
+                                    ]
+                                  : value.failures,
                               })),
                           }),
                         ),
@@ -1125,6 +1188,11 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                 index === 0 ||
                 (!options.buildHistory && (index === 1 || index === turnsPerEpoch - 1));
 
+              if (profiling && index === turnsPerEpoch - 1) {
+                warmWorkEnded = true;
+                // Never abort the profiled incarnation while the API capture is still open.
+                yield* Fiber.join(profiling);
+              }
               if (index > 0 && firstAfterReset) reset = yield* resetForBuild(cohort);
               const query = { ...cohort, sample: sampleName(epoch, index), expectedBuild };
 
@@ -1327,6 +1395,27 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                           ...(metrics.directoryUsed === undefined
                             ? {}
                             : { directoryUsed: metrics.directoryUsed }),
+                          providerCalls: metrics.calls,
+                          ...(metrics.phases === undefined ? {} : { objectPhases: metrics.phases }),
+                          ...(metrics.calls[0]?.firstTokenMs === undefined
+                            ? {}
+                            : {
+                                providerFirstTokenMs:
+                                  metrics.calls[0].sinceEntryMs +
+                                  metrics.calls[0].firstTokenMs -
+                                  metrics.calls[0].startMs,
+                              }),
+                          ...(metrics.phases?.firstTextForwardedMs === undefined
+                            ? {}
+                            : {
+                                firstTextForwardedMs:
+                                  metrics.phases.firstTextForwardedMs - metrics.phases.entryMs,
+                              }),
+                          ...(metrics.phases?.settlementMs === undefined
+                            ? {}
+                            : {
+                                settlementMs: metrics.phases.settlementMs - metrics.phases.entryMs,
+                              }),
                           fingerprints: metrics.calls.map((call) => call.fingerprint),
                         }
                       : row,
