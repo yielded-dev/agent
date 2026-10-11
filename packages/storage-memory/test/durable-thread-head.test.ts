@@ -508,7 +508,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
             FencedAppendRequest.make({
               threadId: current.threadId,
               expectedTailSequence: tail.tailSequence,
-              expectedTailDigest: tail.tailDigest,
+
               producerEpoch: tail.producerEpoch,
               batch: CanonicalBatch.make({
                 batchId: Schema.decodeSync(CanonicalBatch.fields.batchId)("retained-history"),

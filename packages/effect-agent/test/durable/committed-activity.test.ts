@@ -8,7 +8,6 @@ import {
   ActivityProcessorStore,
 } from "@yielded/agent/activity-store";
 import { ActivityPassLimits, processCommittedActivity } from "@yielded/agent/committed-activity";
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import {
   BatchId,
@@ -144,7 +143,7 @@ const probe = (initial: ReadonlyArray<CanonicalRecordEnvelope> = [record(1)]) =>
         ThreadTail.make({
           threadId,
           tailSequence: sequence(state.records.length),
-          tailDigest: EMPTY_TAIL_DIGEST,
+
           producerEpoch: Schema.decodeSync(ProducerEpoch)(0),
         }),
       ),
@@ -257,61 +256,48 @@ describe("finite committed activity processing", () => {
     },
   );
 
-  it.effect(
-    "rejects gaps, truncated tails, and changed content before applying pinned output",
-    () =>
-      Effect.gen(function* () {
-        const gap = probe([record(2)]);
-        let applied = 0;
+  it.effect("rejects gaps and truncated tails before applying pinned output", () =>
+    Effect.gen(function* () {
+      const gap = probe([record(2)]);
+      let applied = 0;
 
-        const options = {
-          key,
-          owner: "worker",
-          limits,
-          extract: () => Effect.succeed(null),
-          apply: () =>
-            Effect.sync(() => {
-              applied += 1;
-            }),
-        };
+      const options = {
+        key,
+        owner: "worker",
+        limits,
+        extract: () => Effect.succeed(null),
+        apply: () =>
+          Effect.sync(() => {
+            applied += 1;
+          }),
+      };
 
-        const gapError = yield* processCommittedActivity(options).pipe(
-          Effect.provide(gap.layer),
-          Effect.flip,
-        );
+      const gapError = yield* processCommittedActivity(options).pipe(
+        Effect.provide(gap.layer),
+        Effect.flip,
+      );
 
-        expect(gapError).toMatchObject({
-          _tag: "ActivityProcessingError",
-          reason: "noncontiguous",
-        });
-        const changed = probe();
+      expect(gapError).toMatchObject({
+        _tag: "ActivityProcessingError",
+        reason: "noncontiguous",
+      });
+      const changed = probe();
 
-        changed.state.prepareLostAck = true;
-        yield* processCommittedActivity(options).pipe(Effect.provide(changed.layer), Effect.exit);
-        const pending = changed.state.pending;
+      changed.state.prepareLostAck = true;
+      yield* processCommittedActivity(options).pipe(Effect.provide(changed.layer), Effect.exit);
+      const pending = changed.state.pending;
 
-        changed.state.records = [];
-        expect(
-          yield* processCommittedActivity(options).pipe(Effect.provide(changed.layer), Effect.flip),
-        ).toMatchObject({ _tag: "ActivityProcessingError", reason: "noncontiguous" });
-        expect(changed.state.pending).toEqual(pending);
-        expect(changed.state.through).toBe(0);
-        expect(changed.state.released).toBe(2);
-        expect(changed.state.pages).toEqual([1]);
-        changed.state.records = [record(1, "mutated canonical source")];
-
-        const changedError = yield* processCommittedActivity(options).pipe(
-          Effect.provide(changed.layer),
-          Effect.flip,
-        );
-
-        expect(changedError).toMatchObject({
-          _tag: "ActivityProcessingError",
-          reason: "noncontiguous",
-        });
-        expect(applied).toBe(0);
-        expect(changed.state.through).toBe(0);
-      }),
+      changed.state.records = [];
+      expect(
+        yield* processCommittedActivity(options).pipe(Effect.provide(changed.layer), Effect.flip),
+      ).toMatchObject({ _tag: "ActivityProcessingError", reason: "noncontiguous" });
+      expect(changed.state.pending).toEqual(pending);
+      expect(changed.state.through).toBe(0);
+      expect(changed.state.released).toBe(2);
+      expect(changed.state.pages).toEqual([1]);
+      expect(applied).toBe(0);
+      expect(changed.state.through).toBe(0);
+    }),
   );
 
   it.effect("finalizes scoped callbacks on timeout and interruption without advancing", () =>

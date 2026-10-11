@@ -1,6 +1,6 @@
 import type { RunId, SubmissionId, ThreadId, ToolCallId } from "@yielded/agent/identifiers";
 import type { IdempotencyKey } from "@yielded/agent/receipt";
-import type { Digest, ProducerEpoch, RecordEnvelope, RecordId } from "@yielded/agent/records";
+import type { ProducerEpoch, RecordEnvelope, RecordId } from "@yielded/agent/records";
 import type { SubmissionSnapshot, WorkerLedgerState } from "@yielded/agent/submission-ledger";
 import type {
   PreparedImportPage,
@@ -28,7 +28,6 @@ import { Context, type Effect, type Stream } from "effect";
 
 export interface PreparedMemoryAppend {
   readonly request: FencedAppendRequest;
-  readonly digest: Digest;
   readonly batchJson: string;
 }
 

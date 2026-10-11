@@ -690,8 +690,8 @@ the whole Run succeeded. Eligibility rules must account for that distinction.
 For each record the processor saves a Schema-encoded extraction, applies that saved output, and
 then advances its separate cursor. The work ID depends on processor, version, Thread, and
 sequence, never the worker or clock. Advancing clears pending output in the same transaction;
-there is no separate pending-work read per record. A saved output wins over re-extraction after restart. Its
-canonical record digest excludes the adapter's opaque observation cursor. Another processor
+there is no separate pending-work read per record. A saved output wins over re-extraction after restart.
+Saved work identifies its canonical record and sequence. Another processor
 version has independent progress; changing a version is an application decision about
 reprocessing and destination identities.
 
@@ -770,7 +770,7 @@ const apply = Effect.fn("applyDiscussion")(function* (work: PreparedActivity) {
     locator: `memory://dan-discussions/${work.workId}`,
     content: {
       ...content,
-      metadata: { ...content.metadata, sourceRecordDigest: work.recordDigest },
+      metadata: { ...content.metadata, sourceRecordId: work.recordId },
     },
     scopes: [MemoryScope.make("dan-approved-chad-and-tim")],
   });

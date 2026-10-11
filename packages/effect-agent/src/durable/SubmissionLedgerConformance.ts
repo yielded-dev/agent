@@ -299,7 +299,7 @@ const publicationForRecord = Effect.fn("SubmissionLedgerConformance.publicationF
         threadId,
         producerEpoch: tail.producerEpoch,
         expectedTailSequence: tail.tailSequence,
-        expectedTailDigest: tail.tailDigest,
+
         batch: CanonicalBatch.make({
           batchId: submissionSettlementBatchId(submissionId),
           producerId: PRODUCER_A,
@@ -1738,8 +1738,7 @@ const settlementLifecycle = conformanceCase(
         yield* ensure(
           replayed.replayed &&
             recordEquivalent(replayed.record, published.record) &&
-            replayed.tailSequence === published.tailSequence &&
-            replayed.tailDigest === published.tailDigest,
+            replayed.tailSequence === published.tailSequence,
           "Authorized publication replay must return the immutable winner and current canonical tail",
         );
       }

@@ -3,7 +3,6 @@ import { Context, Effect, Schema } from "effect";
 import { SubmissionId, type ReceiptId, type RunId } from "../core/Identifiers.ts";
 import {
   CanonicalSequence,
-  Digest,
   RecordEnvelope,
   SubmissionSettled,
   type SubmissionSettledRecord,
@@ -44,7 +43,7 @@ export class SettlementPublicationResult extends Schema.Class<SettlementPublicat
 )({
   record: RecordEnvelope,
   tailSequence: CanonicalSequence,
-  tailDigest: Digest,
+
   replayed: Schema.Boolean,
 }) {}
 

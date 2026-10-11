@@ -25,7 +25,6 @@ export class PreparedActivity extends Schema.Class<PreparedActivity>(
   sequence: CanonicalSequence.check(Schema.isGreaterThan(0)),
   workId: Digest,
   recordId: RecordId,
-  recordDigest: Digest,
   output: PersistedJson,
 }) {}
 

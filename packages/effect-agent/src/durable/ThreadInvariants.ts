@@ -2,9 +2,9 @@ import { Effect, Schema, Stream } from "effect";
 
 import type { RunId, ThreadId } from "../core/Identifiers.ts";
 import { IntegrityCheck, IntegrityReport, type IntegrityCheckName } from "./Admin.ts";
-import { EMPTY_TAIL_DIGEST } from "./Digest.ts";
+import { recordEncoding } from "./internal/record-encoding.ts";
 import { CanonicalSequence, type CanonicalRecordEnvelope, type RecordId } from "./Records.ts";
-import { canonicalRunIds, reference, verifyRunContinuations } from "./RunContinuation.ts";
+import { canonicalRunIds, verifyRunContinuations } from "./RunContinuation.ts";
 import {
   submissionInputRecordId,
   submissionSettlementRecordId,
@@ -90,7 +90,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
   });
 
   let lastInputQueue = -1;
-  let checkpointDigest = input.checkpoint?.throughSequence === 0 ? EMPTY_TAIL_DIGEST : undefined;
+  let checkpointBound = input.checkpoint?.throughSequence === 0;
 
   yield* Stream.runForEach(input.pages, (page) =>
     Effect.gen(function* () {
@@ -104,11 +104,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
         ),
         Effect.match({
           onFailure: (e) => {
-            for (const name of [
-              "schema-round-trip",
-              "sequence-contiguity",
-              "digest-chain",
-            ] as const)
+            for (const name of ["schema-round-trip", "sequence-contiguity"] as const)
               fail(name, e.message);
 
             return undefined;
@@ -126,8 +122,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
           }),
         );
       for (const batch of prepared.batches)
-        if (batch.lastSequence === input.checkpoint?.throughSequence)
-          checkpointDigest = batch.tailDigest;
+        if (batch.lastSequence === input.checkpoint?.throughSequence) checkpointBound = true;
       for (const entry of prepared.records) {
         yield* Effect.gen(function* () {
           for (const runId of canonicalRunIds(entry.record)) {
@@ -137,7 +132,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
               selected === undefined ||
               selected.sequence !== entry.sequence ||
               selected.batchId !== entry.batchId ||
-              (yield* reference(selected.record)).digest !== (yield* reference(entry.record)).digest
+              recordEncoding(selected.record).json !== recordEncoding(entry.record).json
             )
               fail(
                 "continuation-evidence",
@@ -196,7 +191,6 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
       onSuccess: () => undefined,
       onFailure: (e) => {
         fail("sequence-contiguity", e.message);
-        fail("digest-chain", e.message);
       },
     }),
   );
@@ -274,16 +268,14 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
     fail("all-settled", "No submissions are known");
   if (
     input.checkpoint !== undefined &&
-    (input.checkpoint.threadId !== input.threadId ||
-      checkpointDigest !== input.checkpoint.tailDigest)
+    (input.checkpoint.threadId !== input.threadId || !checkpointBound)
   )
-    fail("checkpoint-binding", "Checkpoint is not bound to a recomputed batch tail");
+    fail("checkpoint-binding", "Checkpoint is not bound to a complete canonical batch tail");
 
   const names: Array<IntegrityCheckName> = [
     "schema-round-trip",
     "record-identity",
     "sequence-contiguity",
-    "digest-chain",
     "continuation-evidence",
     "fifo-input-order",
     "fifo-settlement-order",

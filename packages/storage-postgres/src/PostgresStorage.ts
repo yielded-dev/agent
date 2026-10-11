@@ -70,7 +70,7 @@ export interface PostgresStorageOptions {
   readonly lockTimeout?: number | undefined;
   /** Ownership lease in milliseconds. Defaults to the SubmissionLedger's lease duration. */
   readonly ownershipLeaseDuration?: number | undefined;
-  /** Audit every stored payload and digest chain on open. Defaults to false. */
+  /** Audit stored payloads, identities, and batch coverage on open. Defaults to false. */
   readonly verifyOnOpen?: boolean | undefined;
   readonly failpoint?: PostgresStorageFailpointHandler | undefined;
   readonly activityFailpoint?: ActivityMutationFailpoint["Service"]["hit"] | undefined;

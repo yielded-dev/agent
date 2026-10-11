@@ -134,7 +134,7 @@ describe("durable tool declarations", () => {
         },
       ],
     },
-    messagesDigest: SHA_256_A,
+
     toolOperations: [
       {
         toolCallId: "call-1",
@@ -261,8 +261,6 @@ describe("S2 durable subagent canonical payloads", () => {
     childSubmissionId: "submission-child-1",
     childSettlementId: "settlement:submission-child-1",
     childOutcome: "completed",
-    childResultDigest: SHA_256_A,
-    projectedResultDigest: SHA_256_B,
     usageSummary: { turns: 1, toolCalls: 0 },
     reservationId: "run%3Asubmission-parent:call-delegate-1",
     finalAccounting: { consumed: { turns: 1 }, released: { turns: 3 } },

@@ -25,9 +25,8 @@ export class SqliteStorageConfigValue extends Schema.Class<SqliteStorageConfigVa
    */
   ownershipLeaseDuration: OwnershipLeaseMillis,
   /**
-   * Re-verify every stored payload and digest chain while opening the store. Per-operation
-   * Schema decoding and the digest chain already fail clearly on corrupt rows, so the full
-   * scan is an explicit opt-in integrity audit rather than a startup requirement.
+   * Audit stored payload schemas, identities, and batch coverage while opening the store.
+   * Per-operation Schema decoding remains enabled; this complete scan is an explicit opt-in.
    */
   verifyOnOpen: Schema.Boolean,
 }) {}

@@ -1,7 +1,12 @@
-import { digestJson, EMPTY_TAIL_DIGEST, utf8ByteLength } from "@yielded/agent/digest";
+import { canonicalJson, utf8ByteLength } from "@yielded/agent/digest";
 import { ThreadId, RunId, SubmissionId as importSubmissionId } from "@yielded/agent/identifiers";
 import type { IdempotencyKey } from "@yielded/agent/receipt";
-import { ExportBatch, ExportedRecord } from "@yielded/agent/record-format";
+import {
+  ExportBatch,
+  ExportedRecord,
+  ExportRecord,
+  ReadRecord,
+} from "@yielded/agent/record-format";
 import {
   ProducerEpoch,
   CURRENT_RECORD_FORMAT,
@@ -11,7 +16,6 @@ import {
   CanonicalSequence,
   ObservationOffset,
   type BatchId,
-  type Digest,
   MAX_RUN_EVIDENCE_RECORDS,
   MAX_RUN_EVIDENCE_BYTES,
   MAX_RUN_TERMINAL_BYTES,
@@ -165,7 +169,6 @@ const ThreadCapacity = Context.Reference<number>(
 interface StoredBatch {
   /** Preserve the exact destination wire, including additive fields unknown to this reader. */
   readonly batchJson: string;
-  readonly digest: Digest;
   readonly result: AppendResult;
 }
 
@@ -246,7 +249,6 @@ interface StoredThread {
   readonly runInputs: Map<string, CanonicalRecordEnvelope | null>;
   readonly producerEpoch: ProducerEpoch;
   readonly tailSequence: CanonicalSequence;
-  readonly tailDigest: Digest;
   readonly ranges: Map<number, ThreadArchiveRange>;
   readonly rangeStarts: Array<number>;
   readonly archiveContents: Map<number, Map<BatchId, string>>;
@@ -267,7 +269,6 @@ interface StoredThread {
     }
   >;
   readonly batchesByFirst: Map<number, BatchId>;
-  readonly tailDigests: Map<CanonicalSequence, Digest>;
   readonly checkpoints: Map<CanonicalSequence, ThreadCheckpoint>;
 }
 
@@ -275,6 +276,15 @@ const storedRecord = (thread: StoredThread, sequence: number) =>
   thread.chunks.get(Math.floor((sequence - 1) / RECORD_CHUNK_SIZE))?.records[
     (sequence - 1) % RECORD_CHUNK_SIZE
   ];
+
+const isBatchBoundary = (thread: StoredThread, sequence: CanonicalSequence): boolean => {
+  if (sequence === 0) return true;
+  const record = storedRecord(thread, sequence);
+
+  return (
+    record !== undefined && thread.batches.get(record.batchId)?.result.lastSequence === sequence
+  );
+};
 
 const storedBytes = (thread: StoredThread, sequence: number) =>
   thread.chunks.get(Math.floor((sequence - 1) / RECORD_CHUNK_SIZE))?.bytes[
@@ -1229,7 +1239,6 @@ const makeThreadStore = Effect.gen(function* () {
           threads.set(request.threadId, {
             producerEpoch: request.producerEpoch,
             tailSequence: ZERO_CANONICAL_SEQUENCE,
-            tailDigest: EMPTY_TAIL_DIGEST,
             byId: new Map(),
             workerRecords: new Map(),
             peerCount: 0,
@@ -1256,7 +1265,6 @@ const makeThreadStore = Effect.gen(function* () {
             executions: new Map(),
             executionRevision: 0,
             executionCommits: new Map(),
-            tailDigests: new Map([[ZERO_CANONICAL_SEQUENCE, EMPTY_TAIL_DIGEST]]),
             checkpoints: new Map(),
           });
 
@@ -1270,12 +1278,7 @@ const makeThreadStore = Effect.gen(function* () {
     },
   );
 
-  const retainRange = (
-    thread: StoredThread,
-    threadId: ThreadId,
-    batch: StoredBatch,
-    previousTailDigest: Digest,
-  ) => {
+  const retainRange = (thread: StoredThread, threadId: ThreadId, batch: StoredBatch) => {
     const bytes = new TextEncoder().encode(batch.batchJson).byteLength;
     const count = batch.result.lastSequence - batch.result.firstSequence + 1;
     let open = thread.openRange.current;
@@ -1290,12 +1293,10 @@ const makeThreadStore = Effect.gen(function* () {
       open = undefined;
     }
     thread.openRange.current = ThreadArchiveRange.make({
-      format: "effect-agent/thread-range@1",
+      format: "effect-agent/thread-range@2",
       threadId,
       firstSequence: open?.firstSequence ?? batch.result.firstSequence,
       lastSequence: batch.result.lastSequence,
-      previousTailDigest: open?.previousTailDigest ?? previousTailDigest,
-      tailDigest: batch.digest,
       recordCount: (open?.recordCount ?? 0) + count,
       batchCount: (open?.batchCount ?? 0) + 1,
       byteCount: (open?.byteCount ?? 0) + bytes,
@@ -1321,17 +1322,11 @@ const makeThreadStore = Effect.gen(function* () {
         "Canonical batch exceeds its bounded transfer representation",
       );
 
-    const digest = yield* captured.digest().pipe(
-      Effect.provideService(Crypto.Crypto, crypto),
-      Effect.mapError((error) => storeError("append", error.message, error)),
-    );
-
-    return { request, digest, batchJson };
+    return { request, batchJson };
   });
 
   const appendPrepared = Effect.fnUntraced(function* ({
     request,
-    digest,
     batchJson,
   }: PreparedMemoryAppend) {
     // Every caller holds the shared kernel mutation gate across validation and Ref publication.
@@ -1349,7 +1344,6 @@ const makeThreadStore = Effect.gen(function* () {
       thread !== undefined &&
       thread.producerEpoch === request.producerEpoch &&
       thread.tailSequence === request.expectedTailSequence &&
-      thread.tailDigest === request.expectedTailDigest &&
       !thread.batches.has(request.batch.batchId) &&
       !thread.executionCommits.has(request.batch.batchId)
     ) {
@@ -1370,7 +1364,6 @@ const makeThreadStore = Effect.gen(function* () {
             batchId: request.batch.batchId,
             reason: "tail",
             actualTailSequence: thread.tailSequence,
-            actualTailDigest: thread.tailDigest,
           });
         if (
           update.checkpoint.throughSequence !==
@@ -1419,7 +1412,6 @@ const makeThreadStore = Effect.gen(function* () {
       thread !== undefined &&
       thread.producerEpoch === request.producerEpoch &&
       thread.tailSequence === request.expectedTailSequence &&
-      thread.tailDigest === request.expectedTailDigest &&
       !thread.batches.has(request.batch.batchId) &&
       !thread.executionCommits.has(request.batch.batchId) &&
       currentWork?.version === WORK_INDEX_VERSION &&
@@ -1475,7 +1467,7 @@ const makeThreadStore = Effect.gen(function* () {
                 error: AppendConflict.make({
                   threadId: request.threadId,
                   batchId: request.batch.batchId,
-                  reason: "batch-digest",
+                  reason: "batch-content",
                 }),
               },
               current,
@@ -1493,14 +1485,14 @@ const makeThreadStore = Effect.gen(function* () {
         const previous = thread.batches.get(request.batch.batchId);
 
         if (previous !== undefined) {
-          if (previous.digest !== digest) {
+          if (previous.batchJson !== batchJson) {
             return [
               {
                 _tag: "failure",
                 error: AppendConflict.make({
                   threadId: request.threadId,
                   batchId: request.batch.batchId,
-                  reason: "batch-digest",
+                  reason: "batch-content",
                 }),
               },
               current,
@@ -1513,7 +1505,6 @@ const makeThreadStore = Effect.gen(function* () {
               result: AppendResult.make({
                 firstSequence: previous.result.firstSequence,
                 lastSequence: previous.result.lastSequence,
-                tailDigest: previous.result.tailDigest,
                 replayed: true,
               }),
               records: [],
@@ -1521,10 +1512,7 @@ const makeThreadStore = Effect.gen(function* () {
             current,
           ];
         }
-        if (
-          request.expectedTailSequence !== thread.tailSequence ||
-          request.expectedTailDigest !== thread.tailDigest
-        ) {
+        if (request.expectedTailSequence !== thread.tailSequence) {
           return [
             {
               _tag: "failure",
@@ -1533,7 +1521,6 @@ const makeThreadStore = Effect.gen(function* () {
                 batchId: request.batch.batchId,
                 reason: "tail",
                 actualTailSequence: thread.tailSequence,
-                actualTailDigest: thread.tailDigest,
               }),
             },
             current,
@@ -1571,7 +1558,6 @@ const makeThreadStore = Effect.gen(function* () {
             thread.tailSequence + (records.length > 0 ? 1 : 0),
           ),
           lastSequence,
-          tailDigest: digest,
           replayed: false,
         });
 
@@ -1581,16 +1567,14 @@ const makeThreadStore = Effect.gen(function* () {
           ...thread,
           ...indexes.indexes,
           tailSequence: lastSequence,
-          tailDigest: digest,
           executionRevision: thread.executionRevision + (request.executions?.length ?? 0),
         };
 
         // Every rejection and asynchronous validation precedes this synchronous publication.
         if (records.length > 0) {
-          thread.batches.set(request.batch.batchId, { digest, result, batchJson });
-          retainRange(thread, request.threadId, { digest, result, batchJson }, thread.tailDigest);
+          thread.batches.set(request.batch.batchId, { result, batchJson });
+          retainRange(thread, request.threadId, { result, batchJson });
           thread.batchesByFirst.set(result.firstSequence, request.batch.batchId);
-          thread.tailDigests.set(lastSequence, digest);
           retainRecords(thread, records);
         }
         for (const update of request.executions ?? []) {
@@ -1750,8 +1734,7 @@ const makeThreadStore = Effect.gen(function* () {
 
         if (
           "expectedTailSequence" in selection &&
-          (selection.expectedTailSequence !== thread.tailSequence ||
-            selection.expectedTailDigest !== thread.tailDigest)
+          selection.expectedTailSequence !== thread.tailSequence
         )
           return yield* storeError("selected read", "Canonical tail changed");
         if ("throughSequence" in selection && selection.throughSequence > thread.tailSequence)
@@ -2026,7 +2009,6 @@ const makeThreadStore = Effect.gen(function* () {
     ...emptyIndexes(),
     producerEpoch,
     tailSequence: ZERO_CANONICAL_SEQUENCE,
-    tailDigest: EMPTY_TAIL_DIGEST,
     ranges: new Map(),
     rangeStarts: [],
     archiveContents: new Map(),
@@ -2037,7 +2019,6 @@ const makeThreadStore = Effect.gen(function* () {
     executionRevision: 0,
     executionCommits: new Map(),
     batchesByFirst: new Map(),
-    tailDigests: new Map([[ZERO_CANONICAL_SEQUENCE, EMPTY_TAIL_DIGEST]]),
     checkpoints: new Map(),
   });
 
@@ -2073,7 +2054,6 @@ const makeThreadStore = Effect.gen(function* () {
         format: CURRENT_RECORD_FORMAT,
         threadId,
         tailSequence: thread?.tailSequence ?? ZERO_CANONICAL_SEQUENCE,
-        tailDigest: thread?.tailDigest ?? EMPTY_TAIL_DIGEST,
         snapshot: {
           revision,
           admissions: facts.admissions,
@@ -2377,26 +2357,17 @@ const makeThreadStore = Effect.gen(function* () {
                     ...staged,
                     ...native.indexes,
                     tailSequence: batch.lastSequence,
-                    tailDigest: batch.tailDigest,
                   };
                   staged.batches.set(batch.batch.batchId, {
                     batchJson: batch.batchJson,
-                    digest: batch.tailDigest,
                     result: AppendResult.make({
                       firstSequence: batch.firstSequence,
                       lastSequence: batch.lastSequence,
-                      tailDigest: batch.tailDigest,
                       replayed: false,
                     }),
                   });
-                  retainRange(
-                    staged,
-                    id,
-                    staged.batches.get(batch.batch.batchId)!,
-                    batch.previousTailDigest,
-                  );
+                  retainRange(staged, id, staged.batches.get(batch.batch.batchId)!);
                   staged.batchesByFirst.set(batch.firstSequence, batch.batch.batchId);
-                  staged.tailDigests.set(batch.lastSequence, batch.tailDigest);
                   stagedWork = commitWork();
                 }
                 for (const { checkpoint } of page.archive.executions) {
@@ -2578,7 +2549,6 @@ const makeThreadStore = Effect.gen(function* () {
       return ThreadTail.make({
         threadId: request.threadId,
         tailSequence: thread.tailSequence,
-        tailDigest: thread.tailDigest,
         producerEpoch: thread.producerEpoch,
       });
     },
@@ -2601,7 +2571,6 @@ const makeThreadStore = Effect.gen(function* () {
       return yield* ThreadIdentity.makeEffect({
         threadId: request.threadId,
         tailSequence: thread.tailSequence,
-        tailDigest: thread.tailDigest,
         producerEpoch: thread.producerEpoch,
         admissions:
           ledgerTransfer === undefined
@@ -2651,13 +2620,13 @@ const makeThreadStore = Effect.gen(function* () {
             current,
           ];
         }
-        if (thread.tailDigests.get(checkpoint.throughSequence) !== checkpoint.tailDigest) {
+        if (!isBatchBoundary(thread, checkpoint.throughSequence)) {
           return [
             {
               _tag: "failure",
               error: CheckpointRejected.make({
                 threadId: checkpoint.threadId,
-                reason: "digest-mismatch",
+                reason: "not-batch-boundary",
               }),
             },
             current,
@@ -2696,13 +2665,10 @@ const makeThreadStore = Effect.gen(function* () {
         selected = checkpoint;
       }
     }
-    if (
-      selected !== undefined &&
-      thread.tailDigests.get(selected.throughSequence) !== selected.tailDigest
-    ) {
+    if (selected !== undefined && !isBatchBoundary(thread, selected.throughSequence)) {
       return yield* CheckpointRejected.make({
         threadId: request.threadId,
-        reason: "digest-mismatch",
+        reason: "not-batch-boundary",
       });
     }
 
@@ -2716,7 +2682,6 @@ const makeThreadStore = Effect.gen(function* () {
     source?: Map<BatchId, string>,
   ) {
     let sequence = range.firstSequence;
-    let digest = range.previousTailDigest;
     let bytes = 0;
     let batches = 0;
     const captured = new Map<BatchId, string>();
@@ -2747,26 +2712,49 @@ const makeThreadStore = Effect.gen(function* () {
           "Range wire or bounds differ from canonical storage",
         );
 
-      const wire = yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Json))(text).pipe(
+      const wire = yield* Schema.decodeEffect(Schema.fromJsonString(ExportBatch))(text).pipe(
         Effect.mapError((cause) => storeError("verify range", "Invalid range wire", cause)),
       );
 
-      digest = yield* digestJson({ previousTailDigest: digest, batch: wire }).pipe(
-        Effect.provideService(Crypto.Crypto, crypto),
-        Effect.mapError((cause) => storeError("verify range", cause.message, cause)),
-      );
-      if (digest !== batch.digest)
-        return yield* storeError("verify range", "Canonical batch anchor mismatch");
+      if (
+        wire.batchId !== id ||
+        batch.result.firstSequence !== sequence ||
+        batch.result.lastSequence !== sequence + wire.records.length - 1
+      )
+        return yield* storeError("verify range", "Canonical batch span or identity differs");
+
+      for (const [index, record] of wire.records.entries()) {
+        const expected = storedRecord(thread, sequence + index);
+
+        if (
+          expected === undefined ||
+          expected.threadId !== range.threadId ||
+          expected.sequence !== sequence + index ||
+          expected.batchId !== id ||
+          expected.record.recordId !== record.recordId
+        )
+          return yield* storeError("verify range", "Canonical record identity or order differs");
+
+        const canonical = yield* Schema.encodeEffect(ReadRecord)(expected.record).pipe(
+          Effect.mapError((cause) => storeError("verify range", "Invalid canonical record", cause)),
+        );
+
+        const archived = yield* Schema.encodeEffect(ExportRecord)(record).pipe(
+          Effect.mapError((cause) => storeError("verify range", "Invalid archive record", cause)),
+        );
+
+        if (canonicalJson(canonical) !== canonicalJson(archived))
+          return yield* storeError("verify range", "Archive and canonical record bytes differ");
+      }
       captured.set(id, text);
       sequence = decodeCanonicalSequence(batch.result.lastSequence + 1);
     }
     if (
-      digest !== range.tailDigest ||
       bytes !== range.byteCount ||
       batches !== range.batchCount ||
       range.recordCount !== range.lastSequence - range.firstSequence + 1
     )
-      return yield* storeError("verify range", "Range anchors or counts differ");
+      return yield* storeError("verify range", "Range spans or counts differ");
 
     return captured;
   });
@@ -2891,10 +2879,7 @@ const makeThreadStore = Effect.gen(function* () {
       const request = yield* validate(ThreadWorkerCapacityRequest, "worker capacity", unvalidated);
       const thread = yield* findThread(MutableRef.get(state.ref), request.threadId);
 
-      if (
-        request.expectedTailSequence !== thread.tailSequence ||
-        request.expectedTailDigest !== thread.tailDigest
-      )
+      if (request.expectedTailSequence !== thread.tailSequence)
         return yield* storeError("worker capacity", "Canonical tail changed");
 
       const index = yield* readyIndex(request.threadId, thread.tailSequence).pipe(
@@ -2906,7 +2891,6 @@ const makeThreadStore = Effect.gen(function* () {
       return ThreadWorkerCapacity.make({
         threadId: request.threadId,
         tailSequence: thread.tailSequence,
-        tailDigest: thread.tailDigest,
         producerEpoch: thread.producerEpoch,
         activeWorkers: Math.min(index.workers.size, request.activeLimit + 1),
         workerActive: worker !== undefined,

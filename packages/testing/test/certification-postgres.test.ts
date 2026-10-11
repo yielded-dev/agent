@@ -81,7 +81,6 @@ it.effect(
           ),
         );
         expect(report.tier2.filter((row) => row.status === "failed")).toEqual([]);
-        expect(report.tier2.every((row) => row.digestChainVerified)).toBe(true);
         for (const scenario of CERTIFICATION_SCENARIOS) {
           expect(report.tier2.some((row) => row.scenario === scenario && row.failpointFired)).toBe(
             true,

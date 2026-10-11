@@ -45,7 +45,7 @@ const work = (
     sequence,
     workId: marker.repeat(64),
     recordId: `record-${sequence}`,
-    recordDigest: marker.toUpperCase().repeat(64).toLowerCase(),
+
     output,
   });
 

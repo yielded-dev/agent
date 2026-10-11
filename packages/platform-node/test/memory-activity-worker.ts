@@ -98,7 +98,6 @@ const applyPrepared = Effect.fn("MemoryActivityWorker.applyPrepared")(function* 
         ...output.content,
         metadata: {
           ...output.content.metadata,
-          sourceRecordDigest: work.recordDigest,
           sourceWorkId: work.workId,
         },
       },

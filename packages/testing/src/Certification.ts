@@ -79,7 +79,7 @@ import { makeCertificationReport } from "./internal/certification-report.ts";
  *   After the injected fault the runner asserts the state stays CLASSIFIABLE (recovery +
  *   the public unblocking operations `resolveUnknown`/`resolveApproval` are the only levers
  *   used) and that the re-drive CONVERGES to `verifyThreadInvariants` with `requireAllSettled`,
- *   including the complete canonical digest chain from native paged verification.
+ *   including schema, identity, order and active state from native paged verification.
  * - **Tier 3 — real loss lever**: recorded honestly. A durable adapter either supplies a
  *   `CertificationCrashLever` executed in this run, cites its committed real-loss evidence
  *   (process-kill / eviction suites), or the certificate says `not-exercised`. A non-durable
@@ -706,7 +706,7 @@ const MAX_REDRIVE_ROUNDS = 8;
  * Verify one lane after convergence: canonical export + every lane Submission the ledger or
  * the log names (the same collection rule as the admin `verify` member), fed to the shared
  * invariant checker in convergence mode WITH the captured per-batch producer directory, so
- * the digest chain is fully recomputed instead of skipped.
+ * retained history and active state are checked.
  */
 const verifyLane = Effect.fnUntraced(function* (lane: ThreadId) {
   const store = yield* ThreadStore;
@@ -736,10 +736,7 @@ const failureTagOf = <E>(cause: Cause.Cause<E>): string => {
   return "defect";
 };
 
-type SweepOutcome = Pick<
-  CertificationSweepResult,
-  "failpointFired" | "status" | "digestChainVerified" | "detail"
->;
+type SweepOutcome = Pick<CertificationSweepResult, "failpointFired" | "status" | "detail">;
 
 /** Discover a clean path, or arm one location; both drives converge and verify real storage. */
 const runSweepCell = Effect.fnUntraced(function* (
@@ -755,7 +752,6 @@ const runSweepCell = Effect.fnUntraced(function* (
   const failed = (detail: string, fired: boolean): SweepOutcome => ({
     failpointFired: fired,
     status: "failed",
-    digestChainVerified: false,
     detail: detail.slice(0, 4_096),
   });
 
@@ -888,8 +884,7 @@ const runSweepCell = Effect.fnUntraced(function* (
     return failed(`did not converge within ${MAX_REDRIVE_ROUNDS} re-drive rounds`, wasFired);
   }
 
-  // Every lane of the cell must verify in convergence mode with a recomputed digest chain.
-  let digestChainVerified = true;
+  // Every lane must pass retained-history and active-state verification in convergence mode.
   const failedChecks: Array<string> = [];
 
   for (const lane of lanes) {
@@ -904,24 +899,15 @@ const runSweepCell = Effect.fnUntraced(function* (
           `${lane}:${check.name}${check.detail === undefined ? "" : ` (${check.detail})`}`,
         );
       }
-      if (check.name === "digest-chain" && check.status !== "passed") {
-        digestChainVerified = false;
-      }
     }
   }
-  if (failedChecks.length > 0 || !digestChainVerified) {
-    return failed(
-      failedChecks.length > 0
-        ? `invariant checks failed: ${failedChecks.join("; ")}`
-        : "the digest chain was not fully recomputed",
-      wasFired,
-    );
+  if (failedChecks.length > 0) {
+    return failed(`invariant checks failed: ${failedChecks.join("; ")}`, wasFired);
   }
 
   return {
     failpointFired: wasFired,
     status: wasFired ? "converged" : "not-triggered",
-    digestChainVerified,
   } satisfies SweepOutcome;
 });
 
@@ -1027,7 +1013,7 @@ export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
     const ledger = yield* SubmissionLedger;
 
     // Tier 2 — discover each deterministic shape without a fault. Unreached locations
-    // would all repeat this same clean drive, including its full digest verification.
+    // would all repeat this same clean drive, including its full invariant verification.
     const tier2: Array<CertificationSweepResult> = [];
 
     const discoveries: Array<{

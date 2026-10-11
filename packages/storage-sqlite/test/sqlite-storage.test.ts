@@ -21,7 +21,7 @@ import {
   layer,
   storageConfigLayer,
 } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
-import { digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { digestJson } from "@yielded/agent/digest";
 import { lifecyclePublicationLayer } from "@yielded/agent/lifecycle-publication";
 import {
   CanonicalBatch,
@@ -149,9 +149,8 @@ const inputRecord = (recordId: string, input: string): CanonicalRecord =>
 const append = (
   store: ThreadStore["Service"],
   canonicalBatch: CanonicalBatch,
-  tail: Pick<AppendResult, "lastSequence" | "tailDigest"> = {
+  tail: Pick<AppendResult, "lastSequence"> = {
     lastSequence: sequence(0),
-    tailDigest: EMPTY_TAIL_DIGEST,
   },
   producerEpoch: ProducerEpoch = epoch(1),
 ) =>
@@ -160,7 +159,7 @@ const append = (
       threadId,
       batch: canonicalBatch,
       expectedTailSequence: tail.lastSequence,
-      expectedTailDigest: tail.tailDigest,
+
       producerEpoch,
     }),
   );
@@ -261,7 +260,7 @@ describe("SqliteThreadStore", () => {
                       threadId,
                       producerEpoch: epoch(1),
                       expectedTailSequence: tail.sequence,
-                      expectedTailDigest: tail.digest,
+
                       batch: compiled,
                       ...(executions === undefined ? {} : { executions }),
                     });
@@ -337,7 +336,7 @@ describe("SqliteThreadStore", () => {
             threadId,
             producerEpoch: epoch(1),
             expectedTailSequence: sequence(0),
-            expectedTailDigest: EMPTY_TAIL_DIGEST,
+
             batch: batch("bad-export-tail", [inputRecord("bad-export-tail", "Kyoto")]),
           }),
         );
@@ -416,7 +415,7 @@ describe("SqliteThreadStore", () => {
             schemaVersion: 1,
             threadId,
             throughSequence: sequence(0),
-            tailDigest: EMPTY_TAIL_DIGEST,
+
             state: {},
             createdAt: at(2),
           });
@@ -432,11 +431,9 @@ describe("SqliteThreadStore", () => {
             yield* Schema.encodeEffect(ThreadCheckpoint)(corrupted),
           );
 
-          const rowDigest = EMPTY_TAIL_DIGEST;
-
           yield* sql`
             UPDATE effect_agent_checkpoints
-            SET checkpoint_json = ${corruptedJson}, tail_digest = ${rowDigest}
+            SET checkpoint_json = ${corruptedJson}
             WHERE thread_id = ${threadId} AND through_sequence = 0
           `;
 
@@ -645,7 +642,7 @@ describe("SqliteThreadStore", () => {
         const snapshot = yield* Fiber.join(exportFiber);
 
         expect(snapshot.tailSequence).toBe(first.lastSequence);
-        expect(snapshot.tailDigest).toBe(first.tailDigest);
+
         expect(snapshot.records).toHaveLength(1);
 
         const current = yield* withStorage(
@@ -764,7 +761,7 @@ describe("SqliteThreadStore", () => {
                 threadId,
                 producerEpoch: session.producerEpoch,
                 expectedTailSequence: before.tailSequence,
-                expectedTailDigest: before.tailDigest,
+
                 batch: fact("independent-fact"),
               }),
             );
@@ -796,7 +793,6 @@ describe("SqliteThreadStore", () => {
             expect(Cause.squash(appended.cause)).toMatchObject({ _tag: "FenceRejected" });
             expect(after.producerEpoch).toBe(session.producerEpoch + 1);
             expect(after.tailSequence).toBe(before.tailSequence);
-            expect(after.tailDigest).toBe(before.tailDigest);
           }
         }).pipe(Effect.scoped, Effect.provide(services));
       }),
@@ -978,7 +974,7 @@ describe("SqliteThreadStore", () => {
                               threadId,
                               producerEpoch: epoch(1),
                               expectedTailSequence: tail.sequence,
-                              expectedTailDigest: tail.digest,
+
                               batch: prepared,
                               ...(executions === undefined ? {} : { executions }),
                             });
@@ -1026,7 +1022,6 @@ describe("SqliteThreadStore", () => {
                   acceptedInput.recordId,
                 ]);
                 expect(exported.tailSequence).toBe(seeded.lastSequence);
-                expect(exported.tailDigest).toBe(seeded.tailDigest);
               }),
           );
 
@@ -1057,7 +1052,6 @@ describe("SqliteThreadStore", () => {
 
               expect(firstRequest.batch.records).toEqual([]);
               expect(replayed.lastSequence).toBe(seeded.lastSequence);
-              expect(replayed.tailDigest).toBe(seeded.tailDigest);
 
               const continuation = yield* readContinuation(
                 threadId,

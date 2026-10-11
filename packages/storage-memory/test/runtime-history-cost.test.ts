@@ -4,7 +4,7 @@ import { MemorySubmissionLedgerLive } from "@yielded/agent-storage-memory/memory
 import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
-import { digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { digestJson } from "@yielded/agent/digest";
 import { DurableAgentRuntime, DurableRuntimeConfig } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
 import { RunId, ThreadId } from "@yielded/agent/identifiers";
@@ -94,7 +94,6 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
   const producerEpoch = Schema.decodeSync(ProducerEpoch)(0);
   const createdAt = yield* DateTime.now;
   let tailSequence = Schema.decodeSync(CanonicalSequence)(0);
-  let tailDigest = EMPTY_TAIL_DIGEST;
   const retainedInputs: Array<string> = [];
 
   yield* store.materialize(ThreadMaterialization.make({ threadId, producerEpoch }));
@@ -150,7 +149,7 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
         threadId,
         producerEpoch,
         expectedTailSequence: tailSequence,
-        expectedTailDigest: tailDigest,
+
         batch: CanonicalBatch.make({
           batchId: Schema.decodeSync(BatchId)(`history-seed:${start}`),
           producerId: Schema.decodeSync(ProducerId)("history-cost"),
@@ -160,7 +159,6 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
     );
 
     tailSequence = appended.lastSequence;
-    tailDigest = appended.tailDigest;
   }
   let measured = false;
 
@@ -215,7 +213,7 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
                     threadId,
                     producerEpoch: tail.producerEpoch,
                     expectedTailSequence: tail.tailSequence,
-                    expectedTailDigest: tail.tailDigest,
+
                     batch: CanonicalBatch.make({
                       batchId: BatchId.make("racing-history"),
                       producerId: ProducerId.make("history-cost"),

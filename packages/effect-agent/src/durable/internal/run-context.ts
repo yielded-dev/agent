@@ -5,6 +5,7 @@ import { canonicalJson, digestCanonicalJson } from "../Digest.ts";
 import {
   CanonicalSequence,
   PromptRecord,
+  type RecordId,
   PROMPT_EVIDENCE_TAGS,
   type CanonicalRecordEnvelope,
   type RunContextRecorded,
@@ -16,7 +17,6 @@ import {
   type JournalBoundary,
 } from "../RunJournal.ts";
 import type { ThreadNotMaterialized, ThreadStoreError } from "../ThreadStore.ts";
-import { reference } from "./evidence.ts";
 import type { JournalRecordEnvelope } from "./journal-metadata.ts";
 import { RunContextReader } from "./run-context-reader.ts";
 
@@ -101,8 +101,7 @@ const readProjectedHistory = Effect.fnUntraced(function* (
       entry === undefined ||
       entry.threadId !== original.threadId ||
       entry.record.recordId !== ref.recordId ||
-      entry.sequence !== ref.sequence ||
-      (yield* reference(entry.record)).digest !== ref.digest
+      entry.sequence !== ref.sequence
     )
       return yield* invalid("Saved context has missing or corrupt retained evidence");
     records.push(yield* projectHistoryRecord(entry, context.runId));
@@ -172,7 +171,7 @@ const readProjectedHistory = Effect.fnUntraced(function* (
 export const readRunContext = Effect.fnUntraced(function* (
   context: RunContextRecorded,
   original: CanonicalRecordEnvelope,
-  digest: string,
+  recordId: RecordId,
 ): Effect.fn.Return<
   RunJournalContext,
   RunJournalError | ThreadStoreError | ThreadNotMaterialized,
@@ -201,7 +200,7 @@ export const readRunContext = Effect.fnUntraced(function* (
     boundaries: history.boundaries.filter(
       (boundary) => boundary.promptLength <= context.priorHistoryLength,
     ),
-    digest,
+    recordId,
     ...(context.contextWindowId === undefined ? {} : { contextWindowId: context.contextWindowId }),
   };
 });

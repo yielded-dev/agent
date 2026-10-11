@@ -73,10 +73,12 @@ flowchart LR
   Recovery completes outstanding obligations from the same canonical record.
 - The append-only journal owns conversation content, operation evidence and terminal outcomes;
   the ledger owns what is still owed and who may advance it. One current Run checkpoint preserves
-  semantic progress, accounting, exact original context and validated completion until settlement
-  and closure of its execution obligations. It is authoritative operational state, replaced in the
+  semantic progress, accounting, exact original context and validated completion until settlement.
+  Unresolved operations and handoffs retain their own rows. The checkpoint is authoritative operational state, replaced in the
   same fenced transaction as new journal facts. Historical checkpoint revisions are not retained
-  or attested by `verify`. Projections, work inventories, lookup indexes and application checkpoints
+  or attested by `verify`. Schema, version, identity, order and transaction checks protect the
+  storage contract; the log provides no tamper evidence. Recovery retains a small `historyDigest`
+  to detect drift in the original model prompt. Projections, work inventories, lookup indexes and application checkpoints
   are disposable. Current bindings select queued and
   resumed work; each committed model response owns its normalized tool arguments and original
   operation contracts. A declared mutating call without a result may have executed, including when

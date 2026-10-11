@@ -284,7 +284,6 @@ import {
   type RunJournalContext,
   type TurnCommitInput,
   runCompletedRecordId,
-  runCompletionDigest,
   runIdForSubmission,
   runStartedBatchId,
   runStartedRecordId,
@@ -1404,7 +1403,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         readonly threadId: ThreadId;
         readonly through: CanonicalSequence;
         readonly runId: RunId;
-        readonly contextDigest: string | undefined;
+        readonly contextRecordId: string | undefined;
         readonly contextEvidence: ReadonlyArray<JournalRecordEnvelope>;
         readonly journal: RunJournalProjection;
         readonly boundaries: ReadonlyArray<JournalBoundary>;
@@ -1412,7 +1411,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     | undefined;
 
   let resolvedContext:
-    | { readonly threadId: ThreadId; readonly digest: string; readonly value: RunJournalContext }
+    | {
+        readonly threadId: ThreadId;
+        readonly recordId: RecordId;
+        readonly value: RunJournalContext;
+      }
     | undefined;
 
   const wake = yield* WakeScheduler;
@@ -1726,11 +1729,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             "Required Run evidence is absent from its locator; rebuild the index explicitly",
           );
         }
-        if (
-          (yield* reference(found.record).pipe(Effect.provideService(Crypto.Crypto, crypto)))
-            .digest !== ref.digest
-        )
-          return yield* invalid("Run continuation evidence has invalid integrity");
         if (!canonicalRunIds(found.record).includes(runId))
           return yield* invalid("Run continuation references another owner");
 
@@ -1741,11 +1739,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         const operational = envelope.operational.find((record) => record.recordId === ref.recordId);
 
         if (operational === undefined) return (yield* resolve(ref)).record;
-        if (
-          (yield* reference(operational).pipe(Effect.provideService(Crypto.Crypto, crypto)))
-            .digest !== ref.digest
-        )
-          return yield* invalid("Active Run evidence has invalid integrity");
 
         return operational;
       });
@@ -1791,11 +1784,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
         if (
           cachedContext?.threadId === threadId &&
-          cachedContext.digest === cursor.savedContext.digest
+          cachedContext.recordId === cursor.savedContext.recordId
         ) {
           saved = cachedContext.value;
         } else {
-          saved = yield* readRunContext(initial, input, cursor.savedContext.digest).pipe(
+          saved = yield* readRunContext(initial, input, cursor.savedContext.recordId).pipe(
             Effect.provide(RunContextReader.layer(threadId)),
             Effect.provideService(ThreadReader, reader),
             Effect.provideService(Crypto.Crypto, crypto),
@@ -1803,7 +1796,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               invalid("Saved original context cannot be resolved from its evidence"),
             ),
           );
-          resolvedContext = { threadId, digest: cursor.savedContext.digest, value: saved };
+          resolvedContext = { threadId, recordId: cursor.savedContext.recordId, value: saved };
         }
         if (
           envelope.operational.filter(({ payload }) => payload._tag === "RunContextRecorded")
@@ -2334,16 +2327,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       if (!response.toolOperations.some((operation) => selectedIds.has(operation.toolCallId)))
         continue;
 
-      const messagesDigest = yield* withCrypto(digestJson(response.messages)).pipe(
-        Effect.mapError((cause) =>
-          RunJournalError.make({ message: "Cannot verify original Tool response", cause }),
-        ),
-      );
-
-      if (messagesDigest !== response.messagesDigest)
-        return yield* RunJournalError.make({
-          message: "Original Tool response has an invalid digest",
-        });
       const declared = yield* declaredToolCalls(response.messages);
 
       for (const operation of response.toolOperations) {
@@ -2682,7 +2665,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
         let tail = {
           sequence: request.expectedTailSequence,
-          digest: request.expectedTailDigest,
         };
 
         return yield* progress.commit(request.batch).pipe(
@@ -2695,7 +2677,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   FencedAppendRequest.make({
                     ...request,
                     expectedTailSequence: tail.sequence,
-                    expectedTailDigest: tail.digest,
+
                     batch,
                     executions,
                   }),
@@ -2703,14 +2685,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 .pipe(
                   Effect.tapErrorTag("AppendConflict", (conflict) =>
                     Effect.sync(() => {
-                      if (
-                        conflict.reason === "tail" &&
-                        conflict.actualTailSequence !== undefined &&
-                        conflict.actualTailDigest !== undefined
-                      )
+                      if (conflict.reason === "tail" && conflict.actualTailSequence !== undefined)
                         tail = {
                           sequence: conflict.actualTailSequence,
-                          digest: conflict.actualTailDigest,
                         };
                     }),
                   ),
@@ -2775,7 +2752,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                           threadId: ctx.threadId,
                           producerEpoch: ctx.producerEpoch,
                           expectedTailSequence: tail.sequence,
-                          expectedTailDigest: tail.digest,
+
                           batch: prepared,
                           executions,
                         }),
@@ -2786,13 +2763,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                         if (
                           conflict.reason !== "tail" ||
                           conflict.actualTailSequence === undefined ||
-                          conflict.actualTailDigest === undefined ||
                           retries >= 8
                         )
                           return Effect.fail(conflict);
                         tail = {
                           sequence: conflict.actualTailSequence,
-                          digest: conflict.actualTailDigest,
                         };
 
                         if (executions !== undefined && executions.length > 0)
@@ -3765,7 +3740,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               records: [envelope],
             }),
             expectedTailSequence: tail.tailSequence,
-            expectedTailDigest: tail.tailDigest,
+
             producerEpoch: tail.producerEpoch,
           }),
         )
@@ -4304,8 +4279,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         childSubmissionId,
         childSettlementId: verified.settlement.settlementId,
         childOutcome: verified.outcome,
-        childResultDigest: yield* withCrypto(digestJson(verified.settlement.result ?? null)),
-        projectedResultDigest: yield* withCrypto(digestJson(boundedResult)),
         usageSummary: yield* childUsageSummaryOf(verified.childRecords, childRunId),
         ...(yield* verifiedChildUsage(verified, childRunId)),
         reservationId: reservation.reservationId,
@@ -4925,7 +4898,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         cached.threadId === ctx.threadId &&
         cached.through === projectionThrough &&
         cached.runId === runId &&
-        cached.contextDigest === priorContext?.digest
+        cached.contextRecordId === priorContext?.recordId
           ? (boundaries.push(...cached.boundaries),
             cached.contextEvidence.forEach(retainHistory),
             cached.journal)
@@ -4956,7 +4929,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         threadId: ctx.threadId,
         through: CanonicalSequence.make(projectionThrough),
         runId,
-        contextDigest: priorContext?.digest,
+        contextRecordId: priorContext?.recordId,
         contextEvidence: [...historyEvidence.values()],
         journal,
         boundaries,
@@ -5496,14 +5469,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             });
           }
         }
-        if (
-          recordedCompletion.resultDigest !== undefined &&
-          recordedCompletion.resultDigest !==
-            (yield* withCrypto(runCompletionDigest(recordedCompletion)))
-        )
-          return yield* RunJournalError.make({
-            message: "RunCompleted terminal values failed their integrity check",
-          });
         // Output and disposition were validated before the atomic RunCompleted commit.
         // Future application codecs and completion functions have no authority to reinterpret it.
 
@@ -7639,10 +7604,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 childSubmissionId: startedPayload.childSubmissionId,
                 childSettlementId: verified.settlement.settlementId,
                 childOutcome: verified.outcome,
-                childResultDigest: yield* withCrypto(
-                  digestJson(verified.settlement.result ?? null),
-                ),
-                projectedResultDigest: yield* withCrypto(digestJson(encodedResult)),
                 usageSummary: yield* childUsageSummaryOf(
                   verified.childRecords,
                   startedPayload.childRunId,
@@ -9303,7 +9264,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             records: [envelope],
           }),
           expectedTailSequence: tail.tailSequence,
-          expectedTailDigest: tail.tailDigest,
+
           producerEpoch,
         }),
       );
@@ -10375,11 +10336,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   });
 
   const readOperation = Effect.fnUntraced(function* (threadId: ThreadId, entry: ThreadWorkEntry) {
-    if (
-      entry.owner._tag !== "Operation" ||
-      entry.originRecordId === undefined ||
-      entry.originDigest === undefined
-    )
+    if (entry.owner._tag !== "Operation" || entry.originRecordId === undefined)
       return yield* ThreadStoreError.make({
         operation: "recover operation",
         message: "The original declaration reference is missing",
@@ -10393,7 +10350,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const origin = yield* withCrypto(
       resolveEvidence(threadId, {
         recordId: entry.originRecordId,
-        digest: entry.originDigest,
       }).pipe(Effect.provideService(ThreadReader, reader)),
     );
 

@@ -1,11 +1,10 @@
-import { EMPTY_TAIL_DIGEST, utf8ByteLength, digestCanonicalJson } from "@yielded/agent/digest";
+import { utf8ByteLength, digestCanonicalJson } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import { ExportRecord } from "@yielded/agent/record-format";
 import {
   CanonicalRecordEnvelope,
   CanonicalSequence,
-  Digest,
   ObservationOffset,
   RecordEnvelope,
 } from "@yielded/agent/records";
@@ -83,7 +82,7 @@ const encodeOperationalFacts = Schema.encodeSync(
 export const sqlCommitIntentDigest = (batchJson: string, facts: ReadonlyArray<RecordEnvelope>) =>
   digestCanonicalJson(JSON.stringify([batchJson, encodeOperationalFacts(facts)]));
 
-/** Prepare owned wire and its digest before the adapter acquires its writer transaction. */
+/** Capture exact wire and active retry intent before acquiring the writer transaction. */
 export const prepareSqlAppend = Effect.fnUntraced(function* (
   request: FencedAppendRequest,
   offsetPrefix: string,
@@ -131,10 +130,6 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
     }),
   );
 
-  const tailDigest = yield* captured
-    .digest()
-    .pipe(Effect.mapError(invalid("digest canonical append")));
-
   const commitDigest = yield* sqlCommitIntentDigest(
     captured.batchJson,
     executionWrites.flatMap(({ update }) => update.facts),
@@ -143,19 +138,16 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
   return {
     threadId: captured.threadId,
     batchId: captured.batch.batchId,
-    batchDigest: tailDigest,
     batchJson: captured.batchJson,
     batchHeaderJson: canonicalBatchHeaderJson(captured.batch),
     producerIdJson: JSON.stringify(captured.batch.producerId),
     batchBytes: captured.batchBytes,
     expectedTailSequence: captured.expectedTailSequence,
-    expectedTailDigest: captured.expectedTailDigest,
     producerEpoch: captured.producerEpoch,
     records,
     progress: captured.progress,
     executionWrites,
     commitDigest,
-    tailDigest,
   } satisfies RawAppendRequest;
 });
 
@@ -181,7 +173,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const decodeObservationOffset = Schema.decodeEffect(ObservationOffset);
   const decodeReadRequest = Schema.decodeEffect(Schema.toType(ThreadReadRequest));
   const decodeTailRequest = Schema.decodeEffect(Schema.toType(ThreadTailRequest));
-  const decodeDigest = Schema.decodeEffect(Digest);
   const decodeAppendResult = Schema.decodeEffect(AppendResult);
 
   const storeError = (operation: string, error: { readonly message: string }) =>
@@ -303,27 +294,21 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     return rows[0];
   });
 
-  const tailDigestAt = Effect.fnUntraced(function* (
+  const requireBatchBoundary = Effect.fnUntraced(function* (
     journal: SqlJournal<S, C, W, F>,
     threadId: ThreadMaterialization["threadId"],
     sequence: CanonicalSequence,
   ) {
-    if (sequence === 0) return EMPTY_TAIL_DIGEST;
+    const valid = yield* journal
+      .isBatchBoundary(threadId, sequence)
+      .pipe(Effect.mapError((error) => storeError("read checkpoint boundary", error)));
 
-    const digests = yield* journal
-      .getTailDigestAt(threadId, sequence)
-      .pipe(Effect.mapError((error) => storeError("read checkpoint digest", error)));
-
-    if (digests.length !== 1) {
+    if (!valid) {
       return yield* CheckpointRejected.make({
         threadId,
-        reason: "digest-mismatch",
+        reason: "not-batch-boundary",
       });
     }
-
-    return yield* Schema.decodeEffect(Digest)(digests[0]).pipe(
-      Effect.mapError((error) => schemaStoreError("decode checkpoint digest", error)),
-    );
   });
 
   const config = options;
@@ -350,12 +335,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
 
     yield* hitFailpoint("materialize:before");
     yield* journal
-      .materialize(
-        validated.threadId,
-        new Date(now).toISOString(),
-        EMPTY_TAIL_DIGEST,
-        validated.producerEpoch,
-      )
+      .materialize(validated.threadId, new Date(now).toISOString(), validated.producerEpoch)
       .pipe(
         Effect.mapError((error) =>
           isFenceRejected(error) ? error : storeError("materialize thread", error),
@@ -503,7 +483,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   });
 
   // Opt-in offline audit holds one read snapshot and hydrates one bounded batch at a time.
-  // No database-wide arrays, lifetime directories or digest maps.
+  // No database-wide arrays or lifetime directories.
   if (config.verifyOnOpen) {
     const sql = yield* SqlClient;
     const { table, execute } = yield* makeSqlQuery(options.namespace);
@@ -610,21 +590,23 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
 
           for (const batch of prepared.batches) {
             const stored = yield* decode(
-              Schema.Array(Schema.Struct({ batch_digest: Digest, tail_digest: Digest })),
+              Schema.Array(
+                Schema.Struct({ first_sequence: SqlInteger, last_sequence: SqlInteger }),
+              ),
               yield* query(
-                sql`SELECT tail_digest AS batch_digest, tail_digest FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${thread.thread_id} AND batch_id=${JSON.stringify(batch.batch.batchId)}`,
+                sql`SELECT first_sequence, last_sequence FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${thread.thread_id} AND batch_id=${JSON.stringify(batch.batch.batchId)}`,
               ),
             );
 
             if (
               stored.length !== 1 ||
-              stored[0]?.batch_digest !== batch.tailDigest ||
-              stored[0]?.tail_digest !== batch.tailDigest
+              stored[0]?.first_sequence !== batch.firstSequence ||
+              stored[0]?.last_sequence !== batch.lastSequence
             )
               return yield* options.errors.corruption({
                 table: "effect_agent_canonical_batches",
                 rowKey: `${thread.thread_id}/${batch.batch.batchId}`,
-                message: "Stored batch digest differs from its exact wire chain",
+                message: "Stored batch span differs from its exported records",
               });
           }
           cursor = page.cursor;
@@ -645,12 +627,11 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
             Schema.Array(
               Schema.Struct({
                 through_sequence: SqlInteger,
-                tail_digest: Digest,
                 checkpoint_json: Schema.String,
               }),
             ),
             yield* query(
-              sql`SELECT through_sequence, tail_digest, checkpoint_json FROM ${table("effect_agent_checkpoints")} WHERE thread_id=${thread.thread_id}
+              sql`SELECT through_sequence, checkpoint_json FROM ${table("effect_agent_checkpoints")} WHERE thread_id=${thread.thread_id}
               AND through_sequence>${afterCheckpoint} ORDER BY through_sequence LIMIT 1`,
             ),
           );
@@ -671,20 +652,15 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
             ),
           );
 
-          const bound =
-            row.through_sequence === 0
-              ? [EMPTY_TAIL_DIGEST]
-              : yield* journal.getTailDigestAt(
-                  thread.thread_id,
-                  CanonicalSequence.make(row.through_sequence),
-                );
+          const bound = yield* journal.isBatchBoundary(
+            thread.thread_id,
+            CanonicalSequence.make(row.through_sequence),
+          );
 
           if (
             checkpoint.threadId !== thread.thread_id ||
             checkpoint.throughSequence !== row.through_sequence ||
-            checkpoint.tailDigest !== row.tail_digest ||
-            bound.length !== 1 ||
-            bound[0] !== row.tail_digest
+            !bound
           )
             return yield* options.errors.corruption({
               table: "effect_agent_checkpoints",
@@ -737,14 +713,9 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
 
     const thread = yield* requireThread(journal, validated.threadId);
 
-    const tailDigest = yield* decodeDigest(thread.tail_digest).pipe(
-      Effect.mapError((error) => schemaStoreError("decode tail digest", error)),
-    );
-
     return ThreadTail.make({
       threadId: validated.threadId,
       tailSequence: thread.tail_sequence,
-      tailDigest,
       producerEpoch: thread.producer_epoch,
     });
   });
@@ -765,24 +736,16 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
       });
     }
 
-    const canonicalDigest = yield* tailDigestAt(
+    yield* requireBatchBoundary(
       journal,
       validated.checkpoint.threadId,
       validated.checkpoint.throughSequence,
     );
-
-    if (canonicalDigest !== validated.checkpoint.tailDigest) {
-      return yield* CheckpointRejected.make({
-        threadId: validated.checkpoint.threadId,
-        reason: "digest-mismatch",
-      });
-    }
     const checkpointJson = yield* encodeCheckpoint(validated.checkpoint);
 
     const raw = RawCheckpoint.make({
       threadId: validated.checkpoint.threadId,
       throughSequence: validated.checkpoint.throughSequence,
-      tailDigest: validated.checkpoint.tailDigest,
       checkpointJson,
     });
 
@@ -823,8 +786,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     if (
       row.thread_id !== validated.threadId ||
       checkpoint.threadId !== row.thread_id ||
-      checkpoint.throughSequence !== row.through_sequence ||
-      checkpoint.tailDigest !== row.tail_digest
+      checkpoint.throughSequence !== row.through_sequence
     ) {
       return yield* ThreadStoreError.make({
         operation: "load checkpoint",
@@ -832,18 +794,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
       });
     }
 
-    const canonicalDigest = yield* tailDigestAt(
-      journal,
-      checkpoint.threadId,
-      checkpoint.throughSequence,
-    );
-
-    if (canonicalDigest !== checkpoint.tailDigest) {
-      return yield* CheckpointRejected.make({
-        threadId: checkpoint.threadId,
-        reason: "digest-mismatch",
-      });
-    }
+    yield* requireBatchBoundary(journal, checkpoint.threadId, checkpoint.throughSequence);
 
     return Option.some(checkpoint);
   });

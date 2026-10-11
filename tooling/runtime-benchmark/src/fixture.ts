@@ -265,7 +265,6 @@ const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number)
         threadId,
         batch,
         expectedTailSequence: tail.tailSequence,
-        expectedTailDigest: tail.tailDigest,
         producerEpoch: tail.producerEpoch,
       }),
     );
@@ -348,7 +347,6 @@ const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
         threadId: seedThread,
         producerEpoch: claim.value.producerEpoch,
         expectedTailSequence: tail.tailSequence,
-        expectedTailDigest: tail.tailDigest,
         batch: CanonicalBatch.make({
           batchId: submissionSettlementBatchId(admitted.submissionId),
           producerId,

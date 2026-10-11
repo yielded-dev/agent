@@ -6,7 +6,6 @@ import {
   type PostgresStorageFailpointLocation,
   PostgresWriteContention,
 } from "@yielded/agent-storage-postgres/postgres-storage-error";
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { SubmissionId } from "@yielded/agent/identifiers";
 import { ReadRecord } from "@yielded/agent/record-format";
 import {
@@ -104,9 +103,8 @@ const inputRecord = (recordId: string, input: string): CanonicalRecord =>
 const append = (
   store: ThreadStore["Service"],
   canonicalBatch: CanonicalBatch,
-  tail: Pick<AppendResult, "lastSequence" | "tailDigest"> = {
+  tail: Pick<AppendResult, "lastSequence"> = {
     lastSequence: sequence(0),
-    tailDigest: EMPTY_TAIL_DIGEST,
   },
   producerEpoch: ProducerEpoch = epoch(1),
 ) =>
@@ -115,7 +113,7 @@ const append = (
       threadId,
       batch: canonicalBatch,
       expectedTailSequence: tail.lastSequence,
-      expectedTailDigest: tail.tailDigest,
+
       producerEpoch,
     }),
   );
@@ -245,7 +243,7 @@ describe("PostgresThreadStore faults", () => {
               threadId: validId,
               batch: batch("unicode-identity-first", [first]),
               expectedTailSequence: sequence(0),
-              expectedTailDigest: EMPTY_TAIL_DIGEST,
+
               producerEpoch: epoch(1),
             }),
           );
@@ -278,7 +276,7 @@ describe("PostgresThreadStore faults", () => {
                 threadId: validId,
                 batch: batch("unicode-identity-second", [second]),
                 expectedTailSequence: tail.lastSequence,
-                expectedTailDigest: tail.tailDigest,
+
                 producerEpoch: epoch(1),
               }),
             )
@@ -773,7 +771,6 @@ describe("PostgresThreadStore faults", () => {
 
               expect(exported.records).toEqual([]);
               expect(exported.tailSequence).toBe(0);
-              expect(exported.tailDigest).toBe(EMPTY_TAIL_DIGEST);
             }),
         );
 
@@ -805,7 +802,7 @@ describe("PostgresThreadStore faults", () => {
           schemaVersion: 1,
           threadId,
           throughSequence: recoveredAppend.lastSequence,
-          tailDigest: recoveredAppend.tailDigest,
+
           state: { destination: "Sapporo" },
           createdAt: at(3),
         });

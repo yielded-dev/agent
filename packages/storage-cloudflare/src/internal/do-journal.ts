@@ -86,7 +86,6 @@ class ThreadRow extends Schema.Class<ThreadRow>("ThreadRow")({
   thread_id: BoundedIdentifier,
   created_at: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
   producer_epoch: ProducerEpoch,
-  tail_digest: BoundedStoredText,
   tail_sequence: CanonicalSequence,
 }) {}
 
@@ -96,16 +95,6 @@ const threadRows = ownedRows(
   (row) => row.thread_id,
   "thread_id",
 );
-
-class BatchRow extends Schema.Class<BatchRow>("BatchRow")({
-  batch_digest: BoundedStoredText,
-  batch_id: Schema.fromJsonString(BoundedIdentifier),
-  batch_json: BoundedStoredText,
-  thread_id: BoundedIdentifier,
-  first_sequence: CanonicalSequence,
-  last_sequence: CanonicalSequence,
-  tail_digest: BoundedStoredText,
-}) {}
 
 class RecordRow extends Schema.Class<RecordRow>("RecordRow")({
   batch_id: Schema.fromJsonString(BoundedIdentifier),
@@ -195,7 +184,6 @@ type ReadPage = [typeof ReadPlanRow.Type, ...Array<typeof ReadPlanRow.Type>];
 class CheckpointRow extends Schema.Class<CheckpointRow>("CheckpointRow")({
   checkpoint_json: BoundedStoredText,
   thread_id: BoundedIdentifier,
-  tail_digest: BoundedStoredText,
   through_sequence: CanonicalSequence,
 }) {}
 
@@ -221,7 +209,6 @@ export class RawAppendResult extends Schema.Class<RawAppendResult>(
   firstSequence: CanonicalSequence,
   lastSequence: CanonicalSequence,
   replayed: Schema.Boolean,
-  tailDigest: BoundedStoredText,
 }) {}
 
 export class RawReadRequest extends Schema.Class<RawReadRequest>(
@@ -237,7 +224,6 @@ export class RawCheckpoint extends Schema.Class<RawCheckpoint>(
 )({
   checkpointJson: BoundedStoredText,
   threadId: BoundedIdentifier,
-  tailDigest: BoundedStoredText,
   throughSequence: CanonicalSequence,
 }) {}
 
@@ -430,9 +416,6 @@ const makeJournal = (
               ...(error.actualTailSequence === undefined
                 ? {}
                 : { actualTailSequence: error.actualTailSequence }),
-              ...(error.actualTailDigest === undefined
-                ? {}
-                : { actualTailDigest: error.actualTailDigest }),
             }),
           ),
         ),
@@ -530,7 +513,6 @@ const makeJournal = (
       function* (
         threadId: string,
         createdAt: string,
-        emptyTailDigest: string,
         producerEpoch: ProducerEpoch,
       ): Effect.fn.Return<
         void,
@@ -542,7 +524,6 @@ const makeJournal = (
             message: "Thread identity exceeds the Durable Object storage bounds.",
           });
         }
-        yield* checkValueBound("materialize thread", emptyTailDigest);
         // Refusals and idempotent materialization need no transaction. Recheck before writes.
         const current = yield* getThread(threadId);
 
@@ -586,13 +567,11 @@ const makeJournal = (
               thread_id,
               created_at,
               tail_sequence,
-              tail_digest,
               producer_epoch
             ) VALUES (
               ${threadId},
               ${createdAt},
               0,
-              ${emptyTailDigest},
               ${producerEpoch}
             )
            RETURNING *`.pipe(
@@ -693,18 +672,8 @@ const makeJournal = (
         });
       }
       // Archives store the full batch as one value, so their ceiling also bounds hot appends.
-      // The trusted append SPI pairs captured JSON with its exact UTF-8 width. Digests are ASCII.
+      // The trusted append SPI pairs captured JSON with its exact UTF-8 width.
       yield* checkValueBound("append canonical batch", request.batchJson, request.batchBytes);
-      yield* checkValueBound(
-        "append canonical batch",
-        request.batchDigest,
-        request.batchDigest.length,
-      );
-      yield* checkValueBound(
-        "append canonical batch",
-        request.tailDigest,
-        request.tailDigest.length,
-      );
       for (const record of request.records) {
         if (record.recordBytes > maxStoredValueBytes)
           return yield* DoValueBoundExceeded.make({
@@ -766,7 +735,7 @@ const makeJournal = (
         if (existing.batch_json !== request.batchJson) {
           return yield* DoAppendConflict.make({
             message: `Batch ${request.batchId} already exists with different canonical content.`,
-            reason: "batch-digest",
+            reason: "batch-content",
           });
         }
 
@@ -774,21 +743,15 @@ const makeJournal = (
           firstSequence: existing.first_sequence,
           lastSequence: existing.last_sequence,
           replayed: true,
-          tailDigest: existing.tail_digest,
         });
       }
 
-      if (
-        request.expectedTailSequence !== thread.tail_sequence ||
-        request.expectedTailDigest !== thread.tail_digest
-      ) {
+      if (request.expectedTailSequence !== thread.tail_sequence) {
         return yield* DoAppendConflict.make({
           message:
-            `Expected tail ${request.expectedTailSequence}/${request.expectedTailDigest} ` +
-            `but found ${thread.tail_sequence}/${thread.tail_digest}.`,
+            `Expected tail ${request.expectedTailSequence} ` + `but found ${thread.tail_sequence}.`,
           reason: "tail",
           actualTailSequence: thread.tail_sequence,
-          actualTailDigest: thread.tail_digest,
         });
       }
 
@@ -859,7 +822,6 @@ const makeJournal = (
         firstSequence,
         lastSequence,
         replayed: false,
-        tailDigest: request.tailDigest,
       });
 
       if (request.records.length > 0) {
@@ -870,14 +832,12 @@ const makeJournal = (
             batch_id,
             first_sequence,
             last_sequence,
-            tail_digest,
             producer_id_json
           ) VALUES (
             ${request.threadId},
             ${JSON.stringify(request.batchId)},
             ${firstSequence},
             ${lastSequence},
-            ${request.tailDigest},
             ${request.producerIdJson}
           )
         `.pipe(Effect.mapError(storageError("insert canonical batch")));
@@ -930,7 +890,6 @@ const makeJournal = (
           UPDATE effect_agent_threads
           SET
             tail_sequence = ${lastSequence},
-            tail_digest = ${request.tailDigest},
             producer_epoch = ${request.producerEpoch}
           WHERE thread_id = ${request.threadId}
          RETURNING *`.pipe(
@@ -1047,10 +1006,7 @@ const makeJournal = (
             message: "The append producer epoch is not current.",
           });
         }
-        if (
-          request.expectedTailSequence !== observed.tail_sequence ||
-          request.expectedTailDigest !== observed.tail_digest
-        ) {
+        if (request.expectedTailSequence !== observed.tail_sequence) {
           const batches = yield* sql`
           SELECT batch_id FROM effect_agent_canonical_batches
           WHERE thread_id = ${request.threadId} AND batch_id = ${JSON.stringify(request.batchId)}
@@ -1059,13 +1015,12 @@ const makeJournal = (
           LIMIT 1
         `.pipe(Effect.mapError(storageError("preflight append replay")));
 
-          // A possible replay still checks the current epoch and digest in the transaction.
+          // A possible replay still checks the current epoch and exact content in the transaction.
           if (batches.length === 0) {
             return yield* DoAppendConflict.make({
               reason: "tail",
               message: "The canonical tail has advanced.",
               actualTailSequence: observed.tail_sequence,
-              actualTailDigest: observed.tail_digest,
             });
           }
         }
@@ -1213,9 +1168,17 @@ const makeJournal = (
 
           if (checkpoint.throughSequence > thread.tail_sequence) {
             return yield* DoCheckpointConflict.make({
+              reason: "ahead-of-tail",
               message:
                 `Checkpoint sequence ${checkpoint.throughSequence} is after canonical tail ` +
                 `${thread.tail_sequence}.`,
+            });
+          }
+
+          if (!(yield* isBatchBoundary(checkpoint.threadId, checkpoint.throughSequence))) {
+            return yield* DoCheckpointConflict.make({
+              reason: "not-batch-boundary",
+              message: "Checkpoint sequence is not the end of a complete canonical batch.",
             });
           }
 
@@ -1223,7 +1186,6 @@ const makeJournal = (
           SELECT
             thread_id,
             through_sequence,
-            tail_digest,
             checkpoint_json
           FROM effect_agent_checkpoints
           WHERE thread_id = ${checkpoint.threadId}
@@ -1245,11 +1207,9 @@ const makeJournal = (
             });
           }
           if (existing.length === 1) {
-            if (
-              existing[0].tail_digest !== checkpoint.tailDigest ||
-              existing[0].checkpoint_json !== checkpoint.checkpointJson
-            ) {
+            if (existing[0].checkpoint_json !== checkpoint.checkpointJson) {
               return yield* DoCheckpointConflict.make({
+                reason: "corrupt",
                 message: "A different checkpoint already exists at this canonical sequence.",
               });
             }
@@ -1261,12 +1221,10 @@ const makeJournal = (
           INSERT INTO effect_agent_checkpoints (
             thread_id,
             through_sequence,
-            tail_digest,
             checkpoint_json
           ) VALUES (
             ${checkpoint.threadId},
             ${checkpoint.throughSequence},
-            ${checkpoint.tailDigest},
             ${checkpoint.checkpointJson}
           )
         `.pipe(Effect.mapError(storageError("insert checkpoint")));
@@ -1282,7 +1240,6 @@ const makeJournal = (
       SELECT
         thread_id,
         through_sequence,
-        tail_digest,
         checkpoint_json
       FROM effect_agent_checkpoints
       WHERE thread_id = ${threadId}
@@ -1299,51 +1256,30 @@ const makeJournal = (
       );
     });
 
-    const getTailDigestAt = Effect.fnUntraced(function* (
+    const isBatchBoundary = Effect.fnUntraced(function* (
       threadId: string,
       sequence: CanonicalSequence,
     ) {
-      const thread = (yield* getThread(threadId))[0];
+      if (sequence === 0) return true;
 
-      if (thread !== undefined && sequence === thread.tail_sequence) return [thread.tail_digest];
-      if (sequence === 0) {
-        const threads = yield* getThread(threadId);
-
-        return threads.length === 0
-          ? []
-          : [threads[0].tail_sequence === 0 ? threads[0].tail_digest : undefined].filter(
-              (value): value is string => value !== undefined,
-            );
-      }
-
-      // Resolve both primary keys; last_sequence alone scans the Thread's archived batches.
-      // Retain the batch-end predicate so an interior record cannot certify a checkpoint.
       const rows = yield* sql<Record<string, unknown>>`
-      SELECT
-        thread_id,
-        batch_id,
-        first_sequence,
-        last_sequence,
-        tail_digest AS batch_digest,
-        tail_digest,
-        '' AS batch_json
-      FROM effect_agent_canonical_batches
-      WHERE thread_id = ${threadId}
-        AND batch_id = (
-          SELECT ${recordBatchId(sql)} FROM effect_agent_canonical_records
-          WHERE thread_id = ${threadId} AND sequence = ${sequence}
-        )
-        AND last_sequence = ${sequence}
-    `.pipe(Effect.mapError(storageError("read canonical digest at sequence")));
+        SELECT last_sequence FROM effect_agent_canonical_batches
+        WHERE thread_id = ${threadId}
+          AND batch_id = (
+            SELECT ${recordBatchId(sql)} FROM effect_agent_canonical_records
+            WHERE thread_id = ${threadId} AND sequence = ${sequence}
+          )
+          AND last_sequence = ${sequence}
+      `.pipe(Effect.mapError(storageError("read canonical batch boundary")));
 
       const batches = yield* decodeRows(
-        Schema.Array(BatchRow),
+        Schema.Array(Schema.Struct({ last_sequence: CanonicalSequence })),
         "effect_agent_canonical_batches",
         `${threadId}/${sequence}`,
         rows,
       );
 
-      return batches.map((batch) => batch.tail_digest);
+      return batches.length === 1;
     });
 
     const sourceFailure = (cause: unknown) =>
@@ -1529,7 +1465,7 @@ const makeJournal = (
       checkValueBound,
       getThread,
       hasRecord,
-      getTailDigestAt,
+      isBatchBoundary,
       loadCheckpoint,
       materialize,
       read: (request: RawReadRequest) => state.read(read(request)),

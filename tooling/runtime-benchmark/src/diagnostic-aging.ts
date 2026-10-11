@@ -165,7 +165,6 @@ const appendPadding = Effect.fn("diagnostic.aging.appendPadding")(function* (
         threadId: paddingThreadId,
         producerEpoch: tail.producerEpoch,
         expectedTailSequence: tail.tailSequence,
-        expectedTailDigest: tail.tailDigest,
         batch: CanonicalBatch.make({
           batchId: BatchId.make(`aging-padding-${paddingThreadId}-${offset}`),
           producerId,
@@ -529,7 +528,7 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
 
         yield* check(
           selected.tailSequence === selectedThreadRecords &&
-            selected.tailDigest === retained.lowTail.tailDigest,
+            selected.tailSequence === retained.lowTail.tailSequence,
           "Background seeding changed the selected Thread",
         );
       }).pipe(Effect.provide(host(filename)), Effect.scoped);

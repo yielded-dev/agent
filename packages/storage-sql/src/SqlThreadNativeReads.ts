@@ -9,7 +9,6 @@ import {
   ObservationOffset,
   CanonicalRecordEnvelope,
   CanonicalSequence,
-  Digest,
   ProducerEpoch,
   PromptRecord,
   type PromptRecordEnvelope,
@@ -322,7 +321,6 @@ export const makeProgressAppendValidation = Effect.fnUntraced(function* (namespa
                 tail: () =>
                   Effect.succeed({
                     tail_sequence: request.expectedTailSequence,
-                    tail_digest: request.expectedTailDigest,
                     producer_epoch: request.producerEpoch,
                   }),
               }),
@@ -392,7 +390,6 @@ export interface SelectedReadOwner {
   readonly tail: (threadId: SelectedThreadRead["threadId"]) => Effect.Effect<
     | {
         readonly tail_sequence: CanonicalSequence;
-        readonly tail_digest: Digest;
         readonly producer_epoch: ProducerEpoch;
       }
     | undefined,
@@ -438,7 +435,6 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
     Schema.Array(
       Schema.Struct({
         tail_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-        tail_digest: Digest,
         producer_epoch: SqlInteger.pipe(Schema.decodeTo(ProducerEpoch)),
       }),
     ),
@@ -462,7 +458,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
     }
 
     const rows =
-      yield* sql`SELECT tail_sequence, tail_digest, producer_epoch FROM ${relation("effect_agent_threads")} WHERE thread_id = ${threadId}`.pipe(
+      yield* sql`SELECT tail_sequence, producer_epoch FROM ${relation("effect_agent_threads")} WHERE thread_id = ${threadId}`.pipe(
         execute,
       );
 
@@ -504,8 +500,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
 
           if (
             "expectedTailSequence" in selection &&
-            (tail.tail_sequence !== selection.expectedTailSequence ||
-              tail.tail_digest !== selection.expectedTailDigest)
+            tail.tail_sequence !== selection.expectedTailSequence
           )
             return yield* failure("selected read tail changed");
           if ("throughSequence" in selection && selection.throughSequence > tail.tail_sequence)
@@ -1186,7 +1181,6 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
           return yield* ThreadIdentity.makeEffect({
             threadId: request.threadId,
             tailSequence: tail.tail_sequence,
-            tailDigest: tail.tail_digest,
             producerEpoch: tail.producer_epoch,
             admissions: facts.admissions_count,
             records,
@@ -1210,10 +1204,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
           Effect.gen(function* () {
             const tail = yield* requireThread(request.threadId);
 
-            if (
-              tail.tail_sequence !== request.expectedTailSequence ||
-              tail.tail_digest !== request.expectedTailDigest
-            )
+            if (tail.tail_sequence !== request.expectedTailSequence)
               return yield* failure("worker capacity tail changed");
             yield* requireReadyWork(request.threadId, tail.tail_sequence);
 
@@ -1239,7 +1230,6 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
             return yield* ThreadWorkerCapacity.makeEffect({
               threadId: request.threadId,
               tailSequence: tail.tail_sequence,
-              tailDigest: tail.tail_digest,
               producerEpoch: tail.producer_epoch,
               activeWorkers: active.length,
               workerActive: worker.length === 1,

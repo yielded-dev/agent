@@ -85,13 +85,6 @@ export class CertificationSweepResult extends Schema.Class<CertificationSweepRes
   /** The armed fault actually fired (one-shot) somewhere in the cell's drive or re-drive. */
   failpointFired: Schema.Boolean,
   status: CertificationSweepStatus,
-  /**
-   * Every lane's digest chain recomputed from `EMPTY_TAIL_DIGEST` and matched the exported
-   * tail — fully discharged here because the runner captures per-batch producer identity at
-   * append time (the port-only admin `verify` reports this check `skipped` instead).
-   * Unreached locations may share the scenario's clean-run verification.
-   */
-  digestChainVerified: Schema.Boolean,
   detail: Schema.optionalKey(BoundedCertificationDetail),
 }) {}
 

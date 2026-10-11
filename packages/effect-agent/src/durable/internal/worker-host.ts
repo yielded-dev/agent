@@ -342,9 +342,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       .inspectTail(ThreadTailRequest.make({ threadId: sourceThreadId }))
       .pipe(Effect.mapError(storageFailure("start")));
 
-    return tail.tailSequence === admission.tailSequence && tail.tailDigest === admission.tailDigest
-      ? admission
-      : undefined;
+    return tail.tailSequence === admission.tailSequence ? admission : undefined;
   });
 
   const authorizeBudget = Effect.fnUntraced(function* (
@@ -540,7 +538,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         selection: {
           _tag: "WorkerExecution",
           expectedTailSequence: tail.tailSequence,
-          expectedTailDigest: tail.tailDigest,
         },
         page: { limit: 2 },
       })
@@ -670,7 +667,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         | WorkerReportPrepared
         | WorkerReportRefused
         | SubtreeBudgetReserved,
-      current: Pick<ThreadIdentity, "tailSequence" | "tailDigest" | "records"> &
+      current: Pick<ThreadIdentity, "tailSequence" | "records"> &
         Partial<Pick<ThreadTail, "producerEpoch">>,
       phase: "source" | "completion" | "subtree" | "report" | "stop",
     ) {
@@ -680,8 +677,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       if (producerEpoch === undefined) {
         const tail = yield* deps.store.inspectTail(ThreadTailRequest.make({ threadId }));
 
-        if (tail.tailSequence !== current.tailSequence || tail.tailDigest !== current.tailDigest)
-          return false;
+        if (tail.tailSequence !== current.tailSequence) return false;
         producerEpoch = tail.producerEpoch;
       }
 
@@ -694,7 +690,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
             threadId,
             producerEpoch,
             expectedTailSequence: current.tailSequence,
-            expectedTailDigest: current.tailDigest,
+
             batch: CanonicalBatch.make({
               batchId: Schema.decodeSync(BatchId)(id),
               producerId: deps.producerId,
@@ -1217,7 +1213,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           .inspectTail(ThreadTailRequest.make({ threadId }))
           .pipe(
             Effect.flatMap((current) =>
-              current.tailSequence !== tail.tailSequence || current.tailDigest !== tail.tailDigest
+              current.tailSequence !== tail.tailSequence
                 ? Effect.succeed(Option.none<ReadonlyArray<CanonicalRecordEnvelope>>())
                 : Effect.fail(cause),
             ),
@@ -1379,9 +1375,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           ? {
               ...targetRequest,
               _tag: "InitialInput",
-              ...(authorization === undefined ||
-              authorization.tailSequence !== current.tailSequence ||
-              authorization.tailDigest !== current.tailDigest
+              ...(authorization === undefined || authorization.tailSequence !== current.tailSequence
                 ? {}
                 : { admission: authorization }),
               ...(origin.continuationOf === undefined
@@ -1464,7 +1458,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           threadId: origin.source.threadId,
           workerThreadId: origin.worker.threadId,
           expectedTailSequence: current.tailSequence,
-          expectedTailDigest: current.tailDigest,
+
           update: admission.reportKind === "update",
           activeLimit,
           pendingLimit,
@@ -1476,8 +1470,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
               .inspectTail(ThreadTailRequest.make({ threadId: origin.source.threadId }))
               .pipe(
                 Effect.flatMap((tail) =>
-                  tail.tailSequence !== current.tailSequence ||
-                  tail.tailDigest !== current.tailDigest
+                  tail.tailSequence !== current.tailSequence
                     ? Effect.succeed(Option.none<ThreadWorkerCapacity>())
                     : Effect.fail(cause),
                 ),
@@ -1489,11 +1482,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
       if (Option.isNone(capacity)) continue;
       const live = capacity.value;
 
-      if (
-        live.threadId !== origin.source.threadId ||
-        live.tailSequence !== current.tailSequence ||
-        live.tailDigest !== current.tailDigest
-      )
+      if (live.threadId !== origin.source.threadId || live.tailSequence !== current.tailSequence)
         return yield* failure("start", "corrupt");
       const pending = live.pendingInputs < pendingLimit;
 
@@ -2234,7 +2223,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           existing.messageId !== messageId ||
           existing.workerThreadId !== workerThreadId ||
           existing.reservation.recordId !== ref.recordId ||
-          existing.reservation.digest !== ref.digest ||
           existing.receiver.threadId !== workerThreadId ||
           existing.receiver.principal !== delivery.envelope.deliveryPrincipal ||
           existing.receiver.idempotencyKey !== delivery.envelope.admissionKey ||
@@ -2253,10 +2241,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           !Schema.toEquivalence(WorkerRef)(
             stop.record.payload.command.worker,
             admission.origin.worker,
-          ) ||
-          (yield* withCrypto(reference(stop.record)).pipe(
-            Effect.mapError(storageFailure("inspect")),
-          )).digest !== existing.stop.digest
+          )
         )
           return yield* failure("inspect", "corrupt");
 
@@ -2974,7 +2959,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
                   selection: {
                     _tag: "WorkerExecution",
                     expectedTailSequence: current.tailSequence,
-                    expectedTailDigest: current.tailDigest,
                   },
                   page: { limit: 2 },
                 })
@@ -2986,11 +2970,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
                       // An unavailable recheck cannot justify discarding the original error.
                       const after = yield* tail().pipe(Effect.orElseSucceed(() => current));
 
-                      if (
-                        after !== undefined &&
-                        (current.tailSequence !== after.tailSequence ||
-                          current.tailDigest !== after.tailDigest)
-                      )
+                      if (after !== undefined && current.tailSequence !== after.tailSequence)
                         return undefined;
 
                       return yield* error;
@@ -3098,7 +3078,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         if (
           !Schema.toEquivalence(WorkerLedgerState)(control, after) ||
           current?.tailSequence !== afterTail?.tailSequence ||
-          current?.tailDigest !== afterTail?.tailDigest ||
           execution?.progress.revision !== afterExecution?.progress.revision ||
           delivery?.key.messageId !== afterDelivery?.key.messageId ||
           delivery?.version !== afterDelivery?.version
@@ -3214,7 +3193,6 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
           ...(previous === undefined ? {} : { continuationOf: previous.evidence }),
           access: "send",
           tailSequence: tail.tailSequence,
-          tailDigest: tail.tailDigest,
         };
 
         if (context.depth !== 0 && sourceSubmissionId === undefined)

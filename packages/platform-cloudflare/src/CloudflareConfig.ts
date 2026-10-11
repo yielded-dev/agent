@@ -113,7 +113,7 @@ export class CloudflareDurableRuntimeConfigValue extends Schema.Class<Cloudflare
     Schema.isGreaterThan(0),
     Schema.isLessThanOrEqualTo(2_000_000),
   ),
-  /** Opt-in full payload/digest-chain audit while opening the store. */
+  /** Opt-in full history and active-state validation while opening the store. */
   verifyOnOpen: Schema.Boolean,
   limits: CloudflareAdmissionLimitsValue,
 }) {}

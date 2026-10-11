@@ -738,12 +738,7 @@ describe("DC alarm semantics", () => {
       );
 
       expect(outcomes.map(({ outcome }) => outcome)).toEqual(["aborted", "completed"]);
-      const unresolved = Option.getOrThrow(await readExecution(receipt));
-
-      expect(unresolved.progress.position).toBe("settled");
-      expect(unresolved.progress.accounting.accountedToolTurn).toBeLessThan(
-        unresolved.progress.turn,
-      );
+      expect(await readExecution(receipt)).toEqual(Option.none());
       expect(await readExecution(follower)).toEqual(Option.none());
     },
     30_000,
