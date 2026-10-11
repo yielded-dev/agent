@@ -24,12 +24,21 @@ export const deployments = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const privateDirectory = stateDirectory(cloud.prefix);
 
+  const Name = Schema.String.check(Schema.isPattern(new RegExp(`^${cloud.prefix}-[a-z0-9-]+$`)));
+  const Workers = Schema.NonEmptyArray(Name).check(Schema.isUnique());
+
+  const ownedWorkers = (name: string) =>
+    Schema.NonEmptyArray(
+      Schema.String.check(Schema.isPattern(new RegExp(`^${name}(?:-[a-z0-9-]+)?$`))),
+    ).check(Schema.isUnique());
+
   const Stack = Schema.Struct({
-    name: Schema.String.check(Schema.isPattern(new RegExp(`^${cloud.prefix}-[a-z0-9-]+$`))),
+    name: Name,
     kind: Schema.Literals(["infrastructure", "target"]),
     bundle: Schema.String,
     build: Schema.String,
     cpu: Schema.Boolean,
+    workers: Schema.optionalKey(Workers),
   });
 
   type Stack = typeof Stack.Type;
@@ -112,6 +121,7 @@ export const deployments = Effect.gen(function* () {
         DURABLE_BENCH_PREFIX: cloud.prefix,
         DURABLE_BENCH_INFRA_PREFIX: state.infrastructurePrefix,
         DURABLE_BENCH_NAME: stack.name,
+        DURABLE_BENCH_WORKERS: JSON.stringify(stack.workers ?? [stack.name]),
         DURABLE_BENCH_BUNDLE: stack.bundle,
         DURABLE_BENCH_BUILD: stack.build,
         DURABLE_BENCH_TOKEN: state.token,
@@ -154,6 +164,28 @@ export const deployments = Effect.gen(function* () {
     });
   });
 
+  const readyInfrastructure = Effect.fnUntraced(function* (revision: string) {
+    yield* ready(driver, revision, false, "driver");
+    yield* ready(url(state.infrastructurePrefix + "-provider"), revision, true, "provider");
+  });
+
+  const readyTargets = (workers: readonly string[], revision: string) =>
+    Effect.forEach(
+      workers,
+      Effect.fnUntraced(function* (name) {
+        yield* ready(url(name), revision);
+        yield* ready(url(name), revision, true);
+      }),
+      { concurrency: 6, discard: true },
+    );
+
+  const infrastructureBuild = Effect.fnUntraced(function* () {
+    if (state.infrastructure?.kind !== "infrastructure" || !state.infrastructureDeployed)
+      return yield* new BenchError({ message: "Shared infrastructure is not deployed." });
+
+    return state.infrastructure.build;
+  });
+
   const infrastructure = Effect.gen(function* () {
     const output = join(privateDirectory, "infrastructure");
     const driverBuild = yield* build(output, "driver");
@@ -182,10 +214,7 @@ export const deployments = Effect.gen(function* () {
       yield* alchemy(infrastructure, "deploy");
     }
 
-    const health = Effect.gen(function* () {
-      yield* ready(driver, revision, false, "driver");
-      yield* ready(url(state.infrastructurePrefix + "-provider"), revision, true, "provider");
-    });
+    const health = readyInfrastructure(revision);
 
     yield* health.pipe(
       Effect.catchTag("BenchError", () =>
@@ -209,23 +238,23 @@ export const deployments = Effect.gen(function* () {
     return reused;
   });
 
-  const target = Effect.fnUntraced(function* (
+  const targets = Effect.fnUntraced(function* (
     name: string,
     bundle: string,
     revision: string,
     cpu: boolean,
+    workers: readonly string[],
   ) {
-    const stack: Stack = { name, kind: "target", bundle, build: revision, cpu };
+    yield* Schema.decodeUnknownEffect(Name)(name);
+    const names = yield* Schema.decodeUnknownEffect(ownedWorkers(name))(workers);
+    const stack: Stack = { name, kind: "target", bundle, build: revision, cpu, workers: names };
 
     state = { ...state, targets: { ...state.targets, [name]: stack } };
     yield* save(stateFile, state);
-    yield* Console.error("Deploying target Worker…");
+    yield* Console.error(`Deploying ${names.length} target Worker(s)…`);
     yield* alchemy(stack, "deploy");
 
-    const health = Effect.gen(function* () {
-      yield* ready(url(name), revision);
-      yield* ready(url(name), revision, true);
-    });
+    const health = readyTargets(names, revision);
 
     yield* health.pipe(
       Effect.catchTag("BenchError", () =>
@@ -239,13 +268,73 @@ export const deployments = Effect.gen(function* () {
       ),
     );
 
+    const endpoints: Readonly<Record<string, string>> = Object.fromEntries(
+      names.map((worker) => [worker, url(worker)]),
+    );
+
+    return endpoints;
+  });
+
+  const target = Effect.fnUntraced(function* (
+    name: string,
+    bundle: string,
+    revision: string,
+    cpu: boolean,
+  ) {
+    yield* targets(name, bundle, revision, cpu, [name]);
+
     return url(name);
+  });
+
+  const attach = Effect.fnUntraced(function* (
+    name: string,
+    expectedTargetBuild: string,
+    expectedInfrastructureBuild: string,
+  ) {
+    yield* Schema.decodeUnknownEffect(Name)(name);
+    const stack = state.targets[name];
+    const targetHash = /^([a-f0-9]{64})-e0$/.exec(expectedTargetBuild)?.[1];
+
+    if (
+      !stack ||
+      stack.name !== name ||
+      stack.kind !== "target" ||
+      stack.build !== expectedTargetBuild ||
+      targetHash === undefined
+    )
+      return yield* new BenchError({
+        message: "Resume target does not match the owned deployment.",
+      });
+
+    if (hash(yield* fs.readFile(stack.bundle)) !== targetHash)
+      return yield* new BenchError({
+        message: "Retained target bundle differs from the resume build.",
+      });
+
+    const revision = yield* infrastructureBuild();
+
+    if (revision !== expectedInfrastructureBuild)
+      return yield* new BenchError({
+        message: "Shared infrastructure differs from the resume build.",
+      });
+
+    const names = yield* Schema.decodeUnknownEffect(ownedWorkers(name))(stack.workers ?? [name]);
+
+    yield* readyInfrastructure(revision);
+    yield* readyTargets(names, expectedTargetBuild);
+
+    const endpoints: Readonly<Record<string, string>> = Object.fromEntries(
+      names.map((worker) => [worker, url(worker)]),
+    );
+
+    return { endpoints, infrastructureBuild: revision };
   });
 
   const destroy = Effect.fnUntraced(function* (name: string) {
     const stack = state.targets[name];
 
     if (stack) yield* alchemy(stack, "destroy");
+
     const remaining = yield* cloud.resources(name);
 
     if (!remaining.verified)
@@ -277,5 +366,15 @@ export const deployments = Effect.gen(function* () {
     return remaining;
   });
 
-  return { token: state.token, driver, infrastructure, target, destroy, teardown };
+  return {
+    token: state.token,
+    driver,
+    infrastructure,
+    infrastructureBuild,
+    target,
+    targets,
+    attach,
+    destroy,
+    teardown,
+  };
 });
