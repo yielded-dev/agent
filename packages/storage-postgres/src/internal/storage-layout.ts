@@ -1039,8 +1039,8 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
     const independent = new Set([
       "effect_agent_activity_metadata",
       "effect_agent_activity_metadata_pkey",
-      "effect_agent_activity_processor_state_v1",
-      "effect_agent_activity_processor_state_v1_pkey",
+      "effect_agent_activity_processor_state_v2",
+      "effect_agent_activity_processor_state_v2_pkey",
     ]);
 
     if (names.every((row) => independent.has(row.name))) return undefined;

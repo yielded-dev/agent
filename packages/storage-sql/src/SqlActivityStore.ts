@@ -1,7 +1,5 @@
 import {
   ActivityBusy,
-  ActivityClaim,
-  ActivityClaimRequest,
   ActivityMutationFailpoint,
   ActivityOwnershipLost,
   ActivityProcessorKey,
@@ -10,20 +8,22 @@ import {
   ActivityStoreError,
   ActivityWorkConflict,
   PreparedActivity,
+  type ActivitySession,
 } from "@yielded/agent/activity-store";
-import { Digest } from "@yielded/agent/records";
+import { CanonicalSequence, Digest } from "@yielded/agent/records";
 import { Clock, Effect, Schema } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 
+import { sqlStorageOwner } from "./internal/SqlOwner.ts";
 import {
   makeRowDecoder,
   makeSqlQuery,
   SqlInteger,
-  SqlNumber,
   type SqlWriteTransaction,
 } from "./SqlStorage.ts";
 
-const STORAGE_VERSION = 1 as const;
+const STORAGE_VERSION = 2 as const;
+const activeSessions = new WeakMap<object, Map<string, object>>();
 const StoredJson = Schema.String.check(Schema.isMaxLength(16 * 1024 * 1024));
 const sameKey = Schema.toEquivalence(ActivityProcessorKey);
 const sameWork = Schema.toEquivalence(PreparedActivity);
@@ -36,9 +36,6 @@ class ActivityStateRow extends Schema.Class<ActivityStateRow>(
   thread_id: ActivityProcessorKey.fields.threadId,
   format_version: SqlInteger,
   through_sequence: SqlInteger.pipe(Schema.decodeTo(ActivityProgress.fields.throughSequence)),
-  epoch: SqlInteger.pipe(Schema.decodeTo(ActivityProgress.fields.epoch)),
-  owner: ActivityProgress.fields.owner,
-  lease_expires_at: SqlNumber.pipe(Schema.decodeTo(ActivityProgress.fields.leaseExpiresAt)),
   progress_json: StoredJson,
 }) {}
 
@@ -109,11 +106,9 @@ const validateProgress = Effect.fnUntraced(function* (
   operation: string,
 ): Effect.fn.Return<ActivityProgress, ActivityStoreError> {
   if (
-    progress.epoch < 1 ||
-    (progress.owner === null && progress.leaseExpiresAt !== 0) ||
-    (progress.pending !== null &&
-      (!sameKey(progress.pending.key, progress.key) ||
-        progress.pending.sequence !== progress.throughSequence + 1))
+    progress.pending !== null &&
+    (!sameKey(progress.pending.key, progress.key) ||
+      progress.pending.sequence !== progress.throughSequence + 1)
   ) {
     return yield* storeError(operation, "corrupt");
   }
@@ -121,27 +116,12 @@ const validateProgress = Effect.fnUntraced(function* (
   return progress;
 });
 
-const makeClaim = (progress: ActivityProgress): ActivityClaim | null =>
-  progress.owner === null
-    ? null
-    : ActivityClaim.make({
-        key: progress.key,
-        owner: progress.owner,
-        epoch: progress.epoch,
-        throughSequence: progress.throughSequence,
-        leaseExpiresAt: progress.leaseExpiresAt,
-        pending: progress.pending,
-      });
-
-const ownershipLost = (claim: ActivityClaim) =>
-  ActivityOwnershipLost.make({ key: claim.key, owner: claim.owner, epoch: claim.epoch });
-
 /**
  * Initialize standalone activity progress and provide its transitions. The adapter supplies
  * its transaction semantics and optional namespace setup, which runs in the initialization transaction.
  */
 export const makeSqlActivityStore = Effect.fnUntraced(function* (
-  withWriteTransaction: SqlWriteTransaction,
+  transact: SqlWriteTransaction,
   initializeNamespace: Effect.Effect<
     void,
     ActivityStoreError,
@@ -150,6 +130,30 @@ export const makeSqlActivityStore = Effect.fnUntraced(function* (
   namespace?: string,
 ) {
   const sql = yield* SqlClientService.SqlClient;
+  const owner = yield* sqlStorageOwner(sql, namespace);
+  const withWriteTransaction: SqlWriteTransaction = (body) => owner.withMutation(transact(body));
+  let registry = activeSessions.get(owner.identity);
+
+  if (registry === undefined) {
+    registry = new Map();
+    activeSessions.set(owner.identity, registry);
+  }
+  const active = registry;
+  const granted = new Map<string, object>();
+  let closed = false;
+
+  yield* Effect.addFinalizer(() =>
+    owner.withMutation(
+      Effect.sync(() => {
+        closed = true;
+        for (const [id, token] of granted) {
+          if (active.get(id) === token) active.delete(id);
+        }
+        granted.clear();
+      }),
+    ),
+  );
+
   const { table: relation, execute } = yield* makeSqlQuery(namespace);
   const failpoint = yield* ActivityMutationFailpoint;
   const decodeMetadataRows = decodeRows(Schema.Array(Schema.Struct({ version: SqlInteger })));
@@ -164,10 +168,6 @@ export const makeSqlActivityStore = Effect.fnUntraced(function* (
 
       const integer = sql.literal(
         sql.onDialectOrElse({ pg: () => "BIGINT", orElse: () => "INTEGER" }),
-      );
-
-      const real = sql.literal(
-        sql.onDialectOrElse({ pg: () => "DOUBLE PRECISION", orElse: () => "REAL" }),
       );
 
       yield* sql`
@@ -203,13 +203,13 @@ export const makeSqlActivityStore = Effect.fnUntraced(function* (
             SELECT c.relname AS name FROM pg_class c
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE c.relkind IN ('r', 'p')
-              AND c.relname = 'effect_agent_activity_processor_state_v1'
+              AND c.relname LIKE 'effect_agent_activity_processor_state_%'
               AND n.nspname = ${namespace ?? sql`current_schema()`}
           `.pipe(execute),
           orElse: () =>
             sql<Record<string, unknown>>`
             SELECT name FROM sqlite_master
-            WHERE type = 'table' AND name = 'effect_agent_activity_processor_state_v1'
+            WHERE type = 'table' AND name LIKE 'effect_agent_activity_processor_state_%'
           `.pipe(execute),
         });
 
@@ -219,15 +219,12 @@ export const makeSqlActivityStore = Effect.fnUntraced(function* (
           return yield* storeError("initialize activity schema", "incompatible");
         }
         yield* sql`
-          CREATE TABLE ${relation("effect_agent_activity_processor_state_v1")} (
+          CREATE TABLE ${relation("effect_agent_activity_processor_state_v2")} (
             processor_id TEXT NOT NULL,
             processor_version TEXT NOT NULL,
             thread_id TEXT NOT NULL,
             format_version ${integer} NOT NULL,
             through_sequence ${integer} NOT NULL,
-            epoch ${integer} NOT NULL,
-            owner TEXT,
-            lease_expires_at ${real} NOT NULL,
             progress_json TEXT NOT NULL,
             PRIMARY KEY (processor_id, processor_version, thread_id)
           )
@@ -239,8 +236,8 @@ export const makeSqlActivityStore = Effect.fnUntraced(function* (
       }
       yield* sql`
         SELECT processor_id, processor_version, thread_id, format_version,
-          through_sequence, epoch, owner, lease_expires_at, progress_json
-        FROM ${relation("effect_agent_activity_processor_state_v1")}
+          through_sequence, progress_json
+        FROM ${relation("effect_agent_activity_processor_state_v2")}
         LIMIT 0
       `.pipe(execute);
     }),
@@ -253,8 +250,8 @@ export const makeSqlActivityStore = Effect.fnUntraced(function* (
   ): Effect.fn.Return<ActivityProgress | null, ActivityStoreError> {
     const rawRows = yield* sql<Record<string, unknown>>`
         SELECT processor_id, processor_version, thread_id, format_version,
-          through_sequence, epoch, owner, lease_expires_at, progress_json
-        FROM ${relation("effect_agent_activity_processor_state_v1")}
+          through_sequence, progress_json
+        FROM ${relation("effect_agent_activity_processor_state_v2")}
         WHERE processor_id = ${key.processorId}
           AND processor_version = ${key.processorVersion}
           AND thread_id = ${key.threadId}
@@ -280,10 +277,7 @@ export const makeSqlActivityStore = Effect.fnUntraced(function* (
       row.processor_id !== key.processorId ||
       row.processor_version !== key.processorVersion ||
       row.thread_id !== key.threadId ||
-      row.through_sequence !== progress.throughSequence ||
-      row.epoch !== progress.epoch ||
-      row.owner !== progress.owner ||
-      row.lease_expires_at !== progress.leaseExpiresAt
+      row.through_sequence !== progress.throughSequence
     ) {
       return yield* storeError(operation, "corrupt");
     }
@@ -309,13 +303,11 @@ export const makeSqlActivityStore = Effect.fnUntraced(function* (
     const progressJson = yield* encodeProgress(progress, operation);
 
     const changed = yield* sql<Record<string, unknown>>`
-      INSERT INTO ${relation("effect_agent_activity_processor_state_v1")} (
-        processor_id, processor_version, thread_id, format_version, through_sequence,
-        epoch, owner, lease_expires_at, progress_json
+      INSERT INTO ${relation("effect_agent_activity_processor_state_v2")} (
+        processor_id, processor_version, thread_id, format_version, through_sequence, progress_json
       ) VALUES (
         ${progress.key.processorId}, ${progress.key.processorVersion}, ${progress.key.threadId},
-        ${STORAGE_VERSION}, ${progress.throughSequence}, ${progress.epoch}, ${progress.owner},
-        ${progress.leaseExpiresAt}, ${progressJson}
+        ${STORAGE_VERSION}, ${progress.throughSequence}, ${progressJson}
       )
       RETURNING 1 AS changed
     `.pipe(execute);
@@ -331,208 +323,172 @@ export const makeSqlActivityStore = Effect.fnUntraced(function* (
     const progressJson = yield* encodeProgress(next, operation);
 
     const changed = yield* sql<Record<string, unknown>>`
-      UPDATE ${relation("effect_agent_activity_processor_state_v1")}
+      UPDATE ${relation("effect_agent_activity_processor_state_v2")}
       SET format_version = ${STORAGE_VERSION},
           through_sequence = ${next.throughSequence},
-          epoch = ${next.epoch},
-          owner = ${next.owner},
-          lease_expires_at = ${next.leaseExpiresAt},
           progress_json = ${progressJson}
       WHERE processor_id = ${current.key.processorId}
         AND processor_version = ${current.key.processorVersion}
         AND thread_id = ${current.key.threadId}
         AND through_sequence = ${current.throughSequence}
-        AND epoch = ${current.epoch}
       RETURNING 1 AS changed
     `.pipe(execute);
 
     yield* checkChanged(changed, operation);
   });
 
-  const requireLive = Effect.fnUntraced(function* (
-    progress: ActivityProgress | null,
-    claim: ActivityClaim,
-    requireSequence: boolean,
-  ): Effect.fn.Return<ActivityProgress, ActivityOwnershipLost> {
-    const now = yield* Clock.currentTimeMillis;
-
-    if (
-      progress === null ||
-      !sameKey(progress.key, claim.key) ||
-      progress.owner !== claim.owner ||
-      progress.epoch !== claim.epoch ||
-      progress.leaseExpiresAt <= now ||
-      (requireSequence && progress.throughSequence !== claim.throughSequence)
-    ) {
-      return yield* ownershipLost(claim);
-    }
-
-    return progress;
-  });
-
   const inspect: ActivityProcessorStore["Service"]["inspect"] = Effect.fnUntraced(function* (key) {
-    const decodedKey = yield* decodeInput(ActivityProcessorKey, key, "inspect activity progress");
+    const decoded = yield* decodeInput(ActivityProcessorKey, key, "inspect activity progress");
 
-    return yield* readProgress(decodedKey, "inspect activity progress");
-  });
-
-  const claim: ActivityProcessorStore["Service"]["claim"] = Effect.fn("SqlActivityStore.claim")(
-    function* (request) {
-      const operation = "claim activity progress";
-      const decoded = yield* decodeInput(ActivityClaimRequest, request, operation);
-
-      yield* failpoint.hit("activity:claim:before");
-
-      const claimed = yield* withWriteTransaction(
-        Effect.gen(function* () {
-          const current = yield* readProgress(decoded.key, operation);
-          const now = yield* Clock.currentTimeMillis;
-
-          if (current !== null && current.owner !== null && current.leaseExpiresAt > now) {
-            return yield* ActivityBusy.make({
-              key: decoded.key,
-              leaseExpiresAt: current.leaseExpiresAt,
-            });
-          }
-
-          const next = yield* Schema.decodeEffect(ActivityProgress)({
-            version: STORAGE_VERSION,
-            key: decoded.key,
-            throughSequence: current?.throughSequence ?? 0,
-            epoch: (current?.epoch ?? 0) + 1,
-            owner: decoded.owner,
-            leaseExpiresAt: now + decoded.leaseMillis,
-            pending: current?.pending ?? null,
-            advancedAt: current?.advancedAt ?? null,
-          }).pipe(Effect.mapError(() => storeError(operation, "corrupt")));
-
-          if (current === null) yield* insertProgress(next, operation);
-          else yield* updateProgress(current, next, operation);
-          yield* failpoint.hit("activity:claim:after-state");
-          const result = makeClaim(next);
-
-          if (result === null) return yield* storeError(operation, "corrupt");
-
-          return result;
-        }),
-      ).pipe(Effect.catchTag("SqlError", () => Effect.fail(storeError(operation))));
-
-      yield* failpoint.hit("activity:claim:after");
-
-      return claimed;
-    },
-  );
-
-  const prepare: ActivityProcessorStore["Service"]["prepare"] = Effect.fnUntraced(
-    function* (request) {
-      const operation = "prepare activity output";
-      const claim = yield* decodeInput(ActivityClaim, request.claim, operation);
-      const work = yield* decodeInput(PreparedActivity, request.work, operation);
-
-      yield* failpoint.hit("activity:prepare:before");
-
-      const result = yield* withWriteTransaction(
-        Effect.gen(function* () {
-          const current = yield* requireLive(
-            yield* readProgress(claim.key, operation),
-            claim,
-            true,
-          );
-
-          if (current.pending !== null) {
-            if (sameWork(current.pending, work)) {
-              return { work: current.pending, changed: false } as const;
-            }
-
-            return yield* ActivityWorkConflict.make({ key: claim.key, workId: work.workId });
-          }
-          if (!sameKey(work.key, claim.key) || work.sequence !== current.throughSequence + 1) {
-            return yield* ActivityWorkConflict.make({ key: claim.key, workId: work.workId });
-          }
-          const next = ActivityProgress.make({ ...current, pending: work });
-
-          yield* updateProgress(current, next, operation);
-          yield* failpoint.hit("activity:prepare:after-state");
-
-          return { work, changed: true } as const;
-        }),
-      ).pipe(Effect.catchTag("SqlError", () => Effect.fail(storeError(operation))));
-
-      if (result.changed) yield* failpoint.hit("activity:prepare:after");
-
-      return result.work;
-    },
-  );
-
-  const advance: ActivityProcessorStore["Service"]["advance"] = Effect.fnUntraced(
-    function* (request) {
-      const operation = "advance activity progress";
-      const claim = yield* decodeInput(ActivityClaim, request.claim, operation);
-      const workId = yield* decodeInput(Digest, request.workId, operation);
-
-      yield* failpoint.hit("activity:advance:before");
-
-      const nextClaim = yield* withWriteTransaction(
-        Effect.gen(function* () {
-          const current = yield* requireLive(
-            yield* readProgress(claim.key, operation),
-            claim,
-            true,
-          );
-
-          if (current.pending === null || current.pending.workId !== workId) {
-            return yield* ActivityWorkConflict.make({ key: claim.key, workId });
-          }
-
-          const next = ActivityProgress.make({
-            ...current,
-            throughSequence: current.pending.sequence,
-            pending: null,
-            advancedAt: yield* Clock.currentTimeMillis,
-          });
-
-          yield* updateProgress(current, next, operation);
-          yield* failpoint.hit("activity:advance:after-state");
-          const result = makeClaim(next);
-
-          if (result === null) return yield* storeError(operation, "corrupt");
-
-          return result;
-        }),
-      ).pipe(Effect.catchTag("SqlError", () => Effect.fail(storeError(operation))));
-
-      yield* failpoint.hit("activity:advance:after");
-
-      return nextClaim;
-    },
-  );
-
-  const release: ActivityProcessorStore["Service"]["release"] = Effect.fn(
-    "SqlActivityStore.release",
-  )(function* (claim) {
-    const operation = "release activity claim";
-    const decoded = yield* decodeInput(ActivityClaim, claim, operation);
-
-    yield* failpoint.hit("activity:release:before");
-    yield* withWriteTransaction(
+    return yield* owner.withMutation(
       Effect.gen(function* () {
-        const current = yield* readProgress(decoded.key, operation);
+        if (closed || owner.isClosed()) return yield* storeError("inspect activity progress");
 
-        if (
-          current === null ||
-          current.owner !== decoded.owner ||
-          current.epoch !== decoded.epoch
-        ) {
-          return yield* ownershipLost(decoded);
-        }
-        const next = ActivityProgress.make({ ...current, owner: null, leaseExpiresAt: 0 });
-
-        yield* updateProgress(current, next, operation);
-        yield* failpoint.hit("activity:release:after-state");
+        return yield* readProgress(decoded, "inspect activity progress");
       }),
-    ).pipe(Effect.catchTag("SqlError", () => Effect.fail(storeError(operation))));
-    yield* failpoint.hit("activity:release:after");
+    );
   });
 
-  return ActivityProcessorStore.of({ inspect, claim, prepare, advance, release });
+  const acquire: ActivityProcessorStore["Service"]["acquire"] = Effect.fn(
+    "SqlActivityStore.acquire",
+  )(function* (rawKey) {
+    const decoded = yield* decodeInput(ActivityProcessorKey, rawKey, "acquire activity progress");
+    const key = ActivityProcessorKey.make({ ...decoded });
+    const id = JSON.stringify([key.processorId, key.processorVersion, key.threadId]);
+
+    return yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const token = {};
+
+        const initial = yield* owner.withMutation(
+          Effect.gen(function* () {
+            if (closed || owner.isClosed()) return yield* storeError("acquire activity progress");
+            if (active.has(id)) return yield* ActivityBusy.make({ key });
+            const current = yield* readProgress(key, "acquire activity progress");
+
+            active.set(id, token);
+            granted.set(id, token);
+
+            return (
+              current ??
+              ActivityProgress.make({
+                version: STORAGE_VERSION,
+                key,
+                throughSequence: CanonicalSequence.make(0),
+                pending: null,
+                advancedAt: null,
+              })
+            );
+          }),
+        );
+
+        const checkActive = Effect.suspend(() =>
+          closed || owner.isClosed() || active.get(id) !== token
+            ? Effect.fail(ActivityOwnershipLost.make({ key }))
+            : Effect.void,
+        );
+
+        // Scope cleanup is local. A stale finalizer cannot retire a newer session.
+        yield* Effect.addFinalizer(() =>
+          owner.withMutation(
+            Effect.sync(() => {
+              if (active.get(id) === token) active.delete(id);
+              if (granted.get(id) === token) granted.delete(id);
+            }),
+          ),
+        );
+
+        const mutate = <A, E, R>(body: Effect.Effect<A, E, R>) =>
+          owner.withMutation(Effect.andThen(checkActive, transact(body)));
+
+        const session: ActivitySession = {
+          progress: initial,
+          checkActive,
+          prepare: Effect.fnUntraced(function* (input) {
+            const operation = "prepare activity output";
+            const work = yield* decodeInput(PreparedActivity, input, operation);
+
+            yield* failpoint.hit("activity:prepare:before");
+
+            const result = yield* mutate(
+              Effect.gen(function* () {
+                yield* checkActive;
+                const stored = yield* readProgress(key, operation);
+
+                const current =
+                  stored ??
+                  ActivityProgress.make({
+                    version: STORAGE_VERSION,
+                    key,
+                    throughSequence: CanonicalSequence.make(0),
+                    pending: null,
+                    advancedAt: null,
+                  });
+
+                if (current.pending !== null) {
+                  if (sameWork(current.pending, work))
+                    return { work: current.pending, changed: false } as const;
+
+                  return yield* ActivityWorkConflict.make({ key, workId: work.workId });
+                }
+                if (!sameKey(work.key, key) || work.sequence !== current.throughSequence + 1)
+                  return yield* ActivityWorkConflict.make({ key, workId: work.workId });
+                const next = ActivityProgress.make({ ...current, pending: work });
+
+                if (stored === null) yield* insertProgress(next, operation);
+                else yield* updateProgress(current, next, operation);
+                yield* failpoint.hit("activity:prepare:after-state");
+
+                return { work, changed: true } as const;
+              }),
+            ).pipe(Effect.catchTag("SqlError", () => Effect.fail(storeError(operation))));
+
+            if (result.changed) yield* failpoint.hit("activity:prepare:after");
+
+            return result.work;
+          }),
+          advance: Effect.fnUntraced(function* (input) {
+            const operation = "advance activity progress";
+            const workId = yield* decodeInput(Digest, input, operation);
+
+            yield* failpoint.hit("activity:advance:before");
+
+            const next = yield* mutate(
+              Effect.gen(function* () {
+                yield* checkActive;
+                const current = yield* readProgress(key, operation);
+
+                if (
+                  current === null ||
+                  current.pending === null ||
+                  current.pending.workId !== workId
+                )
+                  return yield* ActivityWorkConflict.make({ key, workId });
+
+                const next = ActivityProgress.make({
+                  ...current,
+                  throughSequence: current.pending.sequence,
+                  pending: null,
+                  advancedAt: yield* Clock.currentTimeMillis,
+                });
+
+                yield* updateProgress(current, next, operation);
+                yield* failpoint.hit("activity:advance:after-state");
+
+                return next;
+              }),
+            ).pipe(Effect.catchTag("SqlError", () => Effect.fail(storeError(operation))));
+
+            yield* failpoint.hit("activity:advance:after");
+
+            return next;
+          }),
+        };
+
+        return yield* restore(Effect.andThen(checkActive, Effect.succeed(session)));
+      }),
+    );
+  });
+
+  return ActivityProcessorStore.of({ inspect, acquire });
 });

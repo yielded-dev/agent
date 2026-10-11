@@ -233,8 +233,7 @@ it.live(
           content: { text: ORIGINAL_TEXT },
         });
 
-        // SIGKILL skips claim release, so the restarted process must wait out the real lease.
-        yield* Effect.sleep(Duration.millis(2_500));
+        // Process death retires local authority; pinned output is immediately recoverable.
         const recovered = yield* runWorker(filename, "recover-divergent");
 
         expect(recovered.pass).toMatchObject({

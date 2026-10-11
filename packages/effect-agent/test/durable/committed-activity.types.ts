@@ -48,12 +48,10 @@ const pass = processCommittedActivity({
     processorVersion: "1",
     threadId: Schema.decodeSync(ThreadId)("test"),
   }),
-  owner: "worker",
   limits: ActivityPassLimits.make({
     maxRecords: 1,
     pageSize: 1,
     timeoutMillis: 100,
-    leaseMillis: 1_100,
   }),
   extract: () =>
     Effect.gen(function* () {

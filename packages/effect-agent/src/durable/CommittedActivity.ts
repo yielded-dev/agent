@@ -1,8 +1,7 @@
 import { Clock, Effect, Schema, Stream, type Crypto, type Scope } from "effect";
 
 import {
-  ActivityClaim,
-  ActivityClaimRequest,
+  ActivityProgress,
   ActivityProcessorKey,
   ActivityProcessorStore,
   PreparedActivity,
@@ -25,7 +24,6 @@ export class ActivityPassLimits extends Schema.Class<ActivityPassLimits>(
   maxRecords: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 4_096 })),
   pageSize: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 128 })),
   timeoutMillis: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 300_000 })),
-  leaseMillis: ActivityClaimRequest.fields.leaseMillis,
 }) {}
 
 export class ActivityProcessingError extends Schema.TaggedError<ActivityProcessingError>()(
@@ -50,8 +48,6 @@ export class ActivityPassResult extends Schema.Class<ActivityPassResult>(
 
 export interface CommittedActivityProcessor<E = never, R = never, EApply = never, RApply = never> {
   readonly key: ActivityProcessorKey;
-  /** Unique to this worker lifetime; it is not canonical Thread ownership. */
-  readonly owner: string;
   readonly limits: ActivityPassLimits;
   /** Select eligibility and encode an application Schema; null can represent no output. */
   readonly extract: (record: CanonicalRecordEnvelope) => Effect.Effect<PersistedJson, E, R>;
@@ -74,7 +70,7 @@ const contiguous = () =>
     message: "Committed activity does not match its captured Thread prefix or pinned record",
   });
 
-/** Stable work identity independent of worker claims, retry count, extraction, and clocks. */
+/** Stable work identity independent of local sessions, retry count, extraction, and clocks. */
 export const activityWorkId = (key: ActivityProcessorKey, sequence: CanonicalSequence) =>
   digestJson([
     "effect-agent/activity@1",
@@ -93,8 +89,8 @@ export const activityWorkId = (key: ActivityProcessorKey, sequence: CanonicalSeq
  * A durable pending output wins over a new extraction after restart. Apply finishes before
  * progress advances, so separate output stores require durable idempotency. This does not
  * promise exactly-once external side effects. Each callback owns a Scope; the finite pass has
- * a timeout and a longer lease. Claim release has a separate 500ms deadline; failure leaves
- * the bounded lease to expire.
+ * a timeout. Its local session closes with the pass Scope and rejects late mutations;
+ * recovery reuses durable progress immediately under the same single-owner routing contract.
  */
 export const processCommittedActivity = Effect.fnUntraced(function* <
   E = never,
@@ -122,38 +118,20 @@ export const processCommittedActivity = Effect.fnUntraced(function* <
     Effect.mapError(() => invalid("Invalid activity pass limits")),
   );
 
-  if (limits.leaseMillis < limits.timeoutMillis + 1_000) {
-    return yield* invalid("The activity lease must exceed the pass timeout by at least 1000ms");
-  }
-
-  const request = yield* ActivityClaimRequest.makeEffect({
-    key,
-    owner: processor.owner,
-    leaseMillis: limits.leaseMillis,
-  }).pipe(Effect.mapError(() => invalid("Invalid activity worker identity")));
-
   const progress = yield* ActivityProcessorStore;
   const threads = yield* ThreadStore;
 
   return yield* Effect.scoped(
     Effect.gen(function* () {
-      const acquired = yield* Effect.acquireRelease(
-        progress.claim(request).pipe(Effect.interruptible),
-        (claim) =>
-          progress
-            .release(claim)
-            .pipe(Effect.interruptible, Effect.timeoutOption(500), Effect.ignore),
-      );
+      const session = yield* progress.acquire(key);
 
-      let claim = yield* Schema.decodeEffect(ActivityClaim)(acquired).pipe(
-        Effect.mapError(() => invalid("Malformed activity claim")),
-      );
+      let current = yield* Schema.decodeEffect(Schema.toType(ActivityProgress))(
+        session.progress,
+      ).pipe(Effect.mapError(() => invalid("Malformed activity progress")));
 
-      if (
-        !Schema.toEquivalence(ActivityProcessorKey)(claim.key, key) ||
-        claim.owner !== request.owner
-      )
-        return yield* invalid("Activity claim identity does not match its request");
+      if (!Schema.toEquivalence(ActivityProcessorKey)(current.key, key))
+        return yield* invalid("Activity progress identity does not match its request");
+      yield* session.checkActive;
       const startedAt = yield* Clock.currentTimeMillis;
 
       const tail = yield* threads
@@ -166,22 +144,22 @@ export const processCommittedActivity = Effect.fnUntraced(function* <
 
       if (
         tail.threadId !== key.threadId ||
-        tail.tailSequence < claim.throughSequence ||
-        (claim.pending !== null && tail.tailSequence < claim.pending.sequence)
+        tail.tailSequence < current.throughSequence ||
+        (current.pending !== null && tail.tailSequence < current.pending.sequence)
       ) {
         return yield* contiguous();
       }
-      const through = Math.min(tail.tailSequence, claim.throughSequence + limits.maxRecords);
+      const through = Math.min(tail.tailSequence, current.throughSequence + limits.maxRecords);
       let processed = 0;
 
-      while (claim.throughSequence < through) {
-        const limit = Math.min(limits.pageSize, through - claim.throughSequence);
+      while (current.throughSequence < through) {
+        const limit = Math.min(limits.pageSize, through - current.throughSequence);
 
         const page = yield* threads
           .read(
             ThreadRead.make({
               threadId: key.threadId,
-              afterSequence: claim.throughSequence,
+              afterSequence: current.throughSequence,
               limit,
             }),
           )
@@ -193,12 +171,13 @@ export const processCommittedActivity = Effect.fnUntraced(function* <
             rawRecord,
           ).pipe(Effect.mapError(contiguous));
 
-          if (record.threadId !== key.threadId || record.sequence !== claim.throughSequence + 1) {
+          if (record.threadId !== key.threadId || record.sequence !== current.throughSequence + 1) {
             return yield* contiguous();
           }
+          yield* session.checkActive;
           const workId = yield* activityWorkId(key, record.sequence);
 
-          let work = claim.pending;
+          let work = current.pending;
 
           if (work === null) {
             const output = yield* Effect.scoped(processor.extract(record)).pipe(
@@ -209,9 +188,8 @@ export const processCommittedActivity = Effect.fnUntraced(function* <
               ),
             );
 
-            work = yield* progress.prepare({
-              claim,
-              work: PreparedActivity.make({
+            work = yield* session.prepare(
+              PreparedActivity.make({
                 version: 1,
                 key,
                 sequence: record.sequence,
@@ -219,7 +197,7 @@ export const processCommittedActivity = Effect.fnUntraced(function* <
                 recordId: record.record.recordId,
                 output,
               }),
-            });
+            );
           }
 
           const prepared = yield* Schema.decodeEffect(PreparedActivity)(work).pipe(
@@ -233,13 +211,14 @@ export const processCommittedActivity = Effect.fnUntraced(function* <
             prepared.recordId !== record.record.recordId
           )
             return yield* contiguous();
+          yield* session.checkActive;
           yield* Effect.scoped(processor.apply(prepared));
 
-          const next = yield* progress
-            .advance({ claim, workId })
+          const next = yield* session
+            .advance(workId)
             .pipe(
               Effect.flatMap((value) =>
-                Schema.decodeEffect(ActivityClaim)(value).pipe(
+                Schema.decodeEffect(Schema.toType(ActivityProgress))(value).pipe(
                   Effect.mapError(() => invalid("Malformed activity progress")),
                 ),
               ),
@@ -247,13 +226,11 @@ export const processCommittedActivity = Effect.fnUntraced(function* <
 
           if (
             !Schema.toEquivalence(ActivityProcessorKey)(next.key, key) ||
-            next.owner !== claim.owner ||
-            next.epoch !== claim.epoch ||
             next.throughSequence !== record.sequence ||
             next.pending !== null
           )
-            return yield* invalid("Activity progress advanced outside the claimed record");
-          claim = next;
+            return yield* invalid("Activity progress advanced outside the prepared record");
+          current = next;
           processed += 1;
         }
       }
@@ -261,9 +238,9 @@ export const processCommittedActivity = Effect.fnUntraced(function* <
       return ActivityPassResult.make({
         key,
         capturedTail: tail.tailSequence,
-        throughSequence: claim.throughSequence,
+        throughSequence: current.throughSequence,
         processed,
-        pendingRecords: tail.tailSequence - claim.throughSequence,
+        pendingRecords: tail.tailSequence - current.throughSequence,
         startedAt,
         finishedAt: yield* Clock.currentTimeMillis,
       });
