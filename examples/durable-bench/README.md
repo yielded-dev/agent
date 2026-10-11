@@ -288,6 +288,22 @@ below. This explicit mode retains its native submission/settlement path and chec
 
 ## Comparing a change
 
+For local operation counts, run one warm eight-tool turn after 1,000 real historical
+turns with the same Worker protocol:
+
+```sh
+vp run -F @yielded/agent-example-durable-bench count -- --ref origin/main --target yielded --output /tmp/yielded-counts.json
+vp run -F @yielded/agent-example-durable-bench count -- --ref origin/main --target pi --output /tmp/pi-counts.json
+```
+
+Run these sequentially and choose a new output path for each capture. The report checks
+every model-request fingerprint and records source hashes, SQL calls, transaction API
+calls, cursor row counters and Schema decode/encode API calls by source location.
+It includes logical bound-string/blob bytes and net database growth; physical bytes
+written and hidden KV operations are not observable. Schema counts exclude recursive
+parser entries and other validation libraries. Instrumentation is opt-in and supplies
+no timing evidence.
+
 Quick mode screens a candidate with a paired comparison. Use full mode to check repeat
 drift before claiming a small optimization.
 

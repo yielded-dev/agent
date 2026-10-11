@@ -4,6 +4,7 @@ export default defineConfig({
   run: {
     tasks: {
       deployed: { command: "direnv exec . vp exec bun deployed/main.ts", cache: false },
+      count: { command: "bun deployed/count-main.ts", cache: false },
       seed: { command: "bun bench/seed.ts", cache: false },
       vendor: { command: "bun install --cwd third-party", cache: false },
     },

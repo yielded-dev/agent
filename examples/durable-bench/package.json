@@ -16,6 +16,7 @@
     "effect-cf": "catalog:",
     "esbuild": "catalog:",
     "miniflare": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "typescript-twoslash": "catalog:"
   }
 }

@@ -110,6 +110,7 @@
         "esbuild": "catalog:",
         "miniflare": "catalog:",
         "typescript": "catalog:",
+        "typescript-twoslash": "catalog:",
       },
     },
     "examples/travel-planner": {

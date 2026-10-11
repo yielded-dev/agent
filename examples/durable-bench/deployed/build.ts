@@ -31,6 +31,7 @@ export const build = Effect.fnUntraced(function* (
   output: string,
   entry: keyof typeof entries,
   ref?: string,
+  plugins: ReadonlyArray<Plugin> = [],
 ) {
   const fs = yield* FileSystem.FileSystem;
   let revision = yield* git(["rev-parse", "HEAD"]);
@@ -113,7 +114,7 @@ export const build = Effect.fnUntraced(function* (
         // Bun lists ws as built-in; workerd needs its browser export bundled.
         external: ["cloudflare:*", "node:*", ...builtinModules.filter((name) => name !== "ws")],
         logLevel: "silent",
-        plugins: [resolver],
+        plugins: [resolver, ...plugins],
       }),
     catch: (cause) =>
       new BenchError({
