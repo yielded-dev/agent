@@ -4,7 +4,7 @@ import { Type } from "@earendil-works/pi-ai"
 import { createModels } from "@earendil-works/pi-ai/models"
 import { fauxAssistantMessage, fauxProvider, fauxToolCall, type FauxResponseFactory } from "@earendil-works/pi-ai/providers/faux"
 import { createRegistry, defineExtension, defineTool, Harness, section, type Conversation } from "@earendil-works/pi-durable"
-import { SqliteStorage, type SqliteDatabase, type SqliteExecutor, type SqliteValue } from "@earendil-works/pi-durable/storage/sqlite"
+import { openDurableObjectSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/cloudflare"
 import { fingerprint, next, payload, type Message, type Turn } from "../../src/plan.ts"
 import { serve, tables, type Bench } from "../../src/serve.ts"
 
@@ -42,41 +42,12 @@ const lookup = defineTool({
 const registry = createRegistry()
 registry.install(defineExtension({ name: "bench", tools: [lookup], sections: [section("preamble", () => SYSTEM, { tag: false })] }))
 
-const bind = (params: SqliteValue[]) => params.map(p => p instanceof Uint8Array ? p.slice().buffer : typeof p === "bigint" ? Number(p) : p)
-const read = <T>(row: Record<string, SqlStorageValue>) =>
-  Object.fromEntries(Object.entries(row).map(([k, v]) => [k, v instanceof ArrayBuffer ? new Uint8Array(v) : v])) as T
-
-function database(storage: DurableObjectStorage): SqliteDatabase {
-  const sql = storage.sql
-  const rows = <T>(query: string, params: SqliteValue[]) => sql.exec(query, ...bind(params)).toArray().map(row => read<T>(row))
-  const executor: SqliteExecutor = {
-    exec: async query => { sql.exec(query) },
-    run: async (query, ...params) => { sql.exec(query, ...bind(params)) },
-    async get<T extends object>(query: string, ...params: SqliteValue[]) { return rows<T>(query, params)[0] },
-    async all<T extends object>(query: string, ...params: SqliteValue[]) { return rows<T>(query, params) },
-  }
-  let queue: Promise<unknown> = Promise.resolve()
-  const serial = <T>(work: () => Promise<T>) => {
-    const result = queue.then(work)
-    queue = result.catch(() => {})
-    return result
-  }
-  return {
-    exec: query => serial(() => executor.exec(query)),
-    run: (query, ...params) => serial(() => executor.run(query, ...params)),
-    get: (query, ...params) => serial(() => executor.get(query, ...params)),
-    all: (query, ...params) => serial(() => executor.all(query, ...params)),
-    transaction: callback => serial(() => storage.transaction(() => callback(executor))),
-    close: async () => {},
-  }
-}
-
 export class PiDO extends DurableObject implements Bench {
   private root?: Conversation
 
   private async open() {
     if (this.root) return this.root
-    const harness = await Harness.open(await SqliteStorage.open(database(this.ctx.storage)), {
+    const harness = await Harness.open(await openDurableObjectSqliteStorage(this.ctx.storage), {
       models, registry, settings: { compaction: { enabled: false } },
     }, context)
     const model = faux.getModel()

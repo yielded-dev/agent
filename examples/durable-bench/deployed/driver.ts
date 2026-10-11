@@ -1,10 +1,21 @@
 import { Clock, Deferred, Effect, Schema, Stream } from "effect";
 import { Ndjson } from "effect/encoding";
 
-import { MeasureRequest, type FirstTextSource } from "./model.ts";
+import {
+  BuildEvent,
+  BuildRequest,
+  DriverRequest,
+  MeasureRequest,
+  type FirstTextSource,
+} from "./model.ts";
 import {
   AwaitResult,
+  ColdResult,
+  errorText,
+  PrimeResult,
   RunResult,
+  SeedResult,
+  SeedCheckpoint,
   SettledTextResult,
   SubmitResult,
   TextObservation,
@@ -22,7 +33,7 @@ interface Env {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, context: ExecutionContext): Promise<Response> {
     if (request.headers.get("authorization") !== `Bearer ${env.BENCH_TOKEN}`)
       return new Response("unauthorized", { status: 401 });
     if (new URL(request.url).pathname === "/health")
@@ -48,9 +59,10 @@ export default {
         return fetch(new URL("/health?probe=" + Date.now(), target), {
           headers: { authorization: `Bearer ${env.BENCH_TOKEN}`, "cache-control": "no-store" },
         });
-      const { query } = Schema.decodeUnknownSync(MeasureRequest)(input);
+      const { query } = Schema.decodeUnknownSync(DriverRequest)(input);
+      const cancellation = new AbortController();
 
-      const invoke = async (path: string, body?: unknown) => {
+      const invoke = async (path: string, body?: unknown, timeoutMs = 180_000) => {
         const url = new URL(path, target);
 
         for (const [key, value] of Object.entries(query)) url.searchParams.set(key, String(value));
@@ -62,20 +74,144 @@ export default {
             "content-type": "application/json",
           },
           body: JSON.stringify(body ?? {}),
-          signal: AbortSignal.timeout(180_000),
+          signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), cancellation.signal]),
         });
 
         if (!response.ok)
           throw new Error(
-            `Target ${path} returned HTTP ${response.status}; turn outcome may be unknown.`,
+            `Target ${path} returned HTTP ${response.status}: ${await response.text()}; input will not be retried.`,
           );
 
         return response;
       };
 
+      if (new URL(request.url).pathname === "/history-checkpoint") {
+        const checkpoint = Schema.decodeUnknownSync(SeedCheckpoint)(
+          await (await invoke("/seed-progress")).json(),
+        );
+
+        return Response.json({
+          ...checkpoint,
+          driverMs: checkpoint.batch ? Date.now() - checkpoint.batch.startedMs : 0,
+        });
+      }
+      if (new URL(request.url).pathname === "/build-history") {
+        const { from, startedMs: previousStart } = Schema.decodeUnknownSync(BuildRequest)(input);
+        const startedMs = previousStart ?? Date.now();
+        const colo = typeof request.cf?.colo === "string" ? request.cf.colo : null;
+        const encoder = new TextEncoder();
+        const encode = Schema.encodeSync(Schema.fromJsonString(BuildEvent));
+        let cancelled = false;
+        let stopHeartbeat = () => {};
+
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            // Keep the client socket alive while a batch runs; empty lines are not events.
+            const heartbeat = () => {
+              if (!cancelled) controller.enqueue(encoder.encode("\n"));
+            };
+
+            heartbeat();
+            const timer = setInterval(heartbeat, 15_000);
+
+            stopHeartbeat = () => clearInterval(timer);
+
+            const write = (event: BuildEvent) => {
+              if (!cancelled) controller.enqueue(encoder.encode(encode(event) + "\n"));
+            };
+
+            context.waitUntil(
+              (async () => {
+                let completed = from;
+
+                try {
+                  const checkpoint = Schema.decodeUnknownSync(SeedCheckpoint)(
+                    await (await invoke("/seed-progress")).json(),
+                  );
+
+                  if (checkpoint.inFlight || checkpoint.completed !== from || from >= query.history)
+                    throw new Error("History is not at the requested verified batch boundary");
+                  if (from > 0) {
+                    // Close the preceding runtime before admitting this single batch.
+                    const reset = Schema.decodeUnknownSync(ColdResult)(
+                      await (await invoke("/cold")).json(),
+                    );
+
+                    if (
+                      !reset.ok ||
+                      !reset.threadAborted ||
+                      reset.directoryAborted === false ||
+                      reset.before.build !== query.expectedBuild ||
+                      (reset.directoryBefore && reset.directoryBefore.build !== query.expectedBuild)
+                    )
+                      throw new Error("History batch restart or Object build was not acknowledged");
+                  }
+                  const to = Math.min(from + 50, query.history);
+
+                  const result = Schema.decodeUnknownSync(SeedResult)(
+                    await (await invoke("/seed", { from, to, startedMs }, 600_000)).json(),
+                  );
+
+                  if (
+                    result.from !== from ||
+                    result.to !== to ||
+                    result.startedMs !== startedMs ||
+                    result.identity.build !== query.expectedBuild
+                  )
+                    throw new Error("History batch acknowledgement or Object build mismatch");
+                  completed = to;
+                  write({ _tag: "Batch", result, driverMs: Date.now() - startedMs, colo });
+                } catch (cause) {
+                  write({
+                    _tag: "Failed",
+                    completed,
+                    driverMs: Date.now() - startedMs,
+                    colo,
+                    error: errorText(cause),
+                  });
+                } finally {
+                  stopHeartbeat();
+                  if (!cancelled) controller.close();
+                }
+              })(),
+            );
+          },
+          cancel(reason) {
+            cancelled = true;
+            stopHeartbeat();
+            cancellation.abort(reason);
+          },
+        });
+
+        return new Response(body, {
+          headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
+        });
+      }
+      const { observeText, cold } = Schema.decodeUnknownSync(MeasureRequest)(input);
+
       return Response.json(
         await Effect.runPromise(
           Effect.gen(function* () {
+            const primeAt = yield* Clock.currentTimeMillis;
+
+            const primed = cold
+              ? yield* Effect.tryPromise(async () =>
+                  Schema.decodeUnknownSync(PrimeResult)(await (await invoke("/prime")).json()),
+                )
+              : undefined;
+
+            const primeMs = primed ? (yield* Clock.currentTimeMillis) - primeAt : 0;
+            const constructorAndProbeMs = primed?.constructorAndProbeMs ?? 0;
+
+            if (
+              primed &&
+              (!primed.identity.firstEntry ||
+                primed.identity.priorAlarms !== 0 ||
+                primed.identity.build !== query.expectedBuild)
+            )
+              return yield* new ObservationError({
+                message: "Cold construction was not fresh or reported another build.",
+              });
             const ready = yield* Deferred.make<void, ObservationError>();
 
             type Visible = { atMs: number; text: string; source: FirstTextSource };
@@ -84,7 +220,7 @@ export default {
             let input: string | undefined = query.target === "pi" ? query.sample : undefined;
             let observationMs: number | null = null;
 
-            if (query.target !== "tardie") {
+            if (observeText && query.target !== "tardie") {
               const opening = yield* Clock.currentTimeMillis;
               const response = yield* Effect.tryPromise(() => invoke("/text"));
               const body = response.body;
@@ -175,7 +311,7 @@ export default {
             const observedMs = yield* Clock.currentTimeMillis;
 
             // Overflow can replace an instant reply with an empty draft snapshot after settlement.
-            if (receipt !== undefined && !(yield* Deferred.isDone(first))) {
+            if (observeText && receipt !== undefined && !(yield* Deferred.isDone(first))) {
               const result = yield* Effect.tryPromise(async () =>
                 Schema.decodeUnknownSync(SettledTextResult)(
                   await (await invoke("/result", receipt)).json(),
@@ -190,16 +326,21 @@ export default {
 
               yield* Deferred.succeed(first, fallback);
             }
-            const text = query.target === "tardie" ? undefined : yield* Deferred.await(first);
+
+            const text =
+              !observeText || query.target === "tardie" ? undefined : yield* Deferred.await(first);
 
             return {
               ok: true,
-              driverMs: observedMs - startedMs,
+              driverMs: constructorAndProbeMs + observedMs - startedMs,
               observedMs,
               admissionMs,
               firstTextMs: text === undefined ? null : text.atMs - startedMs,
               ...(text === undefined ? {} : { firstText: text.text, firstTextSource: text.source }),
               observationMs,
+              constructorAndProbeMs,
+              primeMs,
+              ...(primed === undefined ? {} : { primed: primed.identity }),
               colo: typeof request.cf?.colo === "string" ? request.cf.colo : null,
             };
           }).pipe(Effect.scoped, Effect.timeout("3 minutes")),
