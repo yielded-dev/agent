@@ -104,11 +104,15 @@ flowchart LR
   Native work pages include terminal side obligations and never grant execution authority.
   Missing inventories fail explicitly; rebuild them in separate resumable maintenance passes.
   Canonical row caches share an isolate-wide bound; never allocate that budget per Object.
-- Keep one Thread-wide canonical order under the owner's mutation gate as complete batches rotate into
-  bounded archive ranges. Publish and verify archive contents and their locator before removing
-  hot payloads. Rotation preserves exact references, live charges, and original retry outcomes;
-  it is independent of model compaction, Run settlement, and execution ownership. Retained
-  storage may grow under host quotas without a lifetime message, Run, or record limit.
+- Keep one Thread-wide canonical order under the owner's mutation gate. Explicit archive maintenance
+  seals the next bounded range of complete batches; ordinary appends need no range metadata.
+  Publish and verify archive contents and their locator before removing hot payloads. Archiving
+  preserves exact references and retry outcomes, independently of model compaction and Run settlement.
+- Export only idle Threads, after Runs, Unknown tool calls, approvals and deliveries have finished.
+  The application keeps the source quiescent through the complete export. Import a completed archive
+  into an empty Thread to preserve conversation history and original receipts. Transfers do not
+  move current Run state or pending work. Moving a Thread also requires the application to quiesce
+  or reroute schedules, subscriptions and incoming messages that could admit new work.
 
 ## Cloudflare wake rules
 

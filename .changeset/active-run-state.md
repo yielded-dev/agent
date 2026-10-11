@@ -11,4 +11,4 @@
 "@yielded/agent-workflow": minor
 ---
 
-Store in-flight Run progress as one current row and retire it at settlement; use one scoped process owner per Thread and reject late results locally. BEHAVIOR CHANGE: use matching runtime and adapter packages on fresh layout-24 stores with thread@6 records; distributed leases, persisted attempts, tamper evidence and historical progress replay are no longer supported.
+Persist only current Run state while a single process owns each Thread, and retire it at settlement. BEHAVIOR CHANGE: use matching packages on fresh layout-25 stores with thread@6 records; transfers require an idle Thread and a completed archive, and distributed ownership, tamper evidence and historical progress replay are no longer supported.

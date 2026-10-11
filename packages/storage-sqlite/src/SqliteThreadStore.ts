@@ -1,5 +1,6 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { SqliteClient } from "@effect/sql-sqlite-node";
+import { sqlStorageOwner } from "@yielded/agent-storage-sql/sql-journal";
 import { makeSqlRunStorage } from "@yielded/agent-storage-sql/sql-run-storage";
 import { makeSqlTransaction, SqlInteger } from "@yielded/agent-storage-sql/sql-storage";
 import { makeSqlThreadImport } from "@yielded/agent-storage-sql/sql-thread-import";
@@ -15,6 +16,7 @@ import {
   ThreadStore,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
+import { checkExportSource } from "@yielded/agent/thread-transfer";
 import { Context, Crypto, Effect, Layer, Schema, Scope } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { CurrentTransformer } from "effect/sql/Statement";
@@ -322,31 +324,39 @@ export const exportThread = Effect.fn("SqliteThreadStore.exportThread")(function
   options: Pick<SqliteStorageOptions, "filename" | "busyTimeout">,
   request: ThreadExportRequest,
 ) {
+  yield* checkExportSource(request.threadId);
+
   return yield* Effect.gen(function* () {
     const sql = yield* SqlClientService.SqlClient;
 
-    return yield* makeSqlTransaction(sql, { begin: "BEGIN" })(
-      Effect.gen(function* () {
-        yield* readSqliteStorageHeader();
+    const owner = yield* sqlStorageOwner(sql);
 
-        const transfer = yield* makeSqlThreadImport({
-          offsetPrefix: "effect-agent-sqlite@1:",
-          read: (body) => body,
-          write: () => Effect.die("A read-only exporter cannot import"),
-        });
+    return yield* owner.withMutation(
+      makeSqlTransaction(sql, { begin: "BEGIN" })(
+        Effect.gen(function* () {
+          yield* readSqliteStorageHeader();
 
-        return yield* transfer.export(request);
-      }),
-    ).pipe(
-      Effect.catchTag("SqlError", (cause) =>
-        SqliteStorageError.make({
-          operation: "export Thread snapshot",
-          message: cause.message,
-          cause,
+          const transfer = yield* makeSqlThreadImport({
+            owner,
+            offsetPrefix: "effect-agent-sqlite@1:",
+            read: (body) => body,
+            write: () => Effect.die("A read-only exporter cannot import"),
+          });
+
+          return yield* transfer.export(request);
         }),
+      ).pipe(
+        Effect.catchTag("SqlError", (cause) =>
+          SqliteStorageError.make({
+            operation: "export Thread snapshot",
+            message: cause.message,
+            cause,
+          }),
+        ),
       ),
     );
   }).pipe(
+    Effect.scoped,
     Effect.provide(
       Layer.merge(
         SqliteClient.layer({

@@ -16,7 +16,6 @@ import type {
   ThreadTail,
   ThreadAdmission,
   ThreadStoreError,
-  ThreadExport,
   ThreadExportSnapshot,
 } from "@yielded/agent/thread-store";
 import type { TransferFacts, TransferSection } from "@yielded/agent/thread-transfer";
@@ -45,15 +44,15 @@ export interface MemoryLedgerImport {
 
 export interface MemoryLedgerTransfer {
   readonly snapshot: (threadId: ThreadId) => Effect.Effect<
-    Omit<typeof ThreadExportSnapshot.Type, "deliveries" | "executions"> & {
-      readonly externalObligations?: ThreadExport["externalObligations"];
+    Omit<typeof ThreadExportSnapshot.Type, "deliveries"> & {
+      readonly idle: boolean;
       readonly workerSeal?: Pick<WorkerLedgerState, "terminal">;
     },
     ThreadStoreError
   >;
   readonly facts: (
     threadId: ThreadId,
-    section: Exclude<TransferSection, "deliveries" | "executions">,
+    section: Exclude<TransferSection, "deliveries">,
     after: string | undefined,
   ) => Effect.Effect<{ readonly facts: TransferFacts; readonly after: string }, ThreadStoreError>;
   readonly startImport: (
@@ -86,7 +85,7 @@ export interface MemoryDeliveryTransfer {
     messageId: IdempotencyKey,
   ) => ReturnType<ThreadImportReader["Service"]["delivery"]>;
   readonly snapshot: (threadId: ThreadId) => {
-    readonly revision: number;
+    readonly idle: boolean;
     readonly deliveries: number;
   };
   readonly facts: (

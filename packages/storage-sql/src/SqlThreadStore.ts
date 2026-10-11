@@ -1,6 +1,5 @@
 import { utf8ByteLength, digestCanonicalJson } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
-import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import { ExportRecord } from "@yielded/agent/record-format";
 import {
   CanonicalRecordEnvelope,
@@ -433,6 +432,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     Stream.unwrap(observeEffect(request));
 
   const transfer = yield* makeSqlThreadImport<S | W | F>({
+    owner: journal.owner,
     namespace: options.namespace,
     offsetPrefix: options.offsetPrefix,
     read: (body) =>
@@ -452,29 +452,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
           ),
         ),
     afterThreadRead: options.hitFailpoint("export:after-thread-read"),
-    afterPage: (prepared) =>
-      Effect.forEach(
-        prepared.records,
-        (entry) => {
-          const fact = entry.record.payload;
-
-          return journal.lifecycle !== undefined &&
-            Schema.is(Schema.toType(LifecyclePublicationFact))(fact)
-            ? journal.lifecycle
-                .retain({
-                  id: JSON.stringify([prepared.archive.threadId, "record", entry.record.recordId]),
-                  ownerThreadId: prepared.archive.threadId,
-                  canonicalSequence: entry.sequence,
-                  createdAt: entry.record.createdAt,
-                  fact,
-                })
-                .pipe(
-                  Effect.mapError((cause) => storeError("rebuild lifecycle publication", cause)),
-                )
-            : Effect.void;
-        },
-        { discard: true },
-      ),
   });
 
   // Opt-in offline audit holds one read snapshot and hydrates one bounded batch at a time.
@@ -492,6 +469,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
       };
 
       const snapshotTransfer = yield* makeSqlThreadImport({
+        owner: journal.owner,
         namespace: options.namespace,
         offsetPrefix: options.offsetPrefix,
         ...transactions,
@@ -545,7 +523,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
         const threads = yield* decode(
           Schema.Array(Schema.Struct({ thread_id: ThreadId })),
           yield* query(
-            sql`SELECT thread_id FROM ${table("effect_agent_threads")} ${afterThread === undefined ? sql`` : sql`WHERE thread_id>${afterThread}`} ORDER BY thread_id LIMIT 1`,
+            sql`SELECT thread_id FROM ${table("effect_agent_threads")} WHERE created_at IS NOT NULL ${afterThread === undefined ? sql`` : sql`AND thread_id>${afterThread}`} ORDER BY thread_id LIMIT 1`,
           ),
         );
 
@@ -557,7 +535,10 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
 
         do {
           const page = yield* snapshotTransfer
-            .export({ threadId: thread.thread_id, ...(cursor === undefined ? {} : { cursor }) })
+            .verificationPage({
+              threadId: thread.thread_id,
+              ...(cursor === undefined ? {} : { cursor }),
+            })
             .pipe(
               Effect.mapError((e) =>
                 options.errors.corruption({
@@ -570,9 +551,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
 
           const prepared = yield* Schema.encodeEffect(ThreadExport)(page).pipe(
             Effect.flatMap(Schema.decodeUnknownEffect(ThreadArchive)),
-            Effect.flatMap((page) =>
-              prepareImportPage(state, page, { allowExternalObligations: true }),
-            ),
+            Effect.flatMap((page) => prepareImportPage(state, page, { verification: true })),
             Effect.provideService(Crypto.Crypto, crypto),
             Effect.mapError((e) =>
               options.errors.corruption({
@@ -612,6 +591,15 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
               table: "effect_agent_threads",
               rowKey: thread.thread_id,
               message: e.message,
+            }),
+          ),
+        );
+        yield* snapshotTransfer.verifyPointers(thread.thread_id).pipe(
+          Effect.mapError((cause) =>
+            options.errors.corruption({
+              table: "effect_agent_threads",
+              rowKey: thread.thread_id,
+              message: cause.message,
             }),
           ),
         );

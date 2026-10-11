@@ -204,6 +204,9 @@ const decodeReadyWork = Schema.decodeUnknownEffect(
       through_sequence: SqlInteger,
       entry_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
       actual_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
+      reporting: SqlInteger.pipe(Schema.decodeTo(Schema.Literals([0, 1, 2]))),
+      worker_input_sequence: Schema.NullOr(SqlInteger.check(Schema.isGreaterThan(0))),
+      worker_settlement_sequence: Schema.NullOr(SqlInteger.check(Schema.isGreaterThan(0))),
     }),
   ]),
 );
@@ -473,7 +476,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
     }
 
     const rows =
-      yield* sql`SELECT tail_sequence FROM ${relation("effect_agent_threads")} WHERE thread_id = ${threadId}`.pipe(
+      yield* sql`SELECT tail_sequence FROM ${relation("effect_agent_threads")} WHERE thread_id = ${threadId} AND created_at IS NOT NULL`.pipe(
         execute,
       );
 
@@ -492,18 +495,25 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
     threadId: SelectedThreadRead["threadId"],
     through: number,
   ) {
-    const rows = yield* sql`SELECT version, state, through_sequence, entry_count,
+    const rows =
+      yield* sql`SELECT work_version AS version, work_state AS state, work_through_sequence AS through_sequence, work_entry_count AS entry_count, work_reporting AS reporting, worker_input_sequence, worker_settlement_sequence,
       (SELECT COUNT(*) FROM ${relation("effect_agent_work_entries")} WHERE thread_id=${threadId}) AS actual_count
-      FROM ${relation("effect_agent_work_index")} WHERE thread_id=${threadId}`.pipe(execute);
+      FROM ${relation("effect_agent_threads")} WHERE thread_id=${threadId}`.pipe(execute);
 
     const [header] = yield* decodeReadyWork(rows);
 
     if (
       header.version !== WORK_INDEX_VERSION ||
       header.through_sequence !== through ||
-      header.entry_count !== header.actual_count
+      header.entry_count !== header.actual_count ||
+      (header.worker_input_sequence !== null && header.worker_input_sequence > through) ||
+      (header.worker_settlement_sequence !== null && header.worker_settlement_sequence > through) ||
+      (header.reporting === 0 &&
+        (header.worker_input_sequence !== null || header.worker_settlement_sequence !== null))
     )
       return yield* failure("native work membership is incomplete");
+
+    return header;
   });
 
   const read = Effect.fnUntraced(
@@ -596,17 +606,10 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                 while (2 ** height > remaining) height--;
                 const width = 2 ** height;
 
-                const prefix =
-                  height === 0
-                    ? sql`context_through`
-                    : sql`(context_through >> ${sql.literal(String(height))})`;
-
                 candidates.push(sql`COALESCE((
-                  SELECT sequence FROM ${relation("effect_agent_canonical_records")}
-                  ${recoveryIndex(sql, height === 0 ? "effect_agent_records_rollover" : `effect_agent_records_rollover_bucket_${height}`)}
+                  SELECT sequence FROM ${relation("effect_agent_rollover_buckets")}
                   WHERE thread_id=(SELECT thread_id FROM boundary_request)
-                    AND record_tag=3 AND context_kind='rollover'
-                    AND ${prefix}=${start / width}
+                    AND height=${sql.literal(String(height))} AND bucket=${start / width}
                     AND sequence<=(SELECT through_sequence FROM boundary_request)
                   ORDER BY sequence DESC LIMIT 1
                 ), 0)`);
@@ -833,16 +836,30 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                   execute,
                 );
               break;
-            case "WorkerExecution":
-              rows = (yield* Effect.forEach(
-                ["UserInputRecorded", "SubmissionSettled"] as const,
-                (tag) =>
-                  sql`SELECT thread_id, sequence, record_id, ${recordBatchId(sql, namespace)} AS batch_id, ${recordJson} AS record_json FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_worker_execution")}
-                  WHERE thread_id = ${request.threadId} AND ${canonicalField(sql, "tag")} = ${RECORD_TAGS[tag]}
-                    AND ${canonicalField(sql, "runId")} IS NOT NULL
-                  ORDER BY sequence DESC LIMIT 1`.pipe(execute),
-              )).flat();
+            case "WorkerExecution": {
+              const current = yield* requireReadyWork(
+                request.threadId,
+                selection.expectedTailSequence,
+              );
+
+              const expected =
+                Number(current.worker_input_sequence !== null) +
+                Number(current.worker_settlement_sequence !== null);
+
+              if (expected === 0) {
+                rows = [];
+                break;
+              }
+              rows =
+                yield* sql`SELECT thread_id, sequence, record_id, ${recordBatchId(sql, namespace)} AS batch_id, ${recordJson} AS record_json
+                FROM ${relation("effect_agent_canonical_records")} WHERE thread_id=${request.threadId}
+                AND sequence IN (${current.worker_input_sequence}, ${current.worker_settlement_sequence}) ORDER BY sequence`.pipe(
+                  execute,
+                );
+              if ((yield* decodeRows(rows)).length !== expected)
+                return yield* failure("Worker execution pointer is missing or duplicated");
               break;
+            }
             case "WorkerState": {
               const funding = selection.sourceSubmissionId;
 
@@ -894,7 +911,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                 branches.push(sql`SELECT * FROM (
                   SELECT thread_id, sequence, record_id, ${recordBatchId(sql, namespace)} AS batch_id, ${recordJson} AS record_json
                   FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_call")}
-                  WHERE thread_id=${request.threadId} AND record_tag=17 AND run_id=${runKey(sql, sql`${request.threadId}`, sql`${canonicalIdentifier(runIdForSubmission(funding))}`, namespace)}
+                  WHERE thread_id=${request.threadId} AND record_tag=17 AND tool_call_id IS NOT NULL AND run_id=${runKey(sql, sql`${request.threadId}`, sql`${canonicalIdentifier(runIdForSubmission(funding))}`, namespace)}
                     AND sequence>${after} AND sequence<=${selection.expectedTailSequence}
                   ORDER BY sequence LIMIT ${request.page.limit}) AS joined_worker`);
               }
@@ -978,6 +995,12 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                     ))
                 )
                   return yield* failure("invalid original Tool declaration pointer");
+                if (
+                  selection._tag === "WorkerExecution" &&
+                  payload._tag !== "UserInputRecorded" &&
+                  !(payload._tag === "SubmissionSettled" && payload.runId !== undefined)
+                )
+                  return yield* failure("invalid Worker execution membership");
                 if (
                   selection._tag === "WorkerState" &&
                   (payload._tag === "WorkerInputRequested"
@@ -1160,7 +1183,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
           const tail = yield* requireThread(request.threadId);
 
           const [facts] = yield* decodeIdentityFacts(
-            yield* sql`SELECT admissions_count FROM ${relation("effect_agent_transfer_state")} WHERE thread_id=${request.threadId}`.pipe(
+            yield* sql`SELECT COUNT(*) AS admissions_count FROM ${relation("effect_agent_submissions")} WHERE thread_id=${request.threadId}`.pipe(
               execute,
             ),
           );

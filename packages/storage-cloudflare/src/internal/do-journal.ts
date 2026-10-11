@@ -83,7 +83,7 @@ const chunked = <A>(values: ReadonlyArray<A>, size: number): Array<ReadonlyArray
 
 class ThreadRow extends Schema.Class<ThreadRow>("ThreadRow")({
   thread_id: BoundedIdentifier,
-  created_at: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
+  created_at: Schema.NullOr(Schema.NonEmptyString.check(Schema.isMaxLength(128))),
   tail_sequence: CanonicalSequence,
 }) {}
 
@@ -492,19 +492,6 @@ const makeJournal = (
           Effect.flatMap(Effect.fromResult),
         );
 
-    const requireTransferState = Effect.fnUntraced(function* (threadId: string) {
-      const rows = yield* state
-        .read(sql`SELECT thread_id FROM effect_agent_transfer_state WHERE thread_id=${threadId}`)
-        .pipe(Effect.mapError(storageError("read transfer counters")));
-
-      if (rows.length !== 1)
-        return yield* DoStorageCorruptionError.make({
-          table: "effect_agent_transfer_state",
-          rowKey: threadId,
-          message: "Materialized Thread has no transfer counter row.",
-        });
-    });
-
     const materialize = Effect.fnUntraced(function* (
       threadId: string,
       createdAt: string,
@@ -519,8 +506,6 @@ const makeJournal = (
       const current = yield* getThread(threadId);
 
       if (current.length === 1) {
-        yield* requireTransferState(threadId);
-
         return;
       }
       yield* withWriteTransaction("materialize transaction")(
@@ -551,7 +536,8 @@ const makeJournal = (
               ${threadId},
               ${createdAt},
               0
-            )
+            ) ON CONFLICT(thread_id) DO UPDATE SET created_at=excluded.created_at
+              WHERE effect_agent_threads.created_at IS NULL
            RETURNING *`.pipe(
               threads.write,
               Effect.mapError((error) =>
@@ -559,17 +545,6 @@ const makeJournal = (
               ),
             );
 
-            yield* sql`INSERT INTO effect_agent_transfer_state
-                (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count, executions_count)
-                VALUES (${threadId}, 0, 0, 0, 0, 0, 0, 0) ON CONFLICT(thread_id) DO NOTHING`.pipe(
-              Effect.mapError(storageError("initialize transfer counters")),
-            );
-
-            yield* work
-              .initialize(
-                yield* Schema.decodeEffect(ThreadId)(threadId).pipe(Effect.mapError(workFailure)),
-              )
-              .pipe(Effect.mapError(workFailure));
             if (lifecycle !== undefined)
               yield* sql`INSERT INTO effect_agent_lifecycle_cursors (thread_id, through_sequence)
               VALUES (${threadId}, 0) RETURNING *`.pipe(
@@ -583,7 +558,6 @@ const makeJournal = (
 
             return;
           }
-          yield* requireTransferState(threadId);
         }),
       );
     }, withStorageSpan("DoJournal.materialize"));
@@ -595,7 +569,7 @@ const makeJournal = (
           Effect.mapError((error) =>
             error._tag === "SqlError" ? storageError("read thread")(error) : error,
           ),
-        )).filter((row) => row.thread_id === threadId);
+        )).filter((row) => row.thread_id === threadId && row.created_at !== null);
     });
 
     const hasRecord = Effect.fnUntraced(function* (threadId: string, recordId: string) {
@@ -774,7 +748,6 @@ const makeJournal = (
       });
 
       if (request.records.length > 0) {
-        yield* archives.append(request, firstSequence, lastSequence);
         yield* sql`
           INSERT INTO effect_agent_canonical_batches (
             thread_id,
@@ -835,18 +808,7 @@ const makeJournal = (
       }
 
       if (request.records.length > 0) {
-        yield* sql`
-          UPDATE effect_agent_threads
-          SET
-            tail_sequence = ${lastSequence}
-          WHERE thread_id = ${request.threadId}
-         RETURNING *`.pipe(
-          threads.write,
-          Effect.mapError((error) =>
-            error._tag === "SqlError" ? storageError("advance thread tail")(error) : error,
-          ),
-        );
-        yield* work
+        const workFields = yield* work
           .apply(
             yield* Schema.decodeEffect(ThreadId)(request.threadId).pipe(
               Effect.mapError(workFailure),
@@ -855,6 +817,14 @@ const makeJournal = (
             request.records.map((record) => record.canonical),
           )
           .pipe(Effect.mapError(workFailure));
+
+        yield* sql`UPDATE effect_agent_threads SET ${sql.update({ tail_sequence: lastSequence, ...workFields })}
+          WHERE thread_id=${request.threadId} RETURNING *`.pipe(
+          threads.write,
+          Effect.mapError((error) =>
+            error._tag === "SqlError" ? storageError("advance thread tail")(error) : error,
+          ),
+        );
       }
       yield* executionConflict(executions.commit(request, result));
       if (request.executionWrites.length > 0) yield* failpoint("append:after-record-insert");
@@ -1229,8 +1199,8 @@ const makeJournal = (
     const sourceThreads = Effect.fnUntraced(function* () {
       const all = yield* threads.matching(
         "lifecycle-owners",
-        () => true,
-        sql`SELECT * FROM effect_agent_threads LIMIT 129`,
+        (row) => row.created_at !== null,
+        sql`SELECT * FROM effect_agent_threads WHERE created_at IS NOT NULL LIMIT 129`,
         128,
       );
 
@@ -1239,7 +1209,7 @@ const makeJournal = (
       // Large custom hosts hydrate only owners whose journal has an unmaterialized suffix.
       return yield* Schema.decodeUnknownEffect(Schema.Array(ThreadRow))(
         yield* sql`SELECT t.* FROM effect_agent_threads t LEFT JOIN effect_agent_lifecycle_cursors c ON c.thread_id=t.thread_id
-        WHERE c.thread_id IS NULL OR t.tail_sequence > c.through_sequence ORDER BY t.thread_id LIMIT 128`,
+        WHERE t.created_at IS NOT NULL AND (c.thread_id IS NULL OR t.tail_sequence > c.through_sequence) ORDER BY t.thread_id LIMIT 128`,
       );
     });
 
@@ -1261,7 +1231,7 @@ const makeJournal = (
             // New Threads created with publication disabled have no cursor. Never advance
             // existing cursors: they can owe intent from an interrupted Attempt.
             yield* sql`INSERT INTO effect_agent_lifecycle_cursors(thread_id, through_sequence)
-        SELECT thread_id, tail_sequence FROM effect_agent_threads WHERE true
+        SELECT thread_id, tail_sequence FROM effect_agent_threads WHERE created_at IS NOT NULL
         ON CONFLICT(thread_id) DO NOTHING`;
             yield* sourceThreads();
           }),

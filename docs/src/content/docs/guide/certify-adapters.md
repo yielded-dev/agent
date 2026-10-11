@@ -51,21 +51,23 @@ logical record identities and canonical sequence positions; physical storage lay
 
 An append containing progress must reject conflicting revisions, changed original references,
 regressed accounting, or a frontier outside the same commit before writing. Remove active state
-with canonical terminal proof; unresolved obligations retain their own rows. Include active checkpoints
-in snapshot-fenced exports and fresh imports, without copying claims or leases. Preparations stay
-indexed after Run settlement; destination acknowledgement owns closure. An index grants no
+with canonical terminal proof; unresolved obligations retain their own rows. Keep active verification
+independent of idle-only export. Preparations stay indexed after Run settlement; destination
+acknowledgement owns closure. An index grants no
 execution authority, and missing required evidence is a typed fault, not an empty completed Run.
 See [Run continuations](/concepts/durability/#run-continuations) for recovery bounds.
 
-This unreleased format accepts only fresh layout-24 storage and `effect-agent/thread@6` archives.
+This unreleased format accepts only fresh layout-25 storage and `effect-agent/thread@6` archives.
 Refuse predecessor, newer, or ambiguous layouts before any DDL or record mutation. Preserve the
 rejected store; there is no layout upgrade or historical record decoder.
 
 Thread age has no canonical record ceiling. Export and verification stream bounded pages. Keep each
 `ThreadRead` page at or below 1,024 records and each `CanonicalBatch` at or below 256. An export
-must preserve one captured tail and independent fact revision across its bounded pages, including
-all immutable admissions, accepted commands, deliveries, and cross-range dependencies. Implement
-exact native locators and streaming verification; never silently treat one page as complete history.
+requires application quiescence and must reject any pending work before returning a page. Keep
+one captured tail and manifest of closed admissions, applied commands and terminal delivery facts.
+No transfer revision is maintained on ordinary writes. Import consumes a completed archive and
+publishes into an empty Thread atomically. Implement exact native locators and bounded verification;
+never silently treat one page as complete history.
 
 Implement `SubmissionLedger.readAbortIntent` as a strongly consistent read of one submission's
 abort intent. The runtime polls this method during execution, so its work must stay independent

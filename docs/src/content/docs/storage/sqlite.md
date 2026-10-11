@@ -71,7 +71,7 @@ Custom durable assemblies must share the same scoped storage owner for the Threa
 accepted-work ledger. Separately opened writable runtimes do not coordinate through leases.
 
 SQLite tracks layout separately from record meaning. This unreleased protocol opens only fresh
-layout-24 stores with `effect-agent/thread@6` records. Predecessor or ambiguous stores are rejected
+layout-25 stores with `effect-agent/thread@6` records. Predecessor or ambiguous stores are rejected
 before mutation. Same-format export/import installs into an empty destination Thread; no older
 layout upgrade or archive converter is provided. See the
 [operator procedure](/guide/operations/#adopting-these-contracts).

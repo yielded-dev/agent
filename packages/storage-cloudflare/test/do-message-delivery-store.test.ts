@@ -10,12 +10,13 @@ import {
   type SqlStorageProgressKind,
 } from "@yielded/agent-storage-sql/sql-storage-progress";
 import { lifecyclePublicationLayer } from "@yielded/agent/lifecycle-publication";
-import { MessageDeliveryRecord } from "@yielded/agent/message-delivery";
+import { MessageDeliveryRecord, MessageDeliveryStore } from "@yielded/agent/message-delivery";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import {
   makeMessageDeliveryFixture,
   messageDeliveryStoreConformanceCases,
 } from "@yielded/agent/testing/message-delivery-store-conformance";
+import { ThreadStore, ThreadTailRequest, ThreadMaterialization } from "@yielded/agent/thread-store";
 import { DateTime, Effect, Layer, Option, Result, Schema, Tracer } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { expect, it } from "vite-plus/test";
@@ -23,6 +24,7 @@ import { expect, it } from "vite-plus/test";
 import { doMessageDeliveryStoreLayer } from "../src/DoMessageDeliveryStore.ts";
 import { DoStorageConfig, DoStorageConfigValue } from "../src/DoStorageConfig.ts";
 import { DoStorageFailpoint } from "../src/DoStorageFailpoint.ts";
+import { layer as threadLayer } from "../src/DoThreadStore.ts";
 import { initializeDoJournal } from "../src/internal/do-journal.ts";
 import { withThreadStorage } from "./harness.ts";
 
@@ -249,6 +251,42 @@ it("applies the consuming adapter's stored-value bound to a shared pending view"
       expect(Result.isFailure(direct) && direct.failure.operation).toBe("stored-value-bytes");
       expect(Result.isFailure(cached) && cached.failure.operation).toBe("stored-value-bytes");
     }).pipe(Effect.provide([SqliteClient.layer({ storage }), BrowserCrypto.layer]), Effect.scoped),
+  ));
+
+// A pending delivery can own storage before any conversation has been materialized.
+it("preserves early deliveries when enabling lifecycle publication and materializing the Thread", () =>
+  withThreadStorage(`early-delivery-lifecycle-${crypto.randomUUID()}`, (storage) =>
+    Effect.gen(function* () {
+      const record = yield* makeMessageDeliveryFixture("early-delivery");
+
+      yield* Effect.flatMap(MessageDeliveryStore, (store) => store.insert(record)).pipe(
+        Effect.provide(storeLayer(storage)),
+      );
+      yield* Effect.gen(function* () {
+        const store = yield* ThreadStore;
+        const request = ThreadTailRequest.make({ threadId: record.key.ownerThreadId });
+        const before = yield* store.inspectTail(request).pipe(Effect.result);
+
+        expect(Result.isFailure(before) && before.failure._tag).toBe("ThreadNotMaterialized");
+        yield* store.materialize(
+          ThreadMaterialization.make({ threadId: record.key.ownerThreadId }),
+        );
+        expect((yield* store.inspectTail(request)).tailSequence).toBe(0);
+        expect(yield* store.lifecyclePublications!.pending(0, 1)).toEqual([]);
+      }).pipe(
+        Effect.provide(
+          threadLayer({ storage }).pipe(
+            Layer.provide(lifecyclePublicationLayer.pipe(Layer.provide(BrowserCrypto.layer))),
+          ),
+        ),
+      );
+
+      const retained = yield* Effect.flatMap(MessageDeliveryStore, (store) =>
+        store.get(record.key),
+      ).pipe(Effect.provide(storeLayer(storage)));
+
+      expect(retained).toEqual(record);
+    }).pipe(Effect.provide(BrowserCrypto.layer)),
   ));
 
 for (const [index, testCase] of messageDeliveryStoreConformanceCases.entries()) {

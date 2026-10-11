@@ -1,6 +1,5 @@
-import { BrowserCrypto } from "@effect/platform-browser";
 import * as DoThreadStore from "@yielded/agent-storage-cloudflare/do-thread-store";
-import { canonicalJson, digestJson } from "@yielded/agent/digest";
+import { canonicalJson } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { RecordEnvelope } from "@yielded/agent/records";
 import { ThreadArchive, ThreadImport } from "@yielded/agent/thread-import";
@@ -54,7 +53,7 @@ const Manifest = Schema.Struct({
   tailSequence: ThreadArchive.fields.tailSequence,
 
   snapshot: ThreadArchive.fields.snapshot,
-  externalObligations: ThreadArchive.fields.externalObligations,
+  workerSeal: ThreadArchive.fields.workerSeal,
 });
 
 const fixtureRecords = new Set<RecordEnvelope["payload"]["_tag"]>([
@@ -84,22 +83,16 @@ export const addressArchive = Effect.fnUntraced(function* (
   const threadId = ThreadId.make(name);
   const sourceManifest = yield* Schema.encodeEffect(Manifest)(first);
 
-  if ((yield* digestJson(sourceManifest)) !== first.snapshotId)
-    return yield* fail("Source transfer snapshot digest mismatch");
-  const snapshotId = yield* digestJson({ ...sourceManifest, threadId });
-
   return yield* Effect.forEach(pages, (page) =>
     Effect.gen(function* () {
       if (
         page.threadId !== first.threadId ||
-        page.snapshotId !== first.snapshotId ||
         canonicalJson(yield* Schema.encodeEffect(Manifest)(page)) !== canonicalJson(sourceManifest)
       )
         return yield* fail("Source transfer changes identity or snapshot");
       if (
         page.workerSeal ||
         page.deliveries.length ||
-        page.externalObligations?.length ||
         page.commands.aborts.length ||
         page.commands.approvals.length ||
         page.commands.resolutions.length
@@ -127,7 +120,6 @@ export const addressArchive = Effect.fnUntraced(function* (
       return {
         ...page,
         threadId,
-        snapshotId,
         records: page.records.map((entry) => ({ ...entry, threadId })),
         admissions: page.admissions.map((admission) =>
           ThreadAdmission.make({ ...admission, threadId }),
@@ -142,7 +134,7 @@ export const importCanonical = Effect.fnUntraced(function* (
   wire: readonly Schema.Json[],
   object: string,
 ) {
-  const pages = yield* addressArchive(wire, object).pipe(Effect.provide(BrowserCrypto.layer));
+  const pages = yield* addressArchive(wire, object);
 
   return yield* Effect.gen(function* () {
     const importer = yield* ThreadImport;

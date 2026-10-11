@@ -37,6 +37,7 @@ import {
   LoadCheckpointRequest,
   SaveCheckpointRequest,
 } from "@yielded/agent/thread-store";
+import { checkExportSource } from "@yielded/agent/thread-transfer";
 import { Clock, Context, Crypto, Effect, Layer, Option, Ref, Schema, Stream } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { isSqlError } from "effect/sql/SqlError";
@@ -468,13 +469,14 @@ const makeServices = Effect.fnUntraced(function* () {
     Stream.unwrap(observeEffect(request)).pipe(Stream.withSpan("DoThreadStore.observe"));
 
   const transfer = yield* makeSqlThreadImport({
+    owner: journal.state.owner,
     offsetPrefix: DO_OFFSET_PREFIX,
     maxValueBytes: config.maxStoredValueBytes,
-    // A zero cursor lets the normal publication source regenerate intent from the imported log.
+    // Closed imported history must not emit historical lifecycle notifications again.
     afterImport: ({ result }) =>
       journal.lifecycle === undefined
         ? Effect.void
-        : sql`INSERT INTO effect_agent_lifecycle_cursors(thread_id, through_sequence) VALUES (${result.threadId}, 0)`.pipe(
+        : sql`INSERT INTO effect_agent_lifecycle_cursors(thread_id, through_sequence) VALUES (${result.threadId}, ${result.tailSequence})`.pipe(
             Effect.asVoid,
             Effect.catchTag("SqlError", (cause) => storeError("rebuild lifecycle cursor", cause)),
           ),
@@ -713,6 +715,8 @@ export const exportThread = Effect.fn("DoThreadStore.exportThread")(function* (
   options: Pick<DoStorageOptions, "storage">,
   request: ThreadExportRequest,
 ) {
+  yield* checkExportSource(request.threadId);
+
   return yield* Effect.gen(function* () {
     const sql = yield* SqlClientService.SqlClient;
     const state = yield* ownedState(sql);
@@ -723,6 +727,7 @@ export const exportThread = Effect.fn("DoThreadStore.exportThread")(function* (
           yield* readDoStorageHeader();
 
           const transfer = yield* makeSqlThreadImport({
+            owner: state.owner,
             offsetPrefix: DO_OFFSET_PREFIX,
             read: (body) => body,
             write: () => Effect.die("A read-only exporter cannot import"),

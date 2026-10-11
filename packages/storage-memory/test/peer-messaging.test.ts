@@ -43,7 +43,7 @@ import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { ScheduledInputRefused, ScheduledInputRetryable } from "@yielded/agent/schedule";
 import { SubmissionLedger, SubmissionLookupByKey } from "@yielded/agent/submission-ledger";
 import { PreparedInput } from "@yielded/agent/subscription";
-import { ThreadExportRequest, ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
+import { ThreadTailRequest, ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import { Context, Duration, Effect, Layer, Option, Schema, Stream } from "effect";
@@ -282,7 +282,7 @@ const makeHarness = Effect.fn(function* (
   const driver = yield* makeDriver();
 
   const history = Effect.fnUntraced(function* (threadId: ThreadId) {
-    const page = yield* store.export(ThreadExportRequest.make({ threadId }));
+    const page = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
     if (page.tailSequence > 1024) return yield* Effect.die("Fixture history exceeds 1024 records");
     let bytes = 0;

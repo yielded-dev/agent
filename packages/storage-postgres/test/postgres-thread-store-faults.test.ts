@@ -22,15 +22,12 @@ import {
   LoadCheckpointRequest,
   SaveCheckpointRequest,
   ThreadCheckpoint,
-  ThreadExport,
   ThreadExportRequest,
   ThreadMaterialization,
   ThreadRead,
   ThreadStore,
   ThreadStoreError,
   type AppendResult,
-  streamExport,
-  ThreadExportSource,
 } from "@yielded/agent/thread-store";
 import { Cause, DateTime, Effect, Exit, Fiber, Layer, Option, Ref, Schema, Stream } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
@@ -202,13 +199,15 @@ describe("PostgresThreadStore faults", () => {
                 ),
               ).toEqual(yield* encodeRecords([record]));
 
-              const exported = yield* store
-                .export(ThreadExportRequest.make({ threadId }))
-                .pipe(Effect.flatMap(Schema.encodeEffect(ThreadExport)));
+              const retained = yield* store
+                .read(ThreadRead.make({ threadId, limit: 2 }))
+                .pipe(Stream.runCollect);
 
-              expect(exported.records.map((envelope) => envelope.record)).toEqual(
-                yield* encodeRecords([record]),
-              );
+              expect(
+                yield* Effect.forEach(retained, (envelope) =>
+                  Schema.encodeEffect(ReadRecord)(envelope.record),
+                ),
+              ).toEqual(yield* encodeRecords([record]));
             }),
           );
         });
@@ -266,18 +265,15 @@ describe("PostgresThreadStore faults", () => {
             )
             .pipe(Effect.exit);
 
-          const exported = yield* streamExport({ threadId: validId }).pipe(
-            Stream.provide(ThreadExportSource.layer()),
-            Stream.flatMap((page) => Stream.fromIterable(page.records)),
-            Stream.take(3),
-            Stream.runCollect,
-          );
+          const retained = yield* store
+            .read(ThreadRead.make({ threadId: validId, limit: 3 }))
+            .pipe(Stream.runCollect);
 
           expect({
             rejected,
             validAppend: Exit.isSuccess(validAppend),
-            threadId: exported[0]?.threadId,
-            records: yield* encodeRecords(exported.map((envelope) => envelope.record)),
+            threadId: retained[0]?.threadId,
+            records: yield* encodeRecords(retained.map((envelope) => envelope.record)),
           }).toEqual({
             rejected: [
               { mutation: true, read: true },

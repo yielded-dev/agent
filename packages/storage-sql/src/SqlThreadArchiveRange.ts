@@ -23,7 +23,6 @@ import { Effect, Option, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import { hotRecordJson, recordBatchId, storedBatchHeader } from "./SqlCanonicalStorage.ts";
-import type { RawAppendRequest } from "./SqlJournal.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 
 const bytes = utf8ByteLength;
@@ -96,19 +95,16 @@ const canonicalBatchValue = (
 
   const archived = sizeOnly ? textBytes(sql, sql`a.batch_json`) : sql`a.batch_json`;
 
-  // A missing hot batch copy is not an archive locator. Placement belongs to the range.
-  return sql`(SELECT CASE
-    WHEN placement.state IN ('open', 'sealed') AND placement.locator IS NULL THEN ${hot}
-    WHEN placement.state='archived' AND placement.locator IS NOT NULL THEN (
-      SELECT ${archived} FROM ${table("effect_agent_archive_batches")} a
-      WHERE a.thread_id=${owner}.thread_id AND a.batch_id=${owner}.batch_id
-        AND a.range_first_sequence=placement.first_sequence
-    ) END FROM ${table("effect_agent_journal_ranges")} placement
-    WHERE placement.thread_id=${owner}.thread_id AND placement.first_sequence=(
-      SELECT first_sequence FROM ${table("effect_agent_journal_ranges")}
-      WHERE thread_id=${owner}.thread_id AND first_sequence<=${owner}.first_sequence
-      ORDER BY first_sequence DESC LIMIT 1
-    ) AND ${owner}.last_sequence<=placement.last_sequence)`;
+  // Hot history needs no range metadata. Once archived, only the validated locator selects bytes.
+  return sql`CASE WHEN EXISTS (SELECT 1 FROM ${table("effect_agent_journal_ranges")} placement
+    WHERE placement.thread_id=${owner}.thread_id AND placement.first_sequence<=${owner}.first_sequence
+      AND placement.last_sequence>=${owner}.last_sequence AND placement.state='archived') THEN (
+    SELECT ${archived} FROM ${table("effect_agent_archive_batches")} a
+      JOIN ${table("effect_agent_journal_ranges")} placement ON placement.thread_id=a.thread_id AND placement.first_sequence=a.range_first_sequence
+    WHERE a.thread_id=${owner}.thread_id AND a.batch_id=${owner}.batch_id
+      AND placement.state='archived' AND placement.locator IS NOT NULL
+      AND placement.first_sequence<=${owner}.first_sequence AND placement.last_sequence>=${owner}.last_sequence
+  ) ELSE ${hot} END`;
 };
 
 /** Byte-identical to PreparedAppend and canonical import serialization. */
@@ -126,7 +122,7 @@ const RangeRow = Schema.Struct({
   record_count: SqlInteger.pipe(Schema.decodeTo(Schema.Int)),
   batch_count: SqlInteger.pipe(Schema.decodeTo(Schema.Int)),
   byte_count: SqlInteger.pipe(Schema.decodeTo(Schema.Int)),
-  state: Schema.Literals(["open", "sealed", "archived"]),
+  state: Schema.Literals(["sealed", "archived"]),
   locator: Schema.NullOr(Schema.String),
 });
 
@@ -236,7 +232,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
       ),
     )(
       yield* query(
-        sql`SELECT tail_sequence FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
+        sql`SELECT tail_sequence FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId} AND created_at IS NOT NULL`,
       ),
     ).pipe(Effect.mapError((cause) => failure("archive owner", cause)));
 
@@ -264,73 +260,69 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
     return rows[0];
   });
 
-  /** Called only after append fences/deduplication pass, in that append's writer transaction. */
-  const append = Effect.fnUntraced(function* (
-    request: Pick<RawAppendRequest, "threadId" | "expectedTailSequence" | "batchBytes" | "records">,
-    first: CanonicalSequence,
-    last: CanonicalSequence,
+  /** Scalar bounded planning occurs only for explicit seal/verification, never append. */
+  const planHotRange = Effect.fnUntraced(function* (
+    threadId: ThreadArchiveRange["threadId"],
+    after: number,
+    tail: number,
   ) {
-    const batchBytes = request.batchBytes;
+    if (after === tail) return undefined;
 
-    const byteCount =
-      batchBytes + request.records.reduce((total, record) => total + record.recordBytes, 0);
+    const plan = yield* Schema.decodeUnknownEffect(
+      Schema.Array(
+        Schema.Struct({
+          first_sequence: SqlInteger,
+          last_sequence: SqlInteger,
+          batch_bytes: SqlInteger,
+          record_bytes: SqlInteger,
+        }),
+      ),
+    )(
+      yield* query(sql`SELECT b.first_sequence, b.last_sequence, ${canonicalBatchBytes(sql, namespace, "b")} AS batch_bytes,
+      (SELECT SUM(${textBytes(sql, hotRecordJson(sql, namespace, "r"))}) FROM ${table("effect_agent_canonical_records")} r
+        WHERE r.thread_id=b.thread_id AND r.sequence BETWEEN b.first_sequence AND b.last_sequence) AS record_bytes
+      FROM ${table("effect_agent_canonical_batches")} b WHERE b.thread_id=${threadId} AND b.first_sequence>${after}
+      ORDER BY b.first_sequence LIMIT ${MAX_ARCHIVE_RANGE_RECORDS}`),
+    ).pipe(Effect.mapError((cause) => failure("plan hot range", cause)));
 
-    if (
-      batchBytes > MAX_CANONICAL_BATCH_BYTES ||
-      byteCount > MAX_ARCHIVE_RANGE_BYTES ||
-      request.records.length > MAX_ARCHIVE_RANGE_RECORDS
-    )
-      return yield* failure("append archive range bound");
+    let last = after,
+      count = 0,
+      batches = 0,
+      size = 0;
 
-    // Advance the usual open range in one indexed statement. Its predecessor frontier and
-    // remaining capacity are checked by the writer; decoding the returned descriptor still
-    // rejects malformed metadata and rolls back this entire append transaction.
-    if (request.expectedTailSequence > 0) {
-      const advanced = yield* decodeRanges(
-        yield* query(sql`UPDATE ${table("effect_agent_journal_ranges")}
-          SET last_sequence=${last},
-            record_count=record_count+${request.records.length}, batch_count=batch_count+1,
-            byte_count=byte_count+${byteCount}
-          WHERE thread_id=${request.threadId} AND state='open' AND locator IS NULL
-            AND last_sequence=${first - 1}
-            AND first_sequence>0 AND record_count=last_sequence-first_sequence+1
-            AND record_count BETWEEN 1 AND ${MAX_ARCHIVE_RANGE_RECORDS - request.records.length}
-            AND batch_count BETWEEN 1 AND record_count
-            AND byte_count BETWEEN 1 AND ${MAX_ARCHIVE_RANGE_BYTES - byteCount}
-          RETURNING *`),
-      ).pipe(Effect.mapError((cause) => failure("advance archive range", cause)));
-
-      if (advanced.length > 1) return yield* failure("ambiguous open archive range");
-      if (advanced[0] !== undefined) {
-        yield* descriptor(advanced[0]);
-
-        return;
-      }
-    }
-
-    const rows = yield* decodeRanges(
-      yield* query(sql`SELECT * FROM ${table("effect_agent_journal_ranges")}
-      WHERE thread_id=${request.threadId} AND state='open'`),
-    ).pipe(Effect.mapError((cause) => failure("open archive range", cause)));
-
-    if (rows.length > 1) return yield* failure("ambiguous open archive range");
-    const current = rows[0];
-
-    if (current !== undefined) {
-      yield* descriptor(current);
-      if (current.last_sequence !== first - 1)
-        return yield* failure("archive range append frontier");
+    for (const batch of plan) {
       if (
-        current.record_count + request.records.length <= MAX_ARCHIVE_RANGE_RECORDS &&
-        current.byte_count + byteCount <= MAX_ARCHIVE_RANGE_BYTES
+        batch.first_sequence !== last + 1 ||
+        batch.last_sequence > tail ||
+        batch.last_sequence < batch.first_sequence ||
+        batch.last_sequence - batch.first_sequence >= 256 ||
+        batch.batch_bytes < 1 ||
+        batch.batch_bytes > MAX_CANONICAL_BATCH_BYTES ||
+        batch.record_bytes < 1
       )
-        return yield* failure("archive range append frontier");
-      yield* query(sql`UPDATE ${table("effect_agent_journal_ranges")} SET state='sealed'
-        WHERE thread_id=${request.threadId} AND first_sequence=${current.first_sequence}`);
+        return yield* failure("plan hot range coverage");
+      const records = batch.last_sequence - batch.first_sequence + 1;
+      const bytes = batch.batch_bytes + batch.record_bytes;
+
+      if (count + records > MAX_ARCHIVE_RANGE_RECORDS || size + bytes > MAX_ARCHIVE_RANGE_BYTES)
+        break;
+      last = batch.last_sequence;
+      count += records;
+      batches++;
+      size += bytes;
     }
-    yield* query(sql`INSERT INTO ${table("effect_agent_journal_ranges")}
-        (thread_id, first_sequence, last_sequence, record_count, batch_count, byte_count, state, locator)
-        VALUES (${request.threadId}, ${first}, ${last}, ${request.records.length}, 1, ${byteCount}, 'open', NULL)`);
+    if (count === 0) return yield* failure("plan empty or oversized hot range");
+
+    return {
+      thread_id: threadId,
+      first_sequence: CanonicalSequence.make(after + 1),
+      last_sequence: CanonicalSequence.make(last),
+      record_count: count,
+      batch_count: batches,
+      byte_count: size,
+      state: "sealed",
+      locator: null,
+    } satisfies RangeRow;
   });
 
   const verifyInTransaction = Effect.fnUntraced(function* (row: RangeRow, copied = false) {
@@ -497,7 +489,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
 
           const rows = yield* decodeRanges(
             yield* query(sql`SELECT * FROM ${table("effect_agent_journal_ranges")}
-        WHERE thread_id=${request.threadId} AND state<>'open' AND first_sequence>${request.afterSequence ?? 0}
+        WHERE thread_id=${request.threadId} AND first_sequence>${request.afterSequence ?? 0}
         ORDER BY first_sequence LIMIT ${limit + 1}`),
           ).pipe(Effect.mapError((cause) => failure("archive page", cause)));
 
@@ -516,21 +508,20 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
             Effect.mapError((cause) => failure("archive seal request", cause)),
           );
 
-          yield* requireThread(request.threadId);
+          const tail = yield* requireThread(request.threadId);
 
-          const rows = yield* decodeRanges(
-            yield* query(
-              sql`SELECT * FROM ${table("effect_agent_journal_ranges")} WHERE thread_id=${request.threadId} AND state='open'`,
-            ),
-          ).pipe(Effect.mapError((cause) => failure("archive seal", cause)));
+          const previous = yield* decodeRanges(
+            yield* query(sql`SELECT * FROM ${table("effect_agent_journal_ranges")}
+            WHERE thread_id=${request.threadId} ORDER BY first_sequence DESC LIMIT 1`),
+          ).pipe(Effect.mapError((cause) => failure("seal predecessor", cause)));
 
-          if (rows.length === 0) return Option.none();
-          if (rows.length !== 1 || rows[0] === undefined) return yield* failure("archive seal");
-          const verified = yield* verifyInTransaction(rows[0]);
+          if (previous[0] !== undefined) yield* verifyInTransaction(previous[0]);
+          const row = yield* planHotRange(request.threadId, previous[0]?.last_sequence ?? 0, tail);
 
-          yield* query(
-            sql`UPDATE ${table("effect_agent_journal_ranges")} SET state='sealed' WHERE thread_id=${request.threadId} AND first_sequence=${rows[0].first_sequence}`,
-          );
+          if (row === undefined) return Option.none();
+          const verified = yield* verifyInTransaction(row);
+
+          yield* query(sql`INSERT INTO ${table("effect_agent_journal_ranges")} ${sql.insert(row)}`);
 
           return Option.some(verified);
         }),
@@ -545,7 +536,6 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
           yield* requireThread(request.threadId);
           const row = yield* range(request.threadId, request.firstSequence);
 
-          if (row.state === "open") return yield* failure("archive unsealed range");
           if (row.state === "archived") return yield* verifyInTransaction(row);
           yield* verifyInTransaction(row);
           yield* query(sql`INSERT INTO ${table("effect_agent_archive_batches")} (thread_id, batch_id, range_first_sequence, batch_json)
@@ -576,8 +566,6 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
           yield* requireThread(request.threadId);
           const row = yield* range(request.threadId, request.firstSequence);
 
-          if (row.state === "open") return yield* failure("verify unsealed archive range");
-
           return yield* verifyInTransaction(row);
         }),
       ),
@@ -595,22 +583,14 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
           sql`NOT EXISTS (SELECT 1 FROM ${table("effect_agent_canonical_batches")} b
             WHERE b.thread_id=c.thread_id AND c.sequence BETWEEN b.first_sequence AND b.last_sequence)`,
         ],
-        [
-          "effect_agent_canonical_batches",
-          sql`NOT EXISTS (SELECT 1 FROM ${table("effect_agent_journal_ranges")} r
-            WHERE r.thread_id=c.thread_id AND r.first_sequence=(
-              SELECT first_sequence FROM ${table("effect_agent_journal_ranges")}
-              WHERE thread_id=c.thread_id AND first_sequence<=c.first_sequence
-              ORDER BY first_sequence DESC LIMIT 1)
-              AND c.last_sequence<=r.last_sequence)`,
-        ],
+        ["effect_agent_canonical_batches", sql`FALSE`],
         ["effect_agent_journal_ranges", sql`FALSE`],
         [
           "effect_agent_archive_records",
           sql`NOT EXISTS (SELECT 1 FROM ${table("effect_agent_canonical_records")} b
             JOIN ${table("effect_agent_journal_ranges")} r
               ON r.thread_id=b.thread_id AND r.first_sequence=c.range_first_sequence
-            WHERE b.thread_id=c.thread_id AND b.sequence=c.sequence AND b.payload_json IS NULL
+            WHERE b.thread_id=c.thread_id AND b.sequence=c.sequence
               AND r.state='archived' AND c.sequence BETWEEN r.first_sequence AND r.last_sequence)`,
         ],
         [
@@ -640,7 +620,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
     return yield* transactions.read(
       query(sql`
       SELECT thread_id FROM ${table("effect_agent_threads")}
-      ${afterThreadId === undefined ? sql`` : sql`WHERE thread_id>${afterThreadId}`}
+      WHERE created_at IS NOT NULL ${afterThreadId === undefined ? sql`` : sql`AND thread_id>${afterThreadId}`}
       ORDER BY thread_id LIMIT ${MAX_ARCHIVE_RANGE_PAGE}`).pipe(
         Effect.flatMap(
           Schema.decodeUnknownEffect(
@@ -682,7 +662,14 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
           }
           if (rows.length < MAX_ARCHIVE_RANGE_PAGE) break;
         }
-        if (after !== header.tail_sequence) return yield* failure("archive verification coverage");
+        if (after > header.tail_sequence) return yield* failure("archive verification coverage");
+        while (after < header.tail_sequence) {
+          const hot = yield* planHotRange(threadId, after, header.tail_sequence);
+
+          if (hot === undefined) return yield* failure("archive verification missing hot suffix");
+          yield* verifyInTransaction(hot);
+          after = hot.last_sequence;
+        }
         let checkpointAfter: number | undefined;
 
         while (true) {
@@ -731,7 +718,6 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
 
   return {
     storage,
-    append,
     replay,
     verifyInTransaction,
     range,

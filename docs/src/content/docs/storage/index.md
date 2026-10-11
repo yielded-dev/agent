@@ -47,24 +47,27 @@ Storage alone does not start workers or recover unfinished Runs.
 
 ## Back up or change record formats
 
-A Thread keeps one canonical order and local ownership boundary throughout its lifetime. Storage rotates
-complete batches into bounded ranges; archiving a range preserves exact record identities and
-sequence boundaries. Compaction changes the model view, independently of physical storage. SQL
-adapters verify archive contents and publish their locator before removing hot payload copies.
+A Thread keeps one canonical order and local ownership boundary throughout its lifetime. Explicit
+archive maintenance seals bounded ranges of complete batches. SQL adapters verify archive contents
+and publish their locator before removing hot payloads. Model compaction changes the model view
+independently of physical storage.
 
-`streamExport({ threadId })` acquires `ThreadExportSource` and yields snapshot-bound pages of
-canonical batches, immutable admissions, accepted commands, retained deliveries, and current execution
-checkpoints. Pass those pages to the local `ThreadImport`
-service through `reencodeThread(source)`, or save the NDJSON archive with the admin CLI. Import
-validates every page and referenced fact, applies destination admission constraints, and publishes
-atomically into an empty Thread. Missing dependencies leave the destination unchanged. Historical
-closed workers and children remain evidence; unsupported live foreign obligations refuse transfer.
-Local execution ownership, application checkpoints, and recovery caches are not transferred. Unresolved effects retain
-their uncertainty.
+`streamExport({ threadId })` uses `ThreadExportSource` to export an idle Thread in bounded pages.
+It includes canonical batches, original admissions and receipts, applied commands and completed
+or refused deliveries. Export fails with `ThreadExportRejected` if work remains, including an
+Unknown tool call or a pending approval or delivery. Keep the source quiescent until all pages
+are saved; separately stop or reroute external producers when moving the Thread.
+
+Import a completed archive with `ThreadImport.import(pages)`, or re-encode saved export pages with
+`reencodeThread(source)`. Import checks schema, identity, order, transaction boundaries and referenced
+facts before publishing atomically into an empty Thread. Current Run state, local execution
+ownership and disposable projections are not transferred. Truncated or inconsistent archives
+leave the destination unchanged.
 
 Provide `ThreadExportSource.layer()` from the source `ThreadStore`, or SQLite's read-only
-`exportSourceLayer({ filename })`. Bind that source separately from the destination import Layer
-when transferring between stores.
+`exportSourceLayer({ filename })`. The admin CLI saves NDJSON archives and can re-encode through a
+temporary archive. Finish capturing the source before opening the destination import transaction;
+live piping between writable stores is not supported.
 
 Appends and imports refuse a batch whose identities and references cannot fit its complete
 32 MiB transfer page, even when its canonical payload fits the 16 MiB batch bound. Native adapters
@@ -72,7 +75,7 @@ also reserve page space for the complete admission, accepted command, or deliver
 acknowledging it, including repeated identities and transfer metadata. Oversized fresh facts fail
 before mutation; replay of accepted work preserves its original Receipt.
 
-The unreleased protocol accepts only fresh layout-24 stores and `effect-agent/thread@6` records.
+The unreleased protocol accepts only fresh layout-25 stores and `effect-agent/thread@6` records.
 Predecessor stores fail before mutation; no older layout upgrade or archive converter is included.
 See the [operator procedure and limits](/guide/operations/#adopting-these-contracts).
 

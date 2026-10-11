@@ -18,13 +18,18 @@ import {
   finishThreadImport,
   rebuildImportedSubmission,
   verifyImportedReferences,
-  verifyImportedSettlementOrder,
+  verifyImportedInputOrder,
   ThreadImportRejected,
   ThreadImportReader,
   validateImportedExecution,
   validateImportedRunExecution,
 } from "./ThreadImport.ts";
-import { ThreadExport, ThreadStoreError, type ThreadCheckpoint } from "./ThreadStore.ts";
+import {
+  ThreadExport,
+  ThreadStoreError,
+  type ThreadCheckpoint,
+  type ExecutionCheckpoint,
+} from "./ThreadStore.ts";
 
 /** All reads share the export snapshot. No lifetime identity sets or materialization. */
 export interface ThreadInvariantInput<E = ThreadStoreError, R = never> {
@@ -33,6 +38,8 @@ export interface ThreadInvariantInput<E = ThreadStoreError, R = never> {
   /** Complete directory, including settled rows, ordered by queueSequence. */
   readonly submissions: Stream.Stream<SubmissionSnapshot, E, R>;
   readonly runs: Stream.Stream<RunId, E, R>;
+  /** Includes orphan active rows; never obtained through idle-only public export. */
+  readonly executions: Stream.Stream<ExecutionCheckpoint, E, R>;
   readonly checkpoint?: ThreadCheckpoint;
   readonly checkpointsSupported?: boolean;
   readonly requireAllSettled?: boolean;
@@ -99,9 +106,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
 
       const prepared = yield* Schema.encodeEffect(ThreadExport)(page).pipe(
         Effect.flatMap(Schema.decodeUnknownEffect(ThreadArchive)),
-        Effect.flatMap((archive) =>
-          prepareImportPage(progress, archive, { allowExternalObligations: true }),
-        ),
+        Effect.flatMap((archive) => prepareImportPage(progress, archive, { verification: true })),
         Effect.match({
           onFailure: (e) => {
             for (const name of ["schema-round-trip", "sequence-contiguity"] as const)
@@ -114,13 +119,6 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
       );
 
       if (prepared === undefined) return;
-      for (const { checkpoint } of prepared.archive.executions)
-        yield* validateImportedExecution(input.threadId, checkpoint, page.tailSequence).pipe(
-          Effect.match({
-            onSuccess: () => undefined,
-            onFailure: (e) => fail("continuation-evidence", e.message),
-          }),
-        );
       for (const batch of prepared.batches)
         if (batch.lastSequence === input.checkpoint?.throughSequence) checkpointBound = true;
       for (const entry of prepared.records) {
@@ -194,6 +192,18 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
       },
     }),
   );
+  yield* Stream.runForEach(input.executions, (checkpoint) =>
+    validateImportedExecution(
+      input.threadId,
+      checkpoint,
+      progress.manifest?.tailSequence ?? CanonicalSequence.make(0),
+    ).pipe(
+      Effect.match({
+        onSuccess: () => undefined,
+        onFailure: (e) => fail("continuation-evidence", e.message),
+      }),
+    ),
+  );
   yield* Stream.runForEach(input.runs, (runId) =>
     readVerifiedRun(runId).pipe(
       Effect.match({
@@ -253,9 +263,9 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
         );
       if (input.requireAllSettled && row.state !== "settled")
         fail("all-settled", `Submission ${row.submissionId} is ${row.state}`);
-      yield* verifyImportedSettlementOrder(row).pipe(
+      yield* verifyImportedInputOrder(row).pipe(
         Effect.catchIf(Schema.is(ThreadImportRejected), (e) =>
-          Effect.sync(() => fail("fifo-settlement-order", e.message)),
+          Effect.sync(() => fail("input-before-settlement", e.message)),
         ),
       );
     }),
@@ -278,7 +288,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
     "sequence-contiguity",
     "continuation-evidence",
     "fifo-input-order",
-    "fifo-settlement-order",
+    "input-before-settlement",
     "terminal-uniqueness",
     "ledger-canonical-agreement",
     "checkpoint-binding",

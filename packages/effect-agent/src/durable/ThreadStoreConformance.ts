@@ -57,6 +57,7 @@ import {
   LoadCheckpointRequest,
   SaveCheckpointRequest,
   type ThreadStoreFailure,
+  type ThreadExportRejected,
 } from "./ThreadStore.ts";
 
 /** A ThreadStore contract invariant that an adapter under test violated. */
@@ -70,6 +71,7 @@ export class ThreadStoreConformanceViolation extends Schema.TaggedError<ThreadSt
 
 export type ThreadStoreConformanceFailure =
   | ThreadStoreFailure
+  | ThreadExportRejected
   | CheckpointRejected
   | ThreadStoreConformanceViolation;
 
@@ -86,10 +88,10 @@ export interface ThreadStoreConformanceCase {
 /** Inspect a small test fixture through its captured tail, up to 16,384 records and 32 MiB.
  * Transfer tests use streamExport so every wire page and independent fact section is exercised. */
 export const readTestThread = Effect.fnUntraced(function* (
-  store: Pick<ThreadStore["Service"], "read" | "export">,
+  store: Pick<ThreadStore["Service"], "read" | "inspectTail">,
   request: Pick<ThreadExportRequest, "threadId">,
 ) {
-  const tail = yield* store.export(ThreadExportRequest.make({ threadId: request.threadId }));
+  const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: request.threadId }));
 
   const invalid = (message: string) =>
     ThreadStoreError.make({ operation: "test fixture history", message });
@@ -303,10 +305,10 @@ const atomicBatchVisibility = conformanceCase(
         "A record ID reused across batches must conflict with reason record-identity",
       );
 
-      const exported = yield* store.export(ThreadExportRequest.make({ threadId }));
+      const retained = yield* readTestThread(store, { threadId });
 
       yield* ensure(
-        exported.records.length === 3 && exported.tailSequence === committed.lastSequence,
+        retained.records.length === 3 && retained.tailSequence === committed.lastSequence,
         "A conflicting batch must leave no partial prefix behind",
       );
     }),

@@ -353,7 +353,7 @@ export const IntegrityCheckName = Schema.Literals([
   "fifo-input-order",
   /** Canonical settlement records follow the admitted FIFO order (DUR-004); aborted
    * settlements of never-run work are exempt by design (P7 §7(c)). */
-  "fifo-settlement-order",
+  "input-before-settlement",
   /** At most one canonical terminal record per Submission; exactly one per settled row (DUR-002). */
   "terminal-uniqueness",
   /** Ledger terminal state agrees with the canonical settlement record (DUR-015). */
