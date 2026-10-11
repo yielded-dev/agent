@@ -1138,8 +1138,7 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
         Effect.filterOrFail(
           (capacity) =>
             capacity.threadId === request.threadId &&
-            capacity.tailSequence === request.expectedTailSequence &&
-            capacity.tailDigest === request.expectedTailDigest,
+            capacity.tailSequence === request.expectedTailSequence,
           () => crossThreadStoreError("worker capacity response mismatch", request.threadId),
         ),
       ),

@@ -7,4 +7,4 @@
 "@yielded/agent-storage-cloudflare": minor
 ---
 
-Persist current Run progress atomically with conversation history and retire it after settlement and execution closure. BEHAVIOR CHANGE: use matching runtime and storage packages with fresh layout-22 stores and thread@4 history; verification no longer replays discarded checkpoint revisions.
+Persist current Run progress atomically with conversation history and delete it at settlement, keeping unresolved obligations independently. BEHAVIOR CHANGE: use matching runtime and storage packages with fresh layout-23 stores and thread@5 history; verification checks schema, identity, order and atomicity without tamper evidence or historical progress replay.

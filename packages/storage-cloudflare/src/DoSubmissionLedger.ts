@@ -17,7 +17,6 @@ import {
   type SqlStorageProgressKind,
 } from "@yielded/agent-storage-sql/sql-storage-progress";
 import { canonicalRecordJson } from "@yielded/agent-storage-sql/sql-thread-archive-range";
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import type { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import { InputMessage } from "@yielded/agent/messaging";
 import {
@@ -1795,13 +1794,11 @@ const makeServices = Effect.fnUntraced(function* () {
                 thread_id,
                 created_at,
                 tail_sequence,
-                tail_digest,
                 producer_epoch
               ) VALUES (
                 ${head.thread_id},
                 ${now.iso},
                 0,
-                ${EMPTY_TAIL_DIGEST},
                 ${producerEpoch}
               )
              RETURNING *`.pipe(rows.threads.write, Effect.mapError(internalFailure(operation)));
@@ -2049,10 +2046,6 @@ const makeServices = Effect.fnUntraced(function* () {
           if (thread === undefined)
             return yield* ThreadNotMaterialized.make({ threadId: prepared.request.threadId });
 
-          const tailDigest = yield* Schema.decodeEffect(Digest)(thread.tail_digest).pipe(
-            Effect.mapError(internalFailure(operation)),
-          );
-
           // Replay still requires authority: finalization releases Owned tokens, while
           // retained host linkage or abort intent can authorize tokenless settled replay.
           switch (request.authority._tag) {
@@ -2117,7 +2110,6 @@ const makeServices = Effect.fnUntraced(function* () {
             return SettlementPublicationResult.make({
               record: existing.record,
               tailSequence: thread.tail_sequence,
-              tailDigest,
               replayed: true,
             });
           }
@@ -2128,14 +2120,9 @@ const makeServices = Effect.fnUntraced(function* () {
             });
           const appended = yield* journal.appendPrepared(prepared.raw);
 
-          const committedTailDigest = yield* Schema.decodeEffect(Digest)(appended.tailDigest).pipe(
-            Effect.mapError(internalFailure(operation)),
-          );
-
           return SettlementPublicationResult.make({
             record,
             tailSequence: appended.lastSequence,
-            tailDigest: committedTailDigest,
             replayed: appended.replayed,
           });
         }),
@@ -2153,11 +2140,9 @@ const makeServices = Effect.fnUntraced(function* () {
               threadId: prepared.request.threadId,
               batchId: prepared.request.batch.batchId,
               reason: error.reason,
-              ...(error.actualTailSequence !== undefined &&
-              Schema.is(Digest)(error.actualTailDigest)
+              ...(error.actualTailSequence !== undefined
                 ? {
                     actualTailSequence: error.actualTailSequence,
-                    actualTailDigest: error.actualTailDigest,
                   }
                 : {}),
             });

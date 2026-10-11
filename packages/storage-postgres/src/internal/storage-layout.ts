@@ -13,7 +13,7 @@ import {
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 22;
+export const CurrentPostgresStorageVersion = 23;
 
 /** Counter function body is frozen and checked on every layout inspection. */
 const transferFunctionBody = `
@@ -173,21 +173,21 @@ const transferTriggers = [
 /** Fresh layout only; inspection rejects every predecessor before DDL. */
 const layoutStatements = [
   'CREATE TABLE __NAMESPACE__."effect_agent_storage_version" ( id BOOLEAN PRIMARY KEY NOT NULL, version BIGINT NOT NULL, CONSTRAINT effect_agent_storage_version_single_row CHECK (id) )',
-  'CREATE TABLE __NAMESPACE__."effect_agent_threads" ( thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, created_at TEXT COLLATE "C" NOT NULL, tail_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, producer_epoch BIGINT NOT NULL )',
+  'CREATE TABLE __NAMESPACE__."effect_agent_threads" ( thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, created_at TEXT COLLATE "C" NOT NULL, tail_sequence BIGINT NOT NULL, producer_epoch BIGINT NOT NULL )',
   'CREATE TABLE __NAMESPACE__.effect_agent_envelopes (envelope_key BIGSERIAL PRIMARY KEY NOT NULL, content_digest TEXT COLLATE "C" UNIQUE NOT NULL, prefix TEXT COLLATE "C" NOT NULL, before_payload TEXT COLLATE "C" NOT NULL, before_record_id TEXT COLLATE "C" NOT NULL, suffix TEXT COLLATE "C" NOT NULL)',
   'CREATE TABLE __NAMESPACE__.effect_agent_run_keys (run_key BIGSERIAL PRIMARY KEY NOT NULL, thread_id TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C" NOT NULL, UNIQUE (thread_id, run_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__.effect_agent_threads(thread_id) ON DELETE RESTRICT)',
   'CREATE TABLE __NAMESPACE__.effect_agent_definitions (definition_key BIGSERIAL PRIMARY KEY NOT NULL, content_digest TEXT COLLATE "C" UNIQUE NOT NULL, value_json TEXT COLLATE "C" NOT NULL)',
   'CREATE TABLE __NAMESPACE__.effect_agent_executions (thread_id TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C" NOT NULL, input_sequence BIGINT NOT NULL, revision BIGINT NOT NULL, checkpoint_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, run_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__.effect_agent_threads(thread_id) ON DELETE RESTRICT)',
-  'CREATE TABLE __NAMESPACE__.effect_agent_execution_receipts (thread_id TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, commit_digest TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, run_id, batch_id), FOREIGN KEY (thread_id, run_id) REFERENCES __NAMESPACE__.effect_agent_executions(thread_id, run_id) ON DELETE RESTRICT)',
+  'CREATE TABLE __NAMESPACE__.effect_agent_execution_receipts (thread_id TEXT COLLATE "C" NOT NULL, run_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, commit_digest TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, run_id, batch_id), FOREIGN KEY (thread_id, run_id) REFERENCES __NAMESPACE__.effect_agent_executions(thread_id, run_id) ON DELETE RESTRICT)',
   "CREATE INDEX effect_agent_execution_receipts_batch ON __NAMESPACE__.effect_agent_execution_receipts(thread_id, batch_id)",
-  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_batches" ( thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, producer_id_json TEXT COLLATE "C" NOT NULL, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
+  'CREATE TABLE __NAMESPACE__."effect_agent_canonical_batches" ( thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, producer_id_json TEXT COLLATE "C" NOT NULL, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__."effect_agent_canonical_records" ( thread_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, record_id TEXT COLLATE "C" NOT NULL, created_at_json TEXT COLLATE "C" NOT NULL, envelope_key BIGINT NOT NULL, payload_json TEXT COLLATE "C", record_tag BIGINT NOT NULL, run_id BIGINT, tool_call_id TEXT COLLATE "C", input_kind TEXT COLLATE "C", source_submission_id TEXT COLLATE "C", message_id TEXT COLLATE "C", submission_id TEXT COLLATE "C", application_input BIGINT NOT NULL, context_through BIGINT, context_kind TEXT COLLATE "C", worker_thread_id TEXT COLLATE "C", handoff BIGINT NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__."effect_agent_record_runs" ( thread_id TEXT COLLATE "C" NOT NULL, run_id BIGINT NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, run_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__."effect_agent_canonical_records"(thread_id, sequence) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__.effect_agent_tool_declarations (thread_id TEXT COLLATE "C" NOT NULL, settlement_record_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, settlement_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)',
   "CREATE INDEX effect_agent_tool_declarations_sequence ON __NAMESPACE__.effect_agent_tool_declarations(thread_id, sequence)",
   'CREATE TABLE __NAMESPACE__.effect_agent_record_refusals (thread_id TEXT COLLATE "C" NOT NULL, reservation_record_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, PRIMARY KEY (thread_id, reservation_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)',
   "CREATE INDEX effect_agent_record_refusals_sequence ON __NAMESPACE__.effect_agent_record_refusals(thread_id, sequence)",
-  'CREATE TABLE __NAMESPACE__."effect_agent_checkpoints" ( thread_id TEXT COLLATE "C" NOT NULL, through_sequence BIGINT NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, checkpoint_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, through_sequence), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
+  'CREATE TABLE __NAMESPACE__."effect_agent_checkpoints" ( thread_id TEXT COLLATE "C" NOT NULL, through_sequence BIGINT NOT NULL, checkpoint_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, through_sequence), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__."effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   'CREATE TABLE __NAMESPACE__."effect_agent_submissions" ( submission_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, thread_id TEXT COLLATE "C" NOT NULL, queue_sequence BIGINT NOT NULL, principal TEXT COLLATE "C" NOT NULL, idempotency_key TEXT COLLATE "C" NOT NULL, agent_id TEXT COLLATE "C" NOT NULL, definition_key BIGINT NOT NULL, deployment_id TEXT COLLATE "C" NOT NULL, input_json TEXT COLLATE "C" NOT NULL, input_digest TEXT COLLATE "C" NOT NULL, receipt_id TEXT COLLATE "C" NOT NULL, state TEXT COLLATE "C" NOT NULL, settled_outcome TEXT COLLATE "C", settled_record_id TEXT COLLATE "C", finalized_at TEXT COLLATE "C", created_at TEXT COLLATE "C" NOT NULL, ready_at TEXT COLLATE "C", input_applied_record_id TEXT COLLATE "C", input_applied_sequence BIGINT, joined_host_submission_id TEXT COLLATE "C", suspended_reason_json TEXT COLLATE "C", suspended_at TEXT COLLATE "C", unknown_reason TEXT COLLATE "C", unknown_tool_call_ids_json TEXT COLLATE "C", parent_submission_id TEXT COLLATE "C", parent_tool_call_id TEXT COLLATE "C", admission_group TEXT COLLATE "C", admission_fence_json TEXT COLLATE "C", worker_admission_json TEXT COLLATE "C", message_admission_json TEXT COLLATE "C", UNIQUE (thread_id, principal, idempotency_key), UNIQUE (thread_id, queue_sequence) )',
   'CREATE INDEX effect_agent_submissions_group ON __NAMESPACE__."effect_agent_submissions" (thread_id, admission_group, state)',
   'CREATE TABLE __NAMESPACE__."effect_agent_submission_ownership" ( submission_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, attempt_id TEXT COLLATE "C" NOT NULL, ownership_token TEXT COLLATE "C" NOT NULL, producer_epoch BIGINT NOT NULL, owner_producer_id TEXT COLLATE "C" NOT NULL, lease_expires_at TEXT COLLATE "C" NOT NULL, FOREIGN KEY (submission_id) REFERENCES __NAMESPACE__."effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
@@ -240,7 +240,7 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_records_worker_stop ON __NAMESPACE__.effect_agent_canonical_records(thread_id, worker_thread_id, sequence) WHERE record_tag = 38",
   "CREATE INDEX effect_agent_message_deliveries_identity ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, (read_metadata ->> 'messageId'))",
   "CREATE INDEX effect_agent_message_deliveries_peer ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused') AND (read_metadata ->> 'peer') = 'true'",
-  'CREATE TABLE __NAMESPACE__.effect_agent_journal_ranges (thread_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, previous_tail_digest TEXT COLLATE "C" NOT NULL, tail_digest TEXT COLLATE "C" NOT NULL, record_count BIGINT NOT NULL, batch_count BIGINT NOT NULL, byte_count BIGINT NOT NULL, state TEXT COLLATE "C" NOT NULL, locator TEXT COLLATE "C", PRIMARY KEY (thread_id, first_sequence), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__.effect_agent_threads(thread_id) ON DELETE RESTRICT)',
+  'CREATE TABLE __NAMESPACE__.effect_agent_journal_ranges (thread_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, record_count BIGINT NOT NULL, batch_count BIGINT NOT NULL, byte_count BIGINT NOT NULL, state TEXT COLLATE "C" NOT NULL, locator TEXT COLLATE "C", PRIMARY KEY (thread_id, first_sequence), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__.effect_agent_threads(thread_id) ON DELETE RESTRICT)',
   "CREATE UNIQUE INDEX effect_agent_journal_ranges_open ON __NAMESPACE__.effect_agent_journal_ranges(thread_id) WHERE state = 'open'",
   'CREATE TABLE __NAMESPACE__.effect_agent_archive_batches (thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, range_first_sequence BIGINT NOT NULL, batch_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id, batch_id) REFERENCES __NAMESPACE__.effect_agent_canonical_batches(thread_id, batch_id) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_batches_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES __NAMESPACE__.effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)',
   'CREATE TABLE __NAMESPACE__.effect_agent_archive_records (thread_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, range_first_sequence BIGINT NOT NULL, record_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_records_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES __NAMESPACE__.effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)',
@@ -328,7 +328,6 @@ const layoutShape: Readonly<
       "commit_digest:text:true",
       "first_sequence:bigint:true",
       "last_sequence:bigint:true",
-      "tail_digest:text:true",
     ],
     constraints: {
       effect_agent_execution_receipts_pkey: ["p", ["thread_id", "run_id", "batch_id"]],
@@ -345,8 +344,6 @@ const layoutShape: Readonly<
       "thread_id:text:true",
       "first_sequence:bigint:true",
       "last_sequence:bigint:true",
-      "previous_tail_digest:text:true",
-      "tail_digest:text:true",
       "record_count:bigint:true",
       "batch_count:bigint:true",
       "byte_count:bigint:true",
@@ -486,7 +483,6 @@ const layoutShape: Readonly<
       "batch_id:text:true",
       "first_sequence:bigint:true",
       "last_sequence:bigint:true",
-      "tail_digest:text:true",
       "producer_id_json:text:true",
     ],
     constraints: {
@@ -588,12 +584,7 @@ const layoutShape: Readonly<
     },
   },
   effect_agent_checkpoints: {
-    columns: [
-      "thread_id:text:true",
-      "through_sequence:bigint:true",
-      "tail_digest:text:true",
-      "checkpoint_json:text:true",
-    ],
+    columns: ["thread_id:text:true", "through_sequence:bigint:true", "checkpoint_json:text:true"],
     constraints: {
       effect_agent_checkpoints_pkey: ["p", ["thread_id", "through_sequence"]],
       effect_agent_checkpoints_thread_id_fkey: [
@@ -813,7 +804,6 @@ const layoutShape: Readonly<
       "thread_id:text:true",
       "created_at:text:true",
       "tail_sequence:bigint:true",
-      "tail_digest:text:true",
       "producer_epoch:bigint:true",
     ],
     constraints: { effect_agent_threads_pkey: ["p", ["thread_id"]] },
@@ -1684,10 +1674,10 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
   const { table, execute } = yield* makeSqlQuery(namespace);
 
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 22)`,
+    sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, 23)`,
   );
   yield* execute(
-    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 22, ${CURRENT_RECORD_FORMAT})`,
+    sql`INSERT INTO ${table("effect_agent_schema")} (singleton, layout_version, record_format) VALUES (1, 23, ${CURRENT_RECORD_FORMAT})`,
   );
 
   return yield* readPostgresStorageHeader(namespace);

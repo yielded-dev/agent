@@ -177,7 +177,7 @@ describe("persistent threads", () => {
           }
 
           const log = yield* exported;
-          const projection = replayThread(threadId, log.records, log.tailDigest);
+          const projection = replayThread(threadId, log.records);
 
           expect(projection.completedRuns).toHaveLength(100);
           expect(projection.modelOutputs).toEqual(Array.from({ length: 100 }, () => "ok"));
@@ -347,7 +347,7 @@ describe("persistent threads", () => {
             "user",
             "assistant",
           ]);
-          const projection = replayThread(threadId, restored.log.records, restored.log.tailDigest);
+          const projection = replayThread(threadId, restored.log.records);
 
           expect(projection.inputs).toEqual(["Find my city", "Where was I?"]);
           expect(projection.modelOutputs).toEqual(["Kyoto", "Welcome back to Kyoto"]);
@@ -565,7 +565,7 @@ describe("persistent threads", () => {
                 Effect.provide(sqliteLayer({ filename, verifyOnOpen: true })),
               );
 
-              const projection = replayThread(threadId, log.records, log.tailDigest);
+              const projection = replayThread(threadId, log.records);
 
               expect(projection.inputs).toEqual(location === "append:after" ? ["city"] : []);
               expect(projection.modelOutputs).toEqual(location === "append:after" ? ["Kyoto"] : []);

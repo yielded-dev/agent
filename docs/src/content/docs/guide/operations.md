@@ -17,7 +17,7 @@ administration contract applies to Node and SQLite class `DN` and Cloudflare Dur
 
 - `explain(submissionId)` and `explainThread(threadId)` return the recovery decision,
   operator meaning, and expected disposition. They write nothing.
-- `verify(threadId)` checks the canonical batch digest chain, retained history and active Run
+- `verify(threadId)` checks schema, identity, sequence, retained history and active Run
   checkpoints, including their original Prompt digests. Missing or mismatched active state fails
   integrity verification; discarded intermediate checkpoints are not historical proof.
 - `retry(RetryCommand.make({ submissionId, author, reason }))` logs the operator and repeats the classifier's
@@ -479,7 +479,7 @@ uncertainty, payloads and transactional prearming; this extension defines no pro
 ### Adopting these contracts
 
 Table layout and record meaning have independent versions. The unreleased protocol accepts fresh
-layout-22 stores and `effect-agent/thread@4` records on SQLite, PostgreSQL, and Cloudflare. Opening
+layout-23 stores and `effect-agent/thread@5` records on SQLite, PostgreSQL, and Cloudflare. Opening
 predecessor or ambiguous stores fails before DDL or payload mutation. Keep them with their matching
 release; no historical decoder, layout upgrade, converter, or mixed-format runtime is included.
 

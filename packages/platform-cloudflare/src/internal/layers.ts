@@ -914,7 +914,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                                             AppendResult.make({
                                               firstSequence: result.tailSequence,
                                               lastSequence: result.tailSequence,
-                                              tailDigest: result.tailDigest,
+
                                               replayed: false,
                                             }),
                                           )

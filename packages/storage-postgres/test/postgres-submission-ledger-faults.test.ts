@@ -5,7 +5,7 @@ import {
   type PostgresStorageFailpointLocation,
   PostgresWriteContention,
 } from "@yielded/agent-storage-postgres/postgres-storage-error";
-import { digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { digestJson } from "@yielded/agent/digest";
 import {
   CanonicalBatch,
   CanonicalSequence,
@@ -166,7 +166,7 @@ const settlementPublication = Effect.fn("PostgresLedgerTest.settlementPublicatio
       threadId: thread(threadId),
       producerEpoch: claim.producerEpoch,
       expectedTailSequence: sequence(0),
-      expectedTailDigest: EMPTY_TAIL_DIGEST,
+
       batch: CanonicalBatch.make({
         batchId: submissionSettlementBatchId(admitted.submissionId),
         producerId: TEST_PRODUCER,

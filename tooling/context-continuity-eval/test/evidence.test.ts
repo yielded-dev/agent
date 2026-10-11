@@ -119,7 +119,6 @@ it("rejects aged copies and later transcripts instead of trusting a model-select
     turnId: "archive:1",
     turn: 1,
     messages: { content: [{ role: "user", content: input }] },
-    messagesDigest: "a".repeat(64),
   });
 
   const later = envelope(17, "later-transcript", {
@@ -131,7 +130,6 @@ it("rejects aged copies and later transcripts instead of trusting a model-select
     turnId: "archive:2",
     turn: 2,
     messages: { content: [{ role: "user", content: input }] },
-    messagesDigest: "b".repeat(64),
   });
 
   const copied = read(18, source, input);

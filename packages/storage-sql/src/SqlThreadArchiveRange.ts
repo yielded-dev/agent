@@ -1,12 +1,6 @@
-import {
-  canonicalJson,
-  digestCanonicalBatchJson,
-  digestJson,
-  EMPTY_TAIL_DIGEST,
-  utf8ByteLength,
-} from "@yielded/agent/digest";
+import { canonicalJson, utf8ByteLength } from "@yielded/agent/digest";
 import { ExportBatch, ExportRecord } from "@yielded/agent/record-format";
-import { CanonicalSequence, Digest, ProducerEpoch } from "@yielded/agent/records";
+import { CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
 import {
   MAX_ARCHIVE_RANGE_BYTES,
   MAX_ARCHIVE_RANGE_PAGE,
@@ -26,7 +20,7 @@ import {
   ThreadCheckpoint,
   type ThreadExportBatch,
 } from "@yielded/agent/thread-store";
-import { Crypto, Effect, Option, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import { hotRecordJson, recordBatchId, storedBatchHeader } from "./SqlCanonicalStorage.ts";
@@ -130,8 +124,6 @@ const RangeRow = Schema.Struct({
   thread_id: ThreadArchiveRange.fields.threadId,
   first_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
   last_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-  previous_tail_digest: Digest,
-  tail_digest: Digest,
   record_count: SqlInteger.pipe(Schema.decodeTo(Schema.Int)),
   batch_count: SqlInteger.pipe(Schema.decodeTo(Schema.Int)),
   byte_count: SqlInteger.pipe(Schema.decodeTo(Schema.Int)),
@@ -156,7 +148,6 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
   namespace?: string,
 ) {
   const sql = yield* SqlClient.SqlClient;
-  const crypto = yield* Crypto.Crypto;
   const { table, execute } = yield* makeSqlQuery(namespace);
 
   const query = <A extends object>(statement: Parameters<typeof execute<A>>[0]) =>
@@ -171,7 +162,6 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
         Schema.Struct({
           first_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
           last_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-          tail_digest: Digest,
           byte_count: SqlInteger.pipe(
             Schema.decodeTo(
               Schema.Int.check(
@@ -183,7 +173,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
       ).check(Schema.isMaxLength(1)),
     )(
       yield* query(sql`
-      SELECT first_sequence, last_sequence, tail_digest, ${canonicalBatchBytes(sql, namespace)} AS byte_count
+      SELECT first_sequence, last_sequence, ${canonicalBatchBytes(sql, namespace)} AS byte_count
       FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${threadId} AND batch_id=${JSON.stringify(batchId)}`),
     ).pipe(Effect.mapError((cause) => failure("replay batch plan", cause)));
 
@@ -214,23 +204,6 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
     )
       return yield* failure("replay batch identity");
 
-    const previous =
-      plan.first_sequence === 1
-        ? EMPTY_TAIL_DIGEST
-        : (yield* Schema.decodeUnknownEffect(
-            Schema.Tuple([Schema.Struct({ tail_digest: Digest })]),
-          )(
-            yield* query(sql`SELECT tail_digest FROM ${table("effect_agent_canonical_batches")}
-          WHERE thread_id=${threadId} AND last_sequence=${plan.first_sequence - 1}`),
-          ).pipe(Effect.mapError((cause) => failure("replay predecessor", cause))))[0].tail_digest;
-
-    const digest = yield* digestCanonicalBatchJson(previous, payload.batch_json).pipe(
-      Effect.provideService(Crypto.Crypto, crypto),
-      Effect.mapError((cause) => failure("replay chain", cause)),
-    );
-
-    if (digest !== plan.tail_digest) return yield* failure("replay batch digest");
-
     return { ...plan, batch_json: payload.batch_json };
   });
 
@@ -243,12 +216,10 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
       return yield* failure("archive descriptor identity");
 
     return yield* ThreadArchiveRange.makeEffect({
-      format: "effect-agent/thread-range@1",
+      format: "effect-agent/thread-range@2",
       threadId: row.thread_id,
       firstSequence: row.first_sequence,
       lastSequence: row.last_sequence,
-      previousTailDigest: row.previous_tail_digest,
-      tailDigest: row.tail_digest,
       recordCount: row.record_count,
       batchCount: row.batch_count,
       byteCount: row.byte_count,
@@ -306,7 +277,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
 
   /** Called only after append fences/deduplication pass, in that append's writer transaction. */
   const append = Effect.fnUntraced(function* (
-    request: RawAppendRequest,
+    request: Pick<RawAppendRequest, "threadId" | "expectedTailSequence" | "batchBytes" | "records">,
     first: CanonicalSequence,
     last: CanonicalSequence,
   ) {
@@ -328,11 +299,11 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
     if (request.expectedTailSequence > 0) {
       const advanced = yield* decodeRanges(
         yield* query(sql`UPDATE ${table("effect_agent_journal_ranges")}
-          SET last_sequence=${last}, tail_digest=${request.tailDigest},
+          SET last_sequence=${last},
             record_count=record_count+${request.records.length}, batch_count=batch_count+1,
             byte_count=byte_count+${byteCount}
           WHERE thread_id=${request.threadId} AND state='open' AND locator IS NULL
-            AND last_sequence=${first - 1} AND tail_digest=${request.expectedTailDigest}
+            AND last_sequence=${first - 1}
             AND first_sequence>0 AND record_count=last_sequence-first_sequence+1
             AND record_count BETWEEN 1 AND ${MAX_ARCHIVE_RANGE_RECORDS - request.records.length}
             AND batch_count BETWEEN 1 AND record_count
@@ -358,7 +329,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
 
     if (current !== undefined) {
       yield* descriptor(current);
-      if (current.last_sequence !== first - 1 || current.tail_digest !== request.expectedTailDigest)
+      if (current.last_sequence !== first - 1)
         return yield* failure("archive range append frontier");
       if (
         current.record_count + request.records.length <= MAX_ARCHIVE_RANGE_RECORDS &&
@@ -369,23 +340,15 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
         WHERE thread_id=${request.threadId} AND first_sequence=${current.first_sequence}`);
     }
     yield* query(sql`INSERT INTO ${table("effect_agent_journal_ranges")}
-        (thread_id, first_sequence, last_sequence, previous_tail_digest, tail_digest, record_count, batch_count, byte_count, state, locator)
-        VALUES (${request.threadId}, ${first}, ${last}, ${request.expectedTailDigest}, ${request.tailDigest}, ${request.records.length}, 1, ${byteCount}, 'open', NULL)`);
+        (thread_id, first_sequence, last_sequence, record_count, batch_count, byte_count, state, locator)
+        VALUES (${request.threadId}, ${first}, ${last}, ${request.records.length}, 1, ${byteCount}, 'open', NULL)`);
   });
 
   const verifyInTransaction = Effect.fnUntraced(function* (row: RangeRow, copied = false) {
     const result = yield* descriptor(row);
 
     if (row.state === "archived") {
-      const locator = `sql-range:${yield* digestJson([
-        row.thread_id,
-        row.first_sequence,
-        row.last_sequence,
-        row.tail_digest,
-      ]).pipe(
-        Effect.provideService(Crypto.Crypto, crypto),
-        Effect.mapError((cause) => failure("archive locator digest", cause)),
-      )}`;
+      const locator = `sql-range:${row.first_sequence}:${row.last_sequence}`;
 
       if (row.locator !== locator) return yield* failure("archive locator identity");
     }
@@ -407,8 +370,6 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
       batch_id: Schema.fromJsonString(Schema.String),
       first_sequence: SqlInteger,
       last_sequence: SqlInteger,
-      batch_digest: Digest,
-      tail_digest: Digest,
       byte_count: SqlInteger,
       header_byte_count: SqlInteger,
     });
@@ -430,7 +391,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
 
     const batches = yield* Schema.decodeUnknownEffect(Schema.Array(BatchPlan))(
       yield* query(sql`
-      SELECT c.batch_id, c.first_sequence, c.last_sequence, c.tail_digest AS batch_digest, c.tail_digest, ${batchSize} AS byte_count, ${size(storedBatchHeader(sql, "c"))} AS header_byte_count
+      SELECT c.batch_id, c.first_sequence, c.last_sequence, ${batchSize} AS byte_count, ${size(storedBatchHeader(sql, "c"))} AS header_byte_count
       FROM ${table("effect_agent_canonical_batches")} c ${batchJoin}
       WHERE c.thread_id=${row.thread_id} AND c.first_sequence>=${row.first_sequence} AND c.first_sequence<=${row.last_sequence}
       ORDER BY c.first_sequence LIMIT ${MAX_ARCHIVE_RANGE_RECORDS + 1}`),
@@ -461,7 +422,6 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
         row.byte_count
     )
       return yield* failure("archive size or count");
-    let digest = row.previous_tail_digest;
     let sequence = row.first_sequence;
     let recordIndex = 0;
 
@@ -492,12 +452,6 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
         batch.last_sequence !== sequence + decoded.records.length - 1
       )
         return yield* failure("archive batch identity");
-      digest = yield* digestCanonicalBatchJson(digest, payload.batch_json).pipe(
-        Effect.provideService(Crypto.Crypto, crypto),
-        Effect.mapError((cause) => failure("archive digest", cause)),
-      );
-      if (digest !== batch.batch_digest || digest !== batch.tail_digest)
-        return yield* failure("archive batch digest");
       for (const record of decoded.records) {
         const plan = records[recordIndex++];
 
@@ -510,10 +464,15 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
           return yield* failure("archive record identity");
 
         const [raw] = yield* Schema.decodeUnknownEffect(
-          Schema.Tuple([Schema.Struct({ record_json: Schema.String })]),
+          Schema.Tuple([
+            Schema.Struct({
+              record_json: Schema.String,
+              hot_record_json: Schema.NullOr(Schema.String),
+            }),
+          ]),
         )(
           yield* query(sql`
-          SELECT ${recordText} AS record_json FROM ${table("effect_agent_canonical_records")} c ${recordJoin}
+          SELECT ${recordText} AS record_json, ${archive ? hotRecordJson(sql, namespace, "c") : sql`NULL`} AS hot_record_json FROM ${table("effect_agent_canonical_records")} c ${recordJoin}
           WHERE c.thread_id=${row.thread_id} AND c.sequence=${sequence}`),
         ).pipe(Effect.mapError((cause) => failure("archive record content", cause)));
 
@@ -523,17 +482,14 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
 
         if (
           bytes(raw.record_json) !== plan.byte_count ||
-          canonicalJson(encoded) !== raw.record_json
+          canonicalJson(encoded) !== raw.record_json ||
+          (raw.hot_record_json !== null && raw.hot_record_json !== raw.record_json)
         )
           return yield* failure("archive record wire");
         sequence = CanonicalSequence.make(sequence + 1);
       }
     }
-    if (
-      sequence !== row.last_sequence + 1 ||
-      recordIndex !== row.record_count ||
-      digest !== row.tail_digest
-    )
+    if (sequence !== row.last_sequence + 1 || recordIndex !== row.record_count)
       return yield* failure("archive final frontier");
 
     return result;
@@ -611,15 +567,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
         WHERE thread_id=${row.thread_id} AND sequence>=${row.first_sequence} AND sequence<=${row.last_sequence}`);
           yield* verifyInTransaction(row, true);
 
-          const locator = `sql-range:${yield* digestJson([
-            row.thread_id,
-            row.first_sequence,
-            row.last_sequence,
-            row.tail_digest,
-          ]).pipe(
-            Effect.provideService(Crypto.Crypto, crypto),
-            Effect.mapError((cause) => failure("archive locator digest", cause)),
-          )}`;
+          const locator = `sql-range:${row.first_sequence}:${row.last_sequence}`;
 
           yield* query(sql`UPDATE ${table("effect_agent_journal_ranges")} SET state='archived', locator=${locator}
         WHERE thread_id=${row.thread_id} AND first_sequence=${row.first_sequence}`);
@@ -648,7 +596,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
 
   /**
    * Reject authoritative rows excluded by owner/range traversal. Each probe returns at most
-   * one scalar, including for orphan payloads; digest verification still belongs to verifyThread.
+   * one scalar, including for orphan payloads; content validation belongs to verifyThread.
    */
   const verifyCoverage = transactions.read(
     Effect.gen(function* () {
@@ -720,15 +668,14 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
     transactions.read(
       Effect.gen(function* () {
         const [header] = yield* Schema.decodeUnknownEffect(
-          Schema.Tuple([Schema.Struct({ tail_sequence: SqlInteger, tail_digest: Digest })]),
+          Schema.Tuple([Schema.Struct({ tail_sequence: SqlInteger })]),
         )(
           yield* query(sql`
-      SELECT tail_sequence, tail_digest FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`),
+      SELECT tail_sequence FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`),
         ).pipe(Effect.mapError((cause) => failure("archive verification tail", cause)));
 
         let after = 0;
         let rangeAfter: CanonicalSequence | undefined;
-        let previous = EMPTY_TAIL_DIGEST;
 
         while (true) {
           const rows = yield* decodeRanges(
@@ -738,17 +685,15 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
           ).pipe(Effect.mapError((cause) => failure("archive verification ranges", cause)));
 
           for (const row of rows) {
-            if (row.first_sequence !== after + 1 || row.previous_tail_digest !== previous)
-              return yield* failure("archive verification chain");
+            if (row.first_sequence !== after + 1)
+              return yield* failure("archive verification order");
             yield* verifyInTransaction(row);
             rangeAfter = row.first_sequence;
             after = row.last_sequence;
-            previous = row.tail_digest;
           }
           if (rows.length < MAX_ARCHIVE_RANGE_PAGE) break;
         }
-        if (after !== header.tail_sequence || previous !== header.tail_digest)
-          return yield* failure("archive verification coverage");
+        if (after !== header.tail_sequence) return yield* failure("archive verification coverage");
         let checkpointAfter: number | undefined;
 
         while (true) {
@@ -762,8 +707,8 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
             if (Number(plan.byte_count) > MAX_CANONICAL_BATCH_BYTES)
               return yield* failure("checkpoint verification bound");
 
-            const [payload] = yield* query<{ checkpoint_json: string; tail_digest: string }>(sql`
-              SELECT checkpoint_json, tail_digest FROM ${table("effect_agent_checkpoints")}
+            const [payload] = yield* query<{ checkpoint_json: string }>(sql`
+              SELECT checkpoint_json FROM ${table("effect_agent_checkpoints")}
               WHERE thread_id=${threadId} AND through_sequence=${plan.through_sequence}`);
 
             if (payload === undefined) return yield* failure("checkpoint verification missing");
@@ -774,18 +719,18 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
 
             const sequence = Number(plan.through_sequence);
 
-            const anchor =
-              sequence === 0
-                ? EMPTY_TAIL_DIGEST
-                : (yield* query<{ tail_digest: string }>(sql`
-              SELECT tail_digest FROM ${table("effect_agent_canonical_batches")}
-              WHERE thread_id=${threadId} AND last_sequence=${sequence}`))[0]?.tail_digest;
+            const boundary =
+              sequence === 0 ||
+              (yield* query(sql`
+                SELECT 1 FROM ${table("effect_agent_canonical_batches")}
+                WHERE thread_id=${threadId} AND last_sequence=${sequence} LIMIT 2
+              `)).length === 1;
 
             if (
               checkpoint.threadId !== threadId ||
               checkpoint.throughSequence !== sequence ||
-              checkpoint.tailDigest !== payload.tail_digest ||
-              checkpoint.tailDigest !== anchor
+              sequence > header.tail_sequence ||
+              !boundary
             )
               return yield* failure("checkpoint verification anchor");
             checkpointAfter = sequence;

@@ -19,7 +19,7 @@ import {
   threadStoreLayer,
   storageConfigLayer,
 } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
-import { digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { digestJson } from "@yielded/agent/digest";
 import {
   CanonicalBatch,
   AbortRequested,
@@ -367,7 +367,7 @@ const settlementPublication = Effect.fn("SqliteLedgerTest.settlementPublication"
       threadId: thread(threadId),
       producerEpoch: claim.producerEpoch,
       expectedTailSequence: sequence(0),
-      expectedTailDigest: EMPTY_TAIL_DIGEST,
+
       batch: CanonicalBatch.make({
         batchId: submissionSettlementBatchId(admitted.submissionId),
         producerId: TEST_PRODUCER,
@@ -408,9 +408,8 @@ const append = (
   store: ThreadStore["Service"],
   threadId: string,
   canonicalBatch: CanonicalBatch,
-  tail: Pick<AppendResult, "lastSequence" | "tailDigest"> = {
+  tail: Pick<AppendResult, "lastSequence"> = {
     lastSequence: sequence(0),
-    tailDigest: EMPTY_TAIL_DIGEST,
   },
   producerEpoch: ProducerEpoch = epoch(1),
 ) =>
@@ -419,7 +418,7 @@ const append = (
       threadId: thread(threadId),
       batch: canonicalBatch,
       expectedTailSequence: tail.lastSequence,
-      expectedTailDigest: tail.tailDigest,
+
       producerEpoch,
     }),
   );

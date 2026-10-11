@@ -345,8 +345,6 @@ export const IntegrityCheckName = Schema.Literals([
   "record-identity",
   /** Canonical sequences are gap-free from 1 through the exported tail. */
   "sequence-contiguity",
-  /** The tail digest chain recomputes from EMPTY_TAIL_DIGEST over every batch (DUR-006/DUR-007). */
-  "digest-chain",
   /** Every retained Run fact is addressable independently of the disposable Run directory.
    * Current execution references and original context must agree with retained history;
    * discarded checkpoint revisions and their historical counters are not reconstructed. */
@@ -360,7 +358,7 @@ export const IntegrityCheckName = Schema.Literals([
   "terminal-uniqueness",
   /** Ledger terminal state agrees with the canonical settlement record (DUR-015). */
   "ledger-canonical-agreement",
-  /** The stored checkpoint binds to the recomputed digest chain at its sequence. */
+  /** The stored checkpoint identifies a complete canonical batch boundary. */
   "checkpoint-binding",
   /** Convergence mode only: every known Submission is settled. */
   "all-settled",

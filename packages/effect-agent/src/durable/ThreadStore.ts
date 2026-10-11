@@ -5,7 +5,6 @@ import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { QueueSequence } from "../core/Receipt.ts";
 import { AssignmentTerminal } from "../core/Worker.ts";
 import type { IntegrityReport } from "./Admin.ts";
-import { digestCanonicalBatchJson } from "./Digest.ts";
 import {
   captureRecord,
   recordEncoding,
@@ -120,7 +119,6 @@ export const ThreadWorkerCapacityRequest = Schema.Struct({
   threadId: ThreadId,
   workerThreadId: ThreadId,
   expectedTailSequence: CanonicalSequence,
-  expectedTailDigest: Digest,
   update: Schema.Boolean,
   activeLimit: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0), Schema.isLessThanOrEqualTo(100)),
   pendingLimit: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(100)),
@@ -131,7 +129,6 @@ export type ThreadWorkerCapacityRequest = typeof ThreadWorkerCapacityRequest.Typ
 export const ThreadWorkerCapacity = Schema.Struct({
   threadId: ThreadId,
   tailSequence: CanonicalSequence,
-  tailDigest: Digest,
   producerEpoch: ProducerEpoch,
   /** min(actual distinct workers, activeLimit + 1); equality remains distinguishable. */
   activeWorkers: Schema.Natural.check(Schema.isLessThanOrEqualTo(101)),
@@ -261,7 +258,6 @@ export const readWorkerState = Effect.fnUntraced(function* (request: ThreadWorke
     {
       _tag: "WorkerState",
       expectedTailSequence: tail.tailSequence,
-      expectedTailDigest: tail.tailDigest,
       ...(request.sourceSubmissionId === undefined
         ? {}
         : { sourceSubmissionId: request.sourceSubmissionId }),
@@ -272,7 +268,6 @@ export const readWorkerState = Effect.fnUntraced(function* (request: ThreadWorke
   return {
     threadId: request.threadId,
     tailSequence: tail.tailSequence,
-    tailDigest: tail.tailDigest,
     records,
   };
 });
@@ -301,10 +296,9 @@ export class ExecutionCheckpoint extends Schema.Class<ExecutionCheckpoint>(
   batchId: BatchId,
 }) {}
 
-/** Integrity-bound active state transfers separately from the immutable history chain. */
+/** Active state transfers separately from immutable history. */
 export const ThreadExecutionFact = Schema.Struct({
   checkpoint: ExecutionCheckpoint,
-  digest: Digest,
 });
 
 export type ThreadExecutionFact = typeof ThreadExecutionFact.Type;
@@ -317,7 +311,7 @@ export class ExecutionUpdate extends Schema.Class<ExecutionUpdate>(
   checkpoint: ExecutionCheckpoint,
   /** Newly durable operational facts; capture and validate these before entering the writer. */
   facts: Schema.Array(RecordEnvelope).check(Schema.isMaxLength(8)),
-  /** Only an authorized terminal publication or closure of its remaining obligations may retire. */
+  /** Delete current Run state in the same transaction as its authorized terminal publication. */
   retire: Schema.Boolean,
 }) {}
 
@@ -342,14 +336,12 @@ export class FencedAppendRequest extends Schema.Class<FencedAppendRequest>(
   batch: CommitBatch,
   executions: Schema.optionalKey(Schema.Array(ExecutionUpdate).check(Schema.isMaxLength(256))),
   expectedTailSequence: CanonicalSequence,
-  expectedTailDigest: Digest,
   producerEpoch: ProducerEpoch,
 }) {}
 
 const AppendHeader = Schema.Struct({
   threadId: ThreadId,
   expectedTailSequence: CanonicalSequence,
-  expectedTailDigest: Digest,
   producerEpoch: ProducerEpoch,
   batchId: BatchId,
   producerId: ProducerId,
@@ -397,8 +389,8 @@ export const canonicalBatchFitsTransfer = (
 };
 
 /**
- * Adapter-owned append captured before Crypto or writer acquisition can suspend. Record JSON
- * is shared by the digest, batch and record rows. Privately owned facts and wire metadata
+ * Adapter-owned append captured before writer acquisition can suspend. Record JSON
+ * is shared by the batch and record rows. Privately owned facts and wire metadata
  * keep payloads, identities and validation stable across suspension; adapters persist the
  * captured strings rather than reconstructing bytes from caller-owned values.
  * Transport decoding intentionally returns an ordinary FencedAppendRequest for fresh capture.
@@ -419,7 +411,6 @@ export interface PreparedAppend extends FencedAppendRequest {
     readonly wire: RecordJson;
     readonly canonical: CanonicalBatch["records"][number];
   }>;
-  readonly digest: () => ReturnType<typeof digestCanonicalBatchJson>;
 }
 
 export const PreparedAppend = {
@@ -493,7 +484,6 @@ export const PreparedAppend = {
             {
               threadId: header.threadId,
               expectedTailSequence: header.expectedTailSequence,
-              expectedTailDigest: header.expectedTailDigest,
               producerEpoch: header.producerEpoch,
               batch,
               ...(executionWrites.length === 0
@@ -524,10 +514,6 @@ export const PreparedAppend = {
               records,
               progress,
               executionWrites,
-              digest: () =>
-                records.length === 0
-                  ? Effect.succeed(request.expectedTailDigest)
-                  : digestCanonicalBatchJson(request.expectedTailDigest, batchJson),
             }),
           );
 
@@ -552,7 +538,6 @@ export const PreparedAppend = {
 export class AppendResult extends Schema.Class<AppendResult>("@effect-agent/thread/AppendResult")({
   firstSequence: CanonicalSequence,
   lastSequence: CanonicalSequence,
-  tailDigest: Digest,
   replayed: Schema.Boolean,
 }) {}
 
@@ -655,12 +640,10 @@ export const ThreadSelection = Schema.Union([
   Schema.Struct({
     _tag: Schema.Literal("WorkerExecution"),
     expectedTailSequence: CanonicalSequence,
-    expectedTailDigest: Digest,
   }),
   Schema.Struct({
     _tag: Schema.Literal("WorkerState"),
     expectedTailSequence: CanonicalSequence,
-    expectedTailDigest: Digest,
     sourceSubmissionId: Schema.optionalKey(SubmissionId),
   }),
 ]);
@@ -708,7 +691,6 @@ export class ThreadTailRequest extends Schema.Class<ThreadTailRequest>(
 export class ThreadTail extends Schema.Class<ThreadTail>("@effect-agent/thread/ThreadTail")({
   threadId: ThreadId,
   tailSequence: CanonicalSequence,
-  tailDigest: Digest,
   producerEpoch: ProducerEpoch,
 }) {}
 
@@ -814,18 +796,16 @@ export class ThreadExportRecord extends CanonicalRecordEnvelope.extend<ThreadExp
 
 /** One bounded, batch-aligned page. An absent cursor alone marks a complete transfer. */
 export class ThreadExport extends Schema.Class<ThreadExport>("@effect-agent/thread/ThreadExport")({
-  transferFormat: Schema.Literal("effect-agent/thread-transfer@2"),
+  transferFormat: Schema.Literal("effect-agent/thread-transfer@3"),
   format: Schema.NonEmptyString,
   threadId: ThreadId,
   tailSequence: CanonicalSequence,
-  tailDigest: Digest,
   snapshot: ThreadExportSnapshot,
   snapshotId: Digest,
   /** Presence seals the restored inbox; a terminal reason also requires exact settled worker evidence. */
   workerSeal: Schema.optionalKey(ThreadWorkerSeal),
   /** Inclusive first canonical position, even on a page containing only other owner facts. */
   fromSequence: CanonicalSequence.check(Schema.isGreaterThan(0)),
-  previousTailDigest: Digest,
   records: Schema.Array(ThreadExportRecord).check(
     Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS),
   ),
@@ -879,7 +859,6 @@ export const streamExport = (request: ThreadExportRequest) =>
               (previous !== undefined &&
                 (page.snapshotId !== previous.snapshotId ||
                   page.tailSequence !== previous.tailSequence ||
-                  page.tailDigest !== previous.tailDigest ||
                   page.fromSequence !==
                     (previous.records.at(-1)?.sequence ?? previous.fromSequence - 1) + 1 ||
                   (page.cursor !== undefined && page.cursor === current.cursor)))
@@ -907,7 +886,7 @@ export const streamExport = (request: ThreadExportRequest) =>
   );
 
 /**
- * A disposable projection snapshot. Adapters bind its sequence and digest to the canonical
+ * A disposable projection snapshot. Adapters bind its sequence to a complete batch in the canonical
  * log; consumers decode `state` and decide projection compatibility before suffix replay.
  * Run recovery uses authoritative active checkpoints independently of these application snapshots.
  */
@@ -917,7 +896,6 @@ export class ThreadCheckpoint extends Schema.Class<ThreadCheckpoint>(
   schemaVersion: Schema.Literal(1),
   threadId: ThreadId,
   throughSequence: CanonicalSequence,
-  tailDigest: Digest,
   state: PersistedJson,
   createdAt: Schema.DateTimeUtcFromString,
 }) {}
@@ -963,16 +941,15 @@ export class ThreadNotMaterialized extends Schema.TaggedError<ThreadNotMateriali
 ) {}
 
 /**
- * A canonical append that cannot commit: `batch-digest` replays a batch ID with different
+ * A canonical append that cannot commit: `batch-content` replays a batch ID with different
  * content, `record-identity` reuses a canonical record ID, and `tail` declares a stale expected
  * tail. Tail conflicts carry the actual committed tail as a diagnostic resume hint.
  */
 export class AppendConflict extends Schema.TaggedError<AppendConflict>()("AppendConflict", {
   threadId: ThreadId,
   batchId: BatchId,
-  reason: Schema.Literals(["batch-digest", "record-identity", "tail"]),
+  reason: Schema.Literals(["batch-content", "record-identity", "tail"]),
   actualTailSequence: Schema.optionalKey(CanonicalSequence),
-  actualTailDigest: Schema.optionalKey(Digest),
 }) {}
 
 export class FenceRejected extends Schema.TaggedError<FenceRejected>()("FenceRejected", {
@@ -985,7 +962,12 @@ export class CheckpointRejected extends Schema.TaggedError<CheckpointRejected>()
   "CheckpointRejected",
   {
     threadId: ThreadId,
-    reason: Schema.Literals(["ahead-of-tail", "digest-mismatch", "unsupported-version", "corrupt"]),
+    reason: Schema.Literals([
+      "ahead-of-tail",
+      "not-batch-boundary",
+      "unsupported-version",
+      "corrupt",
+    ]),
   },
 ) {}
 
@@ -1026,7 +1008,7 @@ export class ThreadStore extends Context.Service<
     ) => Effect.Effect<void, ThreadStoreError | FenceRejected>;
     /**
      * Commit history and active state atomically under the producer fence. Operational retry
-     * receipts may retire with closed execution; later retries compare retained canonical content.
+     * receipts retire at settlement; later retries compare retained canonical content.
      */
     readonly append: (
       request: FencedAppendRequest,

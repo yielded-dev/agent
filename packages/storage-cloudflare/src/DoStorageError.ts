@@ -72,9 +72,8 @@ export class DoValueBoundExceeded extends Schema.TaggedError<DoValueBoundExceede
  */
 export class DoAppendConflict extends Schema.TaggedError<DoAppendConflict>()("DoAppendConflict", {
   message: Schema.String,
-  reason: Schema.Literals(["batch-digest", "record-identity", "tail"]),
+  reason: Schema.Literals(["batch-content", "record-identity", "tail"]),
   actualTailSequence: Schema.optionalKey(CanonicalSequence),
-  actualTailDigest: Schema.optionalKey(Schema.String),
 }) {}
 
 /**
@@ -92,6 +91,7 @@ export class DoFenceRejected extends Schema.TaggedError<DoFenceRejected>()("DoFe
 export class DoCheckpointConflict extends Schema.TaggedError<DoCheckpointConflict>()(
   "DoCheckpointConflict",
   {
+    reason: Schema.Literals(["ahead-of-tail", "not-batch-boundary", "corrupt"]),
     message: Schema.String,
   },
 ) {}

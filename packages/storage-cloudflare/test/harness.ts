@@ -169,7 +169,7 @@ export const settlementPublication = Effect.fn("DoLedgerTest.settlementPublicati
         threadId,
         producerEpoch: tail.producerEpoch,
         expectedTailSequence: tail.tailSequence,
-        expectedTailDigest: tail.tailDigest,
+
         batch: CanonicalBatch.make({
           producerId: TEST_PRODUCER,
           batchId: submissionSettlementBatchId(admitted.submissionId),

@@ -1,4 +1,3 @@
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import type { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import { InputMessage } from "@yielded/agent/messaging";
 import {
@@ -1784,13 +1783,11 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
                 thread_id,
                 created_at,
                 tail_sequence,
-                tail_digest,
                 producer_epoch
               ) VALUES (
                 ${head.thread_id},
                 ${now.iso},
                 0,
-                ${EMPTY_TAIL_DIGEST},
                 ${producerEpoch}
               )
             `.pipe(execute, Effect.mapError(sqlFailure(operation)));
@@ -2131,9 +2128,6 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
             publication: SettlementPublicationResult.make({
               record: existing.value.record,
               tailSequence: threads[0].tail_sequence,
-              tailDigest: yield* Schema.decodeEffect(Digest)(threads[0].tail_digest).pipe(
-                Effect.mapError(internalFailure(operation)),
-              ),
               replayed: true,
             }),
           };
@@ -2159,9 +2153,6 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
           publication: SettlementPublicationResult.make({
             record,
             tailSequence: appended.lastSequence,
-            tailDigest: yield* Schema.decodeEffect(Digest)(appended.tailDigest).pipe(
-              Effect.mapError(internalFailure(operation)),
-            ),
             replayed: appended.replayed,
           }),
         };

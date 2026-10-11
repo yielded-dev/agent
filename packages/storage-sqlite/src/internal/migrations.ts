@@ -13,25 +13,25 @@ import {
   SqliteStorageError,
 } from "../SqliteStorageError.ts";
 
-export const CurrentSqliteStorageVersion = 22;
+export const CurrentSqliteStorageVersion = 23;
 
 /** Fresh layout only. Unsupported stores are rejected before these statements execute. */
 const layoutStatements = [
-  'CREATE TABLE "effect_agent_threads" ( thread_id TEXT PRIMARY KEY NOT NULL, created_at TEXT NOT NULL, tail_sequence INTEGER NOT NULL, tail_digest TEXT NOT NULL, producer_epoch INTEGER NOT NULL )',
+  'CREATE TABLE "effect_agent_threads" ( thread_id TEXT PRIMARY KEY NOT NULL, created_at TEXT NOT NULL, tail_sequence INTEGER NOT NULL, producer_epoch INTEGER NOT NULL )',
   "CREATE TABLE effect_agent_envelopes (envelope_key INTEGER PRIMARY KEY NOT NULL, content_digest TEXT UNIQUE NOT NULL, prefix TEXT NOT NULL, before_payload TEXT NOT NULL, before_record_id TEXT NOT NULL, suffix TEXT NOT NULL)",
   "CREATE TABLE effect_agent_run_keys (run_key INTEGER PRIMARY KEY NOT NULL, thread_id TEXT NOT NULL, run_id TEXT NOT NULL, UNIQUE (thread_id, run_id), FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT)",
   "CREATE TABLE effect_agent_definitions (definition_key INTEGER PRIMARY KEY NOT NULL, content_digest TEXT UNIQUE NOT NULL, value_json TEXT NOT NULL)",
   "CREATE TABLE effect_agent_executions (thread_id TEXT NOT NULL, run_id TEXT NOT NULL, input_sequence INTEGER NOT NULL, revision INTEGER NOT NULL, checkpoint_json TEXT NOT NULL, PRIMARY KEY (thread_id, run_id), FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT)",
-  "CREATE TABLE effect_agent_execution_receipts (thread_id TEXT NOT NULL, run_id TEXT NOT NULL, batch_id TEXT NOT NULL, commit_digest TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, tail_digest TEXT NOT NULL, PRIMARY KEY (thread_id, run_id, batch_id), FOREIGN KEY (thread_id, run_id) REFERENCES effect_agent_executions(thread_id, run_id) ON DELETE RESTRICT)",
+  "CREATE TABLE effect_agent_execution_receipts (thread_id TEXT NOT NULL, run_id TEXT NOT NULL, batch_id TEXT NOT NULL, commit_digest TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, PRIMARY KEY (thread_id, run_id, batch_id), FOREIGN KEY (thread_id, run_id) REFERENCES effect_agent_executions(thread_id, run_id) ON DELETE RESTRICT)",
   "CREATE INDEX effect_agent_execution_receipts_batch ON effect_agent_execution_receipts(thread_id, batch_id)",
-  'CREATE TABLE "effect_agent_canonical_batches" ( thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, tail_digest TEXT NOT NULL, producer_id_json TEXT NOT NULL, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES "effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
+  'CREATE TABLE "effect_agent_canonical_batches" ( thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, producer_id_json TEXT NOT NULL, CONSTRAINT effect_agent_canonical_batches_span CHECK (first_sequence >= 1 AND last_sequence >= first_sequence AND last_sequence - first_sequence < 256), PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id) REFERENCES "effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   'CREATE TABLE "effect_agent_canonical_records" ( thread_id TEXT NOT NULL, sequence INTEGER NOT NULL, record_id TEXT NOT NULL, created_at_json TEXT NOT NULL, envelope_key INTEGER NOT NULL, payload_json TEXT, record_tag INTEGER NOT NULL, run_id INTEGER, tool_call_id TEXT, input_kind TEXT, source_submission_id TEXT, message_id TEXT, submission_id TEXT, application_input INTEGER NOT NULL, context_through INTEGER, context_kind TEXT, worker_thread_id TEXT, handoff INTEGER NOT NULL, PRIMARY KEY (thread_id, sequence), UNIQUE (thread_id, record_id), FOREIGN KEY (thread_id) REFERENCES "effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   'CREATE TABLE "effect_agent_record_runs" ( thread_id TEXT NOT NULL, run_id INTEGER NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY (thread_id, run_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES "effect_agent_canonical_records"(thread_id, sequence) ON DELETE RESTRICT ) WITHOUT ROWID',
   "CREATE TABLE effect_agent_tool_declarations (thread_id TEXT NOT NULL, settlement_record_id TEXT NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY (thread_id, settlement_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)",
   "CREATE INDEX effect_agent_tool_declarations_sequence ON effect_agent_tool_declarations(thread_id, sequence)",
   "CREATE TABLE effect_agent_record_refusals (thread_id TEXT NOT NULL, reservation_record_id TEXT NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY (thread_id, reservation_record_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT)",
   "CREATE INDEX effect_agent_record_refusals_sequence ON effect_agent_record_refusals(thread_id, sequence)",
-  'CREATE TABLE "effect_agent_checkpoints" ( thread_id TEXT NOT NULL, through_sequence INTEGER NOT NULL, tail_digest TEXT NOT NULL, checkpoint_json TEXT NOT NULL, PRIMARY KEY (thread_id, through_sequence), FOREIGN KEY (thread_id) REFERENCES "effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
+  'CREATE TABLE "effect_agent_checkpoints" ( thread_id TEXT NOT NULL, through_sequence INTEGER NOT NULL, checkpoint_json TEXT NOT NULL, PRIMARY KEY (thread_id, through_sequence), FOREIGN KEY (thread_id) REFERENCES "effect_agent_threads"(thread_id) ON DELETE RESTRICT )',
   'CREATE TABLE "effect_agent_submissions" ( submission_id TEXT PRIMARY KEY NOT NULL, thread_id TEXT NOT NULL, queue_sequence INTEGER NOT NULL, principal TEXT NOT NULL, idempotency_key TEXT NOT NULL, agent_id TEXT NOT NULL, definition_key INTEGER NOT NULL, deployment_id TEXT NOT NULL, input_json TEXT NOT NULL, input_digest TEXT NOT NULL, receipt_id TEXT NOT NULL, state TEXT NOT NULL, settled_outcome TEXT, settled_record_id TEXT, finalized_at TEXT, created_at TEXT NOT NULL, ready_at TEXT, input_applied_record_id TEXT, input_applied_sequence INTEGER, joined_host_submission_id TEXT, suspended_reason_json TEXT, suspended_at TEXT, unknown_reason TEXT, unknown_tool_call_ids_json TEXT, parent_submission_id TEXT, parent_tool_call_id TEXT, admission_group TEXT, admission_fence_json TEXT, worker_admission_json TEXT, message_admission_json TEXT, UNIQUE (thread_id, principal, idempotency_key), UNIQUE (thread_id, queue_sequence) )',
   'CREATE INDEX effect_agent_submissions_group ON "effect_agent_submissions" (thread_id, admission_group, state)',
   'CREATE TABLE "effect_agent_submission_ownership" ( submission_id TEXT PRIMARY KEY NOT NULL, attempt_id TEXT NOT NULL, ownership_token TEXT NOT NULL, producer_epoch INTEGER NOT NULL, owner_producer_id TEXT NOT NULL, lease_expires_at TEXT NOT NULL, FOREIGN KEY (submission_id) REFERENCES "effect_agent_submissions"(submission_id) ON DELETE RESTRICT )',
@@ -84,7 +84,7 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_records_worker_stop ON effect_agent_canonical_records(thread_id, worker_thread_id, sequence) WHERE record_tag = 38",
   "CREATE INDEX effect_agent_message_deliveries_identity ON effect_agent_message_deliveries(owner_thread_id, json_quote(message_id))",
   "CREATE INDEX effect_agent_message_deliveries_peer ON effect_agent_message_deliveries(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused') AND json_extract(record_json, '$.envelope.messageAdmission.schemaVersion') = 1",
-  "CREATE TABLE effect_agent_journal_ranges (thread_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, previous_tail_digest TEXT NOT NULL, tail_digest TEXT NOT NULL, record_count INTEGER NOT NULL, batch_count INTEGER NOT NULL, byte_count INTEGER NOT NULL, state TEXT NOT NULL, locator TEXT, PRIMARY KEY (thread_id, first_sequence), FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT)",
+  "CREATE TABLE effect_agent_journal_ranges (thread_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, record_count INTEGER NOT NULL, batch_count INTEGER NOT NULL, byte_count INTEGER NOT NULL, state TEXT NOT NULL, locator TEXT, PRIMARY KEY (thread_id, first_sequence), FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT)",
   "CREATE UNIQUE INDEX effect_agent_journal_ranges_open ON effect_agent_journal_ranges(thread_id) WHERE state = 'open'",
   "CREATE TABLE effect_agent_archive_batches (thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, range_first_sequence INTEGER NOT NULL, batch_json TEXT NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id, batch_id) REFERENCES effect_agent_canonical_batches(thread_id, batch_id) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_batches_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)",
   "CREATE TABLE effect_agent_archive_records (thread_id TEXT NOT NULL, sequence INTEGER NOT NULL, range_first_sequence INTEGER NOT NULL, record_json TEXT NOT NULL, PRIMARY KEY (thread_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_records_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)",
@@ -154,7 +154,7 @@ const storageError = (cause: SqlError) =>
   SqliteStorageError.make({ operation: "inspect storage layout", cause, message: cause.message });
 
 const { decode, readObjects, readHeader, readManagedTriggers } = makeSqliteLayoutInspection({
-  version: 22,
+  version: 23,
   statements: layoutStatements,
   objects: layoutObjects,
   headerStatement,
@@ -231,8 +231,8 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayo
         ),
       );
       yield* sql.unsafe(headerStatement).withoutTransform;
-      yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 22, ${CURRENT_RECORD_FORMAT})`;
-      yield* sql.unsafe("PRAGMA user_version = 22").withoutTransform;
+      yield* sql`INSERT INTO effect_agent_schema (singleton, layout_version, record_format) VALUES (1, 23, ${CURRENT_RECORD_FORMAT})`;
+      yield* sql.unsafe("PRAGMA user_version = 23").withoutTransform;
 
       return yield* readSqliteStorageHeader();
     }),

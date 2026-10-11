@@ -1,4 +1,3 @@
-import { Digest } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { bindRunOwnership, RunStorage, type RunStorageSession } from "@yielded/agent/run-storage";
 import { SettlementPublication, SettlementPublisher } from "@yielded/agent/settlement-publisher";
@@ -110,13 +109,11 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
   interface Active {
     readonly authority: SqlRunAuthority;
     readonly epoch: SqlRunAuthority["thread"]["producer_epoch"];
-    digest: Digest;
     token: OwnershipToken;
     closed: boolean;
     releaseNeeded: boolean;
   }
   const active = new Set<Active>();
-  const decodeDigest = Schema.decodeEffect(Digest);
 
   const close = (state: Active) => {
     state.closed = true;
@@ -125,11 +122,6 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
 
   const refresh = Effect.fnUntraced(function* (state: Active) {
     state.releaseNeeded = yield* ledgerKernel.refreshAuthority(state.authority);
-    state.digest = yield* decodeDigest(state.authority.thread.tail_digest).pipe(
-      Effect.mapError((cause) =>
-        LedgerError.make({ operation: "refresh Run tail", message: cause.message, cause }),
-      ),
-    );
     if (
       state.authority.thread.producer_epoch !== state.epoch ||
       (!state.authority.owned && state.authority.submission.state !== "settled")
@@ -426,16 +418,9 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
       ),
     );
 
-    const initialDigest = yield* decodeDigest(authority.thread.tail_digest).pipe(
-      Effect.mapError((cause) =>
-        ThreadStoreError.make({ operation: "bind Run tail", message: cause.message, cause }),
-      ),
-    );
-
     const owned: Active = {
       authority,
       epoch: authority.thread.producer_epoch,
-      digest: initialDigest,
       token: initialToken,
       closed: false,
       releaseNeeded: true,
@@ -445,7 +430,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
     active.add(owned);
     // Authority refresh may observe administrative commits after progress preparation.
     // Keep the writer's observed CAS frontier separate so stale progress returns to reprepare.
-    let writerTail = { sequence: authority.thread.tail_sequence, digest: initialDigest };
+    let writerTail = { sequence: authority.thread.tail_sequence };
 
     const acceptTailConflict = (cause: Cause.Cause<unknown>) => {
       const error = Cause.squash(cause);
@@ -454,17 +439,14 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
         !Schema.is(AppendConflict)(error) ||
         error.reason !== "tail" ||
         error.actualTailSequence === undefined ||
-        error.actualTailDigest === undefined ||
         authority.thread.producer_epoch !== owned.epoch
       )
         return false;
-      writerTail = { sequence: error.actualTailSequence, digest: error.actualTailDigest };
+      writerTail = { sequence: error.actualTailSequence };
       authority.thread = Object.freeze({
         ...authority.thread,
         tail_sequence: writerTail.sequence,
-        tail_digest: writerTail.digest,
       });
-      owned.digest = writerTail.digest;
 
       return true;
     };
@@ -617,7 +599,6 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
                   threadId: claimedThreadId,
                   producerEpoch: owned.epoch,
                   expectedTailSequence: writerTail.sequence,
-                  expectedTailDigest: writerTail.digest,
                   batch,
                   ...(executions === undefined ? {} : { executions }),
                 });
@@ -637,11 +618,9 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
                   authority.thread = Object.freeze({
                     ...authority.thread,
                     tail_sequence: result.value.lastSequence,
-                    tail_digest: result.value.tailDigest,
                   });
-                  owned.digest = result.value.tailDigest;
                 }
-                writerTail = { sequence: authority.thread.tail_sequence, digest: owned.digest };
+                writerTail = { sequence: authority.thread.tail_sequence };
 
                 return result.value;
               }
@@ -668,9 +647,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
             ...authority.thread,
             producer_epoch: current.producerEpoch,
             tail_sequence: current.tailSequence,
-            tail_digest: current.tailDigest,
           });
-          owned.digest = current.tailDigest;
           if (current.producerEpoch !== owned.epoch)
             return yield* FenceRejected.make({
               threadId: claimedThreadId,
@@ -693,7 +670,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
       refresh: checkFence.pipe(
         Effect.andThen(
           Effect.sync(() => {
-            writerTail = { sequence: authority.thread.tail_sequence, digest: owned.digest };
+            writerTail = { sequence: authority.thread.tail_sequence };
           }),
         ),
       ),
@@ -743,7 +720,6 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
                   threadId: claimedThreadId,
                   producerEpoch: owned.epoch,
                   expectedTailSequence: writerTail.sequence,
-                  expectedTailDigest: writerTail.digest,
                   batch,
                   ...(executions === undefined ? {} : { executions }),
                 }),
@@ -759,12 +735,9 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
             authority.thread = Object.freeze({
               ...authority.thread,
               tail_sequence: result.publication.tailSequence,
-              tail_digest: result.publication.tailDigest,
             });
-            owned.digest = result.publication.tailDigest;
             writerTail = {
               sequence: result.publication.tailSequence,
-              digest: result.publication.tailDigest,
             };
           },
           // The publisher checks live authority even on replay. Finalization releases

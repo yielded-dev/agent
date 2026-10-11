@@ -2,7 +2,7 @@ import type { Effect, Option } from "effect";
 import { Schema } from "effect";
 
 import { ThreadId } from "../core/Identifiers.ts";
-import { CanonicalSequence, Digest, ProducerEpoch } from "./Records.ts";
+import { CanonicalSequence, ProducerEpoch } from "./Records.ts";
 import type { FenceRejected, ThreadNotMaterialized, ThreadStoreError } from "./ThreadStore.ts";
 
 export const MAX_ARCHIVE_RANGE_RECORDS = 1_024;
@@ -14,12 +14,10 @@ export const MAX_ARCHIVE_RANGE_PAGE = 32;
 export class ThreadArchiveRange extends Schema.Class<ThreadArchiveRange>(
   "@effect-agent/thread/ThreadArchiveRange",
 )({
-  format: Schema.Literal("effect-agent/thread-range@1"),
+  format: Schema.Literal("effect-agent/thread-range@2"),
   threadId: ThreadId,
   firstSequence: CanonicalSequence.check(Schema.isGreaterThan(0)),
   lastSequence: CanonicalSequence.check(Schema.isGreaterThan(0)),
-  previousTailDigest: Digest,
-  tailDigest: Digest,
   recordCount: Schema.Int.check(
     Schema.isBetween({ minimum: 1, maximum: MAX_ARCHIVE_RANGE_RECORDS }),
   ),
@@ -28,7 +26,7 @@ export class ThreadArchiveRange extends Schema.Class<ThreadArchiveRange>(
   ),
   byteCount: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: MAX_ARCHIVE_RANGE_BYTES })),
   state: Schema.Literals(["sealed", "archived"]),
-  /** Published only after the exact archive contents have been verified against both anchors. */
+  /** Published only after the exact archive contents have been validated for identity, order and completeness. */
   locator: Schema.optionalKey(Schema.NonEmptyString.check(Schema.isMaxLength(4_096))),
 }) {}
 

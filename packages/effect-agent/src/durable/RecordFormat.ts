@@ -93,7 +93,7 @@ export const ReadEnvelope = Schema.Struct({
   }),
 );
 
-/** Batch identity plus lossless record wire, used when auditing an existing digest chain. */
+/** Batch identity plus lossless record wire, used when checking a complete immutable log. */
 export const ExportBatch = Schema.Struct({
   ...CanonicalBatch.fields,
   records: Schema.NonEmptyArray(ExportRecord).check(Schema.isMaxLength(256)),

@@ -174,7 +174,6 @@ export const layer = Layer.effect(
       const prompt = yield* readHistory(base);
 
       const expectedTailSequence = base.tailSequence;
-      const expectedTailDigest = base.tailDigest;
       const initialPromptLength = prompt.content.length;
 
       const createdAt = yield* DateTime.now;
@@ -286,7 +285,6 @@ export const layer = Layer.effect(
                 threadId,
                 producerEpoch: HISTORY_EPOCH,
                 expectedTailSequence,
-                expectedTailDigest,
                 batch: CanonicalBatch.make({
                   batchId: batchId(`history:${runId}`),
                   producerId: producer(`history:${runId}`),

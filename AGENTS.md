@@ -90,10 +90,12 @@ concepts succinctly: what a feature does, how it fits, and how to use it.
    by the interpreter, but durable records remain explicit, versioned Schemas.
 7. The canonical log is append-only and owns conversation content, operation evidence and terminal
    outcomes. An unfinished Run's versioned checkpoint is authoritative operational state, committed
-   atomically with its new history under the same fence and revision check. Retire it only after
-   canonical settlement and closure of its execution obligations. Projections and lookup indexes
+   atomically with its new history under the same fence and revision check. Delete it at canonical
+   settlement; unresolved operations and handoffs retain their own rows. Projections and lookup indexes
    remain disposable. `verify` checks retained history and active checkpoints, including original
-   context integrity; it does not attest discarded intermediate checkpoint revisions.
+   context consistency through `historyDigest`; it does not attest discarded intermediate
+   checkpoint revisions or provide tamper evidence. Storage validates schema, version, identity,
+   sequence and atomic commit boundaries without a hash chain or per-record integrity digests.
 8. No code may claim exactly-once external side-effect execution.
 9. An unresolved ordinary tool call is never automatically replayed after ownership loss.
 10. Tool/model/subagent concurrency is bounded and deterministic at commit time. Tool batches use

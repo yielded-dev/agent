@@ -238,7 +238,6 @@ const appendDocument = Effect.fn("SemanticMemoryEvaluation.appendDocument")(func
       threadId: THREAD_ID,
       producerEpoch,
       expectedTailSequence: tail.tailSequence,
-      expectedTailDigest: tail.tailDigest,
       batch: CanonicalBatch.make({
         batchId,
         producerId,
@@ -277,7 +276,6 @@ const applyActivity = Effect.fn("SemanticMemoryEvaluation.applyActivity")(functi
         metadata: {
           sourceThreadId: THREAD_ID,
           sourceRecordId: output.recordId,
-          sourceRecordDigest: work.recordDigest,
           sourceSequence: work.sequence,
         },
         recordedAt: 1_700_000_000_000,

@@ -16,7 +16,7 @@ import {
   routedMessageDeliveryStoreLayer,
   routedSubmissionLedgerLayer,
 } from "@yielded/agent-storage-cloudflare/port-routing";
-import { digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { digestJson } from "@yielded/agent/digest";
 import { lifecyclePublicationLayer } from "@yielded/agent/lifecycle-publication";
 import { MessageDeliveryStore, readPending } from "@yielded/agent/message-delivery";
 import { type PersistedJson } from "@yielded/agent/records";
@@ -277,7 +277,7 @@ describe("cross-DO port routing", () => {
         expect(empty).toMatchObject({
           threadId,
           tailSequence: 0,
-          tailDigest: EMPTY_TAIL_DIGEST,
+
           producerEpoch: 3,
           records: [],
         });

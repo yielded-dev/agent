@@ -415,11 +415,7 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
             .inspectTail(ThreadTailRequest.make({ threadId }))
             .pipe(Effect.mapError(mapStore(operation)));
 
-          if (
-            tail.tailSequence !== current.log.tailSequence ||
-            tail.tailDigest !== current.log.tailDigest
-          )
-            continue;
+          if (tail.tailSequence !== current.log.tailSequence) continue;
           const createdAtMillis = yield* Clock.currentTimeMillis;
 
           yield* deps.failpoint
@@ -432,7 +428,7 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
                 threadId,
                 producerEpoch: tail.producerEpoch,
                 expectedTailSequence: tail.tailSequence,
-                expectedTailDigest: tail.tailDigest,
+
                 batch: CanonicalBatch.make({
                   batchId: Schema.decodeSync(BatchId)(message.messageId),
                   producerId: deps.producerId,

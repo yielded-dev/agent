@@ -64,7 +64,7 @@ export interface SqliteStorageOptions {
    */
   readonly ownershipLeaseDuration?: number | undefined;
   /**
-   * Audit every stored payload and digest chain on open. Defaults to false. Full reads validate
+   * Audit stored payloads, identities, and batch coverage on open. Defaults to false. Full reads validate
    * canonical records; readPrompt trusts write-time validation of the omitted fields.
    */
   readonly verifyOnOpen?: boolean | undefined;

@@ -305,7 +305,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
           ThreadWorkerCapacity.make({
             threadId: request.threadId,
             tailSequence: request.expectedTailSequence,
-            tailDigest: digest,
+
             producerEpoch: epochs.get(request.threadId)!,
             activeWorkers: Math.min(
               new Set(rows.map((row) => row.origin.worker.threadId)).size,
@@ -371,7 +371,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
           admissions: [...submissions.values()].filter((row) => row.threadId === threadId).length,
           threadId,
           tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
-          tailDigest: digest,
+
           producerEpoch: epochs.get(threadId)!,
           records: selected,
         });
@@ -496,7 +496,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
               ThreadTail.make({
                 threadId,
                 tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
-                tailDigest: digest,
+
                 producerEpoch: epochs.get(threadId)!,
               }),
             );
@@ -518,10 +518,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
             actualEpoch: currentEpoch,
           });
         }
-        if (
-          records.length !== request.expectedTailSequence ||
-          digest !== request.expectedTailDigest
-        ) {
+        if (records.length !== request.expectedTailSequence) {
           rejectedAppends.tail++;
 
           return yield* AppendConflict.make({
@@ -554,7 +551,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
         return AppendResult.make({
           firstSequence: Schema.decodeSync(CanonicalSequence)(first),
           lastSequence: Schema.decodeSync(CanonicalSequence)(records.length),
-          tailDigest: digest,
+
           replayed: false,
         });
       }),
@@ -577,7 +574,6 @@ const harness = Effect.fn("workerHostHarness")(function* (
             threadId: request.threadId,
             tail: Effect.succeed({
               sequence: request.expectedTailSequence,
-              digest: request.expectedTailDigest,
             }),
             append: (batch, updates) =>
               fixtureStore.append({ ...request, batch, executions: updates }),
@@ -948,7 +944,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
                 executions: updates,
                 producerEpoch: tail.producerEpoch,
                 expectedTailSequence: tail.tailSequence,
-                expectedTailDigest: tail.tailDigest,
+
                 batch,
               }),
             ),

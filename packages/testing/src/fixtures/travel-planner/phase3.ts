@@ -130,7 +130,7 @@ export const makePhase3TravelPlannerCheckpoint = (projection: ThreadProjection):
     schemaVersion: 1,
     threadId: projection.threadId,
     throughSequence: projection.throughSequence,
-    tailDigest: projection.tailDigest,
+
     state: Schema.encodeSync(ThreadProjection)(projection),
     createdAt: "2026-09-01T00:00:04.000Z",
   });

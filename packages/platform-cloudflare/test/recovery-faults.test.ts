@@ -642,7 +642,7 @@ describe("recovery faults independent of execution history", () => {
                     threadId,
                     producerEpoch: tail.producerEpoch,
                     expectedTailSequence: tail.tailSequence,
-                    expectedTailDigest: tail.tailDigest,
+
                     batch: CanonicalBatch.make({
                       batchId: BatchId.make(messageId),
                       producerId: ProducerId.make("terminal-fault-fixture"),

@@ -9,12 +9,7 @@ import {
   type ActivityStoreFailure,
 } from "./ActivityStore.ts";
 import { digestJson, type DigestError } from "./Digest.ts";
-import {
-  CanonicalRecordEnvelope,
-  CanonicalSequence,
-  PersistedJson,
-  RecordEnvelope,
-} from "./Records.ts";
+import { CanonicalRecordEnvelope, CanonicalSequence, PersistedJson } from "./Records.ts";
 import {
   ThreadRead,
   ThreadStore,
@@ -203,11 +198,6 @@ export const processCommittedActivity = Effect.fnUntraced(function* <
           }
           const workId = yield* activityWorkId(key, record.sequence);
 
-          const encodedRecord = yield* Schema.encodeEffect(RecordEnvelope)(record.record).pipe(
-            Effect.mapError(contiguous),
-          );
-
-          const recordDigest = yield* digestJson(encodedRecord);
           let work = claim.pending;
 
           if (work === null) {
@@ -227,7 +217,6 @@ export const processCommittedActivity = Effect.fnUntraced(function* <
                 sequence: record.sequence,
                 workId,
                 recordId: record.record.recordId,
-                recordDigest,
                 output,
               }),
             });
@@ -241,8 +230,7 @@ export const processCommittedActivity = Effect.fnUntraced(function* <
             !Schema.toEquivalence(ActivityProcessorKey)(prepared.key, key) ||
             prepared.sequence !== record.sequence ||
             prepared.workId !== workId ||
-            prepared.recordId !== record.record.recordId ||
-            prepared.recordDigest !== recordDigest
+            prepared.recordId !== record.record.recordId
           )
             return yield* contiguous();
           yield* Effect.scoped(processor.apply(prepared));

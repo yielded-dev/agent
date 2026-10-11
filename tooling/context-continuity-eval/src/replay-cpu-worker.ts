@@ -5,7 +5,7 @@ import {
 import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
 import * as Agent from "@yielded/agent/agent";
 import { ContextCompactor } from "@yielded/agent/context-compactor";
-import { digestCanonicalBatch, digestDefinitions, digestJson } from "@yielded/agent/digest";
+import { digestDefinitions, digestJson } from "@yielded/agent/digest";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { RunId, SubmissionId, TurnId } from "@yielded/agent/identifiers";
 import {
@@ -13,7 +13,6 @@ import {
   CanonicalBatch,
   DeploymentId,
   DefinitionDigestInput,
-  Digest,
   ModelResponseRecorded,
   PersistedJson,
   ProducerEpoch,
@@ -78,7 +77,6 @@ const State = Schema.Struct({
   seedRecords: Schema.Natural,
   phase: Schema.Natural,
   seedDigest: Schema.NullOr(Schema.String),
-  seedTailDigest: Schema.NullOr(Digest),
   incarnation: Schema.NullOr(ReplayCpuIncarnation),
   operations: Schema.Array(ReplayCpuOperation).check(Schema.isMaxLength(10)),
 });
@@ -190,7 +188,6 @@ const application = Layer.unwrap(
             seedRecords: 0,
             phase: 0,
             seedDigest: null,
-            seedTailDigest: null,
             incarnation: null,
             operations: [],
           }
@@ -343,7 +340,6 @@ const application = Layer.unwrap(
             records: pages.flatMap((page) => page.records),
             batches: pages.flatMap((page) => page.batches),
             tailSequence: last.tailSequence,
-            tailDigest: last.tailDigest,
           };
         });
 
@@ -384,7 +380,6 @@ const application = Layer.unwrap(
                   turnId: TurnId.make(`seed-turn-${index}`),
                   turn: 1,
                   messages,
-                  messagesDigest: yield* digestJson(messages),
                   runScopedPrefixLength: 1,
                 });
               } else payload = RunCompleted.make({ runId, output });
@@ -413,7 +408,6 @@ const application = Layer.unwrap(
                   records: [first, ...rest],
                 }),
                 expectedTailSequence: tail.tailSequence,
-                expectedTailDigest: tail.tailDigest,
                 producerEpoch: tail.producerEpoch,
               }),
             );
@@ -425,7 +419,6 @@ const application = Layer.unwrap(
             ...state,
             seedRecords: count,
             incarnation,
-            seedTailDigest: log.tailDigest,
             seedDigest: yield* digestJson(
               yield* Schema.encodeEffect(Schema.Array(RecordEnvelope))(
                 log.records.map((entry) => entry.record),
@@ -536,7 +529,6 @@ const application = Layer.unwrap(
 
           const expectedCompactions = [1, 4, 6, 9].filter((phase) => phase <= state.phase).length;
           let nextSequence = state.seedRecords + 1;
-          let tailDigest = state.seedTailDigest;
           const producers = new Map(log.batches.map((batch) => [batch.batchId, batch.producerId]));
           const seen = new Set<string>();
 
@@ -553,13 +545,10 @@ const application = Layer.unwrap(
 
             while (end < log.records.length && log.records[end]?.batchId === entry.batchId) end++;
             const records = log.records.slice(start, end);
-            const [first, ...rest] = records.map((record) => record.record);
             const producerId = producers.get(entry.batchId);
 
             if (
-              first === undefined ||
               producerId === undefined ||
-              tailDigest === null ||
               seen.has(entry.batchId) ||
               records.some(
                 (record, index) =>
@@ -570,19 +559,10 @@ const application = Layer.unwrap(
               break;
             }
             seen.add(entry.batchId);
-            tailDigest = yield* digestCanonicalBatch(
-              tailDigest,
-              CanonicalBatch.make({
-                batchId: entry.batchId,
-                producerId,
-                records: [first, ...rest],
-              }),
-            );
             nextSequence += records.length;
             start = end;
           }
-          batchesUnchanged &&=
-            nextSequence === log.tailSequence + 1 && tailDigest === log.tailDigest;
+          batchesUnchanged &&= nextSequence === log.tailSequence + 1;
 
           const audits = yield* Effect.forEach(captures, ({ phase, call, prompt }) =>
             Effect.gen(function* () {

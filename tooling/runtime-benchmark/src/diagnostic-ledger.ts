@@ -147,7 +147,6 @@ const publish = Effect.fn("diagnostic.ledger.publish")(function* (index: number)
       threadId: seedThread,
       producerEpoch: claim.value.producerEpoch,
       expectedTailSequence: tail.tailSequence,
-      expectedTailDigest: tail.tailDigest,
       batch: CanonicalBatch.make({
         batchId: submissionSettlementBatchId(admitted.submissionId),
         producerId,

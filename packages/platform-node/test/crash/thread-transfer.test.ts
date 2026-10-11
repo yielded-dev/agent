@@ -122,9 +122,9 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               Effect.gen(function* () {
                 const db = yield* openDatabase(site.db);
 
-                expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 22 });
+                expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 23 });
                 expect(db.prepare("SELECT record_format FROM effect_agent_schema").get()).toEqual({
-                  record_format: "effect-agent/thread@4",
+                  record_format: "effect-agent/thread@5",
                 });
                 expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
                 expect(ownershipCount(db)).toEqual({ ownership: 1 });
@@ -138,7 +138,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
             const sourceRecords = pages.flatMap(({ page }) => page.records);
             const sourceExecutions = pages.flatMap(({ page }) => page.executions);
 
-            expect(exported.transferFormat).toBe("effect-agent/thread-transfer@2");
+            expect(exported.transferFormat).toBe("effect-agent/thread-transfer@3");
             expect(sourceExecutions).toHaveLength(1);
             const execution = sourceExecutions[0]?.checkpoint;
 
@@ -165,7 +165,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
             }).pipe(Effect.provide(SqliteThreadStore.layer({ filename: target })));
 
             expect(imported.tailSequence).toBe(exported.tailSequence);
-            expect(imported.tailDigest).toBe(exported.tailDigest);
+
             expect(yield* fs.readFile(site.db)).toEqual(sourceBytes);
             const restored = yield* exportFixture(target, request);
 

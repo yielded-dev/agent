@@ -1,7 +1,7 @@
 import { Context, Effect, Schema } from "effect";
 
 import type { ThreadId } from "../core/Identifiers.ts";
-import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST, utf8ByteLength } from "./Digest.ts";
+import { canonicalJson, digestJson, utf8ByteLength } from "./Digest.ts";
 import { transferRecordDependencies } from "./internal/transfer-dependencies.ts";
 import { ExportRecord } from "./RecordFormat.ts";
 import {
@@ -40,13 +40,7 @@ export type TransferFacts = Pick<
 
 export type TransferManifest = Pick<
   ThreadExport,
-  | "threadId"
-  | "format"
-  | "tailSequence"
-  | "tailDigest"
-  | "snapshot"
-  | "externalObligations"
-  | "workerSeal"
+  "threadId" | "format" | "tailSequence" | "snapshot" | "externalObligations" | "workerSeal"
 >;
 
 /** Reads share the adapter's single page transaction. Batch reads hydrate archives. */
@@ -82,7 +76,6 @@ const Manifest = Schema.Struct({
   threadId: ThreadExport.fields.threadId,
   format: ThreadExport.fields.format,
   tailSequence: ThreadExport.fields.tailSequence,
-  tailDigest: Digest,
   snapshot: ThreadExportSnapshot,
   workerSeal: ThreadExport.fields.workerSeal,
   externalObligations: ThreadExport.fields.externalObligations,
@@ -91,7 +84,6 @@ const Manifest = Schema.Struct({
 const Position = Schema.Struct({
   snapshotId: Digest,
   fromSequence: Schema.Int.check(Schema.isGreaterThan(0)),
-  previousTailDigest: Digest,
   section: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: transferSections.length })),
   consumed: Schema.Natural,
   after: Schema.optionalKey(Schema.String),
@@ -138,9 +130,8 @@ export const transferDependencies = (
 };
 
 export const executionTransferFact = (checkpoint: ExecutionCheckpoint) =>
-  Schema.encodeEffect(ExecutionCheckpoint)(checkpoint).pipe(
-    Effect.flatMap(digestJson),
-    Effect.map((digest): ThreadExecutionFact => ({ checkpoint, digest })),
+  Schema.decodeEffect(Schema.toType(ExecutionCheckpoint))(checkpoint).pipe(
+    Effect.map((checkpoint): ThreadExecutionFact => ({ checkpoint })),
     Effect.mapError((cause) => failure("Cannot encode active execution transfer", cause)),
   );
 
@@ -179,7 +170,6 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
       ? {
           snapshotId,
           fromSequence: 1,
-          previousTailDigest: EMPTY_TAIL_DIGEST,
           section: 0,
           consumed: 0,
         }
@@ -204,7 +194,6 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
   };
 
   const fromSequence = position.fromSequence;
-  const previousTailDigest = position.previousTailDigest;
 
   if (fromSequence <= manifest.tailSequence) {
     canonical = yield* reader.batch(request.threadId, fromSequence);
@@ -230,17 +219,10 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
       ),
     );
 
-    const tail = yield* digestJson({ previousTailDigest, batch: { ...batch, records } }).pipe(
-      Effect.mapError(() => failure("Cannot digest transfer batch")),
-    );
-
     position = {
       ...position,
       fromSequence: fromSequence + records.length,
-      previousTailDigest: tail,
     };
-    if (position.fromSequence > manifest.tailSequence && tail !== manifest.tailDigest)
-      return yield* failure("Canonical transfer chain does not match its captured tail");
   } else {
     while (position.section < transferSections.length) {
       const section = transferSections[position.section]!;
@@ -289,9 +271,6 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
   const more =
     position.fromSequence <= manifest.tailSequence || position.section < transferSections.length;
 
-  if (!more && position.previousTailDigest !== manifest.tailDigest)
-    return yield* failure("Transfer tail differs from the captured snapshot");
-
   const cursor = more
     ? yield* Schema.encodeEffect(Schema.fromJsonString(Position))(position).pipe(
         Effect.mapError((cause) => failure("Cannot encode transfer cursor", cause)),
@@ -300,10 +279,9 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
 
   const page = yield* ThreadExport.makeEffect({
     ...manifest,
-    transferFormat: "effect-agent/thread-transfer@2",
+    transferFormat: "effect-agent/thread-transfer@3",
     snapshotId,
     fromSequence: Schema.decodeSync(CanonicalSequence)(fromSequence),
-    previousTailDigest,
     ...canonical,
     ...facts,
     dependencies: transferDependencies(canonical.records, facts.executions),

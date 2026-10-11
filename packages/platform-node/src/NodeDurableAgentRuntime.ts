@@ -104,7 +104,7 @@ export class NodeDurableAgentRuntimeConfigValue extends Schema.Class<NodeDurable
   synchronous: SqliteStorageConfigValue.fields.synchronous,
   /** Canonical observation poll cadence of the SQLite store. */
   observationPollInterval: NonNegativeMillis,
-  /** Opt-in full payload/digest-chain audit while opening the store. */
+  /** Opt-in full history and active-state validation while opening the store. */
   verifyOnOpen: Schema.Boolean,
 }) {}
 
