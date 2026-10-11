@@ -8,7 +8,6 @@ import { Update } from "../core/AgentUpdates.ts";
 import * as FailureDiagnostic from "../core/FailureDiagnostic.ts";
 import {
   AgentId,
-  AttemptId,
   ThreadId,
   DelegationId,
   ReceiptId,
@@ -53,7 +52,7 @@ export const DeploymentId = Schema.NonEmptyString.pipe(
 
 export type DeploymentId = typeof DeploymentId.Type;
 
-/** Identity of a fenced canonical-log producer. */
+/** Identity of a canonical-log producer. */
 export const ProducerId = Schema.NonEmptyString.pipe(
   Schema.brand("@effect-agent/thread/ProducerId"),
 );
@@ -80,13 +79,6 @@ export const CanonicalSequence = Schema.Natural.pipe(
 );
 
 export type CanonicalSequence = typeof CanonicalSequence.Type;
-
-/** Monotonic fencing epoch for a Thread producer. */
-export const ProducerEpoch = Schema.Natural.pipe(
-  Schema.brand("@effect-agent/thread/ProducerEpoch"),
-);
-
-export type ProducerEpoch = typeof ProducerEpoch.Type;
 
 const BoundedText = Schema.String.check(Schema.isMaxLength(64 * 1024));
 const BoundedName = Schema.NonEmptyString.check(Schema.isMaxLength(256));
@@ -564,17 +556,13 @@ export class ToolApprovalDecided extends Schema.TaggedClass<ToolApprovalDecided>
 }) {}
 
 /**
- * Conservative interruption audit before resuming inference without a canonical response.
- * The preceding fencing generation may include retirement or repair, so this marks incomplete
- * usage coverage and possible duplicate provider cost, not an exact missing-call count.
+ * A Run resumed inference without a retained response. One marker makes usage coverage
+ * incomplete; it does not count missing provider calls or retain Attempt history.
  */
 export class ModelResponseInterrupted extends Schema.TaggedClass<ModelResponseInterrupted>(
   "@effect-agent/thread/ModelResponseInterrupted",
 )("ModelResponseInterrupted", {
   runId: RunId,
-  supersededEpoch: ProducerEpoch,
-  attemptId: AttemptId,
-  reason: BoundedText,
 }) {}
 
 /** Disposable call cancellation: no response or Tool declaration is canonical. */
@@ -1254,8 +1242,8 @@ export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
 ) {}
 
 /** Bump only when the meaning of an existing record changes, independently of SQL layout. */
-export const CURRENT_RECORD_VERSION = 5;
-export const CURRENT_RECORD_FORMAT = "effect-agent/thread@5";
+export const CURRENT_RECORD_VERSION = 6;
+export const CURRENT_RECORD_FORMAT = "effect-agent/thread@6";
 
 /** Durable fact and execution-command schemas. Unsupported controls fail before execution. */
 export const KnownRecordPayload = Schema.Union([

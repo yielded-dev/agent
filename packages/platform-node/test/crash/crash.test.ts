@@ -3,11 +3,7 @@ import { expect, layer } from "@effect/vitest";
 import { NodeDurableHost } from "@yielded/agent-platform-node/node-durable-host";
 import * as Agent from "@yielded/agent/agent";
 import { DurableAgentRuntime, recoveryRepairRecordId } from "@yielded/agent/durable-agent-runtime";
-import {
-  ProducerId,
-  type CanonicalRecordEnvelope,
-  type RecordEnvelope,
-} from "@yielded/agent/records";
+import { type CanonicalRecordEnvelope, type RecordEnvelope } from "@yielded/agent/records";
 import {
   modelResponseInterruptedRecordId,
   modelResponseRecordId,
@@ -19,18 +15,18 @@ import {
   toolCallUnknownRecordId,
   toolStepSettledRecordId,
 } from "@yielded/agent/run-journal";
+import { StorageOwner, RunStorage } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   ApprovalDecisionCommand,
   ClaimRequest,
   RecoverySnapshotRequest,
-  ReleaseOwnershipRequest,
   SubmissionLedger,
   submissionInputRecordId,
   submissionSettlementRecordId,
 } from "@yielded/agent/submission-ledger";
 import { ThreadStore } from "@yielded/agent/thread-store";
-import { Effect, Option, Schema } from "effect";
+import { Deferred, Effect, Exit, Fiber, Option, Schema, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
 import {
@@ -40,9 +36,7 @@ import {
   SECOND_BOOK_REF,
   CHILD_ANSWER,
   CRASH_QUESTION,
-  FENCED_EXIT_CODE,
   FRESH_ANSWER,
-  HOST_PRODUCER_ID,
   ITINERARY_CALL_ID,
   JOIN_QUESTION,
   STEP_REF,
@@ -60,6 +54,9 @@ import {
   makeBookToolLayer,
   makeItineraryToolLayer,
   makeScriptedModel,
+  makeScriptedStreamModel,
+  toolCallParts,
+  STALE_ANSWER,
   plannerDefinition,
   searchDefinition,
   searchToolLayer,
@@ -67,7 +64,6 @@ import {
   supplierReconcilerLayer,
 } from "./fixtures.ts";
 import {
-  CHILD_LEASE_MS,
   assertConvergence,
   childMessages,
   expectKilled,
@@ -80,8 +76,6 @@ import {
   startWorker,
   touchFile,
   waitForFile,
-  waitAfterChildExit,
-  waitOutChildLease,
   withCrashSite,
   withHost,
   withRuntime,
@@ -95,7 +89,7 @@ import {
  * failpoint (`process.exit(137)` — no finalizers, no ownership drain) or with SIGKILL, then
  * restarts against the same file and asserts the required durable outcome, ending with the
  * convergence property: no accepted Submission disappears, no Submission has two terminal
- * outcomes, FIFO order holds, and stale producer epochs are fenced.
+ * outcomes, FIFO order holds, and closed local generations reject late results.
  *
  * The P5 rows add a file-backed external supplier store shared with the children: recorded Tool
  * results must exist in that store (never fabricate, durability §10) and every row's per-call
@@ -106,8 +100,6 @@ import {
  * These tests use real clocks, real files, and real processes by necessity, so the suite runs
  * with `excludeTestServices` like the sandbox-local process tests.
  */
-
-const decodeProducerId = Schema.decodeSync(ProducerId);
 
 const resubmit = (thread: string, key: string) =>
   Effect.gen(function* () {
@@ -293,7 +285,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                     thread,
                     key,
                     killAt,
-                    leaseMillis: CHILD_LEASE_MS,
                   }),
                 );
 
@@ -323,7 +314,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                 const completingStarts: Array<RecordEnvelope> = [];
                 let inspectStart: Effect.Effect<void> = Effect.void;
 
-                yield* waitAfterChildExit;
                 yield* withHost(
                   site.db,
                   Effect.gen(function* () {
@@ -383,36 +373,26 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               killAt: "input:after-canonical-append",
-              leaseMillis: CHILD_LEASE_MS,
             });
 
             expectKilled(result);
-            yield* waitAfterChildExit;
 
             yield* withHost(
               site.db,
               Effect.gen(function* () {
-                const ledger = yield* SubmissionLedger;
+                const storage = yield* RunStorage;
                 const head = yield* lookupByKey(thread, `${key}-1`);
                 const queued = yield* lookupByKey(thread, `${key}-2`);
 
                 // FIFO: a direct claim grants ONLY the unsettled lane head.
-                const claimed = yield* ledger.claim(
-                  ClaimRequest.make({
-                    threadId: decodeThreadId(thread),
-                    producerId: decodeProducerId(HOST_PRODUCER_ID),
-                  }),
+                const claimed = yield* storage.claim(
+                  ClaimRequest.make({ threadId: decodeThreadId(thread) }),
                 );
 
                 expect(Option.isSome(claimed)).toBe(true);
                 if (Option.isNone(claimed)) throw new Error("Expected a claimable lane head");
-                expect(claimed.value.submissionId).toBe(head.submissionId);
-                yield* ledger.releaseOwnership(
-                  ReleaseOwnershipRequest.make({
-                    submissionId: claimed.value.submissionId,
-                    ownershipToken: claimed.value.ownershipToken,
-                  }),
-                );
+                expect(claimed.value.claim.submissionId).toBe(head.submissionId);
+                yield* claimed.value.release;
 
                 const settlements = yield* drainPlanner(thread, CHILD_ANSWER);
 
@@ -453,7 +433,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                   scenario: "run-blocked",
                   thread,
                   key,
-                  leaseMillis: CHILD_LEASE_MS,
                   markerFile: site.marker,
                   releaseFile: site.release,
                 });
@@ -467,7 +446,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
             );
 
             expect(exit.signal).toBe("SIGKILL");
-            yield* waitAfterChildExit;
 
             yield* withHost(
               site.db,
@@ -498,7 +476,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                   modelResponseRecordId(runId, 2),
                 );
                 expect(records.map((envelope) => envelope.record.recordId)).toContain(
-                  modelResponseInterruptedRecordId(runId, 1),
+                  modelResponseInterruptedRecordId(runId),
                 );
                 const settlement = yield* host.awaitSettlement(receipt);
 
@@ -512,92 +490,82 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
     );
 
     it.effect(
-      "a stale Attempt in a live process is fenced out of canonical history",
+      "a closed local Attempt cannot append a late model response over its replacement",
       () =>
         withCrashSite((site) =>
-          Effect.gen(function* () {
-            const thread = "thread-fenced";
-            const key = "fenced-1";
+          withRuntime(
+            site.db,
+            Effect.gen(function* () {
+              const thread = "thread-fenced";
+              const key = "fenced-1";
+              const runtime = yield* DurableAgentRuntime;
+              const owner = yield* StorageOwner;
+              const started = yield* Deferred.make<void>();
+              const release = yield* Deferred.make<void>();
 
-            yield* Effect.scoped(
-              Effect.gen(function* () {
-                const handle = yield* startWorker({
-                  db: site.db,
-                  scenario: "run-blocked",
-                  thread,
-                  key,
-                  leaseMillis: CHILD_LEASE_MS,
-                  markerFile: site.marker,
-                  releaseFile: site.release,
-                });
+              const model = yield* makeScriptedStreamModel((call) =>
+                call === 0
+                  ? Stream.fromIterable(toolCallParts)
+                  : call === 1
+                    ? Stream.fromEffect(
+                        Deferred.succeed(started, undefined).pipe(
+                          Effect.andThen(Deferred.await(release)),
+                        ),
+                      ).pipe(Stream.flatMap(() => Stream.fromIterable(finalParts(STALE_ANSWER))))
+                    : Stream.fromIterable(finalParts(FRESH_ANSWER)),
+              );
 
-                yield* waitForFile(site.marker);
-                // The blocked child's short lease lapses while it is still alive mid-Turn.
-                yield* waitOutChildLease;
+              const agent = Agent.withModel(searchDefinition, model);
 
-                // A restarted host claims a HIGHER epoch and completes the accepted work.
-                const submissionId = yield* withHost(
-                  site.db,
-                  Effect.gen(function* () {
-                    const snapshot = yield* lookupByKey(thread, key);
-                    const settlements = yield* drainSearch(thread, FRESH_ANSWER);
+              const receipt = yield* runtime.submit(
+                agent,
+                { question: CRASH_QUESTION },
+                crashSubmitOptions(thread, key),
+              );
 
-                    expect(settlements).toHaveLength(1);
-                    expect(settlements[0]?.outcome).toBe("completed");
+              const stale = yield* runtime
+                .processThread(agent, receipt.threadId)
+                .pipe(Effect.forkChild);
 
-                    return snapshot.submissionId;
-                  }),
-                );
+              yield* Deferred.await(started);
+              expect(owner.hasOwner(receipt.threadId, receipt.submissionId)).toBe(true);
+              yield* owner.withMutation(
+                Effect.sync(() => owner.closeSubmission(receipt.threadId, receipt.submissionId)),
+              );
+              const settlements = yield* runtime.processThread(agent, receipt.threadId);
 
-                // Unblock the stale child: its Turn commit must be fenced, never committed.
-                yield* touchFile(site.release);
-                const exit = yield* handle.awaitExit;
+              expect(settlements.map((settlement) => settlement.outcome)).toEqual(["completed"]);
+              yield* Deferred.succeed(release, undefined);
+              const staleExit = yield* Fiber.await(stale);
 
-                expect(exit.code).toBe(FENCED_EXIT_CODE);
+              expect(Exit.isFailure(staleExit)).toBe(true);
+              if (Exit.isFailure(staleExit)) expect(failureTag(staleExit)).toBe("OwnershipLost");
+              const records = yield* readLog(thread);
+              const runId = runIdForSubmission(receipt.submissionId);
 
-                const failure = childMessages(handle.stdoutText()).find(
-                  (message) => message.kind === "worker-failure",
-                );
+              const turnTwo = records.filter(
+                (envelope) => envelope.record.recordId === modelResponseRecordId(runId, 2),
+              );
 
-                expect(["FenceRejected", "OwnershipLost"]).toContain(
-                  failure?.kind === "worker-failure" && failure.tag,
-                );
+              expect(turnTwo).toHaveLength(1);
+              const payload = turnTwo[0]?.record.payload;
 
-                yield* withRuntime(
-                  site.db,
-                  Effect.gen(function* () {
-                    const records = yield* readLog(thread);
-                    const runId = runIdForSubmission(submissionId);
+              expect(payload?._tag).toBe("ModelResponseRecorded");
+              if (payload?._tag === "ModelResponseRecorded") {
+                const messages = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(payload.messages);
 
-                    const turnTwo = records.filter(
-                      (envelope) => envelope.record.recordId === modelResponseRecordId(runId, 2),
-                    );
+                const text = messages.content
+                  .filter((message) => message.role === "assistant")
+                  .flatMap((message) => message.content)
+                  .filter((part) => part.type === "text")
+                  .map((part) => part.text)
+                  .join("");
 
-                    expect(turnTwo).toHaveLength(1);
-                    const payload = turnTwo[0]?.record.payload;
-
-                    expect(payload?._tag).toBe("ModelResponseRecorded");
-                    if (payload?._tag === "ModelResponseRecorded") {
-                      const messages = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(
-                        payload.messages,
-                      );
-
-                      const text = messages.content
-                        .filter((message) => message.role === "assistant")
-                        .flatMap((message) => message.content)
-                        .filter((part) => part.type === "text")
-                        .map((part) => part.text)
-                        .join("");
-
-                      // The surviving Turn 2 is the fresh Attempt's, not the fenced stale one.
-                      expect(text).toBe(FRESH_ANSWER);
-                    }
-                    yield* assertConvergence(thread, [submissionId]);
-                  }),
-                );
-              }),
-            );
-          }),
+                expect(text).toBe(FRESH_ANSWER);
+              }
+              yield* assertConvergence(thread, [receipt.submissionId]);
+            }).pipe(Effect.provide(searchToolLayer)),
+          ),
         ),
       30_000,
     );
@@ -616,7 +584,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               killAt: "terminalize:before-publication",
-              leaseMillis: CHILD_LEASE_MS,
             });
 
             expectKilled(result);
@@ -647,8 +614,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                 };
               }),
             );
-
-            yield* waitAfterChildExit;
 
             yield* withHost(
               site.db,
@@ -704,7 +669,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               killAt: "terminalize:after-canonical-append",
-              leaseMillis: CHILD_LEASE_MS,
             });
 
             expectKilled(result);
@@ -839,7 +803,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
     );
 
     it.effect(
-      "abort of an active Run in another process: canonical AbortRequested precedes settlement",
+      "abort routed to the active owner: canonical AbortRequested precedes settlement",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
@@ -854,27 +818,14 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                   thread,
                   key,
                   markerFile: site.marker,
+                  releaseFile: site.release,
                 });
 
                 // The child's Attempt is live and blocked inside its first model call.
                 yield* waitForFile(site.marker);
 
-                // Abort through the SHARED durable ledger from this "operator" process.
-                yield* withRuntime(
-                  site.db,
-                  Effect.gen(function* () {
-                    const runtime = yield* DurableAgentRuntime;
-                    const snapshot = yield* lookupByKey(thread, key);
-
-                    yield* runtime.abort(
-                      AbortCommand.make({
-                        submissionId: snapshot.submissionId,
-                        author: "operator",
-                        reason: "stop the run",
-                      }),
-                    );
-                  }),
-                );
+                // Route the operator command to the sole owner through the fixture's file channel.
+                yield* touchFile(site.release);
 
                 const exit = yield* handle.awaitExit;
 
@@ -953,14 +904,12 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               killAt: "turn:after-response-append",
-              leaseMillis: CHILD_LEASE_MS,
               supplierDir: site.supplier,
             });
 
             expectKilled(result);
-            yield* waitAfterChildExit;
 
-            yield* withHost(
+            const retained = yield* withHost(
               site.db,
               Effect.gen(function* () {
                 const snapshot = yield* lookupByKey(thread, key);
@@ -976,16 +925,24 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
 
                 expect(blocked).toEqual([]);
                 expect(supplierCount(site.supplier, "book", BOOK_REF)).toBe(0);
-                const retained = yield* readLog(thread);
 
-                // Authorized DUR-017 resolution arrives from a SECOND real process through the
-                // shared durable ledger.
-                yield* runResolver({
-                  db: site.db,
-                  scenario: "resolve-unknown",
-                  thread,
-                  key,
-                });
+                return yield* readLog(thread);
+              }),
+            );
+
+            // The observer closes before a new process becomes the sole owner.
+            yield* runResolver({
+              db: site.db,
+              scenario: "resolve-unknown",
+              thread,
+              key,
+            });
+            yield* withHost(
+              site.db,
+              Effect.gen(function* () {
+                const snapshot = yield* lookupByKey(thread, key);
+                const runId = runIdForSubmission(snapshot.submissionId);
+
                 expect(yield* lookupState(snapshot.submissionId)).toBe("input-applied");
                 expect(yield* readLog(thread)).toEqual(retained);
                 const ledger = yield* SubmissionLedger;
@@ -1045,7 +1002,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                   scenario: "run-uncertain",
                   thread,
                   key,
-                  leaseMillis: CHILD_LEASE_MS,
                   supplierDir: site.supplier,
                   markerFile: site.marker,
                 });
@@ -1060,7 +1016,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
             );
 
             expect(exit.signal).toBe("SIGKILL");
-            yield* waitAfterChildExit;
             expect(supplierCount(site.supplier, "book", BOOK_REF)).toBe(1);
 
             yield* withHost(
@@ -1132,12 +1087,10 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               key,
               killAtStorage: "append:before",
               killRequiresSupplier: `book:${BOOK_REF}`,
-              leaseMillis: CHILD_LEASE_MS,
               supplierDir: site.supplier,
             });
 
             expectKilled(result);
-            yield* waitAfterChildExit;
             expect(supplierCount(site.supplier, "book", BOOK_REF)).toBe(1);
 
             // Deliberately NO recovery pass: a recovery pass has no Agent Binding, so the
@@ -1201,12 +1154,10 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               killAt: "step:after-step-append",
-              leaseMillis: CHILD_LEASE_MS,
               supplierDir: site.supplier,
             });
 
             expectKilled(result);
-            yield* waitAfterChildExit;
             // Step 1 executed and committed; step 2 never ran; the handler entered once.
             expect(supplierCount(site.supplier, "itinerary-enter", STEP_REF)).toBe(1);
             expect(supplierCount(site.supplier, "reserve-flight", STEP_REF)).toBe(1);
@@ -1289,12 +1240,10 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               killAt: "approval:after-request-append",
-              leaseMillis: CHILD_LEASE_MS,
               supplierDir: site.supplier,
             });
 
             expectKilled(result);
-            yield* waitAfterChildExit;
 
             // Before recovery: the request is canonical, the ledger never suspended.
             yield* withRuntime(
@@ -1314,18 +1263,24 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               site.db,
               Effect.gen(function* () {
                 const snapshot = yield* lookupByKey(thread, key);
-                const runId = runIdForSubmission(snapshot.submissionId);
 
                 expect(yield* lookupState(snapshot.submissionId)).toBe("suspended");
                 expect(supplierCount(site.supplier, "book", BOOK_REF)).toBe(0);
+              }),
+            );
+            yield* runResolver({
+              db: site.db,
+              scenario: "resolve-approval",
+              thread,
+              key,
+              decision: "approved",
+            });
+            yield* withHost(
+              site.db,
+              Effect.gen(function* () {
+                const snapshot = yield* lookupByKey(thread, key);
+                const runId = runIdForSubmission(snapshot.submissionId);
 
-                yield* runResolver({
-                  db: site.db,
-                  scenario: "resolve-approval",
-                  thread,
-                  key,
-                  decision: "approved",
-                });
                 expect(yield* lookupState(snapshot.submissionId)).toBe("input-applied");
 
                 const settlements = yield* drainApprovalBook(site, thread, FRESH_ANSWER);
@@ -1381,7 +1336,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               killAt: "approval:after-request-append",
-              leaseMillis: CHILD_LEASE_MS,
               supplierDir: site.supplier,
             });
 
@@ -1402,7 +1356,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
             );
             expect(supplierCount(site.supplier, "book", BOOK_REF)).toBe(0);
             expect(supplierCount(site.supplier, "book", SECOND_BOOK_REF)).toBe(0);
-            yield* waitAfterChildExit;
             yield* withHost(
               site.db,
               Effect.gen(function* () {
@@ -1478,11 +1431,9 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               killAt: "join:after-claim",
-              leaseMillis: CHILD_LEASE_MS,
             });
 
             expectKilled(result);
-            yield* waitAfterChildExit;
 
             // Before recovery: the claim is durable, the canonical input never committed.
             const queuedId = yield* withRuntime(
@@ -1546,11 +1497,9 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               killAt: "join:after-canonical-append",
-              leaseMillis: CHILD_LEASE_MS,
             });
 
             expectKilled(result);
-            yield* waitAfterChildExit;
 
             // Before recovery: the input is canonical, only the joined marker was lost.
             const queuedId = yield* withRuntime(
@@ -1614,7 +1563,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               killAtStorage: "ledger:finalize-settlement:after",
-              leaseMillis: CHILD_LEASE_MS,
             });
 
             expectKilled(result);

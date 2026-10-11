@@ -11,8 +11,8 @@ import {
   CanonicalSequence,
   ObservationOffset,
 } from "@yielded/agent/records";
+import { StorageOwner } from "@yielded/agent/run-storage";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
-import { DEFAULT_OWNERSHIP_LEASE_DURATION } from "@yielded/agent/submission-ledger";
 import { MAX_ARCHIVE_RANGE_PAGE } from "@yielded/agent/thread-archive-range";
 import { ThreadImport } from "@yielded/agent/thread-import";
 import {
@@ -32,24 +32,12 @@ import {
   ThreadStoreDiagnostic,
   ThreadTail,
   ThreadTailRequest,
-  FenceRejected,
-  type FencedAppendRequest,
+  type AppendRequest,
   PreparedAppend,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
 } from "@yielded/agent/thread-store";
-import {
-  Clock,
-  Context,
-  Crypto,
-  Duration,
-  Effect,
-  Layer,
-  Option,
-  Ref,
-  Schema,
-  Stream,
-} from "effect";
+import { Clock, Context, Crypto, Effect, Layer, Option, Ref, Schema, Stream } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { isSqlError } from "effect/sql/SqlError";
 
@@ -62,7 +50,6 @@ import {
   type DoStorageCompatibilityError,
   DoAppendConflict,
   DoCheckpointConflict,
-  DoFenceRejected,
   type DoStorageFailpointLocation,
   DoStorageCorruptionError,
   DoStorageError,
@@ -88,11 +75,6 @@ export interface DoStorageOptions {
   readonly storage: DurableObjectStorage;
   readonly observationPollInterval?: number | undefined;
   /**
-   * Submission ownership lease duration in milliseconds (D5). Defaults to
-   * `DEFAULT_OWNERSHIP_LEASE_DURATION` from `@yielded/agent/submission-ledger`.
-   */
-  readonly ownershipLeaseDuration?: number | undefined;
-  /**
    * Maximum bytes for any single stored value; must stay under the platform's 2 MB
    * per-value limit. Defaults to `DEFAULT_MAX_STORED_VALUE_BYTES`.
    */
@@ -113,7 +95,6 @@ export type DoStorageInitializationError =
 
 const OffsetText = Schema.String.check(Schema.isMaxLength(4 * 1024));
 const ZERO_CANONICAL_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
-const isDoFenceRejected = Schema.is(DoFenceRejected);
 const isDoAppendConflict = Schema.is(DoAppendConflict);
 const isDoCheckpointConflict = Schema.is(DoCheckpointConflict);
 // Reuse the same AST/parser across reads. Reconstructing a JSON codec per row
@@ -188,13 +169,6 @@ const parseOffset = Effect.fnUntraced(function* (
     Effect.mapError((error) => schemaStoreError("decode observation offset", error)),
   );
 });
-
-const mapFence = (threadId: ThreadMaterialization["threadId"], error: DoFenceRejected) =>
-  FenceRejected.make({
-    threadId,
-    actualEpoch: error.actualEpoch,
-    attemptedEpoch: error.producerEpoch,
-  });
 
 const encodeCheckpoint = (checkpoint: ThreadCheckpoint): Effect.Effect<string, ThreadStoreError> =>
   Schema.encodeEffect(ThreadCheckpointJson)(checkpoint).pipe(
@@ -339,31 +313,24 @@ const makeServices = Effect.fnUntraced(function* () {
       .hit(location)
       .pipe(Effect.mapError((error) => storeError(`storage failpoint ${location}`, error)));
 
-  const materialize: ThreadStore["Service"]["materialize"] = Effect.fnUntraced(
-    function* (request: ThreadMaterialization) {
-      const validated = yield* Schema.decodeEffect(Schema.toType(ThreadMaterialization))(
-        request,
-      ).pipe(Effect.mapError((error) => schemaStoreError("validate materialization", error)));
+  const materialize: ThreadStore["Service"]["materialize"] = Effect.fnUntraced(function* (
+    request: ThreadMaterialization,
+  ) {
+    const validated = yield* Schema.decodeEffect(Schema.toType(ThreadMaterialization))(
+      request,
+    ).pipe(Effect.mapError((error) => schemaStoreError("validate materialization", error)));
 
-      const now = yield* Clock.currentTimeMillis;
+    const now = yield* Clock.currentTimeMillis;
 
-      yield* hitFailpoint("materialize:before");
-      yield* journal
-        .materialize(validated.threadId, new Date(now).toISOString(), validated.producerEpoch)
-        .pipe(
-          Effect.mapError((error) =>
-            error._tag === "DoFenceRejected"
-              ? mapFence(validated.threadId, error)
-              : storeError("materialize thread", error),
-          ),
-        );
-      yield* hitFailpoint("materialize:after");
-    },
-    withStorageSpan("DoThreadStore.materialize", (error) => error._tag === "FenceRejected"),
-  );
+    yield* hitFailpoint("materialize:before");
+    yield* journal
+      .materialize(validated.threadId, new Date(now).toISOString())
+      .pipe(Effect.mapError((error) => storeError("materialize thread", error)));
+    yield* hitFailpoint("materialize:after");
+  }, withStorageSpan("DoThreadStore.materialize"));
 
   const append: ThreadStore["Service"]["append"] = Effect.fnUntraced(
-    function* (request: FencedAppendRequest) {
+    function* (request: AppendRequest) {
       const validated = yield* PreparedAppend.capture(request);
       const observed = yield* requireThread(journal, validated.threadId);
 
@@ -373,34 +340,33 @@ const makeServices = Effect.fnUntraced(function* () {
 
       yield* hitFailpoint("append:before");
 
-      const result = yield* journal.append(rawRequest, observed).pipe(
-        Effect.mapError((error) => {
-          if (isDoFenceRejected(error)) {
-            return mapFence(validated.threadId, error);
-          }
-          if (isDoAppendConflict(error)) {
-            return error.actualTailSequence !== undefined
-              ? AppendConflict.make({
-                  threadId: validated.threadId,
-                  batchId: validated.batch.batchId,
-                  reason: error.reason,
-                  actualTailSequence: error.actualTailSequence,
-                })
-              : AppendConflict.make({
-                  threadId: validated.threadId,
-                  batchId: validated.batch.batchId,
-                  reason: error.reason,
-                });
-          }
+      const result = yield* journal.state.owner
+        .withProgress(rawRequest.threadId, journal.append(rawRequest, observed))
+        .pipe(
+          Effect.mapError((error) => {
+            if (isDoAppendConflict(error)) {
+              return error.actualTailSequence !== undefined
+                ? AppendConflict.make({
+                    threadId: validated.threadId,
+                    batchId: validated.batch.batchId,
+                    reason: error.reason,
+                    actualTailSequence: error.actualTailSequence,
+                  })
+                : AppendConflict.make({
+                    threadId: validated.threadId,
+                    batchId: validated.batch.batchId,
+                    reason: error.reason,
+                  });
+            }
 
-          return storeError("append canonical batch", error);
-        }),
-        Effect.flatMap((result) =>
-          Schema.decodeEffect(AppendResult)(result).pipe(
-            Effect.mapError((error) => schemaStoreError("decode append result", error)),
+            return storeError("append canonical batch", error);
+          }),
+          Effect.flatMap((result) =>
+            Schema.decodeEffect(AppendResult)(result).pipe(
+              Effect.mapError((error) => schemaStoreError("decode append result", error)),
+            ),
           ),
-        ),
-      );
+        );
 
       yield* hitFailpoint("append:after");
 
@@ -537,7 +503,6 @@ const makeServices = Effect.fnUntraced(function* () {
     return ThreadTail.make({
       threadId: validated.threadId,
       tailSequence: thread.tail_sequence,
-      producerEpoch: thread.producer_epoch,
     });
   });
 
@@ -633,7 +598,6 @@ const makeServices = Effect.fnUntraced(function* () {
               Schema.UndefinedOr(
                 Schema.Struct({
                   tail_sequence: CanonicalSequence,
-                  producer_epoch: ThreadMaterialization.fields.producerEpoch,
                 }),
               ),
             )(rows[0]),
@@ -669,7 +633,10 @@ const makeServices = Effect.fnUntraced(function* () {
     checkpoints: { save: saveCheckpoint, load: loadCheckpoint },
   });
 
-  return Context.make(ThreadStore, threadStore).pipe(Context.add(ThreadImport, transfer.importer));
+  return Context.make(ThreadStore, threadStore).pipe(
+    Context.add(ThreadImport, transfer.importer),
+    Context.add(StorageOwner, journal.state.owner),
+  );
 });
 
 /**
@@ -677,7 +644,7 @@ const makeServices = Effect.fnUntraced(function* () {
  * Crypto authority kept visible in its input channel.
  */
 export const threadStoreLayer: Layer.Layer<
-  ThreadStore | ThreadReader | ThreadImport,
+  ThreadStore | ThreadReader | ThreadImport | StorageOwner,
   DoStorageInitializationError,
   DoStorageConfig | DoStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
 > = ThreadReader.layer().pipe(Layer.provideMerge(Layer.effectContext(makeServices())));
@@ -693,8 +660,6 @@ export const storageConfigLayer = (
   Layer.effect(DoStorageConfig)(
     Schema.decodeEffect(DoStorageConfigValue)({
       observationPollInterval: options.observationPollInterval ?? 25,
-      ownershipLeaseDuration:
-        options.ownershipLeaseDuration ?? Duration.toMillis(DEFAULT_OWNERSHIP_LEASE_DURATION),
       maxStoredValueBytes: options.maxStoredValueBytes ?? DEFAULT_MAX_STORED_VALUE_BYTES,
       verifyOnOpen: options.verifyOnOpen ?? false,
     }).pipe(
@@ -719,12 +684,15 @@ export const storageFailpointLayer = (
 /**
  * A composition-root convenience Layer for canonical Threads inside one Durable Object,
  * built over `ctx.storage`. Durable accepted work is served by the separate SubmissionLedger
- * port; point both at the SAME `ctx.storage` so claims fence the same producer epochs
+ * port; point both at the SAME `ctx.storage` so both share the same scoped storage owner
  * (ADR-0011 D7's "same file" rule, transposed to one object's private database).
  */
 export const layer = (
   options: DoStorageOptions,
-): Layer.Layer<ThreadStore | ThreadReader | ThreadImport, DoStorageInitializationError> =>
+): Layer.Layer<
+  ThreadStore | ThreadReader | ThreadImport | StorageOwner,
+  DoStorageInitializationError
+> =>
   Layer.unwrap(
     Effect.map(DoStorageConfig, (config) =>
       threadStoreLayer.pipe(
@@ -787,6 +755,10 @@ export const exportThread = Effect.fn("DoThreadStore.exportThread")(function* (
 export const invalidate = invalidateOwnedState;
 
 /** Share the Object's transaction gate with owner-local SQL Memory compositions. */
-export const sqlOwnerLayer = Layer.effect(SqlStorageOwner)(
-  Effect.flatMap(SqlClientService.SqlClient, ownedState),
+export const sqlOwnerLayer = Layer.effectContext(
+  Effect.flatMap(SqlClientService.SqlClient, ownedState).pipe(
+    Effect.map((state) =>
+      Context.make(SqlStorageOwner, state).pipe(Context.add(StorageOwner, state.owner)),
+    ),
+  ),
 );

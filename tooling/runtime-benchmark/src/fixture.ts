@@ -19,7 +19,6 @@ import {
   Digest,
   ModelCompleted,
   PersistedJson,
-  ProducerEpoch,
   ProducerId,
   RecordEnvelope,
   RecordId,
@@ -34,7 +33,6 @@ import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunContextPreparation } from "@yielded/agent/run-options";
 import {
   AdmissionRequest,
-  ClaimRequest,
   IdempotencyKey,
   MarkReadyRequest,
   Principal,
@@ -187,7 +185,6 @@ const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number)
   yield* store.materialize(
     ThreadStorage.ThreadMaterialization.make({
       threadId,
-      producerEpoch: Schema.decodeSync(ProducerEpoch)(0),
     }),
   );
   for (let start = 0; start < count; start += 256) {
@@ -261,11 +258,10 @@ const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number)
     const tail = yield* store.inspectTail(ThreadStorage.ThreadTailRequest.make({ threadId }));
 
     yield* store.append(
-      ThreadStorage.FencedAppendRequest.make({
+      ThreadStorage.AppendRequest.make({
         threadId,
         batch,
         expectedTailSequence: tail.tailSequence,
-        producerEpoch: tail.producerEpoch,
       }),
     );
   }
@@ -310,9 +306,6 @@ const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
     );
 
     yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
-    const claim = yield* ledger.claim(ClaimRequest.make({ threadId: seedThread, producerId }));
-
-    if (Option.isNone(claim)) return yield* check(false, "Ledger seed could not claim its row");
     const settlementId = submissionSettlementId(admitted.submissionId);
 
     const payload = yield* Schema.decodeEffect(SubmissionSettledRecord)(
@@ -342,10 +335,8 @@ const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
 
     yield* publishSeedSettlement(
       admitted.submissionId,
-      claim.value.ownershipToken,
-      ThreadStorage.FencedAppendRequest.make({
+      ThreadStorage.AppendRequest.make({
         threadId: seedThread,
-        producerEpoch: claim.value.producerEpoch,
         expectedTailSequence: tail.tailSequence,
         batch: CanonicalBatch.make({
           batchId: submissionSettlementBatchId(admitted.submissionId),

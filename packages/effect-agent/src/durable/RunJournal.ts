@@ -243,16 +243,14 @@ export const toolApprovalDecisionRecordId = (
 ): RecordId => makeRecordId(`approval-decision:${runId}:${turn}:${toolCallId}`);
 
 /**
- * Deterministic identity of a conservative `ModelResponseInterrupted` audit, keyed by the
- * preceding fencing generation. Retirement and repair can also advance generations; the key
- * does not identify an exact missing model call. The one-record batch reuses the same string.
+ * One conservative incomplete-usage marker per Run, regardless of how often recovery occurs.
  */
-export const modelResponseInterruptedRecordId = (runId: RunId, supersededEpoch: number): RecordId =>
-  makeRecordId(`interrupted:${runId}:${supersededEpoch}`);
+export const modelResponseInterruptedRecordId = (runId: RunId): RecordId =>
+  makeRecordId(`interrupted:${runId}`);
 
 /** Deterministic batch identity of one `ModelResponseInterrupted` append (same string). */
-export const modelResponseInterruptedBatchId = (runId: RunId, supersededEpoch: number): BatchId =>
-  makeBatchId(`interrupted:${runId}:${supersededEpoch}`);
+export const modelResponseInterruptedBatchId = (runId: RunId): BatchId =>
+  makeBatchId(`interrupted:${runId}`);
 
 const decodeThreadId = Schema.decodeSync(ThreadId);
 const decodeIdempotencyKey = Schema.decodeSync(IdempotencyKey);

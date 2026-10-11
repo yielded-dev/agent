@@ -480,8 +480,6 @@ export class ContinuityThread extends ThreadObject.make(application, {
   namespaceBinding: "THREADS",
   deploymentId: "context-continuity-cloudflare-v1",
   producerPrefix: "context-eval",
-  ownershipLeaseDuration: 2_000,
-  leaseRenewalInterval: 500,
   alarmBackoffBase: 100,
   alarmBackoffCap: 1_000,
   runtimeFailpoint: (ctx) => (location) =>

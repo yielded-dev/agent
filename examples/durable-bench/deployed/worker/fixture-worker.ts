@@ -26,7 +26,7 @@ async function transfer(storage: DurableObjectStorage, request: Request) {
 
   if (url.pathname === "/export" && target === "yielded")
     return Response.json({
-      archive: await Effect.runPromise(exportCanonical(storage)),
+      archive: await Effect.runPromise(Effect.scoped(exportCanonical(storage))),
       tables: tables(storage.sql),
       fingerprint: await fingerprint(transcript(storage.sql, target)),
     });

@@ -18,21 +18,16 @@ import {
   DefinitionDigests,
   type DeploymentId,
   PersistedJson,
-  type ProducerEpoch,
   type ProducerId,
   RecordEnvelope,
   RecordId,
 } from "../Records.ts";
 import { readRunEvidenceSnapshot } from "../RunContinuation.ts";
 import { runIdForSubmission } from "../RunJournal.ts";
+import type { RunWriter } from "../RunStorage.ts";
 import { LedgerError, type SubmissionSnapshot } from "../SubmissionLedger.ts";
 import { PreparedInput } from "../Subscription.ts";
-import {
-  FencedAppendRequest,
-  ThreadReader,
-  ThreadStore,
-  ThreadTailRequest,
-} from "../ThreadStore.ts";
+import { ThreadReader, ThreadStore, ThreadTailRequest } from "../ThreadStore.ts";
 import {
   deliveryPredecessor,
   decodeWorkCursor,
@@ -171,155 +166,154 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
     }
   });
 
-  const emit = Effect.fnUntraced(function* (request: {
-    readonly submission: SubmissionSnapshot;
-    readonly runId: RunId;
-    readonly producerEpoch: ProducerEpoch;
-    readonly definitions: DefinitionDigests;
-    readonly updateId: IdempotencyKey;
-    readonly value: Schema.Json;
-    readonly maxCount?: number;
-    readonly maxBytes?: number;
-  }) {
-    const value = yield* Schema.encodeEffect(Schema.fromJsonString(PersistedJson))(
-      request.value,
-    ).pipe(
-      Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(PersistedJson))),
-      Effect.mapError(() => rejected("validation")),
-    );
-
-    const updateId = yield* Schema.decodeEffect(IdempotencyKey)(request.updateId).pipe(
-      Effect.mapError(() => rejected("validation")),
-    );
-
-    const digest = yield* digestJson([request.submission.threadId, request.runId, updateId]).pipe(
-      Effect.provideService(Crypto.Crypto, crypto),
-      Effect.mapError(storage),
-    );
-
-    const id = `agent-update:${digest}`;
-    const messageId = Schema.decodeSync(IdempotencyKey)(`worker-update:${digest}`);
-    const maxCount = request.maxCount ?? 32;
-    const maxBytes = request.maxBytes ?? 16_384;
-
-    if (
-      !Number.isSafeInteger(maxCount) ||
-      maxCount < 1 ||
-      !Number.isSafeInteger(maxBytes) ||
-      maxBytes < 1
-    )
-      return yield* rejected("validation");
-
-    for (let attempt = 0; attempt < 32; attempt++) {
-      const history = yield* readRun(request.submission.threadId, request.submission.submissionId);
-
-      const updates = history.records.flatMap(({ record }) =>
-        record.payload._tag === "AgentUpdateEmitted" ? [record.payload] : [],
+  const emit = Effect.fnUntraced(
+    function* (request: {
+      readonly submission: SubmissionSnapshot;
+      readonly runId: RunId;
+      readonly writer: RunWriter;
+      readonly definitions: DefinitionDigests;
+      readonly updateId: IdempotencyKey;
+      readonly value: Schema.Json;
+      readonly maxCount?: number;
+      readonly maxBytes?: number;
+    }) {
+      const value = yield* Schema.encodeEffect(Schema.fromJsonString(PersistedJson))(
+        request.value,
+      ).pipe(
+        Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(PersistedJson))),
+        Effect.mapError(() => rejected("validation")),
       );
 
-      const existing = updates.find(
-        (entry) => entry.update.runId === request.runId && entry.update.updateId === updateId,
+      const updateId = yield* Schema.decodeEffect(IdempotencyKey)(request.updateId).pipe(
+        Effect.mapError(() => rejected("validation")),
       );
 
-      if (existing !== undefined) {
-        if (
-          existing.update.agentId !== request.submission.agentId ||
-          !Schema.toEquivalence(PersistedJson)(existing.update.value, value) ||
-          !Schema.toEquivalence(DefinitionDigests)(existing.definitions, request.definitions)
-        )
-          return yield* rejected("conflict");
-        yield* insert(existing);
+      const digest = yield* digestJson([request.submission.threadId, request.runId, updateId]).pipe(
+        Effect.provideService(Crypto.Crypto, crypto),
+        Effect.mapError(storage),
+      );
 
-        return existing.update;
-      }
-      const own = updates.filter((entry) => entry.update.runId === request.runId);
+      const id = `agent-update:${digest}`;
+      const messageId = Schema.decodeSync(IdempotencyKey)(`worker-update:${digest}`);
+      const maxCount = request.maxCount ?? 32;
+      const maxBytes = request.maxBytes ?? 16_384;
 
       if (
-        own.length >= maxCount ||
-        own.reduce(
-          (total, entry) => total + utf8ByteLength(JSON.stringify(entry.update.value)),
-          0,
-        ) +
-          utf8ByteLength(JSON.stringify(value)) >
-          maxBytes
+        !Number.isSafeInteger(maxCount) ||
+        maxCount < 1 ||
+        !Number.isSafeInteger(maxBytes) ||
+        maxBytes < 1
       )
-        return yield* rejected("capacity");
-      if (
-        history.records.some(
-          ({ record }) =>
-            record.payload._tag === "SubmissionSettled" && record.payload.runId === request.runId,
-        ) ||
-        Option.isNone(history.execution) ||
-        !history.execution.value.operational.some(
-          ({ payload }) => payload._tag === "RunStarted" && payload.runId === request.runId,
-        )
-      )
-        return yield* rejected("identity");
+        return yield* rejected("validation");
 
-      const update = Update.make({
-        schemaVersion: 1,
-        agentId: request.submission.agentId,
-        threadId: request.submission.threadId,
-        runId: request.runId,
-        updateId,
-        sequence: history.updateSequence + 1,
-        value,
-      });
-
-      const prepared = yield* workers.prepareUpdate(update, request.submission, messageId);
-      let delivery: Delivery | undefined;
-
-      if (prepared !== undefined) {
-        if (Option.isNone(deliveries)) return yield* rejected("unavailable");
-        if (
-          utf8ByteLength(JSON.stringify(prepared.envelope)) >
-          deliveries.value.limits.maxEnvelopeBytes
-        )
-          return yield* rejected("capacity");
-        if (
-          (yield* pendingUpdates(request.submission.threadId)) >=
-          (deliveries.value.limits.maxPendingUpdatesPerOwner ?? 32)
-        )
-          return yield* rejected("capacity");
-
-        const predecessor = yield* deliveryPredecessor(
+      for (let attempt = 0; attempt < 32; attempt++) {
+        const history = yield* readRun(
           request.submission.threadId,
-          history.tailSequence,
-        ).pipe(Effect.provideService(ThreadReader, reader), Effect.mapError(storage));
+          request.submission.submissionId,
+        );
 
-        delivery = { ...prepared, ...(predecessor === undefined ? {} : { predecessor }) };
-        const deliveryRecord = yield* prepareDelivery(update, delivery);
+        const updates = history.records.flatMap(({ record }) =>
+          record.payload._tag === "AgentUpdateEmitted" ? [record.payload] : [],
+        );
 
-        const stored = yield* Schema.encodeEffect(Schema.fromJsonString(MessageDeliveryRecord))(
-          deliveryRecord,
-        ).pipe(Effect.mapError(storage));
+        const existing = updates.find(
+          (entry) => entry.update.runId === request.runId && entry.update.updateId === updateId,
+        );
 
-        if (utf8ByteLength(stored) > deliveries.value.maxStoredValueBytes)
+        if (existing !== undefined) {
+          if (
+            existing.update.agentId !== request.submission.agentId ||
+            !Schema.toEquivalence(PersistedJson)(existing.update.value, value) ||
+            !Schema.toEquivalence(DefinitionDigests)(existing.definitions, request.definitions)
+          )
+            return yield* rejected("conflict");
+          yield* insert(existing);
+
+          return existing.update;
+        }
+        const own = updates.filter((entry) => entry.update.runId === request.runId);
+
+        if (
+          own.length >= maxCount ||
+          own.reduce(
+            (total, entry) => total + utf8ByteLength(JSON.stringify(entry.update.value)),
+            0,
+          ) +
+            utf8ByteLength(JSON.stringify(value)) >
+            maxBytes
+        )
           return yield* rejected("capacity");
-      }
+        if (
+          history.records.some(
+            ({ record }) =>
+              record.payload._tag === "SubmissionSettled" && record.payload.runId === request.runId,
+          ) ||
+          Option.isNone(history.execution) ||
+          !history.execution.value.operational.some(
+            ({ payload }) => payload._tag === "RunStarted" && payload.runId === request.runId,
+          )
+        )
+          return yield* rejected("identity");
 
-      const payload = AgentUpdateEmitted.make({
-        update,
-        definitions: request.definitions,
-        ...(delivery === undefined ? {} : { delivery }),
-      });
+        const update = Update.make({
+          schemaVersion: 1,
+          agentId: request.submission.agentId,
+          threadId: request.submission.threadId,
+          runId: request.runId,
+          updateId,
+          sequence: history.updateSequence + 1,
+          value,
+        });
 
-      const tail = yield* store
-        .inspectTail(ThreadTailRequest.make({ threadId: request.submission.threadId }))
-        .pipe(Effect.mapError(storage));
+        const prepared = yield* workers.prepareUpdate(update, request.submission, messageId);
+        let delivery: Delivery | undefined;
 
-      if (tail.producerEpoch !== request.producerEpoch) return yield* storage();
-      if (tail.tailSequence !== history.tailSequence) continue;
-      yield* failpoint.hit("update:before-canonical-append");
+        if (prepared !== undefined) {
+          if (Option.isNone(deliveries)) return yield* rejected("unavailable");
+          if (
+            utf8ByteLength(JSON.stringify(prepared.envelope)) >
+            deliveries.value.limits.maxEnvelopeBytes
+          )
+            return yield* rejected("capacity");
+          if (
+            (yield* pendingUpdates(request.submission.threadId)) >=
+            (deliveries.value.limits.maxPendingUpdatesPerOwner ?? 32)
+          )
+            return yield* rejected("capacity");
 
-      const appended = yield* store
-        .append(
-          FencedAppendRequest.make({
-            threadId: request.submission.threadId,
-            producerEpoch: request.producerEpoch,
-            expectedTailSequence: history.tailSequence,
+          const predecessor = yield* deliveryPredecessor(
+            request.submission.threadId,
+            history.tailSequence,
+          ).pipe(Effect.provideService(ThreadReader, reader), Effect.mapError(storage));
 
-            batch: CanonicalBatch.make({
+          delivery = { ...prepared, ...(predecessor === undefined ? {} : { predecessor }) };
+          const deliveryRecord = yield* prepareDelivery(update, delivery);
+
+          const stored = yield* Schema.encodeEffect(Schema.fromJsonString(MessageDeliveryRecord))(
+            deliveryRecord,
+          ).pipe(Effect.mapError(storage));
+
+          if (utf8ByteLength(stored) > deliveries.value.maxStoredValueBytes)
+            return yield* rejected("capacity");
+        }
+
+        const payload = AgentUpdateEmitted.make({
+          update,
+          definitions: request.definitions,
+          ...(delivery === undefined ? {} : { delivery }),
+        });
+
+        const tail = yield* store
+          .inspectTail(ThreadTailRequest.make({ threadId: request.submission.threadId }))
+          .pipe(Effect.mapError(storage));
+
+        yield* request.writer.checkActive.pipe(Effect.mapError(storage));
+        if (tail.tailSequence !== history.tailSequence) continue;
+        yield* failpoint.hit("update:before-canonical-append");
+
+        const appended = yield* request.writer
+          .append(
+            CanonicalBatch.make({
               batchId: Schema.decodeSync(BatchId)(id),
               producerId: options.producerId,
               records: [
@@ -333,25 +327,34 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
                 }),
               ],
             }),
-          }),
-        )
-        .pipe(
-          Effect.as(true),
-          Effect.catchTag("AppendConflict", () => Effect.succeed(false)),
-          Effect.mapError(storage),
-        );
+          )
+          .pipe(
+            Effect.as(true),
+            Effect.catchTag("AppendConflict", () => Effect.succeed(false)),
+            Effect.mapError(storage),
+          );
 
-      if (!appended) continue;
-      yield* failpoint.hit("update:after-canonical-append");
-      // Canonical progress is observable even when no parent report is selected.
-      yield* wake.notify(request.submission.threadId);
-      yield* insert(payload);
+        if (!appended) continue;
+        yield* failpoint.hit("update:after-canonical-append");
+        // Canonical progress is observable even when no parent report is selected.
+        yield* wake.notify(request.submission.threadId);
+        yield* insert(payload);
 
-      return update;
-    }
+        return update;
+      }
 
-    return yield* storage();
-  });
+      return yield* storage();
+    },
+    (effect, request) =>
+      request.writer.withProgress(effect).pipe(
+        Effect.catchTags({
+          OwnershipLost: () => storage(),
+          ThreadStoreError: () => storage(),
+          ThreadNotMaterialized: () => storage(),
+          AppendConflict: () => storage(),
+        }),
+      ),
+  );
 
   return { emit, repair: insert, repairRun };
 });

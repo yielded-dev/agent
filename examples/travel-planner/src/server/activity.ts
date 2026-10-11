@@ -269,14 +269,7 @@ export const plannerActivity = (
           ...base,
           kind: "failure",
           text: "Model response interrupted",
-          details: [
-            detail("Interruption", {
-              reason: payload.reason,
-              attemptId: payload.attemptId,
-              supersededEpoch: payload.supersededEpoch,
-            }),
-            recordDetails,
-          ],
+          details: [detail("Interruption", { providerUsage: "unavailable" }), recordDetails],
         });
         // An interrupted attempt has no reliable model interval for the replacement.
         boundaries.delete(payload.runId);

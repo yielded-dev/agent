@@ -15,14 +15,13 @@ import {
   DefinitionDigests,
   DeploymentId,
   Digest,
-  ProducerEpoch,
   ProducerId,
   RepairAnnotated,
   UserInputRecorded,
   WorkerOriginRecorded,
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
-import { layer as runStorageLayer } from "@yielded/agent/run-storage";
+import { layer as runStorageLayer, StorageOwner } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   AdmissionRequest,
@@ -38,7 +37,7 @@ import {
   ThreadNotMaterialized,
   ThreadStore,
   ThreadTailRequest,
-  FencedAppendRequest,
+  AppendRequest,
 } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
@@ -54,6 +53,7 @@ class RecoveryReadProbe extends Context.Service<
 const countingThreadStoreLayer = Layer.effectContext(
   Effect.gen(function* () {
     const store = yield* ThreadStore;
+    const owner = yield* StorageOwner;
     const failingSubmission = yield* Ref.make<Option.Option<SubmissionId>>(Option.none());
 
     const counted = ThreadStore.of({
@@ -87,6 +87,7 @@ const countingThreadStoreLayer = Layer.effectContext(
     });
 
     return Context.make(ThreadStore, counted).pipe(
+      Context.add(StorageOwner, owner),
       Context.add(
         RecoveryReadProbe,
         RecoveryReadProbe.of({
@@ -103,7 +104,6 @@ const decodeDeploymentId = Schema.decodeSync(DeploymentId);
 const decodeDigest = Schema.decodeSync(Digest);
 const decodeIdempotencyKey = Schema.decodeSync(IdempotencyKey);
 const decodePrincipal = Schema.decodeSync(Principal);
-const decodeProducerEpoch = Schema.decodeSync(ProducerEpoch);
 const decodeProducerId = Schema.decodeSync(ProducerId);
 const decodeBatchId = Schema.decodeSync(CanonicalBatch.fields.batchId);
 const decodeRecordId = Schema.decodeSync(CanonicalRecord.fields.recordId);
@@ -113,7 +113,6 @@ const AGENT_ID = decodeAgentId("agent-recovery-history-bound");
 const DEPLOYMENT_ID = decodeDeploymentId("deployment-recovery-history-bound");
 const PRODUCER_ID = decodeProducerId("producer-recovery-history-bound");
 const PRINCIPAL = decodePrincipal("principal-recovery-history-bound");
-const FIRST_EPOCH = decodeProducerEpoch(1);
 const ZERO_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
 const DIGEST = decodeDigest("a".repeat(64));
 const DEFINITIONS = DefinitionDigests.make({ agent: DIGEST, model: DIGEST, tools: DIGEST });
@@ -144,7 +143,6 @@ const seedHistory = Effect.fn("RecoveryHistoryTest.seedHistory")(function* (
   yield* store.materialize(
     ThreadMaterialization.make({
       threadId: THREAD_ID,
-      producerEpoch: FIRST_EPOCH,
     }),
   );
 
@@ -178,7 +176,7 @@ const seedHistory = Effect.fn("RecoveryHistoryTest.seedHistory")(function* (
     }
 
     const appended = yield* store.append(
-      FencedAppendRequest.make({
+      AppendRequest.make({
         threadId: THREAD_ID,
         batch: CanonicalBatch.make({
           batchId: decodeBatchId(`history-seed:${start}`),
@@ -186,8 +184,6 @@ const seedHistory = Effect.fn("RecoveryHistoryTest.seedHistory")(function* (
           records: [first, ...rest],
         }),
         expectedTailSequence: tailSequence,
-
-        producerEpoch: FIRST_EPOCH,
       }),
     );
 
@@ -237,11 +233,9 @@ describe("DurableAgentRuntime recovery history", () => {
             const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: THREAD_ID }));
 
             yield* store.append(
-              FencedAppendRequest.make({
+              AppendRequest.make({
                 threadId: THREAD_ID,
                 expectedTailSequence: tail.tailSequence,
-
-                producerEpoch: tail.producerEpoch,
                 batch: CanonicalBatch.make({
                   batchId: submissionInputBatchId(admitted.submissionId),
                   producerId: PRODUCER_ID,

@@ -15,18 +15,15 @@ import {
   MessageDeliveryStore,
   type MessageDeliveryStoreLimits,
 } from "@yielded/agent/message-delivery";
+import { StorageOwner } from "@yielded/agent/run-storage";
 import { ScheduleStore } from "@yielded/agent/schedule";
 import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
-import {
-  DEFAULT_OWNERSHIP_LEASE_DURATION,
-  LedgerError,
-  SubmissionLedger,
-} from "@yielded/agent/submission-ledger";
+import { LedgerError, SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { SubscriptionError, SubscriptionStore, SourcePartition } from "@yielded/agent/subscription";
 import { ThreadImport } from "@yielded/agent/thread-import";
 import type { ThreadExportRequest } from "@yielded/agent/thread-store";
 import { ThreadReader, ThreadStore } from "@yielded/agent/thread-store";
-import { Context, Duration, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import {
@@ -36,7 +33,7 @@ import {
   makePostgresJournal,
   postgresStorageErrors,
   readPostgresStorageHeader,
-  withWriterLockTransaction,
+  makeWriteTransaction,
 } from "./internal/postgres-storage.ts";
 import {
   PostgresStorageError,
@@ -53,7 +50,6 @@ export type PostgresStorageFailpointHandler = (
 const Settings = Schema.Struct({
   observationPollInterval: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   lockTimeout: Schema.Int.check(Schema.isGreaterThan(0)),
-  ownershipLeaseDuration: Schema.Int.check(Schema.isGreaterThan(0)),
   verifyOnOpen: Schema.Boolean,
   schema: Schema.NonEmptyString.check(
     Schema.isMaxLength(63),
@@ -62,14 +58,12 @@ const Settings = Schema.Struct({
 });
 
 export interface PostgresStorageOptions {
-  /** Namespace for qualified storage tables, created under the writer lock when absent. Defaults to public. */
+  /** Namespace for qualified storage tables, created under the owner gate when absent. Defaults to public. */
   readonly schema?: string | undefined;
   /** Journal observation polling interval in milliseconds. Defaults to 25. */
   readonly observationPollInterval?: number | undefined;
-  /** Positive writer-lock timeout in milliseconds. Defaults to 5,000. */
+  /** Positive database lock timeout in milliseconds. Defaults to 5,000. */
   readonly lockTimeout?: number | undefined;
-  /** Ownership lease in milliseconds. Defaults to the SubmissionLedger's lease duration. */
-  readonly ownershipLeaseDuration?: number | undefined;
   /** Audit stored payloads, identities, and batch coverage on open. Defaults to false. */
   readonly verifyOnOpen?: boolean | undefined;
   readonly failpoint?: PostgresStorageFailpointHandler | undefined;
@@ -80,8 +74,6 @@ const settings = (options: PostgresStorageOptions) =>
   Schema.decodeEffect(Settings)({
     observationPollInterval: options.observationPollInterval ?? 25,
     lockTimeout: options.lockTimeout ?? 5_000,
-    ownershipLeaseDuration:
-      options.ownershipLeaseDuration ?? Duration.toMillis(DEFAULT_OWNERSHIP_LEASE_DURATION),
     verifyOnOpen: options.verifyOnOpen ?? false,
     schema: options.schema ?? "public",
   }).pipe(
@@ -119,23 +111,25 @@ const makeThreadStore = ({ config, journal, hitFailpoint }: Journal) =>
     errors: postgresStorageErrors,
     hitFailpoint,
     offsetPrefix: "effect-agent-postgres@1:",
-  });
+  }).pipe(Effect.map((services) => ({ ...services, owner: journal.owner })));
 
 const makeSubmissionLedger = ({ config, journal, hitFailpoint }: Journal) =>
   makeSqlSubmissionLedgerKernel(journal, {
     namespace: config.schema,
     errors: postgresStorageErrors,
     hitFailpoint,
-    ownershipLeaseDuration: config.ownershipLeaseDuration,
     offsetPrefix: "effect-agent-postgres@1:",
     sqlFailure: (operation) => (cause) => {
       const internal = classifyWriteFailure(operation)(cause);
 
       return LedgerError.make({ operation, message: internal.message, cause: internal });
     },
-  });
+  }).pipe(Effect.map((services) => ({ ...services, owner: journal.owner })));
 
-/** Thread history, submissions, and settlement publication over one journal. Requires SqlClient and Crypto. */
+/**
+ * Thread history and submissions over one scoped owner. The application must route each Thread
+ * exclusively to this owner; Postgres does not provide distributed ownership or failover here.
+ */
 export const layerWith = (options: PostgresStorageOptions) =>
   ThreadReader.layer().pipe(
     Layer.provideMerge(
@@ -149,6 +143,7 @@ export const layerWith = (options: PostgresStorageOptions) =>
             Context.add(ThreadImport, threadStore.importer),
             Context.add(SubmissionLedger, submissionLedger.ledger),
             Context.add(SettlementPublisher, submissionLedger.publisher),
+            Context.add(StorageOwner, journal.journal.owner),
           );
         }),
       ),
@@ -164,8 +159,11 @@ export const threadStoreLayer = (options: PostgresStorageOptions = {}) =>
     Layer.provideMerge(
       Layer.effectContext(
         Effect.flatMap(openJournal(options), makeThreadStore).pipe(
-          Effect.map(({ store, importer }) =>
-            Context.make(ThreadStore, store).pipe(Context.add(ThreadImport, importer)),
+          Effect.map(({ store, importer, owner }) =>
+            Context.make(ThreadStore, store).pipe(
+              Context.add(ThreadImport, importer),
+              Context.add(StorageOwner, owner),
+            ),
           ),
         ),
       ),
@@ -213,6 +211,7 @@ export const submissionLedgerLayer = (options: PostgresStorageOptions = {}) =>
       Effect.map((services) =>
         Context.make(SubmissionLedger, services.ledger).pipe(
           Context.add(SettlementPublisher, services.publisher),
+          Context.add(StorageOwner, services.owner),
         ),
       ),
     ),
@@ -227,7 +226,7 @@ export const scheduleStoreLayer = (options: PostgresStorageOptions = {}) =>
       const config = yield* initialize(options);
 
       return yield* makeSqlScheduleStore(
-        withWriterLockTransaction(sql, config.lockTimeout),
+        yield* makeWriteTransaction(sql, config.lockTimeout, config.schema),
         config.schema,
       );
     }),
@@ -247,7 +246,7 @@ export const messageDeliveryStoreLayer = (
 
       return yield* makeSqlMessageDeliveryStore(options.limits, {
         namespace: config.schema,
-        transaction: withWriterLockTransaction(sql, config.lockTimeout),
+        transaction: yield* makeWriteTransaction(sql, config.lockTimeout, config.schema),
       });
     }),
   );
@@ -266,9 +265,9 @@ export const subscriptionStoreLayer = (
 
       const config = yield* initialize(options);
       const sql = yield* SqlClient.SqlClient;
-      const transaction = withWriterLockTransaction(sql, config.lockTimeout);
+      const transaction = yield* makeWriteTransaction(sql, config.lockTimeout, config.schema);
 
-      // Retention DDL must share the writer lock with format initialization.
+      // Retention DDL must share the owner gate with format initialization.
       return yield* transaction(
         makeSqlSubscriptionStore(partition, {
           namespace: config.schema,
@@ -292,7 +291,7 @@ export const activityStoreLayer = (options: PostgresStorageOptions = {}) =>
       const config = yield* settings(options);
 
       return yield* makeSqlActivityStore(
-        withWriterLockTransaction(sql, config.lockTimeout),
+        yield* makeWriteTransaction(sql, config.lockTimeout, config.schema),
         ensurePostgresSchema(config.schema).pipe(
           Effect.mapError(() =>
             ActivityStoreError.make({

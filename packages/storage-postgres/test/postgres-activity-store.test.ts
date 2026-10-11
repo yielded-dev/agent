@@ -225,31 +225,29 @@ describe("Postgres activity processor store", () => {
     ),
   );
 
-  it.effect("serializes competing claims across independent clients", () =>
+  it.effect("serializes competing activity claims through one storage owner", () =>
     withTemporaryDatabase((url) =>
-      Effect.gen(function* () {
-        yield* TestClock.setTime(1_000);
+      runStore(
+        url,
+        Effect.gen(function* () {
+          yield* TestClock.setTime(1_000);
+          const store = yield* ActivityProcessorStore;
 
-        const claim = (owner: string) =>
-          runStore(
-            url,
-            Effect.gen(function* () {
-              const store = yield* ActivityProcessorStore;
+          const outcomes = yield* Effect.all(
+            [
+              store.claim(request("one")).pipe(Effect.result),
+              store.claim(request("two")).pipe(Effect.result),
+            ],
+            { concurrency: 2 },
+          );
 
-              return yield* store.claim(request(owner));
-            }),
-          ).pipe(Effect.result);
+          expect(outcomes.filter(Result.isSuccess)).toHaveLength(1);
+          expect(outcomes.filter(Result.isFailure)).toHaveLength(1);
+          const failure = outcomes.find(Result.isFailure);
 
-        const outcomes = yield* Effect.all([claim("one"), claim("two")], {
-          concurrency: "unbounded",
-        });
-
-        expect(outcomes.filter(Result.isSuccess)).toHaveLength(1);
-        expect(outcomes.filter(Result.isFailure)).toHaveLength(1);
-        const failure = outcomes.find(Result.isFailure);
-
-        expect(failure?.failure).toEqual(ActivityBusy.make({ key, leaseExpiresAt: 11_000 }));
-      }),
+          expect(failure?.failure).toEqual(ActivityBusy.make({ key, leaseExpiresAt: 11_000 }));
+        }),
+      ),
     ),
   );
 

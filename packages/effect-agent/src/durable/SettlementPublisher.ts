@@ -11,17 +11,16 @@ import { runIdForSubmission } from "./RunJournal.ts";
 import {
   LedgerError,
   type OwnershipLost,
-  OwnershipToken,
   type SettlementConflict,
   submissionSettlementBatchId,
   submissionSettlementId,
   submissionSettlementRecordId,
 } from "./SubmissionLedger.ts";
-import { FencedAppendRequest, PreparedAppend, type ThreadStoreFailure } from "./ThreadStore.ts";
+import { AppendRequest, PreparedAppend, type ThreadStoreFailure } from "./ThreadStore.ts";
 
 /** Authority rechecked atomically on every publication attempt, including canonical replay. */
 export const SettlementPublicationAuthority = Schema.Union([
-  Schema.Struct({ _tag: Schema.Literal("Owned"), ownershipToken: OwnershipToken }),
+  Schema.Struct({ _tag: Schema.Literal("Owned") }),
   Schema.Struct({ _tag: Schema.Literal("Joined"), hostSubmissionId: SubmissionId }),
   Schema.Struct({ _tag: Schema.Literal("QueuedAbort") }),
 ]);
@@ -34,7 +33,7 @@ export class SettlementPublication extends Schema.Class<SettlementPublication>(
 )({
   submissionId: SubmissionId,
   authority: SettlementPublicationAuthority,
-  append: FencedAppendRequest,
+  append: AppendRequest,
 }) {}
 
 /** The actual immutable winner and CURRENT tail, including a replay of an earlier publication. */
@@ -56,9 +55,9 @@ export type SettlementPublicationFailure =
 /**
  * One storage owner validates publication authority and appends the terminal fact atomically.
  * Wire preparation precedes the writer; no application callback runs inside its transaction.
- * Existing canonical intent wins an authorized replay. Owned publication always requires a
- * live token, including after a lost acknowledgement; finalization recovers an already settled
- * publication without that token. Joined and queued-abort replay retain their recorded authority.
+ * Existing canonical intent wins an authorized replay. A Run session checks its captured local
+ * capability before this trusted root mutation, including replay. Finalization recovers an
+ * already settled publication from canonical proof. Joined and queued-abort replay retain their recorded authority.
  * Adapters may finalize in this transaction when no recoverable delivery remains; external
  * notification runs outside the transaction.
  */

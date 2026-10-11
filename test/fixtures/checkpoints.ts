@@ -1,6 +1,6 @@
 import { digestJson } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
-import { CanonicalBatch, CanonicalSequence, Digest, ProducerEpoch } from "@yielded/agent/records";
+import { CanonicalBatch, CanonicalSequence, Digest } from "@yielded/agent/records";
 import { AdmissionRequest, SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import {
@@ -13,7 +13,7 @@ import {
   ThreadMaterialization,
   ThreadRead,
   ThreadStore,
-  FencedAppendRequest,
+  AppendRequest,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
 } from "@yielded/agent/thread-store";
@@ -28,7 +28,6 @@ export const historicalCheckpointJson =
 const threadId = Schema.decodeSync(ThreadId)("checkpoint-history");
 const zero = Schema.decodeSync(CanonicalSequence)(0);
 const definitionDigest = Digest.make("0".repeat(64));
-const epoch = Schema.decodeSync(ProducerEpoch)(1);
 
 export const seedCheckpoint = Effect.fn("CheckpointFixture.seed")(function* (historical: boolean) {
   const store = yield* ThreadStore;
@@ -38,7 +37,7 @@ export const seedCheckpoint = Effect.fn("CheckpointFixture.seed")(function* (his
   expect(checkpoints).toBeDefined();
   if (checkpoints === undefined) return;
 
-  yield* store.materialize(ThreadMaterialization.make({ threadId, producerEpoch: epoch }));
+  yield* store.materialize(ThreadMaterialization.make({ threadId }));
   const ledger = yield* SubmissionLedger;
 
   const pending = yield* Schema.decodeEffect(AdmissionRequest)({
@@ -77,11 +76,10 @@ export const seedCheckpoint = Effect.fn("CheckpointFixture.seed")(function* (his
     });
 
     tail = yield* store.append(
-      FencedAppendRequest.make({
+      AppendRequest.make({
         threadId,
         batch,
         expectedTailSequence: tail.lastSequence,
-        producerEpoch: epoch,
       }),
     );
     if (index === 1 && !historical) {

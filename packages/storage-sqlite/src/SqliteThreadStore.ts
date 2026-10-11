@@ -4,14 +4,9 @@ import { makeSqlRunStorage } from "@yielded/agent-storage-sql/sql-run-storage";
 import { makeSqlTransaction, SqlInteger } from "@yielded/agent-storage-sql/sql-storage";
 import { makeSqlThreadImport } from "@yielded/agent-storage-sql/sql-thread-import";
 import { makeSqlThreadStoreKernel } from "@yielded/agent-storage-sql/sql-thread-store";
-import { ThreadId } from "@yielded/agent/identifiers";
-import { ProducerEpoch } from "@yielded/agent/records";
-import { RunStorage } from "@yielded/agent/run-storage";
+import { RunStorage, StorageOwner } from "@yielded/agent/run-storage";
 import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
-import {
-  DEFAULT_OWNERSHIP_LEASE_DURATION,
-  SubmissionLedger,
-} from "@yielded/agent/submission-ledger";
+import { SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { ThreadImport } from "@yielded/agent/thread-import";
 import type { ThreadExportRequest } from "@yielded/agent/thread-store";
 import {
@@ -20,7 +15,7 @@ import {
   ThreadStore,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
-import { Context, Crypto, Duration, Effect, Layer, Schema, Scope } from "effect";
+import { Context, Crypto, Effect, Layer, Schema, Scope } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { CurrentTransformer } from "effect/sql/Statement";
 
@@ -37,11 +32,8 @@ import {
 } from "./internal/sqlite-journal.ts";
 import { sqlFailure } from "./internal/sqlite-ledger-errors.ts";
 import { SqliteStorageConfig, SqliteStorageConfigValue } from "./SqliteStorageConfig.ts";
-import {
-  SqliteStorageCompatibilityError,
-  SqliteStorageCorruptionError,
-  SqliteStorageError,
-} from "./SqliteStorageError.ts";
+import type { SqliteStorageCorruptionError } from "./SqliteStorageError.ts";
+import { SqliteStorageCompatibilityError, SqliteStorageError } from "./SqliteStorageError.ts";
 import {
   SqliteStorageFailpoint,
   type SqliteStorageFailpointHandler,
@@ -58,11 +50,6 @@ export interface SqliteStorageOptions {
    * All stores sharing a client must select the same mode when constructed.
    */
   readonly synchronous?: "FULL" | "NORMAL" | undefined;
-  /**
-   * Submission ownership lease duration in milliseconds (D5). Defaults to
-   * `DEFAULT_OWNERSHIP_LEASE_DURATION` from `@yielded/agent/submission-ledger`.
-   */
-  readonly ownershipLeaseDuration?: number | undefined;
   /**
    * Audit stored payloads, identities, and batch coverage on open. Defaults to false. Full reads validate
    * canonical records; readPrompt trusts write-time validation of the omitted fields.
@@ -89,16 +76,6 @@ const DatabaseHeader = Schema.Tuple([
   Schema.Struct({ user_version: SqlInteger, schema_object_count: SqlInteger }),
 ]);
 
-const RetainedOwnership = Schema.Array(
-  Schema.Struct({
-    thread_id: ThreadId,
-    current_epoch: SqlInteger.pipe(
-      Schema.decodeTo(ProducerEpoch.check(Schema.isLessThan(Number.MAX_SAFE_INTEGER))),
-    ),
-    ownership_epoch: SqlInteger.pipe(Schema.decodeTo(ProducerEpoch)),
-  }),
-);
-
 /**
  * Acquire process-lifetime authority over a dedicated SQLite client before exposing it to a
  * managed host. Open the client with `disableWAL: true`: WAL setup and lock contention must
@@ -106,11 +83,10 @@ const RetainedOwnership = Schema.Array(
  * never change its locking mode or close it while host work is alive.
  *
  * This excludes ALL other database connections, including readers. After compatibility checks,
- * retire retained ownership and advance its Thread epochs in one transaction, then recover
- * through the ordinary ledger protocol. Producer names confer no takeover authority. Journals,
- * receipts, queue states and unresolved external effects are left intact. Managed databases
- * allow only the exact declared transfer-counter triggers. Unknown or altered persistent triggers
- * are rejected before initialization or ownership retirement.
+ * initialize only the fresh supported layout, then recover from durable facts. Scope closure
+ * retires local capabilities; no ownership is restored from the database. Only the exact
+ * declared triggers on Thread storage tables are permitted before any initialization;
+ * application and optional memory tables retain their own schema contracts.
  */
 export const exclusiveHostClientLayer: Layer.Layer<
   SqlClientService.SqlClient | ExclusiveSqliteHost,
@@ -170,58 +146,7 @@ export const exclusiveHostClientLayer: Layer.Layer<
       ),
     );
 
-    // Current-format validation precedes retained ownership mutation.
-    yield* initializeSqliteJournal();
-    yield* sql
-      .withTransaction(
-        Effect.gen(function* () {
-          const rows = yield* sql`
-            SELECT s.thread_id, t.producer_epoch AS current_epoch,
-                   o.producer_epoch AS ownership_epoch
-            FROM effect_agent_submission_ownership o
-            LEFT JOIN effect_agent_submissions s ON s.submission_id = o.submission_id
-            LEFT JOIN effect_agent_threads t ON t.thread_id = s.thread_id
-          `;
-
-          const retained = yield* Schema.decodeUnknownEffect(RetainedOwnership)(rows).pipe(
-            Effect.mapError((error) =>
-              SqliteStorageCorruptionError.make({
-                table: "effect_agent_submission_ownership",
-                rowKey: "exclusive-host-startup",
-                message: error.message,
-              }),
-            ),
-          );
-
-          for (const row of retained) {
-            if (row.ownership_epoch > row.current_epoch) {
-              return yield* SqliteStorageCorruptionError.make({
-                table: "effect_agent_submission_ownership",
-                rowKey: row.thread_id,
-                message: "Retained ownership is ahead of the Thread's producer epoch.",
-              });
-            }
-          }
-
-          yield* sql`
-            UPDATE effect_agent_threads SET producer_epoch = producer_epoch + 1
-            WHERE thread_id IN (
-              SELECT s.thread_id FROM effect_agent_submissions s
-              JOIN effect_agent_submission_ownership o ON o.submission_id = s.submission_id
-            )
-          `;
-          yield* sql`DELETE FROM effect_agent_submission_ownership`;
-        }),
-      )
-      .pipe(
-        Effect.catchTag("SqlError", (cause) =>
-          SqliteStorageError.make({
-            operation: "retire departed host ownership",
-            message: cause.message,
-            cause,
-          }),
-        ),
-      );
+    yield* initializeSqliteJournal().pipe(Effect.provideService(SqlClientService.SqlClient, sql));
 
     return Context.make(SqlClientService.SqlClient, sql).pipe(
       Context.add(ExclusiveSqliteHost, { sql }),
@@ -234,12 +159,14 @@ const makeServices = Effect.fnUntraced(function* () {
   const failpoint = yield* SqliteStorageFailpoint;
   const journal = yield* initializeSqliteJournal();
 
-  return yield* makeSqlThreadStoreKernel(journal, {
+  const services = yield* makeSqlThreadStoreKernel(journal, {
     ...config,
     errors: sqliteErrors,
     hitFailpoint: failpoint.hit,
     offsetPrefix: "effect-agent-sqlite@1:",
   });
+
+  return { ...services, owner: journal.owner };
 });
 
 /**
@@ -249,7 +176,7 @@ const makeServices = Effect.fnUntraced(function* () {
  * fresh file so unsupported files reject before persistent driver configuration changes.
  */
 export const threadStoreLayer: Layer.Layer<
-  ThreadStore | ThreadReader | ThreadImport,
+  ThreadStore | ThreadReader | ThreadImport | StorageOwner,
   SqliteStorageInitializationError,
   SqliteStorageConfig | SqliteStorageFailpoint | SqlClientService.SqlClient | Crypto.Crypto
 > = Layer.effect(
@@ -258,19 +185,22 @@ export const threadStoreLayer: Layer.Layer<
 ).pipe(
   Layer.provideMerge(
     Layer.effectContext(
-      Effect.map(makeServices(), ({ store, importer }) =>
-        Context.make(ThreadStore, store).pipe(Context.add(ThreadImport, importer)),
+      Effect.map(makeServices(), ({ store, importer, owner }) =>
+        Context.make(ThreadStore, store).pipe(
+          Context.add(ThreadImport, importer),
+          Context.add(StorageOwner, owner),
+        ),
       ),
     ),
   ),
+  Layer.provide(exclusiveHostClientLayer),
 );
 
 /**
  * Managed-host storage for an already acquired exclusiveHostClientLayer. The composition
  * root consumes the mutation ports privately and exposes only ThreadReader to application
  * bindings. Its private construction witness binds the exact exclusive client; supplying a
- * generic SqlClient cannot create this owner. A nonexclusive client must use the ordinary
- * ThreadStore and ledger Layers.
+ * generic SqlClient cannot bypass the required exclusive acquisition.
  */
 export const exclusiveRunStorageLayer = Layer.effectContext(
   Effect.gen(function* () {
@@ -303,7 +233,6 @@ export const exclusiveRunStorageLayer = Layer.effectContext(
           {
             errors: sqliteErrors,
             hitFailpoint: failpoint.hit,
-            ownershipLeaseDuration: config.ownershipLeaseDuration,
             offsetPrefix: "effect-agent-sqlite@1:",
             sqlFailure,
           },
@@ -315,6 +244,7 @@ export const exclusiveRunStorageLayer = Layer.effectContext(
           Context.add(SubmissionLedger, services.ledger),
           Context.add(SettlementPublisher, services.publisher),
           Context.add(RunStorage, services.runStorage),
+          Context.add(StorageOwner, services.owner),
         );
       }),
       Context.merge(
@@ -338,8 +268,6 @@ export const storageConfigLayer = (
       observationPollInterval: options.observationPollInterval ?? 25,
       busyTimeout: options.busyTimeout ?? 5_000,
       synchronous: options.synchronous ?? "FULL",
-      ownershipLeaseDuration:
-        options.ownershipLeaseDuration ?? Duration.toMillis(DEFAULT_OWNERSHIP_LEASE_DURATION),
       verifyOnOpen: options.verifyOnOpen ?? false,
     }).pipe(
       Effect.mapError((error) =>
@@ -366,7 +294,10 @@ export const storageFailpointLayer = (
  */
 export const layer = (
   options: SqliteStorageOptions,
-): Layer.Layer<ThreadStore | ThreadReader | ThreadImport, SqliteStorageInitializationError> =>
+): Layer.Layer<
+  ThreadStore | ThreadReader | ThreadImport | StorageOwner,
+  SqliteStorageInitializationError
+> =>
   Layer.unwrap(
     Effect.map(SqliteStorageConfig, (config) =>
       threadStoreLayer.pipe(

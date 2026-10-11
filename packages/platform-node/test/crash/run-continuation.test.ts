@@ -20,13 +20,11 @@ import {
   supplierCounts,
 } from "./fixtures.ts";
 import {
-  CHILD_LEASE_MS,
   assertConvergence,
   expectKilled,
   lookupByKey,
   readLog,
   runWorkerToExit,
-  waitAfterChildExit,
   withCrashSite,
   withHost,
   withRuntime,
@@ -65,7 +63,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               supplierDir: site.supplier,
-              leaseMillis: CHILD_LEASE_MS,
               ...point,
             });
 
@@ -123,7 +120,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               }),
             );
 
-            yield* waitAfterChildExit;
             yield* withHost(
               site.db,
               Effect.gen(function* () {

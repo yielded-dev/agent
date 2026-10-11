@@ -712,7 +712,7 @@ describe("retained Run recovery", () => {
         RecoverySnapshotRequest.make({ submissionId: receipt.submissionId }),
       );
 
-      expect(snapshot.ownership).toBeUndefined();
+      expect(snapshot.hasOwner).toBe(false);
 
       const original = yield* fixtureHistory(
         store,

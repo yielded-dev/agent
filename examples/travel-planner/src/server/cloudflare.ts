@@ -453,14 +453,12 @@ const PlannerLive = Layer.unwrap(
   }),
 );
 
-/** Real durable engine with alarm recovery. Fixtures can supply shorter ownership timings. */
+/** Real durable engine with one local owner and alarm recovery. */
 export const makeTravelPlannerThread = <E>(
   sites: Layer.Layer<TripSiteStore, E, WorkerEnvironment>,
   application = PlannerLive,
-  ownership: Pick<ThreadObject.Options, "ownershipLeaseDuration" | "leaseRenewalInterval"> = {},
 ) => {
   return class extends ThreadObject.make(application.pipe(Layer.provideMerge(sites)), {
-    ...ownership,
     eventLayer: CloudflareTracer.layer,
     namespaceBinding: "PLANNER_THREADS",
     deploymentId: "travel-planner-v1",

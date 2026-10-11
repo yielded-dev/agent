@@ -67,8 +67,7 @@ import {
   ThreadStoreError,
   ThreadTail,
   ThreadTailRequest,
-  FenceRejected,
-  FencedAppendRequest,
+  AppendRequest,
 } from "@yielded/agent/thread-store";
 import {
   ThreadWorkRequest,
@@ -232,7 +231,7 @@ export class StoreMaterializeCall extends Schema.TaggedClass<StoreMaterializeCal
 export class StoreAppendCall extends Schema.TaggedClass<StoreAppendCall>(
   "@effect-agent/storage-cloudflare/StoreAppendCall",
 )("StoreAppend", {
-  request: FencedAppendRequest,
+  request: AppendRequest,
 }) {}
 
 /** Routed one-page `ThreadStore.read`; the page bound is the request's own `limit`. */
@@ -585,7 +584,6 @@ export const PortFailure = Schema.Union([
   WorkDiscoveryUnavailable,
   ThreadNotMaterialized,
   AppendConflict,
-  FenceRejected,
   PortProtocolError,
 ]);
 

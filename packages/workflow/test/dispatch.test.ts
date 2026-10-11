@@ -214,8 +214,8 @@ const makeFixture = Effect.fn("dispatch-test.makeFixture")(function* (ordinaryTo
 
   const ledger = SubmissionLedger.of({
     ...realLedger,
-    claim: (request) =>
-      Ref.update(claims, (count) => count + 1).pipe(Effect.andThen(realLedger.claim(request))),
+    selectHead: (request) =>
+      Ref.update(claims, (count) => count + 1).pipe(Effect.andThen(realLedger.selectHead(request))),
     scanNonterminal: Stream.unwrap(
       Effect.gen(function* () {
         switch (yield* Ref.get(ledgerScanMode)) {
@@ -612,7 +612,7 @@ it.effect("serializes one Thread before taking permits and lets another Thread f
       RecoverySnapshotRequest.make({ submissionId: head.submissionId }),
     );
 
-    expect(before.ownership).toBeDefined();
+    expect(before.hasOwner).toBe(true);
     const follower = yield* fixture.admit("owned-thread", "follower");
     const independent = yield* fixture.admit("independent-thread");
 
@@ -632,7 +632,7 @@ it.effect("serializes one Thread before taking permits and lets another Thread f
       ),
     );
 
-    expect(whileHeld.ownership).toEqual(before.ownership);
+    expect(whileHeld.hasOwner).toBe(true);
     expect(records.some((record) => record.record.payload._tag === "ToolCallUnknown")).toBe(false);
     expect(yield* Ref.get(fixture.toolInvocations)).toBe(1);
     expect((yield* fixture.runtime.inspectSubmissionStatus(independent))._tag).toBe("settled");

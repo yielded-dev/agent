@@ -22,7 +22,7 @@ import {
   LifecyclePublicationFact,
   LifecyclePublicationError,
 } from "@yielded/agent/lifecycle-publication";
-import { CanonicalRecord, CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
+import { CanonicalRecord, CanonicalSequence } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import {
   type AppendConflict,
@@ -37,7 +37,6 @@ import {
   type DoStorageFailpointError,
   DoAppendConflict,
   DoCheckpointConflict,
-  DoFenceRejected,
   DoStorageCorruptionError,
   DoStorageError,
   DoValueBoundExceeded,
@@ -85,7 +84,6 @@ const chunked = <A>(values: ReadonlyArray<A>, size: number): Array<ReadonlyArray
 class ThreadRow extends Schema.Class<ThreadRow>("ThreadRow")({
   thread_id: BoundedIdentifier,
   created_at: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
-  producer_epoch: ProducerEpoch,
   tail_sequence: CanonicalSequence,
 }) {}
 
@@ -230,7 +228,6 @@ export class RawCheckpoint extends Schema.Class<RawCheckpoint>(
 type AppendError =
   | ThreadStoreError
   | DoAppendConflict
-  | DoFenceRejected
   | DoStorageCorruptionError
   | DoStorageError
   | DoStorageFailpointError
@@ -475,8 +472,7 @@ const makeJournal = (
      * `withTransaction` (`ctx.storage.transaction()` under the hood). Within one Durable
      * Object there is exactly ONE writer, so the Node `BEGIN IMMEDIATE` + busy-retry +
      * `SqliteWriteContention` machinery has no analogue here and is deliberately absent.
-     * Ownership-token and epoch checks still run INSIDE the transaction, so fencing atomicity
-     * (DUR-006) is preserved identically.
+     * The shared local owner gate covers the transaction and acknowledgement.
      *
      * Journal write transactions are always top level: the Durable Object client rejects
      * nested transactions, so new journal operations must not wrap this helper inside another
@@ -488,7 +484,7 @@ const makeJournal = (
       <A, E extends { readonly _tag: string }>(
         effect: Effect.Effect<A, E>,
       ): Effect.Effect<A, E | DoStorageError> =>
-        owner.transaction(storageResult(effect, expected)).pipe(
+        state.owner.withMutation(owner.transaction(storageResult(effect, expected))).pipe(
           Effect.provideService(SqlClient.SqlClient, sql),
           Effect.mapError((error) => (isSqlError(error) ? storageError(operation)(error) : error)),
           Effect.tapError(annotateStorageError),
@@ -509,129 +505,88 @@ const makeJournal = (
         });
     });
 
-    const materialize = Effect.fnUntraced(
-      function* (
-        threadId: string,
-        createdAt: string,
-        producerEpoch: ProducerEpoch,
-      ): Effect.fn.Return<
-        void,
-        DoFenceRejected | DoStorageCorruptionError | DoStorageError | DoValueBoundExceeded
-      > {
-        if (threadId.length > MAX_IDENTIFIER_LENGTH) {
-          return yield* DoStorageError.make({
-            operation: "materialize thread",
-            message: "Thread identity exceeds the Durable Object storage bounds.",
-          });
-        }
-        // Refusals and idempotent materialization need no transaction. Recheck before writes.
-        const current = yield* getThread(threadId);
+    const materialize = Effect.fnUntraced(function* (
+      threadId: string,
+      createdAt: string,
+    ): Effect.fn.Return<void, DoStorageCorruptionError | DoStorageError | DoValueBoundExceeded> {
+      if (threadId.length > MAX_IDENTIFIER_LENGTH) {
+        return yield* DoStorageError.make({
+          operation: "materialize thread",
+          message: "Thread identity exceeds the Durable Object storage bounds.",
+        });
+      }
+      // Refusals and idempotent materialization need no transaction. Recheck before writes.
+      const current = yield* getThread(threadId);
 
-        if (current.length === 1 && producerEpoch <= current[0].producer_epoch) {
-          if (producerEpoch === current[0].producer_epoch) {
-            yield* requireTransferState(threadId);
+      if (current.length === 1) {
+        yield* requireTransferState(threadId);
 
-            return;
+        return;
+      }
+      yield* withWriteTransaction("materialize transaction")(
+        Effect.gen(function* () {
+          const existingRows = yield* getThread(threadId);
+
+          const existing = yield* decodeRows(
+            Schema.Array(ThreadRow),
+            "effect_agent_threads",
+            threadId,
+            existingRows,
+          );
+
+          if (existing.length > 1) {
+            return yield* DoStorageCorruptionError.make({
+              table: "effect_agent_threads",
+              rowKey: threadId,
+              message: "A thread primary key returned more than one row.",
+            });
           }
-
-          return yield* DoFenceRejected.make({
-            producerEpoch,
-            actualEpoch: current[0].producer_epoch,
-            message: "The materialization producer epoch is stale.",
-          });
-        }
-        yield* withWriteTransaction(
-          "materialize transaction",
-          (error) => error._tag === "DoFenceRejected",
-        )(
-          Effect.gen(function* () {
-            const existingRows = yield* getThread(threadId);
-
-            const existing = yield* decodeRows(
-              Schema.Array(ThreadRow),
-              "effect_agent_threads",
-              threadId,
-              existingRows,
-            );
-
-            if (existing.length > 1) {
-              return yield* DoStorageCorruptionError.make({
-                table: "effect_agent_threads",
-                rowKey: threadId,
-                message: "A thread primary key returned more than one row.",
-              });
-            }
-            if (existing.length === 0) {
-              yield* sql`
+          if (existing.length === 0) {
+            yield* sql`
             INSERT INTO effect_agent_threads (
               thread_id,
               created_at,
-              tail_sequence,
-              producer_epoch
+              tail_sequence
             ) VALUES (
               ${threadId},
               ${createdAt},
-              0,
-              ${producerEpoch}
+              0
             )
            RETURNING *`.pipe(
-                threads.write,
-                Effect.mapError((error) =>
-                  error._tag === "SqlError" ? storageError("materialize thread")(error) : error,
-                ),
-              );
+              threads.write,
+              Effect.mapError((error) =>
+                error._tag === "SqlError" ? storageError("materialize thread")(error) : error,
+              ),
+            );
 
-              yield* sql`INSERT INTO effect_agent_transfer_state
+            yield* sql`INSERT INTO effect_agent_transfer_state
                 (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count, executions_count)
                 VALUES (${threadId}, 0, 0, 0, 0, 0, 0, 0) ON CONFLICT(thread_id) DO NOTHING`.pipe(
-                Effect.mapError(storageError("initialize transfer counters")),
-              );
+              Effect.mapError(storageError("initialize transfer counters")),
+            );
 
-              yield* work
-                .initialize(
-                  yield* Schema.decodeEffect(ThreadId)(threadId).pipe(Effect.mapError(workFailure)),
-                )
-                .pipe(Effect.mapError(workFailure));
-              if (lifecycle !== undefined)
-                yield* sql`INSERT INTO effect_agent_lifecycle_cursors (thread_id, through_sequence)
+            yield* work
+              .initialize(
+                yield* Schema.decodeEffect(ThreadId)(threadId).pipe(Effect.mapError(workFailure)),
+              )
+              .pipe(Effect.mapError(workFailure));
+            if (lifecycle !== undefined)
+              yield* sql`INSERT INTO effect_agent_lifecycle_cursors (thread_id, through_sequence)
               VALUES (${threadId}, 0) RETURNING *`.pipe(
-                  cursors.write,
-                  Effect.mapError((error) =>
-                    error._tag === "SqlError"
-                      ? storageError("initialize lifecycle source")(error)
-                      : error,
-                  ),
-                );
-
-              return;
-            }
-            if (producerEpoch < existing[0].producer_epoch) {
-              return yield* DoFenceRejected.make({
-                producerEpoch,
-                actualEpoch: existing[0].producer_epoch,
-                message: `Producer epoch ${producerEpoch} is stale; current epoch is ${existing[0].producer_epoch}.`,
-              });
-            }
-            yield* requireTransferState(threadId);
-            if (producerEpoch > existing[0].producer_epoch) {
-              yield* sql`
-            UPDATE effect_agent_threads
-            SET producer_epoch = ${producerEpoch}
-            WHERE thread_id = ${threadId}
-           RETURNING *`.pipe(
-                threads.write,
+                cursors.write,
                 Effect.mapError((error) =>
                   error._tag === "SqlError"
-                    ? storageError("advance materialization epoch")(error)
+                    ? storageError("initialize lifecycle source")(error)
                     : error,
                 ),
               );
-            }
-          }),
-        );
-      },
-      withStorageSpan("DoJournal.materialize", (error) => error._tag === "DoFenceRejected"),
-    );
+
+            return;
+          }
+          yield* requireTransferState(threadId);
+        }),
+      );
+    }, withStorageSpan("DoJournal.materialize"));
 
     const getThread = Effect.fnUntraced(function* (threadId: string) {
       return (yield* threads
@@ -712,14 +667,6 @@ const makeJournal = (
           message: `Expected exactly one row but found ${threadRows.length}.`,
         });
 
-      if (request.producerEpoch !== thread.producer_epoch) {
-        return yield* DoFenceRejected.make({
-          producerEpoch: request.producerEpoch,
-          actualEpoch: thread.producer_epoch,
-          message: `Producer epoch ${request.producerEpoch} is not the current epoch ${thread.producer_epoch}.`,
-        });
-      }
-
       const prefix = recordCache.prefix(request.threadId, thread.tail_sequence);
 
       const replay = yield* executionConflict(executions.replay(request));
@@ -745,6 +692,8 @@ const makeJournal = (
           replayed: true,
         });
       }
+
+      yield* executionConflict(executions.rejectSuperseded(request));
 
       if (request.expectedTailSequence !== thread.tail_sequence) {
         return yield* DoAppendConflict.make({
@@ -889,8 +838,7 @@ const makeJournal = (
         yield* sql`
           UPDATE effect_agent_threads
           SET
-            tail_sequence = ${lastSequence},
-            producer_epoch = ${request.producerEpoch}
+            tail_sequence = ${lastSequence}
           WHERE thread_id = ${request.threadId}
          RETURNING *`.pipe(
           threads.write,
@@ -999,23 +947,16 @@ const makeJournal = (
         // The facade already read this tail. Reject a known stale writer without opening a
         // transaction; a matching tail is still checked atomically below. Replays precede tail
         // conflicts, preserving retry identity even after the log has advanced.
-        if (request.producerEpoch !== observed.producer_epoch) {
-          return yield* DoFenceRejected.make({
-            producerEpoch: request.producerEpoch,
-            actualEpoch: observed.producer_epoch,
-            message: "The append producer epoch is not current.",
-          });
-        }
-        if (request.expectedTailSequence !== observed.tail_sequence) {
+        if (request.records.length > 0 && request.expectedTailSequence !== observed.tail_sequence) {
           const batches = yield* sql`
           SELECT batch_id FROM effect_agent_canonical_batches
           WHERE thread_id = ${request.threadId} AND batch_id = ${JSON.stringify(request.batchId)}
-          UNION ALL SELECT batch_id FROM effect_agent_execution_receipts
-          WHERE thread_id = ${request.threadId} AND batch_id = ${request.batchId}
+          UNION ALL SELECT last_commit_id FROM effect_agent_executions
+          WHERE thread_id = ${request.threadId} AND last_commit_id = ${request.batchId}
           LIMIT 1
         `.pipe(Effect.mapError(storageError("preflight append replay")));
 
-          // A possible replay still checks the current epoch and exact content in the transaction.
+          // A possible replay still checks exact content in the transaction.
           if (batches.length === 0) {
             return yield* DoAppendConflict.make({
               reason: "tail",

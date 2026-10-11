@@ -71,16 +71,16 @@ import {
 
 export { RunContinuation, RunContextRecorded, EvidenceReference } from "./Records.ts";
 
-/** The fenced writer selected at the owning resource boundary, never execution authority. */
+/** Writer and progress sequencer selected at the local owner's resource boundary. */
 export class CurrentRunWriter extends Context.Service<
   CurrentRunWriter,
-  Pick<RunWriter, "threadId" | "tail" | "append">
+  Pick<RunWriter, "threadId" | "tail" | "append" | "withProgress">
 >()("@effect-agent/thread/CurrentRunWriter") {}
 
 /** Settlement publication keeps its original atomic authority and claim-scoped implementation. */
 export class CurrentRunSettlement extends Context.Service<
   CurrentRunSettlement,
-  Pick<RunStorageSession, "threadId" | "tail" | "publishSettlement">
+  Pick<RunStorageSession, "threadId" | "tail" | "publishSettlement" | "withProgress">
 >()("@effect-agent/thread/CurrentRunSettlement") {}
 
 /** Canonical reads pinned to the append owner's current transaction or mutation gate. */
@@ -1561,78 +1561,90 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     return (yield* writer.tail).sequence;
   });
 
-  const commitCaptured = Effect.fnUntraced(function* (batch: CanonicalBatch) {
-    const writer = yield* CurrentRunWriter;
+  const commitCaptured = Effect.fnUntraced(
+    function* (batch: CanonicalBatch) {
+      const writer = yield* CurrentRunWriter;
 
-    for (let retries = 0; ; retries++) {
-      const prepared = yield* prepare(batch, yield* tail).pipe(
-        Effect.catchTag("ThreadNotMaterialized", (cause) =>
-          failure("Selected Run disappeared during progress publication", cause),
-        ),
-      );
+      for (let retries = 0; ; retries++) {
+        const prepared = yield* prepare(batch, yield* tail).pipe(
+          Effect.catchTag("ThreadNotMaterialized", (cause) =>
+            failure("Selected Run disappeared during progress publication", cause),
+          ),
+        );
 
-      const result = yield* writer.append(prepared.batch, prepared.executions).pipe(
-        Effect.catchTag("AppendConflict", (conflict) => {
-          if (conflict.reason !== "tail" || retries >= 8) return Effect.fail(conflict);
-          cached.clear();
+        const result = yield* writer.append(prepared.batch, prepared.executions).pipe(
+          Effect.catchTag("AppendConflict", (conflict) => {
+            if (conflict.reason !== "tail" || retries >= 8) return Effect.fail(conflict);
+            cached.clear();
 
-          return Effect.succeed(undefined);
-        }),
-      );
+            return Effect.succeed(undefined);
+          }),
+        );
 
-      if (result === undefined) continue;
+        if (result === undefined) continue;
 
-      if (result.replayed) cached.clear();
-      else prepared.accept();
+        if (result.replayed) cached.clear();
+        else prepared.accept();
 
-      return result;
-    }
-  }, gate.withPermits(1));
+        return result;
+      }
+    },
+    (effect) =>
+      Effect.flatMap(CurrentRunWriter, (writer) =>
+        writer.withProgress(gate.withPermits(1)(effect)),
+      ),
+  );
 
-  const publishCaptured = Effect.fnUntraced(function* (batch: CanonicalBatch) {
-    const publisher = yield* CurrentRunSettlement;
+  const publishCaptured = Effect.fnUntraced(
+    function* (batch: CanonicalBatch) {
+      const publisher = yield* CurrentRunSettlement;
 
-    if (publisher.threadId !== threadId)
-      return yield* failure("Settlement publisher belongs to another Thread");
+      if (publisher.threadId !== threadId)
+        return yield* failure("Settlement publisher belongs to another Thread");
 
-    for (let retries = 0; ; retries++) {
-      const prepared = yield* prepare(batch, (yield* publisher.tail).sequence).pipe(
-        Effect.catchTag("ThreadNotMaterialized", (cause) =>
-          failure("Selected Run disappeared during progress publication", cause),
-        ),
-      );
+      for (let retries = 0; ; retries++) {
+        const prepared = yield* prepare(batch, (yield* publisher.tail).sequence).pipe(
+          Effect.catchTag("ThreadNotMaterialized", (cause) =>
+            failure("Selected Run disappeared during progress publication", cause),
+          ),
+        );
 
-      const first = prepared.batch.records[0];
+        const first = prepared.batch.records[0];
 
-      if (first === undefined)
-        return yield* failure("Settlement must publish a retained terminal fact");
+        if (first === undefined)
+          return yield* failure("Settlement must publish a retained terminal fact");
 
-      const terminalBatch = yield* CanonicalBatch.makeEffect({
-        ...prepared.batch,
-        records: [first, ...prepared.batch.records.slice(1)],
-      }).pipe(
-        Effect.mapError((cause) =>
-          failure("Settlement must publish a retained terminal fact", cause),
-        ),
-      );
+        const terminalBatch = yield* CanonicalBatch.makeEffect({
+          ...prepared.batch,
+          records: [first, ...prepared.batch.records.slice(1)],
+        }).pipe(
+          Effect.mapError((cause) =>
+            failure("Settlement must publish a retained terminal fact", cause),
+          ),
+        );
 
-      const result = yield* publisher.publishSettlement(terminalBatch, prepared.executions).pipe(
-        Effect.catchTag("AppendConflict", (conflict) => {
-          if (conflict.reason !== "tail" || retries >= 8) return Effect.fail(conflict);
-          cached.clear();
+        const result = yield* publisher.publishSettlement(terminalBatch, prepared.executions).pipe(
+          Effect.catchTag("AppendConflict", (conflict) => {
+            if (conflict.reason !== "tail" || retries >= 8) return Effect.fail(conflict);
+            cached.clear();
 
-          return Effect.succeed(undefined);
-        }),
-      );
+            return Effect.succeed(undefined);
+          }),
+        );
 
-      if (result === undefined) continue;
+        if (result === undefined) continue;
 
-      if (result.replayed) cached.clear();
-      else prepared.accept();
+        if (result.replayed) cached.clear();
+        else prepared.accept();
 
-      return result;
-    }
-  }, gate.withPermits(1));
+        return result;
+      }
+    },
+    (effect) =>
+      Effect.flatMap(CurrentRunSettlement, (writer) =>
+        writer.withProgress(gate.withPermits(1)(effect)),
+      ),
+  );
 
   const commit = (batch: CommitBatch) => captureFacts(batch).pipe(Effect.flatMap(commitCaptured));
 

@@ -5,6 +5,7 @@ import {
   ApprovalDecisionCommand,
   IdempotencyKey,
   SubmissionLedger,
+  RecoverySnapshotRequest,
 } from "@yielded/agent/submission-ledger";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { Clock, Effect, Option, Schema } from "effect";
@@ -13,7 +14,6 @@ import { TestClock } from "effect/testing";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { ThreadMaintenance, ThreadMutationGate } from "../src/Alarm.ts";
-import { CloudflareDurableRuntimeConfig } from "../src/CloudflareConfig.ts";
 import { CloudflareThreadClient } from "../src/CloudflareThreadClient.ts";
 import * as DueQueue from "../src/internal/due-queue.ts";
 import {
@@ -390,7 +390,7 @@ describe("durable host publication", () => {
         Effect.sync(entered.resolve).pipe(Effect.andThen(Effect.promise(() => release.promise))),
       );
       lifecyclePublicationControls.set(thread, { release: acknowledge.promise });
-      await submit(thread, bookDefinition);
+      const receipt = await submit(thread, bookDefinition);
       const running = alarm(thread);
       const interrupted = running.catch(() => undefined);
 
@@ -437,49 +437,24 @@ describe("durable host publication", () => {
         const dormant = await startLane();
         const heldCanonical = await readCanonical(thread, namespace);
 
-        const ownership = () =>
-          runInDurableObject(stub(thread), (_, state) =>
-            state.storage.sql
-              .exec<{ attempt_id: string; lease_expires_at: string }>(
-                "SELECT attempt_id, lease_expires_at FROM effect_agent_submission_ownership",
-              )
-              .toArray(),
+        const hasOwner = () =>
+          runInDurableObject(stub(thread), (instance) =>
+            instance[DurableObject.RunSymbol](
+              Effect.gen(function* () {
+                const ledger = yield* SubmissionLedger;
+
+                const snapshot = yield* ledger.loadRecoverySnapshot(
+                  RecoverySnapshotRequest.make({ submissionId: receipt.submissionId }),
+                );
+
+                return snapshot.hasOwner;
+              }),
+            ),
           );
 
-        const heldOwnership = await ownership();
-
-        const renewalInterval = await runInDurableObject(stub(thread), (instance) =>
-          instance[DurableObject.RunSymbol](
-            Effect.map(CloudflareDurableRuntimeConfig, (config) => config.leaseRenewalInterval),
-          ),
-        );
-
-        expect(heldOwnership).toHaveLength(1);
-        const held = heldOwnership[0];
-
-        if (held === undefined) throw new Error("Expected a held native Attempt");
-        let leaseExpiresAt = held.lease_expires_at;
-
-        for (let renewal = 0; renewal < 12; renewal++) {
-          await advance(renewalInterval);
-          await vi.waitFor(async () => {
-            const renewed = await ownership();
-
-            expect(renewed.map((row) => row.attempt_id)).toEqual(
-              heldOwnership.map((row) => row.attempt_id),
-            );
-            const current = renewed[0];
-
-            if (current === undefined) throw new Error("Expected a renewed native Attempt");
-            expect(Date.parse(current.lease_expires_at)).toBeGreaterThan(
-              Date.parse(leaseExpiresAt),
-            );
-            leaseExpiresAt = current.lease_expires_at;
-          });
-        }
-        expect((await ownership()).map((row) => row.attempt_id)).toEqual(
-          heldOwnership.map((row) => row.attempt_id),
-        );
+        expect(await hasOwner()).toBe(true);
+        await advance(31_000);
+        expect(await hasOwner()).toBe(true);
         expect(await readCanonical(thread, namespace)).toEqual(heldCanonical);
         expect(
           await runInDurableObject(
@@ -703,13 +678,6 @@ describe("durable host publication", () => {
       expect(state.dirty).toBeGreaterThan(state.processed);
       expect(await scheduledAlarm(thread, namespace)).not.toBeNull();
 
-      const leaseDuration = await runInDurableObject(stub(thread), (instance) =>
-        instance[DurableObject.RunSymbol](
-          Effect.map(CloudflareDurableRuntimeConfig, (config) => config.ownershipLeaseDuration),
-        ),
-      );
-
-      await advance(leaseDuration);
       await drainAlarmsUntil(thread, allSettled(thread, namespace), { namespace });
       await quiesce(thread, advance);
       expect((await cursor(thread)).tail).toBe(

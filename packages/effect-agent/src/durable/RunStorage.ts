@@ -1,8 +1,9 @@
 import type { Scope } from "effect";
-import { Cause, Clock, Context, Duration, Effect, Layer, Option, Schema, Semaphore } from "effect";
+import { Cause, Context, Effect, Layer, Option, Schema } from "effect";
 
 import type { SubmissionId, ThreadId } from "../core/Identifiers.ts";
-import type { CanonicalBatch, CanonicalSequence, ProducerEpoch } from "./Records.ts";
+import { StorageOwner } from "./internal/StorageOwner.ts";
+import type { CanonicalBatch, CanonicalSequence } from "./Records.ts";
 import {
   SettlementPublication,
   type SettlementPublicationFailure,
@@ -20,27 +21,34 @@ import {
   MarkInputAppliedRequest,
   MarkJoinedRequest,
   OwnershipLost,
-  type OwnershipToken,
-  ReleaseOwnershipRequest,
-  RenewOwnershipRequest,
   RevertJoiningRequest,
+  SettlementConflict,
   SubmissionLedger,
   SuspendRequest,
   type SuspensionReason,
 } from "./SubmissionLedger.ts";
 import {
   type AppendResult,
+  AppendConflict,
+  AppendRequest,
   type CommitBatch,
   type ExecutionUpdate,
-  FenceRejected,
-  FencedAppendRequest,
+  PreparedAppend,
   ThreadMaterialization,
-  type ThreadNotMaterialized,
+  ThreadNotMaterialized,
   ThreadStore,
   ThreadStoreError,
   type ThreadStoreFailure,
   ThreadTailRequest,
 } from "./ThreadStore.ts";
+
+export {
+  StorageOwner,
+  makeStorageOwner,
+  type MutationGate,
+  type OwnerGeneration,
+  type StorageOwnerService,
+} from "./internal/StorageOwner.ts";
 
 export const RunChildBudgetReservation = Schema.Struct({
   reservationId: ChildBudgetReservationRequest.fields.reservationId,
@@ -58,9 +66,9 @@ export const RunChildAttachment = Schema.Struct({
 
 export type RunChildAttachment = typeof RunChildAttachment.Type;
 
-/** Commands bound to one ownership period. Callers never reconstruct its rotating token. */
+/** Commands bound to one local scoped owner. No authority is transported in their values. */
 export interface RunOwnership {
-  readonly release: Effect.Effect<void, OwnershipLost | LedgerError>;
+  readonly release: Effect.Effect<void>;
   readonly markInputApplied: (
     marker: InputAppliedMarker,
   ) => ReturnType<SubmissionLedger["Service"]["markInputApplied"]>;
@@ -73,7 +81,7 @@ export interface RunOwnership {
   ) => ReturnType<SubmissionLedger["Service"]["markJoined"]>;
   readonly revertJoining: (
     submissionId: SubmissionId,
-  ) => ReturnType<SubmissionLedger["Service"]["revertJoining"]>;
+  ) => Effect.Effect<void, LedgerError | OwnershipLost>;
   readonly suspend: (
     reason: SuspensionReason,
   ) => ReturnType<SubmissionLedger["Service"]["suspend"]>;
@@ -87,33 +95,29 @@ export interface RunOwnership {
 
 export interface RunWriter {
   readonly threadId: ThreadId;
-  readonly producerEpoch: ProducerEpoch;
+  /** Opaque cache identity for this local writer lifetime; never portable authority. */
+  readonly generation: object;
+  readonly refresh: Effect.Effect<void, ThreadStoreFailure>;
+  readonly withProgress: <A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | ThreadStoreFailure, R>;
   readonly tail: Effect.Effect<{ readonly sequence: CanonicalSequence }>;
+  /** Uncertain commit failures close this session before another command may enter. */
   readonly append: (
     batch: CommitBatch,
     executions?: ReadonlyArray<ExecutionUpdate>,
   ) => Effect.Effect<AppendResult, ThreadStoreFailure>;
-  /** Recheck the writer fence after effectful preflight, before dispatch; append no record. */
-  readonly checkFence: Effect.Effect<
-    void,
-    ThreadStoreError | ThreadNotMaterialized | FenceRejected
-  >;
+  /** Recheck the captured local capability after preflight, immediately before effect dispatch. */
+  readonly checkActive: Effect.Effect<void, ThreadStoreFailure>;
 }
 
-/** A claim-scoped owner; a committed suspension ends it, while resume-immediately does not. */
 export interface RunStorageSession extends RunWriter, RunOwnership {
+  readonly claim: Claim;
+  readonly refresh: Effect.Effect<void, ThreadStoreFailure>;
   readonly publishSettlement: (
     batch: CanonicalBatch,
     executions?: ReadonlyArray<ExecutionUpdate>,
   ) => Effect.Effect<SettlementPublicationResult, SettlementPublicationFailure>;
-  /** Initial grant for binding identity. Its token is not an authority for subsequent commands. */
-  readonly claim: Claim;
-  /** Rebind once after initialization's administrative canonical writes. */
-  readonly refresh: Effect.Effect<void, ThreadStoreError | ThreadNotMaterialized | FenceRejected>;
-  readonly renew: Effect.Effect<void, OwnershipLost | LedgerError>;
-  readonly maintain: (
-    renewalInterval: Duration.Duration,
-  ) => Effect.Effect<never, OwnershipLost | LedgerError>;
 }
 
 export class RunStorage extends Context.Service<
@@ -130,207 +134,161 @@ export class RunStorage extends Context.Service<
   }
 >()("@effect-agent/thread/RunStorage") {}
 
-/** Administrative recovery binds its separately acquired authority once, outside active Runs. */
-export const bindRunOwnership = Effect.fnUntraced(function* (
-  threadId: ThreadId,
-  submissionId: SubmissionId,
-  token: Effect.Effect<OwnershipToken>,
-) {
-  const ledger = yield* SubmissionLedger;
+const isDefiniteWriteRefusal = Schema.is(
+  Schema.Union([AppendConflict, OwnershipLost, SettlementConflict, ThreadNotMaterialized]),
+);
 
-  return {
-    release: Effect.flatMap(token, (ownershipToken) =>
-      ledger.releaseOwnership(ReleaseOwnershipRequest.make({ submissionId, ownershipToken })),
+/** The writer gate remains held until uncertain results have revoked the captured capability. */
+const closeOnUncertainWrite = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+  close: Effect.Effect<void>,
+) =>
+  effect.pipe(
+    Effect.onError((cause) =>
+      cause.reasons.length > 0 &&
+      cause.reasons.every(
+        (reason) => Cause.isFailReason(reason) && isDefiniteWriteRefusal(reason.error),
+      )
+        ? Effect.void
+        : close,
     ),
-    markInputApplied: (marker) =>
-      Effect.flatMap(token, (ownershipToken) =>
-        ledger.markInputApplied(
-          MarkInputAppliedRequest.make({ ...marker, submissionId, ownershipToken }),
-        ),
-      ),
-    claimJoining: (maxCount) =>
-      Effect.flatMap(token, (ownershipToken) =>
-        ledger.claimJoining(
-          ClaimJoiningRequest.make({
-            threadId,
-            hostSubmissionId: submissionId,
-            ownershipToken,
-            maxCount,
-          }),
-        ),
-      ),
-    markJoined: (joinedSubmissionId, marker) =>
-      Effect.flatMap(token, (ownershipToken) =>
-        ledger.markJoined(
-          MarkJoinedRequest.make({ ...marker, submissionId: joinedSubmissionId, ownershipToken }),
-        ),
-      ),
-    revertJoining: (joinedSubmissionId) =>
-      Effect.flatMap(token, (ownershipToken) =>
-        ledger.revertJoining(
-          RevertJoiningRequest.make({
-            submissionId: joinedSubmissionId,
-            guard: { hostSubmissionId: submissionId, ownershipToken },
-          }),
-        ),
-      ),
-    suspend: (reason) =>
-      Effect.flatMap(token, (ownershipToken) =>
-        ledger.suspend(SuspendRequest.make({ submissionId, ownershipToken, reason })),
-      ),
-    reserveChildBudget: (request) =>
-      Effect.flatMap(token, (ownershipToken) =>
-        ledger.reserveChildBudget(
-          ChildBudgetReservationRequest.make({
-            ...request,
-            parentSubmissionId: submissionId,
-            ownershipToken,
-          }),
-        ),
-      ),
-    attachChildToReservation: (request) =>
-      Effect.flatMap(token, (ownershipToken) =>
-        ledger.attachChildToReservation(
-          AttachChildToReservationRequest.make({ ...request, ownershipToken }),
-        ),
-      ),
-  } satisfies RunOwnership;
-});
+  );
 
-/** Fenced canonical writer shared by generic Run sessions and administrative repair owners. */
-export const makeRunWriter = Effect.fnUntraced(function* (
+const makeWriter = Effect.fnUntraced(function* (
   threadId: ThreadId,
-  producerEpoch: ProducerEpoch,
+  checkActive: Effect.Effect<void, ThreadStoreFailure>,
+  generation: object,
+  closeOnUncertainResult: Effect.Effect<void>,
 ) {
   const store = yield* ThreadStore;
+  const owner = yield* StorageOwner;
   const initial = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
-  const gate = yield* Semaphore.make(1);
   let tail = { sequence: initial.tailSequence };
 
-  const refresh = gate.withPermits(1)(
+  const refresh = owner.withMutation(
     Effect.gen(function* () {
+      yield* checkActive;
       const current = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
-      if (current.producerEpoch !== producerEpoch)
-        return yield* FenceRejected.make({
-          threadId,
-          attemptedEpoch: producerEpoch,
-          actualEpoch: current.producerEpoch,
-        });
       tail = { sequence: current.tailSequence };
     }),
   );
 
   const append: RunWriter["append"] = (batch, executions) =>
-    gate.withPermits(1)(
-      Effect.gen(function* () {
-        for (let retries = 0; ; retries++) {
-          const result = yield* store
-            .append(
-              FencedAppendRequest.make({
-                threadId,
-                producerEpoch,
-                batch,
-                ...(executions === undefined ? {} : { executions }),
-                expectedTailSequence: tail.sequence,
-              }),
-            )
-            .pipe(
-              Effect.catchTag("AppendConflict", (conflict) => {
-                // Same-epoch administrative repair may advance the tail. Only a failed tail CAS
-                // permits retry; epoch, batch-content, and record-identity failures still propagate.
-                if (
-                  conflict.reason !== "tail" ||
-                  conflict.actualTailSequence === undefined ||
-                  retries >= 8
+    Effect.gen(function* () {
+      const captured = yield* PreparedAppend.capture(
+        AppendRequest.make({
+          threadId,
+          expectedTailSequence: tail.sequence,
+          batch,
+          ...(executions === undefined ? {} : { executions }),
+        }),
+      ).pipe(
+        Effect.mapError((cause) =>
+          ThreadStoreError.make({
+            operation: "capture append",
+            message: cause.message,
+            cause,
+          }),
+        ),
+      );
+
+      return yield* owner.withProgress(
+        threadId,
+        owner.withMutation(
+          Effect.gen(function* () {
+            yield* checkActive;
+            for (let retries = 0; ; retries++) {
+              const result = yield* store
+                .append(
+                  AppendRequest.make({
+                    ...captured,
+                    expectedTailSequence: tail.sequence,
+                  }),
                 )
-                  return Effect.fail(conflict);
-                tail = { sequence: conflict.actualTailSequence };
+                .pipe(
+                  Effect.catchTag("AppendConflict", (conflict) => {
+                    if (
+                      conflict.reason !== "tail" ||
+                      conflict.actualTailSequence === undefined ||
+                      retries >= 8
+                    )
+                      return Effect.fail(conflict);
+                    tail = { sequence: conflict.actualTailSequence };
+                    if (captured.executions !== undefined) return Effect.fail(conflict);
 
-                // Progress must be rebuilt from the winning revision, never resent verbatim.
-                if (executions !== undefined) return Effect.fail(conflict);
+                    return Effect.succeed(undefined);
+                  }),
+                );
 
-                return Effect.succeed(undefined);
-              }),
-            );
+              if (result === undefined) continue;
+              // A historical replay returns its original coordinates, not today's canonical tail.
+              if (result.replayed) yield* refresh;
+              else tail = { sequence: result.lastSequence };
 
-          if (result === undefined) continue;
-          tail = { sequence: result.lastSequence };
+              return result;
+            }
+          }).pipe((effect) => closeOnUncertainWrite(effect, closeOnUncertainResult)),
+        ),
+      );
+    });
 
-          return result;
-        }
-      }),
-    );
-
-  return {
+  const writer = {
     threadId,
-    producerEpoch,
+    generation,
+    withProgress: <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      owner.withProgress(threadId, Effect.andThen(checkActive, effect)),
     tail: Effect.sync(() => tail),
     append,
+    checkActive: owner.withMutation(checkActive),
     refresh,
-    checkFence: refresh,
+  };
+
+  return {
+    writer,
+    adoptTail: (sequence: CanonicalSequence) => {
+      tail = { sequence };
+    },
   };
 });
 
-/** Explicit assembly for adapters whose own transactions validate every mutation. */
+/** Trusted administrative writer sharing the physical owner's gate and lifetime. */
+export const makeRunWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
+  const owner = yield* StorageOwner;
+
+  return (yield* makeWriter(
+    threadId,
+    Effect.suspend(() =>
+      owner.isClosed()
+        ? Effect.fail(
+            ThreadStoreError.make({
+              operation: "write Thread",
+              message: "Storage owner is closed",
+            }),
+          )
+        : Effect.void,
+    ),
+    owner.identity,
+    Effect.void,
+  )).writer;
+});
+
+/** The same scoped single-owner protocol is used by every adapter. */
 export const make = Effect.gen(function* () {
   const ledger = yield* SubmissionLedger;
   const store = yield* ThreadStore;
   const publisher = yield* SettlementPublisher;
+  const owner = yield* StorageOwner;
 
-  const claim = Effect.fn("RunStorage.claim")((request: ClaimRequest) =>
+  const claim: RunStorage["Service"]["claim"] = (request) =>
     Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
-        const acquiredAt = yield* Clock.currentTimeMillis;
-        const granted = yield* ledger.claim(request);
+        const granted = yield* owner.acquire(request.threadId, ledger.selectHead(request));
 
         if (Option.isNone(granted)) return Option.none();
-        const claimed = granted.value;
-        let token = claimed.ownershipToken;
-        let renewedAt = acquiredAt;
-        let closed = false;
-        let released = false;
-        const gate = yield* Semaphore.make(1);
-        // Serialize token use with rotation acknowledgements without blocking renewal
-        // on canonical writes, which use the producer epoch.
-        const ownershipGate = yield* Semaphore.make(1);
+        const generation = granted.value;
+        const claimed = generation.claim;
 
-        const ownership = yield* bindRunOwnership(
-          request.threadId,
-          claimed.submissionId,
-          Effect.sync(() => token),
-        );
-
-        const release = gate.withPermits(1)(
-          Effect.gen(function* () {
-            if (released) return;
-            // Stop writes before releasing database authority; a failed acknowledgement still
-            // allows the Scope finalizer to retry the release with the latest token.
-            closed = true;
-            // Finish any token rotation before releasing its returned authority.
-            yield* ownershipGate.withPermits(1)(ownership.release);
-            released = true;
-          }).pipe(Effect.uninterruptible),
-        );
-
-        yield* Effect.addFinalizer(() =>
-          release.pipe(
-            Effect.catchTag("OwnershipLost", () => Effect.void),
-            Effect.catchTag("LedgerError", () =>
-              Effect.logWarning(
-                "Attempt ownership release failed; lease recovery remains required",
-              ).pipe(Effect.annotateLogs({ submissionId: claimed.submissionId })),
-            ),
-            Effect.ensuring(
-              Effect.sync(() => {
-                closed = true;
-              }),
-            ),
-          ),
-        );
-
-        // Acquiring authority and registering its release are atomic with respect to
-        // interruption. Storage initialization belongs to the caller's ordinary lifetime.
         return yield* restore(
           Effect.gen(function* () {
             if (
@@ -341,191 +299,160 @@ export const make = Effect.gen(function* () {
                 operation: "claim handoff",
                 message: "The submission adapter did not honor the requested handoff",
               });
-            yield* store.materialize(
-              ThreadMaterialization.make({
-                threadId: request.threadId,
-                producerEpoch: claimed.producerEpoch,
-              }),
-            );
-            const writer = yield* makeRunWriter(request.threadId, claimed.producerEpoch);
+            yield* store.materialize(ThreadMaterialization.make({ threadId: request.threadId }));
 
-            const renew = ownershipGate.withPermits(1)(
-              Effect.gen(function* () {
-                if (closed)
-                  return yield* OwnershipLost.make({
-                    submissionId: claimed.submissionId,
-                    actualEpoch: claimed.producerEpoch,
-                  });
-                const at = yield* Clock.currentTimeMillis;
-
-                const renewal = yield* ledger.renewOwnership(
-                  RenewOwnershipRequest.make({
-                    submissionId: claimed.submissionId,
-                    ownershipToken: token,
-                  }),
-                );
-
-                token = renewal.ownershipToken;
-                renewedAt = at;
-              }).pipe(Effect.uninterruptible),
+            const { writer, adoptTail } = yield* makeWriter(
+              request.threadId,
+              generation.checkActive,
+              generation.identity,
+              generation.release,
+            ).pipe(
+              Effect.provideService(ThreadStore, store),
+              Effect.provideService(StorageOwner, owner),
             );
 
-            const command = <A, E>(effect: Effect.Effect<A, E>) =>
-              gate.withPermits(1)(
-                Effect.suspend((): Effect.Effect<A, E | LedgerError> =>
-                  closed
-                    ? Effect.fail(
-                        LedgerError.make({
-                          operation: "run ownership",
-                          message: "Run storage session is closed",
-                        }),
-                      )
-                    : effect,
-                ),
-              );
-
-            const owned = <A, E>(effect: Effect.Effect<A, E>) =>
-              command(ownershipGate.withPermits(1)(effect));
-
-            const canonical = <A, E>(effect: Effect.Effect<A, E>) =>
-              gate.withPermits(1)(
-                Effect.suspend((): Effect.Effect<A, E | ThreadStoreError> =>
-                  closed
-                    ? Effect.fail(
-                        ThreadStoreError.make({
-                          operation: "run append",
-                          message: "Run storage session is closed",
-                        }),
-                      )
-                    : effect,
-                ),
-              );
+            const owned = <A, E>(effect: Effect.Effect<A, E>) => generation.use(effect);
 
             const session: RunStorageSession = {
               ...writer,
               claim: claimed,
-              release,
-              renew,
-              append: (batch, executions) => canonical(writer.append(batch, executions)),
-              checkFence: canonical(writer.checkFence),
-              refresh: canonical(writer.refresh),
-              maintain: (interval) =>
-                Effect.forever(
-                  Effect.gen(function* () {
-                    const now = yield* Clock.currentTimeMillis;
-
-                    yield* Effect.sleep(Math.max(0, renewedAt + Duration.toMillis(interval) - now));
-                    yield* renew;
-                  }),
+              release: generation.release,
+              refresh: writer.refresh,
+              markInputApplied: (marker) =>
+                owned(
+                  ledger.markInputApplied(
+                    MarkInputAppliedRequest.make({
+                      ...marker,
+                      submissionId: claimed.submissionId,
+                    }),
+                  ),
                 ),
-              markInputApplied: (marker) => owned(ownership.markInputApplied(marker)),
-              claimJoining: (maxCount) => owned(ownership.claimJoining(maxCount)),
-              markJoined: (id, marker) => owned(ownership.markJoined(id, marker)),
-              revertJoining: (id) => owned(ownership.revertJoining(id)),
+              claimJoining: (maxCount) =>
+                owned(
+                  ledger.claimJoining(
+                    ClaimJoiningRequest.make({
+                      threadId: request.threadId,
+                      hostSubmissionId: claimed.submissionId,
+                      maxCount,
+                    }),
+                  ),
+                ),
+              markJoined: (submissionId, marker) =>
+                owned(
+                  ledger.markJoined(
+                    MarkJoinedRequest.make({
+                      ...marker,
+                      submissionId,
+                    }),
+                  ),
+                ),
+              revertJoining: (submissionId) =>
+                owned(
+                  ledger.revertJoining(
+                    RevertJoiningRequest.make({
+                      submissionId,
+                      guard: { hostSubmissionId: claimed.submissionId },
+                    }),
+                  ),
+                ),
               suspend: (reason) =>
                 owned(
-                  Effect.gen(function* () {
-                    const outcome = yield* ownership.suspend(reason);
-
-                    if (outcome === "suspended") {
-                      closed = true;
-                      released = true;
-                    }
-
-                    return outcome;
-                  }).pipe(
-                    Effect.onError(() =>
-                      Effect.sync(() => {
-                        closed = true;
+                  ledger
+                    .suspend(
+                      SuspendRequest.make({
+                        submissionId: claimed.submissionId,
+                        reason,
                       }),
+                    )
+                    .pipe(
+                      Effect.tap((outcome) =>
+                        outcome === "suspended" ? generation.release : Effect.void,
+                      ),
                     ),
-                    Effect.uninterruptible,
-                  ),
                 ),
               publishSettlement: (batch, executions) =>
-                command<SettlementPublicationResult, SettlementPublicationFailure>(
-                  Effect.gen(function* () {
-                    let tail = yield* writer.tail;
+                Effect.gen(function* () {
+                  const captured = yield* PreparedAppend.capture(
+                    AppendRequest.make({
+                      threadId: request.threadId,
+                      expectedTailSequence: (yield* writer.tail).sequence,
+                      batch,
+                      ...(executions === undefined ? {} : { executions }),
+                    }),
+                  ).pipe(
+                    Effect.mapError((cause) =>
+                      LedgerError.make({
+                        operation: "capture settlement",
+                        message: cause.message,
+                        cause,
+                      }),
+                    ),
+                  );
 
-                    for (let retries = 0; ; retries++) {
-                      const result = yield* ownershipGate
-                        .withPermits(1)(
-                          Effect.suspend(() =>
-                            publisher.publish(
+                  return yield* owner.withProgress(
+                    request.threadId,
+                    owned(
+                      Effect.gen(function* () {
+                        for (let retries = 0; ; retries++) {
+                          const result = yield* publisher
+                            .publish(
                               SettlementPublication.make({
                                 submissionId: claimed.submissionId,
-                                authority: { _tag: "Owned", ownershipToken: token },
-                                append: FencedAppendRequest.make({
-                                  threadId: request.threadId,
-                                  producerEpoch: claimed.producerEpoch,
-                                  expectedTailSequence: tail.sequence,
-
-                                  batch,
-                                  ...(executions === undefined ? {} : { executions }),
+                                authority: { _tag: "Owned" },
+                                append: AppendRequest.make({
+                                  ...captured,
+                                  expectedTailSequence: (yield* writer.tail).sequence,
                                 }),
                               }),
-                            ),
-                          ),
-                        )
-                        .pipe(
-                          Effect.catchTag("AppendConflict", (conflict) => {
-                            if (
-                              conflict.reason !== "tail" ||
-                              conflict.actualTailSequence === undefined ||
-                              retries >= 8
                             )
-                              return Effect.fail(conflict);
-                            tail = {
-                              sequence: conflict.actualTailSequence,
-                            };
+                            .pipe(
+                              Effect.catchTag("AppendConflict", (conflict) => {
+                                if (
+                                  conflict.reason !== "tail" ||
+                                  conflict.actualTailSequence === undefined ||
+                                  retries >= 8
+                                )
+                                  return Effect.fail(conflict);
 
-                            if (executions !== undefined)
-                              return writer.refresh.pipe(Effect.andThen(Effect.fail(conflict)));
+                                return writer.refresh.pipe(
+                                  Effect.andThen(
+                                    captured.executions === undefined
+                                      ? Effect.succeed(undefined)
+                                      : Effect.fail(conflict),
+                                  ),
+                                );
+                              }),
+                            );
 
-                            return Effect.succeed(undefined);
-                          }),
-                        );
+                          if (result === undefined) continue;
+                          adoptTail(result.tailSequence);
 
-                      if (result === undefined) {
-                        // Let a queued renewal finish before the next attempt captures its token.
-                        yield* Effect.yieldNow;
-                        continue;
-                      }
-                      yield* writer.refresh;
-
-                      return result;
-                    }
-                  }).pipe(
-                    Effect.onError((cause) =>
-                      cause.reasons.every(
-                        (reason) =>
-                          Cause.isFailReason(reason) &&
-                          reason.error._tag === "AppendConflict" &&
-                          reason.error.reason === "tail",
-                      )
-                        ? Effect.void
-                        : Effect.sync(() => {
-                            closed = true;
-                          }),
+                          return result;
+                        }
+                      }).pipe((effect) => closeOnUncertainWrite(effect, generation.release)),
                     ),
+                  );
+                }),
+              reserveChildBudget: (value) =>
+                owned(
+                  ledger.reserveChildBudget(
+                    ChildBudgetReservationRequest.make({
+                      ...value,
+                      parentSubmissionId: claimed.submissionId,
+                    }),
                   ),
                 ),
-              reserveChildBudget: (value) => owned(ownership.reserveChildBudget(value)),
-              attachChildToReservation: (value) => owned(ownership.attachChildToReservation(value)),
+              attachChildToReservation: (value) =>
+                owned(ledger.attachChildToReservation(AttachChildToReservationRequest.make(value))),
             };
 
             return Option.some(session);
-          }),
+          }).pipe(Effect.onError(() => generation.release)),
         );
       }),
-    ).pipe(
-      Effect.provideService(SubmissionLedger, ledger),
-      Effect.provideService(ThreadStore, store),
-    ),
-  );
+    );
 
   return RunStorage.of({ claim, publishSettlement: publisher.publish });
 });
 
-/** Bind one assembly to its selected storage ports; separate assemblies never share a captured owner. */
 export const layer = () => Layer.effect(RunStorage, make);

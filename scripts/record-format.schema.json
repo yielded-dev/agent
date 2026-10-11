@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "dialect": "draft-2020-12",
   "schema": {
     "type": "object",
@@ -1310,21 +1310,9 @@
         "runId": {
           "type": "string",
           "minLength": 1
-        },
-        "supersededEpoch": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "attemptId": {
-          "type": "string",
-          "minLength": 1
-        },
-        "reason": {
-          "type": "string",
-          "maxLength": 65536
         }
       },
-      "required": ["_tag", "runId", "supersededEpoch", "attemptId", "reason"],
+      "required": ["_tag", "runId"],
       "additionalProperties": true
     },
     "ModelCallAbortedEncoded": {

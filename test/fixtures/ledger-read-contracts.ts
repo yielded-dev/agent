@@ -1,4 +1,5 @@
 import { makeCanonicalStorage } from "@yielded/agent-storage-sql/sql-canonical-storage";
+import type { SubmissionId } from "@yielded/agent/identifiers";
 import {
   CanonicalBatch,
   DefinitionDigests,
@@ -6,11 +7,11 @@ import {
   Digest,
   ProducerId,
   RecordEnvelope,
-  ProducerEpoch,
   SubmissionSettledRecord,
   type SettlementOutcome,
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
+import { RunStorage, layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   SettlementPublication,
   SettlementPublisher,
@@ -21,6 +22,7 @@ import {
   AdmissionRequest,
   ClaimRequest,
   MarkReadyRequest,
+  OwnershipLost,
   SettlementConflict,
   SettlementFinalization,
   SubmissionLedger,
@@ -31,7 +33,7 @@ import {
   type SubmissionSnapshot,
 } from "@yielded/agent/submission-ledger";
 import {
-  FencedAppendRequest,
+  AppendRequest,
   ThreadMaterialization,
   ThreadStore,
   ThreadTailRequest,
@@ -40,6 +42,26 @@ import { Cause, DateTime, Effect, Exit, Option, Schema, Stream } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { CurrentTransformer } from "effect/sql/Statement";
 import { expect } from "vite-plus/test";
+
+/** Give a native ledger command the actual scoped Run owner and materialized Thread. */
+export const withSubmissionOwner =
+  (submissionId: SubmissionId) =>
+  <A, E, R>(body: Effect.Effect<A, E, R>) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const ledger = yield* SubmissionLedger;
+        const row = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
+
+        if (Option.isNone(row)) return yield* OwnershipLost.make({ submissionId });
+        const storage = yield* RunStorage.pipe(Effect.provide(runStorageLayer()));
+        const acquired = yield* storage.claim(ClaimRequest.make({ threadId: row.value.threadId }));
+
+        if (Option.isNone(acquired) || acquired.value.claim.submissionId !== submissionId)
+          return yield* OwnershipLost.make({ submissionId });
+
+        return yield* body;
+      }),
+    );
 
 const digest = Schema.decodeSync(Digest)("a".repeat(64));
 const definitions = DefinitionDigests.make({ agent: digest, model: digest, tools: digest });
@@ -102,9 +124,8 @@ const publish = Effect.fn("LedgerReadFixture.publish")(function* (
     SettlementPublication.make({
       submissionId: submission.submissionId,
       authority,
-      append: FencedAppendRequest.make({
+      append: AppendRequest.make({
         threadId: submission.threadId,
-        producerEpoch: tail.producerEpoch,
         expectedTailSequence: tail.tailSequence,
         batch: CanonicalBatch.make({
           batchId: submissionSettlementBatchId(submission.submissionId),
@@ -128,17 +149,11 @@ export const publishReadFixture = Effect.fn("LedgerReadFixture.prepare")(functio
 
   yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
 
-  const claim = yield* ledger.claim(
-    ClaimRequest.make({ threadId: AdmissionRequest.fields.threadId.make(key), producerId }),
-  );
-
-  if (Option.isNone(claim)) return yield* Effect.die("Fixture lane did not become claimable");
-
   return yield* publish(
     { ...admitted, threadId: AdmissionRequest.fields.threadId.make(key) },
-    { _tag: "Owned", ownershipToken: claim.value.ownershipToken },
+    { _tag: "Owned" },
     outcome,
-  );
+  ).pipe(withSubmissionOwner(admitted.submissionId));
 });
 
 const abortQueued = Effect.fn("LedgerReadFixture.abortQueued")(function* (submissionId: string) {
@@ -156,7 +171,6 @@ const abortQueued = Effect.fn("LedgerReadFixture.abortQueued")(function* (submis
   yield* store.materialize(
     ThreadMaterialization.make({
       threadId: submission.value.threadId,
-      producerEpoch: ProducerEpoch.make(0),
     }),
   );
   yield* ledger.requestAbort(

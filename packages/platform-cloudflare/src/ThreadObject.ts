@@ -49,7 +49,6 @@ import {
   ThreadRead,
   ThreadStore,
   ThreadStoreError,
-  FenceRejected,
 } from "@yielded/agent/thread-store";
 import { WorkDiscoveryUnavailable } from "@yielded/agent/thread-work";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
@@ -758,7 +757,6 @@ export const AdminFailure = Schema.Union([
   ThreadStoreError,
   ThreadNotMaterialized,
   AppendConflict,
-  FenceRejected,
   DurableRuntimeFailpointError,
   DurableAlarmError,
   HostProtocolError,

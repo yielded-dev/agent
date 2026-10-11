@@ -45,7 +45,7 @@ import {
   ThreadTailRequest,
   ThreadStore,
   ThreadStoreError,
-  FencedAppendRequest,
+  AppendRequest,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
 } from "@yielded/agent/thread-store";
@@ -58,7 +58,6 @@ import { snapshotStore } from "../../../test/fixtures/storage-upgrade.ts";
 import { evictionFailpointHandler } from "../src/DoStorageFailpointTesting.ts";
 import {
   thread,
-  epoch,
   id,
   at,
   sequence,
@@ -96,17 +95,17 @@ it("reopens atomic start progress and pending lifecycle intent after rollback an
   });
 
   const lifecycleLayer = lifecyclePublicationLayer.pipe(Layer.provideMerge(BrowserCrypto.layer));
-  let prepared: FencedAppendRequest | undefined;
+  let prepared: AppendRequest | undefined;
   let reachedCanonicalCut = false;
 
   await withThreadStorage(name, (storage) =>
     Effect.gen(function* () {
       const store = yield* ThreadStore;
 
-      yield* store.materialize(ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }));
+      yield* store.materialize(ThreadMaterialization.make({ threadId }));
       expect((yield* store.inspectTail(ThreadTailRequest.make({ threadId }))).tailSequence).toBe(0);
       expect(yield* store.lifecyclePublications!.pending(0, 1)).toEqual([]);
-      const writer = yield* makeRunWriter(threadId, epoch(1));
+      const writer = yield* makeRunWriter(threadId);
       const progress = yield* makeProgressWriter(threadId, TEST_DEPLOYMENT);
 
       const failed = yield* progress.commit(batch("start-prefix-batch", [accepted, start])).pipe(
@@ -116,9 +115,8 @@ it("reopens atomic start progress and pending lifecycle intent after rollback an
             Effect.gen(function* () {
               const tail = yield* writer.tail;
 
-              prepared = FencedAppendRequest.make({
+              prepared = AppendRequest.make({
                 threadId,
-                producerEpoch: epoch(1),
                 expectedTailSequence: tail.sequence,
 
                 batch: compiled,
@@ -290,17 +288,15 @@ describe("DoThreadStore", () => {
         }),
       });
 
-      let prepared: FencedAppendRequest | undefined;
+      let prepared: AppendRequest | undefined;
       let reached = false;
 
       const failed = await withThreadStorage(name, (storage) =>
         Effect.gen(function* () {
           const store = yield* ThreadStore;
 
-          yield* store.materialize(
-            ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-          );
-          const writer = yield* makeRunWriter(threadId, epoch(1));
+          yield* store.materialize(ThreadMaterialization.make({ threadId }));
+          const writer = yield* makeRunWriter(threadId);
           const progress = yield* makeProgressWriter(threadId, start.deploymentId);
 
           yield* progress.commit(batch("crash-reopen", [input, start])).pipe(
@@ -310,9 +306,8 @@ describe("DoThreadStore", () => {
                 Effect.gen(function* () {
                   const tail = yield* writer.tail;
 
-                  prepared = FencedAppendRequest.make({
+                  prepared = AppendRequest.make({
                     threadId,
-                    producerEpoch: epoch(1),
                     expectedTailSequence: tail.sequence,
 
                     batch: compiled,
@@ -390,13 +385,10 @@ describe("DoThreadStore", () => {
           const threadId = thread(`decode-diagnostic:${decoder}`);
           const privateValue = "private-canonical-payload-do-not-log";
 
-          yield* store.materialize(
-            ThreadMaterialization.make({ threadId, producerEpoch: epoch(0) }),
-          );
+          yield* store.materialize(ThreadMaterialization.make({ threadId }));
           yield* store.append(
-            FencedAppendRequest.make({
+            AppendRequest.make({
               threadId,
-              producerEpoch: epoch(0),
               expectedTailSequence: sequence(0),
 
               batch: batch(`diagnostic:${decoder}`, [
@@ -452,11 +444,10 @@ describe("DoThreadStore", () => {
         const store = yield* ThreadStore;
         const threadId = thread("bad-export-tail");
 
-        yield* store.materialize(ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }));
+        yield* store.materialize(ThreadMaterialization.make({ threadId }));
         yield* store.append(
-          FencedAppendRequest.make({
+          AppendRequest.make({
             threadId,
-            producerEpoch: epoch(1),
             expectedTailSequence: sequence(0),
 
             batch: batch("bad-export-tail", [inputRecord("bad-export-tail", "Kyoto")]),
@@ -508,19 +499,15 @@ describe("DoThreadStore", () => {
           const store = yield* ThreadStore;
           const threadId = thread("checkpoint-metadata");
 
-          yield* store.materialize(
-            ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-          );
+          yield* store.materialize(ThreadMaterialization.make({ threadId }));
 
           yield* store.append(
-            FencedAppendRequest.make({
+            AppendRequest.make({
               threadId,
               batch: batch("checkpoint-metadata", [
                 inputRecord("checkpoint-metadata-input", "Kyoto"),
               ]),
               expectedTailSequence: sequence(0),
-
-              producerEpoch: epoch(1),
             }),
           );
 
@@ -625,19 +612,17 @@ describe("DoThreadStore", () => {
         const threadId = thread("thread-large-read-snapshot");
         let tail = { lastSequence: sequence(0) };
 
-        yield* store.materialize(ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }));
+        yield* store.materialize(ThreadMaterialization.make({ threadId }));
 
         const appendInput = Effect.fn("DoThreadStoreTest.appendLargeInput")(function* (
           name: string,
           input: string,
         ) {
           tail = yield* store.append(
-            FencedAppendRequest.make({
+            AppendRequest.make({
               threadId,
               batch: batch(`large-batch-${name}`, [inputRecord(`large-record-${name}`, input)]),
               expectedTailSequence: tail.lastSequence,
-
-              producerEpoch: epoch(1),
             }),
           );
         });
@@ -768,7 +753,6 @@ describe("DoThreadStore", () => {
         yield* store.materialize(
           ThreadMaterialization.make({
             threadId: thread(threadId),
-            producerEpoch: epoch(1),
           }),
         );
 
@@ -777,14 +761,12 @@ describe("DoThreadStore", () => {
         // payload honest without allocating megabytes inside workerd).
         const exit = yield* store
           .append(
-            FencedAppendRequest.make({
+            AppendRequest.make({
               threadId: thread(threadId),
               batch: batch("value-bound-batch", [
                 inputRecord("value-bound-record", "x".repeat(2_048)),
               ]),
               expectedTailSequence: sequence(0),
-
-              producerEpoch: epoch(1),
             }),
           )
           .pipe(Effect.exit);

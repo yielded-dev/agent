@@ -49,7 +49,7 @@ import {
 import { PreparedInput } from "../Subscription.ts";
 import {
   getRecord,
-  FencedAppendRequest,
+  AppendRequest,
   ThreadRead,
   ThreadTailRequest,
   ThreadStore,
@@ -424,9 +424,8 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
 
           const appended = yield* deps.store
             .append(
-              FencedAppendRequest.make({
+              AppendRequest.make({
                 threadId,
-                producerEpoch: tail.producerEpoch,
                 expectedTailSequence: tail.tailSequence,
 
                 batch: CanonicalBatch.make({
@@ -454,7 +453,7 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
             )
             .pipe(
               Effect.as(true),
-              Effect.catchTag(["AppendConflict", "FenceRejected"], () => Effect.succeed(false)),
+              Effect.catchTag("AppendConflict", () => Effect.succeed(false)),
               Effect.mapError(mapStore(operation)),
             );
 

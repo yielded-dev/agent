@@ -1,7 +1,6 @@
 import { Context, Schema } from "effect";
 
 const ObservationPollInterval = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
-const OwnershipLeaseMillis = Schema.Int.check(Schema.isGreaterThan(0));
 
 /**
  * Default per-value byte bound, kept under the Durable Object platform's 2 MB SQLite value
@@ -26,13 +25,6 @@ export class DoStorageConfigValue extends Schema.Class<DoStorageConfigValue>(
   "@effect-agent/storage-cloudflare/DoStorageConfigValue",
 )({
   observationPollInterval: ObservationPollInterval,
-  /**
-   * Submission ownership lease duration in milliseconds (D5). Inside one Durable Object the
-   * object itself is the serialized owner, so the lease's primary DC role is fencing work
-   * across DO incarnations (an evicted incarnation's claim becomes reclaimable); correctness
-   * never depends on it because every canonical append is fenced by producer epoch.
-   */
-  ownershipLeaseDuration: OwnershipLeaseMillis,
   /**
    * Maximum bytes for any single stored text value (canonical batch/record JSON, admission
    * input payload, checkpoint JSON). Enforced typed BEFORE any write; must stay under the
