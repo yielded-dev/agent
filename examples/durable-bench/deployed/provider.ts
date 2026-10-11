@@ -41,8 +41,7 @@ export default {
 
       if (
         seed &&
-        (query.target !== "yielded" ||
-          seedIndex >= query.history ||
+        (seedIndex >= query.history ||
           query.ttftMs !== 0 ||
           query.chunkDelayMs !== 0 ||
           query.textStreaming)
