@@ -62,7 +62,7 @@ export const command = Command.make(
     ),
     repeats: positive("repeats").pipe(
       Flag.optional,
-      Flag.withDescription("Warm turns per Object (quick: 4; rigorous: 6; build-history: 9)"),
+      Flag.withDescription("Warm turns per Object (quick: 12; rigorous: 6; build-history: 9)"),
     ),
     concurrency: positive("concurrency").pipe(
       Flag.optional,
@@ -216,7 +216,7 @@ export const command = Command.make(
       ttft: [...new Set(ttft)],
       textStreaming: flags.textStreaming,
       objects,
-      repeats: Option.getOrElse(flags.repeats, () => (flags.buildHistory ? 9 : rigorous ? 6 : 4)),
+      repeats: Option.getOrElse(flags.repeats, () => (flags.buildHistory ? 9 : rigorous ? 6 : 12)),
       concurrency,
       buildConcurrency,
       cold: true,

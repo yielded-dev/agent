@@ -22,7 +22,7 @@ DURABLE_BENCH_PREFIX=bench-change vp run -F @yielded/agent-example-durable-bench
 
 Quick defaults to Yielded, 1,000 historical turns, TTFT 0 and 12 Objects. Each build
 runs one excluded preparation turn, resets the isolate, then measures a cold turn,
-four sequential warm turns and a second cold turn after another reset. Preparation
+twelve sequential warm turns and a second cold turn after another reset. Preparation
 awaits native post-settlement writers so revision-specific derived state exists. Both builds
 measure the same Objects. Within each target/history/TTFT cell, quick randomly assigns half
 the Objects to baseline then candidate (AB), and half to candidate then baseline (BA),
