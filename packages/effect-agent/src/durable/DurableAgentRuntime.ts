@@ -8150,8 +8150,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     yieldAfter?: DateTime.Utc,
   ) =>
     Effect.gen(function* () {
+      // Recheck ownership outside the disposable cache's failure recovery.
+      yield* session.checkActive;
+
       const checkpointPrompt = yield* promptHistory
-        .take({ threadId: session.threadId, producerEpoch: session.producerEpoch })
+        .take({ threadId: session.threadId })
         .pipe(
           Effect.provideService(ThreadStore, store),
           Effect.provideService(ThreadReader, reader),
@@ -8809,7 +8812,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         )
           yield* promptHistory
             .complete(
-              { threadId: session.threadId, producerEpoch: session.producerEpoch },
+              { threadId: session.threadId },
               initialJournal.original,
               initialJournal.history,
             )

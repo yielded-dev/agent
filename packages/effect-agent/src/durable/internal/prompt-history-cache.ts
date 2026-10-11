@@ -139,7 +139,7 @@ export const digestPromptHistory = (prompt: Prompt.Prompt, history: PromptHistor
 };
 
 /** Writer identity is data; effectful writer ports stay in Effect context. */
-type WriterIdentity = Pick<RunWriter, "threadId" | "producerEpoch">;
+type WriterIdentity = Pick<RunWriter, "threadId">;
 
 /** Fold only complete, sequential Runs. Raw facts and encoded/native messages are bounded. */
 const readSuffix = Effect.fnUntraced(function* (
@@ -273,7 +273,6 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* () {
 
       if (cached === undefined && store.promptCheckpoints === undefined) return undefined;
       if (cached !== undefined && cached.threadId !== writer.threadId) return undefined;
-      yield* writer.checkActive;
       const head = yield* store.inspectTail(ThreadTailRequest.make({ threadId: writer.threadId }));
 
       if (cached !== undefined) {
