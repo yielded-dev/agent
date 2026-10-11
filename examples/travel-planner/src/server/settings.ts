@@ -1,16 +1,11 @@
 import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 
-import {
-  AdmittedPlannerSettings,
-  PlannerError,
-  PlannerSettings,
-  defaultPlannerSettings,
-} from "../domain.ts";
+import { PlannerError, PlannerSettings, defaultPlannerSettings } from "../domain.ts";
 
 const StoredSettings = Schema.Struct({
   version: Schema.Literal(1),
-  settings: AdmittedPlannerSettings,
+  settings: PlannerSettings,
 });
 
 const Rows = Schema.Array(Schema.Struct({ value: Schema.String }));
@@ -64,11 +59,7 @@ export const PlannerSettingsStoreLive = Layer.effect(
         rows[0].value,
       ).pipe(Effect.mapError(storageError));
 
-      // Upgrade the preference on read; the next ordinary save persists it atomically.
-      // Canonical submissions retain their original model choice.
-      return stored.settings.model === "gpt-5.6-luna"
-        ? { ...stored.settings, model: "gpt-6-luna" as const }
-        : stored.settings;
+      return stored.settings;
     });
 
     const save = Effect.fn("PlannerSettingsStore.save")(function* (candidate: PlannerSettings) {

@@ -1,11 +1,11 @@
-import { EmailProofDelivery } from "@yielded/auth/Proofs";
+import { EmailDelivery } from "@yielded/auth/EmailDelivery";
 import { DurableObject } from "cloudflare:workers";
-import { Effect, Layer, Redacted } from "effect";
+import { Effect, Layer, ManagedRuntime, Redacted } from "effect";
 import { WorkerEnvironment } from "effect-cf";
 
 import { handleRequest } from "../../src/worker";
 export { TravelPlannerThread } from "./worker";
-import { serveAuth } from "../../src/auth/host";
+import { AuthHost, makeAuthHost } from "../../src/auth/host";
 
 const key = btoa(String.fromCharCode(...new Uint8Array(32).fill(42)))
   .replace(/=/g, "")
@@ -26,39 +26,42 @@ export const fixtureAuthConfig = {
 
 export class AuthFixture extends DurableObject {
   private deliveries: Array<{ code: string; email: string }> = [];
-  async fetch(request: Request) {
-    const url = new URL(request.url);
+  private readonly runtime = ManagedRuntime.make(
+    Layer.effect(
+      AuthHost,
+      Effect.suspend(() => {
+        const delivery = Layer.succeed(EmailDelivery, {
+          send: (message) =>
+            Effect.sync(() => {
+              const code = Redacted.value(message.text).match(/\b\d{6}\b/)?.[0];
 
-    if (url.pathname === "/_fixture/delivery")
-      return Response.json({ ...this.deliveries.at(-1), count: this.deliveries.length });
+              if (code === undefined) throw new Error("Missing verification code");
+              this.deliveries.push({
+                code,
+                email: message.to,
+              });
+            }),
+        });
 
-    const delivery = EmailProofDelivery.layer(
-      { vendorId: "fixture", idempotencyMillis: 0 },
-      (message) =>
-        Effect.sync(() => {
-          this.deliveries.push({
-            code: Redacted.value(message.secret),
-            email: message.recipient.value,
-          });
+        return makeAuthHost(this.ctx.storage, fixtureAuthConfig, delivery);
+      }),
+    ),
+  );
 
-          return { _tag: "Accepted" as const };
-        }),
-    ).pipe(Layer.orDie);
+  fetch(request: Request) {
+    if (new URL(request.url).pathname === "/_fixture/delivery")
+      return Promise.resolve(
+        Response.json({ ...this.deliveries.at(-1), count: this.deliveries.length }),
+      );
 
-    return Effect.runPromise(
-      serveAuth(request, this.ctx.storage, fixtureAuthConfig, delivery).pipe(
-        Effect.catchTag("AuthStorageError", (error) =>
-          Effect.succeed(Response.json({ error: String(error.cause) }, { status: 500 })),
-        ),
-      ),
-    );
+    return this.runtime.runPromise(Effect.flatMap(AuthHost, (host) => host.fetch(request)));
   }
 }
 
 export default {
   fetch: (request: Request, env: Cloudflare.Env, ctx: ExecutionContext) =>
     new URL(request.url).pathname.startsWith("/_fixture/")
-      ? env.AUTH.getByName("auth-v1").fetch(request)
+      ? env.AUTH_V2.getByName("auth-v1").fetch(request)
       : Effect.runPromise(
           handleRequest()(request, env, ctx).pipe(Effect.provideService(WorkerEnvironment, env)),
         ),

@@ -10,12 +10,15 @@ only `/travel/` (the default) and `/browser-use/` are accepted return targets.
 Generated trip apps stay on `*-trip.effect-agent.com`, outside the session origin.
 
 `travel.effect-agent.com` redirects paths and queries to `/travel` with HTTP 301.
-Users must sign in again; accounts and funding grants remain in `AUTH`/`AuthV1`/`PlannerAuth`.
-Planner threads live in `PLANNER_THREADS`/`PlannerThreadsV2`/`PlannerThread`. Stores written
-before thread storage format 16 stay in the retired `ACCOUNT_THREADS`/`AccountThreadsV1`/
-`AccountPlannerThread` namespace, which current storage cannot open; it remains bound only so
-Cloudflare keeps that data. Keep all three identities unchanged: changing one deletes its data.
-The lab binds `PlannerAuth` on script `effect-agent-travel-planner`, instance
+Auth state lives in `AUTH_V2` / `AuthV2` / `PlannerAuthV2`; account-owned threads live in
+`PLANNER_THREADS_V3` / `PlannerThreadsV3` / `PlannerThreadV3`. The beta.34 cutover replaces both
+namespaces and removes the retired account-thread namespace, deleting previous accounts,
+sessions, funding grants and planner conversations. Sign up again after deployment.
+The main deployment detaches the browser lab from the retired auth namespace before
+the reset and rebinds it afterward; shared lab sign-in is unavailable during that interval.
+Alchemy keys these namespaces by env binding: a class-only rename preserves data;
+new binding keys and new classes create empty stores and delete the removed namespaces.
+The lab binds `PlannerAuthV2` on script `effect-agent-travel-planner`, instance
 `auth-v1`; `/_internal/session` and `/_internal/funding/<id>` remain private.
 
 Shared sign-in uses `https://auth.yielded.dev` as its OpenID issuer. Register client
@@ -49,10 +52,8 @@ starter affects new sites; existing app repositories and saved versions remain u
 Source conflicts are returned to the editor so it can read the current files before editing.
 
 Choose GPT-6 Astra or GPT-6 Luna in Settings. Astra remains the default; Luna also supports
-turning reasoning off. Saved preferences for the previous Luna model select GPT-6 Luna on
-the next message, preserving reasoning effort and processing speed. Already accepted work
-retains its admitted model settings. Retained voice requests keep their original settings
-when reconnecting or retrying.
+turning reasoning off. Accepted work retains its admitted model settings. Retained voice requests
+keep their original settings when reconnecting or retrying.
 
 Listing photos come from inspected page galleries. When a gallery yields no usable images,
 the reader also checks Open Graph and Twitter image metadata within the same inspection deadline.
@@ -64,18 +65,12 @@ and `WorkerCompletion` messages. New input can restart its disposable model resp
 the preview clears cancelled text and marks interrupted search activity incomplete.
 The early thinking indicator contains no private model reasoning.
 
-The current planner and scout keep stable agent IDs and select one current binding per ID.
-Retired planner v2–v15 and scout v1–v3 registrations and their custom report inputs are removed.
-Start fresh conversations for those demo revisions; no migration or storage reset is supplied.
-Keep their old stores and original executable release for inspection or reconciliation of unfinished
-external actions. Existing current-agent records, saved trips, accounts, and report evidence are retained.
-Scouts already waiting for research-plan approval remain paused. Cancel their active run and
-start fresh research; removing the checkpoint does not approve existing requests.
+The planner and scout select one current binding per agent ID.
 
-Authentication uses `@yielded/auth` beta.12 with its compatible crypto, OpenID Client, and
-Drizzle persistence companions. The app owns its SQLite tables and provides the adapter's
-`SqliteDo.Database` through `databaseLayer`. It supplies session claims through each strategy's
-`SessionClaims` service. The Atom client uses Fetch transport with
+Authentication uses `@yielded/auth` beta.34, its built-in GitHub and OpenID Connect
+providers, the portable `@yielded/crypto` backend, and the Drizzle persistence adapter. The app owns
+its SQLite tables and provides the adapter's `SqliteDo.Database` through `databaseLayer`.
+It supplies session claims through each strategy's `SessionClaims` service. The Atom client uses Fetch transport with
 a 30-second request and response-body deadline; timed-out mutations are not retried automatically.
 Provider sign-in creates flow IDs on the server; the browser retains only the
 provider, returned flow ID and return target for callback completion. Effect Atom
@@ -93,26 +88,14 @@ and Agent have separate sessions: **Sign out of Agent** leaves Auth signed in.
 The browser lab already consumes this Agent session, so the same login covers it;
 Sync and docs are not connected by this change.
 
-For a new Yielded identity, registration creates a new Agent account. Existing
-accounts are never matched by email or display name. To preserve an existing
-GitHub-owned account, an operator may set `AUTH_YIELDED_ACCOUNT_LINKS` before its
-first Yielded sign-in, as a JSON array of `{ "yieldedSubject": "<Auth subject>",
-"githubSubject": "<numeric GitHub ID>" }`. Independently verify both identities.
-The migration requires exactly one active GitHub owner and rejects pre-existing
-Yielded ownership, reservations or removed identities. It adds the credential to
-that owner without changing their security revision, accounts, funding or threads.
-An atomic receipt prevents later startup from restoring a subsequently removed
-link; conflicting mappings fail closed and require explicit reconciliation.
-Omit the mapping to keep registrations separate.
-
-Auth storage format 2 adds only that receipt table to format 1. Older hosts reject
-format 2; retain this migration when rolling back application code rather than
-resetting deployed storage. Email verification keys are supplied through `ProofKeys` using `AUTH_PROOF_KEY`.
-
-Keep the existing database, namespaces, and key IDs when upgrading this demo from Auth beta.7
-to beta.11; its account and stateful-session formats are retained. Users upgrading from beta.5
-should start a fresh email flow for codes requested before the upgrade because the proof template
-identifier changed. Existing accounts and sessions are retained.
+Each new provider identity creates a separate Agent account; email and display name
+never link existing accounts. Auth starts from one initial schema with no old-data
+conversion. Email codes use single-use proofs, and OAuth callbacks consume their
+flow before exchanging a token. Email verification keys come from `ProofKeys` using
+`AUTH_PROOF_KEY`. Auth owns one application scope per Object incarnation for provider resources,
+bounded proof delivery and abuse counters. A proof receipt confirms admission, not email delivery.
+Eviction resets in-memory counters and can interrupt pending delivery; proof expiry and
+single-use consumption remain durable.
 
 The production deployment workflow enables Cloudflare traces after verifying request URL
 query-string redaction, keeping authentication callback parameters out of platform telemetry.
@@ -139,18 +122,17 @@ It uses the real email authentication and session checks, an offline planner, an
 fresh state that is removed when stopped. Outbound provider requests are blocked;
 GitHub and Yielded sign-in, live research, voice, and published trip sites require the full app.
 A raw `vp preview` does not provision these bindings and its session endpoint returns
-503 when `AUTH` is missing.
+503 when `AUTH_V2` is missing.
 
 For the full application, configure [.env.example](.env.example) with development-owned
 credentials and use `vp run -F @yielded/agent-example-travel-planner dev` from the repository
 root. Alchemy supplies the resources declared in [alchemy.run.ts](alchemy.run.ts), including
-`AUTH` and `AUTH_EMAIL`. Authentication requires a canonical HTTPS `AUTH_ORIGIN`, a matching
+`AUTH_V2` and `AUTH_EMAIL`. Authentication requires a canonical HTTPS `AUTH_ORIGIN`, a matching
 GitHub OAuth callback at `${AUTH_ORIGIN}/travel/auth/github/callback`, a verified email sender, and
 three independent persistent base64url-encoded 32-byte auth keys. Shared sign-in also
 requires the issuer, registered callback and matching OpenID client secret above.
 The deployment workflow reads `TRAVEL_PLANNER_YIELDED_CLIENT_SECRET` from GitHub
-Actions secrets and optional `TRAVEL_PLANNER_YIELDED_ACCOUNT_LINKS` from repository
-variables. Store the shared secret in the deployment secret manager too.
+Actions secrets. Store the shared secret in the deployment secret manager too.
 
 The conversation loads in stages. `GetPlanner` returns messages, trips, and the latest
 source-record overview for up to eight scouts and the trip's editor without reading child

@@ -37,7 +37,7 @@ const makeRuntime = () =>
       compatibilityDate: "2026-07-01",
       compatibilityFlags: ["nodejs_compat"],
       bindings: { PLANNER_TOKEN: token },
-      durableObjects: { PLANNER_THREADS: { className: "TravelPlannerThread", useSQLite: true } },
+      durableObjects: { PLANNER_THREADS_V3: { className: "TravelPlannerThread", useSQLite: true } },
       r2Buckets: ["APP_BUILDS"],
       resourcePersistencePath: directory,
     }),

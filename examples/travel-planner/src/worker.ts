@@ -6,7 +6,7 @@ import { CloudflareTracer, Worker, WorkerEnvironment } from "effect-cf";
 import { artifactsLayer } from "./artifacts";
 import { captureCallbackScript } from "./auth/callback";
 import type { AuthConfiguration } from "./auth/server";
-import { authenticate, type PlannerAuth } from "./auth/worker";
+import { authenticate, type PlannerAuthV2 } from "./auth/worker";
 import { Trip, TripId, TripSiteStore, type AppBuildRequest } from "./domain";
 import { makeTravelPlannerThread } from "./server/cloudflare";
 import { credentialSourceLayer, type CredentialEnvironment } from "./server/credentials";
@@ -17,27 +17,23 @@ import { appNameFromHost } from "./trip-app/addresses.ts";
 import { AppBuildBucketLive } from "./trip-app/bindings.ts";
 import { serveTripApp } from "./trip-app/gateway.ts";
 
-export { PlannerAuth } from "./auth/worker";
+export { PlannerAuthV2 } from "./auth/worker";
 export { Sandbox } from "@cloudflare/sandbox";
 export { SiteBuild } from "./trip-app/build.ts";
 export { TripData } from "./trip-app/gateway.ts";
 
-export class PlannerThread extends makeTravelPlannerThread(
+export class PlannerThreadV3 extends makeTravelPlannerThread(
   Layer.unwrap(
     Effect.map(WorkerEnvironment, (env) => artifactsLayer(env.ARTIFACTS, env.ARTIFACTS_GIT_BASE)),
   ),
 ) {}
 
-/** Retired: its stores use thread storage format 9, which current storage refuses to open.
- * Exported only so Cloudflare keeps that data; nothing addresses it. */
-export class AccountPlannerThread extends PlannerThread {}
-
 declare global {
   namespace Cloudflare {
     interface Env extends AuthConfiguration, CredentialEnvironment {
-      AUTH: DurableObjectNamespace<PlannerAuth>;
+      AUTH_V2: DurableObjectNamespace<PlannerAuthV2>;
       AUTH_EMAIL: SendEmail;
-      PLANNER_THREADS: DurableObjectNamespace<PlannerThread>;
+      PLANNER_THREADS_V3: DurableObjectNamespace<PlannerThreadV3>;
       ARTIFACTS: Artifacts;
       ARTIFACTS_GIT_BASE: string;
       ASSETS?: Fetcher;
@@ -197,7 +193,7 @@ export const handleRequest = (verify = authenticate) =>
     }
     if (url.pathname.startsWith("/auth/")) {
       return yield* Effect.tryPromise({
-        try: () => env.AUTH.getByName("auth-v1").fetch(pageRequest),
+        try: () => env.AUTH_V2.getByName("auth-v1").fetch(pageRequest),
         catch: () => "AuthUnavailable" as const,
       }).pipe(
         Effect.catch(() =>
@@ -238,7 +234,7 @@ export const handleRequest = (verify = authenticate) =>
       return new Response("Not found", { status: 404 });
     if (url.pathname.startsWith("/api/funding/")) {
       return yield* Effect.tryPromise({
-        try: () => env.AUTH.getByName("auth-v1").fetch(request),
+        try: () => env.AUTH_V2.getByName("auth-v1").fetch(request),
         catch: () => "FundingUnavailable" as const,
       }).pipe(
         Effect.map((response) => {
@@ -313,7 +309,7 @@ export const handleRequest = (verify = authenticate) =>
           const owner = yield* plannerOwner(identity.session.subjectId);
 
           return yield* Effect.promise(async () => {
-            using response = await env.PLANNER_THREADS.getByName(owner).plannerFetch(bounded);
+            using response = await env.PLANNER_THREADS_V3.getByName(owner).plannerFetch(bounded);
             const headers = new Headers(response.headers);
 
             headers.set("cache-control", "no-store");

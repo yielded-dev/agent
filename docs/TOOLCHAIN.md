@@ -51,9 +51,6 @@ tool declarations stay unchanged. This applies to repository installations; publ
 libraries still resolve their consumer's Effect peer. Remove the patch when adopting
 an upstream release containing the change.
 
-The repository also patches seven UUID calls in `@yielded/auth@0.1.0-beta.12` for
-Effect 4.0.3. Remove that patch when auth ships compatible calls.
-
 Astro uses its own Vite dependency. Keep the root Vite+ core alias required by Vite+;
 do not add a global Vite override.
 
@@ -62,7 +59,7 @@ Alchemy and its Cloudflare runtime advance together. Their published beta.80 pac
 Distilled rc.13 clients support stable Effect 4 directly, without repository compatibility
 patches. Verify upgrades with a frozen install and `vp run check:deploy`.
 
-The demo uses Auth beta.12 and its compatible Drizzle, GitHub, and crypto companions,
+The demo uses Auth beta.34, its built-in providers, and its Drizzle and crypto companions,
 which support stable Effect directly. Verify auth upgrades with the existing integration checks
 and review their changelogs for API and stored-format changes.
 

@@ -1,6 +1,5 @@
 import {
   requiredOAuthSignInConstraints,
-  requiredOAuthTupleConstraints,
   requiredOAuthRegistrationConstraints,
   type OAuthSignInMapping,
   type OAuthRegistrationIntentMapping,
@@ -9,16 +8,17 @@ import {
 import { SecurityRevision } from "@yielded/auth/Sessions";
 import { sql } from "drizzle-orm";
 import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { Effect, Schema } from "effect";
+import { Effect } from "effect";
 
 import { Registration } from "./contract";
 import {
   subject,
   credential,
   subjectMapping,
+  clock,
   credentialMapping,
   subjectId,
-  mappingError,
+  requirement,
 } from "./schema";
 
 export const oauthFlow = sqliteTable(
@@ -26,43 +26,33 @@ export const oauthFlow = sqliteTable(
   {
     moduleId: text(),
     flowId: text(),
-    commandId: text(),
     purpose: text(),
-    state: text(),
-    version: text(),
+    generation: integer(),
+    provider: text(),
+    callbackId: text(),
+    issuer: text(),
+    responseIssuerMode: text(),
+    subjectId: text(),
     stateDigest: text(),
     binderVerifier: text(),
-    snapshot: text(),
-    claimId: text(),
-    generation: integer(),
     binderExpiresAt: integer(),
+    snapshot: text(),
     issuedAt: integer(),
     expiresAt: integer(),
-    claimedAt: integer(),
-    claimExpiresAt: integer(),
-    retentionUntil: integer(),
   },
   (t) => [
-    uniqueIndex("auth_oauth_flow_0").on(t.moduleId, t.flowId),
-    uniqueIndex("auth_oauth_flow_1").on(t.moduleId, t.commandId),
-    uniqueIndex("auth_oauth_flow_2").on(t.stateDigest),
+    uniqueIndex("auth_oauth_flow_unique").on(t.moduleId, t.flowId),
+    uniqueIndex("auth_oauth_state_unique").on(t.stateDigest),
   ],
 );
 
-export const oauthTuple = sqliteTable(
-  "auth_oauth_tuple",
-  {
-    identityKey: text(),
-    provider: text(),
-    issuer: text(),
-    externalSubject: text(),
-    state: text(),
-    version: text(),
-    subjectId: text(),
-    reservation: text(),
-  },
-  (t) => [uniqueIndex("auth_oauth_tuple_0").on(t.identityKey)],
-);
+export const oauthIdentity = sqliteTable("auth_oauth_identity", {
+  identityKey: text().primaryKey(),
+  provider: text().notNull(),
+  issuer: text().notNull(),
+  externalSubject: text().notNull(),
+  subjectId: text().notNull(),
+});
 
 export const oauthCredential = sqliteTable(
   "auth_oauth_credential",
@@ -86,47 +76,22 @@ export const oauthIntent = sqliteTable(
     moduleId: text(),
     reference: text(),
     flowId: text(),
-    claimId: text(),
     identityKey: text(),
-    version: text(),
-    state: text(),
     snapshot: text(),
-    commandId: text(),
-    fingerprint: text(),
-    pendingReference: text(),
     expiresAt: integer(),
     retentionUntil: integer(),
   },
   (t) => [
-    uniqueIndex("auth_oauth_intent_0").on(t.moduleId, t.reference),
-    uniqueIndex("auth_oauth_intent_1").on(t.moduleId, t.flowId),
+    uniqueIndex("auth_oauth_intent_reference").on(t.moduleId, t.reference),
+    uniqueIndex("auth_oauth_intent_flow").on(t.moduleId, t.flowId),
   ],
 );
 
-export const oauthCommand = sqliteTable(
-  "auth_oauth_command",
-  {
-    moduleId: text(),
-    commandId: text(),
-    reference: text(),
-    identityKey: text(),
-    fingerprint: text(),
-    intentSnapshot: text(),
-    applicationSnapshot: text(),
-    provisioningIdentity: text(),
-    decision: text(),
-    retentionUntil: integer(),
-  },
-  (t) => [uniqueIndex("auth_oauth_command_0").on(t.moduleId, t.commandId)],
-);
-
-const clock = {
-  encodeInstant: (value: number) => value,
-  decodeInstant: Schema.decodeUnknownSync(Schema.Natural),
-  engineNowMillis: sql`cast(round((julianday('now') - 2440587.5) * 86400000) as integer)`,
+const oauthSubject = {
+  ...subjectMapping,
+  activeCondition: sql`${subject.active} = 1`,
+  decodeAuthenticationRequirement: () => requirement,
 };
-
-const oauthSubject = { ...subjectMapping, activeCondition: sql`${subject.active} = 1` };
 
 const oauthAuthority = {
   ...credentialMapping,
@@ -165,9 +130,31 @@ const oauthCredentialMapping = {
   }),
 } as const;
 
+const ownership = {
+  table: oauthIdentity,
+  identityKey: "identityKey",
+  provider: "provider",
+  issuer: "issuer",
+  externalSubject: "externalSubject",
+  subjectId: "subjectId",
+  decodeSubjectId: (row: typeof oauthIdentity.$inferSelect) => row.subjectId,
+} as const;
+
+const intent = {
+  table: oauthIntent,
+  moduleId: "moduleId",
+  reference: "reference",
+  flowId: "flowId",
+  identityKey: "identityKey",
+  snapshot: "snapshot",
+  expiresAt: "expiresAt",
+  retentionUntil: "retentionUntil",
+  encodeInsert: () => ({}),
+} as const;
+
 export const oauthSignInMapping: OAuthSignInMapping<
   typeof subject,
-  typeof oauthTuple,
+  typeof oauthIdentity,
   typeof oauthCredential,
   typeof credential,
   typeof oauthFlow,
@@ -179,144 +166,77 @@ export const oauthSignInMapping: OAuthSignInMapping<
   credential: oauthCredentialMapping,
   clock,
   constraints: requiredOAuthSignInConstraints,
-  ownership: {
-    table: oauthTuple,
-    identityKey: "identityKey",
-    provider: "provider",
-    issuer: "issuer",
-    externalSubject: "externalSubject",
-    subjectId: "subjectId",
-    ownedCondition: sql`${oauthTuple.state} = 'Owned'`,
-    decodeSubjectId: (row) => Schema.decodeUnknownSync(Schema.NonEmptyString)(row.subjectId),
-  },
+  ownership,
   flow: {
+    table: oauthFlow,
     moduleId: "moduleId",
     flowId: "flowId",
-    commandId: "commandId",
     purpose: "purpose",
-    state: "state",
-    version: "version",
+    generation: "generation",
+    provider: "provider",
+    callbackId: "callbackId",
+    issuer: "issuer",
+    responseIssuerMode: "responseIssuerMode",
+    subjectId: "subjectId",
     stateDigest: "stateDigest",
     binderVerifier: "binderVerifier",
-    snapshot: "snapshot",
-    claimId: "claimId",
-    generation: "generation",
     binderExpiresAt: "binderExpiresAt",
+    snapshot: "snapshot",
     issuedAt: "issuedAt",
     expiresAt: "expiresAt",
-    claimedAt: "claimedAt",
-    claimExpiresAt: "claimExpiresAt",
-    retentionUntil: "retentionUntil",
-    table: oauthFlow,
     encodeInsert: (input) => ({ ...input }),
   },
 };
 
 export const oauthIntentMapping: OAuthRegistrationIntentMapping<
-  typeof subject,
-  typeof oauthTuple,
-  typeof oauthCredential,
-  typeof credential,
-  typeof oauthFlow,
-  typeof oauthTuple,
+  typeof oauthIdentity,
   typeof oauthIntent,
   string
 > = {
-  signIn: oauthSignInMapping,
-  ownership: {
-    mode: "integrated",
-    tuple: {
-      identityKey: "identityKey",
-      provider: "provider",
-      issuer: "issuer",
-      externalSubject: "externalSubject",
-      state: "state",
-      version: "version",
-      subjectId: "subjectId",
-      reservation: "reservation",
-      table: oauthTuple,
-      encodeInsert: (input) => ({ identityKey: input.identityKey }),
-    },
+  ownership,
+  intent,
+  clock,
+  constraints: {
+    intentReference: requiredOAuthRegistrationConstraints.intentReference,
+    intentFlow: requiredOAuthRegistrationConstraints.intentFlow,
+    ownership: requiredOAuthRegistrationConstraints.ownership,
   },
-  intent: {
-    moduleId: "moduleId",
-    reference: "reference",
-    flowId: "flowId",
-    claimId: "claimId",
-    identityKey: "identityKey",
-    version: "version",
-    state: "state",
-    snapshot: "snapshot",
-    commandId: "commandId",
-    fingerprint: "fingerprint",
-    pendingReference: "pendingReference",
-    expiresAt: "expiresAt",
-    retentionUntil: "retentionUntil",
-    table: oauthIntent,
-    encodeInsert: () => ({}),
-  },
-  tupleConstraints: requiredOAuthTupleConstraints,
-  registrationConstraints: requiredOAuthRegistrationConstraints,
-  // Public registration is immutable application policy. No invitation or first-user admin.
-  eligibility: { condition: () => sql`1` },
+  eligible: () => sql`1`,
 };
-
-const registrationJson = Schema.fromJsonString(Registration);
 
 export const oauthRegistrationMapping: OAuthRegistrationMapping<
   typeof Registration.Type,
   typeof subject,
-  typeof oauthTuple,
+  typeof oauthIdentity,
   typeof oauthCredential,
   typeof credential,
-  typeof oauthTuple,
   typeof oauthIntent,
-  typeof oauthCommand,
   string
 > = {
-  mode: "atomic",
+  registration: Registration,
   subject: oauthSubject,
   subjectId,
   authority: oauthAuthority,
   credential: oauthCredentialMapping,
-  ownership: oauthIntentMapping.ownership,
-  intent: oauthIntentMapping.intent,
-  clock,
-  tupleConstraints: requiredOAuthTupleConstraints,
-  constraints: requiredOAuthRegistrationConstraints,
-  command: {
-    moduleId: "moduleId",
-    commandId: "commandId",
-    reference: "reference",
-    identityKey: "identityKey",
-    fingerprint: "fingerprint",
-    intentSnapshot: "intentSnapshot",
-    applicationSnapshot: "applicationSnapshot",
-    provisioningIdentity: "provisioningIdentity",
-    decision: "decision",
-    retentionUntil: "retentionUntil",
-    table: oauthCommand,
-    encodeInsert: () => ({}),
+  ownership: {
+    ...ownership,
+    encodeInsert: ({ identity, identityKey, subjectId }) => ({
+      identityKey,
+      provider: identity.provider,
+      issuer: identity.issuer,
+      externalSubject: identity.subject,
+      subjectId,
+    }),
   },
+  intent,
+  clock,
+  constraints: requiredOAuthRegistrationConstraints,
   inspect: ({ registration }) =>
     Effect.succeed({ fingerprint: registration.displayName, eligible: true }),
-  inspectSync: ({ registration }) => ({ fingerprint: registration.displayName, eligible: true }),
-  snapshot: (registration) =>
-    Schema.decodeEffect(registrationJson)(Schema.encodeSync(registrationJson)(registration)).pipe(
-      Effect.mapError(mappingError),
-    ),
-  snapshotSync: (registration) =>
-    Schema.decodeSync(registrationJson)(Schema.encodeSync(registrationJson)(registration)),
-  application: {
-    encode: Schema.encodeSync(registrationJson),
-    decode: Schema.decodeSync(registrationJson),
-  },
   eligibility: { admission: () => sql`1`, postcondition: () => sql`1` },
-  allocateProvisioningIdentity: Effect.sync(() => crypto.randomUUID()),
   allocateSubjectId: Effect.sync(() => crypto.randomUUID()),
   allocateCredentialId: Effect.sync(() => crypto.randomUUID()),
   allocateRevision: Effect.sync(() => SecurityRevision.make(crypto.randomUUID())),
-  retentionMillis: 3_600_000,
   encodeSubjectInsert: ({ intent, registration }, ids) => ({
     id: ids.subjectId,
     revision: ids.securityRevision,

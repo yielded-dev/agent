@@ -1,13 +1,12 @@
-import * as OAuthCrypto from "@yielded/auth-crypto/OAuth";
-import * as OpenIdClient from "@yielded/auth-openid-client";
-import * as GitHub from "@yielded/auth-openid-client/GitHub";
 import * as Auth from "@yielded/auth/Auth";
 import * as Email from "@yielded/auth/Email";
+import * as GitHub from "@yielded/auth/GitHub";
 import * as AuthHttp from "@yielded/auth/Http";
 import * as OAuth from "@yielded/auth/OAuth";
+import * as OpenIdConnect from "@yielded/auth/OpenIdConnect";
 import { ProofKeys } from "@yielded/auth/Proofs";
 import * as Sessions from "@yielded/auth/Sessions";
-import { Effect, Layer, Redacted, Schema } from "effect";
+import { Context, Effect, Exit, Layer, Redacted, Schema } from "effect";
 
 import { LoginApi, Registration } from "./contract";
 import { requirement } from "./schema";
@@ -41,7 +40,6 @@ export const AuthConfiguration = Schema.Struct({
     }),
   ),
   AUTH_YIELDED_CLIENT_SECRET: Schema.NonEmptyString,
-  AUTH_YIELDED_ACCOUNT_LINKS: Schema.optionalKey(Schema.String),
   AUTH_EMAIL_FROM: Schema.NonEmptyString,
 });
 
@@ -58,12 +56,7 @@ export const makeAuth = (config: AuthConfiguration) => {
     digits: 6,
     policy: {
       lifetimeMillis: 300_000,
-      continuationLifetimeMillis: 60_000,
       maximumFailedAttempts: 5,
-      maximumDeliveryAttempts: 1,
-      deliveryClaimMillis: 15_000,
-      deliveryRetryMillis: 30_000,
-      requestRetentionMillis: 3_600_000,
       abuse: {
         issues: { limit: 5, windowMillis: 3_600_000 },
         attempts: { limit: 10, windowMillis: 300_000 },
@@ -82,15 +75,11 @@ export const makeAuth = (config: AuthConfiguration) => {
       email: Email.makeCode(email),
       emailRegistration: Email.makeRegistration({ ...email, registration: Registration }),
       oauth: OAuth.makeRegistration({
-        // Keep the durable namespace while adding another provider to this strategy.
-        namespace: "travel-planner/github",
+        namespace: "travel-planner/oauth",
         registration: Registration,
         policy: {
           generation: 1,
           lifetimeMillis: 300_000,
-          claimLifetimeMillis: 30_000,
-          settlementTimeoutMillis: 5000,
-          retentionMillis: 600_000,
         },
         registrationPolicy: {
           lifetimeMillis: 300_000,
@@ -115,7 +104,7 @@ export const makeAuth = (config: AuthConfiguration) => {
       lifetimeMillis: 600_000,
       keyring: keyring(config.AUTH_BINDING_KEY),
     }),
-    OAuthCrypto.transactionLayer(keyring(config.AUTH_TRANSACTION_KEY)),
+    OAuth.OAuthTransactionProtector.layer(keyring(config.AUTH_TRANSACTION_KEY)),
     OAuth.OAuthReturnTargets.exactRoutes(["/travel/", "/browser-use/"]),
     Email.EmailReturnTargets.exactRoutes(["/travel/", "/browser-use/"]),
   );
@@ -125,8 +114,8 @@ export const makeAuth = (config: AuthConfiguration) => {
   const providers = Layer.effect(
     OAuth.OAuthProtocol,
     Effect.gen(function* () {
-      const github = yield* OAuth.OAuthProtocol.pipe(
-        Effect.provide(
+      const github = Context.get(
+        yield* Layer.build(
           GitHub.layer({
             configurationGeneration: 2,
             clientId: config.AUTH_GITHUB_CLIENT_ID,
@@ -134,29 +123,35 @@ export const makeAuth = (config: AuthConfiguration) => {
             redirectUri: `${config.AUTH_ORIGIN}/travel/auth/github/callback`,
           }),
         ),
+        OAuth.OAuthProtocol,
       );
 
-      const yielded = yield* Effect.cached(
-        OAuth.OAuthProtocol.pipe(
-          Effect.provide(
-            OpenIdClient.layer({
-              providers: [
-                {
-                  protocol: "oidc",
-                  provider: "yielded",
-                  issuer: config.AUTH_YIELDED_ISSUER,
-                  clientId: "yielded-agent",
-                  clientSecret: Redacted.make(config.AUTH_YIELDED_CLIENT_SECRET),
-                  redirectUri: `${config.AUTH_ORIGIN}/travel/auth/yielded/callback`,
-                  scopes: ["openid", "profile"],
-                  // Refresh old issuer sessions before returning; leave a minute for completion.
-                  maxAgeSeconds: Math.floor(requirement.maximumAgeMillis / 1000) - 60,
-                },
-              ],
-            }),
-          ),
+      const context = yield* Effect.context<OpenIdConnect.Requirements>();
+
+      // Retain successful discovery, but let a recovered issuer be retried.
+      const yielded = yield* Effect.cachedWithTTL(
+        Layer.build(
+          OpenIdConnect.layer({
+            providers: [
+              {
+                protocol: "oidc",
+                provider: "yielded",
+                issuer: config.AUTH_YIELDED_ISSUER,
+                clientId: "yielded-agent",
+                clientSecret: Redacted.make(config.AUTH_YIELDED_CLIENT_SECRET),
+                redirectUri: `${config.AUTH_ORIGIN}/travel/auth/yielded/callback`,
+                scopes: ["openid", "profile"],
+                // Refresh old issuer sessions before returning; leave a minute for completion.
+                maxAgeSeconds: Math.floor(requirement.maximumAgeMillis / 1000) - 60,
+              },
+            ],
+          }),
+        ).pipe(
+          Effect.map((services) => Context.get(services, OAuth.OAuthProtocol)),
+          Effect.provide(context),
           Effect.mapError(() => OAuth.OAuthUnavailable.make({})),
         ),
+        (exit) => (Exit.isSuccess(exit) ? Infinity : 0),
       );
 
       const select = (provider: string) =>

@@ -30,13 +30,13 @@ export class FundingFixture extends DurableObject {
             }
             for (const [id, github] of [[adminId, "3450486"]]) {
               sql.exec(
-                "insert into auth_oauth_tuple (identityKey,provider,issuer,externalSubject,state,version,subjectId) values (?,'github','https://github.com/login/oauth',?,'Owned','v1',?)",
+                "insert into auth_oauth_identity (identityKey,provider,issuer,externalSubject,subjectId) values (?,'github','https://github.com/login/oauth',?,?)",
                 id,
                 github,
                 id,
               );
               sql.exec(
-                "insert into auth_oauth_credential (moduleId,credentialId,subjectId,identityKey,revision,active) values ('travel-planner/github',?,?,?,'revision',1)",
+                "insert into auth_oauth_credential (moduleId,credentialId,subjectId,identityKey,revision,active) values ('travel-planner/oauth',?,?,?,'revision',1)",
                 id,
                 id,
                 id,
@@ -103,8 +103,8 @@ export default {
           Effect.provide(
             credentialSourceLayer({
               SERVER_OPENAI_KEY: "sk-fixture-server-key-9876",
-              PLANNER_THREADS: { getByName: () => ({ modelCredential: async () => "null" }) },
-              AUTH: {
+              PLANNER_THREADS_V3: { getByName: () => ({ modelCredential: async () => "null" }) },
+              AUTH_V2: {
                 getByName: () => ({
                   fetch: (internal) => {
                     const id = new URL(internal.url).pathname.split("/").at(-1);

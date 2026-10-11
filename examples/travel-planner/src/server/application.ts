@@ -28,7 +28,7 @@ import {
   type VoiceWork,
   PlannerError,
   PlannerInput,
-  AdmittedPlannerSettings,
+  PlannerSettings,
   type VoiceWorkRequest,
   defaultPlannerSettings,
   type PlannerSnapshot,
@@ -121,7 +121,7 @@ export const sendMessage = Effect.fn("sendMessage")(function* (request: SendMess
   const repository = yield* TripRepository;
   const identity = yield* ThreadObjectIdentity;
 
-  const settings = yield* Schema.decodeEffect(AdmittedPlannerSettings)(
+  const settings = yield* Schema.decodeEffect(PlannerSettings)(
     request.settings ?? defaultPlannerSettings,
   ).pipe(
     Effect.mapError(
@@ -168,7 +168,7 @@ export const sendMessage = Effect.fn("sendMessage")(function* (request: SendMess
         code: "conflict",
         message: "This message was already submitted with different details.",
       });
-    // Preserve the admitted publication revision and legacy seed when acknowledgement was lost.
+    // Preserve the admitted input when acknowledgement was lost.
     // Resubmission completes readiness; finding an admitted ledger row alone is not acceptance.
     const options = { threadId, principal, idempotencyKey };
 

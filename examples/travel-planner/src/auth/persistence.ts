@@ -13,7 +13,7 @@ import { Effect, Layer } from "effect";
 import { emailSignInMapping, emailRegistrationMapping } from "./email-schema";
 import { oauthSignInMapping, oauthIntentMapping, oauthRegistrationMapping } from "./oauth-schema";
 import { proofs } from "./proof-schema";
-import { subject, subjectMapping, subjectId, credentialMapping } from "./schema";
+import { subject, subjectMapping, subjectId, credentialMapping, clock } from "./schema";
 import type { AppAuth } from "./server";
 import { sessionsMapping } from "./session-schema";
 
@@ -35,9 +35,13 @@ export const persistenceLayer = (AppAuth: AppAuth) =>
 
       const registration = yield* Drizzle.makeOAuthRegistrationServices(oauthRegistrationMapping);
 
-      const sessions = yield* Drizzle.makeStatefulSessionServices(sessionsMapping);
+      const sessions = yield* Drizzle.makeStatefulSessionServices(
+        sessionsMapping(AppAuth.sessions.moduleId),
+      );
 
       const authority = yield* Drizzle.makeAuthenticationAuthorityServices({
+        moduleId: AppAuth.sessions.moduleId,
+        clock,
         subject: subjectMapping,
         credential: credentialMapping,
         subjectId,

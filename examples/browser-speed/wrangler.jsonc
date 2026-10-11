@@ -34,7 +34,7 @@
           { "name": "LAB", "class_name": "BrowserLab" },
           {
             "name": "AUTH",
-            "class_name": "PlannerAuth",
+            "class_name": "PlannerAuthV2",
             "script_name": "effect-agent-travel-planner",
           },
         ],

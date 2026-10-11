@@ -7,7 +7,7 @@ import { Effect, Schema } from "effect";
 import { Tool, Toolkit } from "effect/ai";
 
 import { DeliverResponse } from "../agent.ts";
-import { AdmittedPlannerSettings, PlannerError, Text, Trip, TripId } from "../domain.ts";
+import { PlannerSettings, PlannerError, Text, Trip, TripId } from "../domain.ts";
 import { ReadTravelPage } from "../research.ts";
 import { PlannerAttempt } from "../server/progress.ts";
 import { TripRepository } from "../server/trips.ts";
@@ -19,7 +19,7 @@ export const EditorRequest = Schema.Struct({ tripId: TripId, message: Text });
 export const EditorInput = Schema.Struct({
   ...EditorRequest.fields,
   sourceThreadId: ThreadId,
-  settings: AdmittedPlannerSettings,
+  settings: PlannerSettings,
 });
 
 export type EditorInput = typeof EditorInput.Type;

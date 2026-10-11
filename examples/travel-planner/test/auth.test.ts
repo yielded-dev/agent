@@ -9,6 +9,8 @@ import { build } from "esbuild";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { afterAll, beforeAll, expect, it } from "vite-plus/test";
 
+import { LoginApi } from "../src/auth/contract";
+
 let mf: Miniflare;
 let directory: string;
 let githubExchanges = 0;
@@ -45,8 +47,8 @@ beforeAll(async () => {
       r2Buckets: ["APP_BUILDS"],
       serviceBindings: { ASSETS: () => new Response("Fixture asset") },
       durableObjects: {
-        PLANNER_THREADS: { className: "TravelPlannerThread", useSQLite: true },
-        AUTH: { className: "AuthFixture", useSQLite: true },
+        PLANNER_THREADS_V3: { className: "TravelPlannerThread", useSQLite: true },
+        AUTH_V2: { className: "AuthFixture", useSQLite: true },
       },
       durableObjectsPersist: directory,
       outboundService: async (request) => {
@@ -110,21 +112,23 @@ const makeClient = () => {
     return response;
   };
 
-  const raw = async (name: string, payload?: object) => {
+  const raw = async (name: keyof typeof LoginApi.actions, payload?: object) => {
     const response = await request(`/auth/${name}`, {
-      method: payload ? "POST" : "GET",
+      method: LoginApi.actions[name].route.method,
       headers: {
         origin: "https://planner.test",
         "content-type": "application/json",
         "x-effect-auth-csrf": "1",
       },
-      ...(payload ? { body: JSON.stringify({ payload }) } : {}),
+      ...(LoginApi.actions[name].route.method === "POST"
+        ? { body: JSON.stringify({ payload }) }
+        : {}),
     });
 
     return { status: response.status, body: await response.json() };
   };
 
-  const call = async (name: string, payload?: object) => {
+  const call = async (name: keyof typeof LoginApi.actions, payload?: object) => {
     const response = await raw(name, payload);
 
     expect(response.status, JSON.stringify(response.body)).toBe(200);
@@ -142,10 +146,21 @@ const makeClient = () => {
   };
 };
 
-const mail = async () =>
-  Schema.decodeUnknownSync(
-    Schema.Struct({ code: Schema.String, email: Schema.String, count: Schema.Number }),
-  )(await (await mf.dispatchFetch("https://planner.test/_fixture/delivery")).json());
+const DeliveredEmail = Schema.Struct({
+  code: Schema.String,
+  email: Schema.String,
+  count: Schema.Number,
+});
+
+const mail = async () => {
+  const read = async () =>
+    (await mf.dispatchFetch("https://planner.test/_fixture/delivery")).json();
+
+  // A proof receipt confirms admission; the scoped dispatcher delivers asynchronously.
+  await expect.poll(async () => Schema.is(DeliveredEmail)(await read())).toBe(true);
+
+  return Schema.decodeUnknownSync(DeliveredEmail)(await read());
+};
 
 const registrationCode = async (client: ReturnType<typeof makeClient>, email: string) => {
   const input = {
@@ -164,12 +179,13 @@ const registrationCode = async (client: ReturnType<typeof makeClient>, email: st
   return { input, requestId, receipt, delivered: await mail() };
 };
 
-const verifyRegistration = (
+const completeRegistration = (
   client: ReturnType<typeof makeClient>,
   code: Awaited<ReturnType<typeof registrationCode>>,
   secret = code.delivered.code,
 ) =>
-  client.raw("verifyEmailRegistration", {
+  client.raw("completeEmailRegistration", {
+    commandId: crypto.randomUUID(),
     ...code.input,
     reference: code.receipt.reference,
     secret,
@@ -179,9 +195,9 @@ it("binds email proofs to the initiating browser and consumes successful codes o
   const client = makeClient();
   const code = await registrationCode(client, "proof@example.com");
 
-  expect((await verifyRegistration(makeClient(), code)).status).toBe(400);
-  expect((await verifyRegistration(client, code)).status).toBe(200);
-  expect((await verifyRegistration(client, code)).status).toBe(400);
+  expect((await completeRegistration(makeClient(), code)).status).toBe(400);
+  expect((await completeRegistration(client, code)).status).toBe(200);
+  expect((await completeRegistration(client, code)).status).toBe(400);
   expect(await client.call("getSession")).toBeNull();
 });
 

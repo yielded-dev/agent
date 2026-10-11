@@ -3,7 +3,7 @@ import { Effect, Layer, Result, Schema, Stream, Redacted } from "effect";
 import { AiError, LanguageModel, Model } from "effect/ai";
 import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 
-import { type PlannerError, type AdmittedPlannerSettings } from "../domain.ts";
+import { type PlannerError, type PlannerSettings } from "../domain.ts";
 import { credentialForOwner } from "./credentials.ts";
 import { recordDiagnostic } from "./diagnostics.ts";
 import { PlannerAttempt, type ProgressWriter } from "./progress.ts";
@@ -124,7 +124,7 @@ export const observeOpenAi = (
     }),
 });
 
-export const selectedModelConfig = (settings: AdmittedPlannerSettings) =>
+export const selectedModelConfig = (settings: PlannerSettings) =>
   ({
     store: false,
     max_output_tokens: 16_384,

@@ -1,8 +1,9 @@
 import { PersistenceMappingError } from "@yielded/auth-persistence/Adapter";
 import { SubjectId } from "@yielded/auth/Schema";
 import { type AuthenticationRequirement, SecurityRevision } from "@yielded/auth/Sessions";
+import { sql, type SQL } from "drizzle-orm";
 import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { DateTime, Effect, Schema } from "effect";
+import { Effect, Schema } from "effect";
 
 // Local subjects are random IDs. Provider email/profile never grants account ownership.
 export const subject = sqliteTable("auth_subject", {
@@ -52,23 +53,6 @@ export const emailCredential = sqliteTable(
   ],
 );
 
-export const emailRegistration = sqliteTable(
-  "auth_email_registration",
-  {
-    moduleId: text().notNull(),
-    commandId: text().notNull(),
-    fingerprint: text().notNull(),
-    state: text().notNull(),
-    subjectId: text(),
-    pendingReference: text(),
-    retentionUntil: integer().notNull(),
-  },
-  (t) => [
-    uniqueIndex("auth_email_registration_unique").on(t.moduleId, t.commandId),
-    uniqueIndex("auth_email_pending_unique").on(t.pendingReference),
-  ],
-);
-
 export const mappingError = () =>
   PersistenceMappingError.make({
     operation: "travel-auth",
@@ -78,10 +62,13 @@ export const mappingError = () =>
 export const decodeMillis = (value: unknown) =>
   Schema.decodeUnknownEffect(Schema.Natural)(value).pipe(Effect.mapError(mappingError));
 
-export const decodeUtc = (value: unknown) =>
-  decodeMillis(value).pipe(Effect.map(DateTime.makeUnsafe));
-
-export const encodeInstant = (millis: number) => millis;
+export const clock = {
+  encodeInstant: (millis: number) => millis,
+  decodeInstant: Schema.decodeUnknownSync(Schema.Natural),
+  engineNowMillis: sql`cast(round((julianday('now') - 2440587.5) * 86400000) as integer)`,
+  toMillis: (expression: SQL) => expression,
+  fromMillis: (expression: SQL) => expression,
+};
 
 export const subjectId = {
   toNative: (id: SubjectId) => Effect.succeed(id),
@@ -107,7 +94,7 @@ export const subjectMapping = {
   status: "active",
   securityRevision: "revision",
   isActiveStatus: (value: unknown) => value === true,
-  d1ActiveStatusValue: true,
+  activeStatusValue: true,
   decodeRequirement: () => Effect.succeed(requirement),
   nextSecurityRevisionSync: () => SecurityRevision.make(crypto.randomUUID()),
 } as const;
@@ -119,5 +106,5 @@ export const credentialMapping = {
   revision: "revision",
   status: "active",
   isActiveStatus: (value: unknown) => value === true,
-  d1ActiveStatusValue: true,
+  activeStatusValue: true,
 } as const;

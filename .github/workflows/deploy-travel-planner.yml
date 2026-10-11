@@ -55,6 +55,39 @@ jobs:
         working-directory: examples/travel-planner
         run: vp test
 
+      - name: Detach the browser lab from retired auth
+        id: browser-auth
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # A foreign binding must not retain the namespace being deleted. On later
+          # deploys the lab already targets PlannerAuthV2 and this step does nothing.
+          vp exec curl --fail --silent --show-error --max-time 30 \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/yielded-agent-browser-use/settings" \
+            > "$RUNNER_TEMP/browser-settings.json"
+          vp exec jq -e '.success == true and (.result.bindings | type == "array")' "$RUNNER_TEMP/browser-settings.json"
+          if vp exec jq -e '.result.bindings | any(.name == "AUTH" and .class_name == "PlannerAuth" and .script_name == "effect-agent-travel-planner")' "$RUNNER_TEMP/browser-settings.json"; then
+            vp exec cp examples/browser-speed/wrangler.jsonc "$RUNNER_TEMP/browser-wrangler.jsonc"
+            trap 'vp exec cp "$RUNNER_TEMP/browser-wrangler.jsonc" examples/browser-speed/wrangler.jsonc' EXIT
+            vp exec node --input-type=module <<'JS'
+          import { readFileSync, writeFileSync } from "node:fs";
+          const path = "examples/browser-speed/wrangler.jsonc";
+          const source = readFileSync(path, "utf8");
+          const binding = /\{\s*"name": "AUTH",\s*"class_name": "PlannerAuthV2",\s*"script_name": "effect-agent-travel-planner",?\s*\},?/g;
+          if ([...source.matchAll(binding)].length !== 1) throw new Error("Expected exactly one browser auth binding");
+          writeFileSync(path, source.replace(binding, ""));
+          JS
+            vp run -F @yielded/agent-example-browser-speed deploy:public
+            echo "rebind=true" >> "$GITHUB_OUTPUT"
+          elif vp exec jq -e '.result.bindings | all(.name != "AUTH")' "$RUNNER_TEMP/browser-settings.json"; then
+            # Resume a cutover whose planner deployment failed after detaching.
+            echo "rebind=true" >> "$GITHUB_OUTPUT"
+          else
+            vp exec jq -e '.result.bindings | any(.name == "AUTH" and .class_name == "PlannerAuthV2" and .script_name == "effect-agent-travel-planner")' "$RUNNER_TEMP/browser-settings.json"
+          fi
+
       - name: Deploy with Alchemy
         env:
           # Same account and remote Alchemy state credentials as Deploy docs.
@@ -63,7 +96,6 @@ jobs:
           AUTH_ORIGIN: https://agent.yielded.dev
           AUTH_YIELDED_ISSUER: https://auth.yielded.dev
           AUTH_YIELDED_CLIENT_SECRET: ${{ secrets.TRAVEL_PLANNER_YIELDED_CLIENT_SECRET }}
-          AUTH_YIELDED_ACCOUNT_LINKS: ${{ vars.TRAVEL_PLANNER_YIELDED_ACCOUNT_LINKS || '[]' }}
           AUTH_EMAIL_FROM: auth@effect-agent.com
           AUTH_GITHUB_CLIENT_ID: ${{ secrets.TRAVEL_PLANNER_GITHUB_CLIENT_ID }}
           AUTH_GITHUB_CLIENT_SECRET: ${{ secrets.TRAVEL_PLANNER_GITHUB_CLIENT_SECRET }}
@@ -80,6 +112,13 @@ jobs:
             fi
           done
           vp run -F @yielded/agent-example-travel-planner deploy --yes
+
+      - name: Rebind the browser lab to fresh auth
+        if: steps.browser-auth.outputs.rebind == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: vp run -F @yielded/agent-example-browser-speed deploy:public
 
       - name: Enable traces with query-string redaction
         env:
