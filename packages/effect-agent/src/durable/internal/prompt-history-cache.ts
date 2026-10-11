@@ -33,13 +33,79 @@ const JSON_PREFIX = '{"content":[';
 const encodePrompt = Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt));
 const parseJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
 
-const decodePrompt = Schema.decodeUnknownEffect(
-  Schema.Struct({
-    content: Schema.Array(Schema.toCodecJson(Prompt.Message)).check(
-      Schema.isMaxLength(MAX_ENTRIES),
-    ),
-  }),
+// Construct these only when a persisted checkpoint is read. The encoded-side schema
+// validates without running native defaults for every historical message and part.
+const decodeEncodedPrompt = Schema.decodeUnknownEffect(
+  Schema.suspend(() =>
+    Schema.Struct({
+      content: Schema.Array(Schema.toEncoded(Prompt.Message)).check(
+        Schema.isMaxLength(MAX_ENTRIES),
+      ),
+    }),
+  ),
 );
+
+const decodePrompt = Schema.decodeUnknownEffect(
+  Schema.suspend(() =>
+    Schema.Struct({
+      content: Schema.Array(Schema.toCodecJson(Prompt.Message)).check(
+        Schema.isMaxLength(MAX_ENTRIES),
+      ),
+    }),
+  ),
+);
+
+// Inputs have crossed Effect's encoded-message Schema boundary. Native constructors
+// supply only the brands and defaults; Effect still owns every message and part type.
+function hydratePart(part: Prompt.UserMessagePartEncoded): Prompt.UserMessagePart;
+function hydratePart(part: Prompt.ToolMessagePartEncoded): Prompt.ToolMessagePart;
+function hydratePart(part: Prompt.AssistantMessagePartEncoded): Prompt.AssistantMessagePart;
+function hydratePart(part: Prompt.PartEncoded): Prompt.Part {
+  switch (part.type) {
+    case "text":
+      return Prompt.textPart(part);
+    case "reasoning":
+      return Prompt.reasoningPart(part);
+    case "file":
+      return Prompt.filePart(part);
+    case "tool-call":
+      return Prompt.toolCallPart({ ...part, providerExecuted: part.providerExecuted ?? false });
+    case "tool-result":
+      return Prompt.toolResultPart({ ...part, providerExecuted: part.providerExecuted ?? false });
+    case "tool-approval-request":
+      return Prompt.toolApprovalRequestPart(part);
+    case "tool-approval-response":
+      return Prompt.toolApprovalResponsePart(part);
+  }
+}
+
+const hydrateMessage = (message: Prompt.MessageEncoded): Prompt.Message => {
+  switch (message.role) {
+    case "system":
+      return Prompt.systemMessage(message);
+    case "user":
+      return Prompt.userMessage({
+        ...message,
+        content:
+          typeof message.content === "string"
+            ? [Prompt.textPart({ text: message.content })]
+            : message.content.map((p) => hydratePart(p)),
+      });
+    case "assistant":
+      return Prompt.assistantMessage({
+        ...message,
+        content:
+          typeof message.content === "string"
+            ? [Prompt.textPart({ text: message.content })]
+            : message.content.map((p) => hydratePart(p)),
+      });
+    case "tool":
+      return Prompt.toolMessage({
+        ...message,
+        content: message.content.map((p) => hydratePart(p)),
+      });
+  }
+};
 
 export interface PromptHistory {
   readonly prompt: Prompt.Prompt;
@@ -83,7 +149,12 @@ const decodeCheckpointPrefix = Effect.fnUntraced(function* (encoded: string, len
   const bytes = retainedBytes(value, encoded, MAX_BYTES);
 
   if (bytes === undefined) return undefined;
-  const decoded = yield* decodePrompt(value);
+
+  const decoded = yield* decodeEncodedPrompt(value).pipe(
+    Effect.map((prompt) => ({ content: prompt.content.map(hydrateMessage) })),
+    // Binary/URL JSON representations require the ordinary codec's transformations.
+    Effect.catch(() => decodePrompt(value)),
+  );
 
   return decoded.content.length === length
     ? { prompt: Prompt.fromMessages(decoded.content), encoded, bytes }
