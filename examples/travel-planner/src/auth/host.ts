@@ -1,48 +1,47 @@
 import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import * as Drizzle from "@yielded/auth-persistence-drizzle/SqliteDo";
+import type { EmailDelivery } from "@yielded/auth/EmailDelivery";
 import { LifecycleHooks } from "@yielded/auth/Hooks";
-import type { OAuthProtocol } from "@yielded/auth/OAuth";
-import type { EmailProofDelivery } from "@yielded/auth/Proofs";
-import { layerWebCrypto } from "@yielded/auth/WebCrypto";
-import { Effect, Layer, Option, Schema } from "effect";
-import { HttpRouter, HttpServer, HttpServerResponse } from "effect/http";
+import { ProofUnavailable, ProofRequestContext } from "@yielded/auth/Proofs";
+import * as KdfAdmission from "@yielded/crypto/KdfAdmission";
+import * as Portable from "@yielded/crypto/Portable";
+import * as WebCrypto from "@yielded/crypto/WebCrypto";
+import { Context, Effect, Layer, Redacted, Schema } from "effect";
+import {
+  FetchHttpClient,
+  HttpRouter,
+  HttpServer,
+  HttpServerRequest,
+  HttpServerResponse,
+} from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 
 import { FundingApi, FundingError } from "../funding-domain";
+import { AccountId } from "./account";
+import { emailRendererLayer } from "./email-delivery";
 import { makeFundingStore } from "./funding";
-import { makeGithubDiagnostics } from "./oauth-diagnostics";
 import { persistenceLayer } from "./persistence";
 import { makeAuth, type AuthConfiguration } from "./server";
 import { initializeAuthStorage } from "./storage";
-import { connectYieldedAccounts } from "./yielded-accounts";
 
-const rejectedCallback = Schema.decodeOption(
-  Schema.fromJsonString(
-    Schema.Struct({
-      _tag: Schema.Literal("Failure"),
-      error: Schema.Struct({ _tag: Schema.Literal("OAuthRejected") }),
-    }),
-  ),
-);
+export class AuthHost extends Context.Service<
+  AuthHost,
+  {
+    readonly fetch: (
+      request: Request,
+    ) => Effect.Effect<Response, Schema.SchemaError | FundingError>;
+  }
+>()("travel-planner/AuthHost") {}
 
 /** The Auth object owns only auth state; planner data never passes through it. */
-export const serveAuth = Effect.fn("Auth.fetch")(function* (
-  request: Request,
+export const makeAuthHost = Effect.fn("Auth.host")(function* (
   storage: DurableObjectStorage,
   config: AuthConfiguration,
-  delivery: Layer.Layer<EmailProofDelivery>,
-  protocol?: Layer.Layer<OAuthProtocol>,
+  delivery: Layer.Layer<EmailDelivery>,
   serverKeyConfigured = false,
 ) {
   yield* initializeAuthStorage(storage);
-  if (config.AUTH_YIELDED_ACCOUNT_LINKS !== undefined)
-    yield* connectYieldedAccounts(
-      storage,
-      config.AUTH_YIELDED_ISSUER,
-      config.AUTH_YIELDED_ACCOUNT_LINKS,
-    );
   const { AppAuth, http, security, providers } = makeAuth(config);
-  const diagnostics = yield* makeGithubDiagnostics(AppAuth);
 
   const database = persistenceLayer(AppAuth).pipe(
     Layer.provideMerge(Drizzle.databaseLayer),
@@ -51,14 +50,12 @@ export const serveAuth = Effect.fn("Auth.fetch")(function* (
   );
 
   const live = AppAuth.layer.pipe(
+    Layer.provide([database, security, providers, delivery, emailRendererLayer]),
     Layer.provide([
-      diagnostics.persistenceLayer.pipe(Layer.provideMerge(database)),
-      security,
-      protocol ?? providers,
-      delivery,
-      diagnostics.bindingLayer.pipe(Layer.provide(security)),
+      FetchHttpClient.layer,
+      WebCrypto.layerCryptoWeb,
+      Portable.layer(globalThis.crypto.subtle).pipe(Layer.provide(KdfAdmission.layer())),
     ]),
-    Layer.provide(layerWebCrypto),
   );
 
   const authorized = HttpRouter.add(
@@ -88,14 +85,15 @@ export const serveAuth = Effect.fn("Auth.fetch")(function* (
 
       const actor = Effect.gen(function* () {
         const auth = yield* AppAuth;
+        const request = yield* HttpServerRequest.HttpServerRequest;
 
         const session = yield* auth
           .requireSession()
           .pipe(Effect.mapError(() => new FundingError({ message: "Sign in to continue." })));
 
-        if (request.headers.get("x-elsewhere-account") !== session.subjectId)
+        if (request.headers["x-elsewhere-account"] !== session.subjectId)
           return yield* new FundingError({ message: "Account changed. Sign in again." });
-        if (request.method !== "GET" && request.headers.get("origin") !== config.AUTH_ORIGIN)
+        if (request.method !== "GET" && request.headers.origin !== config.AUTH_ORIGIN)
           return yield* new FundingError({ message: "Invalid request origin." });
 
         return session.subjectId;
@@ -122,29 +120,50 @@ export const serveAuth = Effect.fn("Auth.fetch")(function* (
     http.middleware,
   );
 
-  const routes = Layer.mergeAll(
-    http.routes(),
-    authorized,
-    ...(new URL(request.url).pathname.startsWith("/api/funding/") ? [fundingRoutes] : []),
-  ).pipe(Layer.provide(live), Layer.provide(HttpServer.layerServices));
+  const routes = Layer.mergeAll(http.routes(), authorized, fundingRoutes).pipe(
+    Layer.provide(live),
+    Layer.provide(HttpServer.layerServices),
+  );
 
   const web = yield* Effect.acquireRelease(
-    Effect.sync(() => HttpRouter.toWebHandler(routes, { disableLogger: true })),
+    Effect.sync(() =>
+      HttpRouter.toWebHandler(routes, {
+        disableLogger: true,
+        middleware: Effect.provideService(
+          ProofRequestContext,
+          Effect.gen(function* () {
+            // The public Cloudflare edge supplies this header; the Auth Object is private.
+            const request = yield* HttpServerRequest.HttpServerRequest;
+            const address = request.headers["cf-connecting-ip"];
+
+            if (address === undefined || address.length === 0)
+              return yield* ProofUnavailable.make({});
+
+            return { networkKey: Redacted.make(address) };
+          }),
+        ),
+      }),
+    ),
     (web) => Effect.promise(() => web.dispose()),
   );
 
-  const response = yield* Effect.promise(() => web.handler(request));
-  const body = yield* Effect.promise(() => response.arrayBuffer());
+  return AuthHost.of({
+    fetch: Effect.fn("Auth.fetch")(function* (request) {
+      const url = new URL(request.url);
 
-  if (
-    new URL(request.url).pathname === "/travel/auth/completeSignIn" &&
-    response.status === 400 &&
-    Option.isSome(rejectedCallback(new TextDecoder().decode(body)))
-  )
-    yield* diagnostics.report.pipe(
-      Effect.timeout("100 millis"),
-      Effect.catchCause(() => Effect.void),
-    );
+      if (url.pathname.startsWith("/_internal/funding/")) {
+        const id = yield* Schema.decodeEffect(AccountId)(
+          url.pathname.slice("/_internal/funding/".length),
+        );
 
-  return new Response(body, { status: response.status, headers: response.headers });
-}, Effect.scoped);
+        const store = yield* makeFundingStore(storage);
+
+        return Response.json(yield* store.status(id));
+      }
+      const response = yield* Effect.promise(() => web.handler(request));
+      const body = yield* Effect.promise(() => response.arrayBuffer());
+
+      return new Response(body, { status: response.status, headers: response.headers });
+    }),
+  });
+});

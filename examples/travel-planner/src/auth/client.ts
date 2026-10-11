@@ -312,15 +312,10 @@ export const verifyEmailCode = Atom.fn<{
     if (mode === "register") {
       const base = { flowId, email, registration: { displayName: "Traveler" } };
 
-      const verified = yield* get.setResult(auth.verifyEmailRegistration, {
+      const result = yield* get.setResult(auth.completeEmailRegistration, {
         ...base,
         reference,
         secret: input.code,
-      });
-
-      const result = yield* get.setResult(auth.completeEmailRegistration, {
-        ...base,
-        continuationId: verified.continuation.continuationId,
         commandId: yield* id(),
       });
 
@@ -330,15 +325,10 @@ export const verifyEmailCode = Atom.fn<{
     }
     const base = { flowId, email, returnTarget };
 
-    const verified = yield* get.setResult(auth.verifyEmailCode, {
+    yield* get.setResult(auth.completeEmailSignIn, {
       ...base,
       reference,
       secret: input.code,
-    });
-
-    yield* get.setResult(auth.completeEmailSignIn, {
-      ...base,
-      continuationId: verified.continuation.continuationId,
     });
     // auth.session remains the rendering authority after credential settlement.
   }).pipe(Effect.provideService(AtomRegistry.AtomRegistry, get.registry)),

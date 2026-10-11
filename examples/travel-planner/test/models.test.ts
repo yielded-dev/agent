@@ -426,7 +426,7 @@ it.effect(
 
       const credentials = credentialSourceLayer({
         BYOK_ENCRYPTION_KEY: btoa(String.fromCharCode(...encryption)),
-        PLANNER_THREADS: {
+        PLANNER_THREADS_V3: {
           getByName: (owner) => ({
             demoAccessAllowed: async () => false,
             modelCredential: async () => {

@@ -95,9 +95,7 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
               >
                 Use another Yielded account
               </button>
-              <p className="login-note">
-                For an older Agent account, use the same method you used before.
-              </p>
+              <p className="login-note">Each sign-in method uses a separate Agent account.</p>
               <button
                 className="login-secondary"
                 disabled={busy}

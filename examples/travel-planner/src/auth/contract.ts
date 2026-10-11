@@ -4,13 +4,7 @@ import { HookDenied } from "@yielded/auth/Hooks";
 import { IdentityConflict } from "@yielded/auth/Identity";
 import * as OAuth from "@yielded/auth/OAuth";
 import { RequestBindingFlowId, RequestBindingPublic } from "@yielded/auth/Operations";
-import {
-  ProofContinuation,
-  ProofContinuationId,
-  ProofReference,
-  ProofRequestId,
-  ProofRequestReceipt,
-} from "@yielded/auth/Proofs";
+import { ProofReference, ProofRequestId, ProofRequestReceipt } from "@yielded/auth/Proofs";
 import { Email as EmailAddress } from "@yielded/auth/Schema";
 import { Schema } from "effect";
 
@@ -52,8 +46,6 @@ const attempt = {
   secret: Schema.RedactedFromValue(Schema.String.check(Schema.isMaxLength(4096))),
 };
 
-const verified = Schema.Struct({ continuation: ProofContinuation });
-
 export const LoginApi = AuthContract.make("travel-planner/Auth", {
   basePath: "/travel/auth",
   claims: Schema.Struct({ displayName: Schema.String }),
@@ -77,18 +69,8 @@ export const LoginApi = AuthContract.make("travel-planner/Auth", {
       strategy: "email",
       requestFields: { requestBinding: "request-binding" },
     }),
-    verifyEmailCode: AuthContract.action({
-      payload: Schema.Struct({ ...emailSignIn, ...attempt }),
-      success: verified,
-      error: EmailFailure,
-      mode: "mutation",
-      credentials: true,
-      method: "verifySignIn",
-      strategy: "email",
-      requestFields: { requestBinding: "request-binding" },
-    }),
     completeEmailSignIn: AuthContract.action({
-      payload: Schema.Struct({ ...emailSignIn, continuationId: ProofContinuationId }),
+      payload: Schema.Struct({ ...emailSignIn, ...attempt }),
       success: Schema.Struct({
         completion: sessions.CompletionResult,
         returnTarget: Email.SafeReturnTarget,
@@ -99,7 +81,7 @@ export const LoginApi = AuthContract.make("travel-planner/Auth", {
       replay: "single-use",
       method: "completeSignIn",
       strategy: "email",
-      requestFields: { requestBinding: "request-binding", credential: "proof-continuation" },
+      requestFields: { requestBinding: "request-binding" },
       subject: {
         fromSuccess: (value) =>
           value.completion._tag === "Authenticated"
@@ -126,20 +108,10 @@ export const LoginApi = AuthContract.make("travel-planner/Auth", {
       strategy: "emailRegistration",
       requestFields: { requestBinding: "request-binding" },
     }),
-    verifyEmailRegistration: AuthContract.action({
-      payload: Schema.Struct({ ...emailRegistration, ...attempt }),
-      success: verified,
-      error: EmailFailure,
-      mode: "mutation",
-      credentials: true,
-      method: "verifyRegistration",
-      strategy: "emailRegistration",
-      requestFields: { requestBinding: "request-binding" },
-    }),
     completeEmailRegistration: AuthContract.action({
       payload: Schema.Struct({
         ...emailRegistration,
-        continuationId: ProofContinuationId,
+        ...attempt,
         commandId: Email.EmailCommandId,
       }),
       success: OAuth.OAuthRegistrationResult,
@@ -149,7 +121,7 @@ export const LoginApi = AuthContract.make("travel-planner/Auth", {
       replay: "single-use",
       method: "completeRegistration",
       strategy: "emailRegistration",
-      requestFields: { requestBinding: "request-binding", credential: "proof-continuation" },
+      requestFields: { requestBinding: "request-binding" },
     }),
     signIn: AuthContract.action({
       payload: OAuth.OAuthSignInInput,

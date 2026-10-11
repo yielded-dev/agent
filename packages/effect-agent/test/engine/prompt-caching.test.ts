@@ -570,7 +570,7 @@ describe("prompt caching: https://github.com/yielded-dev/agent/issues/651", () =
             expect(requests[index]!.prompt_cache_key).toBe("thread-route");
           expect(requests[index]!.input.slice(0, previous.input.length)).toEqual(previous.input);
           expect(requests[index]!.input.at(-2)).toMatchObject({
-            role: providerName === "xai" ? "system" : "developer",
+            role: "developer",
             content: [{ text: `Answer in ${index === 1 ? "German" : "French"}.` }],
           });
         }

@@ -57,17 +57,12 @@ export default Alchemy.Stack(
       assets: { runWorkerFirst: true },
       env: {
         ...(Redacted.value(serverOpenAiKey) ? { SERVER_OPENAI_KEY: serverOpenAiKey } : {}),
-        // Alchemy keys env-bound Objects by the binding name, overriding the
-        // declaration ID. Keep each binding and class stable; changing one deletes its data.
-        PLANNER_THREADS: Cloudflare.DurableObject("PlannerThreadsV2", {
-          className: "PlannerThread",
+        // New binding keys AND classes create empty namespaces. A class-only
+        // rename under the old key preserves data. Removed bindings delete it.
+        PLANNER_THREADS_V3: Cloudflare.DurableObject("PlannerThreadsV3", {
+          className: "PlannerThreadV3",
         }),
-        // Retired stores in thread storage format 9, which current storage cannot open. The
-        // binding only keeps Cloudflare from deleting them; nothing reads it.
-        ACCOUNT_THREADS: Cloudflare.DurableObject("AccountThreadsV1", {
-          className: "AccountPlannerThread",
-        }),
-        AUTH: Cloudflare.DurableObject("AuthV1", { className: "PlannerAuth" }),
+        AUTH_V2: Cloudflare.DurableObject("AuthV2", { className: "PlannerAuthV2" }),
         AUTH_EMAIL: Cloudflare.Email.SendEmail("AuthEmail", {
           allowedSenderAddresses: [yield* Config.NonEmptyString("AUTH_EMAIL_FROM")],
         }),
@@ -75,9 +70,6 @@ export default Alchemy.Stack(
         AUTH_EMAIL_FROM: Config.NonEmptyString("AUTH_EMAIL_FROM"),
         AUTH_GITHUB_CLIENT_ID: Config.NonEmptyString("AUTH_GITHUB_CLIENT_ID"),
         AUTH_YIELDED_ISSUER: Config.NonEmptyString("AUTH_YIELDED_ISSUER"),
-        AUTH_YIELDED_ACCOUNT_LINKS: Config.String("AUTH_YIELDED_ACCOUNT_LINKS").pipe(
-          Config.withDefault("[]"),
-        ),
         AUTH_YIELDED_CLIENT_SECRET: Config.schema(
           Schema.Redacted(Schema.NonEmptyString),
           "AUTH_YIELDED_CLIENT_SECRET",

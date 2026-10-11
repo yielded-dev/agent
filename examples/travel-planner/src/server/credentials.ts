@@ -12,12 +12,12 @@ export interface CredentialEnvironment {
 }
 
 export interface CredentialBindings extends CredentialEnvironment {
-  readonly AUTH?: {
+  readonly AUTH_V2?: {
     readonly getByName: (name: string) => {
       readonly fetch: (request: Request) => Promise<Response>;
     };
   };
-  readonly PLANNER_THREADS: {
+  readonly PLANNER_THREADS_V3: {
     readonly getByName: (owner: string) => {
       readonly modelCredential: () => Promise<string>;
     };
@@ -67,7 +67,7 @@ export const credentialSourceLayer = (env: CredentialBindings) =>
       Effect.gen(function* () {
         if (!env.SERVER_OPENAI_KEY) return false;
         const id = ownerOfThread(owner).slice("account-".length);
-        const auth = env.AUTH;
+        const auth = env.AUTH_V2;
 
         if (!auth) return yield* unavailable();
 
@@ -93,7 +93,7 @@ export const credentialSourceLayer = (env: CredentialBindings) =>
       }).pipe(Effect.timeout("10 seconds"), Effect.mapError(unavailable)),
     stored: (owner) =>
       Effect.tryPromise({
-        try: () => env.PLANNER_THREADS.getByName(owner).modelCredential(),
+        try: () => env.PLANNER_THREADS_V3.getByName(owner).modelCredential(),
         catch: unavailable,
       }).pipe(
         Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(StoredCredential))),

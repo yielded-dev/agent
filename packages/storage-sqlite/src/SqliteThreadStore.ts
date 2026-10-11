@@ -1,5 +1,4 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import { SqliteClient } from "@effect/sql-sqlite-node";
 import { sqlStorageOwner } from "@yielded/agent-storage-sql/sql-journal";
 import { makeSqlRunStorage } from "@yielded/agent-storage-sql/sql-run-storage";
 import { makeSqlTransaction, SqlInteger } from "@yielded/agent-storage-sql/sql-storage";
@@ -26,6 +25,7 @@ import {
   readSqliteStorageHeader,
   inspectManagedSqliteStorage,
 } from "./internal/migrations.ts";
+import { sqliteClientLayer } from "./internal/sqlite-client-layer.ts";
 import {
   configureSqliteSynchronous,
   initializeSqliteJournal,
@@ -308,7 +308,7 @@ export const layer = (
             Layer.succeed(SqliteStorageConfig)(config),
             storageFailpointLayer(options),
             // The journal enables WAL only after proving the file is fresh.
-            SqliteClient.layer({ filename: options.filename, disableWAL: true }),
+            sqliteClientLayer({ filename: options.filename, disableWAL: true }, "open SQLite"),
             NodeCrypto.layer,
           ),
         ),
@@ -359,12 +359,15 @@ export const exportThread = Effect.fn("SqliteThreadStore.exportThread")(function
     Effect.scoped,
     Effect.provide(
       Layer.merge(
-        SqliteClient.layer({
-          filename: options.filename,
-          readonly: true,
-          disableWAL: true,
-          busyTimeout: options.busyTimeout ?? 5_000,
-        }),
+        sqliteClientLayer(
+          {
+            filename: options.filename,
+            readonly: true,
+            disableWAL: true,
+            busyTimeout: options.busyTimeout ?? 5_000,
+          },
+          "open SQLite for export",
+        ),
         NodeCrypto.layer,
       ),
     ),

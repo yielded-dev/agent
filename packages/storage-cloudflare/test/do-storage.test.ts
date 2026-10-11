@@ -583,7 +583,7 @@ describe("DoThreadStore", () => {
             Effect.withTracerEnabled(true),
             Effect.tap(() =>
               Effect.sync(() => {
-                expect(spanNames).toContain("sql.execute");
+                expect(spanNames).toContain("sqlite");
                 for (const helper of [
                   "DoJournal.decodeRows",
                   "DoJournal.decodeSingleRow",

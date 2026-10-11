@@ -1,7 +1,7 @@
 import { ThreadId } from "@yielded/agent/identifiers";
 import { Schema } from "effect";
 
-import { AdmittedPlannerSettings, ShortText, Text } from "../domain.ts";
+import { PlannerSettings, ShortText, Text } from "../domain.ts";
 import { TravelPhoto, TravelUrl } from "../travel-content.ts";
 
 export const researchCoordinatorId = "travel-planner-v16";
@@ -11,7 +11,7 @@ export const ScoutRequest = Schema.Struct({ title: ShortText, message: Text });
 export const ScoutInput = Schema.Struct({
   ...ScoutRequest.fields,
   sourceThreadId: ThreadId,
-  settings: AdmittedPlannerSettings,
+  settings: PlannerSettings,
 });
 
 /** Bounded source evidence, never authority or private child history. */

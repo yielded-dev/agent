@@ -125,7 +125,7 @@ const command = Command.make(
       !(yield* fs.exists(output)),
       "Output directory already exists; retain earlier evidence",
     );
-    const run = (yield* crypto.randomUUIDv4).replaceAll("-", "").slice(0, 16);
+    const run = (yield* crypto.randomUUIDv4()).replaceAll("-", "").slice(0, 16);
 
     const schedule = yield* Effect.gen(function* () {
       const blocks = [];

@@ -863,7 +863,7 @@ export class CloudflareThreadClient extends Context.Service<
 
         awaitProgress: (threadId, afterSequence) =>
           Effect.gen(function* () {
-            const waiterId = yield* crypto.randomUUIDv4.pipe(
+            const waiterId = yield* crypto.randomUUIDv4().pipe(
               Effect.mapError((error) =>
                 HostProtocolError.make({
                   message: boundHostDiagnostic(

@@ -117,7 +117,7 @@ export const makeFundingStore = Effect.fn("Funding.store")(function* (
     const githubIds = Schema.decodeUnknownSync(Values)(
       storage.sql
         .exec(
-          `select t.externalSubject as value from auth_oauth_tuple t join auth_oauth_credential o on o.identityKey = t.identityKey and o.subjectId = t.subjectId join auth_credential c on c.subjectId = o.subjectId and c.credentialId = o.credentialId where t.subjectId = ? and t.provider = 'github' and t.issuer = ? and t.state = 'Owned' and o.active = 1 and c.active = 1 and c.revision = o.revision`,
+          `select t.externalSubject as value from auth_oauth_identity t join auth_oauth_credential o on o.identityKey = t.identityKey and o.subjectId = t.subjectId join auth_credential c on c.subjectId = o.subjectId and c.credentialId = o.credentialId where t.subjectId = ? and t.provider = 'github' and t.issuer = ? and o.active = 1 and c.active = 1 and c.revision = o.revision`,
           subjectId,
           issuer,
         )

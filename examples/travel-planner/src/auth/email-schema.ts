@@ -7,17 +7,16 @@ import {
 import { EmailCredentialSnapshot } from "@yielded/auth/Email";
 import { TokenDigest } from "@yielded/auth/Schema";
 import { SecurityRevision } from "@yielded/auth/Sessions";
-import { Effect, Schema } from "effect";
+import { Effect, Schema, Struct } from "effect";
 
 import { Registration } from "./contract";
 import type { subject, credential } from "./schema";
 import {
   identifier,
   emailCredential,
-  emailRegistration,
   subjectMapping,
   subjectId,
-  encodeInstant,
+  clock,
   decodeMillis,
   mappingError,
   credentialMapping,
@@ -31,6 +30,7 @@ const identifierMapping = {
   verifiedAt: "verifiedAt",
   bindingRevision: "revision",
   isCurrent: () => true,
+  isMutableTarget: () => false,
   encodeVerifiedInsert: (input: {
     readonly identifier: { readonly namespace: string; readonly value: string };
     readonly subjectId: string;
@@ -54,6 +54,7 @@ const emailCredentialMapping = {
   credentialRevision: "revision",
   status: "active",
   isActiveStatus: (value: unknown) => value === true,
+  activeStatusValue: true,
   encodeVerifiedInsert: (input: {
     readonly moduleId: string;
     readonly subjectId: string;
@@ -74,6 +75,7 @@ export const emailSignInMapping: EmailSignInMapping<
   typeof subject,
   typeof identifier,
   typeof emailCredential,
+  typeof credential,
   string
 > = {
   subject: subjectMapping,
@@ -82,7 +84,7 @@ export const emailSignInMapping: EmailSignInMapping<
   credential: {
     ...emailCredentialMapping,
     decode: ({ moduleId, subject: account, identifier: address, credential: factor }) =>
-      Schema.decodeEffect(EmailCredentialSnapshot)({
+      Schema.decodeEffect(EmailCredentialSnapshot.mapFields(Struct.omit(["requirement"])))({
         moduleId,
         identifier: { namespace: address.namespace, value: address.value },
         identifierRevision: address.revision,
@@ -95,6 +97,12 @@ export const emailSignInMapping: EmailSignInMapping<
           credentials: [{ credentialId: factor.credentialId, revision: factor.revision }],
         },
       }).pipe(Effect.mapError(mappingError)),
+  },
+  authorityCredential: {
+    ...credentialMapping,
+    encodeInsert: (input) => ({ ...input, active: true }),
+    encodeActivation: (revision) => ({ revision, active: true }),
+    encodeRetirement: (revision) => ({ revision, active: false }),
   },
   constraints: requiredEmailSignInConstraints,
   decodeInstant: decodeMillis,
@@ -112,10 +120,10 @@ export const emailRegistrationMapping: EmailRegistrationMapping<
   typeof identifier,
   typeof emailCredential,
   typeof credential,
-  typeof emailRegistration,
   string
 > = {
   mode: "atomic",
+  clock,
   subject: subjectMapping,
   subjectId,
   identifier: identifierMapping,
@@ -125,27 +133,6 @@ export const emailRegistrationMapping: EmailRegistrationMapping<
     encodeInsert: (input) => ({ ...input, active: true }),
   },
   constraints: requiredEmailRegistrationConstraints,
-  registration: {
-    table: emailRegistration,
-    moduleId: "moduleId",
-    commandId: "commandId",
-    fingerprint: "fingerprint",
-    state: "state",
-    subjectId: "subjectId",
-    pendingReference: "pendingReference",
-    retentionUntil: "retentionUntil",
-    encodeInsert: (input, state) => ({
-      moduleId: input.moduleId,
-      commandId: input.commandId,
-      fingerprint: input.fingerprint,
-      state: state.state,
-      subjectId: state.nativeSubjectId ?? null,
-      pendingReference: state.pendingReference ?? null,
-      retentionUntil: state.retentionUntilMillis,
-    }),
-    // A consumed registration never establishes a session, including command replay.
-    decodeReplay: () => Effect.succeed({ _tag: "Rejected" }),
-  },
   inspect: (input) =>
     Effect.succeed({
       fingerprint: TokenDigest.make(
@@ -165,12 +152,8 @@ export const emailRegistrationMapping: EmailRegistrationMapping<
     ),
   snapshotRegistrationSync: (value) =>
     Schema.decodeSync(registrationJson)(Schema.encodeSync(registrationJson)(value)),
-  allocatePendingReferenceSync: () => crypto.randomUUID(),
   allocateCredentialIdSync: () => crypto.randomUUID(),
   allocateRevisionSync: () => SecurityRevision.make(crypto.randomUUID()),
-  encodeInstant,
-  retentionMillis: 3_600_000,
-  isRequestConflict: () => false,
   isIdentifierConflict: () => false,
   isCredentialConflict: () => false,
   provisioning: {
