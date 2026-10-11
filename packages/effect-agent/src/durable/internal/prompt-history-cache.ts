@@ -29,17 +29,90 @@ import { digestRunHistory } from "./run-context.ts";
 const MAX_BYTES = 16 * 1024 * 1024;
 const MAX_ENTRIES = 16_384;
 const MAX_SUFFIX_RECORDS = 1_024;
+// Cold restoration reads a small page per snapshot; the native-value guard below
+// still bounds retained suffix facts before any further page is requested.
+const COLD_SUFFIX_PAGE_RECORDS = 8;
 const JSON_PREFIX = '{"content":[';
 const encodePrompt = Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt));
 const parseJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
 
-const decodePrompt = Schema.decodeUnknownEffect(
-  Schema.Struct({
-    content: Schema.Array(Schema.toCodecJson(Prompt.Message)).check(
-      Schema.isMaxLength(MAX_ENTRIES),
-    ),
-  }),
+// Construct these only when a persisted checkpoint is read. The encoded-side schema
+// validates without running native defaults for every historical message and part.
+const decodeEncodedPrompt = Schema.decodeUnknownEffect(
+  Schema.suspend(() =>
+    Schema.Struct({
+      content: Schema.Array(Schema.toEncoded(Prompt.Message)).check(
+        Schema.isMaxLength(MAX_ENTRIES),
+      ),
+    }),
+  ),
 );
+
+const decodePrompt = Schema.decodeUnknownEffect(
+  Schema.suspend(() =>
+    Schema.Struct({
+      content: Schema.Array(Schema.toCodecJson(Prompt.Message)).check(
+        Schema.isMaxLength(MAX_ENTRIES),
+      ),
+    }),
+  ),
+);
+
+// Inputs have crossed Effect's encoded-message Schema boundary. Native constructors
+// supply only the brands and defaults; Effect still owns every message and part type.
+function hydratePart(part: Prompt.UserMessagePartEncoded): Prompt.UserMessagePart;
+function hydratePart(part: Prompt.ToolMessagePartEncoded): Prompt.ToolMessagePart;
+function hydratePart(part: Prompt.AssistantMessagePartEncoded): Prompt.AssistantMessagePart;
+function hydratePart(part: Prompt.PartEncoded): Prompt.Part {
+  switch (part.type) {
+    case "text":
+      return Prompt.textPart(part);
+    case "reasoning":
+      return Prompt.reasoningPart(part);
+    case "file":
+      return Prompt.filePart(part);
+    case "tool-call":
+      // Unlike options, providerExecuted is required by Effect's constructors;
+      // only its Schema decoder supplies the false default.
+      return Prompt.toolCallPart({ ...part, providerExecuted: part.providerExecuted ?? false });
+    case "tool-result":
+      return Prompt.toolResultPart({ ...part, providerExecuted: part.providerExecuted ?? false });
+    case "tool-approval-request":
+      return Prompt.toolApprovalRequestPart(part);
+    case "tool-approval-response":
+      return Prompt.toolApprovalResponsePart(part);
+  }
+  throw new Error(`Unhandled Prompt part: ${part satisfies never}`);
+}
+
+const hydrateMessage = (message: Prompt.MessageEncoded): Prompt.Message => {
+  switch (message.role) {
+    case "system":
+      return Prompt.systemMessage(message);
+    case "user":
+      return Prompt.userMessage({
+        ...message,
+        content:
+          typeof message.content === "string"
+            ? [Prompt.textPart({ text: message.content })]
+            : message.content.map((p) => hydratePart(p)),
+      });
+    case "assistant":
+      return Prompt.assistantMessage({
+        ...message,
+        content:
+          typeof message.content === "string"
+            ? [Prompt.textPart({ text: message.content })]
+            : message.content.map((p) => hydratePart(p)),
+      });
+    case "tool":
+      return Prompt.toolMessage({
+        ...message,
+        content: message.content.map((p) => hydratePart(p)),
+      });
+  }
+  throw new Error(`Unhandled Prompt message: ${message satisfies never}`);
+};
 
 export interface PromptHistory {
   readonly prompt: Prompt.Prompt;
@@ -78,12 +151,20 @@ const encodeHistory = Effect.fnUntraced(function* (prompt: Prompt.Prompt, allowa
 
 // Finish parsing/decoding before suspending for suffix reads. Only the native prefix and its
 // canonical string leave this Effect; it does not keep a second parsed root in the outer Run.
-const decodeCheckpointPrefix = Effect.fnUntraced(function* (encoded: string, length: number) {
+export const decodeCheckpointPrefix = Effect.fnUntraced(function* (
+  encoded: string,
+  length: number,
+) {
   const value = yield* parseJson(encoded);
   const bytes = retainedBytes(value, encoded, MAX_BYTES);
 
   if (bytes === undefined) return undefined;
-  const decoded = yield* decodePrompt(value);
+
+  const decoded = yield* decodeEncodedPrompt(value).pipe(
+    Effect.map((prompt) => ({ content: prompt.content.map(hydrateMessage) })),
+    // Keep the canonical codec as fallback for representations the encoded Schema rejects.
+    Effect.catch(() => decodePrompt(value)),
+  );
 
   return decoded.content.length === length
     ? { prompt: Prompt.fromMessages(decoded.content), encoded, bytes }
@@ -149,6 +230,7 @@ const readSuffix = Effect.fnUntraced(function* (
   firstRun: RunId,
   allowance: number,
   firstThrough: CanonicalSequence,
+  pageRecords = 1,
 ) {
   const store = yield* ThreadStore;
   const records: Array<JournalRecordEnvelope> = [];
@@ -164,12 +246,13 @@ const readSuffix = Effect.fnUntraced(function* (
           threadId: writer.threadId,
           afterSequence: after,
           throughSequence: through,
-          limit: 1,
+          limit: pageRecords,
         }),
       )
-      .pipe(Stream.take(2), Stream.runCollect);
+      .pipe(Stream.take(pageRecords + 1), Stream.runCollect);
 
-    if (page.length > 1 || records.length + page.length > MAX_SUFFIX_RECORDS) return undefined;
+    if (page.length > pageRecords || records.length + page.length > MAX_SUFFIX_RECORDS)
+      return undefined;
     for (const entry of page) {
       const payload = entry.record.payload;
 
@@ -313,6 +396,7 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* () {
         checkpoint.runId,
         MAX_BYTES - prefix.bytes,
         checkpoint.throughSequence,
+        COLD_SUFFIX_PAGE_RECORDS,
       );
 
       if (
