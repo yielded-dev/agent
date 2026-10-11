@@ -12,7 +12,7 @@ Choose where that state lives, then connect the stores to your agent runtime.
 | ---------------------------------- | --------------------------------------------------------------------- |
 | [In-memory](/storage/memory/)      | Conversations within one application Scope; isolated stores for tests |
 | [SQLite](/storage/sqlite/)         | Persistent history in a local Node.js database                        |
-| [PostgreSQL](/storage/postgres/)   | A database shared by multiple processes, using your Effect SQL client |
+| [PostgreSQL](/storage/postgres/)   | PostgreSQL storage with one live owner per Thread                     |
 | [Cloudflare](/storage/cloudflare/) | SQLite owned by a Durable Object                                      |
 
 Keep `@yielded/agent` and its adapters on the same release. See

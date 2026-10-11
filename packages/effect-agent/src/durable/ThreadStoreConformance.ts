@@ -29,6 +29,7 @@ import {
   UserInputRecorded,
   WorkerInputRequested,
   WorkerInputCompleted,
+  WorkerOriginRecorded,
   WorkerStopRequested,
   SubtreeBudgetReserved,
   PeerMessagePrepared,
@@ -960,6 +961,40 @@ const nativeWorkerAccounting = conformanceCase(
         stopped.some(({ record }) => record.payload._tag === "WorkerStopRequested"),
         "The exact worker stop selection retains intent after assignment completion",
       );
+
+      yield* materialize(workerThreadId);
+
+      const workerTail = yield* append(
+        workerThreadId,
+        batch("worker-execution", [
+          envelope("worker-origin", WorkerOriginRecorded.make({ origin })),
+          envelope(
+            "worker-run-input",
+            UserInputRecorded.make({ kind: "user", input: "run", runId: CONFORMANCE_RUN }),
+          ),
+          envelope("worker-steering", UserInputRecorded.make({ kind: "steering", input: "note" })),
+        ]),
+      );
+
+      const selectedExecution = store
+        .read({
+          threadId: workerThreadId,
+          selection: { _tag: "WorkerExecution", expectedTailSequence: workerTail.lastSequence },
+          page: { limit: 2 },
+        })
+        .pipe(Stream.runCollect);
+
+      const retainsRunInput = (entries: ReadonlyArray<CanonicalRecordEnvelope>) =>
+        ensure(
+          entries.length === 1 && entries[0]?.record.recordId === "worker-run-input",
+          "Worker recovery retains its latest Run input across unrelated steering inputs",
+        );
+
+      yield* retainsRunInput(yield* selectedExecution);
+      if (store.work !== undefined) {
+        yield* store.work.rebuild({ threadId: workerThreadId, restart: true }).pipe(Effect.orDie);
+        yield* retainsRunInput(yield* selectedExecution);
+      }
     }),
 );
 
