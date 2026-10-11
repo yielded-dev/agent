@@ -3,10 +3,7 @@ import { Effect, Predicate, Result } from "effect";
 type Tagged = { readonly _tag: string; readonly reason?: unknown };
 
 export const isAppendContention = (error: Tagged): boolean =>
-  error._tag === "DoFenceRejected" ||
-  error._tag === "FenceRejected" ||
-  ((error._tag === "DoAppendConflict" || error._tag === "AppendConflict") &&
-    error.reason === "tail");
+  (error._tag === "DoAppendConflict" || error._tag === "AppendConflict") && error.reason === "tail";
 
 /** Expected refusals remain typed at the port, but are outcomes of the storage operation. */
 export const storageResult = <A, E extends Tagged, R>(
@@ -30,7 +27,7 @@ export const annotateStorageError = (error: Tagged) =>
   });
 
 export const withStorageSpan =
-  (name: string, expected: (error: Tagged) => boolean) =>
+  (name: string, expected: (error: Tagged) => boolean = () => false) =>
   <A, E extends Tagged, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
     storageResult(effect, expected).pipe(
       Effect.tap((result) =>

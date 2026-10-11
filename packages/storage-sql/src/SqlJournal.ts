@@ -1,10 +1,12 @@
+import { sqlStorageOwner } from "./internal/SqlOwner.ts";
+export { sqlStorageOwner } from "./internal/SqlOwner.ts";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
-import { CanonicalSequence, Digest, ProducerEpoch } from "@yielded/agent/records";
+import type { Digest } from "@yielded/agent/records";
+import { CanonicalSequence } from "@yielded/agent/records";
 import {
   AppendConflict,
   CheckpointRejected,
-  FenceRejected,
   type PreparedAppend,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
@@ -38,6 +40,8 @@ import {
   type CanonicalRecordMetadata,
   makeProgressAppendValidation,
   makeExecutionRead,
+  StoredExecution,
+  decodeStoredExecution,
 } from "./SqlThreadNativeReads.ts";
 import { makeSqlThreadWork } from "./SqlThreadWork.ts";
 
@@ -63,7 +67,6 @@ const storedTextBytes = (value: string): number => new TextEncoder().encode(valu
 export class ThreadRow extends Schema.Class<ThreadRow>("ThreadRow")({
   thread_id: BoundedIdentifier,
   created_at: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
-  producer_epoch: SqlInteger.pipe(Schema.decodeTo(ProducerEpoch)),
   tail_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
 }) {}
 
@@ -102,7 +105,6 @@ export interface RawAppendRequest {
   readonly batchBytes: number;
   readonly threadId: PreparedAppend["threadId"];
   readonly expectedTailSequence: CanonicalSequence;
-  readonly producerEpoch: ProducerEpoch;
   readonly records: ReadonlyArray<
     PreparedAppend["records"][number] & {
       readonly readMetadata: CanonicalRecordMetadata;
@@ -127,9 +129,7 @@ export class RawAppendResult extends Schema.Class<RawAppendResult>(
   replayed: Schema.Boolean,
 }) {}
 
-const MAX_EXECUTION_RECEIPTS = 16_384;
-
-/** Shared native transaction body; callers own the producer fence and mutation transaction. */
+/** Shared native transaction body; callers own the local capability check and mutation transaction. */
 export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
   const { table, execute } = yield* makeSqlQuery(namespace);
@@ -148,16 +148,13 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
     );
 
   const decodeReceipt = Schema.decodeUnknownEffect(
-    Schema.Array(
-      Schema.Struct({
-        commit_digest: Digest,
-        first_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-        last_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-      }),
-    ).check(Schema.isMaxLength(1)),
+    Schema.Array(StoredExecution).check(Schema.isMaxLength(1)),
   );
 
-  const conflict = (request: RawAppendRequest, reason: "batch-content" | "tail") =>
+  const conflict = (
+    request: RawAppendRequest,
+    reason: "batch-content" | "tail" | "stale-command",
+  ) =>
     AppendConflict.make({
       threadId: request.threadId,
       batchId: request.batchId,
@@ -172,25 +169,47 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
   const replay = Effect.fnUntraced(function* (request: RawAppendRequest) {
     const [receipt] = yield* decodeReceipt(
       yield* query(sql`
-      SELECT commit_digest, first_sequence, last_sequence
-      FROM ${table("effect_agent_execution_receipts")}
-      WHERE thread_id=${request.threadId} AND batch_id=${request.batchId} LIMIT 1
+      SELECT thread_id, run_id, input_sequence, revision, checkpoint_json, last_commit_id, last_commit_digest
+      FROM ${table("effect_agent_executions")}
+      WHERE thread_id=${request.threadId} AND last_commit_id=${request.batchId} LIMIT 1
     `),
     ).pipe(Effect.mapError((cause) => failed("Invalid execution receipt", cause)));
 
     if (receipt === undefined) return undefined;
-    if (receipt.commit_digest !== request.commitDigest)
+    const checkpoint = yield* decodeStoredExecution(receipt);
+
+    if (receipt.last_commit_digest !== request.commitDigest)
       return yield* conflict(request, "batch-content");
 
     return RawAppendResult.make({
-      firstSequence: receipt.first_sequence,
-      lastSequence: receipt.last_sequence,
+      firstSequence: CanonicalSequence.make(
+        checkpoint.throughSequence - Math.max(0, request.records.length - 1),
+      ),
+      lastSequence: checkpoint.throughSequence,
       replayed: true,
     });
   });
 
   /** Active intent conflicts fail; retired settlements still adopt their canonical terminal proof. */
   const checkCommitIntent = (request: RawAppendRequest) => replay(request).pipe(Effect.asVoid);
+
+  const rejectSuperseded = Effect.fnUntraced(function* (request: RawAppendRequest) {
+    if (request.records.length > 0) return;
+    for (const { update } of request.executionWrites) {
+      const prior = Option.getOrUndefined(
+        yield* read({ threadId: request.threadId, runId: update.checkpoint.progress.runId }),
+      );
+
+      if (
+        prior !== undefined &&
+        update.previousRevision < prior.progress.revision &&
+        update.facts.every((fact) =>
+          prior.operational.some((known) => known.recordId === fact.recordId),
+        )
+      )
+        return yield* conflict(request, "stale-command");
+    }
+  });
 
   const validate = Effect.fnUntraced(function* (request: RawAppendRequest) {
     const seen = new Set<string>();
@@ -206,8 +225,19 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
         yield* read({ threadId: request.threadId, runId: next.runId }),
       );
 
-      if ((previous?.progress.revision ?? 0) !== update.previousRevision)
-        return yield* conflict(request, "tail");
+      if ((previous?.progress.revision ?? 0) !== update.previousRevision) {
+        // Already retained operational facts cannot be charged again after their retry window.
+        // A newly prepared command with new facts remains a CAS conflict for reprepare.
+        const superseded =
+          request.records.length === 0 &&
+          previous !== undefined &&
+          update.previousRevision < previous.progress.revision &&
+          update.facts.every((fact) =>
+            previous.operational.some((known) => known.recordId === fact.recordId),
+          );
+
+        return yield* conflict(request, superseded ? "stale-command" : "tail");
+      }
       if (
         next.revision !== update.previousRevision + 1 ||
         (previous !== undefined && checkpoint.originalSequence !== previous.originalSequence) ||
@@ -247,31 +277,14 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
         )
           return yield* failed("Execution retirement has no canonical settlement proof");
       }
-      if (!update.retire) {
-        const [receipts] = yield* Schema.decodeUnknownEffect(
-          Schema.Tuple([
-            Schema.Struct({ count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)) }),
-          ]),
-        )(
-          yield* query(sql`SELECT COUNT(*) AS count FROM (SELECT 1 FROM ${table("effect_agent_execution_receipts")}
-            WHERE thread_id=${request.threadId} AND run_id=${JSON.stringify(next.runId)} LIMIT ${MAX_EXECUTION_RECEIPTS}) AS bounded_receipts`),
-        ).pipe(Effect.mapError((cause) => failed("Invalid execution receipt count", cause)));
-
-        if (receipts.count >= MAX_EXECUTION_RECEIPTS)
-          return yield* failed("Active execution receipt limit exceeded");
-      }
     }
   });
 
-  const commit = Effect.fnUntraced(function* (request: RawAppendRequest, result: RawAppendResult) {
+  const commit = Effect.fnUntraced(function* (request: RawAppendRequest, _result: RawAppendResult) {
     for (const { update, checkpointJson } of request.executionWrites) {
       const run = JSON.stringify(update.checkpoint.progress.runId);
 
       if (update.retire) {
-        yield* query(
-          sql`DELETE FROM ${table("effect_agent_execution_receipts")} WHERE thread_id=${request.threadId} AND run_id=${run}`,
-        );
-
         const deleted = yield* query(sql`DELETE FROM ${table("effect_agent_executions")}
           WHERE thread_id=${request.threadId} AND run_id=${run} AND revision=${update.previousRevision} RETURNING run_id`);
 
@@ -281,19 +294,17 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
       }
 
       const changed = yield* query(sql`INSERT INTO ${table("effect_agent_executions")}
-        (thread_id, run_id, input_sequence, revision, checkpoint_json)
-        VALUES (${request.threadId}, ${run}, ${update.checkpoint.originalSequence}, ${update.checkpoint.progress.revision}, ${checkpointJson})
-        ON CONFLICT(thread_id, run_id) DO UPDATE SET revision=excluded.revision, checkpoint_json=excluded.checkpoint_json
+        (thread_id, run_id, input_sequence, revision, checkpoint_json, last_commit_id, last_commit_digest)
+        VALUES (${request.threadId}, ${run}, ${update.checkpoint.originalSequence}, ${update.checkpoint.progress.revision}, ${checkpointJson}, ${request.batchId}, ${request.commitDigest})
+        ON CONFLICT(thread_id, run_id) DO UPDATE SET revision=excluded.revision, checkpoint_json=excluded.checkpoint_json,
+          last_commit_id=excluded.last_commit_id, last_commit_digest=excluded.last_commit_digest
         WHERE ${table("effect_agent_executions")}.revision=${update.previousRevision} RETURNING run_id`);
 
       if (changed.length !== 1) return yield* conflict(request, "tail");
-      yield* query(sql`INSERT INTO ${table("effect_agent_execution_receipts")}
-        (thread_id, run_id, batch_id, commit_digest, first_sequence, last_sequence)
-        VALUES (${request.threadId}, ${run}, ${request.batchId}, ${request.commitDigest}, ${result.firstSequence}, ${result.lastSequence})`);
     }
   });
 
-  return { read, replay, checkCommitIntent, validate, commit };
+  return { read, replay, checkCommitIntent, rejectSuperseded, validate, commit };
 });
 
 export class RawReadRequest extends Schema.Class<RawReadRequest>(
@@ -336,7 +347,14 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   );
 
   const failpoint = options.hitFailpoint;
-  const { withReadTransaction, withWriteTransaction } = options.transactions;
+  const owner = yield* sqlStorageOwner(sql, options.namespace);
+
+  const withReadTransaction: SqlTransactions<S, W>["withReadTransaction"] = (operation) => (body) =>
+    owner.withMutation(options.transactions.withReadTransaction(operation)(body));
+
+  const withWriteTransaction: SqlTransactions<S, W>["withWriteTransaction"] =
+    (operation) => (body) =>
+      owner.withMutation(options.transactions.withWriteTransaction(operation)(body));
 
   const archives = yield* makeSqlThreadArchiveRange(
     {
@@ -410,8 +428,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   const materialize = Effect.fnUntraced(function* (
     threadId: ThreadId,
     createdAt: string,
-    producerEpoch: ProducerEpoch,
-  ): Effect.fn.Return<void, FenceRejected | C | S | W> {
+  ): Effect.fn.Return<void, C | S | W> {
     if (threadId.length > MAX_IDENTIFIER_LENGTH) {
       return yield* options.errors.storage({
         operation: "materialize thread",
@@ -424,8 +441,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           SELECT
             thread_id,
             created_at,
-            tail_sequence,
-            producer_epoch
+            tail_sequence
           FROM ${relation("effect_agent_threads")}
           WHERE thread_id = ${threadId}
         `.pipe(execute, Effect.mapError(storageError("read materialized thread")));
@@ -444,13 +460,11 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
             INSERT INTO ${relation("effect_agent_threads")} (
               thread_id,
               created_at,
-              tail_sequence,
-              producer_epoch
+              tail_sequence
             ) VALUES (
               ${threadId},
               ${createdAt},
-              0,
-              ${producerEpoch}
+              0
             )
           `.pipe(execute, Effect.mapError(storageError("materialize thread")));
 
@@ -465,13 +479,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
 
           return;
         }
-        if (producerEpoch < existing[0].producer_epoch) {
-          return yield* FenceRejected.make({
-            threadId,
-            attemptedEpoch: producerEpoch,
-            actualEpoch: existing[0].producer_epoch,
-          });
-        }
 
         const counters = yield* sql`SELECT thread_id FROM ${relation("effect_agent_transfer_state")}
           WHERE thread_id=${threadId}`.pipe(
@@ -485,13 +492,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
             rowKey: threadId,
             message: "Materialized Thread has no transfer counter row.",
           });
-        if (producerEpoch > existing[0].producer_epoch) {
-          yield* sql`
-            UPDATE ${relation("effect_agent_threads")}
-            SET producer_epoch = ${producerEpoch}
-            WHERE thread_id = ${threadId}
-          `.pipe(execute, Effect.mapError(storageError("advance materialization epoch")));
-        }
       }),
     );
   });
@@ -501,8 +501,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
       SELECT
         thread_id,
         created_at,
-        tail_sequence,
-        producer_epoch
+        tail_sequence
       FROM ${relation("effect_agent_threads")}
       WHERE thread_id = ${threadId}
     `.pipe(execute, Effect.mapError(storageError("read thread")));
@@ -515,8 +514,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           SELECT
             thread_id,
             created_at,
-            tail_sequence,
-            producer_epoch
+            tail_sequence
           FROM ${relation("effect_agent_threads")}
           WHERE thread_id = ${threadId}
         `.pipe(execute, Effect.mapError(storageError("read append tail")));
@@ -527,10 +525,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   const appendInTransaction = Effect.fnUntraced(function* (
     request: RawAppendRequest,
     readThread: Effect.Effect<ThreadRow, C | S>,
-  ): Effect.fn.Return<
-    RawAppendResult,
-    AppendConflict | FenceRejected | ThreadStoreError | C | S | F | W
-  > {
+  ): Effect.fn.Return<RawAppendResult, AppendConflict | ThreadStoreError | C | S | F | W> {
     if (
       request.threadId.length > MAX_IDENTIFIER_LENGTH ||
       request.batchId.length > MAX_IDENTIFIER_LENGTH ||
@@ -570,14 +565,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
 
     const thread = yield* readThread;
 
-    if (request.producerEpoch !== thread.producer_epoch) {
-      return yield* FenceRejected.make({
-        threadId: request.threadId,
-        attemptedEpoch: request.producerEpoch,
-        actualEpoch: thread.producer_epoch,
-      });
-    }
-
     const replay = yield* executions.replay(request);
 
     if (replay !== undefined) return replay;
@@ -599,6 +586,8 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
         replayed: true,
       });
     }
+
+    yield* executions.rejectSuperseded(request);
 
     if (request.expectedTailSequence !== thread.tail_sequence) {
       return yield* AppendConflict.make({
@@ -741,8 +730,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
       yield* sql`
         UPDATE ${relation("effect_agent_threads")}
         SET
-          tail_sequence = ${lastSequence},
-          producer_epoch = ${request.producerEpoch}
+          tail_sequence = ${lastSequence}
         WHERE thread_id = ${request.threadId}
       `.pipe(execute, Effect.mapError(storageError("advance thread tail")));
       yield* work
@@ -825,8 +813,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
           SELECT
             thread_id,
             created_at,
-            tail_sequence,
-            producer_epoch
+            tail_sequence
           FROM ${relation("effect_agent_threads")}
           WHERE thread_id = ${checkpoint.threadId}
         `.pipe(execute, Effect.mapError(storageError("read checkpoint tail")));
@@ -956,8 +943,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
             SELECT
               thread_id,
               created_at,
-              tail_sequence,
-              producer_epoch
+              tail_sequence
             FROM ${relation("effect_agent_threads")}
             ORDER BY thread_id
           `.pipe(execute, Effect.mapError(storageError("scan threads")));
@@ -1015,6 +1001,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     );
 
   const journal = {
+    owner,
     checkCommitIntent: executions.checkCommitIntent,
     archives: archives.storage,
     archiveRanges: archives,
@@ -1053,7 +1040,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   };
 });
 
-/** Ordinary journals retain transactionally read producer and tail fences. */
+/** All journals use the physical owner gate and transactionally read tail CAS. */
 export const makeSqlJournal = <
   S extends Diagnostic,
   C extends Diagnostic,

@@ -1,5 +1,5 @@
 import type { Option, Stream } from "effect";
-import { Brand, Context, Duration, Effect, Schema } from "effect";
+import { Brand, Context, Effect, Schema } from "effect";
 
 import { InputMessage } from "../capabilities/Messaging.ts";
 import * as FailureDiagnostic from "../core/FailureDiagnostic.ts";
@@ -27,8 +27,6 @@ import {
   DeploymentId,
   Digest,
   PersistedJson,
-  ProducerEpoch,
-  ProducerId,
   RecordId,
   SettlementFailureDiagnostic,
   SettlementOutcome,
@@ -40,16 +38,6 @@ import {
 } from "./Records.ts";
 
 export { IdempotencyKey, JoinedToHost, QueueSequence, Principal } from "../core/Receipt.ts";
-
-/**
- * Opaque proof that one Attempt currently owns a Submission's lane. It authorizes ledger
- * mutations only; canonical-log fencing authority remains the producer epoch (DUR-006).
- */
-export const OwnershipToken = Schema.NonEmptyString.check(Schema.isMaxLength(256)).pipe(
-  Schema.brand("@effect-agent/thread/OwnershipToken"),
-);
-
-export type OwnershipToken = typeof OwnershipToken.Type;
 
 /**
  * Ledger lifecycle states for one Submission. `settled` is the only terminal state; every other
@@ -75,7 +63,6 @@ export const SubmissionState = Schema.Literals([
   "ready",
   "joining",
   "joined",
-  "running",
   "input-applied",
   "suspended",
   "unknown",
@@ -98,13 +85,6 @@ export const SubmissionScheduling = Context.Reference<{
     readonly next: SubmissionSnapshot;
   }) => Effect.Effect<boolean, LedgerError>;
 }>("@effect-agent/thread/SubmissionScheduling", { defaultValue: () => ({}) });
-
-/**
- * Default ownership lease duration (D5). The lease is a liveness hint that makes an abandoned
- * claim reclaimable; correctness never depends on it because every canonical append is fenced by
- * producer epoch. Adapters expose this as configuration and use this value when unconfigured.
- */
-export const DEFAULT_OWNERSHIP_LEASE_DURATION: Duration.Duration = Duration.seconds(30);
 
 /**
  * What a SubmissionLedger adapter claims about itself. `durable-node` asserts single-node
@@ -321,57 +301,27 @@ export type AdmissionResolution = typeof AdmissionResolution.Type;
 
 /**
  * A trusted runtime's advisory handoff after committing a complete Turn and closing its
- * Attempt. The epoch fences the observation; an intervening claim invalidates it. Deferred
- * Runs retain their identities and obligations. Losing this hint resumes ordinary FIFO.
+ * Attempt. The owner rechecks the entire deferred prefix and target under its mutation gate.
+ * Deferred Runs retain their identities and obligations; losing this hint resumes FIFO.
  */
 export class ClaimHandoff extends Schema.Class<ClaimHandoff>("@effect-agent/thread/ClaimHandoff")({
-  producerEpoch: ProducerEpoch,
   deferredSubmissionIds: Schema.NonEmptyArray(SubmissionId),
   submissionId: SubmissionId,
 }) {}
 
 export class ClaimRequest extends Schema.Class<ClaimRequest>("@effect-agent/thread/ClaimRequest")({
   threadId: ThreadId,
-  producerId: ProducerId,
   handoff: Schema.optionalKey(ClaimHandoff),
 }) {}
 
 /**
- * One granted ownership period. `producerEpoch` is the fencing token for every canonical append
- * this Attempt performs; `leaseExpiresAt` is when the claim becomes reclaimable unless renewed.
+ * Selected accepted work. Attempt identity is diagnostic; only the bound scoped session
+ * grants execution authority. No field is a portable ownership capability.
  */
 export class Claim extends Schema.Class<Claim>("@effect-agent/thread/Claim")({
   submissionId: SubmissionId,
   attemptId: AttemptId,
-  ownershipToken: OwnershipToken,
-  producerEpoch: ProducerEpoch,
-  leaseExpiresAt: Schema.DateTimeUtcFromString,
   inputPayload: PersistedJson,
-}) {}
-
-export class RenewOwnershipRequest extends Schema.Class<RenewOwnershipRequest>(
-  "@effect-agent/thread/RenewOwnershipRequest",
-)({
-  submissionId: SubmissionId,
-  ownershipToken: OwnershipToken,
-}) {}
-
-/**
- * A renewed lease. Adapters MAY rotate the token; callers must use the returned token for every
- * later ledger mutation.
- */
-export class OwnershipRenewal extends Schema.Class<OwnershipRenewal>(
-  "@effect-agent/thread/OwnershipRenewal",
-)({
-  ownershipToken: OwnershipToken,
-  leaseExpiresAt: Schema.DateTimeUtcFromString,
-}) {}
-
-export class ReleaseOwnershipRequest extends Schema.Class<ReleaseOwnershipRequest>(
-  "@effect-agent/thread/ReleaseOwnershipRequest",
-)({
-  submissionId: SubmissionId,
-  ownershipToken: OwnershipToken,
 }) {}
 
 /**
@@ -381,7 +331,6 @@ export class MarkInputAppliedRequest extends Schema.Class<MarkInputAppliedReques
   "@effect-agent/thread/MarkInputAppliedRequest",
 )({
   submissionId: SubmissionId,
-  ownershipToken: OwnershipToken,
   recordId: RecordId,
   sequence: CanonicalSequence,
 }) {}
@@ -501,8 +450,7 @@ export class AbortIntentRequest extends Schema.Class<AbortIntentRequest>(
 
 /**
  * Atomic claim of the contiguous ready prefix of strictly-later queued Submissions for joining
- * into the active host Run (plan §2.5). Fenced by the host Attempt's ownership token — no epoch
- * bump, the host already owns the lane. An `admitted`-but-not-`ready` row breaks the prefix;
+ * into the active host Run (plan §2.5). The bound host session owns the lane. An `admitted`-but-not-`ready` row breaks the prefix;
  * an aborted-settled row is a closed obligation and is skipped as a non-gap (P7 §7(c)).
  */
 export class ClaimJoiningRequest extends Schema.Class<ClaimJoiningRequest>(
@@ -510,7 +458,6 @@ export class ClaimJoiningRequest extends Schema.Class<ClaimJoiningRequest>(
 )({
   threadId: ThreadId,
   hostSubmissionId: SubmissionId,
-  ownershipToken: OwnershipToken,
   maxCount: Schema.Int.check(Schema.isGreaterThan(0)),
 }) {}
 
@@ -529,7 +476,6 @@ export class MarkJoinedRequest extends Schema.Class<MarkJoinedRequest>(
   "@effect-agent/thread/MarkJoinedRequest",
 )({
   submissionId: SubmissionId,
-  ownershipToken: OwnershipToken,
   recordId: RecordId,
   sequence: CanonicalSequence,
 }) {}
@@ -537,8 +483,7 @@ export class MarkJoinedRequest extends Schema.Class<MarkJoinedRequest>(
 /**
  * Recovery-only revert of a `joining` Submission whose canonical input append never committed
  * (DUR-016): `joining → ready`, idempotent, a no-op when the Submission already joined.
- * A guard limits the revert to the exact linked host: its current ownership token is required
- * while it is live; omit the token only for a settled host. A changed host link is a no-op.
+ * A guard limits the revert to the exact linked host: the root gate serializes it with the linked host. A changed host link is a no-op.
  * Adapters validate the guard atomically with the transition. Unguarded requests retain the
  * caller-owned recovery contract.
  */
@@ -549,7 +494,6 @@ export class RevertJoiningRequest extends Schema.Class<RevertJoiningRequest>(
   guard: Schema.optionalKey(
     Schema.Struct({
       hostSubmissionId: SubmissionId,
-      ownershipToken: Schema.optionalKey(OwnershipToken),
     }),
   ),
 }) {}
@@ -608,7 +552,7 @@ export const SuspensionReason = Schema.Union([
 export type SuspensionReason = typeof SuspensionReason.Type;
 
 /**
- * Durable suspension of owned work (plan §2.6): `input-applied`/`running` → `suspended`, the
+ * Durable suspension of owned work (plan §2.6): `input-applied`/`ready` → `suspended`, the
  * ownership period ends, NO settlement occurs — the accepted-work obligation stays owed while
  * the lane consumes no worker permit.
  */
@@ -616,7 +560,6 @@ export class SuspendRequest extends Schema.Class<SuspendRequest>(
   "@effect-agent/thread/SuspendRequest",
 )({
   submissionId: SubmissionId,
-  ownershipToken: OwnershipToken,
   reason: SuspensionReason,
 }) {}
 
@@ -679,7 +622,6 @@ export class ChildBudgetReservationRequest extends Schema.Class<ChildBudgetReser
   reservationId: ChildReservationId,
   parentSubmissionId: SubmissionId,
   parentToolCallId: ToolCallId,
-  ownershipToken: OwnershipToken,
   allocation: PersistedJson,
   allocationDigest: Digest,
 }) {}
@@ -718,7 +660,6 @@ export class AttachChildToReservationRequest extends Schema.Class<AttachChildToR
   "@effect-agent/thread/AttachChildToReservationRequest",
 )({
   reservationId: ChildReservationId,
-  ownershipToken: OwnershipToken,
   childSubmissionId: SubmissionId,
 }) {}
 
@@ -726,7 +667,7 @@ export class AttachChildToReservationRequest extends Schema.Class<AttachChildToR
  * Freezes the final consumed/released accounting decision (spec §12 join step 6). The
  * accounting is an opaque Schema-encoded document replayed from the canonical `SubagentJoined`
  * record (or the deterministic zero-consumed decision for an orphaned reservation), so the
- * decision itself authorizes the transition — no ownership token is consulted (DUR-015).
+ * decision itself authorizes the transition — no execution owner is required (DUR-015).
  */
 export class BeginChildBudgetReleaseRequest extends Schema.Class<BeginChildBudgetReleaseRequest>(
   "@effect-agent/thread/BeginChildBudgetReleaseRequest",
@@ -875,16 +816,6 @@ export class UnknownResolutionIntent extends Schema.Class<UnknownResolutionInten
   canonicalRecordId: Schema.optionalKey(RecordId),
 }) {}
 
-/** Current ownership as recovery sees it. The live owner's token is never exposed here. */
-export class OwnershipSnapshot extends Schema.Class<OwnershipSnapshot>(
-  "@effect-agent/thread/OwnershipSnapshot",
-)({
-  attemptId: AttemptId,
-  ownerProducerId: ProducerId,
-  producerEpoch: ProducerEpoch,
-  leaseExpiresAt: Schema.DateTimeUtcFromString,
-}) {}
-
 export class RecoverySnapshotRequest extends Schema.Class<RecoverySnapshotRequest>(
   "@effect-agent/thread/RecoverySnapshotRequest",
 )({
@@ -938,7 +869,7 @@ export class RecoverySnapshot extends Schema.Class<RecoverySnapshot>(
   "@effect-agent/thread/RecoverySnapshot",
 )({
   submission: SubmissionSnapshot,
-  ownership: Schema.optionalKey(OwnershipSnapshot),
+  hasOwner: Schema.Boolean,
   inputApplied: Schema.optionalKey(InputAppliedMarker),
   abortIntent: Schema.optionalKey(AbortIntent),
   joins: Schema.Array(JoinSnapshot),
@@ -968,12 +899,11 @@ export class AdmissionConflict extends Schema.TaggedError<AdmissionConflict>()(
 ) {}
 
 /**
- * The presented ownership token no longer owns the Submission's lane. `actualEpoch` is the
- * thread's current producer epoch so a stale Attempt can prove to itself it was superseded.
+ * The captured local session has closed or was replaced. Reading current state cannot
+ * grant that session authority again.
  */
 export class OwnershipLost extends Schema.TaggedError<OwnershipLost>()("OwnershipLost", {
   submissionId: SubmissionId,
-  actualEpoch: ProducerEpoch,
 }) {}
 
 /** A conflicting terminal outcome was already reserved or finalized (DUR-002, DUR-012). */
@@ -1041,7 +971,7 @@ export type SubmissionLedgerFailure =
   | AdmissionPolicyError;
 
 /**
- * Operational durable state for accepted work: admission, FIFO readiness, ownership, leases,
+ * Operational durable state for accepted work: admission, FIFO readiness, readiness,
  * abort intent, and settlement obligations (STORE-001). The Thread Log remains the
  * authority for applied input and terminal outcomes; every marker in this ledger can be rebuilt
  * from canonical history (DUR-015).
@@ -1064,32 +994,19 @@ export type SubmissionLedgerFailure =
  *   Marking an already-ready (or later-state) Submission is a no-op.
  * - `lookup` — read one Submission by identity or scoped idempotency key; strongly consistent
  *   with prior ledger writes.
- * - `claim` — claims the lowest unsettled `queueSequence` after skipping only unknown rows
- *   without abort intent. Approval, joining and child-wait barriers remain ordered. Returns
- *   `Option.none` when no eligible work exists or ANY lease in the Thread is live, including
- *   a lease belonging to the same producer. A successful claim atomically bumps the Thread's producer
- *   epoch — fencing every stale Attempt out of canonical appends (DUR-006) — mints a fresh
- *   `attemptId` and `ownershipToken`, and starts the ownership lease (D5: adapters default to
- *   `DEFAULT_OWNERSHIP_LEASE_DURATION`, configurable). An expired lease makes the head
- *   claimable; expiry alone never revokes correctness, only permission to assume liveness.
- *   An optional trusted-runtime `handoff` can defer only the named `input-applied` prefix,
- *   with no abort intent, to claim the exact next runnable Submission. It is checked atomically
- *   against the current producer epoch and the same whole-Thread ownership fence. Admission
- *   gaps, approval/child waits and joined work cannot be bypassed. Hints are not durable facts;
- *   recovery resumes the same retained Runs and can select another complete-Turn handoff.
- * - `renewOwnership` — extends the lease while the token still owns the lane; fails with
- *   `OwnershipLost` once superseded. Renewal after lease expiry succeeds if no other claim has
- *   taken the lane in between.
- * - `releaseOwnership` — graceful drain: ends the ownership period without settling, returning
- *   a nonterminal head to claimable state. Fails with `OwnershipLost` once superseded.
+ * - `selectHead` — selects the lowest eligible unsettled queue position for the storage owner's
+ *   scoped Run session. The local owner serializes selection and permits only one live session
+ *   per Thread. Elapsed time never grants a second session. Unknown work without abort intent
+ *   may be skipped; approval, joining and child-wait barriers remain ordered. An advisory
+ *   handoff may defer only the named input-applied prefix and must select the exact next
+ *   runnable Submission. A fresh diagnostic Attempt identity is not persisted ownership.
  * - `markInputApplied` — idempotent marker that the deterministic `UserInputRecorded` record is
  *   canonical (state → input-applied). Recovery repairs this marker from history when the append
  *   committed but the marker write was lost.
  * - `finalizeSettlement` — idempotent terminal projection (state → settled) from the
  *   deterministic canonical SubmissionSettled record. It validates the admitted receipt and
  *   retains the first finalization timestamp. Native adapters seal opted-in worker assignments
- *   atomically before releasing the lane. No ownership token is required: canonical history
- *   authorizes finalization; missing or contradictory canonical evidence fails without mutation.
+ *   atomically before releasing the lane. Canonical history authorizes finalization; missing or contradictory canonical evidence fails without mutation.
  * - `requestAbort` — durable, idempotent by `submissionId`: repeating returns the recorded
  *   intent unchanged (DUR-012). Fails with `SettlementConflict` once the Submission is settled;
  *   abort never rewrites a terminal outcome. Fails with `JoinedToHost` for a `joined` Submission
@@ -1097,14 +1014,14 @@ export type SubmissionLedgerFailure =
  *   `joining` Submission records the intent; it is honored only if the host has not consumed the
  *   input (revert-then-abort).
  * - `claimJoining` — atomic: transitions the contiguous `ready` prefix of strictly-later
- *   `queueSequence`s (up to `maxCount`) to `joining` under the host's ownership token, recording
- *   the host linkage; no epoch bump (the host Attempt already owns the lane). An
+ *   `queueSequence`s (up to `maxCount`) to `joining` under the bound host session, recording
+ *   the host linkage. An
  *   `admitted`-not-`ready` row breaks the prefix; an aborted-settled row is a closed obligation
  *   and is skipped as a non-gap (P7 §7(c)). Fails with `OwnershipLost` once superseded.
  * - `markJoined` — idempotent `joining → joined` with the canonical input record position;
  *   repairable from history when the append committed but the marker write was lost (DUR-016).
  * - `revertJoining` — recovery-only, idempotent `joining → ready`; a no-op when already joined.
- * - `suspend` — `input-applied`/`running` → `suspended`; ends the ownership period WITHOUT
+ * - `suspend` — `input-applied`/`ready` → `suspended`; ends the ownership period WITHOUT
  *   settling (the obligation stays owed, the lane consumes no worker permit). Returns
  *   `resume-immediately` when the reason is already fully covered: for `ApprovalPending`,
  *   a recorded denial ends the batch or decisions cover every pending call; for
@@ -1125,21 +1042,20 @@ export type SubmissionLedgerFailure =
  *   child's canonical Settlement is the authority. The runtime reports it after the exact
  *   record is published and before ledger finalization. Adapters verify that canonical record
  *   under their mutation authority; an earlier child is an adapter-checked caller error. It never
- *   settles the parent and requires no ownership token:
- *   the canonically recorded child settlement authorizes the wake.
+ *   settles the parent; the canonically recorded child settlement authorizes the wake.
  * - `reserveChildBudget` — idempotent get-or-create of the parent-owned child budget
- *   reservation (spec §12 step 2), fenced by the parent lane's live `OwnershipToken`. An
- *   identical replay returns the stored row with `replayed` set without requiring a live token;
+ *   reservation (spec §12 step 2), checked by the parent session. An
+ *   identical administrative replay returns the stored row with `replayed` set;
  *   a divergent allocation for the same id, or a second id for the same
  *   `(parentSubmissionId, parentToolCallId)`, fails with `ChildReservationConflict`.
  * - `attachChildToReservation` — idempotent: records the admitted child on the reservation row
  *   (repairable from the canonical `SubagentStarted` record). A replay with the recorded child
- *   is a no-op; the first attach is fenced by the parent token and requires status `reserved`;
+ *   is a no-op; the first attach is guarded by the parent session and requires status `reserved`;
  *   a divergent child fails with `ChildReservationConflict`.
  * - `beginChildBudgetRelease` — `reserved → releasePending`: freezes the final accounting
  *   decision exactly once. Replaying the identical accounting (at `releasePending` or
  *   `released`) is a no-op; a divergent accounting fails with `ChildReservationConflict`.
- *   Requires no ownership token: the accounting is replayed from the canonical `SubagentJoined`
+ *   The accounting is replayed from the canonical `SubagentJoined`
  *   record (or is the deterministic zero-consumed decision for an orphaned reservation), so
  *   canonical history authorizes the transition (DUR-015) and the freeze comparison — not a
  *   fence — guarantees one decision.
@@ -1149,7 +1065,7 @@ export type SubmissionLedgerFailure =
  *   repair, never available twice" (spec §12).
  * - `markUnknown` — idempotent, ownership-free (canonical evidence authorizes it): state →
  *   `unknown`, parking the Submission while its accepted settlement obligation stays visible.
- *   Existing ownership must release or expire before another claim (DUR-009/DUR-017).
+ *   The current session must close before another claim (DUR-009/DUR-017).
  *   Fails with `SettlementConflict` once settled.
  * - `recordUnknownResolution` — durable, idempotent per `(submissionId, toolCallId, kind)`;
  *   divergent decisions or factual outcomes fail with `UnknownResolutionConflict`. Later
@@ -1185,13 +1101,9 @@ export class SubmissionLedger extends Context.Service<
     readonly resolveAdmission: (
       request: SubmissionLookupByKey,
     ) => Effect.Effect<AdmissionResolution, LedgerError>;
-    readonly claim: (request: ClaimRequest) => Effect.Effect<Option.Option<Claim>, LedgerError>;
-    readonly renewOwnership: (
-      request: RenewOwnershipRequest,
-    ) => Effect.Effect<OwnershipRenewal, OwnershipLost | LedgerError>;
-    readonly releaseOwnership: (
-      request: ReleaseOwnershipRequest,
-    ) => Effect.Effect<void, OwnershipLost | LedgerError>;
+    readonly selectHead: (
+      request: ClaimRequest,
+    ) => Effect.Effect<Option.Option<Claim>, LedgerError>;
     readonly markInputApplied: (
       request: MarkInputAppliedRequest,
     ) => Effect.Effect<void, OwnershipLost | LedgerError>;

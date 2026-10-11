@@ -33,7 +33,6 @@ it.effect("opens Activity independently, then composes every port over one pool"
         yield* store.materialize(
           yield* Schema.decodeEffect(ThreadMaterialization)({
             threadId: "native-composition",
-            producerEpoch: 1,
           }),
         );
 
@@ -83,7 +82,6 @@ it.live(
 
         const materialization = yield* Schema.decodeEffect(ThreadMaterialization)({
           threadId: "nested-transaction",
-          producerEpoch: 1,
         });
 
         const result = yield* sql

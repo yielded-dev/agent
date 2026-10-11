@@ -15,7 +15,6 @@ import {
   CanonicalSequence,
   DeploymentId,
   ObservationOffset,
-  ProducerEpoch,
   RecordEnvelope,
   RecordId,
   UserInputRecorded,
@@ -143,8 +142,6 @@ const probe = (initial: ReadonlyArray<CanonicalRecordEnvelope> = [record(1)]) =>
         ThreadTail.make({
           threadId,
           tailSequence: sequence(state.records.length),
-
-          producerEpoch: Schema.decodeSync(ProducerEpoch)(0),
         }),
       ),
     read: (request) => {

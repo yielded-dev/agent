@@ -53,8 +53,6 @@ const baseClass = ThreadObject.make(
     namespaceBinding: "THREADS",
     deploymentId: phase6TravelPlannerDeploymentId,
     producerPrefix: phase6TravelPlannerProducerPrefix,
-    ownershipLeaseDuration: 1_000,
-    leaseRenewalInterval: 100,
     settlementPollInterval: 25,
     abortPollInterval: 25,
     alarmBackoffBase: 10,

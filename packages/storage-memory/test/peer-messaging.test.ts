@@ -139,7 +139,6 @@ const makeHarness = Effect.fn(function* (
       DurableRuntimeConfig.layer({
         deploymentId: Schema.decodeSync(DeploymentId)("peer-test"),
         producerId: Schema.decodeSync(ProducerId)("peer-test"),
-        leaseRenewalInterval: Duration.seconds(5),
         settlementPollInterval: Duration.millis(100),
       }),
       Layer.succeed(PeerAuthorizer, {

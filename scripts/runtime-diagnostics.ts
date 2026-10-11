@@ -250,7 +250,6 @@ export const compareDiagnostics = Effect.fn("diagnostic.compare")(function* (opt
             "diagnostic-capabilities.ts",
             "diagnostic-ledger.ts",
             "diagnostic-aging.ts",
-            "diagnostic-writer.ts",
             "diagnostic-fairness.ts",
           ].map((file) => path.join(source, file)),
           outdir: fixtures,

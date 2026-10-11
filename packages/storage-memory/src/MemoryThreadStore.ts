@@ -8,7 +8,6 @@ import {
   ReadRecord,
 } from "@yielded/agent/record-format";
 import {
-  ProducerEpoch,
   CURRENT_RECORD_FORMAT,
   RecordEnvelope,
   type RecordId,
@@ -41,6 +40,7 @@ import {
   workerInputRecordId,
   toolCallSettledRecordId,
 } from "@yielded/agent/run-journal";
+import { StorageOwner, makeStorageOwner } from "@yielded/agent/run-storage";
 import {
   submissionAbortRecordId,
   submissionInputRecordId,
@@ -73,7 +73,7 @@ import {
 } from "@yielded/agent/thread-import";
 import { verifyThreadInvariants } from "@yielded/agent/thread-invariants";
 import {
-  type FencedAppendRequest,
+  type AppendRequest,
   type ExecutionCheckpoint,
   type ThreadCheckpoint,
   ThreadPeerCountRequest,
@@ -94,7 +94,6 @@ import {
   ThreadStoreError,
   ThreadTail,
   ThreadTailRequest,
-  FenceRejected,
   PreparedAppend,
   type CommitBatch,
   LoadCheckpointRequest,
@@ -247,7 +246,6 @@ interface StoredThread {
   readonly workerRecords: Map<string, Array<CanonicalRecordEnvelope>>;
   readonly byId: Map<string, CanonicalRecordEnvelope>;
   readonly runInputs: Map<string, CanonicalRecordEnvelope | null>;
-  readonly producerEpoch: ProducerEpoch;
   readonly tailSequence: CanonicalSequence;
   readonly ranges: Map<number, ThreadArchiveRange>;
   readonly rangeStarts: Array<number>;
@@ -261,12 +259,8 @@ interface StoredThread {
   readonly executions: Map<RunId, ExecutionCheckpoint>;
   readonly executionRevision: number;
   readonly executionCommits: Map<
-    BatchId,
-    {
-      readonly intent: string;
-      readonly result: AppendResult;
-      readonly runIds: ReadonlyArray<RunId>;
-    }
+    RunId,
+    { readonly batchId: BatchId; readonly intent: string; readonly result: AppendResult }
   >;
   readonly batchesByFirst: Map<number, BatchId>;
   readonly checkpoints: Map<CanonicalSequence, ThreadCheckpoint>;
@@ -777,7 +771,7 @@ const prepareIndexes = (
 type AppendDecision =
   | {
       readonly _tag: "failure";
-      readonly error: ThreadStoreError | ThreadNotMaterialized | AppendConflict | FenceRejected;
+      readonly error: ThreadStoreError | ThreadNotMaterialized | AppendConflict;
     }
   | {
       readonly _tag: "success";
@@ -786,7 +780,7 @@ type AppendDecision =
     };
 
 type MaterializeDecision =
-  | { readonly _tag: "failure"; readonly error: ThreadStoreError | FenceRejected }
+  | { readonly _tag: "failure"; readonly error: ThreadStoreError }
   | { readonly _tag: "success" };
 
 type CheckpointDecision =
@@ -811,7 +805,6 @@ const validate = <A, I>(
     Effect.mapError((error) => storeError(operation, `Invalid ${operation} request`, error)),
   );
 
-const decodeProducerEpoch = Schema.decodeSync(ProducerEpoch);
 const decodeCanonicalSequence = Schema.decodeSync(CanonicalSequence);
 const ZERO_CANONICAL_SEQUENCE = decodeCanonicalSequence(0);
 
@@ -898,7 +891,8 @@ const makeThreadStore = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const state = yield* Ref.make<MemoryState>({ threads: new Map() });
   const gate = yield* Semaphore.make(1);
-  const withMutation = gate.withPermits(1);
+  const owner = yield* makeStorageOwner(gate.withPermits(1));
+  const withMutation = owner.withMutation;
   const updates = yield* PubSub.sliding<void>(1);
   let ledgerTransfer: MemoryLedgerTransfer | undefined;
   let deliveryTransfer: MemoryDeliveryTransfer | undefined;
@@ -1185,32 +1179,7 @@ const makeThreadStore = Effect.gen(function* () {
         (current): readonly [MaterializeDecision, MemoryState] => {
           const existing = current.threads.get(request.threadId);
 
-          if (existing !== undefined) {
-            if (request.producerEpoch < existing.producerEpoch) {
-              return [
-                {
-                  _tag: "failure",
-                  error: FenceRejected.make({
-                    threadId: request.threadId,
-                    actualEpoch: existing.producerEpoch,
-                    attemptedEpoch: request.producerEpoch,
-                  }),
-                },
-                current,
-              ];
-            }
-            if (request.producerEpoch === existing.producerEpoch) {
-              return [{ _tag: "success" }, current];
-            }
-            const threads = new Map(current.threads);
-
-            threads.set(request.threadId, {
-              ...existing,
-              producerEpoch: request.producerEpoch,
-            });
-
-            return [{ _tag: "success" }, { threads }];
-          }
+          if (existing !== undefined) return [{ _tag: "success" }, current];
           if (
             !MutableRef.get(workState.ref).has(request.threadId) &&
             MutableRef.get(workState.ref).size >= maxThreads
@@ -1237,7 +1206,6 @@ const makeThreadStore = Effect.gen(function* () {
           const threads = new Map(current.threads);
 
           threads.set(request.threadId, {
-            producerEpoch: request.producerEpoch,
             tailSequence: ZERO_CANONICAL_SEQUENCE,
             byId: new Map(),
             workerRecords: new Map(),
@@ -1304,7 +1272,7 @@ const makeThreadStore = Effect.gen(function* () {
     });
   };
 
-  const prepareAppend = Effect.fnUntraced(function* (unvalidated: FencedAppendRequest) {
+  const prepareAppend = Effect.fnUntraced(function* (unvalidated: AppendRequest) {
     const captured = yield* PreparedAppend.capture(unvalidated);
     const request = captured;
     const batchJson = captured.batchJson;
@@ -1340,12 +1308,36 @@ const makeThreadStore = Effect.gen(function* () {
       ),
     });
 
+    const latestIntent =
+      thread === undefined
+        ? undefined
+        : [...thread.executionCommits.values()].find(
+            (entry) => entry.batchId === request.batch.batchId,
+          );
+
+    if (thread !== undefined && latestIntent === undefined && request.batch.records.length === 0) {
+      for (const update of request.executions ?? []) {
+        const prior = thread.executions.get(update.checkpoint.progress.runId);
+
+        if (
+          prior !== undefined &&
+          update.previousRevision < prior.progress.revision &&
+          update.facts.every((fact) =>
+            prior.operational.some((known) => known.recordId === fact.recordId),
+          )
+        )
+          return yield* AppendConflict.make({
+            threadId: request.threadId,
+            batchId: request.batch.batchId,
+            reason: "stale-command",
+          });
+      }
+    }
     if (
       thread !== undefined &&
-      thread.producerEpoch === request.producerEpoch &&
       thread.tailSequence === request.expectedTailSequence &&
       !thread.batches.has(request.batch.batchId) &&
-      !thread.executionCommits.has(request.batch.batchId)
+      latestIntent === undefined
     ) {
       const executions = request.executions ?? [];
 
@@ -1410,10 +1402,9 @@ const makeThreadStore = Effect.gen(function* () {
 
     const preparedWork =
       thread !== undefined &&
-      thread.producerEpoch === request.producerEpoch &&
       thread.tailSequence === request.expectedTailSequence &&
       !thread.batches.has(request.batch.batchId) &&
-      !thread.executionCommits.has(request.batch.batchId) &&
+      latestIntent === undefined &&
       currentWork?.version === WORK_INDEX_VERSION &&
       currentWork.state === "ready" &&
       currentWork.through === thread.tailSequence &&
@@ -1444,20 +1435,7 @@ const makeThreadStore = Effect.gen(function* () {
             current,
           ];
         }
-        if (request.producerEpoch !== thread.producerEpoch) {
-          return [
-            {
-              _tag: "failure",
-              error: FenceRejected.make({
-                threadId: request.threadId,
-                actualEpoch: thread.producerEpoch,
-                attemptedEpoch: request.producerEpoch,
-              }),
-            },
-            current,
-          ];
-        }
-        const priorExecution = thread.executionCommits.get(request.batch.batchId);
+        const priorExecution = latestIntent;
 
         if (priorExecution !== undefined) {
           if (priorExecution.intent !== executionIntent)
@@ -1580,18 +1558,18 @@ const makeThreadStore = Effect.gen(function* () {
         for (const update of request.executions ?? []) {
           const runId = update.checkpoint.progress.runId;
 
-          if (update.retire) thread.executions.delete(runId);
-          else thread.executions.set(runId, update.checkpoint);
+          if (update.retire) {
+            thread.executions.delete(runId);
+            thread.executionCommits.delete(runId);
+          } else {
+            thread.executions.set(runId, update.checkpoint);
+            thread.executionCommits.set(runId, {
+              batchId: request.batch.batchId,
+              intent: executionIntent,
+              result,
+            });
+          }
         }
-        if (request.executions !== undefined)
-          thread.executionCommits.set(request.batch.batchId, {
-            intent: executionIntent,
-            result,
-            runIds: request.executions.map((update) => update.checkpoint.progress.runId),
-          });
-        for (const [id, receipt] of thread.executionCommits)
-          if (receipt.runIds.every((runId) => !thread.executions.has(runId)))
-            thread.executionCommits.delete(id);
         indexes.commit();
         if (preparedWork !== undefined) publishWork(request.threadId, preparedWork());
         current.threads.set(request.threadId, next);
@@ -1619,7 +1597,9 @@ const makeThreadStore = Effect.gen(function* () {
   const append: ThreadStore["Service"]["append"] = Effect.fn("MemoryThreadStore.append")(
     (request) =>
       prepareAppend(request).pipe(
-        Effect.flatMap((prepared) => withMutation(appendPrepared(prepared))),
+        Effect.flatMap((prepared) =>
+          owner.withProgress(prepared.request.threadId, withMutation(appendPrepared(prepared))),
+        ),
       ),
   );
 
@@ -2005,9 +1985,8 @@ const makeThreadStore = Effect.gen(function* () {
       }),
     );
 
-  const emptyThread = (producerEpoch: ProducerEpoch): StoredThread => ({
+  const emptyThread = (): StoredThread => ({
     ...emptyIndexes(),
-    producerEpoch,
     tailSequence: ZERO_CANONICAL_SEQUENCE,
     ranges: new Map(),
     rangeStarts: [],
@@ -2285,7 +2264,7 @@ const makeThreadStore = Effect.gen(function* () {
                     MutableRef.get(workState.ref).size >= maxThreads
                   )
                     return yield* storeError("import", "Destination Thread capacity exceeded");
-                  staged = emptyThread(decodeProducerEpoch(1));
+                  staged = emptyThread();
                   stagedLedger =
                     ledgerTransfer === undefined
                       ? undefined
@@ -2489,24 +2468,15 @@ const makeThreadStore = Effect.gen(function* () {
                   message: "Live foreign ownership cannot be restored",
                 });
 
-              const nextEpoch = Math.max(
-                progress.producerEpoch,
-                (existing?.producerEpoch ?? 0) + 1,
-              );
-
-              if (!Number.isSafeInteger(nextEpoch))
-                return yield* invalidThreadArchive("Producer epoch cannot be fenced safely", id);
-              const producerEpoch = decodeProducerEpoch(nextEpoch);
-
               const commitLedger =
                 stagedLedger === undefined
                   ? undefined
-                  : yield* stagedLedger.prepareCommit(producerEpoch, progress.manifest?.workerSeal);
+                  : yield* stagedLedger.prepareCommit(progress.manifest?.workerSeal);
 
               const commitDelivery =
                 stagedDelivery === undefined ? undefined : yield* stagedDelivery.prepareCommit();
 
-              const installed = { ...restoredThread, producerEpoch };
+              const installed = restoredThread;
 
               yield* Effect.uninterruptible(
                 Effect.sync(() => {
@@ -2549,7 +2519,6 @@ const makeThreadStore = Effect.gen(function* () {
       return ThreadTail.make({
         threadId: request.threadId,
         tailSequence: thread.tailSequence,
-        producerEpoch: thread.producerEpoch,
       });
     },
   );
@@ -2571,7 +2540,6 @@ const makeThreadStore = Effect.gen(function* () {
       return yield* ThreadIdentity.makeEffect({
         threadId: request.threadId,
         tailSequence: thread.tailSequence,
-        producerEpoch: thread.producerEpoch,
         admissions:
           ledgerTransfer === undefined
             ? 0
@@ -2764,13 +2732,6 @@ const makeThreadStore = Effect.gen(function* () {
   ) {
     const thread = yield* findThread(MutableRef.get(state.ref), request.threadId);
 
-    if (request.producerEpoch !== thread.producerEpoch)
-      return yield* FenceRejected.make({
-        threadId: request.threadId,
-        actualEpoch: thread.producerEpoch,
-        attemptedEpoch: request.producerEpoch,
-      });
-
     return thread;
   });
 
@@ -2891,7 +2852,6 @@ const makeThreadStore = Effect.gen(function* () {
       return ThreadWorkerCapacity.make({
         threadId: request.threadId,
         tailSequence: thread.tailSequence,
-        producerEpoch: thread.producerEpoch,
         activeWorkers: Math.min(index.workers.size, request.activeLimit + 1),
         workerActive: worker !== undefined,
         pendingInputs: Math.min(
@@ -3005,8 +2965,10 @@ const makeThreadStore = Effect.gen(function* () {
   });
 
   return Context.make(ThreadStore, threadStore).pipe(
+    Context.add(StorageOwner, owner),
     Context.add(ThreadImport, { import: importThread }),
     Context.add(MemoryThreadStoreKernel, {
+      owner,
       withMutation,
       retainDelivery,
       checkThreadCapacity: (threadId) =>

@@ -253,11 +253,9 @@ export const admissionWork = (row: SubmissionWorkItem): ThreadWorkEntry => ({
     ? { wait: "effect-resolution" as const }
     : row.state === "suspended"
       ? { wait: "input" as const }
-      : row.state === "running"
-        ? { wait: "ownership" as const }
-        : row.state === "admitted"
-          ? { wait: "admission" as const }
-          : {}),
+      : row.state === "admitted"
+        ? { wait: "admission" as const }
+        : {}),
 });
 
 export const decodeWorkCursor = Effect.fnUntraced(function* (request: ThreadWorkRequest) {

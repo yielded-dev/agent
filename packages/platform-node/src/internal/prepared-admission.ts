@@ -73,7 +73,7 @@ export const makeNodePreparedInputAdmission = Effect.gen(function* () {
             ThreadStoreError: () => Effect.fail(ambiguous()),
             ThreadNotMaterialized: () => Effect.fail(ambiguous()),
             AppendConflict: () => Effect.fail(ambiguous()),
-            FenceRejected: () => Effect.fail(ambiguous()),
+            OwnershipLost: () => Effect.fail(ambiguous()),
             DurableRuntimeFailpointError: () => Effect.fail(ambiguous()),
           }),
         ),

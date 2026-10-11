@@ -6,12 +6,10 @@ import {
 } from "@yielded/agent-storage-cloudflare/do-thread-store";
 import { CurrentBindingSelection, type BindingSelection } from "@yielded/agent/agent-registration";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
-import { ProducerId } from "@yielded/agent/records";
-import { layer as runStorageLayer } from "@yielded/agent/run-storage";
+import { RunStorage, layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   ClaimRequest,
   RecoverySnapshotRequest,
-  ReleaseOwnershipRequest,
   SubmissionLedger,
   SubmissionLookupById,
   LedgerError,
@@ -767,7 +765,7 @@ describe("maintenance retry deadlines", () => {
                   yield* TestClock.setTime(Date.now() + 86_400_000);
                   const clock = yield* TestClock.testClockWith(Effect.succeed);
                   const bindings = yield* makeTestBindings;
-                  const config = yield* CloudflareDurableRuntimeConfig;
+
                   const entered = yield* Deferred.make<void>();
                   const admit = yield* Deferred.make<void>();
                   const finish = yield* Deferred.make<void>();
@@ -779,7 +777,6 @@ describe("maintenance retry deadlines", () => {
                     Layer.provide(
                       storageConfigLayer({
                         storage: state.storage,
-                        ownershipLeaseDuration: config.ownershipLeaseDuration,
                       }),
                     ),
                     Layer.provide(DoStorageFailpoint.layer),
@@ -963,8 +960,6 @@ describe("maintenance retry deadlines", () => {
                         : binding,
                     );
 
-                    const config = yield* CloudflareDurableRuntimeConfig;
-
                     const planner = bindings.find(
                       (binding) => binding.agentId === plannerDefinition.id,
                     )!;
@@ -1005,7 +1000,6 @@ describe("maintenance retry deadlines", () => {
                       Layer.provide(
                         storageConfigLayer({
                           storage: state.storage,
-                          ownershipLeaseDuration: config.ownershipLeaseDuration,
                         }),
                       ),
                       Layer.provide(DoStorageFailpoint.layer),
@@ -1021,7 +1015,7 @@ describe("maintenance retry deadlines", () => {
                         ),
                       ),
                       Effect.provideService(CloudflareDurableRuntimeConfig, {
-                        ...config,
+                        ...(yield* CloudflareDurableRuntimeConfig),
                         alarmBackoffBase: 100,
                         alarmBackoffCap: 100,
                       }),
@@ -1087,7 +1081,7 @@ describe("maintenance retry deadlines", () => {
           expect(Exit.isFailure(yield* run(pass))).toBe(true);
           const parked = yield* snapshot;
 
-          expect(parked.ownership).toBeUndefined();
+          expect(parked.hasOwner).toBe(false);
           expect(parked.submission.state).toBe("ready");
           expect(errors.filter((message) => message.includes("binding"))).toHaveLength(1);
 
@@ -1178,27 +1172,11 @@ describe("maintenance retry deadlines", () => {
             instance[DurableObject.RunSymbol](
               Effect.gen(function* () {
                 const ledger = yield* SubmissionLedger;
-                const config = yield* CloudflareDurableRuntimeConfig;
 
-                const leaseLedger = yield* SubmissionLedger.pipe(
-                  Effect.provide(
-                    submissionLedgerLayer.pipe(
-                      Layer.provide(
-                        storageConfigLayer({
-                          storage: state.storage,
-                          ownershipLeaseDuration: 60_000,
-                        }),
-                      ),
-                      Layer.provide(DoStorageFailpoint.layer),
-                    ),
-                  ),
-                );
+                const runStorage = yield* RunStorage;
 
-                const claim = yield* leaseLedger.claim(
-                  ClaimRequest.make({
-                    threadId: decodeThreadId(thread),
-                    producerId: ProducerId.make("other-live-owner"),
-                  }),
+                const claim = yield* runStorage.claim(
+                  ClaimRequest.make({ threadId: decodeThreadId(thread) }),
                 );
 
                 expect(Option.isSome(claim)).toBe(true);
@@ -1206,8 +1184,7 @@ describe("maintenance retry deadlines", () => {
                 yield* Effect.gen(function* () {
                   const maintenance = yield* ThreadMaintenance;
 
-                  // The long live lease spans both mandatory retry floors; neither pass
-                  // may steal ownership while exercising the no-progress budget.
+                  // Neither retry floor replaces a live local owner.
                   for (let stage = 0; stage < 2; stage++) {
                     const now = yield* Clock.currentTimeMillis;
 
@@ -1225,31 +1202,23 @@ describe("maintenance retry deadlines", () => {
                   }
 
                   const snapshot = yield* ledger.loadRecoverySnapshot(
-                    RecoverySnapshotRequest.make({ submissionId: claim.value.submissionId }),
+                    RecoverySnapshotRequest.make({ submissionId: claim.value.claim.submissionId }),
                   );
 
-                  expect(snapshot.ownership?.attemptId).toBe(claim.value.attemptId);
-                  // Releasing a claim changes ownership bookkeeping, not source progress.
-                  yield* maintenance.withMutation(
-                    ledger.releaseOwnership(
-                      ReleaseOwnershipRequest.make({
-                        submissionId: claim.value.submissionId,
-                        ownershipToken: claim.value.ownershipToken,
-                      }),
-                    ),
-                  );
+                  expect(snapshot.hasOwner).toBe(true);
+                  yield* maintenance.withMutation(claim.value.release);
                   expect((yield* maintenance.pass).settled).toBe(0);
                   yield* clock.adjust(2_000);
                   expect((yield* maintenance.pass).settled).toBe(1);
                 }).pipe(
                   Effect.provide(Layer.fresh(ThreadMaintenance.layer)),
                   Effect.provideService(CloudflareDurableRuntimeConfig, {
-                    ...config,
+                    ...(yield* CloudflareDurableRuntimeConfig),
                     alarmBackoffBase: 10,
                     alarmBackoffCap: 40,
                   }),
                 );
-              }),
+              }).pipe(Effect.scoped),
             ),
           ),
         );

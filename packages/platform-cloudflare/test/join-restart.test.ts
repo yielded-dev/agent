@@ -8,7 +8,7 @@ import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
 import type { Receipt } from "@yielded/agent/receipt";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
-import { layer as runStorageLayer } from "@yielded/agent/run-storage";
+import { RunStorage, layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import {
@@ -178,19 +178,38 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
       Effect.map(SubmissionLedger, (ledger) =>
         SubmissionLedger.of({
           ...ledger,
-          claimJoining: (request) =>
-            Effect.gen(function* () {
-              const gate = joinBatches[prompts.length - 1];
-
-              if (scenario === "backlog" && !recovering && gate !== undefined)
-                yield* Deferred.await(gate);
-
-              return yield* ledger.claimJoining(request);
-            }),
           revertJoining: (request) =>
             ledger
               .revertJoining(request)
               .pipe(Effect.tap(() => Deferred.succeed(rejected, undefined))),
+        }),
+      ),
+    );
+
+    // Pause before entering the owner mutation gate: admissions must remain able to
+    // fill the next joining batch while the claim is held at the runtime boundary.
+    const observedRuns = Layer.effect(
+      RunStorage,
+      Effect.map(RunStorage, (storage) =>
+        RunStorage.of({
+          ...storage,
+          claim: (request) =>
+            storage.claim(request).pipe(
+              Effect.map(
+                Option.map((session) => ({
+                  ...session,
+                  claimJoining: (maxCount) =>
+                    Effect.gen(function* () {
+                      const gate = joinBatches[prompts.length - 1];
+
+                      if (scenario === "backlog" && !recovering && gate !== undefined)
+                        yield* Deferred.await(gate);
+
+                      return yield* session.claimJoining(maxCount);
+                    }),
+                })),
+              ),
+            ),
         }),
       ),
     );
@@ -208,7 +227,7 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
             Effect.provideService(DurableObjectContext, { ctx: state, env }),
             Effect.provide(
               DurableAgentRuntime.layer.pipe(
-                Layer.provide(runStorageLayer()),
+                Layer.provide(observedRuns.pipe(Layer.provide(runStorageLayer()))),
                 Layer.provide(observedLedger),
                 Layer.provide(
                   Layer.effect(
@@ -343,7 +362,7 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
     if (admitted === undefined) throw new Error("Expected both durable receipts");
 
     if (evicts) {
-      // The dead owner's lease expires before the new incarnation may claim the Run.
+      // Eviction ended the old process; recovery acquires a fresh local generation.
       recovering = true;
       await run(
         Effect.scoped(

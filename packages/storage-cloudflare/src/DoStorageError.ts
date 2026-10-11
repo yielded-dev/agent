@@ -1,4 +1,4 @@
-import { CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
+import { CanonicalSequence } from "@yielded/agent/records";
 import { ThreadStoreDiagnostic } from "@yielded/agent/thread-store";
 import { Schema } from "effect";
 
@@ -72,19 +72,8 @@ export class DoValueBoundExceeded extends Schema.TaggedError<DoValueBoundExceede
  */
 export class DoAppendConflict extends Schema.TaggedError<DoAppendConflict>()("DoAppendConflict", {
   message: Schema.String,
-  reason: Schema.Literals(["batch-content", "record-identity", "tail"]),
+  reason: Schema.Literals(["batch-content", "record-identity", "tail", "stale-command"]),
   actualTailSequence: Schema.optionalKey(CanonicalSequence),
-}) {}
-
-/**
- * A producer epoch does not match the Thread's current writer registration. Appends
- * require the exact registered epoch, so both older and newer unregistered epochs are fenced;
- * a newer epoch takes over by materializing first.
- */
-export class DoFenceRejected extends Schema.TaggedError<DoFenceRejected>()("DoFenceRejected", {
-  actualEpoch: ProducerEpoch,
-  message: Schema.String,
-  producerEpoch: ProducerEpoch,
 }) {}
 
 /** A checkpoint conflicts with a previously stored checkpoint at the same offset. */
@@ -123,14 +112,10 @@ export const DoStorageFailpointLocation = Schema.Literals([
   "ledger:claim:after",
   "ledger:mark-input-applied:before",
   "ledger:mark-input-applied:after",
-  "ledger:renew:before",
-  "ledger:renew:after",
   "ledger:finalize-settlement:before",
   "ledger:finalize-settlement:after",
   "ledger:request-abort:before",
   "ledger:request-abort:after",
-  "ledger:release:before",
-  "ledger:release:after",
   "ledger:claim-joining:before",
   "ledger:claim-joining:after",
   "ledger:mark-joined:before",

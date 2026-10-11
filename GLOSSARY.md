@@ -163,15 +163,15 @@ append; `joined` follows it and settles with the host Run.
 
 **Run Continuation**
 
-Current semantic progress for one Run, held in its Execution Checkpoint and atomically fenced
+Current semantic progress for one Run, held in its Execution Checkpoint and atomically committed
 with new history facts. It retains cumulative charges and exact references to original input,
 saved context, declared operations, and terminal evidence; previous revisions are discarded.
 
 **Execution Checkpoint**
 
 Authoritative current state for unfinished execution, including its Run Continuation and original
-context. It grants no ownership and retires only after canonical settlement and closure of execution
-obligations. A backup must retain it with the history needed to resume that execution.
+context. It grants no ownership and is deleted at settlement. Unresolved tools, deliveries and
+approvals retain their own state until resolved.
 
 **Saved Run context**
 
@@ -475,16 +475,16 @@ submission ownership. The application owns extraction, destination idempotency, 
 The ordered, append-only sequence of Canonical Records for one Thread.
 
 **Submission Ledger**  
-Operational durable state for admission, FIFO readiness, ownership, Attempts, optional leases,
-abort intent, and settlement obligations.
+Operational durable state for admission, FIFO readiness, abort intent and settlement obligations.
+A process-local generation owns execution; no claims, leases or Attempt history are persisted.
 
 **Canonical Batch**  
 An atomic append of one or more Canonical Records. Readers never observe part of a batch.
 
 **Archive Range**
 
-A bounded sequence of complete Canonical Batches with verified digest anchors and a stable storage
-locator. Ranges share one Thread order and producer fence. Archiving changes physical placement,
+A bounded sequence of complete Canonical Batches with verified sequence boundaries and a stable
+storage locator. Ranges share one Thread order and local owner. Archiving changes physical placement,
 not model context, grants, Run budgets, or unresolved obligations.
 
 **Projection**  
@@ -495,9 +495,9 @@ client messages. Projections are rebuildable.
 An application-owned optimization containing a Projection through a verified log offset. It is
 disposable and distinct from the authoritative Execution Checkpoint of an unfinished Run.
 
-**Producer Epoch**  
-A fencing token that grants one owner permission to append. A stale owner with an older epoch
-cannot mutate canonical state even if it resumes.
+**Owner Generation**
+A process-local capability for one scoped Attempt. Closing it permanently rejects its late
+results. The host must route a Thread to one owner process; authority is never exported or restored.
 
 **Unknown Outcome**  
 A durable record that an external Tool effect may have occurred but was not confirmed

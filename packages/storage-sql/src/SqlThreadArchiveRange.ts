@@ -1,6 +1,6 @@
 import { canonicalJson, utf8ByteLength } from "@yielded/agent/digest";
 import { ExportBatch, ExportRecord } from "@yielded/agent/record-format";
-import { CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
+import { CanonicalSequence } from "@yielded/agent/records";
 import {
   MAX_ARCHIVE_RANGE_BYTES,
   MAX_ARCHIVE_RANGE_PAGE,
@@ -14,7 +14,6 @@ import {
   type ThreadArchiveStorage,
 } from "@yielded/agent/thread-archive-range";
 import {
-  FenceRejected,
   ThreadNotMaterialized,
   ThreadStoreError,
   ThreadCheckpoint,
@@ -232,12 +231,12 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
     const rows = yield* Schema.decodeUnknownEffect(
       Schema.Array(
         Schema.Struct({
-          producer_epoch: SqlInteger.pipe(Schema.decodeTo(ProducerEpoch)),
+          tail_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
         }),
       ),
     )(
       yield* query(
-        sql`SELECT producer_epoch FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
+        sql`SELECT tail_sequence FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
       ),
     ).pipe(Effect.mapError((cause) => failure("archive owner", cause)));
 
@@ -247,17 +246,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
 
     if (row === undefined) return yield* failure("archive owner");
 
-    return row.producer_epoch;
-  });
-
-  const requireFence = Effect.fnUntraced(function* (
-    threadId: ThreadArchiveRange["threadId"],
-    epoch: ProducerEpoch,
-  ) {
-    const actualEpoch = yield* requireThread(threadId);
-
-    if (actualEpoch !== epoch)
-      return yield* FenceRejected.make({ threadId, attemptedEpoch: epoch, actualEpoch });
+    return row.tail_sequence;
   });
 
   const range = Effect.fnUntraced(function* (
@@ -527,7 +516,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
             Effect.mapError((cause) => failure("archive seal request", cause)),
           );
 
-          yield* requireFence(request.threadId, request.producerEpoch);
+          yield* requireThread(request.threadId);
 
           const rows = yield* decodeRanges(
             yield* query(
@@ -553,7 +542,7 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
             Effect.mapError((cause) => failure("archive publish request", cause)),
           );
 
-          yield* requireFence(request.threadId, request.producerEpoch);
+          yield* requireThread(request.threadId);
           const row = yield* range(request.threadId, request.firstSequence);
 
           if (row.state === "open") return yield* failure("archive unsealed range");

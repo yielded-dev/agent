@@ -1,5 +1,6 @@
 import { NodeCrypto } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
+import * as PostgresStorage from "@yielded/agent-storage-postgres/postgres-storage";
 import { MessageDeliveryStore } from "@yielded/agent/message-delivery";
 import { Digest } from "@yielded/agent/records";
 import { ScheduleRecord, ScheduleStore } from "@yielded/agent/schedule";
@@ -22,7 +23,7 @@ import {
 import { Effect, Layer, Result, Schema } from "effect";
 import { TestClock } from "effect/testing";
 
-import { storage, withTemporaryDatabase } from "./harness.ts";
+import { clientLayer, storage, withTemporaryDatabase } from "./harness.ts";
 
 describe("PostgresScheduleStore", () => {
   it.effect("counts capacity without parsing arbitrary schedule inputs in PostgreSQL", () =>
@@ -190,7 +191,7 @@ describe("PostgresSubscriptionStore", () => {
       ),
   );
 
-  it.effect("initializes retention tables and a shared partition concurrently", () =>
+  it.effect("initializes retention facets concurrently through one native client", () =>
     withTemporaryDatabase((url) =>
       Effect.all(
         Array.from({ length: 2 }, () =>
@@ -198,10 +199,14 @@ describe("PostgresSubscriptionStore", () => {
             const store = yield* SubscriptionStore;
 
             expect(yield* store.nextDeadline).toBeNull();
-          }).pipe(Effect.provide(storage(url).subscriptionStore(subscriptionConformancePartition))),
+          }).pipe(
+            Effect.provide(
+              PostgresStorage.subscriptionStoreLayer(subscriptionConformancePartition),
+            ),
+          ),
         ),
         { concurrency: 2 },
-      ),
+      ).pipe(Effect.provide([clientLayer(url), NodeCrypto.layer])),
     ),
   );
 

@@ -12,9 +12,9 @@ authority, public replies, and application read models. These are the runtime's 
 ```mermaid
 flowchart LR
   accTitle: Durable execution and committed facts
-  accDescr: Input flows through a durable receipt, fenced attempt, model response, tool batch, and settlement. The tool batch can return to the fenced attempt for the next turn. Committed facts feed publication, delivery, memory, and application projections.
+  accDescr: Input flows through a durable receipt, scoped attempt, model response, tool batch, and settlement. The tool batch can return to the scoped attempt for the next turn. Committed facts feed publication, delivery, memory, and application projections.
   subgraph durable["Durable execution"]
-    input["input"] --> receipt["durable receipt"] --> attempt["fenced attempt"] --> model["model response"] --> batch["tool batch"] --> settlement["settlement"]
+    input["input"] --> receipt["durable receipt"] --> attempt["scoped attempt"] --> model["model response"] --> batch["tool batch"] --> settlement["settlement"]
     batch -->|next turn| attempt
   end
   facts["committed facts"] --> projections["publication, delivery, memory, and application projections"]
@@ -58,6 +58,10 @@ flowchart LR
 
 ## Ownership and recovery
 
+- One process owns a Thread at a time on every backend. A scoped local generation rejects late
+  results after an Attempt closes. Acquisition and writes share the owner's mutation gate;
+  elapsed time never authorizes a second owner. PostgreSQL is a compatibility backend with the
+  same routing requirement, without distributed takeover or ownership leases.
 - Every acknowledged Submission remains owed until canonical terminal Settlement. Preserve exact
   Submission, Receipt, delivery, idempotency, and settlement identities through retries, eviction,
   and restart. Recovery repeats acknowledgements of the same work; it never admits replacement
@@ -72,10 +76,12 @@ flowchart LR
   lane. An adapter may finalize inside publication when no recoverable delivery remains.
   Recovery completes outstanding obligations from the same canonical record.
 - The append-only journal owns conversation content, operation evidence and terminal outcomes;
-  the ledger owns what is still owed and who may advance it. One current Run checkpoint preserves
+  the ledger owns what is still owed, and the local owner controls who may advance it. One current Run checkpoint preserves
   semantic progress, accounting, exact original context and validated completion until settlement.
   Unresolved operations and handoffs retain their own rows. The checkpoint is authoritative operational state, replaced in the
-  same fenced transaction as new journal facts. Historical checkpoint revisions are not retained
+  same transaction as new journal facts, then deleted at settlement. Only the latest operational
+  commit can replay; a replacement adopts current state and the immutable terminal winner.
+  Historical checkpoint revisions are not retained
   or attested by `verify`. Schema, version, identity, order and transaction checks protect the
   storage contract; the log provides no tamper evidence. Recovery retains a small `historyDigest`
   to detect drift in the original model prompt. Projections, work inventories, lookup indexes and application checkpoints
@@ -87,7 +93,7 @@ flowchart LR
   or reconciliation: exactly-once recording does not promise exactly-once execution.
 - Keep application reads in application-owned views. Durable Object SQLite retains execution
   and recovery state, not a second application query model. Measure a statement budget for a
-  representative turn when changing storage; fewer queries must not weaken fencing or receipts.
+  representative turn when changing storage; fewer queries must not weaken owner checks or receipts.
 - Keep synchronous work bounded so single-threaded Objects can receive input. Reuse codecs and
   committed views. Unfinished Runs read their current authoritative checkpoint and bounded selected
   evidence, independently of unrelated Thread history. Original context reconstruction reads its
@@ -100,7 +106,7 @@ flowchart LR
   Native work pages include terminal side obligations and never grant execution authority.
   Missing inventories fail explicitly; rebuild them in separate resumable maintenance passes.
   Canonical row caches share an isolate-wide bound; never allocate that budget per Object.
-- Keep one Thread-wide canonical order and producer fence as complete batches rotate into
+- Keep one Thread-wide canonical order under the owner's mutation gate as complete batches rotate into
   bounded archive ranges. Publish and verify archive contents and their locator before removing
   hot payloads. Rotation preserves exact references, live charges, and original retry outcomes;
   it is independent of model compaction, Run settlement, and execution ownership. Retained
@@ -109,11 +115,10 @@ flowchart LR
 ## Cloudflare wake rules
 
 - Wake for new input, committed source facts, settlement notifications, and explicit deadlines.
-  Idle Objects take no alarms. Execution lease renewal belongs only to a live Attempt, including
-  its resource handoff; a parked approval or accepted delivery is not a running execution.
+  Idle Objects take no alarms. A parked approval or accepted delivery is not a running execution.
 - Self-rearming work has a finite no-progress budget, a retry floor, and backoff. Unchanged
   pending work eventually parks, reports once without content, and retries at most hourly.
-  Genuine committed progress resumes it immediately. Claims, clock changes, retries, and repeated
+  Genuine committed progress resumes it immediately. Acquisition, clock changes, retries, and repeated
   wake hints cannot replenish the budget. Draining a lane ends that pending obligation.
 - These alarm rules apply to the Cloudflare host. Node's lost-hint recovery scans and the generic
   settlement waiter still poll; do not describe them as notification-only. See

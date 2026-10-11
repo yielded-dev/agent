@@ -24,7 +24,6 @@ import {
   BatchId,
   CanonicalBatch,
   DeploymentId,
-  ProducerEpoch,
   ProducerId,
   RecordEnvelope,
   RecordId,
@@ -40,7 +39,7 @@ import {
 import { SemanticMemoryProfile } from "@yielded/agent/semantic-memory-index";
 import { memoryStoreLayer } from "@yielded/agent/sql-memory-store";
 import {
-  FencedAppendRequest,
+  AppendRequest,
   ThreadMaterialization,
   ThreadStore,
   ThreadTailRequest,
@@ -218,8 +217,6 @@ const appendDocument = Effect.fn("SemanticMemoryEvaluation.appendDocument")(func
 
   const deploymentId = yield* Schema.decodeEffect(DeploymentId)("semantic-memory-evaluation");
 
-  const producerEpoch = yield* Schema.decodeEffect(ProducerEpoch)(1);
-
   const batchId = yield* Schema.decodeEffect(BatchId)(`eval-batch-${ordinal}-${document.id}`);
 
   const producerId = yield* Schema.decodeEffect(ProducerId)("semantic-memory-evaluation");
@@ -234,9 +231,8 @@ const appendDocument = Effect.fn("SemanticMemoryEvaluation.appendDocument")(func
   });
 
   return yield* store.append(
-    FencedAppendRequest.make({
+    AppendRequest.make({
       threadId: THREAD_ID,
-      producerEpoch,
       expectedTailSequence: tail.tailSequence,
       batch: CanonicalBatch.make({
         batchId,
@@ -636,7 +632,6 @@ export const runEvaluation = Effect.fn("runSemanticMemoryEvaluation")(function* 
     yield* threads.materialize(
       ThreadMaterialization.make({
         threadId: THREAD_ID,
-        producerEpoch: yield* Schema.decodeEffect(ProducerEpoch)(1),
       }),
     );
     // Download/model initialization is complete before commit-lag measurements begin.

@@ -30,6 +30,7 @@ import {
   IdempotencyKey,
   JoinedToHost,
   LedgerError,
+  OwnershipLost,
   Principal,
   Settlement,
   SettlementConflict,
@@ -42,7 +43,6 @@ import {
   AppendConflict,
   ThreadNotMaterialized,
   ThreadStoreError,
-  FenceRejected,
 } from "@yielded/agent/thread-store";
 import { Context, Crypto, Duration, Effect, Layer, Predicate, Schema, Stream } from "effect";
 import { RpcTargets, RpcTracing } from "effect-cf";
@@ -179,10 +179,10 @@ export const HostFailure = Schema.Union([
   UnknownResolutionConflict,
   JoinedToHost,
   LedgerError,
+  OwnershipLost,
   ThreadStoreError,
   ThreadNotMaterialized,
   AppendConflict,
-  FenceRejected,
   DurableRuntimeFailpointError,
   AdmissionLimitExceeded,
   DurableAlarmError,
@@ -306,10 +306,10 @@ const ClientSubmitHostFailure = Schema.Union([
   AdmissionConflict,
   AdmissionPolicyError,
   LedgerError,
+  OwnershipLost,
   ThreadStoreError,
   ThreadNotMaterialized,
   AppendConflict,
-  FenceRejected,
   DurableRuntimeFailpointError,
   AdmissionLimitExceeded,
   DurableAlarmError,
@@ -318,6 +318,7 @@ const ClientSubmitHostFailure = Schema.Union([
 
 const ClientAwaitHostFailure = Schema.Union([
   LedgerError,
+  OwnershipLost,
   SettlementConflict,
   OperationDenied,
   HostProtocolError,
@@ -333,6 +334,7 @@ const ClientObserveHostFailure = Schema.Union([
 const ClientAbortHostFailure = Schema.Union([
   OperationDenied,
   LedgerError,
+  OwnershipLost,
   SettlementConflict,
   JoinedToHost,
   DurableRuntimeFailpointError,
@@ -342,6 +344,7 @@ const ClientAbortHostFailure = Schema.Union([
 
 const ClientApprovalHostFailure = Schema.Union([
   LedgerError,
+  OwnershipLost,
   SettlementConflict,
   ApprovalConflict,
   OperationDenied,
@@ -351,6 +354,7 @@ const ClientApprovalHostFailure = Schema.Union([
 
 const ClientUnknownHostFailure = Schema.Union([
   LedgerError,
+  OwnershipLost,
   SettlementConflict,
   UnknownResolutionConflict,
   JoinedToHost,

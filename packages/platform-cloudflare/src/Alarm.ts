@@ -690,7 +690,6 @@ const stableExternalWait = (
     case "input-applied":
     case "joining":
     case "ready":
-    case "running":
     case "settled":
       return false;
   }

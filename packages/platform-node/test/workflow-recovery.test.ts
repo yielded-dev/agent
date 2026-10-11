@@ -4,9 +4,10 @@ import { WorkflowAgentHost } from "@yielded/agent-workflow/workflow-agent-host";
 import * as Agent from "@yielded/agent/agent";
 import { digestDefinitions } from "@yielded/agent/digest";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
+import { StorageOwner } from "@yielded/agent/run-storage";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservations";
-import { Clock, Deferred, Effect, Fiber, FileSystem, Layer, Ref, Stream } from "effect";
+import { Deferred, Effect, Fiber, Layer, Ref, Stream } from "effect";
 import { Toolkit, type Response } from "effect/ai";
 
 import {
@@ -126,38 +127,11 @@ it.live(
   30_000,
 );
 
-it.live("competing Workflow owners fence the stale model result out of canonical history", () =>
+it.live("a replacement Run rejects a late Workflow model result through the same owner", () =>
   Effect.gen(function* () {
-    let phase = "constructing first owner";
-
-    yield* Effect.addFinalizer(() =>
-      Effect.logInfo(`Workflow ownership test stopped while ${phase}`),
-    );
     const directory = yield* temporaryDirectory;
-    const fs = yield* FileSystem.FileSystem;
-
-    yield* fs.makeDirectory(`${directory}/first`);
-    yield* fs.makeDirectory(`${directory}/second`);
-    const clock = yield* Clock.Clock;
-    let offset = 0;
-
-    // Advance once to expire the first claim without sleeping. Native delivery timers
-    // continue advancing, and the replacement uses a long, actively renewed lease.
-    const ownershipClock: Clock.Clock = {
-      sleep: (duration) => clock.sleep(duration),
-      monotonicTimeNanosUnsafe: () => clock.monotonicTimeNanosUnsafe(),
-      monotonicTimeNanos: clock.monotonicTimeNanos,
-      currentTimeMillisUnsafe: () => clock.currentTimeMillisUnsafe() + offset,
-      currentTimeMillis: Effect.sync(() => clock.currentTimeMillisUnsafe() + offset),
-      currentTimeNanosUnsafe: () => clock.currentTimeNanosUnsafe() + BigInt(offset) * 1000000n,
-      currentTimeNanos: Effect.sync(
-        () => clock.currentTimeNanosUnsafe() + BigInt(offset) * 1000000n,
-      ),
-    };
-
     const started = yield* Deferred.make<void>();
     const release = yield* Deferred.make<void>();
-    const firstCompleted = yield* Deferred.make<void>();
 
     const fixture = yield* makePlanner((call) =>
       call === 0
@@ -167,39 +141,10 @@ it.live("competing Workflow owners fence the stale model result out of canonical
         : Stream.fromIterable(finalParts("fresh")),
     );
 
-    // Independent SQL Workflow engines contend only over the shared canonical agent ledger.
-    const stack = (owner: "first" | "second") =>
-      hostLayer(`${directory}/${owner}`, [fixture], {
-        filename: `${directory}/agent.sqlite`,
-        producerId: owner,
-        // These two SQLite connections share an event loop. A synchronous busy wait
-        // would prevent its lock holder from committing; let Workflow retry contention.
-        busyTimeout: 0,
-        ownershipLeaseDuration: owner === "first" ? 200 : 30000,
-        leaseRenewalInterval: owner === "first" ? 30000 : 50,
-      }).pipe(Layer.provide(Layer.succeedContext(Clock.Clock.context(ownershipClock))));
-
-    const first = yield* Effect.gen(function* () {
-      const host = yield* WorkflowAgentHost;
-
-      yield* host.submit(fixture.agent, { question: "fence" }, submitOptions(fixture.digests));
-
-      // Dispatch cleanup proves this owner's native completion without another settlement waiter.
-      yield* until(pendingIntents, (rows) => rows.length === 0);
-      yield* Deferred.succeed(firstCompleted, undefined);
-
-      return yield* Effect.never;
-    }).pipe(Effect.provide(stack("first")), Effect.forkChild);
-
-    phase = "waiting for first model";
-    yield* Deferred.await(started);
-    offset = 1000;
-    phase = "constructing replacement owner";
-
     yield* Effect.gen(function* () {
       const host = yield* WorkflowAgentHost;
-
-      phase = "submitting to replacement owner";
+      const runtime = yield* DurableAgentRuntime;
+      const owner = yield* StorageOwner;
 
       const receipt = yield* host.submit(
         fixture.agent,
@@ -207,12 +152,19 @@ it.live("competing Workflow owners fence the stale model result out of canonical
         submitOptions(fixture.digests),
       );
 
-      phase = "waiting for replacement settlement";
-      expect((yield* host.awaitSettlement(receipt)).outcome).toBe("completed");
+      yield* Deferred.await(started);
+      // End this local generation while its external response is still outstanding.
+      // Both drivers share the same physical owner; there is no distributed takeover.
+      expect(owner.hasOwner(receipt.threadId, receipt.submissionId)).toBe(true);
+      yield* owner.withMutation(
+        Effect.sync(() => owner.closeSubmission(receipt.threadId, receipt.submissionId)),
+      );
+      const settlements = yield* runtime.processThreadResolved(receipt.threadId);
+
+      expect(settlements.map((settlement) => settlement.outcome)).toEqual(["completed"]);
       yield* Deferred.succeed(release, undefined);
-      phase = "waiting for stale native Workflow completion and cleanup";
-      yield* Effect.raceFirst(Deferred.await(firstCompleted), Fiber.join(first));
-      phase = "checking canonical history";
+      expect((yield* host.awaitSettlement(receipt)).outcome).toBe("completed");
+      yield* until(pendingIntents, (rows) => rows.length === 0);
       yield* host.repair;
       const log = yield* readLog(receipt.threadId);
 
@@ -223,8 +175,7 @@ it.live("competing Workflow owners fence the stale model result out of canonical
       expect(JSON.stringify(responses)).toContain("fresh");
       expect(JSON.stringify(responses)).not.toContain("stale");
       expect(yield* Ref.get(fixture.calls)).toBe(2);
-    }).pipe(Effect.provide(stack("second")));
-    yield* Fiber.interrupt(first);
+    }).pipe(Effect.provide(hostLayer(directory, [fixture])));
   }).pipe(Effect.scoped, Effect.provide(platform)),
 );
 

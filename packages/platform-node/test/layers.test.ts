@@ -742,7 +742,7 @@ describe("NodeDurableAgentRuntime", () => {
               return {
                 result,
                 status,
-                ownership: snapshot.ownership,
+                hasOwner: snapshot.hasOwner,
                 terminal: records.filter(
                   ({ record }) =>
                     record.payload._tag === "RunFailed" ||
@@ -764,7 +764,7 @@ describe("NodeDurableAgentRuntime", () => {
           accepted.map(() => ({
             result: { _tag: "Failure", failure: { _tag: "BindingUnavailable" } },
             status: { _tag: "pending" },
-            ownership: undefined,
+            hasOwner: false,
             terminal: [],
           })),
         );

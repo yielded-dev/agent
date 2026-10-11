@@ -238,7 +238,6 @@ describe("SQLite child Parent Link verification", () => {
                 harness.bindings,
                 runtimeOptions(`${directory}/idor.sqlite`, {
                   runtimeFailpoint: armableFailpoint(arm),
-                  ownershipLeaseDuration: FAILPOINT_LEASE_MILLIS,
                 }),
               ),
             ),

@@ -31,8 +31,7 @@ import {
   ThreadExport,
   ThreadTail,
   ThreadTailRequest,
-  FenceRejected,
-  type FencedAppendRequest,
+  type AppendRequest,
   PreparedAppend,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
@@ -84,7 +83,7 @@ export const sqlCommitIntentDigest = (batchJson: string, facts: ReadonlyArray<Re
 
 /** Capture exact wire and active retry intent before acquiring the writer transaction. */
 export const prepareSqlAppend = Effect.fnUntraced(function* (
-  request: FencedAppendRequest,
+  request: AppendRequest,
   offsetPrefix: string,
 ) {
   const invalid = (operation: string) => (cause: { readonly message: string }) =>
@@ -143,7 +142,6 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
     producerIdJson: JSON.stringify(captured.batch.producerId),
     batchBytes: captured.batchBytes,
     expectedTailSequence: captured.expectedTailSequence,
-    producerEpoch: captured.producerEpoch,
     records,
     progress: captured.progress,
     executionWrites,
@@ -161,7 +159,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const OffsetText = Schema.String.check(Schema.isMaxLength(4 * 1024));
   const OFFSET_PREFIX = options.offsetPrefix;
   const ZERO_CANONICAL_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
-  const isFenceRejected = Schema.is(FenceRejected);
   const isAppendConflict = Schema.is(AppendConflict);
   const isCheckpointRejected = Schema.is(CheckpointRejected);
   const canonicalRecordJson = Schema.fromJsonString(ExportRecord);
@@ -335,17 +332,13 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
 
     yield* hitFailpoint("materialize:before");
     yield* journal
-      .materialize(validated.threadId, new Date(now).toISOString(), validated.producerEpoch)
-      .pipe(
-        Effect.mapError((error) =>
-          isFenceRejected(error) ? error : storeError("materialize thread", error),
-        ),
-      );
+      .materialize(validated.threadId, new Date(now).toISOString())
+      .pipe(Effect.mapError((error) => storeError("materialize thread", error)));
     yield* hitFailpoint("materialize:after");
   });
 
   const makeAppend = (commit: SqlJournal<S, C, W, F>["append"], requireMaterialized: boolean) =>
-    Effect.fn("SqlThreadStore.append")(function* (request: FencedAppendRequest) {
+    Effect.fn("SqlThreadStore.append")(function* (request: AppendRequest) {
       const rawRequest = yield* prepareSqlAppend(request, options.offsetPrefix).pipe(
         Effect.provideService(Crypto.Crypto, crypto),
       );
@@ -354,18 +347,20 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
 
       yield* hitFailpoint("append:before");
 
-      const result = yield* commit(rawRequest).pipe(
-        Effect.mapError((error) => {
-          if (isFenceRejected(error) || isAppendConflict(error)) return error;
+      const result = yield* journal.owner
+        .withProgress(rawRequest.threadId, commit(rawRequest))
+        .pipe(
+          Effect.mapError((error) => {
+            if (isAppendConflict(error)) return error;
 
-          return storeError("append canonical batch", error);
-        }),
-        Effect.flatMap((result) =>
-          decodeAppendResult(result).pipe(
-            Effect.mapError((error) => schemaStoreError("decode append result", error)),
+            return storeError("append canonical batch", error);
+          }),
+          Effect.flatMap((result) =>
+            decodeAppendResult(result).pipe(
+              Effect.mapError((error) => schemaStoreError("decode append result", error)),
+            ),
           ),
-        ),
-      );
+        );
 
       yield* hitFailpoint("append:after");
 
@@ -716,7 +711,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     return ThreadTail.make({
       threadId: validated.threadId,
       tailSequence: thread.tail_sequence,
-      producerEpoch: thread.producer_epoch,
     });
   });
 

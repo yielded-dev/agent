@@ -148,7 +148,7 @@ const failure = (operation: string, cause: unknown) =>
   });
 
 const Header = Schema.Struct({
-  ...Struct.pick(ThreadRow.fields, ["thread_id", "tail_sequence", "producer_epoch"]),
+  ...Struct.pick(ThreadRow.fields, ["thread_id", "tail_sequence"]),
 });
 
 const Row = Schema.Struct({
@@ -309,7 +309,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
       snapshot: (body) => body,
       tail: (threadId) =>
         query(
-          sql`SELECT thread_id, tail_sequence, producer_epoch FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
+          sql`SELECT thread_id, tail_sequence FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
         ).pipe(
           Effect.flatMap((value) => decode(Schema.Array(Header), value)),
           Effect.map((headers) => headers[0]),
@@ -529,7 +529,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
   const exportReader = ThreadExporterReader.of({
     snapshot: Effect.fnUntraced(function* (threadId: ThreadId) {
       const headers = yield* query(
-        sql`SELECT thread_id, tail_sequence, producer_epoch FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
+        sql`SELECT thread_id, tail_sequence FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
       ).pipe(Effect.flatMap((r) => decode(Schema.Array(Header), r)));
 
       const state =
@@ -1046,7 +1046,6 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           Effect.gen(function* () {
             const progress = makeThreadImportProgress();
             let threadId: ThreadId | undefined;
-            let destinationEpoch = 0;
             const maxBytes = options.maxValueBytes ?? 16 * 1024 * 1024;
 
             const reject = (reason: ThreadImportRejected["reason"], message: string) =>
@@ -1086,7 +1085,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                   yield* checkIdentifiers([threadId]);
 
                   const headers = yield* query(
-                    sql`SELECT thread_id, tail_sequence, producer_epoch FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
+                    sql`SELECT thread_id, tail_sequence FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
                   ).pipe(Effect.flatMap((r) => decode(Schema.Array(Header), r)));
 
                   for (const name of [
@@ -1095,7 +1094,6 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                     "effect_agent_record_runs",
                     "effect_agent_canonical_batches",
                     "effect_agent_executions",
-                    "effect_agent_execution_receipts",
                     "effect_agent_checkpoints",
                     "effect_agent_worker_stops",
                     "effect_agent_run_keys",
@@ -1178,7 +1176,6 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                       "target-not-empty",
                       "Destination retains transfer facts or nonempty work state",
                     );
-                  destinationEpoch = (headers[0]?.producer_epoch ?? -1) + 1;
 
                   const now = DateTime.formatIso(
                     DateTime.makeUnsafe(yield* Clock.currentTimeMillis),
@@ -1186,7 +1183,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
                   if (headers.length === 0)
                     yield* query(
-                      sql`INSERT INTO ${table("effect_agent_threads")} (thread_id, created_at, tail_sequence, producer_epoch) VALUES (${threadId}, ${now}, 0, ${destinationEpoch})`,
+                      sql`INSERT INTO ${table("effect_agent_threads")} (thread_id, created_at, tail_sequence) VALUES (${threadId}, ${now}, 0)`,
                     );
                   yield* query(sql`INSERT INTO ${table("effect_agent_transfer_state")} (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count, executions_count)
           VALUES (${threadId}, 0, 0, 0, 0, 0, 0, 0) ON CONFLICT DO NOTHING`);
@@ -2014,13 +2011,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                   "unsupported-obligations",
                   "Staged canonical history retains unsupported live foreign obligations",
                 );
-              const epoch = Math.max(destinationEpoch, progress.producerEpoch);
 
-              if (!Number.isSafeInteger(epoch) || epoch >= Number.MAX_SAFE_INTEGER)
-                return yield* reject(
-                  "unsupported-capacity",
-                  "No fresh producer generation is available",
-                );
               if (workerSeal !== undefined)
                 yield* query(
                   sql`INSERT INTO ${table("effect_agent_worker_stops")} (thread_id, terminal) VALUES (${id}, ${workerSeal.terminal ?? null})`,
@@ -2032,7 +2023,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                 sql`DELETE FROM ${table("effect_agent_import_delivery_visits")} WHERE thread_id=${id}`,
               );
               yield* query(
-                sql`UPDATE ${table("effect_agent_threads")} SET tail_sequence=${result.tailSequence}, producer_epoch=${epoch} WHERE thread_id=${id}`,
+                sql`UPDATE ${table("effect_agent_threads")} SET tail_sequence=${result.tailSequence} WHERE thread_id=${id}`,
               );
               if (options.afterImport !== undefined)
                 yield* options

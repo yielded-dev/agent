@@ -1,6 +1,6 @@
 import { Clock, Context, Effect, Layer, Option, Schema } from "effect";
 
-import type { AppendResult, FencedAppendRequest } from "./ThreadStore.ts";
+import type { AppendResult, AppendRequest } from "./ThreadStore.ts";
 
 /** A derived projection failed; the canonical source remains authoritative. */
 export class ThreadProjectionError extends Schema.TaggedError<ThreadProjectionError>()(
@@ -31,7 +31,7 @@ export interface ThreadProjectionMaintenanceService {
    * Failure must leave the unprocessed prefix visible to pendingDeadline.
    */
   readonly applyCommitted: (
-    request: FencedAppendRequest,
+    request: AppendRequest,
     result: AppendResult,
   ) => Effect.Effect<void, ThreadProjectionError>;
   /** One bounded, restartable backfill batch. Never drain until caught up in a loop. */

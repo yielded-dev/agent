@@ -352,7 +352,7 @@ describe("DC alarm semantics", () => {
             ),
           );
 
-          expect(snapshot.ownership).toBeUndefined();
+          expect(snapshot.hasOwner).toBe(false);
           const before = yield* Effect.promise(() => readCanonical(thread));
 
           expect(before.some(({ record }) => record.payload._tag === "SubmissionSettled")).toBe(

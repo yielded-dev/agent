@@ -42,7 +42,7 @@ import {
 } from "@yielded/agent/submission-ledger";
 import { PreparedInput } from "@yielded/agent/subscription";
 import {
-  FencedAppendRequest,
+  AppendRequest,
   ThreadRead,
   ThreadStore,
   ThreadTailRequest,
@@ -75,7 +75,6 @@ import {
   type ThreadRecoveryFaultEvent,
   type ThreadMaintenanceFailpointHandler,
 } from "../src/Alarm.ts";
-import { CloudflareDurableRuntimeConfig } from "../src/CloudflareConfig.ts";
 import type { submit as admitToThread } from "../src/ThreadObject.ts";
 import {
   bookDefinition,
@@ -130,7 +129,6 @@ const localRun =
         instance[DurableObject.RunSymbol](
           Effect.gen(function* () {
             const bindings = yield* makeTestBindings;
-            const config = yield* CloudflareDurableRuntimeConfig;
 
             const observedStore = Layer.effect(
               ThreadStore,
@@ -184,7 +182,6 @@ const localRun =
               Layer.provide(
                 storageConfigLayer({
                   storage: state.storage,
-                  ownershipLeaseDuration: config.ownershipLeaseDuration,
                 }),
               ),
               Layer.provide(DoStorageFailpoint.layer),
@@ -448,7 +445,7 @@ it(
             );
 
             expect(queued.submission.state).toBe("ready");
-            expect(queued.ownership).toBeUndefined();
+            expect(queued.hasOwner).toBe(false);
             yield* Deferred.succeed(releaseFirst, undefined);
             yield* Fiber.join(running);
             expect(secondStarted).toBe(true);
@@ -465,7 +462,7 @@ it(
 
             expect(secondSnapshot.submission.state).toBe("settled");
             expect(followerSnapshot.submission.state).toBe("settled");
-            expect(followerSnapshot.ownership).toBeUndefined();
+            expect(followerSnapshot.hasOwner).toBe(false);
 
             const records = yield* ThreadStore.use((store) =>
               Stream.runCollect(
@@ -539,7 +536,7 @@ it(
                 RecoverySnapshotRequest.make({ submissionId: accepted[index]!.submissionId }),
               );
 
-              expect(snapshot.ownership).toBeUndefined();
+              expect(snapshot.hasOwner).toBe(false);
               expect(snapshot.submission.state).not.toBe("settled");
             }
 
@@ -638,9 +635,8 @@ describe("recovery faults independent of execution history", () => {
                 const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
                 return yield* store.append(
-                  FencedAppendRequest.make({
+                  AppendRequest.make({
                     threadId,
-                    producerEpoch: tail.producerEpoch,
                     expectedTailSequence: tail.tailSequence,
 
                     batch: CanonicalBatch.make({

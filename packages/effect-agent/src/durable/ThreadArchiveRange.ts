@@ -2,8 +2,8 @@ import type { Effect, Option } from "effect";
 import { Schema } from "effect";
 
 import { ThreadId } from "../core/Identifiers.ts";
-import { CanonicalSequence, ProducerEpoch } from "./Records.ts";
-import type { FenceRejected, ThreadNotMaterialized, ThreadStoreError } from "./ThreadStore.ts";
+import { CanonicalSequence } from "./Records.ts";
+import type { ThreadNotMaterialized, ThreadStoreError } from "./ThreadStore.ts";
 
 export const MAX_ARCHIVE_RANGE_RECORDS = 1_024;
 export const MAX_ARCHIVE_RANGE_BYTES = 32 * 1024 * 1024;
@@ -49,7 +49,6 @@ export type ThreadArchiveRangePage = typeof ThreadArchiveRangePage.Type;
 
 export const ThreadArchiveRangeSeal = Schema.Struct({
   threadId: ThreadId,
-  producerEpoch: ProducerEpoch,
 });
 
 export type ThreadArchiveRangeSeal = typeof ThreadArchiveRangeSeal.Type;
@@ -63,7 +62,6 @@ export type ThreadArchiveRangeRequest = typeof ThreadArchiveRangeRequest.Type;
 
 export const ThreadArchiveRangePublish = Schema.Struct({
   ...ThreadArchiveRangeRequest.fields,
-  producerEpoch: ProducerEpoch,
 });
 
 export type ThreadArchiveRangePublish = typeof ThreadArchiveRangePublish.Type;
@@ -71,7 +69,7 @@ export type ThreadArchiveRangePublish = typeof ThreadArchiveRangePublish.Type;
 type ReadFailure = ThreadStoreError | ThreadNotMaterialized;
 
 /**
- * Storage-owner maintenance. Rotation retains the same canonical order, producer fence,
+ * Storage-owner maintenance. Rotation retains the same canonical order, owner,
  * live obligations, and exact identities. Archive publication must preserve a reachable
  * hot copy until durable contents and their locator have passed integrity verification.
  */
@@ -81,10 +79,10 @@ export interface ThreadArchiveStorage {
   ) => Effect.Effect<ThreadArchiveRangePage, ReadFailure>;
   readonly seal: (
     request: ThreadArchiveRangeSeal,
-  ) => Effect.Effect<Option.Option<ThreadArchiveRange>, ReadFailure | FenceRejected>;
+  ) => Effect.Effect<Option.Option<ThreadArchiveRange>, ReadFailure>;
   readonly archive: (
     request: ThreadArchiveRangePublish,
-  ) => Effect.Effect<ThreadArchiveRange, ReadFailure | FenceRejected>;
+  ) => Effect.Effect<ThreadArchiveRange, ReadFailure>;
   readonly verify: (
     request: ThreadArchiveRangeRequest,
   ) => Effect.Effect<ThreadArchiveRange, ReadFailure>;

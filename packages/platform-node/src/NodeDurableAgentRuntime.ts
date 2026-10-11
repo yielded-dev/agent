@@ -28,7 +28,6 @@ import {
   DurableRuntimeFailpoint,
   type DurableRuntimeFailpointHandler,
 } from "@yielded/agent/durable-failpoint";
-import { type SubmissionId } from "@yielded/agent/identifiers";
 import { type MessageDeliveryError, MessageDeliveryStore } from "@yielded/agent/message-delivery";
 import { DeploymentId, ProducerId } from "@yielded/agent/records";
 import {
@@ -41,15 +40,9 @@ import {
   type RunToolFailureObserver,
 } from "@yielded/agent/run-options";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
-import {
-  DEFAULT_OWNERSHIP_LEASE_DURATION,
-  ReleaseOwnershipRequest,
-  SubmissionLedger,
-  type OwnershipToken,
-} from "@yielded/agent/submission-ledger";
 import { ThreadReader } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
-import { Context, Crypto, Duration, Effect, Layer, Ref, Schema, Scope } from "effect";
+import { Context, Crypto, Duration, Effect, Layer, Schema, Scope } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { CurrentTransformer } from "effect/sql/Statement";
 
@@ -86,16 +79,12 @@ export class NodeDurableAgentRuntimeConfigValue extends Schema.Class<NodeDurable
   filename: Schema.NonEmptyString,
   deploymentId: DeploymentId,
   producerId: ProducerId,
-  /** Submission ownership lease duration (D5); liveness hint only, epochs stay authoritative. */
-  ownershipLeaseDuration: PositiveMillis,
   /** Finite bound on concurrent worker loops per host (rule 10). */
   workerConcurrency: WorkerConcurrency,
   /** Fallback scan cadence for the Node wake scheduler and independent message delivery recovery. */
   wakeScanInterval: PositiveMillis,
   /** `awaitSettlement` ledger re-check cadence when no wake arrives. */
   settlementPollInterval: PositiveMillis,
-  /** Worker ownership-lease renewal cadence. */
-  leaseRenewalInterval: PositiveMillis,
   /** Active-Run abort-intent poll cadence. */
   abortPollInterval: PositiveMillis,
   /** Bounded SQLITE_BUSY retry window for write-lock acquisition. */
@@ -130,16 +119,12 @@ export interface NodeDurableAgentRuntimeOptions<
   readonly filename: string;
   readonly deploymentId: string;
   readonly producerId: string;
-  /** Milliseconds; default `DEFAULT_OWNERSHIP_LEASE_DURATION` (30s, D5). */
-  readonly ownershipLeaseDuration?: number | undefined;
   /** Default 1; bounded to 1..64. */
   readonly workerConcurrency?: number | undefined;
   /** Milliseconds; default 1000. */
   readonly wakeScanInterval?: number | undefined;
   /** Milliseconds; default 500. */
   readonly settlementPollInterval?: number | undefined;
-  /** Milliseconds; default 10000. */
-  readonly leaseRenewalInterval?: number | undefined;
   /** Milliseconds; default 500. */
   readonly abortPollInterval?: number | undefined;
   /** Deployment-owned pricing authority used by durable cost budgets and settlements. */
@@ -215,12 +200,9 @@ const configFromOptions = (
     filename: options.filename,
     deploymentId: options.deploymentId,
     producerId: options.producerId,
-    ownershipLeaseDuration:
-      options.ownershipLeaseDuration ?? Duration.toMillis(DEFAULT_OWNERSHIP_LEASE_DURATION),
     workerConcurrency: options.workerConcurrency ?? 1,
     wakeScanInterval: options.wakeScanInterval ?? 1_000,
     settlementPollInterval: options.settlementPollInterval ?? 500,
-    leaseRenewalInterval: options.leaseRenewalInterval ?? 10_000,
     abortPollInterval: options.abortPollInterval ?? 500,
     busyTimeout: options.busyTimeout ?? 5_000,
     synchronous: options.synchronous ?? "FULL",
@@ -248,7 +230,6 @@ const sqliteStorageConfigLayer: Layer.Layer<
       observationPollInterval: config.observationPollInterval,
       busyTimeout: config.busyTimeout,
       synchronous: config.synchronous,
-      ownershipLeaseDuration: config.ownershipLeaseDuration,
       verifyOnOpen: config.verifyOnOpen,
     });
   }),
@@ -266,7 +247,6 @@ const durableRuntimeConfigLayer = (
         deploymentId: config.deploymentId,
         producerId: config.producerId,
         settlementPollInterval: Duration.millis(config.settlementPollInterval),
-        leaseRenewalInterval: Duration.millis(config.leaseRenewalInterval),
         abortPollInterval: Duration.millis(config.abortPollInterval),
         ...(estimateCostMicrousd === undefined ? {} : { estimateCostMicrousd }),
       });
@@ -345,103 +325,12 @@ const privateMessageDeliveryLayer = Layer.effect(MessageDeliveryStore)(
   }),
 );
 
-const releaseTrackedOwnership = (
-  ledger: SubmissionLedger["Service"],
-  registry: Ref.Ref<ReadonlyMap<SubmissionId, OwnershipToken>>,
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    const tracked = yield* Ref.getAndSet(registry, new Map<SubmissionId, OwnershipToken>());
-
-    for (const [submissionId, ownershipToken] of tracked) {
-      yield* ledger
-        .releaseOwnership(ReleaseOwnershipRequest.make({ submissionId, ownershipToken }))
-        .pipe(
-          Effect.catchTags({
-            // A newer epoch already owns (or settled) the lane: nothing left to drain.
-            OwnershipLost: () => Effect.void,
-            // Drain is best-effort by design: the lease still expires and the durability protocol,
-            // not graceful shutdown, provides correctness (DEPLOY-006).
-            LedgerError: (error) =>
-              Effect.logWarning("Ownership drain failed; the lease will expire instead", error),
-          }),
-        );
-    }
-  });
-
-/**
- * Shutdown-drain decorator for a `SubmissionLedger` (deployment §6 step 6): every ownership
- * period granted through this Layer is tracked — claims start tracking, renewals follow token
- * rotation, releases and settlement finalizations stop it — and every ownership still held when
- * the Layer's Scope closes is released so another host can claim the lane immediately instead of
- * waiting for lease expiry. The drain is a liveness courtesy only; producer-epoch fencing remains
- * the correctness authority (DUR-006), and a forced kill simply falls back to lease expiry.
- */
-export const ownershipDrainLayer: Layer.Layer<SubmissionLedger, never, SubmissionLedger> =
-  Layer.effect(SubmissionLedger)(
-    Effect.gen(function* () {
-      const ledger = yield* SubmissionLedger;
-
-      const registry = yield* Ref.make<ReadonlyMap<SubmissionId, OwnershipToken>>(
-        new Map<SubmissionId, OwnershipToken>(),
-      );
-
-      const track = (submissionId: SubmissionId, ownershipToken: OwnershipToken) =>
-        Ref.update(registry, (tracked) => new Map(tracked).set(submissionId, ownershipToken));
-
-      const untrack = (submissionId: SubmissionId) =>
-        Ref.update(registry, (tracked) => {
-          const next = new Map(tracked);
-
-          next.delete(submissionId);
-
-          return next;
-        });
-
-      yield* Effect.addFinalizer(() => releaseTrackedOwnership(ledger, registry));
-
-      return SubmissionLedger.of({
-        ...ledger,
-        claim: (request) =>
-          ledger
-            .claim(request)
-            .pipe(
-              Effect.tap((claimed) =>
-                claimed._tag === "Some"
-                  ? track(claimed.value.submissionId, claimed.value.ownershipToken)
-                  : Effect.void,
-              ),
-            ),
-        renewOwnership: (request) =>
-          ledger.renewOwnership(request).pipe(
-            Effect.tap((renewal) => track(request.submissionId, renewal.ownershipToken)),
-            Effect.tapError((error) =>
-              error._tag === "OwnershipLost" ? untrack(request.submissionId) : Effect.void,
-            ),
-          ),
-        releaseOwnership: (request) =>
-          ledger.releaseOwnership(request).pipe(
-            Effect.tap(() => untrack(request.submissionId)),
-            Effect.tapError((error) =>
-              error._tag === "OwnershipLost" ? untrack(request.submissionId) : Effect.void,
-            ),
-          ),
-        finalizeSettlement: (request) =>
-          ledger.finalizeSettlement(request).pipe(Effect.tap(() => untrack(request.submissionId))),
-        // Suspension ends the ownership period by contract, so the drain stops tracking it.
-        suspend: (request) =>
-          ledger.suspend(request).pipe(Effect.tap(() => untrack(request.submissionId))),
-        loadRecoverySnapshot: ledger.loadRecoverySnapshot,
-      });
-    }),
-  );
-
 /**
  * The DN Layer assembly (deployment §12: a Layer-assembly library, not an app entrypoint).
  * `layer(options)` decodes the configuration, opens ONE SQLite database serving both the
- * Thread Log and the Submission Ledger (so claims fence the same producer epochs), wires
- * the Node wake scheduler with its ledger-scan fallback, exposes independent message delivery
- * storage, wraps the ledger with the shutdown
- * ownership drain, defaults the Tool reconciliation policy to the fail-closed
+ * Thread Log and the Submission Ledger under one scoped owner, wires the Node wake scheduler
+ * with its ledger-scan fallback, exposes independent message delivery storage, and defaults
+ * the Tool reconciliation policy to the fail-closed
  * `ToolReconciler.uncertain` (override via `options.toolReconciler`), and provides a ready
  * `DurableAgentRuntime` on top. Storage compatibility is
  * verified during construction: an incompatible database file fails the Layer with
@@ -650,12 +539,7 @@ export class NodeDurableAgentRuntime {
               });
 
         const ordinaryStorage = runStorageLayer().pipe(
-          Layer.provideMerge(
-            Layer.mergeAll(
-              threadStoreLayer,
-              ownershipDrainLayer.pipe(Layer.provideMerge(submissionLedgerLayer)),
-            ),
-          ),
+          Layer.provideMerge(Layer.mergeAll(threadStoreLayer, submissionLedgerLayer)),
         );
 
         const portLayers = Layer.mergeAll(

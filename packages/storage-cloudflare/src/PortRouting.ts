@@ -28,7 +28,6 @@ import {
   ThreadStore,
   ThreadReader,
   ThreadStoreError,
-  FenceRejected,
 } from "@yielded/agent/thread-store";
 import { WorkDiscoveryUnavailable } from "@yielded/agent/thread-work";
 import type { WakeScheduler } from "@yielded/agent/wake-scheduler";
@@ -302,7 +301,7 @@ export const makeLocalSubmissionLookup = (
 
 const NoAdditionalPortFailure = Schema.Never;
 const AbortPortFailure = Schema.Union([SettlementConflict, JoinedToHost]);
-const AppendPortFailure = Schema.Union([ThreadNotMaterialized, AppendConflict, FenceRejected]);
+const AppendPortFailure = Schema.Union([ThreadNotMaterialized, AppendConflict, OwnershipLost]);
 
 /**
  * The fail-fast refusal for any foreign operation OUTSIDE the closed route-capable subset
@@ -719,33 +718,15 @@ const makeRoutedLedgerServices = Effect.fnUntraced(function* (options: RoutedPor
 
     // Every operation below is lane-local by construction (plan §1.3): a foreign address is
     // an out-of-contract call and fails fast typed instead of being quietly distributed.
-    claim: (request) =>
+    selectHead: (request) =>
       options.ownsThread(request.threadId)
-        ? local.claim(request)
+        ? local.selectHead(request)
         : Effect.fail(crossThreadLedgerError("ledger claim", request.threadId)),
 
     claimJoining: (request) =>
       options.ownsThread(request.threadId)
         ? local.claimJoining(request)
         : Effect.fail(crossThreadLedgerError("ledger claim joining", request.threadId)),
-
-    renewOwnership: (request) =>
-      submissionTarget("ledger renew ownership", request.submissionId).pipe(
-        Effect.flatMap((target) =>
-          target._tag === "local"
-            ? local.renewOwnership(request)
-            : Effect.fail(crossThreadLedgerError("ledger renew ownership", target.threadId)),
-        ),
-      ),
-
-    releaseOwnership: (request) =>
-      submissionTarget("ledger release ownership", request.submissionId).pipe(
-        Effect.flatMap((target) =>
-          target._tag === "local"
-            ? local.releaseOwnership(request)
-            : Effect.fail(crossThreadLedgerError("ledger release ownership", target.threadId)),
-        ),
-      ),
 
     markInputApplied: (request) =>
       submissionTarget("ledger mark input applied", request.submissionId).pipe(
@@ -879,7 +860,6 @@ export const routedSettlementPublisherLayer = (options: RoutedPortOptions) =>
           ThreadStoreError,
           ThreadNotMaterialized,
           AppendConflict,
-          FenceRejected,
         ]),
       );
 
@@ -1036,7 +1016,7 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
               request.threadId,
               StoreRangeSealCall.make({ request }),
               StoreRangeSealResult,
-              Schema.Union([ThreadNotMaterialized, FenceRejected]),
+              ThreadNotMaterialized,
             ).pipe(Effect.map((reply) => reply.range)),
       archive: (request) =>
         options.ownsThread(request.threadId)
@@ -1048,7 +1028,7 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
               request.threadId,
               StoreRangeArchiveCall.make({ request }),
               StoreRangeArchiveResult,
-              Schema.Union([ThreadNotMaterialized, FenceRejected]),
+              ThreadNotMaterialized,
             ).pipe(Effect.map((reply) => reply.range)),
       verify: (request) =>
         options.ownsThread(request.threadId)
@@ -1179,7 +1159,7 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
             request.threadId,
             StoreMaterializeCall.make({ request }),
             StoreMaterializeResult,
-            FenceRejected,
+            NoAdditionalPortFailure,
           ).pipe(Effect.asVoid),
 
     append: (request) =>

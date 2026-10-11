@@ -4,11 +4,9 @@ import * as PostgresStorage from "@yielded/agent-storage-postgres/postgres-stora
 import type { MessageDeliveryStoreLimits } from "@yielded/agent/message-delivery";
 import { Effect, Layer, Redacted } from "effect";
 
-import { WRITER_LOCK_KEY } from "../src/internal/postgres-storage.ts";
-
 /**
- * A live Postgres is required: this adapter's contract is its concurrency behaviour, and no
- * in-process double reproduces it. `EFFECT_AGENT_TEST_POSTGRES_URL` points CI at its own service.
+ * A live Postgres is required for transaction rollback and connection cleanup;
+ * an in-process double cannot establish those properties. `EFFECT_AGENT_TEST_POSTGRES_URL` points CI at its own service.
  */
 const adminUrl =
   process.env.EFFECT_AGENT_TEST_POSTGRES_URL ??
@@ -32,7 +30,7 @@ const admin = <A, E>(effect: Effect.Effect<A, E, PgClient.PgClient>) =>
   );
 
 /**
- * Each case owns a database, including its database-scoped writer lock. `WITH (FORCE)` ends
+ * Each case owns a database. `WITH (FORCE)` ends
  * any pooled connection the case left open.
  */
 export const withTemporaryDatabase = <A, E>(
@@ -96,24 +94,23 @@ export const storage = (
 
 /** One pool connection makes subsequent operations verify failed-transaction cleanup. */
 export const singleConnectionStorage = (url: string, lockTimeout: number) =>
-  storage(url, { lockTimeout, ownershipLeaseDuration: 30_000 }, { maxConnections: 1 });
+  storage(url, { lockTimeout }, { maxConnections: 1 });
 
 /**
- * Holds the adapter's writer lock from an unrelated client for the duration of `use`, as a
- * transiently coexisting producer would, then rolls the holding transaction back.
+ * Holds a native table lock like an administrative operation, then rolls it back.
  */
-export const whileHoldingWriterLock = <A, E>(url: string, use: Effect.Effect<A, E>) =>
+export const whileHoldingTableLock = <A, E>(
+  url: string,
+  use: Effect.Effect<A, E>,
+  table: "effect_agent_threads" | "effect_agent_submissions" = "effect_agent_threads",
+) =>
   Effect.scoped(
     Effect.gen(function* () {
       const sql = yield* PgClient.PgClient;
       const connection = yield* sql.reserve;
 
       yield* connection.executeUnprepared("BEGIN", [], undefined);
-      yield* connection.executeUnprepared(
-        `SELECT pg_advisory_xact_lock(${WRITER_LOCK_KEY})`,
-        [],
-        undefined,
-      );
+      yield* connection.executeUnprepared(`LOCK TABLE ${table} IN SHARE MODE`, [], undefined);
 
       const result = yield* use;
 

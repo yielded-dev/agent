@@ -60,6 +60,12 @@ concurrency behavior, and [persistence and durability](/concepts/durability/) fo
 
 ## Database ownership
 
+Route each Thread to one live process and reuse one storage Layer within that process.
+PostgreSQL is a compatibility backend under the same single-owner contract as SQLite and
+Cloudflare. Horizontal multi-worker execution of one Thread and lease-based takeover are not
+supported. Stop the old owner before routing its Threads to a replacement; the application owns
+that routing boundary.
+
 The adapter initializes its tables when the Layer opens. Credentials need permission to use
 and initialize the selected schema. Tables default to `public`; use
 `PostgresStorage.layerWith({ schema: "agent" })` for another namespace. An existing schema avoids

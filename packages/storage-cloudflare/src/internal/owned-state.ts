@@ -1,18 +1,14 @@
 import { SqliteClient } from "@effect/sql-sqlite-do";
-import { Context, Effect, Exit, Predicate, Schema, Semaphore } from "effect";
+import { makeStorageOwner, type StorageOwner } from "@yielded/agent/run-storage";
+import { Deferred, Effect, Exit, Predicate, Schema, Scope, Semaphore } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 
 import { DoStorageCorruptionError, DoStorageError } from "../DoStorageError.ts";
 
-const ActiveState = Context.Reference<OwnedState | undefined>(
-  "@effect-agent/storage-cloudflare/internal/ActiveState",
-  { defaultValue: () => undefined },
-);
-
 /** One disposable view per physical Object database, including separately acquired adapters. */
 export class OwnedState {
-  private readonly gate = Semaphore.makeUnsafe(1);
+  constructor(readonly owner: StorageOwner["Service"]) {}
   readonly invalidators = new Set<() => void>();
 
   readonly invalidate = Effect.sync(() => {
@@ -21,11 +17,7 @@ export class OwnedState {
 
   /** Cached readers must wait for the complete transaction, including rollback/commit. */
   readonly read = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
-    Effect.flatMap(ActiveState, (active) =>
-      active === this
-        ? effect
-        : this.gate.withPermits(1)(Effect.provideService(effect, ActiveState, this)),
-    );
+    this.owner.withMutation(effect);
 
   readonly transaction = <A, E, R>(
     effect: Effect.Effect<A, E, R>,
@@ -39,14 +31,24 @@ export class OwnedState {
     );
 }
 
-const states = new WeakMap<object, OwnedState>();
+interface RetainedState {
+  readonly ready: Deferred.Deferred<OwnedState>;
+  readonly disposed: Deferred.Deferred<void>;
+  readonly scope: Scope.Closeable;
+  references: number;
+  closing: boolean;
+}
+
+const states = new WeakMap<object, RetainedState>();
 
 /** Explicit invalidation for maintenance that writes private tables outside the adapters. */
 export const invalidateOwnedState = (storage: DurableObjectStorage): Effect.Effect<void> =>
   Effect.suspend(() => {
     const state = states.get(storage);
 
-    return state === undefined ? Effect.void : state.read(state.invalidate);
+    return state === undefined
+      ? Effect.void
+      : Deferred.await(state.ready).pipe(Effect.flatMap((state) => state.read(state.invalidate)));
   });
 
 const DoClient = Schema.declare<SqliteClient.SqliteClient>(
@@ -61,18 +63,60 @@ export const ownedState = (sql: SqlClient) =>
         message: "Owned state requires a Durable Object SQLite client.",
       }),
     ),
-    Effect.map((client) => {
-      // Instrumentation may return a fresh SQL wrapper on every storage.sql access.
-      const key = client.config.storage ?? client.config.db ?? client;
-      let state = states.get(key);
+    Effect.flatMap((client) =>
+      Effect.uninterruptible(
+        Effect.gen(function* () {
+          // Instrumentation may return fresh wrappers; the physical Object identity owns the root.
+          const key = client.config.storage ?? client.config.db ?? client;
 
-      if (state === undefined) {
-        state = new OwnedState();
-        states.set(key, state);
-      }
+          for (;;) {
+            let retained = states.get(key);
 
-      return state;
-    }),
+            if (retained?.closing) {
+              yield* Deferred.await(retained.disposed);
+              continue;
+            }
+            if (retained === undefined) {
+              retained = {
+                ready: Deferred.makeUnsafe(),
+                disposed: Deferred.makeUnsafe(),
+                scope: Scope.makeUnsafe(),
+                references: 1,
+                closing: false,
+              };
+              states.set(key, retained);
+
+              const owner = yield* makeStorageOwner(Semaphore.makeUnsafe(1).withPermits(1)).pipe(
+                Scope.provide(retained.scope),
+              );
+
+              yield* Deferred.succeed(retained.ready, new OwnedState(owner));
+            } else retained.references++;
+            const current = retained;
+
+            yield* Effect.addFinalizer(() =>
+              Effect.uninterruptible(
+                Effect.gen(function* () {
+                  current.references--;
+                  if (current.references !== 0) return;
+                  current.closing = true;
+                  yield* Scope.close(current.scope, Exit.void).pipe(
+                    Effect.ensuring(
+                      Effect.gen(function* () {
+                        if (states.get(key) === current) states.delete(key);
+                        yield* Deferred.succeed(current.disposed, undefined);
+                      }),
+                    ),
+                  );
+                }),
+              ),
+            );
+
+            return yield* Deferred.await(current.ready);
+          }
+        }),
+      ),
+    ),
   );
 
 /**

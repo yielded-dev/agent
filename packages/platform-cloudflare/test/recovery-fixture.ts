@@ -23,7 +23,6 @@ import {
   ThreadObjectIdentity,
   ThreadObjectPlacement,
 } from "../src/CloudflareBindings.ts";
-import { CloudflareDurableRuntimeConfig } from "../src/CloudflareConfig.ts";
 import { cloudflareWakeSchedulerLayer } from "../src/WakeScheduler.ts";
 
 /** Only the history read is held; admission, control state and real SQLite remain available. */
@@ -119,7 +118,7 @@ export const recoveryTestLayer = (bindings: ReadonlyArray<ResolvedBinding>, host
     Effect.gen(function* () {
       const { ctx } = yield* DurableObjectContext;
       const { threadId: owner } = yield* ThreadObjectIdentity;
-      const config = yield* CloudflareDurableRuntimeConfig;
+
       const runtimeConfig = yield* DurableRuntimeConfig;
 
       const observedStore = Layer.effect(
@@ -161,7 +160,6 @@ export const recoveryTestLayer = (bindings: ReadonlyArray<ResolvedBinding>, host
         Layer.provide(
           storageConfigLayer({
             storage: ctx.storage,
-            ownershipLeaseDuration: config.ownershipLeaseDuration,
           }),
         ),
         Layer.provide(DoStorageFailpoint.layer),

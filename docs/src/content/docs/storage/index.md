@@ -47,9 +47,9 @@ Storage alone does not start workers or recover unfinished Runs.
 
 ## Back up or change record formats
 
-A Thread keeps one canonical order and producer fence throughout its lifetime. Storage rotates
+A Thread keeps one canonical order and local ownership boundary throughout its lifetime. Storage rotates
 complete batches into bounded ranges; archiving a range preserves exact record identities and
-digest anchors. Compaction changes the model view, independently of physical storage. SQL
+sequence boundaries. Compaction changes the model view, independently of physical storage. SQL
 adapters verify archive contents and publish their locator before removing hot payload copies.
 
 `streamExport({ threadId })` acquires `ThreadExportSource` and yields snapshot-bound pages of
@@ -59,7 +59,7 @@ service through `reencodeThread(source)`, or save the NDJSON archive with the ad
 validates every page and referenced fact, applies destination admission constraints, and publishes
 atomically into an empty Thread. Missing dependencies leave the destination unchanged. Historical
 closed workers and children remain evidence; unsupported live foreign obligations refuse transfer.
-Claims, leases, application checkpoints, and recovery caches are not transferred. Unresolved effects retain
+Local execution ownership, application checkpoints, and recovery caches are not transferred. Unresolved effects retain
 their uncertainty.
 
 Provide `ThreadExportSource.layer()` from the source `ThreadStore`, or SQLite's read-only
@@ -72,7 +72,7 @@ also reserve page space for the complete admission, accepted command, or deliver
 acknowledging it, including repeated identities and transfer metadata. Oversized fresh facts fail
 before mutation; replay of accepted work preserves its original Receipt.
 
-The unreleased protocol accepts only fresh layout-23 stores and `effect-agent/thread@5` records.
+The unreleased protocol accepts only fresh layout-24 stores and `effect-agent/thread@6` records.
 Predecessor stores fail before mutation; no older layout upgrade or archive converter is included.
 See the [operator procedure and limits](/guide/operations/#adopting-these-contracts).
 

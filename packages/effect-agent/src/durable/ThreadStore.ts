@@ -26,13 +26,13 @@ import {
   ObservationOffset,
   PersistedJson,
   type PromptRecordEnvelope,
-  ProducerEpoch,
   ProducerId,
   RecordId,
   RecordEnvelope,
   RunContinuation,
 } from "./Records.ts";
 import { subagentLineageRecordId, workerOriginRecordId } from "./RunJournal.ts";
+import type { OwnershipLost } from "./SubmissionLedger.ts";
 import {
   AbortIntent,
   AdmissionRequest,
@@ -130,7 +130,6 @@ export type ThreadWorkerCapacityRequest = typeof ThreadWorkerCapacityRequest.Typ
 export const ThreadWorkerCapacity = Schema.Struct({
   threadId: ThreadId,
   tailSequence: CanonicalSequence,
-  producerEpoch: ProducerEpoch,
   /** min(actual distinct workers, activeLimit + 1); equality remains distinguishable. */
   activeWorkers: Schema.Natural.check(Schema.isLessThanOrEqualTo(101)),
   workerActive: Schema.Boolean,
@@ -277,7 +276,6 @@ export class ThreadMaterialization extends Schema.Class<ThreadMaterialization>(
   "@effect-agent/thread/ThreadMaterialization",
 )({
   threadId: ThreadId,
-  producerEpoch: ProducerEpoch,
 }) {}
 
 /** Current interpreter state, not an append-only history record or a disposable projection. */
@@ -330,20 +328,18 @@ export class ExecutionRead extends Schema.Class<ExecutionRead>(
   runId: RunId,
 }) {}
 
-export class FencedAppendRequest extends Schema.Class<FencedAppendRequest>(
-  "@effect-agent/thread/FencedAppendRequest",
+export class AppendRequest extends Schema.Class<AppendRequest>(
+  "@effect-agent/thread/AppendRequest",
 )({
   threadId: ThreadId,
   batch: CommitBatch,
   executions: Schema.optionalKey(Schema.Array(ExecutionUpdate).check(Schema.isMaxLength(256))),
   expectedTailSequence: CanonicalSequence,
-  producerEpoch: ProducerEpoch,
 }) {}
 
 const AppendHeader = Schema.Struct({
   threadId: ThreadId,
   expectedTailSequence: CanonicalSequence,
-  producerEpoch: ProducerEpoch,
   batchId: BatchId,
   producerId: ProducerId,
 });
@@ -358,7 +354,7 @@ const executionJson = Schema.fromJsonString(ExecutionUpdate);
 const encodeExecution = Schema.encodeSync(executionJson);
 const decodeExecution = Schema.decodeSync(executionJson);
 
-const capturedAppends = new WeakMap<FencedAppendRequest, PreparedAppend>();
+const capturedAppends = new WeakMap<AppendRequest, PreparedAppend>();
 
 /**
  * Admission reserves one complete batch's envelope, references, snapshot and continuation cursor.
@@ -394,9 +390,9 @@ export const canonicalBatchFitsTransfer = (
  * is shared by the batch and record rows. Privately owned facts and wire metadata
  * keep payloads, identities and validation stable across suspension; adapters persist the
  * captured strings rather than reconstructing bytes from caller-owned values.
- * Transport decoding intentionally returns an ordinary FencedAppendRequest for fresh capture.
+ * Transport decoding intentionally returns an ordinary AppendRequest for fresh capture.
  */
-export interface PreparedAppend extends FencedAppendRequest {
+export interface PreparedAppend extends AppendRequest {
   readonly batchJson: string;
   readonly batchBytes: number;
   readonly progress: ReadonlyArray<ProgressAppendRecord>;
@@ -415,7 +411,7 @@ export interface PreparedAppend extends FencedAppendRequest {
 }
 
 export const PreparedAppend = {
-  capture: (input: FencedAppendRequest): Effect.Effect<PreparedAppend, ThreadStoreError> =>
+  capture: (input: AppendRequest): Effect.Effect<PreparedAppend, ThreadStoreError> =>
     Effect.suspend(() => {
       const existing = capturedAppends.get(input);
 
@@ -481,11 +477,10 @@ export const PreparedAppend = {
             ),
           );
 
-          const request = new FencedAppendRequest(
+          const request = new AppendRequest(
             {
               threadId: header.threadId,
               expectedTailSequence: header.expectedTailSequence,
-              producerEpoch: header.producerEpoch,
               batch,
               ...(executionWrites.length === 0
                 ? {}
@@ -687,12 +682,11 @@ export class ThreadTailRequest extends Schema.Class<ThreadTailRequest>(
 
 /**
  * The committed tail of one Thread Log. A resuming producer composes its next
- * FencedAppendRequest from this value instead of exporting the whole log.
+ * AppendRequest from this value instead of exporting the whole log.
  */
 export class ThreadTail extends Schema.Class<ThreadTail>("@effect-agent/thread/ThreadTail")({
   threadId: ThreadId,
   tailSequence: CanonicalSequence,
-  producerEpoch: ProducerEpoch,
 }) {}
 
 export class ThreadIdentityRequest extends Schema.Class<ThreadIdentityRequest>(
@@ -990,19 +984,14 @@ export class ThreadNotMaterialized extends Schema.TaggedError<ThreadNotMateriali
 /**
  * A canonical append that cannot commit: `batch-content` replays a batch ID with different
  * content, `record-identity` reuses a canonical record ID, and `tail` declares a stale expected
- * tail. Tail conflicts carry the actual committed tail as a diagnostic resume hint.
+ * tail. `stale-command` rejects a superseded operational request and must not be reprepared.
+ * Tail conflicts carry the actual committed tail as a diagnostic resume hint.
  */
 export class AppendConflict extends Schema.TaggedError<AppendConflict>()("AppendConflict", {
   threadId: ThreadId,
   batchId: BatchId,
-  reason: Schema.Literals(["batch-content", "record-identity", "tail"]),
+  reason: Schema.Literals(["batch-content", "record-identity", "tail", "stale-command"]),
   actualTailSequence: Schema.optionalKey(CanonicalSequence),
-}) {}
-
-export class FenceRejected extends Schema.TaggedError<FenceRejected>()("FenceRejected", {
-  threadId: ThreadId,
-  actualEpoch: ProducerEpoch,
-  attemptedEpoch: ProducerEpoch,
 }) {}
 
 export class CheckpointRejected extends Schema.TaggedError<CheckpointRejected>()(
@@ -1022,7 +1011,7 @@ export type ThreadStoreFailure =
   | ThreadStoreError
   | ThreadNotMaterialized
   | AppendConflict
-  | FenceRejected;
+  | OwnershipLost;
 
 /**
  * Optional, disposable projection storage. Neither history execution nor durable recovery
@@ -1050,18 +1039,17 @@ export class ThreadStore extends Context.Service<
     /** Bounded physical log ranges, independent of compaction and execution ownership. */
     readonly archives?: ThreadArchiveStorage;
     readonly verification?: ThreadVerificationStorage;
-    readonly materialize: (
-      request: ThreadMaterialization,
-    ) => Effect.Effect<void, ThreadStoreError | FenceRejected>;
+    readonly materialize: (request: ThreadMaterialization) => Effect.Effect<void, ThreadStoreError>;
     /**
-     * Commit history and active state atomically under the producer fence. Operational retry
-     * receipts retire at settlement; later retries compare retained canonical content.
+     * Commit history and current execution atomically under the storage owner's mutation gate.
+     * Only the latest active operational intent replays. Historical batches compare exact
+     * canonical content; their prior operational intent is no longer retained.
      */
     readonly append: (
-      request: FencedAppendRequest,
+      request: AppendRequest,
     ) => Effect.Effect<
       AppendResult,
-      ThreadStoreError | ThreadNotMaterialized | AppendConflict | FenceRejected
+      ThreadStoreError | ThreadNotMaterialized | AppendConflict | OwnershipLost
     >;
     /** Authoritative current state only. Absence after settlement is normal; loss while active is corruption. */
     readonly readExecution: (

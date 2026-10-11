@@ -23,7 +23,6 @@ import {
   CanonicalBatch,
   CanonicalSequence,
   DeploymentId,
-  ProducerEpoch,
   ProducerId,
   RecordEnvelope,
   RecordId,
@@ -54,8 +53,7 @@ import {
   getRunInput,
   readWorkerState,
   ThreadTailRequest,
-  FencedAppendRequest,
-  FenceRejected,
+  AppendRequest,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
   type ThreadStoreFailure,
@@ -134,7 +132,6 @@ const decodeThreadId = Schema.decodeSync(ThreadId);
 const decodeRecordId = Schema.decodeSync(RecordId);
 const decodeBatchId = Schema.decodeSync(BatchId);
 const decodeSequence = Schema.decodeSync(CanonicalSequence);
-const decodeEpoch = Schema.decodeSync(ProducerEpoch);
 
 const CONFORMANCE_DEPLOYMENT = Schema.decodeSync(DeploymentId)("deployment-conformance");
 const CONFORMANCE_PRODUCER = Schema.decodeSync(ProducerId)("producer-conformance");
@@ -143,13 +140,10 @@ const CONFORMANCE_RUN = Schema.decodeSync(RunId)("run-conformance");
 const CONFORMANCE_CREATED_AT = DateTime.toUtc(DateTime.makeUnsafe(1));
 
 const ZERO_SEQUENCE = decodeSequence(0);
-const EPOCH_ONE = decodeEpoch(1);
-const EPOCH_TWO = decodeEpoch(2);
 const DEFINITION_DIGEST = Digest.make("0".repeat(64));
 
 const EMPTY_TAIL = { lastSequence: ZERO_SEQUENCE } as const;
 const isAppendConflict = Schema.is(AppendConflict);
-const isFenceRejected = Schema.is(FenceRejected);
 const isCheckpointRejected = Schema.is(CheckpointRejected);
 const isThreadNotMaterialized = Schema.is(ThreadNotMaterialized);
 
@@ -178,30 +172,24 @@ const batch = (
     records,
   });
 
-const materialize = Effect.fn("ThreadStoreConformance.materialize")(function* (
-  threadId: ThreadId,
-  producerEpoch: ProducerEpoch,
-) {
+const materialize = Effect.fn("ThreadStoreConformance.materialize")(function* (threadId: ThreadId) {
   const store = yield* ThreadStore;
 
-  yield* store.materialize(ThreadMaterialization.make({ threadId, producerEpoch }));
+  yield* store.materialize(ThreadMaterialization.make({ threadId }));
 });
 
 const append = Effect.fn("ThreadStoreConformance.append")(function* (
   threadId: ThreadId,
   canonicalBatch: CanonicalBatch,
   tail: Pick<AppendResult, "lastSequence"> = EMPTY_TAIL,
-  producerEpoch: ProducerEpoch = EPOCH_ONE,
 ) {
   const store = yield* ThreadStore;
 
   return yield* store.append(
-    FencedAppendRequest.make({
+    AppendRequest.make({
       threadId,
       batch: canonicalBatch,
       expectedTailSequence: tail.lastSequence,
-
-      producerEpoch,
     }),
   );
 });
@@ -259,7 +247,7 @@ const atomicBatchVisibility = conformanceCase(
       const threadId = decodeThreadId("conformance-atomic");
       const store = yield* ThreadStore;
 
-      yield* materialize(threadId, EPOCH_ONE);
+      yield* materialize(threadId);
 
       const committed = yield* append(
         threadId,
@@ -330,7 +318,7 @@ const idempotentReplay = conformanceCase(
     Effect.gen(function* () {
       const threadId = decodeThreadId("conformance-replay");
 
-      yield* materialize(threadId, EPOCH_ONE);
+      yield* materialize(threadId);
 
       const original = batch("replay-batch-1", [
         record("replay-record-1", "Lisbon"),
@@ -372,7 +360,7 @@ const tailConflict = conformanceCase(
     Effect.gen(function* () {
       const threadId = decodeThreadId("conformance-tail");
 
-      yield* materialize(threadId, EPOCH_ONE);
+      yield* materialize(threadId);
 
       const first = yield* append(
         threadId,
@@ -406,62 +394,6 @@ const tailConflict = conformanceCase(
     }),
 );
 
-const producerFencing = conformanceCase(
-  "fences stale producer epochs while allowing epoch takeover",
-  ({ ensure, expectFailure }) =>
-    Effect.gen(function* () {
-      const threadId = decodeThreadId("conformance-fencing");
-
-      yield* materialize(threadId, EPOCH_ONE);
-
-      const first = yield* append(
-        threadId,
-        batch("fence-batch-1", [record("fence-record-1", "first")]),
-      );
-
-      yield* materialize(threadId, EPOCH_TWO);
-
-      const staleAppend = yield* expectFailure(
-        "an append using the pre-takeover producer epoch",
-        append(
-          threadId,
-          batch("fence-batch-2", [record("fence-record-2", "second")]),
-          first,
-          EPOCH_ONE,
-        ),
-      );
-
-      yield* ensure(
-        isFenceRejected(staleAppend) &&
-          staleAppend.actualEpoch === EPOCH_TWO &&
-          staleAppend.attemptedEpoch === EPOCH_ONE,
-        "A stale producer epoch must be fenced with both epochs reported",
-      );
-
-      const staleMaterialize = yield* expectFailure(
-        "re-materializing with the pre-takeover producer epoch",
-        materialize(threadId, EPOCH_ONE),
-      );
-
-      yield* ensure(
-        isFenceRejected(staleMaterialize),
-        "A stale producer epoch must not re-register through materialization",
-      );
-
-      const takeover = yield* append(
-        threadId,
-        batch("fence-batch-2", [record("fence-record-2", "second")]),
-        first,
-        EPOCH_TWO,
-      );
-
-      yield* ensure(
-        !takeover.replayed && takeover.firstSequence === first.lastSequence + 1,
-        "The takeover epoch must append after the committed tail",
-      );
-    }),
-);
-
 const offsetResumability = conformanceCase(
   "resumes observation from a saved offset with exactly the suffix",
   ({ ensure }) =>
@@ -469,7 +401,7 @@ const offsetResumability = conformanceCase(
       const threadId = decodeThreadId("conformance-offsets");
       const store = yield* ThreadStore;
 
-      yield* materialize(threadId, EPOCH_ONE);
+      yield* materialize(threadId);
 
       const first = yield* append(
         threadId,
@@ -558,7 +490,7 @@ const checkpointBoundaries = conformanceCase(
         missing.every(isThreadNotMaterialized),
         "Checkpoints require a materialized Thread",
       );
-      yield* materialize(threadId, EPOCH_ONE);
+      yield* materialize(threadId);
 
       const first = yield* append(
         threadId,
@@ -636,19 +568,17 @@ const tailInspection = conformanceCase(
         "Tail inspection of an unmaterialized Thread must fail as not materialized",
       );
 
-      yield* materialize(threadId, EPOCH_ONE);
+      yield* materialize(threadId);
       const empty = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
       yield* ensure(
-        empty.tailSequence === ZERO_SEQUENCE && empty.producerEpoch === EPOCH_ONE,
-        "An empty Thread must report the zero tail and its registered epoch",
+        empty.tailSequence === ZERO_SEQUENCE,
+        "An empty Thread must report the zero tail without ownership metadata",
       );
       const emptyIdentity = yield* store.readIdentity(ThreadIdentityRequest.make({ threadId }));
 
       yield* ensure(
-        emptyIdentity.tailSequence === ZERO_SEQUENCE &&
-          emptyIdentity.producerEpoch === EPOCH_ONE &&
-          emptyIdentity.records.length === 0,
+        emptyIdentity.tailSequence === ZERO_SEQUENCE && emptyIdentity.records.length === 0,
         "A materialized empty identity remains distinct from a missing Thread",
       );
 
@@ -669,7 +599,6 @@ const tailInspection = conformanceCase(
       yield* ensure(
         identity.threadId === threadId &&
           identity.tailSequence === first.lastSequence &&
-          identity.producerEpoch === EPOCH_ONE &&
           identity.records.length === 1 &&
           identity.records[0]?.record.recordId === workerOriginRecordId(threadId),
         "Identity captures the canonical tail and deduplicates a first record at the origin locator",
@@ -679,7 +608,6 @@ const tailInspection = conformanceCase(
         threadId,
         batch("inspect-batch-2", [record("inspect-record-2", "second")]),
         { lastSequence: afterAppend.tailSequence },
-        afterAppend.producerEpoch,
       );
 
       yield* ensure(
@@ -689,63 +617,30 @@ const tailInspection = conformanceCase(
 
       const staleIdentity = yield* expectFailure(
         "appending from an identity snapshot after a tail advance",
-        append(
-          threadId,
-          batch("inspect-stale-identity", [record("inspect-record-3", "third")]),
-          { lastSequence: identity.tailSequence },
-          identity.producerEpoch,
-        ),
+        append(threadId, batch("inspect-stale-identity", [record("inspect-record-3", "third")]), {
+          lastSequence: identity.tailSequence,
+        }),
       );
 
       yield* ensure(
         isAppendConflict(staleIdentity) && staleIdentity.reason === "tail",
         "Identity reads do not bypass the canonical append tail fence",
       );
-      const beforeTakeover = yield* store.readIdentity(ThreadIdentityRequest.make({ threadId }));
-
-      yield* materialize(threadId, EPOCH_TWO);
-      const afterTakeover = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
-
-      yield* ensure(
-        afterTakeover.producerEpoch === EPOCH_TWO &&
-          afterTakeover.tailSequence === resumed.lastSequence,
-        "Tail inspection must reflect epoch takeover without disturbing the tail",
-      );
-
-      const fencedIdentity = yield* expectFailure(
-        "appending from an identity snapshot after an epoch-only takeover",
-        append(
-          threadId,
-          batch("inspect-stale-epoch", [record("inspect-record-3", "third")]),
-          { lastSequence: beforeTakeover.tailSequence },
-          beforeTakeover.producerEpoch,
-        ),
-      );
-
-      yield* ensure(
-        isFenceRejected(fencedIdentity),
-        "An epoch-only takeover rejects the identity snapshot's captured producer fence",
-      );
-
-      const afterTakeoverIdentity = yield* store.readIdentity(
-        ThreadIdentityRequest.make({ threadId }),
-      );
+      const currentIdentity = yield* store.readIdentity(ThreadIdentityRequest.make({ threadId }));
 
       const retried = yield* append(
         threadId,
         batch("inspect-retry-identity", [record("inspect-record-3", "third")]),
         {
-          lastSequence: afterTakeoverIdentity.tailSequence,
+          lastSequence: currentIdentity.tailSequence,
         },
-        afterTakeoverIdentity.producerEpoch,
       );
 
       yield* ensure(
-        afterTakeoverIdentity.producerEpoch === EPOCH_TWO &&
-          afterTakeoverIdentity.tailSequence === resumed.lastSequence &&
-          afterTakeoverIdentity.records.length === 1 &&
+        currentIdentity.tailSequence === resumed.lastSequence &&
+          currentIdentity.records.length === 1 &&
           retried.lastSequence === resumed.lastSequence + 1,
-        "Rereading identity after takeover retains the bounded facts and permits the current producer",
+        "Rereading identity retains the bounded facts and allows append at the current tail",
       );
     }),
 );
@@ -801,7 +696,7 @@ const nativeAmbiguousOwnership = conformanceCase(
     Effect.gen(function* () {
       const threadId = decodeThreadId("ambiguous-native-run");
 
-      yield* materialize(threadId, EPOCH_ONE);
+      yield* materialize(threadId);
       yield* append(
         threadId,
         batch("inputs", [record("input-1", "first"), record("input-2", "second")]),
@@ -820,7 +715,7 @@ const nativeWorkerAccounting = conformanceCase(
       const threadId = decodeThreadId("native-worker-accounting");
       const store = yield* ThreadStore;
 
-      yield* materialize(threadId, EPOCH_ONE);
+      yield* materialize(threadId);
       const workerThreadId = decodeThreadId("worker");
       const agentId = Schema.decodeSync(AgentId)("agent");
 
@@ -943,7 +838,6 @@ const nativeWorkerAccounting = conformanceCase(
       yield* ensure(
         identity.threadId === threadId &&
           identity.tailSequence === tail.lastSequence &&
-          identity.producerEpoch === EPOCH_ONE &&
           identity.records.length === 3 &&
           identity.records.map(({ record }) => record.recordId).join() ===
             [
@@ -1077,7 +971,6 @@ export const threadStoreConformanceCases: ReadonlyArray<ThreadStoreConformanceCa
   atomicBatchVisibility,
   idempotentReplay,
   tailConflict,
-  producerFencing,
   offsetResumability,
   tailInspection,
   notMaterializedOperations,

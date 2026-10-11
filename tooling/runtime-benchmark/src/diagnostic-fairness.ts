@@ -470,7 +470,7 @@ export const runFairnessCase = Effect.fn("diagnostic.fairness")(
             settledOutput.answer === lane.label &&
             lane.claimedSubmissionId === lane.receipt!.submissionId &&
             settlement.submissionId === lane.receipt!.submissionId &&
-            snapshot.ownership === undefined &&
+            !snapshot.hasOwner &&
             snapshot.submission.state === "settled" &&
             snapshot.submission.settledOutcome === "completed" &&
             snapshot.hostSubmissionId === undefined,

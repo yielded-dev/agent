@@ -13,7 +13,6 @@ import {
   DefinitionDigests,
   DeploymentId,
   Digest,
-  ProducerEpoch,
   ProducerId,
   RecordEnvelope,
   RecordId,
@@ -34,7 +33,7 @@ import {
   UnknownResolutionCommand,
 } from "@yielded/agent/submission-ledger";
 import {
-  FencedAppendRequest,
+  AppendRequest,
   LoadCheckpointRequest,
   ThreadReader,
   ThreadMaterialization,
@@ -161,9 +160,8 @@ const appendPadding = Effect.fn("diagnostic.aging.appendPadding")(function* (
       return yield* BenchmarkError.make({ message: "Empty aging padding batch" });
 
     yield* store.append(
-      FencedAppendRequest.make({
+      AppendRequest.make({
         threadId: paddingThreadId,
-        producerEpoch: tail.producerEpoch,
         expectedTailSequence: tail.tailSequence,
         batch: CanonicalBatch.make({
           batchId: BatchId.make(`aging-padding-${paddingThreadId}-${offset}`),
@@ -376,11 +374,10 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
     yield* check(
       recovery.blocked.length === 0 &&
         pending.submission.state === "unknown" &&
-        pending.ownership === undefined &&
+        !pending.hasOwner &&
         originalMutations === 1,
       "Original mutation did not remain uncertain without ownership",
     );
-    const tail = yield* raw.inspectTail(tailRequest);
     const runId = runIdForSubmission(older.submissionId);
     const current = typeof raw.readExecution === "function";
     const active = current ? yield* raw.readExecution({ threadId, runId }) : Option.none();
@@ -425,7 +422,7 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
         response.record.payload._tag === "ModelResponseRecorded",
       "Original retained references selected the wrong records",
     );
-    const sealed = yield* raw.archives.seal({ threadId, producerEpoch: tail.producerEpoch });
+    const sealed = yield* raw.archives.seal({ threadId });
 
     if (Option.isNone(sealed))
       return yield* BenchmarkError.make({ message: "Original Run range did not seal" });
@@ -433,7 +430,6 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
     const archived = yield* raw.archives.archive({
       threadId,
       firstSequence: sealed.value.firstSequence,
-      producerEpoch: tail.producerEpoch,
     });
 
     yield* raw.archives.verify({ threadId, firstSequence: archived.firstSequence });
@@ -515,7 +511,6 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
           yield* store.materialize(
             ThreadMaterialization.make({
               threadId: backgroundThreadId,
-              producerEpoch: ProducerEpoch.make(1),
             }),
           );
         const tail = yield* appendPadding(previousSize, size, backgroundThreadId);
