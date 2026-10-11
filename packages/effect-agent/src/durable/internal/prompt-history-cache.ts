@@ -69,6 +69,8 @@ function hydratePart(part: Prompt.PartEncoded): Prompt.Part {
     case "file":
       return Prompt.filePart(part);
     case "tool-call":
+      // Unlike options, providerExecuted is required by Effect's constructors;
+      // only its Schema decoder supplies the false default.
       return Prompt.toolCallPart({ ...part, providerExecuted: part.providerExecuted ?? false });
     case "tool-result":
       return Prompt.toolResultPart({ ...part, providerExecuted: part.providerExecuted ?? false });
@@ -77,6 +79,7 @@ function hydratePart(part: Prompt.PartEncoded): Prompt.Part {
     case "tool-approval-response":
       return Prompt.toolApprovalResponsePart(part);
   }
+  throw new Error(`Unhandled Prompt part: ${part satisfies never}`);
 }
 
 const hydrateMessage = (message: Prompt.MessageEncoded): Prompt.Message => {
@@ -105,6 +108,7 @@ const hydrateMessage = (message: Prompt.MessageEncoded): Prompt.Message => {
         content: message.content.map((p) => hydratePart(p)),
       });
   }
+  throw new Error(`Unhandled Prompt message: ${message satisfies never}`);
 };
 
 export interface PromptHistory {
@@ -144,7 +148,10 @@ const encodeHistory = Effect.fnUntraced(function* (prompt: Prompt.Prompt, allowa
 
 // Finish parsing/decoding before suspending for suffix reads. Only the native prefix and its
 // canonical string leave this Effect; it does not keep a second parsed root in the outer Run.
-const decodeCheckpointPrefix = Effect.fnUntraced(function* (encoded: string, length: number) {
+export const decodeCheckpointPrefix = Effect.fnUntraced(function* (
+  encoded: string,
+  length: number,
+) {
   const value = yield* parseJson(encoded);
   const bytes = retainedBytes(value, encoded, MAX_BYTES);
 
@@ -152,7 +159,7 @@ const decodeCheckpointPrefix = Effect.fnUntraced(function* (encoded: string, len
 
   const decoded = yield* decodeEncodedPrompt(value).pipe(
     Effect.map((prompt) => ({ content: prompt.content.map(hydrateMessage) })),
-    // Binary/URL JSON representations require the ordinary codec's transformations.
+    // Keep the canonical codec as fallback for representations the encoded Schema rejects.
     Effect.catch(() => decodePrompt(value)),
   );
 
