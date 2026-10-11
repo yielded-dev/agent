@@ -23,9 +23,9 @@ export const command = Command.make(
       Flag.withDescription("Maximum bytes per snapshot request (default: 4 MiB)"),
     ),
     restoreEachPass: Flag.Boolean("restore-each-pass").pipe(
-      Flag.withDefault(false),
+      Flag.optional,
       Flag.withDescription(
-        "Restore identical saved history before every pass (automatic for different storage formats)",
+        "Restore each pass (default through 1,000 turns; always across storage formats)",
       ),
     ),
     fixtureDirectory: Flag.String("fixture-directory").pipe(
@@ -164,7 +164,9 @@ export const command = Command.make(
       flags.buildHistory ? 3 : rigorous ? 30 : 12,
     );
 
-    const concurrency = Option.getOrElse(flags.concurrency, () => 6);
+    const concurrency = Option.getOrElse(flags.concurrency, () =>
+      flags.buildHistory || rigorous ? 6 : 12,
+    );
 
     const buildConcurrency = Option.getOrElse(flags.buildConcurrency, () =>
       flags.buildHistory
@@ -202,7 +204,10 @@ export const command = Command.make(
         ? { fixtureDirectory: flags.fixtureDirectory.value }
         : {}),
       restoreBytes: flags.restoreBytes,
-      restoreEachPass: flags.restoreEachPass,
+      restoreEachPass: Option.getOrElse(
+        flags.restoreEachPass,
+        () => !flags.buildHistory && sizes.every((size) => size <= 1000),
+      ),
       buildHistory: flags.buildHistory,
       targets: [...new Set(targets)],
       sizes: [...new Set(sizes)],

@@ -34,7 +34,8 @@ the previous pool before allocating its replacement. Each Worker declares only i
 namespaces (one for Yielded or pi, two for Tardie). A pre-deploy account inventory rejects
 runs that would leave fewer than 50 of the account's 500 namespace slots free.
 Every run clears and restores
-its Objects, then measures both revisions on those same Objects; earlier samples are never reused.
+its Objects. Histories through 1,000 turns restore before every pass, so both revisions start
+from identical saved state on those same Objects; earlier samples are never reused.
 Each pass uploads a fresh version and rejects Worker-isolate reuse across passes. Activating an
 already uploaded version can retain the previous isolate, including in an A/A control, so version
 activation is not used. Full, profiling and tardie runs use fresh Workers. Remove retained resources when done:
@@ -48,7 +49,8 @@ and the balanced ABBA/BAAB sequence. Both presets preserve the driver timer, col
 restart acknowledgement, warm residency and transcript checks. Each cohort has a
 separate Worker; isolate sharing rejects its measurements. Independent cells run
 concurrently, with `--concurrency` limiting measured Objects and `--build-concurrency`
-limiting restore work. Turns within an Object remain sequential.
+limiting restore work. Quick defaults to 12 concurrent Objects; full defaults to six.
+Turns within an Object remain sequential.
 
 ```sh
 vp run deployed -- --preset full --baseline origin/main --candidate HEAD
@@ -315,8 +317,9 @@ vp run deployed -- --rigorous --baseline origin/main --candidate HEAD
 Rigorous mode enables cold turns, CPU and six warm repeats per pass. It randomly chooses
 ABBA or BAAB, redeploying the **same Worker and namespaces** with the two Yielded builds.
 Each pass restarts the same physical Objects. Different storage-format keys automatically
-restore each revision's own fixture before every pass. `--restore-each-pass` also restores
-matching formats; otherwise their histories grow across passes. All restores preserve
+restore each revision's own fixture before every pass. Matching formats also restore by
+default when all selected histories have at most 1,000 turns. For larger matching-format
+capacity runs, `--restore-each-pass` opts in; otherwise history grows across passes. All restores preserve
 original SQLite rows and table counts, then run an excluded preparation turn.
 Repeated baselines reveal deployment/time/history drift. The output includes paired differences and confidence intervals. Do not claim gains smaller than
 the control or within-Object repeat spread; inspect all Objects, not just the median.
