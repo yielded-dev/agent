@@ -64,10 +64,7 @@ const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
     "SqlSubmissionLedger.publishSettlement",
     "SqlSubmissionLedger.finalizeSettlement",
   ],
-  "packages/storage-sql/src/SqlActivityStore.ts": [
-    "SqlActivityStore.claim",
-    "SqlActivityStore.release",
-  ],
+  "packages/storage-sql/src/SqlActivityStore.ts": ["SqlActivityStore.acquire"],
   "packages/storage-memory/src/MemoryThreadStore.ts": ["MemoryThreadStore.append"],
   "packages/storage-memory/src/MemorySubmissionLedger.ts": [
     "MemorySubmissionLedger.selectHead",
