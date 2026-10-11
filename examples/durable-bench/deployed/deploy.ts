@@ -416,14 +416,15 @@ export const deployments = Effect.gen(function* () {
   ) {
     yield* Schema.decodeUnknownEffect(Name)(name);
     const stack = state.targets[name];
-    const targetHash = /^([a-f0-9]{64})-e0$/.exec(expectedTargetBuild)?.[1];
+    const targetHash = expectedTargetBuild.slice(0, 64);
 
     if (
       !stack ||
       stack.name !== name ||
       stack.kind !== "target" ||
       stack.build !== expectedTargetBuild ||
-      targetHash === undefined
+      !/^[a-f0-9]{64}$/.test(targetHash) ||
+      expectedTargetBuild !== `${targetHash}-${name}-e0`
     )
       return yield* new BenchError({
         message: "Resume target does not match the owned deployment.",
