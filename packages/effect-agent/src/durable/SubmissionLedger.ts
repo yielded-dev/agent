@@ -717,7 +717,7 @@ export class ApprovalDecisionIntent extends Schema.Class<ApprovalDecisionIntent>
 
 /**
  * Durable Unknown marking for one Submission's open ordinary Tool Calls (DUR-009): state →
- * `unknown`, parking that Submission without changing ownership or the Thread epoch. Idempotent.
+ * `unknown`, parking that Submission without changing its local owner generation. Idempotent.
  */
 export class MarkUnknownRequest extends Schema.Class<MarkUnknownRequest>(
   "@effect-agent/thread/MarkUnknownRequest",

@@ -148,8 +148,7 @@ export const memoryActivityWorker = Effect.gen(function* () {
 
   const pass = yield* processCommittedActivity({
     key: activityKey,
-    owner: config.mode === "crash-after-apply" ? "first-process" : "second-process",
-    limits: { maxRecords: 16, pageSize: 4, timeoutMillis: 1_000, leaseMillis: 2_200 },
+    limits: { maxRecords: 16, pageSize: 4, timeoutMillis: 1_000 },
     extract: (record) =>
       extractionOutput(record, config.mode === "recover-divergent").pipe(
         Effect.tap(() =>
