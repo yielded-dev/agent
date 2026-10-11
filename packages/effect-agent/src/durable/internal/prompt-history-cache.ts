@@ -29,9 +29,9 @@ import { digestRunHistory } from "./run-context.ts";
 const MAX_BYTES = 16 * 1024 * 1024;
 const MAX_ENTRIES = 16_384;
 const MAX_SUFFIX_RECORDS = 1_024;
-// Read a small page per storage snapshot; the aggregate native-value guard below
+// Cold restoration reads a small page per snapshot; the native-value guard below
 // still bounds retained suffix facts before any further page is requested.
-const SUFFIX_PAGE_RECORDS = 8;
+const COLD_SUFFIX_PAGE_RECORDS = 8;
 const JSON_PREFIX = '{"content":[';
 const encodePrompt = Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt));
 const parseJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
@@ -230,6 +230,7 @@ const readSuffix = Effect.fnUntraced(function* (
   firstRun: RunId,
   allowance: number,
   firstThrough: CanonicalSequence,
+  pageRecords = 1,
 ) {
   const store = yield* ThreadStore;
   const records: Array<JournalRecordEnvelope> = [];
@@ -245,12 +246,12 @@ const readSuffix = Effect.fnUntraced(function* (
           threadId: writer.threadId,
           afterSequence: after,
           throughSequence: through,
-          limit: SUFFIX_PAGE_RECORDS,
+          limit: pageRecords,
         }),
       )
-      .pipe(Stream.take(SUFFIX_PAGE_RECORDS + 1), Stream.runCollect);
+      .pipe(Stream.take(pageRecords + 1), Stream.runCollect);
 
-    if (page.length > SUFFIX_PAGE_RECORDS || records.length + page.length > MAX_SUFFIX_RECORDS)
+    if (page.length > pageRecords || records.length + page.length > MAX_SUFFIX_RECORDS)
       return undefined;
     for (const entry of page) {
       const payload = entry.record.payload;
@@ -395,6 +396,7 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* () {
         checkpoint.runId,
         MAX_BYTES - prefix.bytes,
         checkpoint.throughSequence,
+        COLD_SUFFIX_PAGE_RECORDS,
       );
 
       if (
