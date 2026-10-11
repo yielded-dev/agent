@@ -1,11 +1,41 @@
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
-import { Config, Effect, Schema } from "effect";
+import { Clock, Config, Console, Effect, Layer, Schema } from "effect";
+import * as HttpClient from "effect/http/HttpClient";
+
+// Record API wall time without URLs, headers, account identifiers, or response bodies.
+const deploymentHttp = Layer.effect(
+  HttpClient.HttpClient,
+  Effect.gen(function* () {
+    const client = yield* HttpClient.HttpClient;
+
+    return HttpClient.transform(client, (response, request) =>
+      Effect.gen(function* () {
+        const startedMs = yield* Clock.currentTimeMillis;
+
+        const category =
+          request.method === "PUT" && /\/scripts\/[^/]+$/.test(new URL(request.url).pathname)
+            ? "upload"
+            : "api";
+
+        return yield* response.pipe(
+          Effect.ensuring(
+            Effect.gen(function* () {
+              yield* Console.error(
+                `BENCH_DEPLOY_HTTP ${JSON.stringify({ category, startedMs, elapsedMs: (yield* Clock.currentTimeMillis) - startedMs })}`,
+              );
+            }),
+          ),
+        );
+      }),
+    );
+  }),
+);
 
 export default Alchemy.Stack(
   "durable-bench",
   {
-    providers: Cloudflare.providers(),
+    providers: Cloudflare.providers().pipe(Layer.provideMerge(deploymentHttp)),
     state: Alchemy.localState(),
   },
   Effect.gen(function* () {
@@ -78,6 +108,10 @@ export default Alchemy.Stack(
     const workers = yield* Effect.forEach(
       names,
       Effect.fnUntraced(function* (workerName) {
+        const target = yield* Schema.decodeUnknownEffect(
+          Schema.Literals(["yielded", "pi", "tardie"]),
+        )(workerName.split("-").at(-1)).pipe(Effect.orDie);
+
         const worker = yield* Cloudflare.Worker(
           workerName === name ? "durable-bench-target" : `durable-bench-target-${workerName}`,
           {
@@ -90,19 +124,33 @@ export default Alchemy.Stack(
               ...env,
               CPU: cpu,
               PROVIDER_URL: provider,
-              YIELDED: Cloudflare.DurableObject("durable-bench-yielded", {
-                className: "YieldedDO",
-              }),
-              PI: Cloudflare.DurableObject("durable-bench-pi", { className: "PiDO" }),
-              ACTORS: Cloudflare.DurableObject("durable-bench-actors", { className: "ActorDO" }),
-              THREADS: Cloudflare.DurableObject("durable-bench-threads", { className: "ThreadDO" }),
+              ...(target === "yielded"
+                ? {
+                    YIELDED: Cloudflare.DurableObject("durable-bench-yielded", {
+                      className: "YieldedDO",
+                    }),
+                  }
+                : {}),
+              ...(target === "pi"
+                ? { PI: Cloudflare.DurableObject("durable-bench-pi", { className: "PiDO" }) }
+                : {}),
+              ...(target === "tardie"
+                ? {
+                    ACTORS: Cloudflare.DurableObject("durable-bench-actors", {
+                      className: "ActorDO",
+                    }),
+                    THREADS: Cloudflare.DurableObject("durable-bench-threads", {
+                      className: "ThreadDO",
+                    }),
+                  }
+                : {}),
             },
           },
         );
 
         return { name: workerName, url: worker.url };
       }),
-      { concurrency: 6 },
+      { concurrency: names.length },
     );
 
     return { targets: Object.fromEntries(workers.map((worker) => [worker.name, worker.url])) };

@@ -1,6 +1,6 @@
 import { basename, join } from "node:path";
 
-import { Console, Effect, FileSystem, Schema } from "effect";
+import { Clock, Console, Effect, FileSystem, Schema } from "effect";
 
 import { build } from "./build.ts";
 import { Cloudflare, request } from "./cloudflare.ts";
@@ -11,6 +11,7 @@ import {
   execute,
   hash,
   nonce,
+  prefixLock,
   read,
   redact,
   repository,
@@ -39,6 +40,7 @@ export const deployments = Effect.gen(function* () {
     build: Schema.String,
     cpu: Schema.Boolean,
     workers: Schema.optionalKey(Workers),
+    namespaceLayout: Schema.optionalKey(Schema.Literal("selected-target")),
   });
 
   type Stack = typeof Stack.Type;
@@ -99,6 +101,17 @@ export const deployments = Effect.gen(function* () {
     action: "deploy" | "destroy",
     force = false,
   ) {
+    if (action === "deploy" && stack.kind === "target") {
+      // Coordinate headroom checks and allocation across this machine's bench prefixes.
+      yield* prefixLock("durable-bench-account-" + hash(cloud.accountId).slice(0, 16));
+      const headroom = yield* cloud.namespaceHeadroom(stack.workers ?? [stack.name]);
+
+      yield* Console.error(
+        `Namespace headroom: ${headroom.existing} existing, ${headroom.additional} additional, ${headroom.free} free after deployment.`,
+      );
+    }
+    const startedMs = yield* Clock.currentTimeMillis;
+
     const result = yield* execute(
       [
         "exec",
@@ -131,11 +144,19 @@ export const deployments = Effect.gen(function* () {
       },
     );
 
+    for (const line of result.output.split("\n")) {
+      const marker = line.indexOf("BENCH_DEPLOY_HTTP ");
+
+      if (marker >= 0) yield* Console.error(line.slice(marker));
+    }
+    yield* Console.error(
+      `BENCH_DEPLOY ${JSON.stringify({ kind: stack.kind, action, retry: force, elapsedMs: (yield* Clock.currentTimeMillis) - startedMs })}`,
+    );
     if (result.code !== 0)
       return yield* new BenchError({
         message: `Alchemy ${action} failed (${result.code}): ${redact(result.output, secrets).slice(-3000)}`,
       });
-  });
+  }, Effect.scoped);
 
   const ready = Effect.fnUntraced(function* (
     endpoint: string,
@@ -144,8 +165,9 @@ export const deployments = Effect.gen(function* () {
     role = "target",
   ) {
     let consecutive = 0;
+    const startedMs = yield* Clock.currentTimeMillis;
 
-    for (let attempt = 0; attempt < 30; attempt++) {
+    for (let attempt = 0; (yield* Clock.currentTimeMillis) - startedMs < 20_000; attempt++) {
       const health = yield* request(
         fromDriver ? driver + "/ready" : endpoint + "/health?probe=" + nonce(),
         state.token,
@@ -155,9 +177,19 @@ export const deployments = Effect.gen(function* () {
 
       consecutive =
         health._tag === "Success" && health.success.value.build === expected ? consecutive + 1 : 0;
-      if (consecutive === 3) return;
-      yield* Effect.sleep("2 seconds");
+      if (consecutive === 3) {
+        yield* Console.error(
+          `BENCH_READY ${JSON.stringify({ role, fromDriver, attempts: attempt + 1, elapsedMs: (yield* Clock.currentTimeMillis) - startedMs })}`,
+        );
+
+        return;
+      }
+      if (consecutive === 0) yield* Effect.sleep("250 millis");
     }
+
+    yield* Console.error(
+      `BENCH_READY ${JSON.stringify({ role, fromDriver, incomplete: true, elapsedMs: (yield* Clock.currentTimeMillis) - startedMs })}`,
+    );
 
     return yield* new BenchError({
       message: `${role} Worker health did not propagate${fromDriver ? " through the driver" : ""}. No benchmark input was sent.`,
@@ -165,8 +197,13 @@ export const deployments = Effect.gen(function* () {
   });
 
   const readyInfrastructure = Effect.fnUntraced(function* (revision: string) {
-    yield* ready(driver, revision, false, "driver");
-    yield* ready(url(state.infrastructurePrefix + "-provider"), revision, true, "provider");
+    yield* Effect.all(
+      [
+        ready(driver, revision, false, "driver"),
+        ready(url(state.infrastructurePrefix + "-provider"), revision, true, "provider"),
+      ],
+      { concurrency: 2, discard: true },
+    );
   });
 
   const readyTargets = (workers: readonly string[], revision: string) =>
@@ -177,7 +214,7 @@ export const deployments = Effect.gen(function* () {
           concurrency: 2,
           discard: true,
         }),
-      { concurrency: 12, discard: true },
+      { concurrency: workers.length, discard: true },
     );
 
   const infrastructureBuild = Effect.fnUntraced(function* () {
@@ -249,6 +286,16 @@ export const deployments = Effect.gen(function* () {
   ) {
     yield* Schema.decodeUnknownEffect(Name)(name);
     const names = yield* Schema.decodeUnknownEffect(ownedWorkers(name))(workers);
+
+    // One retained pool per prefix. Retire legacy four-binding pools before allocating replacements.
+    for (const old of Object.values(state.targets))
+      if (
+        old.name.startsWith(cloud.prefix + "-pool-") &&
+        (old.name !== name || old.namespaceLayout !== "selected-target")
+      ) {
+        yield* Console.error("Retiring the previous owned Worker pool before deployment…");
+        yield* destroy(old.name);
+      }
     const retained = join(privateDirectory, name, "bundles", revision);
 
     if (persistent) {
@@ -264,6 +311,7 @@ export const deployments = Effect.gen(function* () {
       build: revision,
       cpu,
       workers: names,
+      namespaceLayout: "selected-target",
     };
 
     state = { ...state, targets: { ...state.targets, [name]: stack } };
