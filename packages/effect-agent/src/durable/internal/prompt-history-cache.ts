@@ -12,6 +12,7 @@ import {
   type Digest,
   type ProducerEpoch,
 } from "../Records.ts";
+import { CurrentRunWriter } from "../RunContinuation.ts";
 import { projectRunJournalStream, RunJournalError } from "../RunJournal.ts";
 import type { RunWriter } from "../RunStorage.ts";
 import {
@@ -145,9 +146,12 @@ export const digestPromptHistory = (prompt: Prompt.Prompt, history: PromptHistor
   );
 };
 
+/** Writer identity is data; effectful writer ports stay in Effect context. */
+type WriterIdentity = Pick<RunWriter, "threadId" | "producerEpoch">;
+
 /** Fold only complete, sequential Runs. Raw facts and encoded/native messages are bounded. */
 const readSuffix = Effect.fnUntraced(function* (
-  writer: RunWriter,
+  writer: WriterIdentity,
   from: CanonicalSequence,
   through: CanonicalSequence,
   firstRun: RunId,
@@ -269,7 +273,7 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* () {
   );
 
   const take = Effect.fnUntraced(
-    function* (writer: RunWriter) {
+    function* (writer: WriterIdentity) {
       const cached = current;
 
       current = undefined;
@@ -362,7 +366,7 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* () {
   );
 
   const complete = Effect.fnUntraced(
-    function* (writer: RunWriter, original: CanonicalRecordEnvelope, history: PromptHistory) {
+    function* (writer: WriterIdentity, original: CanonicalRecordEnvelope, history: PromptHistory) {
       const { encoded, bytes, digest } = history;
       const input = original.record.payload;
 
@@ -376,7 +380,7 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* () {
       )
         return;
       const store = yield* ThreadStore;
-      const tail = yield* writer.tail;
+      const tail = yield* (yield* CurrentRunWriter).tail;
 
       const delta = yield* readSuffix(
         writer,

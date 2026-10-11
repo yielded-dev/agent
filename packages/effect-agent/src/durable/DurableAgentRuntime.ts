@@ -8218,7 +8218,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   ) =>
     Effect.gen(function* () {
       const checkpointPrompt = yield* promptHistory
-        .take(session)
+        .take({ threadId: session.threadId, producerEpoch: session.producerEpoch })
         .pipe(
           Effect.provideService(ThreadStore, store),
           Effect.provideService(ThreadReader, reader),
@@ -8885,8 +8885,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           initialJournal.history !== undefined
         )
           yield* promptHistory
-            .complete(session, initialJournal.original, initialJournal.history)
+            .complete(
+              { threadId: session.threadId, producerEpoch: session.producerEpoch },
+              initialJournal.original,
+              initialJournal.history,
+            )
             .pipe(
+              Effect.provideService(CurrentRunWriter, session),
               Effect.provideService(ThreadStore, store),
               Effect.provideService(ThreadReader, reader),
             );
