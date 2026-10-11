@@ -6,7 +6,7 @@ payment-attempt count, and receipt. The host uses BrowserUse over
 CloudflareInteractiveBrowser; the browser may reach only the fixture origin.
 
 ```text
-Alchemy Test → Worker + CheckoutRun → Cloudflare Browser Run
+Wrangler → Worker + CheckoutRun → Cloudflare Browser Run
   /run once → /shop/login → /shop/product → /shop/review
              → POST /shop/pay (commits, returns 503) → /shop/orders
   independent GET /evidence → POST /close → GET /evidence → destroy
@@ -30,9 +30,11 @@ browser actions cannot submit payment. The runner requires exactly one payment a
 and an independently fetched matching receipt. A model completion message or an HTTP
 success alone cannot pass the gate.
 
-Before dispatch, the runner waits for authenticated evidence from a pristine
-Durable Object, retrying fresh-route 404 and transient 5xx/transport failures every
-two seconds for up to one minute.
+The runner deploys the executable Worker, Durable Object migration, and secret bindings
+in one upload. It creates no temporary Durable Object class that could serve requests
+while the final version propagates. Before dispatch, it waits for authenticated evidence
+from a pristine Durable Object, retrying fresh-route 404 and transient 5xx/transport
+failures every two seconds for up to one minute.
 Authentication failures, invalid evidence, and nonpristine owners fail immediately.
 
 The browser then reloads the initial login GET until it observes the email, password,
@@ -69,7 +71,7 @@ Use a clean committed checkout. Required environment:
 | `CHECKOUT_TOKEN`               | Fresh random control API bearer token                         |
 | `CHECKOUT_PASSWORD`            | Fresh random password for the designated fixture buyer        |
 | `OPENAI_API_KEY`               | Model provider credential                                     |
-| `CLOUDFLARE_ACCOUNT_ID`        | Intended account, checked against Alchemy's account           |
+| `CLOUDFLARE_ACCOUNT_ID`        | Deployment account, checked against the configured subdomain  |
 | `CLOUDFLARE_API_TOKEN`         | Deployment credential; stays on the runner                    |
 | `BROWSER_RENDERING_API_TOKEN`  | Narrow account-scoped Browser Run Write token                 |
 | `CLOUDFLARE_WORKERS_SUBDOMAIN` | Workers subdomain without .workers.dev                        |
@@ -88,7 +90,9 @@ vp run --no-cache -F @yielded/agent-example-browser-run-worker-proof prove:live
 
 Missing configuration, a dirty checkout, a mismatched SHA, an existing report, or an
 occupied Worker name fails before deployment. Local Alchemy emulation is refused.
-The runner records its identity and pending report before provisioning the stage.
+The runner records its identity and pending report before deployment. Wrangler receives
+bindings through a private temporary file, removed when deployment finishes or fails;
+its output is not published.
 
 The ignored `.checkout-proof/<run>/report.json` in this workspace retains the commit,
 Worker name, dispatch status, sanitized independent evidence, allowlisted Worker failure codes,
@@ -113,7 +117,7 @@ must also be confirmed by the Worker management API. A lost browser-acquisition 
 without a session ID keeps cleanup unconfirmed and requires provider reconciliation;
 the owner is retained rather than claiming that no browser was created.
 
-Keep the same clean revision, environment, report, and private `.alchemy` directory.
+Keep the same clean revision, environment, and report.
 Recovery performs closure and retirement only:
 
 ```sh
@@ -136,7 +140,6 @@ also runs one attempt at the selected dispatch commit.
 Both workflows generate and mask the control token and buyer password, retry recorded
 cleanup after failure or cancellation, and retain only `report.json` for 30 days.
 Missing evidence, failed checkout, or unconfirmed cleanup fails the job. Never upload
-`.alchemy`, credentials, or private session capabilities. Hard runner termination
-can prevent finalizers and lose local Alchemy state; the retained Worker alarm remains
-the fallback for closing its browser. Preserve private deployment state securely when
-manual retirement is needed.
+credentials or private session capabilities. Hard runner termination can prevent finalizers;
+the retained Worker alarm remains the fallback for closing its browser. Recovery uses
+the recorded Worker identity and does not require local deployment state.

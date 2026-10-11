@@ -6,6 +6,9 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": false,
+  "observability": {
+    "enabled": false,
+  },
   "browser": {
     "binding": "BROWSER",
   },
