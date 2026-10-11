@@ -597,7 +597,7 @@ const makeServices = Effect.fnUntraced(function* () {
       );
 
   const mintUuid = (operation: string): Effect.Effect<string, LedgerError> =>
-    crypto.randomUUIDv7.pipe(Effect.mapError((error) => internalFailure(operation)(error)));
+    crypto.randomUUIDv7().pipe(Effect.mapError((error) => internalFailure(operation)(error)));
 
   const currentInstant = Effect.map(Clock.currentTimeMillis, (millis) => ({
     millis,

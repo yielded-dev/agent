@@ -524,7 +524,7 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       );
 
   const mintIdentifier = (prefix: string, operation: string): Effect.Effect<string, LedgerError> =>
-    crypto.randomUUIDv7.pipe(
+    crypto.randomUUIDv7().pipe(
       Effect.map((uuid) => `${prefix}-${uuid}`),
       Effect.mapError((error) => internalFailure(operation)(error)),
     );

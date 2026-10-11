@@ -11,6 +11,7 @@ import type * as SqlClientService from "effect/sql/SqlClient";
 import { initializeSqliteJournal, sqliteErrors } from "./internal/sqlite-journal.ts";
 import { sqlFailure } from "./internal/sqlite-ledger-errors.ts";
 import { SqliteStorageConfig } from "./SqliteStorageConfig.ts";
+import { SqliteStorageError } from "./SqliteStorageError.ts";
 import { SqliteStorageFailpoint } from "./SqliteStorageFailpoint.ts";
 import {
   exclusiveHostClientLayer,
@@ -65,7 +66,23 @@ export const ledgerLayer = (
           Layer.mergeAll(
             Layer.succeed(SqliteStorageConfig)(config),
             storageFailpointLayer(options),
-            SqliteClient.layer({ filename: options.filename, disableWAL: true }),
+            SqliteClient.layer({ filename: options.filename, disableWAL: true }).pipe(
+              Layer.catch((cause) =>
+                Layer.effectContext<
+                  Layer.Success<ReturnType<typeof SqliteClient.layer>>,
+                  SqliteStorageError,
+                  never
+                >(
+                  Effect.fail(
+                    SqliteStorageError.make({
+                      operation: "open SQLite",
+                      message: cause.message,
+                      cause,
+                    }),
+                  ),
+                ),
+              ),
+            ),
             NodeCrypto.layer,
           ),
         ),

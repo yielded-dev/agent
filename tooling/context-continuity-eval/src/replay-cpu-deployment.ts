@@ -94,8 +94,8 @@ export const prepareReplayCpuResources = Effect.fn("ReplayCpu.prepareResources")
     baseline,
     candidate,
     token:
-      (yield* crypto.randomUUIDv4).replaceAll("-", "") +
-      (yield* crypto.randomUUIDv4).replaceAll("-", ""),
+      (yield* crypto.randomUUIDv4()).replaceAll("-", "") +
+      (yield* crypto.randomUUIDv4()).replaceAll("-", ""),
   };
 
   yield* writeReplayCpuJson(path.join(privateDirectory, "private.json"), privateState);

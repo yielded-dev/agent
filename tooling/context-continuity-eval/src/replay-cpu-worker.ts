@@ -169,8 +169,8 @@ const application = Layer.unwrap(
     const env = yield* WorkerEnvironment;
     const crypto = yield* Crypto.Crypto;
 
-    moduleIncarnation ??= yield* crypto.randomUUIDv4;
-    const incarnation = { module: moduleIncarnation, runtime: yield* crypto.randomUUIDv4 };
+    moduleIncarnation ??= yield* crypto.randomUUIDv4();
+    const incarnation = { module: moduleIncarnation, runtime: yield* crypto.randomUUIDv4() };
     const native = yield* ContextCompactor.pipe(Effect.provide(ContextCompactor.layerRollover));
 
     ctx.storage.sql.exec(

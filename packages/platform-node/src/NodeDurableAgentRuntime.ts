@@ -6,6 +6,7 @@ import {
   SqliteStorageConfig,
   SqliteStorageConfigValue,
 } from "@yielded/agent-storage-sqlite/sqlite-storage-config";
+import { SqliteStorageError } from "@yielded/agent-storage-sqlite/sqlite-storage-error";
 import {
   SqliteStorageFailpoint,
   type SqliteStorageFailpointHandler,
@@ -512,7 +513,23 @@ export class NodeDurableAgentRuntime {
                       Effect.setContext(applicationContext),
                     ),
           }),
-          SqliteClient.layer({ filename: config.filename, disableWAL: exclusive }),
+          SqliteClient.layer({ filename: config.filename, disableWAL: exclusive }).pipe(
+            Layer.catch((cause) =>
+              Layer.effectContext<
+                Layer.Success<ReturnType<typeof SqliteClient.layer>>,
+                SqliteStorageError,
+                never
+              >(
+                Effect.fail(
+                  SqliteStorageError.make({
+                    operation: "open SQLite",
+                    message: cause.message,
+                    cause,
+                  }),
+                ),
+              ),
+            ),
+          ),
           NodeCrypto.layer,
         ).pipe(Layer.provide(nodeConfigLayer));
 

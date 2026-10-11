@@ -679,7 +679,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
     const crypto = yield* Crypto.Crypto;
 
     const mintIdentity = (operation: string) =>
-      crypto.randomUUIDv4.pipe(
+      crypto.randomUUIDv4().pipe(
         Effect.flatMap(Schema.decodeEffect(MemoryIdentityNonce)),
         Effect.mapError((cause) => ledgerError(operation, "Cannot mint a Memory identity", cause)),
       );

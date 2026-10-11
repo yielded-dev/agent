@@ -31,7 +31,7 @@ export const runCloudflareEvaluation = Effect.fn("ContextContinuity.runCloudflar
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const start = yield* Clock.currentTimeMillis;
-    const thread = `context-eval-${yield* (yield* Crypto.Crypto).randomUUIDv4}`;
+    const thread = `context-eval-${yield* (yield* Crypto.Crypto).randomUUIDv4()}`;
     const base = new URL(baseUrl);
 
     if (base.protocol !== "https:")

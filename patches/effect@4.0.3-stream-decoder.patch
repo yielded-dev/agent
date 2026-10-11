@@ -1,8 +1,7 @@
 diff --git a/src/ai/LanguageModel.ts b/src/ai/LanguageModel.ts
-index e20a9e6..fc93fc9 100644
 --- a/src/ai/LanguageModel.ts
 +++ b/src/ai/LanguageModel.ts
-@@ -847,6 +847,62 @@ export const make: (params: {
+@@ -857,6 +857,62 @@
      Effect.map(Option.getOrElse(() => defaultIdGenerator))
    )
  
@@ -65,7 +64,7 @@ index e20a9e6..fc93fc9 100644
    const generateText = <
      Options extends NoExcessProperties<GenerateTextOptions<any>, Options>,
      Tools extends Record<string, Tool.Any> = {}
-@@ -1538,12 +1594,7 @@ export const make: (params: {
+@@ -1535,12 +1591,7 @@
        }
      }
  
@@ -80,10 +79,9 @@ index e20a9e6..fc93fc9 100644
      // If tool call resolution is disabled, return the response without
      // resolving the tool calls that were generated
 diff --git a/dist/ai/LanguageModel.js b/dist/ai/LanguageModel.js
-index 7a53537..53b1b56 100644
 --- a/dist/ai/LanguageModel.js
 +++ b/dist/ai/LanguageModel.js
-@@ -251,6 +251,32 @@ export const make = /*#__PURE__*/Effect.fnUntraced(function* (params) {
+@@ -251,6 +251,32 @@
    const parentSpanTransformer = yield* Effect.serviceOption(CurrentSpanTransformer);
    const getSpanTransformer = Effect.serviceOption(CurrentSpanTransformer).pipe(Effect.map(Option.orElse(() => parentSpanTransformer)));
    const idGenerator = yield* Effect.serviceOption(IdGenerator).pipe(Effect.map(Option.getOrElse(() => defaultIdGenerator)));
@@ -114,9 +112,9 @@ index 7a53537..53b1b56 100644
 +    return decode;
 +  };
    const generateText = options => Effect.useSpan("LanguageModel.generateText", {
-     attributes: {
-       concurrency: options.concurrency,
-@@ -682,8 +708,7 @@ export const make = /*#__PURE__*/Effect.fnUntraced(function* (params) {
+     kind: "client"
+   }, Effect.fnUntraced(function* (span) {
+@@ -675,8 +701,7 @@
          providerOptions.incrementalPrompt = prepared.value.prompt;
        }
      }

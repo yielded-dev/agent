@@ -241,7 +241,7 @@ export const subscriptionToolsLayer = (
         .do(
           "subscription-identity",
           SubscriptionName,
-          crypto.randomUUIDv7.pipe(
+          crypto.randomUUIDv7().pipe(
             Effect.map((id) => `tool:${id}`),
             Effect.mapError(() => toolFailure("storage", "creation-identity")),
           ),

@@ -308,7 +308,23 @@ export const layer = (
             Layer.succeed(SqliteStorageConfig)(config),
             storageFailpointLayer(options),
             // The journal enables WAL only after proving the file is fresh.
-            SqliteClient.layer({ filename: options.filename, disableWAL: true }),
+            SqliteClient.layer({ filename: options.filename, disableWAL: true }).pipe(
+              Layer.catch((cause) =>
+                Layer.effectContext<
+                  Layer.Success<ReturnType<typeof SqliteClient.layer>>,
+                  SqliteStorageError,
+                  never
+                >(
+                  Effect.fail(
+                    SqliteStorageError.make({
+                      operation: "open SQLite",
+                      message: cause.message,
+                      cause,
+                    }),
+                  ),
+                ),
+              ),
+            ),
             NodeCrypto.layer,
           ),
         ),
@@ -364,7 +380,23 @@ export const exportThread = Effect.fn("SqliteThreadStore.exportThread")(function
           readonly: true,
           disableWAL: true,
           busyTimeout: options.busyTimeout ?? 5_000,
-        }),
+        }).pipe(
+          Layer.catch((cause) =>
+            Layer.effectContext<
+              Layer.Success<ReturnType<typeof SqliteClient.layer>>,
+              SqliteStorageError,
+              never
+            >(
+              Effect.fail(
+                SqliteStorageError.make({
+                  operation: "open SQLite for export",
+                  message: cause.message,
+                  cause,
+                }),
+              ),
+            ),
+          ),
+        ),
         NodeCrypto.layer,
       ),
     ),

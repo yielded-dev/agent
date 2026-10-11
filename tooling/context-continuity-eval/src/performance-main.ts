@@ -230,8 +230,8 @@ const command = Command.make(
         });
       const config = yield* loadPerformanceConfig;
       const openai = yield* Config.Redacted("OPENAI_API_KEY");
-      const run = (yield* (yield* Crypto.Crypto).randomUUIDv4).replaceAll("-", "");
-      const token = Redacted.make(yield* (yield* Crypto.Crypto).randomUUIDv4);
+      const run = (yield* (yield* Crypto.Crypto).randomUUIDv4()).replaceAll("-", "");
+      const token = Redacted.make(yield* (yield* Crypto.Crypto).randomUUIDv4());
       const secretPath = yield* fs.makeTempFileScoped({ prefix: "performance-secrets-" });
 
       yield* fs.writeFileString(

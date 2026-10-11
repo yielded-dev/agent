@@ -67,7 +67,7 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "effect": "^4.0.0",
+    "effect": "^4.0.3",
     "effect-cf": "^0.53.0"
   }
 }
