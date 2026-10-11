@@ -35,10 +35,16 @@ export class YieldedDO extends RestoreDO {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env, "yielded");
   }
+  override fetch(request: Request): Promise<Response> {
+    return super.fetch(request);
+  }
 }
 
 export class PiDO extends RestoreDO {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env, "pi");
+  }
+  override fetch(request: Request): Promise<Response> {
+    return super.fetch(request);
   }
 }
