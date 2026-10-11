@@ -91,10 +91,7 @@ const backend = () => ({
   work: new Map<string, ThreadWorkEntry>(),
   ordered: new Map<string, Array<string>>(),
   pending: new Map<ThreadId, Set<MessageDeliveryKey["messageId"]>>(),
-  counts: new Map<
-    ThreadId,
-    { retained: number; ordinary: number; update: number; peer: number; revision: number }
-  >(),
+  counts: new Map<ThreadId, { retained: number; ordinary: number; update: number; peer: number }>(),
   metadata: new Map<
     string,
     {
@@ -225,11 +222,7 @@ export const memoryMessageDeliveryStoreLayer = (
         let counts = current.counts.get(owner);
 
         if (counts === undefined)
-          current.counts.set(
-            owner,
-            (counts = { retained: 0, ordinary: 0, update: 0, peer: 0, revision: 0 }),
-          );
-        counts.revision++;
+          current.counts.set(owner, (counts = { retained: 0, ordinary: 0, update: 0, peer: 0 }));
         if (old === undefined) counts.retained++;
         if (old?.pending) {
           if (old.update) counts.update--;
@@ -496,7 +489,10 @@ export const memoryMessageDeliveryStoreLayer = (
         snapshot: (threadId) => {
           const counts = MutableRef.get(state.ref).counts.get(threadId);
 
-          return { revision: counts?.revision ?? 0, deliveries: counts?.retained ?? 0 };
+          return {
+            idle: (MutableRef.get(state.ref).pending.get(threadId)?.size ?? 0) === 0,
+            deliveries: counts?.retained ?? 0,
+          };
         },
         pendingPeerCount: (threadId, limit) =>
           Math.min(MutableRef.get(state.ref).counts.get(threadId)?.peer ?? 0, limit),
@@ -527,7 +523,6 @@ export const memoryMessageDeliveryStoreLayer = (
             facts: {
               admissions: [],
               commands: { aborts: [], approvals: [], resolutions: [] },
-              executions: [],
               deliveries:
                 record === undefined
                   ? []

@@ -62,6 +62,7 @@ import {
   ThreadVerificationRequest,
   ThreadMaterialization,
   ThreadNotMaterialized,
+  ThreadExportRejected,
   ThreadReadRequest,
   ThreadPromptRead,
   ThreadStoreError,
@@ -583,6 +584,7 @@ export const PortFailure = Schema.Union([
   ThreadStoreError,
   WorkDiscoveryUnavailable,
   ThreadNotMaterialized,
+  ThreadExportRejected,
   AppendConflict,
   PortProtocolError,
 ]);

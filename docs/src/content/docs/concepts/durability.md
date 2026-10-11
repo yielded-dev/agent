@@ -33,16 +33,16 @@ Replay rebuilds conversation projections from canonical records without executin
 checkpoints and indexes are disposable. An unfinished Run's execution checkpoint is authoritative
 operational state and must be retained with its history.
 
-The execution protocol uses `effect-agent/thread@6` records in fresh layout-24 stores.
+The execution protocol uses `effect-agent/thread@6` records in fresh layout-25 stores.
 This format is unreleased: install matching runtime and storage packages, and retain predecessor
 stores with their matching release. Opening or importing a predecessor format fails before mutation;
 this release has no converter, predecessor decoder, or layout upgrade.
 
-Same-format archives preserve canonical records, immutable admission facts, accepted commands and
-current execution checkpoints in `effect-agent/thread-transfer@3` pages.
-Pending admissions need not have reached the log. Import validates every reference and rebuilds
-operational state in an empty Thread without importing execution ownership. Unresolved ordinary
-mutating calls remain Unknown. See [backup and restore](/guide/operations/#adopting-these-contracts).
+Same-format archives preserve conversation records, terminal outcomes, original receipts, applied
+commands and completed delivery facts in `effect-agent/thread-transfer@4` pages. Export requires
+an idle Thread and application quiescence throughout capture. Import a completed archive into an
+empty Thread; active Runs and unresolved obligations must finish before transfer. See
+[backup and restore](/guide/operations/#adopting-these-contracts).
 
 A selected Run recovers from its current checkpoint and exact Run evidence at one captured
 tail. Later facts enter through a bounded selected-Run suffix. Unrelated later Thread history never
@@ -79,7 +79,7 @@ response with no application tool calls commits atomically with that active comp
 
 `ExecutionCheckpoint` holds the current `RunContinuation`: preparing context, awaiting a model,
 processing declared operations, waiting, uncertain, or settling. Its revision advances in the same
-fenced transaction as new history facts; a progress-only commit leaves the history tail unchanged.
+owner-checked transaction as new history facts; a progress-only commit leaves the history tail unchanged.
 The ledger alone admits work and grants ownership. Settlement removes the checkpoint and
 its retry receipts atomically with the terminal fact. Unresolved operations retain their own rows
 until their obligations close. Terminal delivery reports can append without restarting a Run.
@@ -99,7 +99,7 @@ flowchart LR
   C --> E[Settlement: retain history, delete Run state]
 ```
 
-The continuation contains cumulative policy and model charges plus bounded, integrity-checked
+The continuation contains cumulative policy and model charges plus bounded, identity-checked
 references to the original input, original evaluated context, latest native response, and terminal
 facts. Results, Durable Steps, approval decisions, and original operation contracts keep their own
 canonical identities. Recovery reuses those facts; it neither replenishes allowances nor repeats

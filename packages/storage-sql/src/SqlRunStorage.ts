@@ -7,11 +7,7 @@ import {
   submissionInputBatchId,
   submissionInputRecordId,
 } from "@yielded/agent/submission-ledger";
-import {
-  ThreadImport,
-  captureImportSource,
-  type ThreadArchive,
-} from "@yielded/agent/thread-import";
+import { ThreadImport, type ThreadArchive } from "@yielded/agent/thread-import";
 import { ThreadStore, ThreadReader } from "@yielded/agent/thread-store";
 import { Channel, Context, Crypto, Effect, Scope, Stream } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
@@ -281,15 +277,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
   const importer = ThreadImport.of({
     import: <E, R>(request: Stream.Stream<ThreadArchive, E, R>) =>
       Effect.contextWith((live: Context.Context<R>) =>
-        bind(
-          Effect.scoped(
-            Effect.gen(function* () {
-              const captured = yield* captureImportSource(Stream.provideContext(request, live));
-
-              return yield* owner.withMutation(storeKernel.importer.import(captured));
-            }),
-          ),
-        ),
+        bind(storeKernel.importer.import(Stream.provideContext(request, live))),
       ),
   });
 

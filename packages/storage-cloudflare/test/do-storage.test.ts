@@ -33,6 +33,7 @@ import {
 import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { makeRunWriter } from "@yielded/agent/run-storage";
 import {
+  readTestThread,
   threadStoreConformanceCases,
   threadCheckpointConformanceCases,
 } from "@yielded/agent/testing/thread-store-conformance";
@@ -344,7 +345,7 @@ describe("DoThreadStore", () => {
       await withThreadStorage(name, (storage) =>
         Effect.gen(function* () {
           const store = yield* ThreadStore;
-          const before = yield* store.export(ThreadExportRequest.make({ threadId }));
+          const before = yield* readTestThread(store, { threadId });
           const committed = location === "append:after";
 
           expect(before.records).toHaveLength(committed ? 1 : 0);
@@ -355,7 +356,7 @@ describe("DoThreadStore", () => {
           const request = compiled;
 
           expect((yield* store.append(request)).replayed).toBe(committed);
-          const after = yield* store.export(ThreadExportRequest.make({ threadId }));
+          const after = yield* readTestThread(store, { threadId });
 
           expect(after.records.map(({ record }) => record.payload._tag)).toEqual([
             "UserInputRecorded",
@@ -455,7 +456,7 @@ describe("DoThreadStore", () => {
         );
         yield* Effect.sync(() =>
           storage.sql.exec(
-            "UPDATE effect_agent_threads SET tail_sequence=0 WHERE thread_id=?",
+            "UPDATE effect_agent_threads SET tail_sequence=0, work_through_sequence=0 WHERE thread_id=?",
             threadId,
           ),
         );

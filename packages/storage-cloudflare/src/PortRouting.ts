@@ -25,10 +25,12 @@ import {
   AppendConflict,
   ThreadMaterialization,
   ThreadNotMaterialized,
+  ThreadExportRejected,
   ThreadStore,
   ThreadReader,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
+import { checkExportSource } from "@yielded/agent/thread-transfer";
 import { WorkDiscoveryUnavailable } from "@yielded/agent/thread-work";
 import type { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import {
@@ -1233,15 +1235,19 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
           ),
 
     export: (request) =>
-      options.ownsThread(request.threadId)
-        ? local.export(request)
-        : foreignStoreCall(
-            "thread export",
-            request.threadId,
-            StoreExportCall.make({ request }),
-            StoreExportResult,
-            ThreadNotMaterialized,
-          ).pipe(Effect.map((reply) => reply.export)),
+      checkExportSource(request.threadId).pipe(
+        Effect.andThen(
+          options.ownsThread(request.threadId)
+            ? local.export(request)
+            : foreignStoreCall(
+                "thread export",
+                request.threadId,
+                StoreExportCall.make({ request }),
+                StoreExportResult,
+                Schema.Union([ThreadNotMaterialized, ThreadExportRejected]),
+              ).pipe(Effect.map((reply) => reply.export)),
+        ),
+      ),
 
     // Observation and checkpoints are lane-local: the closed route-capable store subset
     // includes exact-Thread work pages and rebuild, but no global Object enumeration.

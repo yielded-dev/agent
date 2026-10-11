@@ -66,15 +66,13 @@ export const makeTransferFactCheck = <A, I>(schema: Schema.Codec<A, I>) => {
 
 export { PROMPT_EVIDENCE_TAGS } from "./Records.ts";
 
-/** Captures every fact owner, including facts that do not advance the canonical tail. */
+/** Counts of closed owner facts, computed only when an idle export begins. */
 export const ThreadExportSnapshot = Schema.Struct({
-  revision: Schema.Natural,
   admissions: Schema.Natural,
   aborts: Schema.Natural,
   approvals: Schema.Natural,
   resolutions: Schema.Natural,
   deliveries: Schema.Natural,
-  executions: Schema.Natural,
 });
 
 export type ThreadExportSnapshot = typeof ThreadExportSnapshot.Type;
@@ -294,13 +292,6 @@ export class ExecutionCheckpoint extends Schema.Class<ExecutionCheckpoint>(
   throughSequence: CanonicalSequence,
   batchId: BatchId,
 }) {}
-
-/** Active state transfers separately from immutable history. */
-export const ThreadExecutionFact = Schema.Struct({
-  checkpoint: ExecutionCheckpoint,
-});
-
-export type ThreadExecutionFact = typeof ThreadExecutionFact.Type;
 
 /** A revision-checked transition committed by the same owner as the retained history facts. */
 export class ExecutionUpdate extends Schema.Class<ExecutionUpdate>(
@@ -754,6 +745,8 @@ export class ThreadAdmission extends Schema.Class<ThreadAdmission>(
   receiptId: ReceiptId,
   queueSequence: QueueSequence,
   createdAt: Schema.DateTimeUtcFromString,
+  /** Stable closed Receipt timestamp; required for idle transfer, absent on active verification facts. */
+  settledAt: Schema.optionalKey(Schema.DateTimeUtcFromString),
 }) {}
 
 /** Accepted operator commands are facts; their application markers are deliberately omitted. */
@@ -779,9 +772,6 @@ export const ThreadCommands = Schema.Struct({
 
 export const ThreadExportBatch = Schema.Struct({ batchId: BatchId, producerId: ProducerId });
 
-/** Other owning stores are required to restore these obligations; a single-Thread import refuses them. */
-export const ThreadExternalObligation = Schema.Literals(["child", "worker", "message-delivery"]);
-
 /** The wire is part of the export type: ordinary read envelopes are not lossless archives. */
 export class ThreadExportRecord extends CanonicalRecordEnvelope.extend<ThreadExportRecord>(
   "@effect-agent/thread/ThreadExportRecord",
@@ -791,12 +781,11 @@ export class ThreadExportRecord extends CanonicalRecordEnvelope.extend<ThreadExp
 
 /** One bounded, batch-aligned page. An absent cursor alone marks a complete transfer. */
 export class ThreadExport extends Schema.Class<ThreadExport>("@effect-agent/thread/ThreadExport")({
-  transferFormat: Schema.Literal("effect-agent/thread-transfer@3"),
+  transferFormat: Schema.Literal("effect-agent/thread-transfer@4"),
   format: Schema.NonEmptyString,
   threadId: ThreadId,
   tailSequence: CanonicalSequence,
   snapshot: ThreadExportSnapshot,
-  snapshotId: Digest,
   /** Presence seals the restored inbox; a terminal reason also requires exact settled worker evidence. */
   workerSeal: Schema.optionalKey(ThreadWorkerSeal),
   /** Inclusive first canonical position, even on a page containing only other owner facts. */
@@ -815,18 +804,12 @@ export class ThreadExport extends Schema.Class<ThreadExport>("@effect-agent/thre
   deliveries: Schema.Array(MessageDeliveryRecord).check(
     Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS),
   ),
-  executions: Schema.Array(ThreadExecutionFact).check(
-    Schema.isMaxLength(MAX_THREAD_EXPORT_PAGE_RECORDS),
-  ),
   cursor: Schema.optionalKey(ThreadExportCursor),
   /** Exact reference-bearing records identify cross-range recovery dependencies. */
   dependencies: Schema.Array(RecordId).check(Schema.isMaxLength(256 * 4_096)),
-  externalObligations: Schema.optionalKey(
-    Schema.Array(ThreadExternalObligation).check(Schema.isMaxLength(3)),
-  ),
 }) {}
 
-/** Export-only authority. Native verification binds this port to its existing read snapshot. */
+/** Idle export authority. Applications quiesce external producers for the complete export. */
 export class ThreadExportSource extends Context.Service<
   ThreadExportSource,
   Pick<ThreadStore["Service"], "export">
@@ -839,7 +822,7 @@ export class ThreadExportSource extends Context.Service<
   }
 }
 
-/** Pull bounded pages from one captured snapshot without collecting the Thread. Requires ThreadExportSource. */
+/** Pull bounded idle pages. The caller keeps this Thread quiescent until the stream ends. */
 export const streamExport = (request: ThreadExportRequest) =>
   Stream.unwrap(
     Effect.gen(function* () {
@@ -852,7 +835,11 @@ export const streamExport = (request: ThreadExportRequest) =>
             if (
               page.threadId !== request.threadId ||
               (previous !== undefined &&
-                (page.snapshotId !== previous.snapshotId ||
+                (!Schema.toEquivalence(ThreadExportSnapshot)(page.snapshot, previous.snapshot) ||
+                  !Schema.toEquivalence(Schema.UndefinedOr(ThreadWorkerSeal))(
+                    page.workerSeal,
+                    previous.workerSeal,
+                  ) ||
                   page.tailSequence !== previous.tailSequence ||
                   page.fromSequence !==
                     (previous.records.at(-1)?.sequence ?? previous.fromSequence - 1) + 1 ||
@@ -981,6 +968,26 @@ export class ThreadNotMaterialized extends Schema.TaggedError<ThreadNotMateriali
   { threadId: ThreadId },
 ) {}
 
+/** Export is Thread-local: external schedules, subscriptions and ingress are application-owned. */
+export class ThreadExportRejected extends Schema.TaggedError<ThreadExportRejected>()(
+  "ThreadExportRejected",
+  {
+    threadId: ThreadId,
+    reason: Schema.Literals(["non-idle", "source-changed", "live-import-source"]),
+  },
+) {
+  override get message(): string {
+    switch (this.reason) {
+      case "non-idle":
+        return `Thread ${this.threadId} is not idle; close its active owner and finish pending work before export.`;
+      case "source-changed":
+        return `Thread ${this.threadId} changed during export; keep the source quiescent and restart from the first page.`;
+      case "live-import-source":
+        return `Import requires a detached archive; finish exporting Thread ${this.threadId} before opening the destination transaction.`;
+    }
+  }
+}
+
 /**
  * A canonical append that cannot commit: `batch-content` replays a batch ID with different
  * content, `record-identity` reuses a canonical record ID, and `tail` declares a stale expected
@@ -1076,7 +1083,10 @@ export class ThreadStore extends Context.Service<
     ) => Stream.Stream<CanonicalRecordEnvelope, ThreadStoreError | ThreadNotMaterialized>;
     readonly export: (
       request: ThreadExportRequest,
-    ) => Effect.Effect<ThreadExport, ThreadStoreError | ThreadNotMaterialized>;
+    ) => Effect.Effect<
+      ThreadExport,
+      ThreadStoreError | ThreadNotMaterialized | ThreadExportRejected
+    >;
     readonly inspectTail: (
       request: ThreadTailRequest,
     ) => Effect.Effect<ThreadTail, ThreadStoreError | ThreadNotMaterialized>;

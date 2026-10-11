@@ -443,7 +443,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
             created_at,
             tail_sequence
           FROM ${relation("effect_agent_threads")}
-          WHERE thread_id = ${threadId}
+          WHERE thread_id = ${threadId} AND created_at IS NOT NULL
         `.pipe(execute, Effect.mapError(storageError("read materialized thread")));
 
         const existing = yield* decodeThreadRows("effect_agent_threads", threadId, existingRows);
@@ -465,33 +465,12 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
               ${threadId},
               ${createdAt},
               0
-            )
+            ) ON CONFLICT(thread_id) DO UPDATE SET created_at=excluded.created_at
+            WHERE ${relation("effect_agent_threads")}.created_at IS NULL
           `.pipe(execute, Effect.mapError(storageError("materialize thread")));
-
-          yield* sql`INSERT INTO ${relation("effect_agent_transfer_state")}
-            (thread_id, revision, admissions_count, aborts_count, approvals_count, resolutions_count, deliveries_count, executions_count)
-            VALUES (${threadId}, 0, 0, 0, 0, 0, 0, 0) ON CONFLICT(thread_id) DO NOTHING`.pipe(
-            execute,
-            Effect.mapError(storageError("initialize transfer counters")),
-          );
-
-          yield* work.initialize(threadId).pipe(Effect.mapError(workFailure));
 
           return;
         }
-
-        const counters = yield* sql`SELECT thread_id FROM ${relation("effect_agent_transfer_state")}
-          WHERE thread_id=${threadId}`.pipe(
-          execute,
-          Effect.mapError(storageError("read transfer counters")),
-        );
-
-        if (counters.length !== 1)
-          return yield* options.errors.corruption({
-            table: "effect_agent_transfer_state",
-            rowKey: threadId,
-            message: "Materialized Thread has no transfer counter row.",
-          });
       }),
     );
   });
@@ -503,7 +482,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
         created_at,
         tail_sequence
       FROM ${relation("effect_agent_threads")}
-      WHERE thread_id = ${threadId}
+      WHERE thread_id = ${threadId} AND created_at IS NOT NULL
     `.pipe(execute, Effect.mapError(storageError("read thread")));
 
     return yield* decodeThreadRows("effect_agent_threads", threadId, rows);
@@ -516,7 +495,7 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
             created_at,
             tail_sequence
           FROM ${relation("effect_agent_threads")}
-          WHERE thread_id = ${threadId}
+          WHERE thread_id = ${threadId} AND created_at IS NOT NULL
         `.pipe(execute, Effect.mapError(storageError("read append tail")));
 
     return yield* decodeThreadRow("effect_agent_threads", threadId, threadRows);
@@ -657,7 +636,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     });
 
     if (request.records.length > 0) {
-      yield* archives.append(request, firstSequence, lastSequence);
       yield* sql`
         INSERT INTO ${relation("effect_agent_canonical_batches")} (
           thread_id,
@@ -727,19 +705,19 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     }
 
     if (request.records.length > 0) {
-      yield* sql`
-        UPDATE ${relation("effect_agent_threads")}
-        SET
-          tail_sequence = ${lastSequence}
-        WHERE thread_id = ${request.threadId}
-      `.pipe(execute, Effect.mapError(storageError("advance thread tail")));
-      yield* work
+      const workFields = yield* work
         .apply(
           request.threadId,
           firstSequence,
           request.records.map((record) => record.canonical),
         )
         .pipe(Effect.mapError(workFailure));
+
+      yield* sql`UPDATE ${relation("effect_agent_threads")} SET ${sql.update({ tail_sequence: lastSequence, ...workFields })}
+        WHERE thread_id=${request.threadId}`.pipe(
+        execute,
+        Effect.mapError(storageError("advance thread tail")),
+      );
     }
     yield* executions.commit(request, result);
     if (request.executionWrites.length > 0) yield* failpoint("append:after-record-insert");

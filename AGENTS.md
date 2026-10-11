@@ -90,8 +90,8 @@ concepts succinctly: what a feature does, how it fits, and how to use it.
    by the interpreter, but durable records remain explicit, versioned Schemas.
 7. The canonical log is append-only and owns conversation content, operation evidence and terminal
    outcomes. An unfinished Run's versioned checkpoint is authoritative operational state, committed
-   atomically with its new history under the single owner's mutation gate and revision check. Delete it at canonical
-   settlement; unresolved operations and handoffs retain their own rows. Projections and lookup indexes
+   atomically with its new history under the single owner's mutation gate and revision check. Delete
+   it at canonical settlement; unresolved operations and handoffs retain their own rows. Projections and lookup indexes
    remain disposable. `verify` checks retained history and active checkpoints, including original
    context consistency through `historyDigest`; it does not attest discarded intermediate
    checkpoint revisions or provide tamper evidence. Storage validates schema, version, identity,
@@ -170,8 +170,9 @@ packages.
 - Do not silently widen errors to `unknown`, `Error`, or `any`.
 - Do not use type assertions to cross a schema boundary.
 - Change canonical history through export → re-encode → import, never through in-place payload
-  rewrites. Live state, including Run continuations and operation state, carries explicit versions
-  with narrow conversions. Storage-layout steps remain adapter-owned, ordered, and atomic.
+  rewrites. Export only idle Threads and keep the source quiescent until the archive is complete.
+  Current Run state and operation state carry explicit versions. Storage-layout steps remain
+  adapter-owned, ordered, and atomic.
   Refuse formats and layouts newer than the running code before mutation.
 - Write changesets as one or two imperative sentences naming the consumer-visible change. Add only
   a short usage example or an explicit BEHAVIOR CHANGE note when consumers must act; keep IDs,
