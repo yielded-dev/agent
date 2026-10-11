@@ -1387,7 +1387,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const submissionScheduling = yield* SubmissionScheduling;
   const store = yield* ThreadStore;
   const reader = ThreadReader.fromStore(store);
-  const promptHistory = yield* makePromptHistoryCache(store);
+  const promptHistory = yield* makePromptHistoryCache();
 
   const workDiscovery = yield* ThreadWorkDiscovery.pipe(
     Effect.provide(ThreadWorkDiscovery.layer),
