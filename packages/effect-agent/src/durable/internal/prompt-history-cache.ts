@@ -19,8 +19,8 @@ import {
   MAX_PROMPT_CHECKPOINT_BYTES,
   MAX_PROMPT_CHECKPOINT_RUNS,
   ThreadPromptRead,
+  ThreadStore,
   ThreadTailRequest,
-  type ThreadStore,
 } from "../ThreadStore.ts";
 import type { JournalRecordEnvelope } from "./journal-metadata.ts";
 import { promptJsonFootprint } from "./prompt-footprint.ts";
@@ -147,13 +147,13 @@ export const digestPromptHistory = (prompt: Prompt.Prompt, history: PromptHistor
 
 /** Fold only complete, sequential Runs. Raw facts and encoded/native messages are bounded. */
 const readSuffix = Effect.fnUntraced(function* (
-  store: ThreadStore["Service"],
   writer: RunWriter,
   from: CanonicalSequence,
   through: CanonicalSequence,
   firstRun: RunId,
   allowance: number,
 ) {
+  const store = yield* ThreadStore;
   const records: Array<JournalRecordEnvelope> = [];
   let after = from;
   let remaining = allowance;
@@ -257,7 +257,7 @@ const appendJson = (
   suffix.encoded.slice(JSON_PREFIX.length);
 
 /** Memory and persisted prefixes share the same canonical anchor and suffix rules. */
-export const makePromptHistoryCache = Effect.fnUntraced(function* (store: ThreadStore["Service"]) {
+export const makePromptHistoryCache = Effect.fnUntraced(function* () {
   let current: CachedPromptHistory | undefined;
   let closed = false;
 
@@ -274,6 +274,8 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* (store: Thread
 
       current = undefined;
       if (closed) return undefined;
+      const store = yield* ThreadStore;
+
       if (cached === undefined && store.promptCheckpoints === undefined) return undefined;
       if (
         cached !== undefined &&
@@ -328,7 +330,6 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* (store: Thread
       if (prefix === undefined) return undefined;
 
       const delta = yield* readSuffix(
-        store,
         writer,
         context.historyThrough,
         head.tailSequence,
@@ -374,10 +375,10 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* (store: Thread
         input.runId === undefined
       )
         return;
+      const store = yield* ThreadStore;
       const tail = yield* writer.tail;
 
       const delta = yield* readSuffix(
-        store,
         writer,
         CanonicalSequence.make(original.sequence - 1),
         tail.sequence,
