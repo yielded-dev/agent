@@ -259,6 +259,12 @@ export class ActorDO extends actorWorker.ActorObject {
 
     return counts;
   }
+  async clearFixture(query: Query) {
+    this.meter.assertBuild(query);
+    await super.dispose();
+    await this.ctx.storage.deleteAll();
+    await this.ctx.storage.sync();
+  }
 }
 
 export class ThreadDO extends actorWorker.ThreadObject {

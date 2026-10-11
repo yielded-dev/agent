@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 
 import { Host } from "./host.ts";
-import { readQuery, type Env, type Target } from "./protocol.ts";
+import { type Env, type Target } from "./protocol.ts";
 
 export { default, ActorDO, ThreadDO } from "../../third-party/src/deployed/index.ts";
 
@@ -13,20 +13,6 @@ class RestoreDO extends DurableObject<Env> {
     this.host = new Host(ctx, env, target);
   }
   override async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-
-    if (url.pathname === "/restore/clear") {
-      const query = readQuery(url);
-
-      this.host.meter.assertBuild(query);
-      if (request.method !== "POST" || query.target !== this.host.target)
-        throw new Error("Invalid restore reset");
-      await this.ctx.storage.deleteAll();
-      await this.ctx.storage.sync();
-
-      return Response.json({ ok: true });
-    }
-
     return this.host.fetch(request, {});
   }
 }

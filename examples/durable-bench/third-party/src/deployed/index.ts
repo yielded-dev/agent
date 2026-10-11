@@ -254,6 +254,7 @@ export default {
 
       let directoryTables: Readonly<Record<string, number>> | undefined;
 
+      if (url.pathname === "/restore/clear" && actor) await actor.clearFixture(query);
       if (url.pathname === "/restore/start" && actor) {
         const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.clone().json());
 

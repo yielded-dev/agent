@@ -1,4 +1,5 @@
-import { Effect, Schema } from "effect";
+import { exportThread } from "@yielded/agent-storage-cloudflare/do-thread-store";
+import { Effect, Layer, Schema } from "effect";
 
 import { CYCLE, history, MEASURED_TOOLS, turn } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";
@@ -15,7 +16,7 @@ import {
   type SqlDump,
 } from "./protocol.ts";
 import { restore } from "./restore.ts";
-import { importRows, RestoreStorage } from "./storage.ts";
+import { FixtureExport, importRows, RestoreStorage } from "./storage.ts";
 
 export const COLD_ABORT = "durable-bench explicit cold";
 
@@ -65,9 +66,23 @@ export class Host {
       if (url.pathname.startsWith("/restore/")) {
         this.meter.assertBuild(query);
 
+        if (url.pathname === "/restore/clear") {
+          if (request.method !== "POST") throw new Error("Restore reset requires POST");
+          await handlers.close?.();
+          await this.ctx.storage.deleteAll();
+          await this.ctx.storage.sync();
+
+          return Response.json({ ok: true, identity: this.meter.identity() });
+        }
+
         const restored = await Effect.runPromise(
           restore(request, query).pipe(
             Effect.provideService(RestoreStorage, this.ctx.storage),
+            Effect.provide(
+              Layer.succeed(FixtureExport, {
+                page: (input) => exportThread({ storage: this.ctx.storage }, input),
+              }),
+            ),
             Effect.scoped,
           ),
         );

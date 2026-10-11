@@ -1,5 +1,5 @@
 import { CurrentDoStorageVersion } from "@yielded/agent-storage-cloudflare/do-storage-version";
-import { exportThread } from "@yielded/agent-storage-cloudflare/do-thread-store";
+import type { exportThread } from "@yielded/agent-storage-cloudflare/do-thread-store";
 import { CURRENT_RECORD_FORMAT, RecordEnvelope } from "@yielded/agent/records";
 import { ThreadExportRequest, type ThreadExportCursor } from "@yielded/agent/thread-store";
 import { Context, Effect, Schema } from "effect";
@@ -13,6 +13,14 @@ import { expectedSeed, type BulkFixture, type SqlDump, type Target } from "./pro
 export class RestoreStorage extends Context.Service<RestoreStorage, DurableObjectStorage>()(
   "durable-bench/RestoreStorage",
 ) {}
+
+/** Read-only export capability; the native adapter is bound by Host at the request boundary. */
+export class FixtureExport extends Context.Service<
+  FixtureExport,
+  {
+    readonly page: (request: typeof ThreadExportRequest.Type) => ReturnType<typeof exportThread>;
+  }
+>()("durable-bench/FixtureExport") {}
 
 export class FixtureError extends Schema.TaggedError<FixtureError>()("FixtureError", {
   message: Schema.String,
@@ -126,7 +134,7 @@ const appendYielded = (result: Message[], record: typeof RecordEnvelope.Type) =>
 
 /** Use the revision's read-only exporter for compact layouts; never canonical-import the fixture. */
 const compactTranscript = Effect.fnUntraced(function* (fixture: BulkFixture) {
-  const storage = yield* RestoreStorage;
+  const exporter = yield* FixtureExport;
 
   const request = yield* Schema.decodeUnknownEffect(ThreadExportRequest)({
     threadId: fixture.threadId,
@@ -136,10 +144,7 @@ const compactTranscript = Effect.fnUntraced(function* (fixture: BulkFixture) {
   let cursor: typeof ThreadExportCursor.Type | undefined;
 
   do {
-    const page = yield* exportThread(
-      { storage },
-      { ...request, ...(cursor === undefined ? {} : { cursor }) },
-    );
+    const page = yield* exporter.page({ ...request, ...(cursor === undefined ? {} : { cursor }) });
 
     for (const entry of page.records) appendYielded(messages, entry.record);
     cursor = page.cursor;
