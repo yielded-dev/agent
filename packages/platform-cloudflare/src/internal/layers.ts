@@ -71,7 +71,7 @@ import {
   toolFailureObserverLayer,
 } from "@yielded/agent/run-options";
 import type { RunStorage } from "@yielded/agent/run-storage";
-import { layer as runStorageLayer } from "@yielded/agent/run-storage";
+import { layer as runStorageLayer, StorageOwner } from "@yielded/agent/run-storage";
 import { SettlementPublisher, validatePublication } from "@yielded/agent/settlement-publisher";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import {
@@ -150,16 +150,12 @@ export interface CloudflareDurableRuntimeOptions {
   readonly deploymentId: string;
   /** Head of the minted producer identity `{producerPrefix}:{threadId}`. */
   readonly producerPrefix: string;
-  /** Milliseconds; default 30s (D5). */
-  readonly ownershipLeaseDuration?: number | undefined;
   /** Milliseconds; default 100. */
   readonly alarmBackoffBase?: number | undefined;
   /** Failed/no-progress exponential backoff ceiling in milliseconds; default 5000. */
   readonly alarmBackoffCap?: number | undefined;
   /** Milliseconds; default 500. */
   readonly settlementPollInterval?: number | undefined;
-  /** Milliseconds; default 10000. */
-  readonly leaseRenewalInterval?: number | undefined;
   /** Milliseconds; default 500. */
   readonly abortPollInterval?: number | undefined;
   /** Deployment-owned pricing authority used by durable cost budgets and settlements. */
@@ -237,6 +233,7 @@ export type CloudflareDurableRuntimeServices =
   | ThreadStore
   | ThreadReader
   | RunStorage
+  | StorageOwner
   | SettlementPublisher
   | MessageDeliveryStore
   | WakeScheduler
@@ -279,14 +276,10 @@ const configFromOptions = (
   decodeConfigValue({
     deploymentId: options.deploymentId,
     producerPrefix: options.producerPrefix,
-    ownershipLeaseDuration:
-      options.ownershipLeaseDuration ?? CLOUDFLARE_RUNTIME_DEFAULTS.ownershipLeaseDuration,
     alarmBackoffBase: options.alarmBackoffBase ?? CLOUDFLARE_RUNTIME_DEFAULTS.alarmBackoffBase,
     alarmBackoffCap: options.alarmBackoffCap ?? CLOUDFLARE_RUNTIME_DEFAULTS.alarmBackoffCap,
     settlementPollInterval:
       options.settlementPollInterval ?? CLOUDFLARE_RUNTIME_DEFAULTS.settlementPollInterval,
-    leaseRenewalInterval:
-      options.leaseRenewalInterval ?? CLOUDFLARE_RUNTIME_DEFAULTS.leaseRenewalInterval,
     abortPollInterval: options.abortPollInterval ?? CLOUDFLARE_RUNTIME_DEFAULTS.abortPollInterval,
     observationPollInterval:
       options.observationPollInterval ?? CLOUDFLARE_RUNTIME_DEFAULTS.observationPollInterval,
@@ -363,7 +356,6 @@ const runtimeConfigLayer = (
           deploymentId: config.deploymentId,
           producerId,
           settlementPollInterval: Duration.millis(config.settlementPollInterval),
-          leaseRenewalInterval: Duration.millis(config.leaseRenewalInterval),
           abortPollInterval: Duration.millis(config.abortPollInterval),
           ...(options.estimateCostMicrousd === undefined
             ? {}
@@ -629,7 +621,6 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
       const storageOptions: DoStorageOptions = {
         storage: ctx.storage,
         observationPollInterval: config.observationPollInterval,
-        ownershipLeaseDuration: config.ownershipLeaseDuration,
         maxStoredValueBytes: config.maxStoredValueBytes,
         verifyOnOpen: config.verifyOnOpen,
       };
@@ -763,6 +754,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
               Effect.gen(function* () {
                 const store = yield* ThreadStore;
                 const ledger = yield* SubmissionLedger;
+                const storageOwner = yield* StorageOwner;
                 const settlementPublisher = yield* SettlementPublisher;
                 const mutations = yield* ThreadMutationGate;
                 const index = yield* ThreadProjectionMaintenance;
@@ -895,6 +887,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                 const stopWorker = ledger.stopWorker;
 
                 return Context.make(ThreadStore, observedStore).pipe(
+                  Context.add(StorageOwner, storageOwner),
                   Context.add(SettlementPublisher, {
                     publish: (input) =>
                       Effect.gen(function* () {
@@ -1027,6 +1020,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
       ).pipe(Layer.provide(localPorts), Layer.provide(messageStore), Layer.provide(wakes));
 
       const routedPorts = Layer.mergeAll(
+        Layer.effect(StorageOwner, StorageOwner),
         routedSubmissionLedgerLayer({ ownsThread }),
         routedSettlementPublisherLayer({ ownsThread }),
         routedThreadStoreLayer({ ownsThread }),

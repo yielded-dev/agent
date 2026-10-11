@@ -15,7 +15,6 @@ import {
   DefinitionDigestInput,
   ModelResponseRecorded,
   PersistedJson,
-  ProducerEpoch,
   RecordEnvelope,
   RecordId,
   RunCompleted,
@@ -27,7 +26,7 @@ import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunContextPreparation } from "@yielded/agent/run-options";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import {
-  FencedAppendRequest,
+  AppendRequest,
   ThreadExportRequest,
   ThreadExportSource,
   streamExport,
@@ -345,9 +344,7 @@ const application = Layer.unwrap(
 
         const seed = Effect.fn("issue692.seed")(function* (count: 10 | 1000) {
           yield* check(state.seedRecords === 0 && state.phase === 0, "Seed already initialized");
-          yield* store.materialize(
-            ThreadMaterialization.make({ threadId, producerEpoch: ProducerEpoch.make(0) }),
-          );
+          yield* store.materialize(ThreadMaterialization.make({ threadId }));
           for (let start = 0; start < count; start += 128) {
             const records: Array<RecordEnvelope> = [];
 
@@ -400,7 +397,7 @@ const application = Layer.unwrap(
             const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
             yield* store.append(
-              FencedAppendRequest.make({
+              AppendRequest.make({
                 threadId,
                 batch: CanonicalBatch.make({
                   batchId: BatchId.make(`seed-${start}`),
@@ -408,7 +405,6 @@ const application = Layer.unwrap(
                   records: [first, ...rest],
                 }),
                 expectedTailSequence: tail.tailSequence,
-                producerEpoch: tail.producerEpoch,
               }),
             );
           }

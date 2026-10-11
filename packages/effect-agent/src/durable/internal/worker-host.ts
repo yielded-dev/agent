@@ -123,11 +123,10 @@ import {
   getRecord,
   getRunInput,
   readWorkerState as readNativeWorkerState,
-  FencedAppendRequest,
+  AppendRequest,
   type ThreadIdentity,
   type ThreadWorkerCapacity,
   ThreadRead,
-  type ThreadTail,
   ThreadTailRequest,
 } from "../ThreadStore.ts";
 import { deliveryPredecessor, workId } from "../ThreadWork.ts";
@@ -667,28 +666,18 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         | WorkerReportPrepared
         | WorkerReportRefused
         | SubtreeBudgetReserved,
-      current: Pick<ThreadIdentity, "tailSequence" | "records"> &
-        Partial<Pick<ThreadTail, "producerEpoch">>,
+      current: Pick<ThreadIdentity, "tailSequence" | "records">,
       phase: "source" | "completion" | "subtree" | "report" | "stop",
     ) {
       const operation = "start";
-      let producerEpoch = current.producerEpoch;
 
-      if (producerEpoch === undefined) {
-        const tail = yield* deps.store.inspectTail(ThreadTailRequest.make({ threadId }));
-
-        if (tail.tailSequence !== current.tailSequence) return false;
-        producerEpoch = tail.producerEpoch;
-      }
-
-      // The store atomically fences the validated prefix and its producer epoch.
+      // The owner's transaction checks the exact prefix used for this decision.
       yield* hit(`worker:before-${phase}-append`, operation);
 
       const result = yield* deps.store
         .append(
-          FencedAppendRequest.make({
+          AppendRequest.make({
             threadId,
-            producerEpoch,
             expectedTailSequence: current.tailSequence,
 
             batch: CanonicalBatch.make({
@@ -715,7 +704,7 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
         )
         .pipe(
           Effect.as(true),
-          Effect.catchTag(["AppendConflict", "FenceRejected"], () => Effect.succeed(false)),
+          Effect.catchTag("AppendConflict", () => Effect.succeed(false)),
         );
 
       if (result) yield* hit(`worker:after-${phase}-append`, operation);

@@ -1,4 +1,4 @@
-import { makeSqlJournal } from "@yielded/agent-storage-sql/sql-journal";
+import { makeSqlJournal, sqlStorageOwner } from "@yielded/agent-storage-sql/sql-journal";
 import {
   makeSqlQuery,
   makeSqlTransaction,
@@ -20,23 +20,6 @@ import { applyPostgresLayout, inspectPostgresStorage } from "./storage-layout.ts
 
 export { CurrentPostgresStorageVersion, readPostgresStorageHeader } from "./storage-layout.ts";
 
-/**
- * This exact FNV-1a hash, including its tag and UTF-8 encoding, is a persistent advisory-lock
- * wire format and must never change: a different key would let an old and a new deployment write
- * concurrently. The shape follows `SqlRunnerStorage`'s lock namespace in Effect's cluster module.
- */
-const advisoryLockKey = (tag: string): number => {
-  const bytes = new TextEncoder().encode(`effect-agent:${tag}`);
-  let hash = 0x811c9dc5;
-
-  for (const byte of bytes) hash = Math.imul(hash ^ byte, 0x01000193);
-
-  return hash | 0;
-};
-
-/** One key serialises every writer, which is the scope SQLite's write lock had. */
-export const WRITER_LOCK_KEY = advisoryLockKey("storage/writer");
-
 const storageError = (operation: string) => (cause: SqlError) =>
   PostgresStorageError.make({ operation, cause, message: cause.message });
 
@@ -49,28 +32,34 @@ export const classifyWriteFailure =
       ? PostgresWriteContention.make({
           operation,
           cause,
-          message: `Another producer won the Postgres write race; ${operation} is safe to retry.`,
+          message: `Postgres reported a transient transaction conflict; ${operation} is safe to retry.`,
         })
       : storageError(operation)(cause);
 
 /**
- * READ COMMITTED observes the preceding writer's changes after the interruptible lock wait.
- * The shared transaction rolls back before releasing its connection on failure.
+ * Applications route each Thread to one scoped owner. This local gate is shared by all ports
+ * using the same client/namespace; it is not a distributed lock or failover protocol.
  */
-export const withWriterLockTransaction = (sql: SqlClient.SqlClient, lockTimeout: number) =>
-  makeSqlTransaction(sql, {
+export const makeWriteTransaction = Effect.fnUntraced(function* (
+  sql: SqlClient.SqlClient,
+  lockTimeout: number,
+  namespace: string,
+) {
+  const owner = yield* sqlStorageOwner(sql, namespace);
+
+  const transaction = makeSqlTransaction(sql, {
     begin: "BEGIN ISOLATION LEVEL READ COMMITTED",
-    prelude: Effect.gen(function* () {
-      yield* sql`SELECT set_config('lock_timeout', ${`${lockTimeout}ms`}, true)`.withoutTransform;
-      yield* sql`SELECT pg_advisory_xact_lock(${WRITER_LOCK_KEY})`.withoutTransform;
-    }),
+    prelude: sql`SELECT set_config('lock_timeout', ${`${lockTimeout}ms`}, true)`.withoutTransform,
   });
 
-/** Every page of a multi-query export observes the same snapshot without taking the writer lock. */
+  return <A, E, R>(body: Effect.Effect<A, E, R>) => owner.withMutation(transaction(body));
+});
+
+/** Every page of a multi-query export observes the same snapshot without creating write authority. */
 const withReadTransaction = (sql: SqlClient.SqlClient) =>
   makeSqlTransaction(sql, { begin: "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" });
 
-/** Run while holding the writer transaction, including when this schema does not yet exist. */
+/** Run while holding the owner transaction, including when this schema does not yet exist. */
 export const ensurePostgresSchema = Effect.fnUntraced(function* (schema: string) {
   const sql = yield* SqlClient.SqlClient;
   const { execute } = yield* makeSqlQuery();
@@ -93,7 +82,7 @@ const isTransactionFailure = Schema.is(
   Schema.Union([PostgresStorageError, PostgresWriteContention]),
 );
 
-/** Inspect under the writer lock before any DDL; current headers commit together. */
+/** Inspect under the owner gate before any DDL; current headers commit together. */
 export const initializePostgresStorage = Effect.fn("PostgresStorage.initializeLayout")(function* ({
   lockTimeout,
   schema,
@@ -103,10 +92,9 @@ export const initializePostgresStorage = Effect.fn("PostgresStorage.initializeLa
 }) {
   const sql = yield* SqlClient.SqlClient;
 
-  yield* withWriterLockTransaction(
-    sql,
-    lockTimeout,
-  )(
+  const write = yield* makeWriteTransaction(sql, lockTimeout, schema);
+
+  yield* write(
     Effect.gen(function* () {
       const header = yield* inspectPostgresStorage(schema);
 
@@ -129,7 +117,7 @@ export const makePostgresJournal = Effect.fnUntraced(function* (
   namespace: string,
 ) {
   const sql = yield* SqlClient.SqlClient;
-  const write = withWriterLockTransaction(sql, lockTimeout);
+  const write = yield* makeWriteTransaction(sql, lockTimeout, namespace);
   const read = withReadTransaction(sql);
 
   return yield* makeSqlJournal({

@@ -1,3 +1,4 @@
+import { RunId, ThreadId } from "@yielded/agent/identifiers";
 import { decodeExportRecord } from "@yielded/agent/record-format";
 import {
   type CanonicalRecord,
@@ -9,7 +10,8 @@ import {
   ObservationOffset,
   CanonicalRecordEnvelope,
   CanonicalSequence,
-  ProducerEpoch,
+  BatchId,
+  Digest,
   PromptRecord,
   type PromptRecordEnvelope,
   RecordId,
@@ -225,48 +227,64 @@ const boundedCandidates = (
   return join(groups);
 };
 
-/** One authoritative active value; this read never synthesizes canonical history. */
+/** One current value and one retry descriptor; imported checkpoints have no local retry intent. */
+export const StoredExecution = Schema.Struct({
+  thread_id: ThreadId,
+  run_id: Schema.fromJsonString(RunId),
+  input_sequence: SqlInteger.pipe(
+    Schema.decodeTo(CanonicalSequence.check(Schema.isGreaterThan(0))),
+  ),
+  revision: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
+  checkpoint_json: Schema.String.check(Schema.isMaxLength(16 * 1024 * 1024)),
+  last_commit_id: Schema.NullOr(BatchId),
+  last_commit_digest: Schema.NullOr(Digest),
+});
+
+export const decodeStoredExecution = Effect.fnUntraced(function* (
+  row: typeof StoredExecution.Type,
+) {
+  const checkpoint = yield* Schema.decodeEffect(Schema.fromJsonString(ExecutionCheckpoint))(
+    row.checkpoint_json,
+  ).pipe(Effect.mapError((cause) => failure("decode active execution", cause)));
+
+  if (
+    checkpoint.progress.runId !== row.run_id ||
+    checkpoint.originalSequence !== row.input_sequence ||
+    checkpoint.progress.revision !== row.revision ||
+    (row.last_commit_id === null) !== (row.last_commit_digest === null) ||
+    (row.last_commit_id !== null && row.last_commit_id !== checkpoint.batchId)
+  )
+    return yield* failure("read execution identity");
+
+  return checkpoint;
+});
+
+/** This read never synthesizes canonical history. */
 export const makeExecutionRead = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
   const { table, execute } = yield* makeSqlQuery(namespace);
 
   const decodeRows = Schema.decodeUnknownEffect(
-    Schema.Array(
-      Schema.Struct({
-        input_sequence: SqlInteger.pipe(
-          Schema.decodeTo(CanonicalSequence.check(Schema.isGreaterThan(0))),
-        ),
-        revision: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
-        checkpoint_json: Schema.String.check(Schema.isMaxLength(16 * 1024 * 1024)),
-      }),
-    ).check(Schema.isMaxLength(1)),
+    Schema.Array(StoredExecution).check(Schema.isMaxLength(1)),
   );
-
-  const decodeCheckpoint = Schema.decodeEffect(Schema.fromJsonString(ExecutionCheckpoint));
 
   return Effect.fnUntraced(
     function* (input: ExecutionRead) {
       const request = yield* Schema.decodeEffect(ExecutionRead)(input);
 
-      const rows =
-        yield* sql`SELECT input_sequence, revision, checkpoint_json FROM ${table("effect_agent_executions")}
+      const [row] = yield* decodeRows(
+        yield* sql`SELECT thread_id, run_id, input_sequence, revision,
+      checkpoint_json, last_commit_id, last_commit_digest FROM ${table("effect_agent_executions")}
       WHERE thread_id=${request.threadId} AND run_id=${JSON.stringify(request.runId)}`.pipe(
           execute,
-        );
-
-      const [row] = yield* decodeRows(rows);
+        ),
+      );
 
       if (row === undefined) return Option.none();
-      const checkpoint = yield* decodeCheckpoint(row.checkpoint_json);
+      if (row.thread_id !== request.threadId || row.run_id !== request.runId)
+        return yield* failure("read execution keys");
 
-      if (
-        checkpoint.progress.runId !== request.runId ||
-        checkpoint.originalSequence !== row.input_sequence ||
-        checkpoint.progress.revision !== row.revision
-      )
-        return yield* failure("read execution identity");
-
-      return Option.some(checkpoint);
+      return Option.some(yield* decodeStoredExecution(row));
     },
     Effect.mapError((cause) => failure("read active execution", cause)),
   );
@@ -321,7 +339,6 @@ export const makeProgressAppendValidation = Effect.fnUntraced(function* (namespa
                 tail: () =>
                   Effect.succeed({
                     tail_sequence: request.expectedTailSequence,
-                    producer_epoch: request.producerEpoch,
                   }),
               }),
             );
@@ -390,7 +407,6 @@ export interface SelectedReadOwner {
   readonly tail: (threadId: SelectedThreadRead["threadId"]) => Effect.Effect<
     | {
         readonly tail_sequence: CanonicalSequence;
-        readonly producer_epoch: ProducerEpoch;
       }
     | undefined,
     ThreadStoreError
@@ -435,7 +451,6 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
     Schema.Array(
       Schema.Struct({
         tail_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-        producer_epoch: SqlInteger.pipe(Schema.decodeTo(ProducerEpoch)),
       }),
     ),
   );
@@ -458,7 +473,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
     }
 
     const rows =
-      yield* sql`SELECT tail_sequence, producer_epoch FROM ${relation("effect_agent_threads")} WHERE thread_id = ${threadId}`.pipe(
+      yield* sql`SELECT tail_sequence FROM ${relation("effect_agent_threads")} WHERE thread_id = ${threadId}`.pipe(
         execute,
       );
 
@@ -1181,7 +1196,6 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
           return yield* ThreadIdentity.makeEffect({
             threadId: request.threadId,
             tailSequence: tail.tail_sequence,
-            producerEpoch: tail.producer_epoch,
             admissions: facts.admissions_count,
             records,
           });
@@ -1230,7 +1244,6 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
             return yield* ThreadWorkerCapacity.makeEffect({
               threadId: request.threadId,
               tailSequence: tail.tail_sequence,
-              producerEpoch: tail.producer_epoch,
               activeWorkers: active.length,
               workerActive: worker.length === 1,
               pendingInputs: pending.length,

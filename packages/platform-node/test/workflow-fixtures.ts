@@ -150,8 +150,6 @@ export const hostLayer = <const Entries extends ReadonlyArray<AgentRegistration>
         filename: `${directory}/agent.sqlite`,
         deploymentId,
         producerId: "workflow-owner",
-        ownershipLeaseDuration: 200,
-        leaseRenewalInterval: 50,
         settlementPollInterval: 10,
         abortPollInterval: 10,
         ...options,

@@ -2,7 +2,7 @@ import { Context, Effect, Schema } from "effect";
 
 import { DurableRuntimeFailpoint, DurableRuntimeFailpointError } from "./DurableFailpoint.ts";
 import { ensureThreadCreated, ensureWorkerOrigin } from "./internal/thread-initialization.ts";
-import { ProducerEpoch, ProducerId, WorkerAdmission } from "./Records.ts";
+import { ProducerId, WorkerAdmission } from "./Records.ts";
 import {
   AdmissionConflict,
   AdmissionPolicyError,
@@ -13,7 +13,6 @@ import {
 } from "./SubmissionLedger.ts";
 import {
   AppendConflict,
-  FenceRejected,
   ThreadMaterialization,
   ThreadNotMaterialized,
   ThreadStore,
@@ -41,7 +40,6 @@ export const WorkerAdmissionFailure = Schema.Union([
   ThreadStoreError,
   ThreadNotMaterialized,
   AppendConflict,
-  FenceRejected,
   DurableRuntimeFailpointError,
 ]);
 
@@ -68,14 +66,11 @@ export const admitWorker = Effect.fnUntraced(function* (request: WorkerAdmission
   yield* failpoint.hit("submit:after-admit");
   if (admitted.replayed && admitted.state !== "admitted") return admitted;
 
-  yield* store
-    .materialize(
-      ThreadMaterialization.make({
-        threadId: request.threadId,
-        producerEpoch: Schema.decodeSync(ProducerEpoch)(0),
-      }),
-    )
-    .pipe(Effect.catchTag("FenceRejected", () => Effect.void));
+  yield* store.materialize(
+    ThreadMaterialization.make({
+      threadId: request.threadId,
+    }),
+  );
 
   const config = {
     producerId: request.producerId,

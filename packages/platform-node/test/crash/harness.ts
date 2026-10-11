@@ -59,9 +59,6 @@ import {
 export const workerEntry = fileURLToPath(new URL("./worker-entry.ts", import.meta.url));
 export const packageRoot = fileURLToPath(new URL("../..", import.meta.url));
 
-/** Lease the child claims with in kill scenarios; expired by `waitAfterChildExit` after death. */
-export const CHILD_LEASE_MS = 250;
-const LEASE_WAIT_MS = 1_000;
 const POLL_INTERVAL_MS = 25;
 
 export interface WorkerExit {
@@ -115,7 +112,6 @@ export interface ChildOptions {
   readonly killAtStorage?: SqliteStorageFailpointLocation | undefined;
   /** Coordinator failpoint where the worker BLOCKS (marker + hang) instead of dying. */
   readonly blockAt?: DurableRuntimeFailpointLocation | undefined;
-  readonly leaseMillis?: number | undefined;
   readonly markerFile?: string | undefined;
   readonly releaseFile?: string | undefined;
   readonly supplierDir?: string | undefined;
@@ -142,7 +138,6 @@ const childEnv = (options: ChildOptions): Record<string, string> => {
   if (options.killAt !== undefined) env[CrashEnv.killAt] = options.killAt;
   if (options.killAtStorage !== undefined) env[CrashEnv.killAtStorage] = options.killAtStorage;
   if (options.blockAt !== undefined) env[CrashEnv.blockAt] = options.blockAt;
-  if (options.leaseMillis !== undefined) env[CrashEnv.leaseMillis] = String(options.leaseMillis);
   if (options.markerFile !== undefined) env[CrashEnv.markerFile] = options.markerFile;
   if (options.releaseFile !== undefined) env[CrashEnv.releaseFile] = options.releaseFile;
   if (options.supplierDir !== undefined) env[CrashEnv.supplierDir] = options.supplierDir;
@@ -249,12 +244,6 @@ export const expectKilled = (result: WorkerResult): void => {
     `expected a killed worker, got ${JSON.stringify(result.exit)}; stderr: ${result.stderr}`,
   ).toBe(true);
 };
-
-/** After confirmed process exit, no renewal can extend the child's last short lease. */
-export const waitAfterChildExit = Effect.sleep(Duration.millis(CHILD_LEASE_MS + POLL_INTERVAL_MS));
-
-/** Live stale-owner scenarios retain a wider wait while the blocked child still exists. */
-export const waitOutChildLease = Effect.sleep(Duration.millis(LEASE_WAIT_MS));
 
 export const runtimeOptions = (
   filename: string,

@@ -34,7 +34,6 @@ const storeLayer = (storage: DurableObjectStorage) =>
         DoStorageConfig,
         DoStorageConfigValue.make({
           observationPollInterval: 1,
-          ownershipLeaseDuration: 30_000,
           maxStoredValueBytes: 1_900_000,
           verifyOnOpen: false,
         }),

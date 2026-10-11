@@ -18,7 +18,7 @@ import { ThreadId, RunId, ToolCallId, TurnId, type AgentId } from "@yielded/agen
 import { DefinitionDigests, DeploymentId, Digest, ProducerId } from "@yielded/agent/records";
 import { childThreadIdFor } from "@yielded/agent/run-journal";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
-import { layer as runStorageLayer } from "@yielded/agent/run-storage";
+import { layer as runStorageLayer, type StorageOwner } from "@yielded/agent/run-storage";
 import type { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentPolicy } from "@yielded/agent/subagent";
@@ -31,7 +31,6 @@ import {
   SubmissionLedger,
   SubmissionLookupById,
   UnknownResolutionCommand,
-  DEFAULT_OWNERSHIP_LEASE_DURATION,
 } from "@yielded/agent/submission-ledger";
 import {
   type CertificationCaseResult,
@@ -61,7 +60,6 @@ import {
   Stream,
 } from "effect";
 import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
-import { TestClock } from "effect/testing";
 
 import { makeCertificationReport } from "./internal/certification-report.ts";
 
@@ -87,8 +85,8 @@ import { makeCertificationReport } from "./internal/certification-report.ts";
  *
  * The runner is adapter-neutral and platform-neutral: it imports nothing Node-only, so the
  * same entry point runs under `@effect/vitest` on Node and inside workerd (storage-cloudflare's
- * in-workerd runner). It must run under a TestClock (Tier 1 drives lease expiry through
- * virtual time), and requires only `Crypto.Crypto` from the environment.
+ * in-workerd runner). Tier 1 uses a TestClock to show that elapsed time cannot replace a live
+ * owner; only `Crypto.Crypto` is required from the environment.
  */
 
 // ---------------------------------------------------------------------------
@@ -121,22 +119,13 @@ export interface CertifyDurableAdaptersOptions<LedgerE = never, StoreE = never> 
     LedgerE,
     Crypto.Crypto
   >;
-  readonly threadStore: Layer.Layer<ThreadStore, StoreE, Crypto.Crypto>;
+  readonly threadStore: Layer.Layer<ThreadStore | StorageOwner, StoreE, Crypto.Crypto>;
   /** Defaults to `WakeScheduler.layerNoop`; the runner re-drives lanes explicitly. */
   readonly wakeScheduler?: Layer.Layer<WakeScheduler> | undefined;
   /** Executes Tier 3 in this run; takes precedence over `tierThreeEvidence`. */
   readonly crashLever?: CertificationCrashLever | undefined;
   /** Repository-relative citations of committed real-loss suites (Tier 3 `recorded-evidence`). */
   readonly tierThreeEvidence?: ReadonlyArray<string> | undefined;
-  /**
-   * The candidate ledger's configured ownership lease (defaults to the D5 default, 30s).
-   * Every Tier-2 re-drive round advances the TestClock past this lease before reclaiming:
-   * a live lease may block ALL new claims (the SQL adapters do; the memory reference also
-   * allows same-producer reclaim), so the adapter-NEUTRAL recovery lever after a mid-Attempt
-   * fault is lease expiry — exactly the documented D5 liveness mechanism, driven through
-   * virtual time.
-   */
-  readonly ownershipLeaseDuration?: Duration.Duration | undefined;
 }
 
 /** The six Tier-2 scenario shapes in sweep order. */
@@ -742,7 +731,6 @@ type SweepOutcome = Pick<CertificationSweepResult, "failpointFired" | "status" |
 const runSweepCell = Effect.fnUntraced(function* (
   scenario: CertificationScenario,
   location: DurableRuntimeFailpointLocation | undefined,
-  leaseAdvance: Duration.Duration,
   reached: Set<DurableRuntimeFailpointLocation>,
 ) {
   const ledger = yield* SubmissionLedger;
@@ -827,9 +815,7 @@ const runSweepCell = Effect.fnUntraced(function* (
   let converged = false;
 
   for (let round = 0; round < MAX_REDRIVE_ROUNDS && !converged; round++) {
-    // Expire any lease a faulted Attempt left behind (D5): virtual time is the
-    // adapter-neutral reclaim lever — a live lease may block every new claim.
-    yield* TestClock.adjust(leaseAdvance);
+    // A failed drive closes its scoped generation before recovery can select another owner.
     yield* Effect.exit(runtime.runRecovery());
     for (const lane of lanes) {
       yield* Effect.exit(driveLane(lane));
@@ -998,15 +984,10 @@ export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
           deploymentId: Schema.decodeSync(DeploymentId)("deployment-certification"),
           producerId: Schema.decodeSync(ProducerId)("producer-certification"),
           settlementPollInterval: Duration.millis(50),
-          leaseRenewalInterval: Duration.seconds(5),
           abortPollInterval: Duration.millis(50),
         }),
       ),
     ),
-  );
-
-  const leaseAdvance = Duration.millis(
-    Duration.toMillis(options.ownershipLeaseDuration ?? DEFAULT_OWNERSHIP_LEASE_DURATION) + 1_000,
   );
 
   const program = Effect.gen(function* () {
@@ -1025,7 +1006,7 @@ export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
     for (const scenario of CERTIFICATION_SCENARIOS) {
       const reached = new Set<DurableRuntimeFailpointLocation>();
 
-      const outcome = yield* runSweepCell(scenario, undefined, leaseAdvance, reached);
+      const outcome = yield* runSweepCell(scenario, undefined, reached);
 
       discoveries.push({ scenario, outcome, reached });
     }
@@ -1054,7 +1035,7 @@ export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
           );
 
           if (location === undefined) break;
-          outcomes.set(location, yield* runSweepCell(scenario, location, leaseAdvance, reached));
+          outcomes.set(location, yield* runSweepCell(scenario, location, reached));
         }
       }
       for (const location of DurableRuntimeFailpointLocation.literals) {

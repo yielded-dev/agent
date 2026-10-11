@@ -1,6 +1,6 @@
 import { expectTypeOf } from "@effect/vitest";
-import type { AppendConflict, FenceRejected, ThreadStoreError } from "@yielded/agent/thread-store";
-import { Context, Effect, Schema, type Crypto } from "effect";
+import type { AppendConflict, ThreadStoreError } from "@yielded/agent/thread-store";
+import { Context, Effect, Schema, type Crypto, type Scope } from "effect";
 import type { SqlClient } from "effect/sql/SqlClient";
 
 import type { makeSqlJournal, SqlJournal } from "../src/SqlJournal.ts";
@@ -26,15 +26,11 @@ type LedgerConstruction = ReturnType<
 >;
 
 expectTypeOf<Effect.Error<JournalConstruction>>().toEqualTypeOf<StorageFailure>();
-expectTypeOf<Effect.Services<JournalConstruction>>().toEqualTypeOf<SqlClient | Crypto.Crypto>();
+expectTypeOf<Effect.Services<JournalConstruction>>().toEqualTypeOf<
+  SqlClient | Crypto.Crypto | Scope.Scope
+>();
 expectTypeOf<Effect.Error<ReturnType<Journal["append"]>>>().toEqualTypeOf<
-  | StorageFailure
-  | Corruption
-  | Contention
-  | InjectedFailure
-  | AppendConflict
-  | FenceRejected
-  | ThreadStoreError
+  StorageFailure | Corruption | Contention | InjectedFailure | AppendConflict | ThreadStoreError
 >();
 expectTypeOf<Effect.Services<ThreadConstruction>>().toEqualTypeOf<SqlClient | Crypto.Crypto>();
 expectTypeOf<Effect.Error<ThreadConstruction>>().toEqualTypeOf<StorageFailure | Corruption>();

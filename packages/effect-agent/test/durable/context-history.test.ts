@@ -7,12 +7,7 @@ import {
 } from "@yielded/agent/context-history";
 import { ThreadId } from "@yielded/agent/identifiers";
 import type { RecordEnvelope } from "@yielded/agent/records";
-import {
-  CanonicalRecordEnvelope,
-  CanonicalSequence,
-  ProducerEpoch,
-  PersistedJson,
-} from "@yielded/agent/records";
+import { CanonicalRecordEnvelope, CanonicalSequence, PersistedJson } from "@yielded/agent/records";
 import * as ThreadContextHistory from "@yielded/agent/thread-context-history";
 import { ThreadStore, ThreadStoreError, ThreadTail } from "@yielded/agent/thread-store";
 import { Cause, Deferred, Effect, Exit, Fiber, Layer, Schema, Stream } from "effect";
@@ -75,8 +70,6 @@ const probe = (initial: ReadonlyArray<CanonicalRecordEnvelope>) => {
         ThreadTail.make({
           threadId: request.threadId,
           tailSequence: sequence(state.records.length),
-
-          producerEpoch: Schema.decodeSync(ProducerEpoch)(0),
         }),
       ),
     read: (request) => {

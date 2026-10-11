@@ -30,8 +30,6 @@ const threadOptions: ThreadObject.Options = {
   namespaceBinding: "RESTART_THREADS",
   deploymentId: DEPLOYMENT_ID,
   producerPrefix: PRODUCER_PREFIX,
-  ownershipLeaseDuration: 250,
-  leaseRenewalInterval: 50,
   settlementPollInterval: 25,
   abortPollInterval: 25,
   alarmBackoffBase: 10,

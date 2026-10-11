@@ -1,6 +1,6 @@
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import type { Receipt } from "@yielded/agent/receipt";
-import { ProducerEpoch, type PersistedJson } from "@yielded/agent/records";
+import { type PersistedJson } from "@yielded/agent/records";
 import {
   AbortCommand,
   AbortIntentRequest,
@@ -12,7 +12,7 @@ import {
   type SettlementFinalization,
 } from "@yielded/agent/submission-ledger";
 import {
-  FencedAppendRequest,
+  AppendRequest,
   ThreadMaterialization,
   ThreadRead,
   ThreadStore,
@@ -137,14 +137,11 @@ const prepareAppend = (thread: string, count: number) =>
         const store = yield* ThreadStore;
         const threadId = decodeThreadId(thread);
 
-        yield* store.materialize(
-          ThreadMaterialization.make({ threadId, producerEpoch: ProducerEpoch.make(0) }),
-        );
+        yield* store.materialize(ThreadMaterialization.make({ threadId }));
         const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
-        return yield* Schema.decodeUnknownEffect(FencedAppendRequest)({
+        return yield* Schema.decodeUnknownEffect(AppendRequest)({
           threadId,
-          producerEpoch: tail.producerEpoch,
           expectedTailSequence: tail.tailSequence,
 
           batch: {
@@ -164,7 +161,7 @@ const prepareAppend = (thread: string, count: number) =>
     ),
   );
 
-const append = (thread: string, request: FencedAppendRequest) =>
+const append = (thread: string, request: AppendRequest) =>
   runInDurableObject(stub(thread), (instance) =>
     instance[DurableObject.RunSymbol](
       Effect.flatMap(ThreadStore, (store) => store.append(request)),

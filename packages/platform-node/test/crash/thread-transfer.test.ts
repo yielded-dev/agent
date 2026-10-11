@@ -29,7 +29,6 @@ import {
   supplierCounts,
 } from "./fixtures.ts";
 import {
-  CHILD_LEASE_MS,
   assertConvergence,
   expectKilled,
   lookupByKey,
@@ -43,11 +42,6 @@ const openDatabase = (filename: string) =>
   Effect.acquireRelease(
     Effect.sync(() => new DatabaseSync(filename)),
     (db) => Effect.sync(() => db.close()),
-  );
-
-const ownershipCount = (db: DatabaseSync) =>
-  Schema.decodeUnknownSync(Schema.Struct({ ownership: Schema.Int }))(
-    db.prepare("SELECT COUNT(*) AS ownership FROM effect_agent_submission_ownership").get(),
   );
 
 // This process-loss fixture is small; bound its comparison buffers independently of the
@@ -113,7 +107,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread: "checkpoint-crash",
               key: "checkpoint-crash",
               supplierDir: site.supplier,
-              leaseMillis: CHILD_LEASE_MS,
               killAt: "compaction:after-canonical-append",
             });
 
@@ -122,12 +115,11 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               Effect.gen(function* () {
                 const db = yield* openDatabase(site.db);
 
-                expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 23 });
+                expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 24 });
                 expect(db.prepare("SELECT record_format FROM effect_agent_schema").get()).toEqual({
-                  record_format: "effect-agent/thread@5",
+                  record_format: "effect-agent/thread@6",
                 });
                 expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
-                expect(ownershipCount(db)).toEqual({ ownership: 1 });
               }),
             );
             const sourceBytes = yield* fs.readFile(site.db);
@@ -171,13 +163,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
 
             expect(yield* Effect.forEach(restored, ({ page }) => comparablePage(page))).toEqual(
               yield* Effect.forEach(pages, ({ page }) => comparablePage(page)),
-            );
-            yield* Effect.scoped(
-              Effect.gen(function* () {
-                const db = yield* openDatabase(target);
-
-                expect(ownershipCount(db)).toEqual({ ownership: 0 });
-              }),
             );
 
             yield* withHost(

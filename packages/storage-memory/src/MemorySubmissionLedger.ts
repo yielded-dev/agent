@@ -14,11 +14,9 @@ import {
   MAX_RUN_EVIDENCE_RECORDS,
   MAX_RUN_EVIDENCE_BYTES,
   WorkerAdmission,
-  ProducerEpoch,
   type DefinitionDigests,
   type DeploymentId,
   type Digest,
-  type ProducerId,
   type RecordEnvelope,
   type SettlementOutcome,
 } from "@yielded/agent/records";
@@ -60,7 +58,6 @@ import {
   Claim,
   ClaimJoiningRequest,
   ClaimRequest,
-  DEFAULT_OWNERSHIP_LEASE_DURATION,
   InputAppliedMarker,
   JoinSnapshot,
   JoinedToHost,
@@ -72,15 +69,10 @@ import {
   MarkReadyRequest,
   MarkUnknownRequest,
   OwnershipLost,
-  OwnershipRenewal,
-  OwnershipSnapshot,
-  OwnershipToken,
   QueueSequence,
   RecoverySnapshot,
   RecoverySnapshotRequest,
   ReleaseChildBudgetRequest,
-  ReleaseOwnershipRequest,
-  RenewOwnershipRequest,
   ReservedChildBudget,
   RevertJoiningRequest,
   Settlement,
@@ -137,7 +129,6 @@ import {
   Exit,
   Fiber,
   DateTime,
-  Duration,
   Effect,
   Layer,
   MutableRef,
@@ -161,7 +152,6 @@ const STATE_RANK: Record<SubmissionState, number> = {
   ready: 1,
   joining: 2,
   joined: 3,
-  running: 4,
   "input-applied": 5,
   suspended: 6,
   unknown: 7,
@@ -192,14 +182,6 @@ interface SubmissionRow {
   readonly messageAdmissionJson?: string;
 }
 
-interface StoredOwnership {
-  readonly attemptId: AttemptId;
-  readonly ownershipToken: OwnershipToken;
-  readonly producerEpoch: ProducerEpoch;
-  readonly ownerProducerId: ProducerId;
-  readonly leaseExpiresAtMillis: number;
-}
-
 interface StoredFinalization {
   readonly settlementId: SettlementId;
   readonly finalizedAtMillis: number;
@@ -222,7 +204,6 @@ interface StoredUnknownResolution {
 
 interface StoredSubmission {
   readonly row: SubmissionRow;
-  readonly ownership: StoredOwnership | undefined;
   readonly inputApplied: InputAppliedMarker | undefined;
   readonly finalization: StoredFinalization | undefined;
   readonly abortIntent: AbortIntent | undefined;
@@ -247,7 +228,6 @@ const BLOCKED_HEAD_STATES: ReadonlySet<SubmissionState> = new Set([
 
 interface LaneState {
   readonly nextQueueSequence: number;
-  readonly producerEpoch: number;
 }
 
 /** One parent-owned child budget reservation row (spec §12 steps 2 and 6). */
@@ -359,11 +339,9 @@ const validate = <A, I>(
 const decodeSubmissionId = Schema.decodeSync(SubmissionId);
 const decodeReceiptId = Schema.decodeSync(ReceiptId);
 const decodeAttemptId = Schema.decodeSync(AttemptId);
-const decodeOwnershipToken = Schema.decodeSync(OwnershipToken);
 // Imported identities are opaque facts and never influence fresh identity sizes.
 const MemoryIdentityNonce = Schema.String.check(Schema.isUUID(4));
 const decodeQueueSequence = Schema.decodeSync(QueueSequence);
-const decodeProducerEpoch = Schema.decodeSync(ProducerEpoch);
 const equivalentPersistedJson = Schema.toEquivalence(PersistedJson);
 const equivalentUnknownResolution = Schema.toEquivalence(UnknownResolution);
 const admissionFitsTransfer = makeTransferFactCheck(ThreadAdmission);
@@ -483,7 +461,6 @@ const fromRebuilt = (rebuilt: RebuiltSubmission): StoredSubmission => {
         ? {}
         : { admissionFence: admission.admissionFence }),
     },
-    ownership: undefined,
     inputApplied: rebuilt.inputApplied,
     finalization:
       settlement === undefined || rebuilt.settlement === undefined
@@ -530,24 +507,8 @@ const sameParentLinkage = (
       left.parentSubmissionId === right.parentSubmissionId &&
       left.parentToolCallId === right.parentToolCallId;
 
-const laneEpoch = (state: LedgerState, threadId: ThreadId): number =>
-  state.lanes.get(threadId)?.producerEpoch ?? 0;
-
-const ownershipLost = (state: LedgerState, stored: StoredSubmission): OwnershipLost =>
-  OwnershipLost.make({
-    submissionId: stored.row.submissionId,
-    actualEpoch: decodeProducerEpoch(laneEpoch(state, stored.row.threadId)),
-  });
-
-/** A retained row token cannot outlive a newer owner of the same Thread. */
-const ownsLane = (
-  state: LedgerState,
-  stored: StoredSubmission,
-  ownershipToken: OwnershipToken,
-): boolean =>
-  stored.ownership !== undefined &&
-  stored.ownership.ownershipToken === ownershipToken &&
-  stored.ownership.producerEpoch === laneEpoch(state, stored.row.threadId);
+const ownershipLost = (stored: StoredSubmission): OwnershipLost =>
+  OwnershipLost.make({ submissionId: stored.row.submissionId });
 
 const withSubmission = (state: LedgerState, stored: StoredSubmission): LedgerState => {
   const row = stored.row;
@@ -716,38 +677,15 @@ function* threadRows(state: LedgerState, threadId: ThreadId, after = -1) {
 }
 
 /**
- * Reference in-memory SubmissionLedger. It implements the full port contract — atomic idempotent
- * admission, eligible FIFO claims, producer-epoch fencing, Clock-driven ownership leases, idempotent
- * canonical settlement publication/finalization, and durable abort intent — with every transition applied
- * as one atomic `Ref.modify`, but its state does not survive the process (`non-durable`).
+ * Reference in-memory SubmissionLedger. Admission, ordered selection and canonical settlement
+ * share the Memory kernel's mutation gate. The kernel Scope owns local Run capabilities;
+ * selecting work does not write execution ownership into the ledger.
  *
- * Adapter-specific semantics within the port's latitude:
- *
- * - Time comes exclusively from the Effect `Clock` service, so `TestClock` drives lease expiry
- *   deterministically; no wall clock is consulted.
- * - The ownership lease is pinned to `DEFAULT_OWNERSHIP_LEASE_DURATION` (D5); durable adapters
- *   own the configuration seam.
- * - Any live lease in the Thread blocks every new claim, including the same `producerId`.
- *   Unresolved unknown work is skipped only after ownership is released or expires.
- * - Claiming advances `ready` to `running` and otherwise preserves the recorded state, so
- *   progress markers from an earlier Attempt survive a reclaim.
- * - `renewOwnership` keeps the token stable (the port allows rotation); a replayed admission
- *   reports the Submission's current state alongside the original identities.
- * - `claimJoining` walks the strictly-later queue: rows already `joining`/`joined` to the
- *   SAME host extend the claimed prefix and are skipped, and an aborted-settled row is a
- *   closed obligation that is also skipped (P7 §7(c)); any other non-`ready` row (an
- *   `admitted` gap, a non-aborted settled row, foreign-host linkage) breaks the prefix
- *   conservatively.
- * - `markJoined` verifies the token against the HOST's live ownership (the lane is
- *   host-owned), so a later host Attempt can repair a lost marker from history (DUR-016). The
- *   join marker reuses the input-applied marker: the joined input IS `input:{sid}`.
- * - `suspend` and `markUnknown` refuse after canonical settlement publication under the
- *   paired journal mutation gate.
- * - `resolveAdmission` derives its answer from the single strongly consistent store, so it
- *   never answers `Indeterminate` on its own; the test-only `resolveAdmissionFault` option
- *   injects the `Indeterminate` classification so SUB-031 callers can be conformance-tested.
- * - `recordChildSettled` and `suspend(WaitingForChild)` observe child settlement directly from
- *   the child rows (single-store latitude); no separate notification marker is stored.
+ * Joining retains the contiguous ready prefix and exact host linkage. Canonical settlement
+ * authorizes finalization and child wake repair, while bound sessions reject late commands.
+ * Child wake checks read the child rows directly, without a separate notification marker.
+ * Admission resolution is strongly consistent; resolveAdmissionFault injects the
+ * Indeterminate outcome for existing caller conformance workflows.
  */
 const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
   Effect.gen(function* () {
@@ -841,7 +779,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
     });
 
     const admissionFence = yield* SubmissionAdmissionFence;
-    const leaseMillis = Duration.toMillis(DEFAULT_OWNERSHIP_LEASE_DURATION);
 
     const capabilities = Effect.succeed(LedgerCapabilities.make({ durability: "non-durable" }));
 
@@ -1014,7 +951,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
 
           const lane = current.lanes.get(request.threadId) ?? {
             nextQueueSequence: 1,
-            producerEpoch: 0,
           };
 
           const freshAdmissionSequence = current.freshAdmissionSequence + 1;
@@ -1065,7 +1001,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
 
           const stored: StoredSubmission = {
             row,
-            ownership: undefined,
             inputApplied: undefined,
             finalization: undefined,
             abortIntent: undefined,
@@ -1084,7 +1019,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
 
           const lanes = current.lanes.set(request.threadId, {
             nextQueueSequence: lane.nextQueueSequence + 1,
-            producerEpoch: lane.producerEpoch,
           });
 
           return [
@@ -1205,164 +1139,66 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       },
     );
 
-    const claim: SubmissionLedger["Service"]["claim"] = Effect.fn("MemorySubmissionLedger.claim")(
-      (unvalidated) =>
-        Effect.gen(function* () {
-          const request = yield* validate(ClaimRequest, "claim", unvalidated);
-          const nowMillis = yield* Clock.currentTimeMillis;
-          const identity = yield* mintIdentity("claim");
-
-          const decision = yield* Ref.modify(
-            state,
-            (current): readonly [Decision<Option.Option<Claim>, LedgerError>, LedgerState] => {
-              for (const id of current.activeByThread.get(request.threadId) ?? []) {
-                const stored = current.submissions.get(id);
-
-                if (stored === undefined) continue;
-                if (
-                  stored.row.threadId === request.threadId &&
-                  stored.ownership !== undefined &&
-                  stored.ownership.leaseExpiresAtMillis > nowMillis
-                ) {
-                  return [success(Option.none()), current];
-                }
-              }
-              let head = findHead(current, request.threadId);
-
-              if (request.handoff !== undefined) {
-                const handoff = request.handoff;
-
-                if (current.lanes.get(request.threadId)?.producerEpoch !== handoff.producerEpoch)
-                  return [success(Option.none()), current];
-
-                const candidates = Array.from(
-                  current.activeByThread.get(request.threadId) ?? [],
-                  (id) => current.submissions.get(id),
-                )
-                  .filter(
-                    (entry): entry is StoredSubmission =>
-                      entry !== undefined &&
-                      !(entry.row.state === "unknown" && entry.abortIntent === undefined),
-                  )
-                  .sort((a, b) => a.row.queueSequence - b.row.queueSequence);
-
-                for (const candidate of candidates) {
-                  if (candidate.row.submissionId === handoff.submissionId) {
-                    head = candidate;
-                    break;
-                  }
-                  if (
-                    !handoff.deferredSubmissionIds.includes(candidate.row.submissionId) ||
-                    candidate.row.state !== "input-applied" ||
-                    candidate.abortIntent !== undefined
-                  )
-                    return [success(Option.none()), current];
-                }
-                if (
-                  head?.row.submissionId !== handoff.submissionId ||
-                  (head.row.state !== "ready" &&
-                    head.row.state !== "running" &&
-                    head.row.state !== "input-applied")
-                )
-                  return [success(Option.none()), current];
-              }
-
-              if (head === undefined) return [success(Option.none()), current];
-              if (BLOCKED_HEAD_STATES.has(head.row.state)) return [success(Option.none()), current];
-              const lane = current.lanes.get(request.threadId);
-
-              if (lane === undefined) {
-                return [
-                  failure(ledgerError("claim", "Claimable head without a Thread lane")),
-                  current,
-                ];
-              }
-              const producerEpoch = decodeProducerEpoch(lane.producerEpoch + 1);
-
-              const ownership: StoredOwnership = {
-                attemptId: decodeAttemptId(`attempt-memory-${identity}`),
-                ownershipToken: decodeOwnershipToken(`ownership-memory-${identity}`),
-                producerEpoch,
-                ownerProducerId: request.producerId,
-                leaseExpiresAtMillis: nowMillis + leaseMillis,
-              };
-
-              const row: SubmissionRow =
-                head.row.state === "ready" ? { ...head.row, state: "running" } : head.row;
-
-              const next = withSubmission(current, { ...head, row, ownership });
-
-              const lanes = next.lanes.set(request.threadId, {
-                nextQueueSequence: lane.nextQueueSequence,
-                producerEpoch: lane.producerEpoch + 1,
-              });
-
-              return [
-                success(
-                  Option.some(
-                    Claim.make({
-                      submissionId: row.submissionId,
-                      attemptId: ownership.attemptId,
-                      ownershipToken: ownership.ownershipToken,
-                      producerEpoch,
-                      leaseExpiresAt: utc(ownership.leaseExpiresAtMillis),
-                      inputPayload: row.inputPayload,
-                    }),
-                  ),
-                ),
-                { ...next, lanes },
-              ];
-            },
-          );
-
-          if (decision._tag === "failure") return yield* decision.error;
-
-          return decision.value;
-        }),
-    );
-
-    const renewOwnership: SubmissionLedger["Service"]["renewOwnership"] = Effect.fn(
-      "MemorySubmissionLedger.renewOwnership",
+    const selectHead: SubmissionLedger["Service"]["selectHead"] = Effect.fn(
+      "MemorySubmissionLedger.selectHead",
     )((unvalidated) =>
       Effect.gen(function* () {
-        const request = yield* validate(RenewOwnershipRequest, "renewOwnership", unvalidated);
-        const nowMillis = yield* Clock.currentTimeMillis;
+        const request = yield* validate(ClaimRequest, "claim", unvalidated);
+        const identity = yield* mintIdentity("claim");
 
         const decision = yield* Ref.modify(
           state,
-          (
-            current,
-          ): readonly [Decision<OwnershipRenewal, OwnershipLost | LedgerError>, LedgerState] => {
-            const stored = current.submissions.get(request.submissionId);
+          (current): readonly [Decision<Option.Option<Claim>, LedgerError>, LedgerState] => {
+            if (journal.owner.hasOwner(request.threadId)) return [success(Option.none()), current];
+            let head = findHead(current, request.threadId);
 
-            if (stored === undefined) {
-              return [
-                failure(
-                  ledgerError("renewOwnership", `Unknown Submission ${request.submissionId}`),
-                ),
-                current,
-              ];
-            }
-            if (
-              stored.ownership === undefined ||
-              !ownsLane(current, stored, request.ownershipToken)
-            ) {
-              return [failure(ownershipLost(current, stored)), current];
+            if (request.handoff !== undefined) {
+              const handoff = request.handoff;
+
+              const candidates = Array.from(
+                current.activeByThread.get(request.threadId) ?? [],
+                (id) => current.submissions.get(id),
+              )
+                .filter(
+                  (entry): entry is StoredSubmission =>
+                    entry !== undefined &&
+                    !(entry.row.state === "unknown" && entry.abortIntent === undefined),
+                )
+                .sort((a, b) => a.row.queueSequence - b.row.queueSequence);
+
+              for (const candidate of candidates) {
+                if (candidate.row.submissionId === handoff.submissionId) {
+                  head = candidate;
+                  break;
+                }
+                if (
+                  !handoff.deferredSubmissionIds.includes(candidate.row.submissionId) ||
+                  candidate.row.state !== "input-applied" ||
+                  candidate.abortIntent !== undefined
+                )
+                  return [success(Option.none()), current];
+              }
+              if (
+                head?.row.submissionId !== handoff.submissionId ||
+                (head.row.state !== "ready" && head.row.state !== "input-applied")
+              )
+                return [success(Option.none()), current];
             }
 
-            const ownership: StoredOwnership = {
-              ...stored.ownership,
-              leaseExpiresAtMillis: nowMillis + leaseMillis,
-            };
+            if (head === undefined) return [success(Option.none()), current];
+            if (BLOCKED_HEAD_STATES.has(head.row.state)) return [success(Option.none()), current];
 
             return [
               success(
-                OwnershipRenewal.make({
-                  ownershipToken: ownership.ownershipToken,
-                  leaseExpiresAt: utc(ownership.leaseExpiresAtMillis),
-                }),
+                Option.some(
+                  Claim.make({
+                    submissionId: head.row.submissionId,
+                    attemptId: decodeAttemptId(`attempt-memory-${identity}`),
+                    inputPayload: head.row.inputPayload,
+                  }),
+                ),
               ),
-              withSubmission(current, { ...stored, ownership }),
+              current,
             ];
           },
         );
@@ -1370,40 +1206,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         if (decision._tag === "failure") return yield* decision.error;
 
         return decision.value;
-      }),
-    );
-
-    const releaseOwnership: SubmissionLedger["Service"]["releaseOwnership"] = Effect.fn(
-      "MemorySubmissionLedger.releaseOwnership",
-    )((unvalidated) =>
-      Effect.gen(function* () {
-        const request = yield* validate(ReleaseOwnershipRequest, "releaseOwnership", unvalidated);
-
-        const decision = yield* Ref.modify(
-          state,
-          (current): readonly [Decision<void, OwnershipLost | LedgerError>, LedgerState] => {
-            const stored = current.submissions.get(request.submissionId);
-
-            if (stored === undefined) {
-              return [
-                failure(
-                  ledgerError("releaseOwnership", `Unknown Submission ${request.submissionId}`),
-                ),
-                current,
-              ];
-            }
-            if (!ownsLane(current, stored, request.ownershipToken)) {
-              return [failure(ownershipLost(current, stored)), current];
-            }
-
-            return [
-              success(undefined),
-              withSubmission(current, { ...stored, ownership: undefined }),
-            ];
-          },
-        );
-
-        if (decision._tag === "failure") return yield* decision.error;
       }),
     );
 
@@ -1424,8 +1226,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 current,
               ];
             }
-            if (!ownsLane(current, stored, request.ownershipToken)) {
-              return [failure(ownershipLost(current, stored)), current];
+            if (!journal.owner.hasOwner(stored.row.threadId, stored.row.submissionId)) {
+              return [failure(ownershipLost(stored)), current];
             }
 
             if (stored.inputApplied !== undefined) {
@@ -1486,99 +1288,99 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       const { request, record, settlement } = yield* validatePublication(input);
       const prepared = yield* journal.prepareAppend(request.append);
 
-      return yield* journal.withMutation(
-        Effect.gen(function* () {
-          const current = yield* Ref.get(state);
-          const stored = current.submissions.get(request.submissionId);
+      return yield* journal.owner.withProgress(
+        request.append.threadId,
+        journal.withMutation(
+          Effect.gen(function* () {
+            const current = yield* Ref.get(state);
+            const stored = current.submissions.get(request.submissionId);
 
-          if (stored === undefined)
-            return yield* ledgerError("publish settlement", "Unknown Submission");
-          if (stored.row.threadId !== prepared.request.threadId)
-            return yield* ledgerError("publish settlement", "Publication targets another Thread");
-          yield* validateCanonicalSettlement(record, stored.row);
-          const existing = yield* canonicalSettlement(stored.row);
-          const tail = yield* journal.tail(stored.row.threadId);
+            if (stored === undefined)
+              return yield* ledgerError("publish settlement", "Unknown Submission");
+            if (stored.row.threadId !== prepared.request.threadId)
+              return yield* ledgerError("publish settlement", "Publication targets another Thread");
+            yield* validateCanonicalSettlement(record, stored.row);
+            const existing = yield* canonicalSettlement(stored.row);
+            const tail = yield* journal.tail(stored.row.threadId);
 
-          // Replay still requires authority: finalization releases Owned tokens, while
-          // retained host linkage or abort intent can authorize tokenless settled replay.
-          switch (request.authority._tag) {
-            case "Owned":
-              if (
-                !ownsLane(current, stored, request.authority.ownershipToken) ||
-                stored.ownership?.producerEpoch !== tail.producerEpoch
-              )
-                return yield* ownershipLost(current, stored);
-              yield* validateCanonicalSettlement(record, {
-                submissionId: request.submissionId,
-                receiptId: stored.row.receiptId,
-                ...(settlement.outcome === "aborted" && settlement.runId === undefined
-                  ? {}
-                  : { runId: runIdForSubmission(request.submissionId) }),
-              });
-              break;
-            case "Joined": {
-              if (
-                (stored.row.state !== "joined" &&
-                  !(stored.row.state === "settled" && existing !== undefined)) ||
-                stored.joinedHostSubmissionId !== request.authority.hostSubmissionId
-              )
-                return yield* ledgerError(
-                  "publish settlement",
-                  "Submission is not joined to this host",
-                );
-              const host = current.submissions.get(request.authority.hostSubmissionId);
+            // Replay still requires authority: finalization releases Owned tokens, while
+            // retained host linkage or abort intent can authorize tokenless settled replay.
+            switch (request.authority._tag) {
+              case "Owned":
+                if (!journal.owner.hasOwner(stored.row.threadId, stored.row.submissionId))
+                  return yield* ownershipLost(stored);
+                yield* validateCanonicalSettlement(record, {
+                  submissionId: request.submissionId,
+                  receiptId: stored.row.receiptId,
+                  ...(settlement.outcome === "aborted" && settlement.runId === undefined
+                    ? {}
+                    : { runId: runIdForSubmission(request.submissionId) }),
+                });
+                break;
+              case "Joined": {
+                if (
+                  (stored.row.state !== "joined" &&
+                    !(stored.row.state === "settled" && existing !== undefined)) ||
+                  stored.joinedHostSubmissionId !== request.authority.hostSubmissionId
+                )
+                  return yield* ledgerError(
+                    "publish settlement",
+                    "Submission is not joined to this host",
+                  );
+                const host = current.submissions.get(request.authority.hostSubmissionId);
 
-              const canonicalHost =
-                host === undefined || host.row.threadId !== stored.row.threadId
-                  ? undefined
-                  : yield* canonicalSettlement(host.row);
+                const canonicalHost =
+                  host === undefined || host.row.threadId !== stored.row.threadId
+                    ? undefined
+                    : yield* canonicalSettlement(host.row);
 
-              if (canonicalHost === undefined)
-                return yield* ledgerError(
-                  "publish settlement",
-                  "Joined host has no canonical settlement",
-                );
-              yield* validateJoinedSettlement(settlement, canonicalHost.settlement);
-              break;
+                if (canonicalHost === undefined)
+                  return yield* ledgerError(
+                    "publish settlement",
+                    "Joined host has no canonical settlement",
+                  );
+                yield* validateJoinedSettlement(settlement, canonicalHost.settlement);
+                break;
+              }
+              case "QueuedAbort":
+                if (
+                  (stored.row.state !== "ready" &&
+                    !(stored.row.state === "settled" && existing !== undefined)) ||
+                  stored.abortIntent === undefined ||
+                  journal.owner.hasOwner(stored.row.threadId, stored.row.submissionId) ||
+                  settlement.outcome !== "aborted"
+                )
+                  return yield* ledgerError(
+                    "publish settlement",
+                    "Submission is not an unclaimed queued abort",
+                  );
+                yield* validateCanonicalSettlement(record, {
+                  submissionId: request.submissionId,
+                  receiptId: stored.row.receiptId,
+                  runId: undefined,
+                });
+                break;
             }
-            case "QueuedAbort":
-              if (
-                (stored.row.state !== "ready" &&
-                  !(stored.row.state === "settled" && existing !== undefined)) ||
-                stored.abortIntent === undefined ||
-                stored.ownership !== undefined ||
-                settlement.outcome !== "aborted"
-              )
-                return yield* ledgerError(
-                  "publish settlement",
-                  "Submission is not an unclaimed queued abort",
-                );
-              yield* validateCanonicalSettlement(record, {
-                submissionId: request.submissionId,
-                receiptId: stored.row.receiptId,
-                runId: undefined,
+            if (existing !== undefined)
+              return SettlementPublicationResult.make({
+                record: existing.record,
+                tailSequence: tail.tailSequence,
+                replayed: true,
               });
-              break;
-          }
-          if (existing !== undefined)
-            return SettlementPublicationResult.make({
-              record: existing.record,
-              tailSequence: tail.tailSequence,
-              replayed: true,
-            });
-          if (stored.row.state === "settled")
-            return yield* ledgerError(
-              "publish settlement",
-              "Finalized Submission has no canonical settlement",
-            );
-          const appended = yield* journal.appendPrepared(prepared);
+            if (stored.row.state === "settled")
+              return yield* ledgerError(
+                "publish settlement",
+                "Finalized Submission has no canonical settlement",
+              );
+            const appended = yield* journal.appendPrepared(prepared);
 
-          return SettlementPublicationResult.make({
-            record,
-            tailSequence: appended.lastSequence,
-            replayed: false,
-          });
-        }),
+            return SettlementPublicationResult.make({
+              record,
+              tailSequence: appended.lastSequence,
+              replayed: false,
+            });
+          }),
+        ),
       );
     });
 
@@ -1730,7 +1532,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             const next = withSubmission(sealed, {
               ...stored,
               row: { ...stored.row, state: "settled", settledOutcome: settlement.outcome },
-              ownership: undefined,
               finalization: {
                 settlementId: settlement.settlementId,
                 recordId: record.recordId,
@@ -1755,6 +1556,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         );
 
         if (decision._tag === "failure") return yield* decision.error;
+
+        if (before !== undefined)
+          journal.owner.closeSubmission(before.row.threadId, request.submissionId);
 
         return decision.value;
       }),
@@ -1802,7 +1606,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               const stored = submissions.get(id);
 
               if (stored === undefined) continue;
-              if (!apply && stored.ownership !== undefined) owned++;
+              if (!apply && journal.owner.hasOwner(stored.row.threadId, stored.row.submissionId))
+                owned++;
               if (stored.abortIntent === undefined) {
                 const abortIntent = AbortIntent.make({
                   submissionId: id,
@@ -1976,8 +1781,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 current,
               ];
             }
-            if (!ownsLane(current, host, request.ownershipToken)) {
-              return [failure(ownershipLost(current, host)), current];
+            if (!journal.owner.hasOwner(host.row.threadId, host.row.submissionId)) {
+              return [failure(ownershipLost(host)), current];
             }
 
             const later = threadRows(current, request.threadId, host.row.queueSequence);
@@ -2073,8 +1878,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             }
             // The lane is host-owned: the presented token must own the HOST's ownership period,
             // which also lets a later host Attempt repair a lost marker from history (DUR-016).
-            if (!ownsLane(current, host, request.ownershipToken)) {
-              return [failure(ownershipLost(current, host)), current];
+            if (!journal.owner.hasOwner(host.row.threadId, host.row.submissionId)) {
+              return [failure(ownershipLost(host)), current];
             }
             if (stored.inputApplied !== undefined) {
               if (
@@ -2163,27 +1968,16 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                   current,
                 ];
               }
-              if (guard.ownershipToken === undefined) {
-                if (host.row.state !== "settled") {
-                  return [
-                    failure(
-                      ledgerError("revertJoining", "Tokenless cleanup requires a settled host"),
-                    ),
-                    current,
-                  ];
-                }
-              } else if (!ownsLane(current, host, guard.ownershipToken)) {
+              if (
+                host.row.state !== "settled" &&
+                !journal.owner.hasOwner(host.row.threadId, host.row.submissionId)
+              )
                 return [
                   failure(
-                    ledgerError(
-                      "revertJoining",
-                      "Host ownership changed before reverting the joining Submission",
-                      ownershipLost(current, host),
-                    ),
+                    ledgerError("revertJoining", "The linked host has no active local session"),
                   ),
                   current,
                 ];
-              }
             }
 
             return [
@@ -2272,8 +2066,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 current,
               ];
             }
-            if (!ownsLane(current, stored, request.ownershipToken)) {
-              return [failure(ownershipLost(current, stored)), current];
+            if (!journal.owner.hasOwner(stored.row.threadId, stored.row.submissionId)) {
+              return [failure(ownershipLost(stored)), current];
             }
 
             // A covering event that raced ahead of the suspend transaction (an approval decision,
@@ -2298,7 +2092,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               withSubmission(current, {
                 ...stored,
                 row: { ...stored.row, state: "suspended" },
-                ownership: undefined,
                 suspension: { reason: request.reason, suspendedAtMillis: nowMillis },
               }),
             ];
@@ -2306,6 +2099,9 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
         );
 
         if (decision._tag === "failure") return yield* decision.error;
+
+        if (decision.value === "suspended" && target !== undefined)
+          journal.owner.closeSubmission(target.row.threadId, request.submissionId);
 
         return decision.value;
       },
@@ -2863,8 +2659,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             }
             // Creation is fenced by the parent lane's live ownership (spec §12 step 2): a stale
             // parent Attempt can never create new reservation state.
-            if (!ownsLane(current, parent, request.ownershipToken)) {
-              return [failure(ownershipLost(current, parent)), current];
+            if (!journal.owner.hasOwner(parent.row.threadId, parent.row.submissionId)) {
+              return [failure(ownershipLost(parent)), current];
             }
 
             const reservation: StoredChildReservation = {
@@ -2961,8 +2757,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                 current,
               ];
             }
-            if (!ownsLane(current, parent, request.ownershipToken)) {
-              return [failure(ownershipLost(current, parent)), current];
+            if (!journal.owner.hasOwner(parent.row.threadId, parent.row.submissionId)) {
+              return [failure(ownershipLost(parent)), current];
             }
             if (reservation.status !== "reserved") {
               return [
@@ -3290,16 +3086,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
                   suspendedAt: utc(stored.suspension.suspendedAtMillis),
                 }),
               }),
-          ...(stored.ownership === undefined
-            ? {}
-            : {
-                ownership: OwnershipSnapshot.make({
-                  attemptId: stored.ownership.attemptId,
-                  ownerProducerId: stored.ownership.ownerProducerId,
-                  producerEpoch: stored.ownership.producerEpoch,
-                  leaseExpiresAt: utc(stored.ownership.leaseExpiresAtMillis),
-                }),
-              }),
+          hasOwner: journal.owner.hasOwner(stored.row.threadId, stored.row.submissionId),
           ...(stored.inputApplied === undefined ? {} : { inputApplied: stored.inputApplied }),
           ...(stored.abortIntent === undefined ? {} : { abortIntent: stored.abortIntent }),
         });
@@ -3350,9 +3137,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
       markReady: (request) => journal.withMutation(markReady(request)),
       lookup,
       resolveAdmission,
-      claim: (request) => journal.withMutation(claim(request)),
-      renewOwnership: (request) => journal.withMutation(renewOwnership(request)),
-      releaseOwnership: (request) => journal.withMutation(releaseOwnership(request)),
+      selectHead: (request) => journal.withMutation(selectHead(request)),
       markInputApplied: (request) => journal.withMutation(markInputApplied(request)),
       finalizeSettlement: (request) => journal.withMutation(finalizeSettlement(request)),
       requestAbort: (request) => journal.withMutation(requestAbort(request)),
@@ -3701,7 +3486,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
               withSubmission(staged, { ...stored, unknownResolutions: resolutions });
             }
           }),
-          prepareCommit: Effect.fnUntraced(function* (producerEpoch, workerSeal) {
+          prepareCommit: Effect.fnUntraced(function* (workerSeal) {
             const services = yield* Effect.context<never>();
             const activeGroups = new Set<string>();
             let lastQueue = 0;
@@ -3770,7 +3555,7 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
 
             return () => {
               for (const stored of staged.submissions.values()) withSubmission(current, stored);
-              current.lanes.set(threadId, { nextQueueSequence: lastQueue + 1, producerEpoch });
+              current.lanes.set(threadId, { nextQueueSequence: lastQueue + 1 });
               if (workerSeal !== undefined)
                 current.stoppedWorkers.set(threadId, workerSeal.terminal);
             };

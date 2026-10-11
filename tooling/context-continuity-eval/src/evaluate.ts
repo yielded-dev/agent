@@ -434,7 +434,6 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
       filename: path.join(options.outputDirectory, "thread.sqlite"),
       deploymentId: "context-continuity-eval-v1",
       producerId: `context-eval-${phase.index}-${previous === undefined ? "initial" : "resumed"}`,
-      ...(hardRestart ? { ownershipLeaseDuration: 2_000, leaseRenewalInterval: 500 } : {}),
       runtimeFailpoint: (location) =>
         location === restart?.location
           ? hardRestart

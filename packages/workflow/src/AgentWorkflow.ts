@@ -7,11 +7,11 @@ import {
   AdmissionConflict,
   AdmissionPolicyError,
   LedgerError,
+  OwnershipLost,
   SettlementConflict,
 } from "@yielded/agent/submission-ledger";
 import {
   AppendConflict,
-  FenceRejected,
   ThreadNotMaterialized,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
@@ -35,8 +35,8 @@ export const Error = Schema.Union([
   BindingUnavailable,
   DigestError,
   DurableRuntimeFailpointError,
-  FenceRejected,
   LedgerError,
+  OwnershipLost,
   OperationDenied,
   SettlementConflict,
   ThreadNotMaterialized,

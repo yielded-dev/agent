@@ -9,17 +9,12 @@ import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
 import * as AgentRuntime from "@yielded/agent/agent-runtime";
 import { ThreadId } from "@yielded/agent/identifiers";
-import { ProducerEpoch } from "@yielded/agent/records";
 import { type RunEvent } from "@yielded/agent/run-event";
 import { RunContextPreparationPassthrough } from "@yielded/agent/run-options";
 import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadHistory } from "@yielded/agent/thread-history";
 import { replayThread } from "@yielded/agent/thread-projection";
-import {
-  ThreadExportRequest,
-  ThreadMaterialization,
-  ThreadStore,
-} from "@yielded/agent/thread-store";
+import { ThreadExportRequest, ThreadStore } from "@yielded/agent/thread-store";
 import {
   Cause,
   Deferred,
@@ -32,6 +27,7 @@ import {
   Schema,
   SchemaGetter,
   SchemaIssue,
+  Scope,
   Stream,
 } from "effect";
 import { LanguageModel, Model, Tool, Toolkit } from "effect/ai";
@@ -422,45 +418,44 @@ describe("persistent threads", () => {
   );
 
   it.effect(
-    "honors a newer producer epoch and refuses subsequent history Runs before model execution",
+    "a closed storage owner refuses late history commits and new Runs before model execution",
     () =>
       Effect.gen(function* () {
-        const started = yield* Deferred.make<void>();
-        const release = yield* Deferred.make<void>();
+        const ownerScope = yield* Scope.make();
+        const context = yield* Layer.buildWithScope(memory, ownerScope);
 
-        const running = yield* AgentRuntime.run(
-          agent([
-            {
-              ...answer("stale"),
-              onStreamStart: Deferred.succeed(started, undefined).pipe(
-                Effect.andThen(Deferred.await(release)),
-              ),
-            },
-          ]),
-          "input",
-          options,
-        ).pipe(Effect.forkChild);
+        yield* Effect.addFinalizer(() => Scope.close(ownerScope, Exit.void));
+        yield* Effect.gen(function* () {
+          const started = yield* Deferred.make<void>();
+          const release = yield* Deferred.make<void>();
 
-        yield* Deferred.await(started);
-        const store = yield* ThreadStore;
+          const running = yield* AgentRuntime.run(
+            agent([
+              {
+                ...answer("stale"),
+                onStreamStart: Deferred.succeed(started, undefined).pipe(
+                  Effect.andThen(Deferred.await(release)),
+                ),
+              },
+            ]),
+            "input",
+            options,
+          ).pipe(Effect.forkChild);
 
-        yield* store.materialize(
-          ThreadMaterialization.make({
-            threadId,
-            producerEpoch: Schema.decodeSync(ProducerEpoch)(1),
-          }),
-        );
-        yield* Deferred.succeed(release, undefined);
-        const stale = yield* Fiber.await(running);
+          yield* Deferred.await(started);
+          yield* Scope.close(ownerScope, Exit.void);
+          yield* Deferred.succeed(release, undefined);
+          const stale = yield* Fiber.await(running);
 
-        expect(Exit.isFailure(stale) && Cause.findErrorOption(stale.cause)).toMatchObject({
-          value: { _tag: "ThreadHistoryError", reason: "fenced" },
-        });
-        const next = yield* AgentRuntime.run(agent([]), "next", options).pipe(Effect.flip);
+          expect(Exit.isFailure(stale) && Cause.findErrorOption(stale.cause)).toMatchObject({
+            value: { _tag: "ThreadHistoryError", reason: "fenced" },
+          });
+          const next = yield* AgentRuntime.run(agent([]), "next", options).pipe(Effect.flip);
 
-        expect(next).toMatchObject({ _tag: "ThreadHistoryError", reason: "fenced" });
-        expect((yield* exported).records).toEqual([]);
-      }).pipe(Effect.provide(memory)),
+          expect(next).toMatchObject({ _tag: "ThreadHistoryError", reason: "fenced" });
+          expect((yield* exported).records).toEqual([]);
+        }).pipe(Effect.provide(context));
+      }),
   );
 
   {

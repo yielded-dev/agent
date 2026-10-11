@@ -3,6 +3,7 @@ import { Cause, Effect, Exit, Option, Schema } from "effect";
 
 import { DurableRuntimeFailpointLocation } from "./DurableFailpoint.ts";
 import { inspectForeignDiagnostic, safeUnknownString } from "./internal/foreign-diagnostic.ts";
+import type { StorageOwner } from "./RunStorage.ts";
 import type { SettlementPublisher } from "./SettlementPublisher.ts";
 import type { SubmissionLedger } from "./SubmissionLedger.ts";
 import { LedgerCapabilities } from "./SubmissionLedger.ts";
@@ -180,12 +181,12 @@ const caseResult = <A, E>(
  * captured per-case (never short-circuiting the sweep), so a certificate always reports the
  * complete contract surface. Requires the co-owned `SubmissionLedger`, `ThreadStore`, and
  * `SettlementPublisher` plus `Crypto.Crypto`, and must run under a TestClock (the ledger cases
- * drive lease expiry through virtual time).
+ * verify that elapsed time never replaces a live owner).
  */
 export const certifyPorts = Effect.fn("Thread.certifyPorts")(function* (): Effect.fn.Return<
   ReadonlyArray<CertificationCaseResult>,
   never,
-  SubmissionLedger | ThreadStore | SettlementPublisher | Crypto.Crypto
+  SubmissionLedger | ThreadStore | SettlementPublisher | StorageOwner | Crypto.Crypto
 > {
   const results: Array<CertificationCaseResult> = [];
 

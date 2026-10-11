@@ -33,7 +33,7 @@ Replay rebuilds conversation projections from canonical records without executin
 checkpoints and indexes are disposable. An unfinished Run's execution checkpoint is authoritative
 operational state and must be retained with its history.
 
-The execution protocol uses `effect-agent/thread@5` records in fresh layout-23 stores.
+The execution protocol uses `effect-agent/thread@6` records in fresh layout-24 stores.
 This format is unreleased: install matching runtime and storage packages, and retain predecessor
 stores with their matching release. Opening or importing a predecessor format fails before mutation;
 this release has no converter, predecessor decoder, or layout upgrade.
@@ -57,7 +57,7 @@ from canonical records.
 ## Complete a submission
 
 The storage owner publishes one canonical `SubmissionSettled` record after checking the current
-claim, joined host, or queued abort authority in the same transaction. Delivery and parent
+local owner generation, joined host, or queued abort authority in the same transaction. Delivery and parent
 acknowledgements complete before ledger finalization releases the lane. Finalization derives the
 outcome from that record and preserves its first finalization timestamp on every retry.
 SQL adapters finalize plain-root submissions in the publication transaction; submissions with
@@ -92,7 +92,7 @@ the evaluated context of a settled Run. The history log remains the terminal out
 
 ```mermaid
 flowchart LR
-  A[Accepted input in ledger] --> B[Current fenced Attempt]
+  A[Accepted input in ledger] --> B[Current scoped Attempt]
   B --> C[Append history + replace active checkpoint]
   C --> D[Exact input, saved context, and operation evidence]
   D --> B
@@ -140,7 +140,7 @@ execution owner: a Tool handoff charges its emitting Run, while host follow-ups 
 framework reports have no source Run charge. Later inputs never enlarge a settled launching Run.
 
 Exact evidence reads and same-format archives retain additive fields and the original wire values.
-Reading a typed view never changes the content pinned by an evidence digest.
+Reading a typed view never changes the referenced canonical content.
 
 New Runs read only history-relevant fields of the selected range and project them once. They
 trust immutable history validated at write, archive, and import boundaries; they do not reverify
@@ -161,7 +161,7 @@ Generic `ThreadStore.checkpoints` remain optional application projections and ne
 An unknown Submission without abort intent is parked: later input can run in the same Thread
 while the original settlement obligation stays open.
 Suspended, joining, and joined work retain their ordering barriers. At most one live owner can
-claim a Thread; a wake hint does not acquire ownership or advance its fencing epoch.
+claim a Thread; a wake hint does not acquire ownership or replace its scoped generation.
 
 A host can opt into `SubmissionScheduling.yieldTo` to handle the next same-Agent input in its
 own Run after a completed Turn. The prior Attempt closes before the next one acquires ownership;
@@ -247,7 +247,7 @@ agent cancellation API. Each Attempt releases its ownership and resources before
 
 ## Retain resources while awaiting approval
 
-`AgentRegistration.attemptLayer` owns services for one fenced Attempt. Its resources finalize
+`AgentRegistration.attemptLayer` owns services for one scoped Attempt. Its resources finalize
 when the Attempt completes, suspends, fails, or is interrupted. A replacement Attempt builds
 fresh services around any externally retained resource.
 
@@ -269,8 +269,8 @@ The runtime returns a Receipt after durable ledger admission, thread materializa
 readiness. Reusing an admission key with the same input returns the same Receipt. Different input
 conflicts. Admission sequence sets queue order.
 
-Each producer write checks its ownership token and epoch. A stale attempt cannot append after a
-replacement takes ownership. Recovery uses the same current binding selection as execution (unique stable Agent ID by
+Each producer write checks its captured local generation. A closed Attempt cannot append after a
+replacement takes ownership. All backends require one process to own a Thread at a time. Recovery uses the same current binding selection as execution (unique stable Agent ID by
 default, or explicit host selection from the canonical Submission). It validates a strongly
 consistent canonical prefix before classifying the last committed boundary:
 

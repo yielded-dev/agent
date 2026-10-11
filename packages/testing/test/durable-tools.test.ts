@@ -310,7 +310,6 @@ const configLayer = DurableRuntimeConfig.layer({
   deploymentId: Schema.decodeSync(DeploymentId)("deployment-durable-tools"),
   producerId: Schema.decodeSync(ProducerId)("producer-durable-tools"),
   settlementPollInterval: Duration.millis(100),
-  leaseRenewalInterval: Duration.seconds(5),
   abortPollInterval: Duration.millis(100),
 });
 
@@ -1961,7 +1960,6 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
                 ),
                 producerId: Schema.decodeSync(ProducerId)("producer-refused"),
                 settlementPollInterval: Duration.millis(100),
-                leaseRenewalInterval: Duration.seconds(5),
                 abortPollInterval: Duration.millis(100),
               }),
             ),

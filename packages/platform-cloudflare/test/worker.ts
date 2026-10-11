@@ -99,8 +99,6 @@ const baseOptions: ThreadObject.Options = {
   deploymentId: DEPLOYMENT_ID,
   producerPrefix: PRODUCER_PREFIX,
   // A dead incarnation's lease must lapse quickly so alarm passes reclaim its lane.
-  ownershipLeaseDuration: 250,
-  leaseRenewalInterval: 50,
   settlementPollInterval: 25,
   abortPollInterval: 25,
   alarmBackoffBase: 10,
@@ -280,8 +278,6 @@ export class PublicationThreadObject extends ThreadObject.make(
     namespaceBinding: "PUBLICATIONS",
     // Twelve acknowledged renewals span the no-progress retry window without replaying
     // thousands of heartbeat operations when the publication tests advance their clock.
-    ownershipLeaseDuration: 60_000,
-    leaseRenewalInterval: 15_000,
     abortPollInterval: 10_000,
   },
 ) {}

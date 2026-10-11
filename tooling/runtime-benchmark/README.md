@@ -29,9 +29,8 @@ The cleanup lines remove only declaration artifacts emitted by older package bui
 disposable checkouts. Every other modified or untracked file fails clean-checkout validation.
 
 Comparison staging aliases historical PascalCase exports to the current kebab-case paths without
-changing their implementations. Settlement seeds conditionally load the compared revision’s publisher;
-older revisions use their own reservation Schema and append the same canonical settlement before
-finalization. A missing export selects that older protocol, while a broken existing module fails.
+changing their implementations. The current fixture uses the single-owner storage and settlement ports. Compare revisions
+with the current record format; use the retained older fixture for historical storage formats.
 No candidate implementation or dependency installation is substituted for the baseline. Workers explicitly provide the same Effect AI identity generator
 to both revisions so releases predating default IDs remain runnable. These compatibility choices
 apply only to the comparison fixtures; they add no published export aliases or runtime fallbacks.
@@ -178,7 +177,7 @@ inference; Run resume must receive the handoff without retired history. The sepa
 durable completion must have one new canonical SubmissionSettled with the exact output and retain
 the entire original archive. Seed writes use the adapters' normal public
 operations and existing failpoints. The benchmark introduces no persisted format or migration.
-SQLite uses the production Node assembly and its default scheduling, lease, and durability
+SQLite uses the production Node assembly and its default scheduling and durability
 configuration; recovery cases additionally install the documented host rollover preparation.
 Database teardown and evidence reads are outside the warm-operation interval.
 
@@ -266,7 +265,7 @@ Read the full spread and raw samples before drawing a conclusion. Re-run a suspe
 with another matched cohort. Small-sample p95, local source timings, or differing provider workloads
 do not establish an SLO, Cloudflare CPU billing, or a competitive ranking. Deterministic engine
 and adapter work-budget tests remain the PR regression gates; timing evidence complements them.
-The manual diagnostics below separate fairness and lock contention from isolated run latency.
+The manual diagnostics below separate worker fairness and ledger observations from isolated run latency.
 Keep timing informational until repeated matched cohorts establish a workload-specific relative
 and absolute regression threshold. Current hosted runs show substantial machine and storage
 variance; one small-sample tail estimate or percentage alone is not a release gate. Confirm a
@@ -380,16 +379,8 @@ replay, runtime status observation, and active finalization are measured separat
 includes its ordinary recovery-snapshot work. The statement counter excludes the driver's
 transaction BEGIN/COMMIT commands.
 
-Contention cases compare the same replay/status operation while another Node process holds a
-SQLite write transaction for zero, 25, or 100 milliseconds after a readiness handshake. That
-process releases its lock independently of the observer's event loop. Observer latency excludes
-process startup and handshake; the report retains both the requested-window duration and full
-lock occupancy through rollback. Writer and observer timestamps share Node's same-host `hrtime`
-domain; overlap uses the conservative interval after acquisition and before rollback begins.
-Samples that miss the writer window remain in the report with `noWriterOverlap=1`; consult the
-overlap counters before claiming contention. A healthy read may finish while the writer still
-holds its lock. These cases do not measure event-loop lag or change the adapter's busy timeout.
-A subsequent public write and scoped process finalization verify release.
+SQLite diagnostics use one file owner. Settled replay and status cases run through that owner;
+opening a second writer against its database is outside the supported storage contract.
 
 Fairness cases run four independent tool-heavy Threads and one short Thread with one, two, or
 four registered Node host workers. Each busy Run uses four 100-millisecond tools with concurrency

@@ -11,6 +11,7 @@ import {
   storageConfigLayer,
 } from "@yielded/agent-storage-cloudflare/do-thread-store";
 import { evictionFailpointHandler } from "@yielded/agent-storage-cloudflare/testing/do-storage-failpoint-testing";
+import { RunStorage, layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AdmissionRequest,
   AdmissionPolicyError,
@@ -20,8 +21,6 @@ import {
   MarkReadyRequest,
   MarkUnknownRequest,
   RecoverySnapshotRequest,
-  ReleaseOwnershipRequest,
-  RenewOwnershipRequest,
   ResolutionNeverHappened,
   SubmissionLedger,
   SubmissionLookupByKey,
@@ -29,7 +28,6 @@ import {
   UnknownResolutionCommand,
 } from "@yielded/agent/submission-ledger";
 import { submissionLedgerConformanceCases } from "@yielded/agent/testing/submission-ledger-conformance";
-import { ThreadMaterialization, ThreadStore, ThreadTailRequest } from "@yielded/agent/thread-store";
 import { runInDurableObject } from "cloudflare:test";
 import { Cause, Effect, Exit, Layer, Option, Schema, Stream } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
@@ -38,12 +36,10 @@ import { describe, expect, it } from "vite-plus/test";
 import { instrumentedStorage } from "../../../test/fixtures/instrumented-storage.ts";
 import {
   admission,
-  epoch,
   thread,
   threadStub,
   id,
   TEST_PRINCIPAL,
-  TEST_PRODUCER,
   toolCall,
   withThreadStorage,
 } from "./harness.ts";
@@ -54,32 +50,27 @@ const isDoValueBoundExceeded = Schema.is(DoValueBoundExceeded);
 
 describe("DoSubmissionLedger", () => {
   // Regression: 8085bda keyed views by storage.sql, which instrumentation may wrap on each access.
-  it("shares producer epochs when instrumentation returns fresh SQL handles", () =>
-    withThreadStorage("claimed-epoch-shared", (rawStorage) => {
+  it("shares one owner when instrumentation returns fresh SQL handles", () =>
+    withThreadStorage("local-owner-shared", (rawStorage) => {
       const storage = instrumentedStorage(rawStorage);
 
       return Effect.gen(function* () {
-        const store = yield* ThreadStore;
         const ledger = yield* SubmissionLedger;
-        const threadId = thread("claimed-epoch-shared");
-
-        yield* store.materialize(ThreadMaterialization.make({ threadId, producerEpoch: epoch(0) }));
-        expect((yield* store.inspectTail(ThreadTailRequest.make({ threadId }))).producerEpoch).toBe(
-          0,
-        );
-        const accepted = yield* ledger.admit(yield* admission("claimed-epoch-shared", "first", {}));
+        const first = yield* RunStorage.pipe(Effect.provide(runStorageLayer()));
+        const second = yield* RunStorage.pipe(Effect.provide(runStorageLayer()));
+        const threadId = thread("local-owner-shared");
+        const accepted = yield* ledger.admit(yield* admission("local-owner-shared", "first", {}));
 
         yield* ledger.markReady(MarkReadyRequest.make({ submissionId: accepted.submissionId }));
-
-        const claim = yield* ledger.claim(
-          ClaimRequest.make({ threadId, producerId: TEST_PRODUCER }),
-        );
+        const claim = yield* first.claim(ClaimRequest.make({ threadId }));
 
         expect(Option.isSome(claim)).toBe(true);
-        expect((yield* store.inspectTail(ThreadTailRequest.make({ threadId }))).producerEpoch).toBe(
-          1,
-        );
+        expect(Option.isNone(yield* second.claim(ClaimRequest.make({ threadId })))).toBe(true);
+        if (Option.isNone(claim)) return;
+        yield* claim.value.release;
+        expect(Option.isSome(yield* second.claim(ClaimRequest.make({ threadId })))).toBe(true);
       }).pipe(
+        Effect.scoped,
         Effect.provide([
           threadStoreLayer({ storage }),
           ledgerLayer({ storage }),
@@ -275,10 +266,10 @@ describe("DoSubmissionLedger", () => {
     ]);
   });
 
-  it("preserves a later writer across eviction after an unknown-resolution wake", async () => {
+  it("recovers an unknown-resolution wake after eviction without retaining the retired owner", async () => {
     const objectName = "unknown-writer-resolution-eviction";
     const lane = "thread-unknown-writer-resolution";
-    const request = ClaimRequest.make({ threadId: thread(lane), producerId: TEST_PRODUCER });
+    const request = ClaimRequest.make({ threadId: thread(lane) });
 
     const before = await withThreadStorage(objectName, (storage) =>
       Effect.gen(function* () {
@@ -288,7 +279,7 @@ describe("DoSubmissionLedger", () => {
 
         yield* ledger.markReady(MarkReadyRequest.make({ submissionId: older.submissionId }));
         yield* ledger.markReady(MarkReadyRequest.make({ submissionId: later.submissionId }));
-        const first = yield* ledger.claim(request);
+        const first = yield* ledger.selectHead(request);
 
         if (Option.isNone(first)) return yield* Effect.die("missing older claim");
         yield* ledger.markUnknown(
@@ -298,13 +289,7 @@ describe("DoSubmissionLedger", () => {
             reason: "ordinary Tool outcome is uncertain",
           }),
         );
-        yield* ledger.releaseOwnership(
-          ReleaseOwnershipRequest.make({
-            submissionId: older.submissionId,
-            ownershipToken: first.value.ownershipToken,
-          }),
-        );
-        const second = yield* ledger.claim(request);
+        const second = yield* ledger.selectHead(request);
 
         if (Option.isNone(second)) return yield* Effect.die("missing later claim");
         expect(second.value.submissionId).toBe(later.submissionId);
@@ -358,30 +343,14 @@ describe("DoSubmissionLedger", () => {
         );
 
         expect(older.submission.state).toBe("input-applied");
-        expect(later.ownership?.producerEpoch).toBe(before.second.producerEpoch);
-        expect(Option.isNone(yield* ledger.claim(request))).toBe(true);
-
-        const renewal = yield* ledger.renewOwnership(
-          RenewOwnershipRequest.make({
-            submissionId: before.second.submissionId,
-            ownershipToken: before.second.ownershipToken,
-          }),
-        );
-
-        expect(renewal.ownershipToken).toBe(before.second.ownershipToken);
-        yield* ledger.releaseOwnership(
-          ReleaseOwnershipRequest.make({
-            submissionId: before.second.submissionId,
-            ownershipToken: renewal.ownershipToken,
-          }),
-        );
-        const resumed = yield* ledger.claim(request);
+        expect(older.hasOwner).toBe(false);
+        expect(later.hasOwner).toBe(false);
+        expect(later.submission.state).not.toBe("settled");
+        const resumed = yield* ledger.selectHead(request);
 
         expect(Option.isSome(resumed)).toBe(true);
-        if (Option.isSome(resumed)) {
+        if (Option.isSome(resumed))
           expect(resumed.value.submissionId).toBe(before.older.submissionId);
-          expect(resumed.value.producerEpoch).toBeGreaterThan(before.second.producerEpoch);
-        }
       }).pipe(Effect.provide([ledgerLayer({ storage }), BrowserCrypto.layer])),
     );
   });

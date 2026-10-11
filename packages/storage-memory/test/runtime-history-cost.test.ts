@@ -17,7 +17,6 @@ import {
   Digest,
   ModelCompleted,
   PersistedJson,
-  ProducerEpoch,
   ProducerId,
   RecordEnvelope,
   RecordId,
@@ -35,7 +34,7 @@ import {
   SubmissionLedger,
 } from "@yielded/agent/submission-ledger";
 import {
-  FencedAppendRequest,
+  AppendRequest,
   ThreadMaterialization,
   ThreadStore,
   ThreadTailRequest,
@@ -91,12 +90,11 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
 ) {
   const store = yield* ThreadStore;
   const threadId = Schema.decodeSync(ThreadId)(`history-cost-${historySize}`);
-  const producerEpoch = Schema.decodeSync(ProducerEpoch)(0);
   const createdAt = yield* DateTime.now;
   let tailSequence = Schema.decodeSync(CanonicalSequence)(0);
   const retainedInputs: Array<string> = [];
 
-  yield* store.materialize(ThreadMaterialization.make({ threadId, producerEpoch }));
+  yield* store.materialize(ThreadMaterialization.make({ threadId }));
   for (let start = 0; start < historySize; start += 256) {
     const records = Array.makeBy(Math.min(256, historySize - start), (offset) => {
       const position = start + offset;
@@ -145,9 +143,8 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
     });
 
     const appended = yield* store.append(
-      FencedAppendRequest.make({
+      AppendRequest.make({
         threadId,
-        producerEpoch,
         expectedTailSequence: tailSequence,
 
         batch: CanonicalBatch.make({
@@ -209,9 +206,8 @@ const measure = Effect.fn("RuntimeHistoryCost.measure")(function* (
 
               yield* store
                 .append(
-                  FencedAppendRequest.make({
+                  AppendRequest.make({
                     threadId,
-                    producerEpoch: tail.producerEpoch,
                     expectedTailSequence: tail.tailSequence,
 
                     batch: CanonicalBatch.make({
@@ -341,7 +337,7 @@ it.live.each([{ kind: "interruption", phase: "selected-run" }] satisfies Readonl
     expect(result.measured).toBe(false);
     expect(Exit.isFailure(result.exit)).toBe(true);
     expect(result.openedPages).toBe(result.closedPages);
-    expect(result.snapshot.ownership).toBeUndefined();
+    expect(result.snapshot.hasOwner).toBe(false);
     expect(result.requests.every((request) => request.limit <= 1_024)).toBe(true);
   }),
 );
@@ -354,7 +350,7 @@ it.live("captures original context before racing later appends", () =>
     expect(result.measured).toBe(true);
     expect(Exit.isSuccess(result.exit)).toBe(true);
     expect(result.openedPages).toBe(result.closedPages);
-    expect(result.snapshot.ownership).toBeUndefined();
+    expect(result.snapshot.hasOwner).toBe(false);
   }),
 );
 

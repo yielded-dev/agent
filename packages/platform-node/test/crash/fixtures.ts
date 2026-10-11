@@ -39,7 +39,6 @@ export const CrashEnv = {
   killAtStorage: "EFFECT_AGENT_KILL_AT_STORAGE",
   /** Coordinator failpoint where the worker BLOCKS (marker file + hang) instead of dying. */
   blockAt: "EFFECT_AGENT_BLOCK_AT",
-  leaseMillis: "EFFECT_AGENT_LEASE_MS",
   markerFile: "EFFECT_AGENT_MARKER_FILE",
   releaseFile: "EFFECT_AGENT_RELEASE_FILE",
   supplierDir: "EFFECT_AGENT_SUPPLIER_DIR",
@@ -117,7 +116,6 @@ export type CrashScenario = typeof CrashScenario.Type;
 /** Exit code armed at a kill failpoint (`process.exit`, mirroring SIGKILL's 128+9). */
 export const KILL_EXIT_CODE = 137;
 /** Exit code for a child whose Attempt was fenced out by a newer producer epoch (expected). */
-export const FENCED_EXIT_CODE = 87;
 
 export const CRASH_DEPLOYMENT_ID = "deployment-crash";
 export const CHILD_PRODUCER_ID = "producer-crash-child";
@@ -856,10 +854,6 @@ export const ChildMessage = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("settlements"),
     settlements: Schema.Array(Settlement),
-  }),
-  Schema.Struct({
-    kind: Schema.Literal("worker-failure"),
-    tag: Schema.String,
   }),
   Schema.Struct({
     kind: Schema.Literal("resolved"),

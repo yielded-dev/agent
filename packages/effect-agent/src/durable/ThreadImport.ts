@@ -15,7 +15,6 @@ import {
   CanonicalRecordEnvelope,
   CanonicalSequence,
   CURRENT_RECORD_FORMAT,
-  ProducerEpoch,
   RecordEnvelope,
   RecordJson,
   RunContinuation,
@@ -42,8 +41,8 @@ import {
   submissionSettlementRecordId,
   submissionAbortRecordId,
 } from "./SubmissionLedger.ts";
-import type { ExecutionCheckpoint } from "./ThreadStore.ts";
 import {
+  type ExecutionCheckpoint,
   MAX_THREAD_EXPORT_PAGE_BYTES,
   MAX_THREAD_EXPORT_PAGE_RECORDS,
   ThreadAdmission,
@@ -472,7 +471,6 @@ export const captureImportSource = Effect.fnUntraced(function* <E, R>(
 export interface ThreadImportProgress {
   manifest: ThreadArchive | undefined;
   sequence: number;
-  producerEpoch: number;
   ended: boolean;
   cursor: string | undefined;
   counts: {
@@ -488,7 +486,6 @@ export interface ThreadImportProgress {
 export const makeThreadImportProgress = (): ThreadImportProgress => ({
   manifest: undefined,
   sequence: 0,
-  producerEpoch: 1,
   ended: false,
   cursor: undefined,
   counts: { admissions: 0, aborts: 0, approvals: 0, resolutions: 0, deliveries: 0, executions: 0 },
@@ -609,8 +606,6 @@ export const prepareImportPage = Effect.fnUntraced(function* (
       encoded.push(entry.record);
       index++;
       state.sequence++;
-      if (record.payload._tag === "ModelResponseInterrupted")
-        state.producerEpoch = Math.max(state.producerEpoch, record.payload.supersededEpoch + 1);
     }
 
     const canonical = yield* Schema.decodeUnknownEffect(
@@ -735,17 +730,6 @@ export const finishThreadImport = (state: ThreadImportProgress) =>
       return yield* invalid(
         "Transfer stream ended before its complete canonical sequence and fact sections",
       );
-    yield* Schema.decodeEffect(ProducerEpoch.check(Schema.isLessThan(Number.MAX_SAFE_INTEGER)))(
-      state.producerEpoch,
-    ).pipe(
-      Effect.mapError(() =>
-        ThreadImportRejected.make({
-          threadId: page.threadId,
-          reason: "unsupported-capacity",
-          message: "Producer generation exhausted",
-        }),
-      ),
-    );
 
     return ThreadImportResult.make({
       threadId: page.threadId,

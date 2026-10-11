@@ -25,7 +25,7 @@ import {
   type Settlement,
   type SubmissionSnapshot,
 } from "@yielded/agent/submission-ledger";
-import { Cause, Duration, Effect, Exit, Layer, Option, Schema, Stream } from "effect";
+import { Cause, Duration, Effect, Exit, Fiber, Layer, Option, Schema, Stream } from "effect";
 import type { Response } from "effect/ai";
 
 import {
@@ -38,7 +38,6 @@ import {
   DELEGATE_CALL_ID,
   JOIN_QUESTION,
   KILL_EXIT_CODE,
-  FENCED_EXIT_CODE,
   STALE_ANSWER,
   bookDefinition,
   bookIdempotentDefinition,
@@ -82,12 +81,6 @@ import {
  * the same file and asserts the crash-matrix row's required durable outcome.
  */
 
-const MillisFromString = Schema.FiniteFromString.check(
-  Schema.isInt(),
-  Schema.isGreaterThan(0),
-  Schema.isLessThanOrEqualTo(600_000),
-);
-
 const WorkerEnv = Schema.Struct({
   EFFECT_AGENT_DB: Schema.NonEmptyString,
   EFFECT_AGENT_SCENARIO: CrashScenario,
@@ -96,7 +89,6 @@ const WorkerEnv = Schema.Struct({
   EFFECT_AGENT_KILL_AT: Schema.optionalKey(DurableRuntimeFailpointLocation),
   EFFECT_AGENT_KILL_AT_STORAGE: Schema.optionalKey(SqliteStorageFailpointLocation),
   EFFECT_AGENT_BLOCK_AT: Schema.optionalKey(DurableRuntimeFailpointLocation),
-  EFFECT_AGENT_LEASE_MS: Schema.optionalKey(MillisFromString),
   EFFECT_AGENT_MARKER_FILE: Schema.optionalKey(Schema.NonEmptyString),
   EFFECT_AGENT_RELEASE_FILE: Schema.optionalKey(Schema.NonEmptyString),
   EFFECT_AGENT_SUPPLIER_DIR: Schema.optionalKey(Schema.NonEmptyString),
@@ -142,7 +134,7 @@ const killIfGated: Effect.Effect<void> = Effect.suspend(() =>
 
 /**
  * A blocking failpoint (S2 simultaneous-kill rows): the worker proves it reached the location
- * with the marker file, then hangs mid-Attempt — still holding its ownership lease — until the
+ * with the marker file, then hangs mid-Attempt — still holding its local owner generation — until the
  * harness SIGKILLs it, exactly like a process that stalled at that durable step.
  */
 const blockAndHang: Effect.Effect<never> = Effect.suspend(() => {
@@ -178,9 +170,6 @@ const options: NodeDurableAgentRuntimeOptions = {
   filename: env.EFFECT_AGENT_DB,
   deploymentId: CRASH_DEPLOYMENT_ID,
   producerId: CHILD_PRODUCER_ID,
-  ownershipLeaseDuration: env.EFFECT_AGENT_LEASE_MS ?? 30_000,
-  // Long enough that a deliberately expired short lease is never renewed mid-scenario.
-  leaseRenewalInterval: 60_000,
   abortPollInterval: 50,
   settlementPollInterval: 50,
   wakeScanInterval: 1_000,
@@ -432,7 +421,18 @@ const scenario = Effect.gen(function* () {
       );
 
       yield* emit({ kind: "receipt", key: idempotencyKey, receipt });
-      yield* emitSettlements(yield* runtime.processThread(agent, threadId));
+      const running = yield* runtime.processThread(agent, threadId).pipe(Effect.forkScoped);
+
+      // The harness routes its operator command to this process, the sole database owner.
+      yield* awaitFile(requireEnv(env.EFFECT_AGENT_RELEASE_FILE, "EFFECT_AGENT_RELEASE_FILE"));
+      yield* runtime.abort(
+        AbortCommand.make({
+          submissionId: receipt.submissionId,
+          author: "operator",
+          reason: "stop the run",
+        }),
+      );
+      yield* emitSettlements(yield* Fiber.join(running));
 
       return;
     }
@@ -639,13 +639,6 @@ const scenario = Effect.gen(function* () {
   }
 });
 
-const ErrorTag = Schema.Struct({ _tag: Schema.NonEmptyString });
-const decodeErrorTag = Schema.decodeUnknownOption(ErrorTag);
-
-/** A superseded Attempt failing typed is EXPECTED evidence of fencing, not a harness defect. */
-const isFencedFailure = (tag: string): boolean =>
-  tag === "FenceRejected" || tag === "OwnershipLost";
-
 const runtimeLayer = Layer.unwrap(
   Effect.gen(function* () {
     const bindings =
@@ -658,24 +651,10 @@ const runtimeLayer = Layer.unwrap(
 );
 
 const exit = await Effect.runPromiseExit(
-  scenario.pipe(Effect.provide(Layer.mergeAll(runtimeLayer, searchToolLayer))),
+  scenario.pipe(Effect.scoped, Effect.provide(Layer.mergeAll(runtimeLayer, searchToolLayer))),
 );
 
 if (Exit.isFailure(exit)) {
-  const failure = Cause.findErrorOption(exit.cause);
-
-  const tag = Option.isSome(failure)
-    ? Option.match(decodeErrorTag(failure.value), {
-        onNone: () => "UnknownError",
-        onSome: ({ _tag }) => _tag,
-      })
-    : "Defect";
-
-  if (isFencedFailure(tag)) {
-    await Effect.runPromise(emit({ kind: "worker-failure", tag }));
-    process.exitCode = FENCED_EXIT_CODE;
-  } else {
-    console.error(Cause.pretty(exit.cause));
-    process.exitCode = 1;
-  }
+  console.error(Cause.pretty(exit.cause));
+  process.exitCode = 1;
 }

@@ -21,10 +21,10 @@ administration contract applies to Node and SQLite class `DN` and Cloudflare Dur
   checkpoints, including their original Prompt digests. Missing or mismatched active state fails
   integrity verification; discarded intermediate checkpoints are not historical proof.
 - `retry(RetryCommand.make({ submissionId, author, reason }))` logs the operator and repeats the classifier's
-  decision. Repairs with a claim annotate their attempt using that claim's epoch; state-only wakes
+  decision. Repairs under the current local owner may annotate the attempted repair; state-only wakes
   and marker repairs do not append canonical audit records. Retry refuses settled work and requests
   awaiting `resolveUnknown` or `resolveApproval`.
-- `wake(threadId)` sends a droppable liveness hint without taking ownership or advancing an epoch.
+- `wake(threadId)` sends a droppable liveness hint without taking ownership.
 - `scanObligations(thresholds)` reports blocked or aging accepted work.
 
 `NodeDurableHost` exposes all five. Use
@@ -60,7 +60,7 @@ envelope and require only `ThreadReader`. Authorize the owner and locator before
 verify the returned payload; absence alone does not prove an admission was never accepted.
 
 Native stores provide `readIdentity({ threadId })` for the first canonical record and exact worker
-origin/lineage records with their captured tail and producer epoch. It is one bounded, consistent
+origin/lineage records with their captured tail and owner generation. It is one bounded, consistent
 read, not an authorization grant. Custom ThreadStore adapters must implement this operation;
 deploy matching Cloudflare client and owner packages for its read-only port protocol.
 
@@ -217,8 +217,8 @@ connection cannot read the live database. Stop the host before using an external
 A restore has four rules:
 
 1. Pre-backup history must pass the same `verify` checks as the original.
-2. Fence or terminate every producer from the original timeline before serving restored data.
-   Restored storage rejects post-backup ownership tokens.
+2. Stop the original process before serving restored data. A fresh process creates new local
+   owner generations; storage does not coordinate two live owners of one Thread.
 3. Treat external effects recorded only after the backup as unknown. Never replay them
    automatically. Resolve them through `resolveUnknown` using supplier records.
 4. Receipts issued after the backup are gone. Clients must resubmit with idempotency keys. Reconcile
@@ -239,7 +239,7 @@ implement these APIs, so follow this hosted runbook:
 5. run `verifyEncoded` and `obligationsEncoded` before reopening admission.
 
 Cross-Object children created after the bookmark need parent recovery. A restored Object replaces
-old local producer epochs automatically.
+old local owner generations automatically.
 
 ## Authorization and isolation
 
@@ -479,7 +479,7 @@ uncertainty, payloads and transactional prearming; this extension defines no pro
 ### Adopting these contracts
 
 Table layout and record meaning have independent versions. The unreleased protocol accepts fresh
-layout-23 stores and `effect-agent/thread@5` records on SQLite, PostgreSQL, and Cloudflare. Opening
+layout-24 stores and `effect-agent/thread@6` records on SQLite, PostgreSQL, and Cloudflare. Opening
 predecessor or ambiguous stores fails before DDL or payload mutation. Keep them with their matching
 release; no historical decoder, layout upgrade, converter, or mixed-format runtime is included.
 
@@ -498,14 +498,13 @@ vp run admin:durable reencode --database source.sqlite --thread THREAD --target 
 Every page binds the canonical tail and a revision of admissions, accepted commands, delivery facts
 and active execution state. Progress-only checkpoint updates also invalidate an in-flight export.
 Import preserves exact record wire,
-batch producers, digest anchors, queue order, admission time, Receipts, principals, keys, and opaque
+batch producers, sequence boundaries, queue order, admission time, Receipts, principals, keys, and opaque
 admission fences and groups. Destination admission policy and active-group constraints still apply.
 Truncated pages, missing cross-range evidence, contradictory identities, or unavailable policy
 checks fail without publishing staged work. Keep the source when validation fails.
 
 Import restores authoritative active checkpoints and rebuilds ledger state and native indexes from
-retained facts. Claims, leases, execution ownership,
-application checkpoints, and recovery caches start empty. Unresolved ordinary tools remain Unknown;
+retained facts. Local execution ownership, application checkpoints, and recovery caches start empty. Unresolved ordinary tools remain Unknown;
 settlement does not close surviving effects or deliveries. Closed historical workers and children
 can transfer; live obligations owned by another store must finish through their owning workflow
 before a single-Thread import. Retained deliveries transfer without their operational lease.
@@ -524,9 +523,9 @@ transaction until validation completes. Memory storage retains all facts in vola
 memory and needs an explicit host memory allowance.
 
 Use `ThreadStore.archives` for storage-owner maintenance: seal the current complete-batch range,
-then archive its `firstSequence` under the current producer epoch. SQL adapters copy and verify
+then archive its `firstSequence` under the current owner generation. SQL adapters copy and verify
 bounded contents, publish a stable locator, and only then remove hot payload copies in the same
-transaction. Interruption leaves a reachable copy. Ranges share the Thread's fence and continuous
+transaction. Interruption leaves a reachable copy. Ranges share the Thread's owner gate and continuous
 sequence; they do not reset grants, Run budgets, or live obligations. Exact old-record reads and
 batch retries follow the native identity locator, without traversing intervening ranges.
 

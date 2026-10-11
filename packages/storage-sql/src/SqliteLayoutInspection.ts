@@ -122,15 +122,16 @@ export const makeSqliteLayoutInspection = <C, K, S>(
     return header;
   });
 
-  /** Dedicated managed hosts allow exactly the current layout's declared triggers. */
+  /** Framework tables allow exactly their declared triggers; application schemas own theirs. */
   const readManagedTriggers = Effect.fnUntraced(function* (initialized: boolean) {
     const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
     const actual = yield* decode(
       Objects,
-      yield* sql`SELECT name, type, sql FROM main.sqlite_master WHERE type='trigger' ORDER BY name`.pipe(
-        Effect.mapError(options.storageError),
-      ),
+      yield* sql`SELECT name, type, sql FROM main.sqlite_master
+        WHERE type='trigger' AND tbl_name IN ${sql.in(
+          options.objects.filter(([type]) => type === "table").map(([, name]) => name),
+        )} ORDER BY name`.pipe(Effect.mapError(options.storageError)),
       "sqlite_master",
     );
 
@@ -151,7 +152,7 @@ export const makeSqliteLayoutInspection = <C, K, S>(
       return yield* Effect.fail(
         options.incompatible(
           initialized ? options.version : 0,
-          "Managed-host database contains unknown or incompatible persistent SQL triggers.",
+          "Thread storage tables contain unknown or incompatible persistent SQL triggers.",
         ),
       );
   });

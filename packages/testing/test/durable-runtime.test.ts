@@ -249,7 +249,6 @@ const configLayer = DurableRuntimeConfig.layer({
   deploymentId: Schema.decodeSync(DeploymentId)("deployment-durable"),
   producerId: Schema.decodeSync(ProducerId)("producer-durable"),
   settlementPollInterval: Duration.millis(100),
-  leaseRenewalInterval: Duration.seconds(5),
   abortPollInterval: Duration.millis(100),
 });
 
@@ -2048,7 +2047,7 @@ layer(testLayer)("RUN-030 durable execution duration", (it) => {
               RecoverySnapshotRequest.make({ submissionId: receipt.submissionId }),
             );
 
-            expect(pending.ownership).toBeUndefined();
+            expect(pending.hasOwner).toBe(false);
             expect(pending.submission.state).not.toBe("settled");
             const before = yield* readLog(thread);
 
@@ -2242,7 +2241,7 @@ layer(testLayer)("deployment continuity", (it) => {
           RecoverySnapshotRequest.make({ submissionId: later.submissionId }),
         );
 
-        expect(ownerBefore.ownership).toBeDefined();
+        expect(ownerBefore.hasOwner).toBe(true);
         const explanation = yield* runtime.explain(original.submissionId);
 
         expect({
@@ -2274,8 +2273,8 @@ layer(testLayer)("deployment continuity", (it) => {
         expect(
           (yield* ledger.loadRecoverySnapshot(
             RecoverySnapshotRequest.make({ submissionId: later.submissionId }),
-          )).ownership,
-        ).toEqual(ownerBefore.ownership);
+          )).hasOwner,
+        ).toBe(true);
         expect(yield* lookupState(original.submissionId)).toBe("unknown");
         yield* Deferred.succeed(release, undefined);
         const completed = yield* Fiber.join(worker);
@@ -2794,7 +2793,7 @@ layer(testLayer)("independent input scheduling", (it) => {
                 RecoverySnapshotRequest.make({ submissionId: receipt.submissionId }),
               );
 
-              expect(snapshot.ownership).toBeUndefined();
+              expect(snapshot.hasOwner).toBe(false);
               expect(snapshot.submission.receiptId).toBe(receipt.receiptId);
               expect(snapshot.submission.state).toBe("settled");
               expect(snapshot.submission.principal).toBe(
