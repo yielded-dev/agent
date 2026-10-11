@@ -134,34 +134,31 @@ export class RunStorage extends Context.Service<
   }
 >()("@effect-agent/thread/RunStorage") {}
 
+/** One writer's scoped capability, selected at claim or administrative construction. */
+class WriterOwnership extends Context.Service<
+  WriterOwnership,
+  {
+    readonly identity: object;
+    readonly checkActive: Effect.Effect<void, ThreadStoreFailure>;
+    readonly release: Effect.Effect<void>;
+  }
+>()("@effect-agent/durable/internal/WriterOwnership") {}
+
 const isDefiniteWriteRefusal = Schema.is(
   Schema.Union([AppendConflict, OwnershipLost, SettlementConflict, ThreadNotMaterialized]),
 );
 
-/** The writer gate remains held until uncertain results have revoked the captured capability. */
-const closeOnUncertainWrite = <A, E, R>(
-  effect: Effect.Effect<A, E, R>,
-  close: Effect.Effect<void>,
-) =>
-  effect.pipe(
-    Effect.onError((cause) =>
-      cause.reasons.length > 0 &&
-      cause.reasons.every(
-        (reason) => Cause.isFailReason(reason) && isDefiniteWriteRefusal(reason.error),
-      )
-        ? Effect.void
-        : close,
-    ),
+const isDefiniteWriteFailure = (cause: Cause.Cause<unknown>) =>
+  cause.reasons.length > 0 &&
+  cause.reasons.every(
+    (reason) => Cause.isFailReason(reason) && isDefiniteWriteRefusal(reason.error),
   );
 
-const makeWriter = Effect.fnUntraced(function* (
-  threadId: ThreadId,
-  checkActive: Effect.Effect<void, ThreadStoreFailure>,
-  generation: object,
-  closeOnUncertainResult: Effect.Effect<void>,
-) {
+const makeWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
   const store = yield* ThreadStore;
   const owner = yield* StorageOwner;
+  const ownership = yield* WriterOwnership;
+  const checkActive = ownership.checkActive;
   const initial = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
   let tail = { sequence: initial.tailSequence };
 
@@ -228,14 +225,19 @@ const makeWriter = Effect.fnUntraced(function* (
 
               return result;
             }
-          }).pipe((effect) => closeOnUncertainWrite(effect, closeOnUncertainResult)),
+          }).pipe(
+            // Revoke uncertain writes before releasing the writer's mutation gate.
+            Effect.onError((cause) =>
+              isDefiniteWriteFailure(cause) ? Effect.void : ownership.release,
+            ),
+          ),
         ),
       );
     });
 
   const writer = {
     threadId,
-    generation,
+    generation: ownership.identity,
     withProgress: <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       owner.withProgress(threadId, Effect.andThen(checkActive, effect)),
     tail: Effect.sync(() => tail),
@@ -256,20 +258,21 @@ const makeWriter = Effect.fnUntraced(function* (
 export const makeRunWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
   const owner = yield* StorageOwner;
 
-  return (yield* makeWriter(
-    threadId,
-    Effect.suspend(() =>
-      owner.isClosed()
-        ? Effect.fail(
-            ThreadStoreError.make({
-              operation: "write Thread",
-              message: "Storage owner is closed",
-            }),
-          )
-        : Effect.void,
-    ),
-    owner.identity,
-    Effect.void,
+  return (yield* makeWriter(threadId).pipe(
+    Effect.provideService(WriterOwnership, {
+      identity: owner.identity,
+      checkActive: Effect.suspend(() =>
+        owner.isClosed()
+          ? Effect.fail(
+              ThreadStoreError.make({
+                operation: "write Thread",
+                message: "Storage owner is closed",
+              }),
+            )
+          : Effect.void,
+      ),
+      release: Effect.void,
+    }),
   )).writer;
 });
 
@@ -301,12 +304,8 @@ export const make = Effect.gen(function* () {
               });
             yield* store.materialize(ThreadMaterialization.make({ threadId: request.threadId }));
 
-            const { writer, adoptTail } = yield* makeWriter(
-              request.threadId,
-              generation.checkActive,
-              generation.identity,
-              generation.release,
-            ).pipe(
+            const { writer, adoptTail } = yield* makeWriter(request.threadId).pipe(
+              Effect.provideService(WriterOwnership, generation),
               Effect.provideService(ThreadStore, store),
               Effect.provideService(StorageOwner, owner),
             );
@@ -429,7 +428,11 @@ export const make = Effect.gen(function* () {
 
                           return result;
                         }
-                      }).pipe((effect) => closeOnUncertainWrite(effect, generation.release)),
+                      }).pipe(
+                        Effect.onError((cause) =>
+                          isDefiniteWriteFailure(cause) ? Effect.void : generation.release,
+                        ),
+                      ),
                     ),
                   );
                 }),
