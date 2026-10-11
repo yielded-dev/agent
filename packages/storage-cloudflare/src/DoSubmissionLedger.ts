@@ -493,46 +493,18 @@ const makeServices = Effect.fnUntraced(function* () {
     operation: string,
   ) => effect.pipe(Effect.mapError(internalFailure(operation)));
 
-  // Small lanes share control metadata; large retained histories keep indexed SQL reads.
-  const laneWork = Effect.fnUntraced(function* (threadId: string, operation: string) {
-    const work = yield* cached(
-      workRows.matching(
-        JSON.stringify(["lane", threadId]),
-        (row) => row.thread_id === threadId,
-        sql`SELECT submission_id, thread_id, queue_sequence, principal, idempotency_key,
-        deployment_id, receipt_id, state FROM effect_agent_submissions WHERE thread_id = ${threadId} LIMIT 129`,
-        128,
-      ),
-      operation,
-    );
-
-    return work.length > 128
-      ? undefined
-      : [...work].sort((a, b) => a.queue_sequence - b.queue_sequence);
-  });
-
   const byKey = Effect.fnUntraced(function* (
     request: Pick<SubmissionLookupByKey, "threadId" | "principal" | "idempotencyKey">,
     operation: string,
   ) {
-    const lane = yield* laneWork(request.threadId, operation);
-
-    if (lane === undefined)
-      return yield* cached(
-        rows.submissions.byFields([
-          ["thread_id", request.threadId],
-          ["principal", request.principal],
-          ["idempotency_key", request.idempotencyKey],
-        ]),
-        operation,
-      );
-
-    const matches = lane.filter(
-      (row) =>
-        row.principal === request.principal && row.idempotency_key === request.idempotencyKey,
+    return yield* cached(
+      rows.submissions.byFields([
+        ["thread_id", request.threadId],
+        ["principal", request.principal],
+        ["idempotency_key", request.idempotencyKey],
+      ]),
+      operation,
     );
-
-    return yield* Effect.forEach(matches, (row) => requireSubmission(operation, row.submission_id));
   }, state.read);
 
   const retainLifecycle = (submission: SubmissionRow, fact: LifecyclePublicationFact) =>
@@ -1235,17 +1207,10 @@ const makeServices = Effect.fnUntraced(function* () {
 
         // The first accepted input fixes ordinary/worker lane identity atomically with admission.
         // Canonical origin materialization can lag admission; a log scan cannot fence that race.
-        const lane = yield* laneWork(validated.threadId, operation);
-
-        const firstRows =
-          lane === undefined
-            ? yield* sql<Record<string, unknown>>`
+        const firstRows = yield* sql<Record<string, unknown>>`
             SELECT worker_admission_json FROM effect_agent_submissions
             WHERE thread_id=${validated.threadId} ORDER BY queue_sequence LIMIT 1
-          `.pipe(Effect.mapError(sqlFailure(operation)))
-            : lane[0] === undefined
-              ? []
-              : [yield* requireSubmission(operation, lane[0].submission_id)];
+          `.pipe(Effect.mapError(sqlFailure(operation)));
 
         const first = yield* Schema.decodeUnknownEffect(
           Schema.Array(
@@ -1289,14 +1254,11 @@ const makeServices = Effect.fnUntraced(function* () {
             });
         }
 
-        const maxRows =
-          lane === undefined
-            ? yield* sql<Record<string, unknown>>`
+        const maxRows = yield* sql<Record<string, unknown>>`
             SELECT COALESCE(MAX(queue_sequence), 0) AS max_queue_sequence
             FROM effect_agent_submissions
             WHERE thread_id = ${validated.threadId}
-          `.pipe(Effect.mapError(sqlFailure(operation)))
-            : [{ max_queue_sequence: lane.at(-1)?.queue_sequence ?? 0 }];
+          `.pipe(Effect.mapError(sqlFailure(operation)));
 
         const decodedMax = yield* decodeRows(
           Schema.Array(MaxQueueSequenceRow),
@@ -1581,11 +1543,8 @@ const makeServices = Effect.fnUntraced(function* () {
     const claimed = yield* owner.withMutation(
       Effect.gen(function* () {
         if (owner.hasOwner(validated.threadId)) return Option.none<Claim>();
-        const lane = yield* laneWork(validated.threadId, operation);
 
-        const headRows =
-          lane === undefined
-            ? yield* sql<Record<string, unknown>>`
+        const headRows = yield* sql<Record<string, unknown>>`
             SELECT ${submissionColumns}
             FROM effect_agent_submissions
             WHERE thread_id = ${validated.threadId}
@@ -1598,29 +1557,7 @@ const makeServices = Effect.fnUntraced(function* () {
               )
             ORDER BY queue_sequence ASC
             LIMIT ${validated.handoff === undefined ? 1 : validated.handoff.deferredSubmissionIds.length + 1}
-          `.pipe(Effect.mapError(sqlFailure(operation)))
-            : yield* Effect.gen(function* () {
-                const heads: Array<SubmissionRow> = [];
-
-                for (const item of lane) {
-                  if (item.state === "settled") continue;
-                  if (
-                    item.state === "unknown" &&
-                    Option.isNone(yield* readAbortIntent(operation, item.submission_id))
-                  )
-                    continue;
-                  heads.push(yield* requireSubmission(operation, item.submission_id));
-                  if (
-                    heads.length >=
-                    (validated.handoff === undefined
-                      ? 1
-                      : validated.handoff.deferredSubmissionIds.length + 1)
-                  )
-                    break;
-                }
-
-                return heads;
-              });
+          `.pipe(Effect.mapError(sqlFailure(operation)));
 
         const heads = yield* decodeSubmissionRows(operation, validated.threadId, headRows);
 
@@ -2293,21 +2230,13 @@ const makeServices = Effect.fnUntraced(function* () {
 
         if (stopped.length > 0) return [];
 
-        const lane = yield* laneWork(validated.threadId, operation);
-
-        const laterRows =
-          lane === undefined
-            ? yield* sql<Record<string, unknown>>`
+        const laterRows = yield* sql<Record<string, unknown>>`
           SELECT ${submissionColumns}
           FROM effect_agent_submissions
           WHERE thread_id = ${validated.threadId}
             AND queue_sequence > ${host.queue_sequence}
           ORDER BY queue_sequence ASC
-        `.pipe(Effect.mapError(sqlFailure(operation)))
-            : yield* Effect.forEach(
-                lane.filter((item) => item.queue_sequence > host.queue_sequence),
-                (item) => requireSubmission(operation, item.submission_id),
-              );
+        `.pipe(Effect.mapError(sqlFailure(operation)));
 
         const later = yield* decodeSubmissionRows(operation, validated.threadId, laterRows);
         const claimed: Array<JoiningClaim> = [];
