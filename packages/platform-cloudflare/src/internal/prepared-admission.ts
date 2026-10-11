@@ -78,7 +78,7 @@ export const cloudflarePreparedInputAdmissionLayer: Layer.Layer<
                 ScheduleStorageError.make({ operation: "prepared admission", reason: "corrupt" }),
               ThreadNotMaterialized: () => ScheduledInputRetryable.make({ reason: "storage" }),
               AppendConflict: () => ScheduledInputRetryable.make({ reason: "ambiguous" }),
-              FenceRejected: () => ScheduledInputRetryable.make({ reason: "ambiguous" }),
+              OwnershipLost: () => ScheduledInputRetryable.make({ reason: "ambiguous" }),
               DurableRuntimeFailpointError: () =>
                 ScheduledInputRetryable.make({ reason: "ambiguous" }),
             }),

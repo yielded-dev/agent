@@ -203,7 +203,6 @@ import {
   ModelResponseInterrupted,
   ModelCallAborted,
   PersistedJson,
-  ProducerEpoch,
   RecordEnvelope,
   RecordId,
   RepairAnnotated,
@@ -284,7 +283,6 @@ import {
   type RunJournalContext,
   type TurnCommitInput,
   runCompletedRecordId,
-  runCompletionDigest,
   runIdForSubmission,
   runStartedBatchId,
   runStartedRecordId,
@@ -316,7 +314,7 @@ import {
 } from "./RunJournal.ts";
 import {
   RunStorage,
-  bindRunOwnership,
+  StorageOwner,
   makeRunWriter,
   type RunOwnership,
   type RunStorageSession,
@@ -334,10 +332,8 @@ import {
   type AbortIntent,
   AbortIntentRequest,
   type AdmissionConflict,
-  type Claim,
   type JoinedToHost,
   type OwnershipLost,
-  type OwnershipToken,
   type RecoverySnapshot,
   type SettlementConflict,
   type SubmissionSnapshot,
@@ -345,7 +341,6 @@ import {
   AdmissionRequest,
   ApprovalDecisionCommand,
   ApprovalPendingSuspension,
-  AttachChildToReservationRequest,
   BeginChildBudgetReleaseRequest,
   ChildReservationId,
   ChildSettledNotification,
@@ -355,21 +350,18 @@ import {
   ClaimRequest,
   IdempotencyKey,
   LedgerError,
-  MarkJoinedRequest,
   MarkReadyRequest,
   MarkUnknownRequest,
   ParentLinkage,
   Principal,
   RecoverySnapshotRequest,
   ReleaseChildBudgetRequest,
-  ReleaseOwnershipRequest,
   RevertJoiningRequest,
   SettlementFinalization,
   Settlement,
   SubmissionLedger,
   SubmissionLookupById,
   SubmissionLookupByKey,
-  SuspendRequest,
   UnknownResolutionCommand,
   unknownResolutionKind,
   WaitingChild,
@@ -394,7 +386,6 @@ import { PreparedInput } from "./Subscription.ts";
 import {
   type AppendConflict,
   type ThreadNotMaterialized,
-  type FenceRejected,
   ThreadMaterialization,
   ThreadObservation,
   ThreadRead,
@@ -403,7 +394,7 @@ import {
   ThreadStoreDiagnostic,
   ThreadStoreError,
   ThreadTailRequest,
-  FencedAppendRequest,
+  AppendRequest,
   getRecord,
   getRunInput,
   ThreadReader,
@@ -467,7 +458,6 @@ const decodeCanonicalSequence = Schema.decodeSync(CanonicalSequence);
 const decodeRecordId = Schema.decodeSync(RecordId);
 const decodeToolCallIdUnknown = Schema.decodeUnknownEffect(ToolCallId);
 const decodeUsageTotal = Schema.decodeEffect(Schema.Natural);
-const ZERO_EPOCH = Schema.decodeSync(ProducerEpoch)(0);
 const ZERO_SEQUENCE = decodeCanonicalSequence(0);
 const MAX_FAILURE_MESSAGE_LENGTH = 16_384;
 const RECONCILER_AUTHOR = "reconciler";
@@ -621,7 +611,6 @@ const RecoveryCauseTag = Schema.Literals([
   "ThreadStoreError",
   "ThreadNotMaterialized",
   "AppendConflict",
-  "FenceRejected",
   "RunJournalError",
   "WorkDiscoveryUnavailable",
   "DurableRuntimeFailpointError",
@@ -893,10 +882,10 @@ export type DurableSubmitFailure =
   | AdmissionConflict
   | AdmissionPolicyError
   | LedgerError
+  | OwnershipLost
   | ThreadStoreError
   | ThreadNotMaterialized
   | AppendConflict
-  | FenceRejected
   | DurableRuntimeFailpointError;
 
 /** Attempt resources could not be retained before deliberate approval suspension. */
@@ -915,7 +904,6 @@ export type DurableWorkerFailure =
   | ThreadStoreError
   | ThreadNotMaterialized
   | AppendConflict
-  | FenceRejected
   | RunJournalError
   | WorkDiscoveryUnavailable
   | RecoveryBlocked
@@ -1003,7 +991,7 @@ export const DurableApprovalResolver: Context.Reference<RunApprovalHook<never, n
 /**
  * Optional attempt-local retention before an unresolved approval releases ownership. Supply
  * this from the Attempt's Layer, capturing its live resources. The canonical approval request
- * already exists; claim renewal and abort observation remain active while this operation runs.
+ * already exists; local ownership and abort observation remain active while this operation runs.
  * Return only after retention is confirmed. Failure leaves the accepted work owed and preserves
  * its cause; interruption keeps normal resource cleanup. No approval-gated Tool runs here.
  *
@@ -1042,8 +1030,6 @@ export interface DurableRuntimeConfigOptions {
   readonly producerId: ProducerId;
   /** `awaitSettlement` ledger re-check cadence when no wake arrives (default 500ms). */
   readonly settlementPollInterval?: Duration.Duration | undefined;
-  /** Worker ownership-lease renewal cadence (default 10s; D5 lease default is 30s). */
-  readonly leaseRenewalInterval?: Duration.Duration | undefined;
   /** Active-Run abort-intent poll cadence (default 500ms). */
   readonly abortPollInterval?: Duration.Duration | undefined;
   /** Cooperative bound for one Thread's recovery, including child reads (default 30s). */
@@ -1059,7 +1045,6 @@ export class DurableRuntimeConfig extends Context.Service<
     readonly deploymentId: DeploymentId;
     readonly producerId: ProducerId;
     readonly settlementPollInterval: Duration.Duration;
-    readonly leaseRenewalInterval: Duration.Duration;
     readonly abortPollInterval: Duration.Duration;
     readonly recoveryTimeout: Duration.Duration;
     readonly estimateCostMicrousd?: RunCostEstimator | undefined;
@@ -1070,7 +1055,6 @@ export class DurableRuntimeConfig extends Context.Service<
       deploymentId: options.deploymentId,
       producerId: options.producerId,
       settlementPollInterval: options.settlementPollInterval ?? Duration.millis(500),
-      leaseRenewalInterval: options.leaseRenewalInterval ?? Duration.seconds(10),
       abortPollInterval: options.abortPollInterval ?? Duration.millis(500),
       recoveryTimeout: options.recoveryTimeout ?? Duration.seconds(30),
       ...(options.estimateCostMicrousd === undefined
@@ -1353,7 +1337,6 @@ type PublishSettlement = (
 interface AttemptLineage {
   readonly attemptId: AttemptId;
   /** The fencing generation preceding this claim (0 = no prior generation). */
-  readonly supersededEpoch: ProducerEpoch;
   /** The canonical `input:{sid}` record existed before this Attempt started. */
   readonly inputWasRecorded: boolean;
 }
@@ -1395,16 +1378,17 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   );
 
   const runStorage = yield* RunStorage;
+  const storageOwner = yield* StorageOwner;
   const deliveries = yield* Effect.serviceOption(MessageDeliveryStore);
 
   // Disposable: canonical tail and owner identify the exact projection, never ownership.
-  // Retain only the most recent view; canonical continuations govern cold recovery.
+  // Retain only the most recent view; authoritative active checkpoints govern cold recovery.
   let projectedJournal:
     | {
         readonly threadId: ThreadId;
         readonly through: CanonicalSequence;
         readonly runId: RunId;
-        readonly contextDigest: string | undefined;
+        readonly contextRecordId: string | undefined;
         readonly contextEvidence: ReadonlyArray<JournalRecordEnvelope>;
         readonly journal: RunJournalProjection;
         readonly boundaries: ReadonlyArray<JournalBoundary>;
@@ -1412,7 +1396,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     | undefined;
 
   let resolvedContext:
-    | { readonly threadId: ThreadId; readonly digest: string; readonly value: RunJournalContext }
+    | {
+        readonly threadId: ThreadId;
+        readonly recordId: RecordId;
+        readonly value: RunJournalContext;
+      }
     | undefined;
 
   const wake = yield* WakeScheduler;
@@ -1688,10 +1676,22 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       );
 
       if (Option.isNone(loaded)) {
+        const terminal = own.findLast(
+          ({ record }) =>
+            record.payload._tag === "SubmissionSettled" && record.payload.runId === runId,
+        );
+
+        if (terminal?.record.payload._tag === "SubmissionSettled") {
+          if (
+            terminal.record.payload.historyRecordCount === undefined ||
+            own.filter((entry) => entry.sequence <= terminal.sequence).length !==
+              terminal.record.payload.historyRecordCount
+          )
+            return yield* invalid("Settled Run history is incomplete");
+          continue;
+        }
         if (own.some(({ record }) => !isPreContinuationFact(record)))
-          return yield* invalid(
-            "Run execution has no canonical continuation; repair its locator explicitly",
-          );
+          return yield* invalid("Active Run execution has no authoritative checkpoint");
         continue;
       }
       const envelope = loaded.value;
@@ -1714,15 +1714,18 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             "Required Run evidence is absent from its locator; rebuild the index explicitly",
           );
         }
-        if (
-          (yield* reference(found.record).pipe(Effect.provideService(Crypto.Crypto, crypto)))
-            .digest !== ref.digest
-        )
-          return yield* invalid("Run continuation evidence has invalid integrity");
         if (!canonicalRunIds(found.record).includes(runId))
           return yield* invalid("Run continuation references another owner");
 
         return found;
+      });
+
+      const resolveRecord = Effect.fnUntraced(function* (ref: typeof cursor.originalInput) {
+        const operational = envelope.operational.find((record) => record.recordId === ref.recordId);
+
+        if (operational === undefined) return (yield* resolve(ref)).record;
+
+        return operational;
       });
 
       const input = yield* resolve(cursor.originalInput);
@@ -1734,21 +1737,22 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         input.record.payload.runId !== runId
       )
         return yield* invalid("Run continuation has no exact original admitted input");
-      const frontier = yield* resolve(cursor.lastFact);
+      yield* resolveRecord(cursor.lastFact);
 
       // An intact frontier does not prove that every earlier locator entry is present.
       if (
-        own.reduce((count, entry) => count + (entry.sequence <= frontier.sequence ? 1 : 0), 0) !==
-        cursor.recordCount
+        own.reduce(
+          (count, entry) => count + (entry.sequence <= envelope.throughSequence ? 1 : 0),
+          0,
+        ) !== envelope.canonicalRecords
       )
         return yield* invalid(
           "Run continuation has incomplete canonical evidence; rebuild its locator explicitly",
         );
 
       if (
-        frontier.batchId !== envelope.batchId ||
-        frontier.sequence >= envelope.sequence ||
-        !validateSuffix(own, envelope.sequence)
+        envelope.throughSequence < input.sequence ||
+        !validateSuffix(own, envelope.throughSequence)
       )
         return yield* invalid(
           "Run continuation has an invalid frontier or exceeds its selected suffix bound",
@@ -1756,23 +1760,20 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       let saved: RunJournalContext | undefined;
 
       if (cursor.savedContext !== undefined) {
-        const savedEnvelope = yield* resolve(cursor.savedContext);
+        const savedRecord = yield* resolveRecord(cursor.savedContext);
 
-        if (
-          savedEnvelope.record.payload._tag !== "RunContextRecorded" ||
-          savedEnvelope.sequence <= input.sequence
-        )
+        if (savedRecord.payload._tag !== "RunContextRecorded")
           return yield* invalid("Run continuation has invalid saved original context");
-        const initial = savedEnvelope.record.payload;
+        const initial = savedRecord.payload;
         const cachedContext = resolvedContext;
 
         if (
           cachedContext?.threadId === threadId &&
-          cachedContext.digest === cursor.savedContext.digest
+          cachedContext.recordId === cursor.savedContext.recordId
         ) {
           saved = cachedContext.value;
         } else {
-          saved = yield* readRunContext(initial, input, cursor.savedContext.digest).pipe(
+          saved = yield* readRunContext(initial, input, cursor.savedContext.recordId).pipe(
             Effect.provide(RunContextReader.layer(threadId)),
             Effect.provideService(ThreadReader, reader),
             Effect.provideService(Crypto.Crypto, crypto),
@@ -1780,9 +1781,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               invalid("Saved original context cannot be resolved from its evidence"),
             ),
           );
-          resolvedContext = { threadId, digest: cursor.savedContext.digest, value: saved };
+          resolvedContext = { threadId, recordId: cursor.savedContext.recordId, value: saved };
         }
-        if (own.filter(({ record }) => record.payload._tag === "RunContextRecorded").length !== 1)
+        if (
+          envelope.operational.filter(({ payload }) => payload._tag === "RunContextRecorded")
+            .length !== 1
+        )
           return yield* invalid("Run has conflicting saved original contexts");
       }
       if (cursor.latestResponse !== undefined) {
@@ -1795,7 +1799,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           own.some(
             (entry) =>
               entry.record.payload._tag === "ModelResponseRecorded" &&
-              entry.sequence <= frontier.sequence &&
+              entry.sequence <= envelope.throughSequence &&
               entry.sequence > response.sequence,
           )
         )
@@ -1803,19 +1807,19 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       } else if (cursor.accounting.committedTurns !== 0)
         return yield* invalid("Run continuation accounting has no corresponding response");
       if (cursor.terminal !== undefined) {
-        const terminal = yield* resolve(cursor.terminal);
+        const terminal = yield* resolveRecord(cursor.terminal);
 
         if (
-          terminal.record.payload._tag !== "RunCompleted" &&
-          terminal.record.payload._tag !== "RunFailed" &&
-          terminal.record.payload._tag !== "SubmissionSettled"
+          terminal.payload._tag !== "RunCompleted" &&
+          terminal.payload._tag !== "RunFailed" &&
+          terminal.payload._tag !== "SubmissionSettled"
         )
           return yield* invalid("Run continuation has invalid terminal evidence");
       }
       if (journalOwner === runId) {
         context = saved;
         progress = cursor;
-        progressThrough = frontier.sequence;
+        progressThrough = envelope.throughSequence;
       }
     }
 
@@ -2308,16 +2312,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       if (!response.toolOperations.some((operation) => selectedIds.has(operation.toolCallId)))
         continue;
 
-      const messagesDigest = yield* withCrypto(digestJson(response.messages)).pipe(
-        Effect.mapError((cause) =>
-          RunJournalError.make({ message: "Cannot verify original Tool response", cause }),
-        ),
-      );
-
-      if (messagesDigest !== response.messagesDigest)
-        return yield* RunJournalError.make({
-          message: "Original Tool response has an invalid digest",
-        });
       const declared = yield* declaredToolCalls(response.messages);
 
       for (const operation of response.toolOperations) {
@@ -2553,14 +2547,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       }),
     );
 
-  /** Materialize without regressing a fence someone else already advanced. */
-  const materializeAtLeast = (
-    threadId: ThreadId,
-    producerEpoch: ProducerEpoch,
-  ): Effect.Effect<void, ThreadStoreError> =>
-    store
-      .materialize(ThreadMaterialization.make({ threadId, producerEpoch }))
-      .pipe(Effect.catchTag("FenceRejected", () => Effect.void));
+  const materializeThread = (threadId: ThreadId) =>
+    store.materialize(ThreadMaterialization.make({ threadId }));
 
   const ensureThreadCreated = (
     threadId: ThreadId,
@@ -2577,26 +2565,26 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   type ProgressWriter = Effect.Success<ReturnType<typeof makeProgressWriter>>;
   const progressWriters = new WeakMap<RunWriter, ProgressWriter>();
 
-  const activeProgress = new Map<
-    ThreadId,
-    { readonly epoch: ProducerEpoch; readonly writer: ProgressWriter }
-  >();
+  const activeProgress = new Map<ThreadId, { readonly writer: ProgressWriter }>();
 
   const withProgress = Effect.fnUntraced(function* (writer: RunWriter) {
     const active = activeProgress.get(writer.threadId);
 
     const progress =
-      active?.epoch === writer.producerEpoch
-        ? active.writer
-        : yield* makeProgressWriter(writer.threadId, config.deploymentId).pipe(
-            Effect.provideService(ThreadReader, reader),
-            Effect.provideService(Crypto.Crypto, crypto),
-          );
+      active?.writer ??
+      (yield* makeProgressWriter(writer.threadId, config.deploymentId).pipe(
+        Effect.provideService(ThreadReader, reader),
+        Effect.provideService(Crypto.Crypto, crypto),
+      ));
 
     const owned: RunWriter = {
       ...writer,
       append: (batch) =>
-        progress.commit(batch).pipe(Effect.provideService(CurrentRunWriter, writer)),
+        progress.commit(batch).pipe(
+          Effect.provideService(CurrentRunWriter, writer),
+          // A replaced owner may observe retired progress before it reaches the append gate.
+          Effect.tapError(() => writer.checkActive),
+        ),
     };
 
     progressWriters.set(owned, progress);
@@ -2604,9 +2592,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     return { owned, progress };
   });
 
-  const attemptContextFor = (threadId: ThreadId, producerEpoch: ProducerEpoch) =>
-    makeRunWriter(threadId, producerEpoch).pipe(
+  const attemptContextAtTail = (threadId: ThreadId) =>
+    makeRunWriter(threadId).pipe(
       Effect.provideService(ThreadStore, store),
+      Effect.provideService(StorageOwner, storageOwner),
       Effect.flatMap(withProgress),
       Effect.map(({ owned }) => owned),
     );
@@ -2614,7 +2603,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const withProgressSession = Effect.fnUntraced(function* (session: RunStorageSession) {
     const { owned, progress } = yield* withProgress(session);
 
-    activeProgress.set(session.threadId, { epoch: session.producerEpoch, writer: progress });
+    activeProgress.set(session.threadId, { writer: progress });
     yield* Effect.addFinalizer(() =>
       Effect.sync(() => {
         if (activeProgress.get(session.threadId)?.writer === progress)
@@ -2643,43 +2632,38 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         const active = activeProgress.get(request.threadId);
 
         const progress =
-          active?.epoch === request.producerEpoch
-            ? active.writer
-            : yield* makeProgressWriter(request.threadId, config.deploymentId).pipe(
-                Effect.provideService(ThreadReader, reader),
-                Effect.provideService(Crypto.Crypto, crypto),
-              );
+          active?.writer ??
+          (yield* makeProgressWriter(request.threadId, config.deploymentId).pipe(
+            Effect.provideService(ThreadReader, reader),
+            Effect.provideService(Crypto.Crypto, crypto),
+          ));
 
         let tail = {
           sequence: request.expectedTailSequence,
-          digest: request.expectedTailDigest,
         };
 
         return yield* progress.commit(request.batch).pipe(
           Effect.provideService(CurrentRunWriter, {
             threadId: request.threadId,
             tail: Effect.sync(() => tail),
-            append: (batch) =>
+            withProgress: (effect) => storageOwner.withProgress(request.threadId, effect),
+            append: (batch, executions) =>
               store
                 .append(
-                  FencedAppendRequest.make({
+                  AppendRequest.make({
                     ...request,
                     expectedTailSequence: tail.sequence,
-                    expectedTailDigest: tail.digest,
+
                     batch,
+                    executions,
                   }),
                 )
                 .pipe(
                   Effect.tapErrorTag("AppendConflict", (conflict) =>
                     Effect.sync(() => {
-                      if (
-                        conflict.reason === "tail" &&
-                        conflict.actualTailSequence !== undefined &&
-                        conflict.actualTailDigest !== undefined
-                      )
+                      if (conflict.reason === "tail" && conflict.actualTailSequence !== undefined)
                         tail = {
                           sequence: conflict.actualTailSequence,
-                          digest: conflict.actualTailDigest,
                         };
                     }),
                   ),
@@ -2687,22 +2671,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           }),
         );
       }),
-  });
-
-  const recoveryOwnership = (
-    threadId: ThreadId,
-    submissionId: SubmissionId,
-    ownershipToken: OwnershipToken,
-  ) =>
-    bindRunOwnership(threadId, submissionId, Effect.succeed(ownershipToken)).pipe(
-      Effect.provideService(SubmissionLedger, ledger),
-    );
-
-  /** Administrative publication rechecks its explicit authority under the canonical writer. */
-  const attemptContextAtTail = Effect.fnUntraced(function* (threadId: ThreadId) {
-    const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
-
-    return yield* attemptContextFor(threadId, tail.producerEpoch);
   });
 
   const appendBatch = (ctx: Pick<RunWriter, "threadId" | "append">, batch: CanonicalBatch) =>
@@ -2730,7 +2698,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           Effect.provideService(CurrentRunSettlement, {
             threadId: ctx.threadId,
             tail: ctx.tail,
-            publishSettlement: (prepared) =>
+            withProgress: ctx.withProgress,
+            publishSettlement: (prepared, executions) =>
               Effect.gen(function* () {
                 let tail = yield* ctx.tail;
 
@@ -2740,40 +2709,37 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                       SettlementPublication.make({
                         submissionId,
                         authority,
-                        append: FencedAppendRequest.make({
+                        append: AppendRequest.make({
                           threadId: ctx.threadId,
-                          producerEpoch: ctx.producerEpoch,
                           expectedTailSequence: tail.sequence,
-                          expectedTailDigest: tail.digest,
+
                           batch: prepared,
+                          executions,
                         }),
                       }),
                     )
                     .pipe(
+                      (effect) =>
+                        storageOwner.withMutation(Effect.andThen(ctx.checkActive, effect)),
                       Effect.catchTag("AppendConflict", (conflict) => {
                         if (
                           conflict.reason !== "tail" ||
                           conflict.actualTailSequence === undefined ||
-                          conflict.actualTailDigest === undefined ||
                           retries >= 8
                         )
                           return Effect.fail(conflict);
                         tail = {
                           sequence: conflict.actualTailSequence,
-                          digest: conflict.actualTailDigest,
                         };
 
-                        if (
-                          prepared.records.some(({ payload }) => payload._tag === "RunContinuation")
-                        )
-                          return ctx.checkFence.pipe(Effect.andThen(Effect.fail(conflict)));
+                        if (executions !== undefined && executions.length > 0)
+                          return ctx.refresh.pipe(Effect.andThen(Effect.fail(conflict)));
 
                         return Effect.succeed(undefined);
                       }),
                     );
 
                   if (result === undefined) continue;
-                  yield* ctx.checkFence;
 
                   return result;
                 }
@@ -3239,30 +3205,27 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     yield* ownership.markInputApplied({ recordId, sequence: result.firstSequence });
   });
 
-  const canonicalRunStartFromRecords = Effect.fnUntraced(function* (
-    records: ReadonlyArray<CanonicalRecordEnvelope>,
-    runId: RunId,
-  ) {
+  const readRunStart = Effect.fnUntraced(function* (threadId: ThreadId, runId: RunId) {
+    const loaded = yield* reader
+      .readExecution({ threadId, runId })
+      .pipe(Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(Option.none())));
+
+    if (Option.isNone(loaded)) return undefined;
     const recordId = runStartedRecordId(runId);
-
-    const starts = records.filter(
-      ({ record }) => record.payload._tag === "RunStarted" && record.payload.runId === runId,
-    );
-
-    const existing = records.find(({ record }) => record.recordId === recordId);
+    const starts = loaded.value.operational.filter(({ payload }) => payload._tag === "RunStarted");
+    const existing = loaded.value.operational.find((record) => record.recordId === recordId);
 
     if (
       starts.length > 1 ||
-      (starts.length === 1 && starts[0]?.record.recordId !== recordId) ||
+      (starts.length === 1 && starts[0]?.recordId !== recordId) ||
       (existing !== undefined &&
-        (existing.record.payload._tag !== "RunStarted" || existing.record.payload.runId !== runId))
-    ) {
+        (existing.payload._tag !== "RunStarted" || existing.payload.runId !== runId))
+    )
       return yield* RunJournalError.make({
-        message: `Run ${runId} has conflicting start evidence`,
+        message: `Run ${runId} has conflicting active start state`,
       });
-    }
 
-    return existing?.record;
+    return existing;
   });
 
   const makeRunStart = Effect.fnUntraced(function* (
@@ -3273,7 +3236,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const writer = yield* CurrentRunWriter;
     const runId = runIdForSubmission(submission.submissionId);
     const recordId = runStartedRecordId(runId);
-    const existing = yield* canonicalRunStartFromRecords(records, runId);
+    const existing = yield* readRunStart(submission.threadId, runId);
     let start: RecordEnvelope;
     let allowance = maxDurationMillis;
     let committed = existing !== undefined;
@@ -3611,7 +3574,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
     yield* wake.notify(submission.threadId);
     yield* notifyParentOfChildSettlement(submission, published.record);
-    yield* settleJoinedSubmissions(ctx, canonicalSettlement);
+    yield* settleJoinedSubmissions(
+      yield* attemptContextAtTail(submission.threadId),
+      canonicalSettlement,
+    );
 
     return materializeSettlement(settlement, published.record);
   });
@@ -3730,7 +3696,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       yield* store
         .append(
-          FencedAppendRequest.make({
+          AppendRequest.make({
             threadId: request.childThreadId,
             batch: CanonicalBatch.make({
               batchId: subagentLineageBatchId(request.childThreadId),
@@ -3738,12 +3704,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               records: [envelope],
             }),
             expectedTailSequence: tail.tailSequence,
-            expectedTailDigest: tail.tailDigest,
-            producerEpoch: tail.producerEpoch,
           }),
         )
         .pipe(
-          Effect.catchTag(["AppendConflict", "FenceRejected"], (error) =>
+          Effect.catchTag("AppendConflict", (error) =>
             // A racing establishment pass (or the child's own claimed worker) advanced the
             // log; the deterministic identity means the record either exists or the next
             // pass re-proves it — verify instead of trusting the race blindly.
@@ -3763,7 +3727,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       effect.pipe(
         Effect.retry({
           times: 7,
-          while: (error) => error._tag === "AppendConflict" || error._tag === "FenceRejected",
+          while: (error) => error._tag === "AppendConflict",
         }),
       ),
   );
@@ -3870,7 +3834,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       }
     }
     yield* hit("subagent:after-admit");
-    yield* materializeAtLeast(request.childThreadId, ZERO_EPOCH);
+    yield* materializeThread(request.childThreadId);
     yield* ensureThreadCreated(request.childThreadId, request.targetAgentId, request.targetDigests);
     const childRead = yield* readAllTolerant(request.childThreadId, []);
 
@@ -4277,8 +4241,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         childSubmissionId,
         childSettlementId: verified.settlement.settlementId,
         childOutcome: verified.outcome,
-        childResultDigest: yield* withCrypto(digestJson(verified.settlement.result ?? null)),
-        projectedResultDigest: yield* withCrypto(digestJson(boundedResult)),
         usageSummary: yield* childUsageSummaryOf(verified.childRecords, childRunId),
         ...(yield* verifiedChildUsage(verified, childRunId)),
         reservationId: reservation.reservationId,
@@ -4762,19 +4724,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     );
 
   /**
-   * Superseding-Attempt interruption audit (durability §9): appended at most once per superseded
-   * fence generation before this Attempt re-invokes the model. It deliberately over-approximates:
-   * an owner may have stopped between commits, and host retirement or repair can advance the
-   * fence without inference. History cannot distinguish these from a lost provider response.
-   * This records incomplete accounting, not an exact number or identity of missing model calls.
+   * Record incomplete provider accounting once before recovery can repeat inference. A saved
+   * input without a settled Run may have lost a response; no Attempt history is needed.
    */
   const appendInterruptedAudit = Effect.fnUntraced(function* (
     ctx: AttemptAppendContext,
     runId: ReturnType<typeof runIdForSubmission>,
-    lineage: AttemptLineage,
     knownIds: Set<string>,
   ): Effect.fn.Return<void, DurableWorkerFailure> {
-    const recordId = modelResponseInterruptedRecordId(runId, lineage.supersededEpoch);
+    const recordId = modelResponseInterruptedRecordId(runId);
 
     if (knownIds.has(recordId)) return;
 
@@ -4782,17 +4740,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       recordId,
       ModelResponseInterrupted.make({
         runId,
-        supersededEpoch: lineage.supersededEpoch,
-        attemptId: lineage.attemptId,
-        reason:
-          "A prior ownership period ended without a canonical settlement; any in-flight model response was lost and the model may be re-invoked (duplicate provider cost is observable)",
       }),
     );
 
     yield* appendBatch(
       ctx,
       CanonicalBatch.make({
-        batchId: modelResponseInterruptedBatchId(runId, lineage.supersededEpoch),
+        batchId: modelResponseInterruptedBatchId(runId),
         producerId: config.producerId,
         records: [envelope],
       }),
@@ -4805,8 +4759,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
   /**
    * Drive the shared interpreter Effect with history rebuilt by the run journal, commit
-   * each Turn canonically through the fenced append, watch for durable abort intent, and keep the
-   * ownership lease renewed. Engine Run failures settle `failed`; coordinator failures abort the
+   * each Turn under the local owner, and watch for durable abort intent. Engine Run failures settle `failed`; coordinator failures abort the
    * Attempt cleanly with the obligation still owed.
    *
    * The interpreter supplies validated response, closed Tool-result, and completion facts.
@@ -4898,7 +4851,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         cached.threadId === ctx.threadId &&
         cached.through === projectionThrough &&
         cached.runId === runId &&
-        cached.contextDigest === priorContext?.digest
+        cached.contextRecordId === priorContext?.recordId
           ? (boundaries.push(...cached.boundaries),
             cached.contextEvidence.forEach(retainHistory),
             cached.journal)
@@ -4929,7 +4882,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         threadId: ctx.threadId,
         through: CanonicalSequence.make(projectionThrough),
         runId,
-        contextDigest: priorContext?.digest,
+        contextRecordId: priorContext?.recordId,
         contextEvidence: [...historyEvidence.values()],
         journal,
         boundaries,
@@ -5413,9 +5366,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           });
         });
 
-      const recordedCompletion = records.find(
-        (envelope) => envelope.record.recordId === runCompletedRecordId(runId),
-      )?.record.payload;
+      const activeExecution = yield* reader.readExecution({ threadId: ctx.threadId, runId });
+
+      const recordedCompletion = Option.isSome(activeExecution)
+        ? activeExecution.value.operational.find(
+            (record) => record.recordId === runCompletedRecordId(runId),
+          )?.payload
+        : undefined;
 
       if (recordedCompletion !== undefined) {
         if (recordedCompletion._tag !== "RunCompleted" || recordedCompletion.runId !== runId) {
@@ -5465,14 +5422,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             });
           }
         }
-        if (
-          recordedCompletion.resultDigest !== undefined &&
-          recordedCompletion.resultDigest !==
-            (yield* withCrypto(runCompletionDigest(recordedCompletion)))
-        )
-          return yield* RunJournalError.make({
-            message: "RunCompleted terminal values failed their integrity check",
-          });
         // Output and disposition were validated before the atomic RunCompleted commit.
         // Future application codecs and completion functions have no authority to reinterpret it.
 
@@ -6259,7 +6208,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 message: "Tool dispatch preceded its canonical response",
               });
             yield* hit("tools:before-dispatch-fence");
-            yield* ctx.checkFence;
+            yield* ctx.checkActive;
             initialDispatchProofTurns.delete(currentToolTurn.turn);
             yield* hit("tools:after-dispatch-fence");
           }),
@@ -6838,8 +6787,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
        *    ownership (DUR-015). A `joining` row WITHOUT canonical input was never consumed and
        *    is recovery's to revert — the hook never guesses at it (fail-closed).
        * 2. Claim fresh — `claimJoining` atomically transitions the contiguous ready prefix of
-       *    strictly-later queue sequences to `joining` under the host's ownership token (no
-       *    epoch bump; an admitted-not-ready row breaks the prefix). Per fresh claim: honor a
+       *    strictly-later queue sequences to `joining` under the host's local generation (an
+       *    admitted-not-ready row breaks the prefix). Per fresh claim: honor a
        *    pre-consumption abort intent by reverting (revert-then-abort), else append the
        *    deterministic `UserInputRecorded` (batch `submission-input:{sid}`, record
        *    `input:{sid}`, `runId` = host Run, kind `steering`) → `join:after-canonical-append`
@@ -7608,10 +7557,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 childSubmissionId: startedPayload.childSubmissionId,
                 childSettlementId: verified.settlement.settlementId,
                 childOutcome: verified.outcome,
-                childResultDigest: yield* withCrypto(
-                  digestJson(verified.settlement.result ?? null),
-                ),
-                projectedResultDigest: yield* withCrypto(digestJson(encodedResult)),
                 usageSummary: yield* childUsageSummaryOf(
                   verified.childRecords,
                   startedPayload.childRunId,
@@ -7792,9 +7737,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
               if (
                 Option.isSome(candidate) &&
-                (candidate.value.state === "ready" ||
-                  candidate.value.state === "running" ||
-                  candidate.value.state === "input-applied")
+                (candidate.value.state === "ready" || candidate.value.state === "input-applied")
               ) {
                 const next = yield* recordHalt(
                   ledger.lookup(
@@ -7807,9 +7750,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 if (
                   Option.isSome(next) &&
                   next.value.agentId === submission.agentId &&
-                  (next.value.state === "ready" ||
-                    next.value.state === "running" ||
-                    next.value.state === "input-applied") &&
+                  (next.value.state === "ready" || next.value.state === "input-applied") &&
                   (yield* recordHalt(
                     submissionScheduling.yieldTo({ active: submission, next: next.value }),
                   ))
@@ -7849,15 +7790,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         ...(pendingContextToolCallId === undefined ? {} : { pendingContextToolCallId }),
       };
 
-      // Durability §9: the superseding Attempt records the interruption BEFORE re-invoking the
-      // model. A batch resume never re-invokes the model for the pending Turn, so it is exempt.
-      if (
-        pending === undefined &&
-        lineage.inputWasRecorded &&
-        lineage.supersededEpoch >= 1 &&
-        lineage.supersededEpoch < ctx.producerEpoch
-      ) {
-        yield* appendInterruptedAudit(ctx, runId, lineage, knownIds);
+      // Mark incomplete usage before recovery repeats inference. A batch resume already has
+      // its response and does not re-invoke the model for the pending Turn.
+      if (pending === undefined && lineage.inputWasRecorded) {
+        yield* appendInterruptedAudit(ctx, runId, knownIds);
         interruptedUsage = true;
       }
 
@@ -7875,14 +7811,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 ),
               ),
               Effect.andThen(() =>
-                updateRuntime.emit({
-                  updateId: update.updateId,
-                  value: update.value,
-                  submission,
-                  runId,
-                  producerEpoch: ctx.producerEpoch,
-                  definitions: submission.agentDigests,
-                }),
+                updateRuntime
+                  .emit({
+                    updateId: update.updateId,
+                    value: update.value,
+                    submission,
+                    runId,
+                    definitions: submission.agentDigests,
+                  })
+                  .pipe(Effect.provideService(CurrentRunWriter, ctx)),
               ),
               Effect.catchTag(["LedgerError", "DurableRuntimeFailpointError"], (failure) =>
                 // Preserve the original infrastructure failure at the coordinator boundary;
@@ -7944,7 +7881,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             ),
           ),
         ),
-        // Retain while the Attempt's services, claim renewal and abort watcher are still live.
+        // Retain while the Attempt's services, local ownership and abort watcher are still live.
         // A failed retention halts the coordinator; it is not a failed Tool or a safe suspension.
         Effect.tapCause((cause) =>
           Option.isSome(agentApprovalPendingOption(cause)) &&
@@ -7974,11 +7911,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         }),
       );
 
-      // Liveness only: the lease keeps the claim visible; correctness stays with the epoch fence.
-      // OwnershipLost ends the race and interrupts the Run fiber cleanly.
-      const renewal = halt(session.maintain(config.leaseRenewalInterval));
-
-      const execution = Effect.raceFirst(consume, Effect.raceFirst(abortWatcher, renewal));
+      const execution = Effect.raceFirst(consume, abortWatcher);
 
       const raced = (
         yieldAfter === undefined && submissionScheduling.yieldTo === undefined
@@ -8217,8 +8150,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     yieldAfter?: DateTime.Utc,
   ) =>
     Effect.gen(function* () {
+      // Recheck ownership outside the disposable cache's failure recovery.
+      yield* session.checkActive;
+
       const checkpointPrompt = yield* promptHistory
-        .take({ threadId: session.threadId, producerEpoch: session.producerEpoch })
+        .take({ threadId: session.threadId })
         .pipe(
           Effect.provideService(ThreadStore, store),
           Effect.provideService(ThreadReader, reader),
@@ -8228,14 +8164,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       session = yield* withProgressSession(session);
       const { claim, threadId } = session;
       const submissionId = claim.submissionId;
-
-      // Claim atomically advances the lane fence. SQL/DO share that fence with ThreadStore,
-      // so reading the tail here already observes this claim, not its predecessor. Use the
-      // granted generation; canonical input and response evidence below decide whether a
-      // conservative interruption audit is needed before inference can repeat.
-      const supersededEpoch = Schema.decodeSync(ProducerEpoch)(
-        Math.max(0, claim.producerEpoch - 1),
-      );
 
       const snapshot = yield* ledger.loadRecoverySnapshot(
         RecoverySnapshotRequest.make({ submissionId }),
@@ -8359,7 +8287,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         const settlement = yield* finalizeFromHistory(submission, record);
         const canonicalSettlement = yield* settlementPayloadFromRecord(record, submissionId);
 
-        yield* settleJoinedSubmissions(ctx, canonicalSettlement);
+        yield* settleJoinedSubmissions(
+          yield* attemptContextAtTail(submission.threadId),
+          canonicalSettlement,
+        );
 
         return Option.some(settlement);
       }
@@ -8374,7 +8305,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           return Option.none<Settlement>();
         }
         if (disposition === "blocked") {
-          yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+          yield* session.release;
 
           return Option.none<Settlement>();
         }
@@ -8466,7 +8397,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           }
           // This Submission is parked (marked Unknown, or reconciliation itself failed):
           // release the claim without settling — the accepted-work obligation stays owed.
-          yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+          yield* session.release;
 
           return false;
         }
@@ -8617,7 +8548,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const lineage: AttemptLineage = {
         attemptId: claim.attemptId,
-        supersededEpoch,
         inputWasRecorded: evidence.inputRecorded,
       };
 
@@ -8660,11 +8590,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           const suffix = currentRecords.filter((entry) => entry.sequence > original.sequence);
 
           const fresh =
-            !lineage.inputWasRecorded &&
-            (tail.sequence === original.sequence ||
-              (tail.sequence === original.sequence + 1 &&
-                view.progressThrough === original.sequence)) &&
-            suffix.every((entry) => entry.record.payload._tag === "RunContinuation");
+            !lineage.inputWasRecorded && tail.sequence === original.sequence && suffix.length === 0;
 
           // Every replay stays bounded at the ORIGINAL admission, never the later Thread tail.
           const source: InitialJournalSource = yield* Effect.gen(function* () {
@@ -8809,7 +8735,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             return Option.none<Settlement>();
           }
           if (disposition === "blocked") {
-            yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+            yield* session.release;
 
             return Option.none<Settlement>();
           }
@@ -8850,7 +8776,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         if (openObligation) {
           if (outcome._tag === "failed") {
             // Release the claim and leave the lane to recovery classification.
-            yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+            yield* session.release;
 
             return Option.none<Settlement>();
           }
@@ -8886,7 +8812,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         )
           yield* promptHistory
             .complete(
-              { threadId: session.threadId, producerEpoch: session.producerEpoch },
+              { threadId: session.threadId },
               initialJournal.original,
               initialJournal.history,
             )
@@ -8903,49 +8829,21 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   /** A missing current binding leaves both roots and children owed, with their claims released. */
   type CapturedWorkerBinding = Effect.Success<ReturnType<typeof makeLegacyWorkerBinding>>;
 
-  // Administrative repairs acquire separately from active Run sessions and never renew.
-  // Register cleanup before any interruptible work can observe the granted claim.
-  const acquireAdministrativeClaim = Effect.fnUntraced(function* (
-    threadId: ThreadId,
-    handoff?: ClaimHandoff,
-  ) {
-    const claimed = yield* ledger.claim(
-      ClaimRequest.make({
-        threadId,
-        producerId: config.producerId,
-        ...(handoff === undefined ? {} : { handoff }),
-      }),
-    );
-
-    if (Option.isNone(claimed)) return Option.none();
-    const claim = claimed.value;
-
-    yield* Effect.addFinalizer(() =>
-      ledger
-        .releaseOwnership(
-          ReleaseOwnershipRequest.make({
-            submissionId: claim.submissionId,
-            ownershipToken: claim.ownershipToken,
-          }),
-        )
-        .pipe(
-          Effect.catchTag("OwnershipLost", () => Effect.void),
-          Effect.catchTag("LedgerError", () =>
-            Effect.logWarning(
-              "Attempt ownership release failed; lease recovery remains required",
-            ).pipe(Effect.annotateLogs({ submissionId: claim.submissionId })),
-          ),
+  const acquireAdministrativeClaim = (threadId: ThreadId, handoff?: ClaimHandoff) =>
+    runStorage
+      .claim(
+        ClaimRequest.make({
+          threadId,
+          ...(handoff === undefined ? {} : { handoff }),
+        }),
+      )
+      .pipe(
+        Effect.flatMap((claimed) =>
+          Option.isNone(claimed)
+            ? Effect.succeed(Option.none<RunStorageSession>())
+            : withProgressSession(claimed.value).pipe(Effect.map(Option.some)),
         ),
-    );
-
-    if (handoff !== undefined && claim.submissionId !== handoff.submissionId)
-      return yield* LedgerError.make({
-        operation: "claim handoff",
-        message: "The submission adapter did not honor the requested handoff",
-      });
-
-    return Option.some({ claim });
-  }, Effect.uninterruptible);
+      );
 
   const processThreadHead = (
     resolve: (
@@ -8971,7 +8869,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           const claimed = yield* runStorage.claim(
             ClaimRequest.make({
               threadId,
-              producerId: config.producerId,
               ...(handoff === undefined ? {} : { handoff }),
             }),
           );
@@ -9018,7 +8915,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             );
 
             if (!lineageRecorded) {
-              yield* session.release.pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+              yield* session.release;
 
               const parent = yield* ledger.lookup(
                 SubmissionLookupById.make({
@@ -9056,7 +8953,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 },
                 (nextSubmissionId) => {
                   nextHandoff = ClaimHandoff.make({
-                    producerEpoch: claim.producerEpoch,
                     deferredSubmissionIds: [
                       ...(handoff?.deferredSubmissionIds ?? []),
                       claim.submissionId,
@@ -9207,50 +9103,33 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const claimFor = Effect.fnUntraced(function* (
     submission: SubmissionSnapshot,
     decision: RecoveryDecision,
-  ): Effect.fn.Return<Option.Option<Claim>, LedgerError | OwnershipLost, Scope.Scope> {
+  ): Effect.fn.Return<Option.Option<RunStorageSession>, DurableWorkerFailure, Scope.Scope> {
     const head = yield* eligibleThreadHead(submission.threadId);
 
-    if (Option.isNone(head) || head.value.submissionId !== submission.submissionId) {
+    if (Option.isNone(head) || head.value.submissionId !== submission.submissionId)
       return Option.none();
-    }
     const claimed = yield* acquireAdministrativeClaim(submission.threadId);
 
     if (Option.isNone(claimed)) return Option.none();
-    if (claimed.value.claim.submissionId !== submission.submissionId) {
-      // Only the first eligible Submission is claimable; selection may have changed since the read.
-      yield* ledger
-        .releaseOwnership(
-          ReleaseOwnershipRequest.make({
-            submissionId: claimed.value.claim.submissionId,
-            ownershipToken: claimed.value.claim.ownershipToken,
-          }),
-        )
-        .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+    const session = claimed.value;
+
+    if (session.claim.submissionId !== submission.submissionId) {
+      yield* session.release;
 
       return Option.none();
     }
+    yield* annotateRepair(session, decision);
 
-    yield* annotateRepair(submission.threadId, decision, claimed.value.claim.producerEpoch);
-
-    return Option.some(claimed.value.claim);
+    return Option.some(session);
   });
 
-  /**
-   * Best-effort DUR-013 audit of an owned repair attempt, before it can release its claim.
-   * The fixed granted epoch never borrows a later writer's authority. State-only repairs
-   * omit canonical annotations; their decision and operator author/reason remain in telemetry.
-   */
+  /** Repair annotations use the captured session, never authority reconstructed from history. */
   const annotateRepair = (
-    threadId: ThreadId,
+    session: RunStorageSession,
     decision: RecoveryDecision,
-    producerEpoch: ProducerEpoch,
   ): Effect.Effect<void> =>
     Effect.gen(function* () {
-      yield* store.materialize(ThreadMaterialization.make({ threadId, producerEpoch }));
-      const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
-
-      // ThreadCreated must remain the first canonical record of a new Thread.
-      if (tail.tailSequence === ZERO_SEQUENCE) return;
+      if ((yield* session.tail).sequence === ZERO_SEQUENCE) return;
 
       const encodedDecision = yield* Schema.encodeEffect(RecoveryDecision)(decision).pipe(
         Effect.orDie,
@@ -9263,17 +9142,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         RepairAnnotated.make({ reason: `recovery:${decision._tag}`, details }),
       );
 
-      yield* store.append(
-        FencedAppendRequest.make({
-          threadId,
-          batch: CanonicalBatch.make({
-            batchId: recoveryRepairBatchId(decision.submissionId, decision._tag),
-            producerId: config.producerId,
-            records: [envelope],
-          }),
-          expectedTailSequence: tail.tailSequence,
-          expectedTailDigest: tail.tailDigest,
-          producerEpoch,
+      yield* session.append(
+        CanonicalBatch.make({
+          batchId: recoveryRepairBatchId(decision.submissionId, decision._tag),
+          producerId: config.producerId,
+          records: [envelope],
         }),
       );
     }).pipe(Effect.ignore);
@@ -9350,9 +9223,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       // accepted work without an Attempt). The appends run at the current tail with the
       // durable abort intent as publication authority; any racing owner's fence
       // advance (or a concurrent joining claim) defers honestly to the next pass.
-      if (submission.state === "ready" && snapshot.ownership === undefined) {
+      if (submission.state === "ready" && !snapshot.hasOwner) {
         return yield* Effect.gen(function* () {
-          yield* materializeAtLeast(submission.threadId, ZERO_EPOCH);
+          yield* materializeThread(submission.threadId);
           yield* ensureThreadCreated(
             submission.threadId,
             submission.agentId,
@@ -9372,7 +9245,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           return "repaired" as const;
         }).pipe(
           Effect.catchTags({
-            FenceRejected: () => Effect.succeed("deferred" as const),
             AppendConflict: () => Effect.succeed("deferred" as const),
             OwnershipLost: () => Effect.succeed("deferred" as const),
           }),
@@ -9381,23 +9253,21 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       return "deferred";
     }
-    const claim = claimed.value;
+    const session = claimed.value;
 
     yield* store.materialize(
       ThreadMaterialization.make({
         threadId: submission.threadId,
-        producerEpoch: claim.producerEpoch,
       }),
     );
     yield* ensureThreadCreated(submission.threadId, submission.agentId, submission.agentDigests);
-    const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
+    const ctx = session;
 
     yield* settleAborted(
       ctx,
       submission,
       publicationFor(ctx, submission.submissionId, {
         _tag: "Owned",
-        ownershipToken: claim.ownershipToken,
       }),
       intent,
       evidence,
@@ -9424,15 +9294,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const claimed = yield* claimFor(submission, decision);
 
     if (Option.isNone(claimed)) return "deferred";
-    const claim = claimed.value;
+    const session = claimed.value;
 
     yield* store.materialize(
       ThreadMaterialization.make({
         threadId: submission.threadId,
-        producerEpoch: claim.producerEpoch,
       }),
     );
-    const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
+    const ctx = session;
     const knownIds = knownRecordIdsOf(records);
     // The classifier's decision lists ONLY ordinary open calls (S2: an open delegation call
     // never marks Unknown — its establishment is idempotent and routes through the Subagent
@@ -9465,14 +9334,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     } else {
       disposition = "repaired";
     }
-    yield* ledger
-      .releaseOwnership(
-        ReleaseOwnershipRequest.make({
-          submissionId: submission.submissionId,
-          ownershipToken: claim.ownershipToken,
-        }),
-      )
-      .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+    yield* session.release;
 
     return disposition;
   });
@@ -9578,30 +9440,17 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const claimed = yield* claimFor(submission, decision);
 
     if (Option.isNone(claimed)) return "deferred";
-    const claim = claimed.value;
+    const session = claimed.value;
 
-    const outcome = yield* ledger.suspend(
-      SuspendRequest.make({
-        submissionId: submission.submissionId,
-        ownershipToken: claim.ownershipToken,
-        reason: ApprovalPendingSuspension.make({
-          toolCallIds: [first.toolCallId],
-        }),
-      }),
+    const outcome = yield* session.suspend(
+      ApprovalPendingSuspension.make({ toolCallIds: [first.toolCallId] }),
     );
 
     yield* hit("approval:after-suspend");
     if (outcome === "resume-immediately") {
       // Decisions raced in between the snapshot read and the suspend transaction: nothing to
       // repair — release the claim so a worker resumes the declared batch.
-      yield* ledger
-        .releaseOwnership(
-          ReleaseOwnershipRequest.make({
-            submissionId: submission.submissionId,
-            ownershipToken: claim.ownershipToken,
-          }),
-        )
-        .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+      yield* session.release;
 
       return "deferred";
     }
@@ -9638,7 +9487,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   > {
     const submission = snapshot.submission;
     const runId = runIdForSubmission(submission.submissionId);
-    const start = yield* canonicalRunStartFromRecords(records, runId);
+    const start = yield* readRunStart(submission.threadId, runId);
 
     if (
       start?.payload._tag === "RunStarted" &&
@@ -9661,35 +9510,19 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const claimed = yield* claimFor(submission, decision);
 
       if (Option.isNone(claimed)) return "deferred";
-      const claim = claimed.value;
+      const session = claimed.value;
 
       yield* store.materialize(
         ThreadMaterialization.make({
           threadId: submission.threadId,
-          producerEpoch: claim.producerEpoch,
         }),
       );
-      const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
+      const ctx = session;
 
-      yield* reconcileRetainedChildren(
-        ctx,
-        submission,
-        yield* recoveryOwnership(
-          submission.threadId,
-          submission.submissionId,
-          claim.ownershipToken,
-        ),
-      );
+      yield* reconcileRetainedChildren(ctx, submission, session);
       const open = yield* completeJoinedReleases(submission);
 
-      yield* ledger
-        .releaseOwnership(
-          ReleaseOwnershipRequest.make({
-            submissionId: submission.submissionId,
-            ownershipToken: claim.ownershipToken,
-          }),
-        )
-        .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+      yield* session.release;
 
       return open ? "deferred" : "repaired";
     }
@@ -9736,7 +9569,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         // its input append. Recovery must not revert claims a live host is still consuming.
         const claimed =
           host.value.state === "settled"
-            ? Option.none<Claim>()
+            ? Option.none<RunStorageSession>()
             : yield* claimFor(host.value, decision);
 
         if (host.value.state !== "settled" && Option.isNone(claimed)) return "deferred";
@@ -9744,7 +9577,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           yield* store.materialize(
             ThreadMaterialization.make({
               threadId: submission.threadId,
-              producerEpoch: claimed.value.producerEpoch,
             }),
           );
 
@@ -9784,34 +9616,21 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           // A ledger-settled host without canonical settlement evidence is not repair authority.
           return "deferred";
         } else if (inputEnvelope !== undefined) {
-          yield* ledger.markJoined(
-            MarkJoinedRequest.make({
-              submissionId: submission.submissionId,
-              ownershipToken: claimed.value.ownershipToken,
-              recordId: inputEnvelope.record.recordId,
-              sequence: inputEnvelope.sequence,
-            }),
-          );
+          yield* claimed.value.markJoined(submission.submissionId, {
+            recordId: inputEnvelope.record.recordId,
+            sequence: inputEnvelope.sequence,
+          });
         }
         if (currentEvidence.hostSettlementOutcome !== undefined || inputEnvelope === undefined)
-          yield* ledger.revertJoining(
-            RevertJoiningRequest.make({
-              submissionId: submission.submissionId,
-              guard: {
-                hostSubmissionId,
-                ...(Option.isNone(claimed) ? {} : { ownershipToken: claimed.value.ownershipToken }),
-              },
-            }),
-          );
-        if (Option.isSome(claimed))
-          yield* ledger
-            .releaseOwnership(
-              ReleaseOwnershipRequest.make({
-                submissionId: hostSubmissionId,
-                ownershipToken: claimed.value.ownershipToken,
-              }),
-            )
-            .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+          yield* Option.isSome(claimed)
+            ? claimed.value.revertJoining(submission.submissionId)
+            : ledger.revertJoining(
+                RevertJoiningRequest.make({
+                  submissionId: submission.submissionId,
+                  guard: { hostSubmissionId },
+                }),
+              );
+        if (Option.isSome(claimed)) yield* claimed.value.release;
         yield* wake.notify(submission.threadId);
 
         return "repaired";
@@ -9822,14 +9641,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         if (hostSubmissionId === undefined) return "deferred";
         const hostRecord = yield* canonicalSettlementRecord(records, hostSubmissionId);
         const hostSettlement = yield* settlementPayloadFromRecord(hostRecord, hostSubmissionId);
-        // The host settled canonically, so no live owner can exist for this lane (a joined
-        // head is never claimable): the joined settlement completes unfenced at the current
-        // tail, deferring to any racing fence advance.
+        // Canonical host settlement and the durable join link authorize this repair after
+        // the host generation closes. The shared administrative gate protects its append.
         const ctx = yield* attemptContextAtTail(submission.threadId);
 
         const applied = yield* settleOneJoined(ctx, hostSettlement, snapshot).pipe(
           Effect.as(true),
-          Effect.catchTag("FenceRejected", () => Effect.succeed(false)),
+          Effect.catchTag("OwnershipLost", () => Effect.succeed(false)),
         );
 
         return applied ? "repaired" : "deferred";
@@ -9843,7 +9661,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       }
       case "CompleteMaterialization":
       case "RepairReadiness": {
-        yield* materializeAtLeast(submission.threadId, ZERO_EPOCH);
+        yield* materializeThread(submission.threadId);
         yield* ensureThreadCreated(
           submission.threadId,
           submission.agentId,
@@ -9867,12 +9685,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         const claimed = yield* claimFor(submission, decision);
 
         if (Option.isNone(claimed)) return "deferred";
-        const claim = claimed.value;
+        const session = claimed.value;
 
         yield* store.materialize(
           ThreadMaterialization.make({
             threadId: submission.threadId,
-            producerEpoch: claim.producerEpoch,
           }),
         );
         yield* ensureThreadCreated(
@@ -9880,13 +9697,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           submission.agentId,
           submission.agentDigests,
         );
-        const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
+        const ctx = session;
 
-        const ownership = yield* recoveryOwnership(
-          submission.threadId,
-          submission.submissionId,
-          claim.ownershipToken,
-        );
+        const ownership = session;
 
         const currentRecords = yield* refreshRecoveryHistory(
           submission.threadId,
@@ -9902,16 +9715,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           currentRecords,
           snapshot.inputApplied,
         );
-        const ownershipToken = claim.ownershipToken;
-
-        yield* ledger
-          .releaseOwnership(
-            ReleaseOwnershipRequest.make({
-              submissionId: submission.submissionId,
-              ownershipToken,
-            }),
-          )
-          .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+        yield* session.release;
 
         return "repaired";
       }
@@ -9953,15 +9757,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         const claimed = yield* claimFor(submission, decision);
 
         if (Option.isNone(claimed)) return "deferred";
-        const claim = claimed.value;
+        const session = claimed.value;
 
         yield* store.materialize(
           ThreadMaterialization.make({
             threadId: submission.threadId,
-            producerEpoch: claim.producerEpoch,
           }),
         );
-        const ctx = yield* attemptContextFor(submission.threadId, claim.producerEpoch);
+        const ctx = session;
         const knownIds = knownRecordIdsOf(records);
         const startRecordId = subagentStartedRecordId(runId, decision.toolCallId);
 
@@ -9991,28 +9794,18 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           );
           yield* hit("subagent:after-start-append");
         }
-        yield* ledger
-          .attachChildToReservation(
-            AttachChildToReservationRequest.make({
-              reservationId: decodeChildReservationIdSync(requestedPayload.reservationId),
-              ownershipToken: claim.ownershipToken,
-              childSubmissionId: admission.childSubmissionId,
-            }),
-          )
+        yield* session
+          .attachChildToReservation({
+            reservationId: decodeChildReservationIdSync(requestedPayload.reservationId),
+            childSubmissionId: admission.childSubmissionId,
+          })
           .pipe(
             Effect.catchTag(
               "ChildReservationConflict",
               conflictToLedgerError("attachChildToReservation"),
             ),
           );
-        yield* ledger
-          .releaseOwnership(
-            ReleaseOwnershipRequest.make({
-              submissionId: submission.submissionId,
-              ownershipToken: claim.ownershipToken,
-            }),
-          )
-          .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+        yield* session.release;
         yield* wake.notify(requestedPayload.childThreadId);
         yield* wake.notify(submission.threadId);
 
@@ -10026,28 +9819,17 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         const claimed = yield* claimFor(submission, decision);
 
         if (Option.isNone(claimed)) return "deferred";
-        const claim = claimed.value;
+        const session = claimed.value;
 
-        const suspension = yield* ledger.suspend(
-          SuspendRequest.make({
-            submissionId: submission.submissionId,
-            ownershipToken: claim.ownershipToken,
-            reason: WaitingForChildSuspension.make({ children: decision.children }),
-          }),
+        const suspension = yield* session.suspend(
+          WaitingForChildSuspension.make({ children: decision.children }),
         );
 
         yield* hit("subagent:after-suspend");
         if (suspension === "resume-immediately") {
           // Every listed child already settled: leave the joins to a claiming worker's batch
           // resume (they need the parent Binding and its result projection).
-          yield* ledger
-            .releaseOwnership(
-              ReleaseOwnershipRequest.make({
-                submissionId: submission.submissionId,
-                ownershipToken: claim.ownershipToken,
-              }),
-            )
-            .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+          yield* session.release;
 
           return "deferred";
         }
@@ -10141,27 +9923,16 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           const claimed = yield* claimFor(submission, decision);
 
           if (Option.isNone(claimed)) return "deferred";
-          const claim = claimed.value;
+          const session = claimed.value;
 
-          const suspension = yield* ledger.suspend(
-            SuspendRequest.make({
-              submissionId: submission.submissionId,
-              ownershipToken: claim.ownershipToken,
-              reason: WaitingForChildSuspension.make({ children: decision.children }),
-            }),
+          const suspension = yield* session.suspend(
+            WaitingForChildSuspension.make({ children: decision.children }),
           );
 
           yield* hit("subagent:after-suspend");
           if (suspension === "resume-immediately") {
             // Every child settled while suspending: the next pass joins the winners.
-            yield* ledger
-              .releaseOwnership(
-                ReleaseOwnershipRequest.make({
-                  submissionId: submission.submissionId,
-                  ownershipToken: claim.ownershipToken,
-                }),
-              )
-              .pipe(Effect.catchTag("OwnershipLost", () => Effect.void));
+            yield* session.release;
           }
         }
 
@@ -10344,11 +10115,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   });
 
   const readOperation = Effect.fnUntraced(function* (threadId: ThreadId, entry: ThreadWorkEntry) {
-    if (
-      entry.owner._tag !== "Operation" ||
-      entry.originRecordId === undefined ||
-      entry.originDigest === undefined
-    )
+    if (entry.owner._tag !== "Operation" || entry.originRecordId === undefined)
       return yield* ThreadStoreError.make({
         operation: "recover operation",
         message: "The original declaration reference is missing",
@@ -10362,7 +10129,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const origin = yield* withCrypto(
       resolveEvidence(threadId, {
         recordId: entry.originRecordId,
-        digest: entry.originDigest,
       }).pipe(Effect.provideService(ThreadReader, reader)),
     );
 
@@ -11362,7 +11128,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     if (admitted.replayed && admitted.state !== "admitted") {
       return receipt;
     }
-    yield* materializeAtLeast(options.threadId, ZERO_EPOCH);
+    yield* materializeThread(options.threadId);
     yield* ensureThreadCreated(options.threadId, agent.definition.id, options.definitions);
     yield* hit("submit:after-materialize");
     yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
@@ -12596,6 +12362,7 @@ export class DurableAgentRuntime extends Context.Service<
     | SubmissionLedger
     | ThreadStore
     | RunStorage
+    | StorageOwner
     | WakeScheduler
     | DurableRuntimeFailpoint
     | DurableRuntimeConfig
@@ -12611,6 +12378,7 @@ export class DurableAgentRuntime extends Context.Service<
     | SubmissionLedger
     | ThreadStore
     | RunStorage
+    | StorageOwner
     | WakeScheduler
     | DurableRuntimeFailpoint
     | DurableRuntimeConfig

@@ -1,15 +1,21 @@
 import { NodeFileSystem } from "@effect/platform-node";
 import { expect, layer } from "@effect/vitest";
 import { NodeDurableHost } from "@yielded/agent-platform-node/node-durable-host";
-import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
-import { type DurableRuntimeFailpointLocation } from "@yielded/agent/durable-failpoint";
+import { DurableAgentRuntime, DurableRuntimeConfig } from "@yielded/agent/durable-agent-runtime";
+import {
+  DurableRuntimeFailpoint,
+  type DurableRuntimeFailpointLocation,
+} from "@yielded/agent/durable-failpoint";
 import { type SubmissionId } from "@yielded/agent/identifiers";
+import { DeploymentId, ProducerId } from "@yielded/agent/records";
 import {
   childThreadIdFor,
   childIdempotencyKeyFor,
   runIdForSubmission,
   toolCallSettledRecordId,
 } from "@yielded/agent/run-journal";
+import { RunToolAuthorization } from "@yielded/agent/run-options";
+import { StorageOwner } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   RecoverySnapshotRequest,
@@ -17,15 +23,16 @@ import {
   SubmissionLookupById,
   SubmissionLookupByKey,
 } from "@yielded/agent/submission-ledger";
-import { ThreadStore, ThreadTailRequest } from "@yielded/agent/thread-store";
-import { Effect, Option } from "effect";
+import { ToolReconciler } from "@yielded/agent/tool-reconciler";
+import { Effect, Fiber, Layer, Option } from "effect";
 
 import {
   CHILD_MODEL_OP,
+  CRASH_DEPLOYMENT_ID,
+  HOST_PRODUCER_ID,
   CRASH_PRINCIPAL,
   CRASH_QUESTION,
   DELEGATE_CALL_ID,
-  FENCED_EXIT_CODE,
   PROJECTED_SUMMARY,
   RESEARCH_TOPIC,
   childModelInvocations,
@@ -36,19 +43,15 @@ import {
   makeCrashSubagentBindings,
 } from "./fixtures.ts";
 import {
-  CHILD_LEASE_MS,
   assertConvergence,
-  childMessages,
+  failureTag,
   expectKilled,
   lookupByKey,
   payloadsOf,
   readLog,
   runWorkerToExit,
-  startWorker,
   touchFile,
   waitForFile,
-  waitAfterChildExit,
-  waitOutChildLease,
   withCrashSite,
   withHost,
   withRuntime,
@@ -122,18 +125,6 @@ const startedPayloadOf = (thread: string) =>
 
     return payload;
   });
-
-const readTail = (thread: string) =>
-  Effect.gen(function* () {
-    const store = yield* ThreadStore;
-
-    return yield* store.inspectTail(ThreadTailRequest.make({ threadId: decodeThreadId(thread) }));
-  });
-
-const recordIdsOf = (thread: string) =>
-  Effect.map(readLog(thread), (records) =>
-    records.map((envelope) => envelope.record.recordId as string),
-  );
 
 /** The delegation call settled exactly once with the given payload expectations. */
 const assertDelegationSettled = (
@@ -230,12 +221,10 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                   thread,
                   key,
                   killAt: row.location,
-                  leaseMillis: CHILD_LEASE_MS,
                   supplierDir: site.supplier,
                 });
 
                 expectKilled(result);
-                yield* waitAfterChildExit;
 
                 const bindings = yield* restartBindings(site);
 
@@ -311,12 +300,10 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               killAt: "subagent:after-reserve",
-              leaseMillis: CHILD_LEASE_MS,
               supplierDir: site.supplier,
             });
 
             expectKilled(result);
-            yield* waitAfterChildExit;
 
             // Abort the parent from a client-only restart before any recovery pass runs.
             const parentId = yield* withRuntime(
@@ -408,12 +395,10 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread,
               key,
               killAtStorage: "ledger:finalize-settlement:after",
-              leaseMillis: CHILD_LEASE_MS,
               supplierDir: site.supplier,
             });
 
             expectKilled(result);
-            yield* waitAfterChildExit;
 
             // Before recovery: the child is settled and its parent wake is already durable.
             const ids = yield* withRuntime(
@@ -494,12 +479,10 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                   thread,
                   key,
                   killAt: row.location,
-                  leaseMillis: CHILD_LEASE_MS,
                   supplierDir: site.supplier,
                 });
 
                 expectKilled(result);
-                yield* waitAfterChildExit;
                 // The child ran exactly once BEFORE the kill; everything after is replay.
                 expect(childModelInvocations(site.supplier), row.location).toBe(1);
 
@@ -664,104 +647,81 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
     );
 
     it.effect(
-      "a stale parent resumed past its replacement is fenced out of the join and the child stays untouched",
+      "a closed parent rejects a late join projection without changing its completed child",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
             const thread = "thread-s2-stale-join";
             const key = "s2-stale-join-1";
 
-            yield* Effect.scoped(
+            const staleBindings = yield* makeCrashSubagentBindings({
+              supplierDir: site.supplier,
+              parentScript: "delegate-then-final",
+              projectionGate: { markerFile: site.marker, releaseFile: site.release },
+            });
+
+            const freshBindings = yield* restartBindings(site);
+
+            yield* withRuntime(
+              site.db,
               Effect.gen(function* () {
-                // The stale worker establishes, runs the child, then blocks inside
-                // `projectResult` — after verifying the settled child, BEFORE the join append —
-                // still holding the parent ownership lease.
-                const staleWorker = yield* startWorker({
-                  db: site.db,
-                  scenario: "subagent-run",
-                  thread,
-                  key,
-                  projectMarkerFile: site.marker,
-                  projectReleaseFile: site.release,
-                  leaseMillis: CHILD_LEASE_MS,
-                  supplierDir: site.supplier,
-                });
+                const owner = yield* StorageOwner;
+                const receipt = yield* submitCoordinator(thread, key);
+
+                expect(yield* drive(thread)).toHaveLength(0);
+                const childThread = childThreadIdFor(receipt.submissionId, DELEGATE_CALL);
+
+                expect((yield* drive(childThread)).map((result) => result.outcome)).toEqual([
+                  "completed",
+                ]);
+                const childBefore = yield* readLog(childThread);
+                const stale = yield* drive(thread).pipe(Effect.forkChild);
 
                 yield* waitForFile(site.marker);
-                yield* waitOutChildLease;
-                expect(childModelInvocations(site.supplier)).toBe(1);
-
-                // The replacement claims the parent lane at a higher epoch and completes the
-                // join by recomputing the projection from canonical child output (spec §14).
-                const bindings = yield* restartBindings(site);
-
-                const ids = yield* withHost(
-                  site.db,
-                  Effect.gen(function* () {
-                    const parent = yield* lookupByKey(thread, key);
-                    const settlements = yield* drive(thread);
-
-                    expect(settlements.map((settlement) => settlement.outcome)).toEqual([
-                      "completed",
-                    ]);
-                    const started = yield* startedPayloadOf(thread);
-
-                    return {
-                      parent: parent.submissionId,
-                      child: started.childSubmissionId,
-                    };
-                  }),
-                  undefined,
-                  bindings,
+                expect(owner.hasOwner(receipt.threadId, receipt.submissionId)).toBe(true);
+                yield* owner.withMutation(
+                  Effect.sync(() => owner.closeSubmission(receipt.threadId, receipt.submissionId)),
                 );
 
-                const childThread = childThreadIdFor(ids.parent, DELEGATE_CALL);
-                const childTailBefore = yield* withRuntime(site.db, readTail(childThread));
+                const fresh = yield* DurableAgentRuntime.pipe(
+                  Effect.provide(
+                    DurableAgentRuntime.layerWithBindings(freshBindings).pipe(
+                      Layer.provide([
+                        RunToolAuthorization.allowAll,
+                        DurableRuntimeFailpoint.layer,
+                        ToolReconciler.uncertain,
+                        DurableRuntimeConfig.layer({
+                          deploymentId: DeploymentId.make(CRASH_DEPLOYMENT_ID),
+                          producerId: ProducerId.make(HOST_PRODUCER_ID),
+                        }),
+                      ]),
+                    ),
+                  ),
+                );
 
-                // Unblock the stale parent: its pending join append MUST be fenced.
+                const settlements = yield* fresh.processThreadResolved(receipt.threadId);
+
+                expect(settlements.map((result) => result.outcome)).toEqual(["completed"]);
                 yield* touchFile(site.release);
-                const exit = yield* staleWorker.awaitExit;
+                expect(failureTag(yield* Fiber.await(stale))).toBe("OwnershipLost");
+                expect(yield* readLog(childThread)).toEqual(childBefore);
+                yield* assertOneEstablishedChild(thread, childThread);
+                yield* assertDelegationSettled(thread, receipt.submissionId, {
+                  isFailure: false,
+                  result: { summary: PROJECTED_SUMMARY },
+                });
+                expect(yield* reservationStatuses(receipt.submissionId)).toEqual(["released"]);
+                expect(childModelInvocations(site.supplier)).toBe(1);
+                yield* assertConvergence(thread, [receipt.submissionId], {
+                  site,
+                  counts: { [CHILD_MODEL_COUNT_KEY]: 1 },
+                });
+                const started = yield* startedPayloadOf(thread);
 
-                expect(exit.code, `stderr: ${staleWorker.stderrText()}`).toBe(FENCED_EXIT_CODE);
-
-                const failure = childMessages(staleWorker.stdoutText()).find(
-                  (message) => message.kind === "worker-failure",
-                );
-
-                expect(
-                  failure?.kind === "worker-failure" &&
-                    ["FenceRejected", "OwnershipLost"].includes(failure.tag),
-                  `expected a fenced stale join, got ${JSON.stringify(failure)}`,
-                ).toBe(true);
-
-                yield* withRuntime(
-                  site.db,
-                  Effect.gen(function* () {
-                    // Vice-versa independent fencing: fencing the stale PARENT Attempt left
-                    // the CHILD lane byte-identical — same tail digest, same epoch.
-                    const childTailAfter = yield* readTail(childThread);
-
-                    expect(childTailAfter.tailDigest).toBe(childTailBefore.tailDigest);
-                    expect(Number(childTailAfter.producerEpoch)).toBe(
-                      Number(childTailBefore.producerEpoch),
-                    );
-                    // Exactly one join/result/settlement exists; the recomputed projection
-                    // never re-executed the completed child.
-                    yield* assertOneEstablishedChild(thread, childThread);
-                    yield* assertDelegationSettled(thread, ids.parent, {
-                      isFailure: false,
-                      result: { summary: PROJECTED_SUMMARY },
-                    });
-                    expect(yield* reservationStatuses(ids.parent)).toEqual(["released"]);
-                    expect(childModelInvocations(site.supplier)).toBe(1);
-                    yield* assertConvergence(thread, [ids.parent], {
-                      site,
-                      counts: { [CHILD_MODEL_COUNT_KEY]: 1 },
-                    });
-                    yield* assertConvergence(childThread, [ids.child]);
-                  }),
-                );
+                yield* assertConvergence(childThread, [started.childSubmissionId]);
               }),
+              undefined,
+              staleBindings,
             );
           }),
         ),
@@ -769,128 +729,86 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
     );
 
     it.effect(
-      "fencing the child's stale Attempt leaves the waiting parent's lane and epoch untouched",
+      "replacing a child owner rejects its late result and leaves the waiting parent's history intact",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
             const thread = "thread-s2-child-fence";
             const key = "s2-child-fence-1";
 
-            const bindings = yield* makeCrashSubagentBindings({
+            const staleBindings = yield* makeCrashSubagentBindings({
               supplierDir: site.supplier,
               parentScript: "delegate-then-final",
+              childBlock: { markerFile: site.marker, releaseFile: site.release },
             });
 
-            // Establish in-process: the parent suspends waitingForChild.
-            const parentId = yield* withRuntime(
+            const freshBindings = yield* restartBindings(site);
+
+            yield* withRuntime(
               site.db,
               Effect.gen(function* () {
-                yield* submitCoordinator(thread, key);
+                const owner = yield* StorageOwner;
+                const receipt = yield* submitCoordinator(thread, key);
+
                 expect(yield* drive(thread)).toHaveLength(0);
-                const parent = yield* lookupByKey(thread, key);
-
-                expect(parent.state).toBe("suspended");
-
-                return parent.submissionId;
-              }),
-              undefined,
-              bindings,
-            );
-
-            const childThread = childThreadIdFor(parentId, DELEGATE_CALL);
-            const parentTailBefore = yield* withRuntime(site.db, readTail(thread));
-            const parentIdsBefore = yield* withRuntime(site.db, recordIdsOf(thread));
-
-            yield* Effect.scoped(
-              Effect.gen(function* () {
-                // The stale child worker blocks mid-child-Turn holding the child lease.
-                const childWorker = yield* startWorker({
-                  db: site.db,
-                  scenario: "subagent-child",
-                  thread,
-                  key,
-                  childBlockFile: site.marker,
-                  childReleaseFile: site.release,
-                  leaseMillis: CHILD_LEASE_MS,
-                  supplierDir: site.supplier,
-                });
+                expect((yield* submissionSnapshot(receipt.submissionId)).state).toBe("suspended");
+                const childThread = childThreadIdFor(receipt.submissionId, DELEGATE_CALL);
+                const started = yield* startedPayloadOf(thread);
+                const parentBefore = yield* readLog(thread);
+                const stale = yield* drive(childThread).pipe(Effect.forkChild);
 
                 yield* waitForFile(site.marker);
-                yield* waitOutChildLease;
-
-                // A fresh owner completes the child lane at a HIGHER child epoch.
-                const childId = yield* withRuntime(
-                  site.db,
-                  Effect.gen(function* () {
-                    const settlements = yield* drive(childThread);
-
-                    expect(settlements.map((settlement) => settlement.outcome)).toEqual([
-                      "completed",
-                    ]);
-                    const started = yield* startedPayloadOf(thread);
-
-                    return started.childSubmissionId;
-                  }),
-                  undefined,
-                  bindings,
+                expect(owner.hasOwner(childThread, started.childSubmissionId)).toBe(true);
+                yield* owner.withMutation(
+                  Effect.sync(() => owner.closeSubmission(childThread, started.childSubmissionId)),
                 );
 
+                const fresh = yield* DurableAgentRuntime.pipe(
+                  Effect.provide(
+                    DurableAgentRuntime.layerWithBindings(freshBindings).pipe(
+                      Layer.provide([
+                        RunToolAuthorization.allowAll,
+                        DurableRuntimeFailpoint.layer,
+                        ToolReconciler.uncertain,
+                        DurableRuntimeConfig.layer({
+                          deploymentId: DeploymentId.make(CRASH_DEPLOYMENT_ID),
+                          producerId: ProducerId.make(HOST_PRODUCER_ID),
+                        }),
+                      ]),
+                    ),
+                  ),
+                );
+
+                const settlements = yield* fresh.processThreadResolved(childThread);
+
+                expect(settlements.map((result) => result.outcome)).toEqual(["completed"]);
                 expect(childModelInvocations(site.supplier)).toBe(2);
-
-                // Unblock the stale child: its Turn commit is fenced by the child's OWN epoch;
-                // it emits the STALE answer which must never become canonical.
                 yield* touchFile(site.release);
-                const exit = yield* childWorker.awaitExit;
-
-                expect(exit.code, `stderr: ${childWorker.stderrText()}`).toBe(FENCED_EXIT_CODE);
-
-                const failure = childMessages(childWorker.stdoutText()).find(
-                  (message) => message.kind === "worker-failure",
+                expect(failureTag(yield* Fiber.await(stale))).toBe("OwnershipLost");
+                expect(yield* readLog(thread)).toEqual(parentBefore);
+                expect((yield* submissionSnapshot(receipt.submissionId)).state).toBe(
+                  "input-applied",
                 );
-
-                expect(["FenceRejected", "OwnershipLost"]).toContain(
-                  failure?.kind === "worker-failure" && failure.tag,
-                );
-
-                yield* withRuntime(
-                  site.db,
-                  Effect.gen(function* () {
-                    // Independent fencing (spec §7 platform row): the child replacement never
-                    // touched the parent's log or epoch — the parent's only transition is its
-                    // own durable wake (suspended → input-applied).
-                    const parentTailAfter = yield* readTail(thread);
-
-                    expect(parentTailAfter.tailDigest).toBe(parentTailBefore.tailDigest);
-                    expect(Number(parentTailAfter.producerEpoch)).toBe(
-                      Number(parentTailBefore.producerEpoch),
-                    );
-                    expect(yield* recordIdsOf(thread)).toEqual(parentIdsBefore);
-                    expect((yield* submissionSnapshot(parentId)).state).toBe("input-applied");
-                    // Exactly one committed child response — the fresh Attempt's.
-                    const childLog = yield* readLog(childThread);
-
-                    expect(payloadsOf(childLog, "ModelResponseRecorded")).toHaveLength(1);
-
-                    // The woken parent joins the FRESH child answer, not the fenced stale one.
-                    const settlements = yield* drive(thread);
-
-                    expect(settlements.map((settlement) => settlement.outcome)).toEqual([
-                      "completed",
-                    ]);
-                    yield* assertDelegationSettled(thread, parentId, {
-                      isFailure: false,
-                      result: { summary: PROJECTED_SUMMARY },
-                    });
-                    yield* assertConvergence(thread, [parentId], {
-                      site,
-                      counts: { [CHILD_MODEL_COUNT_KEY]: 2 },
-                    });
-                    yield* assertConvergence(childThread, [childId]);
-                  }),
-                  undefined,
-                  bindings,
-                );
+                expect(
+                  payloadsOf(yield* readLog(childThread), "ModelResponseRecorded"),
+                ).toHaveLength(1);
+                expect(
+                  (yield* fresh.processThreadResolved(receipt.threadId)).map(
+                    (result) => result.outcome,
+                  ),
+                ).toEqual(["completed"]);
+                yield* assertDelegationSettled(thread, receipt.submissionId, {
+                  isFailure: false,
+                  result: { summary: PROJECTED_SUMMARY },
+                });
+                yield* assertConvergence(thread, [receipt.submissionId], {
+                  site,
+                  counts: { [CHILD_MODEL_COUNT_KEY]: 2 },
+                });
+                yield* assertConvergence(childThread, [started.childSubmissionId]);
               }),
+              undefined,
+              staleBindings,
             );
           }),
         ),

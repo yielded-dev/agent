@@ -1,12 +1,12 @@
 import { expect, it } from "@effect/vitest";
-import { Context, DateTime, Effect, Layer, Option, Tracer, Schema } from "effect";
+import { Context, Effect, Layer, Option, Tracer, Schema } from "effect";
 import { Toolkit } from "effect/ai";
 
 import * as Agent from "../../src/core/Agent.ts";
 import { AttemptId, SubmissionId, ThreadId } from "../../src/core/Identifiers.ts";
 import { DurableWorkerBinding } from "../../src/durable/AgentRegistration.ts";
-import { DefinitionDigests, Digest, ProducerEpoch } from "../../src/durable/Records.ts";
-import { Claim, OwnershipToken } from "../../src/durable/SubmissionLedger.ts";
+import { DefinitionDigests, Digest } from "../../src/durable/Records.ts";
+import { Claim } from "../../src/durable/SubmissionLedger.ts";
 
 class Dependency extends Context.Service<Dependency, string>()("test/registered-dependency") {}
 
@@ -91,9 +91,6 @@ it.effect(
             Claim.make({
               submissionId: SubmissionId.make("submission"),
               attemptId: AttemptId.make("attempt"),
-              ownershipToken: OwnershipToken.make("owner"),
-              producerEpoch: ProducerEpoch.make(1),
-              leaseExpiresAt: DateTime.makeUnsafe(0),
               inputPayload: "input",
             }),
           );

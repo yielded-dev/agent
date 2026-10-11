@@ -4,7 +4,7 @@ import { DurableWorkerBinding } from "@yielded/agent/agent-registration";
 import { ContextCompactor } from "@yielded/agent/context-compactor";
 import { DurableAgentRuntime, DurableRuntimeConfig } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
-import { AgentId, ThreadId, ToolCallId } from "@yielded/agent/identifiers";
+import { AgentId, ThreadId, ToolCallId, type RunId } from "@yielded/agent/identifiers";
 import { ReadEnvelope } from "@yielded/agent/record-format";
 import {
   BatchId,
@@ -13,8 +13,8 @@ import {
   DefinitionDigests,
   DeploymentId,
   Digest,
-  ProducerEpoch,
   ProducerId,
+  RecordEnvelope,
   RecordId,
   RepairAnnotated,
   ThreadCreated,
@@ -33,14 +33,16 @@ import {
   UnknownResolutionCommand,
 } from "@yielded/agent/submission-ledger";
 import {
-  FencedAppendRequest,
+  AppendRequest,
   LoadCheckpointRequest,
   ThreadReader,
   ThreadMaterialization,
+  ThreadRead,
   ThreadStore,
   ThreadTailRequest,
   type ThreadSelection,
 } from "@yielded/agent/thread-store";
+import * as ThreadStorage from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import {
@@ -95,6 +97,33 @@ const select = Effect.fnUntraced(function* (selection: ThreadSelection, limit = 
   return yield* store.read({ threadId, selection, page: { limit } }).pipe(Stream.runCollect);
 });
 
+/** Historical comparison builds retain progress rows; current builds never use this path. */
+const historicalProgress = Effect.fnUntraced(function* (
+  runId: RunId,
+  afterSequence?: ThreadStorage.ThreadTail["tailSequence"],
+) {
+  const store = yield* ThreadStore;
+
+  const entry = yield* store
+    .read(
+      ThreadRead.make({
+        threadId,
+        limit: 256,
+        ...(afterSequence === undefined ? {} : { afterSequence }),
+      }),
+    )
+    .pipe(
+      Stream.filter(
+        ({ record }) => record.payload._tag === "RunContinuation" && record.payload.runId === runId,
+      ),
+      Stream.runLast,
+    );
+
+  return Option.isSome(entry) && entry.value.record.payload._tag === "RunContinuation"
+    ? entry.value.record.payload
+    : undefined;
+});
+
 const appendPadding = Effect.fn("diagnostic.aging.appendPadding")(function* (
   from: number,
   through: number,
@@ -131,11 +160,9 @@ const appendPadding = Effect.fn("diagnostic.aging.appendPadding")(function* (
       return yield* BenchmarkError.make({ message: "Empty aging padding batch" });
 
     yield* store.append(
-      FencedAppendRequest.make({
+      AppendRequest.make({
         threadId: paddingThreadId,
-        producerEpoch: tail.producerEpoch,
         expectedTailSequence: tail.tailSequence,
-        expectedTailDigest: tail.tailDigest,
         batch: CanonicalBatch.make({
           batchId: BatchId.make(`aging-padding-${paddingThreadId}-${offset}`),
           producerId,
@@ -266,7 +293,10 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
   const originalAgent = makeAgent("Keep original instructions.");
   const changedAgent = makeAgent("CHANGED BINDING must not replace retained instructions.");
 
-  const makeRuntime = Effect.fnUntraced(function* (changed: boolean) {
+  const makeRuntime = Effect.fnUntraced(function* (
+    changed: boolean,
+    beforeSettlement: Effect.Effect<void> = Effect.void,
+  ) {
     const binding = yield* DurableWorkerBinding.make(
       changed ? changedAgent : originalAgent,
       changed ? changedDefinitions : definitions,
@@ -280,7 +310,10 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
             Layer.mergeAll(
               RunToolAuthorization.allowAll,
               ContextCompactor.layerRollover,
-              DurableRuntimeFailpoint.layer,
+              Layer.succeed(DurableRuntimeFailpoint, {
+                hit: (location) =>
+                  location === "terminalize:before-publication" ? beforeSettlement : Effect.void,
+              }),
               WakeScheduler.layerNoop,
               ToolReconciler.uncertain,
               DurableRuntimeConfig.layer({ deploymentId, producerId }),
@@ -341,37 +374,55 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
     yield* check(
       recovery.blocked.length === 0 &&
         pending.submission.state === "unknown" &&
-        pending.ownership === undefined &&
+        !pending.hasOwner &&
         originalMutations === 1,
       "Original mutation did not remain uncertain without ownership",
     );
-    const tail = yield* raw.inspectTail(tailRequest);
+    const runId = runIdForSubmission(older.submissionId);
+    const current = typeof raw.readExecution === "function";
+    const active = current ? yield* raw.readExecution({ threadId, runId }) : Option.none();
 
-    const cursor = (yield* select({
-      _tag: "RunContinuation",
-      runId: runIdForSubmission(older.submissionId),
-      throughSequence: tail.tailSequence,
-    }))[0]?.record.payload;
+    if (current && Option.isNone(active))
+      return yield* BenchmarkError.make({ message: "Uncertain Run lost its active checkpoint" });
+    const execution = Option.isSome(active) ? active.value : undefined;
+
+    const cursor = execution === undefined ? yield* historicalProgress(runId) : execution.progress;
 
     if (cursor?._tag !== "RunContinuation" || cursor.savedContext === undefined)
       return yield* BenchmarkError.make({ message: "Missing original Run context references" });
     const input = (yield* select({ _tag: "RecordId", recordId: cursor.originalInput.recordId }))[0];
 
-    const context = (yield* select({
-      _tag: "RecordId",
-      recordId: cursor.savedContext.recordId,
-    }))[0];
+    const canonicalContext =
+      execution === undefined
+        ? (yield* select({ _tag: "RecordId", recordId: cursor.savedContext.recordId }))[0]
+        : undefined;
 
-    if (input === undefined || context === undefined || raw.archives === undefined)
+    const context =
+      execution === undefined
+        ? canonicalContext?.record
+        : execution.operational.find((record) => record.recordId === cursor.savedContext?.recordId);
+
+    const response =
+      cursor.latestResponse === undefined
+        ? undefined
+        : (yield* select({ _tag: "RecordId", recordId: cursor.latestResponse.recordId }))[0];
+
+    if (
+      input === undefined ||
+      context === undefined ||
+      response === undefined ||
+      raw.archives === undefined
+    )
       return yield* BenchmarkError.make({
-        message: "Missing original input, context or archive port",
+        message: "Missing original input, active context, model evidence or archive port",
       });
     yield* check(
       input.record.recordId === submissionInputRecordId(older.submissionId) &&
-        context.record.payload._tag === "RunContextRecorded",
+        context.payload._tag === "RunContextRecorded" &&
+        response.record.payload._tag === "ModelResponseRecorded",
       "Original retained references selected the wrong records",
     );
-    const sealed = yield* raw.archives.seal({ threadId, producerEpoch: tail.producerEpoch });
+    const sealed = yield* raw.archives.seal({ threadId });
 
     if (Option.isNone(sealed))
       return yield* BenchmarkError.make({ message: "Original Run range did not seal" });
@@ -379,15 +430,15 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
     const archived = yield* raw.archives.archive({
       threadId,
       firstSequence: sealed.value.firstSequence,
-      producerEpoch: tail.producerEpoch,
     });
 
     yield* raw.archives.verify({ threadId, firstSequence: archived.firstSequence });
     yield* check(
       archived.state === "archived" &&
         archived.firstSequence <= input.sequence &&
-        archived.lastSequence >= context.sequence,
-      "Original input/context did not enter the archived range",
+        archived.lastSequence >= response.sequence &&
+        (canonicalContext === undefined || archived.lastSequence >= canonicalContext.sequence),
+      "Original canonical input/model evidence did not enter the archived range",
     );
     phase = "later";
     const later = yield* submit("later input");
@@ -400,13 +451,39 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
         laterMutations === 2,
       "Later Run did not finish independently",
     );
+    if (execution !== undefined) {
+      const retained = yield* raw.readExecution({ threadId, runId });
+
+      yield* check(
+        Option.isSome(retained) &&
+          (yield* Schema.encodeEffect(Schema.fromJsonString(ThreadStorage.ExecutionCheckpoint))(
+            retained.value,
+          )) ===
+            (yield* Schema.encodeEffect(Schema.fromJsonString(ThreadStorage.ExecutionCheckpoint))(
+              execution,
+            )),
+        "Later Run changed the unresolved Run's original state or accounting",
+      );
+    }
     // Disposable checkpoints are deliberately absent; no canonical or archive data is removed.
     yield* sql`DELETE FROM effect_agent_checkpoints WHERE thread_id = ${threadId}`;
     const beforePadding = yield* raw.inspectTail(tailRequest);
     const padding = storeSize ? selectedThreadRecords - beforePadding.tailSequence : ages[0];
     const lowTail = yield* appendPadding(0, padding);
 
-    return { older, cursor, input, context, lowTail, registryKey: runtime.bindingRegistryKey };
+    return {
+      older,
+      cursor,
+      execution,
+      context,
+      canonicalOriginals: [
+        input,
+        response,
+        ...(canonicalContext === undefined ? [] : [canonicalContext]),
+      ],
+      lowTail,
+      registryKey: runtime.bindingRegistryKey,
+    };
   }).pipe(Effect.provide(host(filename)), Effect.scoped);
 
   const copyClosed = Effect.fnUntraced(function* (source: string, destination: string) {
@@ -434,7 +511,6 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
           yield* store.materialize(
             ThreadMaterialization.make({
               threadId: backgroundThreadId,
-              producerEpoch: ProducerEpoch.make(1),
             }),
           );
         const tail = yield* appendPadding(previousSize, size, backgroundThreadId);
@@ -447,7 +523,7 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
 
         yield* check(
           selected.tailSequence === selectedThreadRecords &&
-            selected.tailDigest === retained.lowTail.tailDigest,
+            selected.tailSequence === retained.lowTail.tailSequence,
           "Background seeding changed the selected Thread",
         );
       }).pipe(Effect.provide(host(filename)), Effect.scoped);
@@ -529,6 +605,25 @@ export const runAgingCase = Effect.fn("diagnostic.aging.run")(function* (storeSi
       const raw = yield* ThreadStore;
       const ledger = yield* SubmissionLedger;
       const before = yield* raw.inspectTail(tailRequest);
+      const runId = runIdForSubmission(seed.older.submissionId);
+      const current = typeof raw.readExecution === "function";
+      let terminalExecution: ThreadStorage.ExecutionCheckpoint | undefined;
+
+      if (current) {
+        const reopened = yield* raw.readExecution({ threadId, runId });
+
+        yield* check(
+          Option.isSome(reopened) &&
+            seed.execution !== undefined &&
+            (yield* Schema.encodeEffect(Schema.fromJsonString(ThreadStorage.ExecutionCheckpoint))(
+              reopened.value,
+            )) ===
+              (yield* Schema.encodeEffect(Schema.fromJsonString(ThreadStorage.ExecutionCheckpoint))(
+                seed.execution,
+              )),
+          "Closed snapshot changed the original active context, clock or accounting",
+        );
+      }
 
       if (storeSize) {
         const background = yield* raw.inspectTail(
@@ -561,6 +656,36 @@ export const runAgingCase = Effect.fn("diagnostic.aging.run")(function* (storeSi
 
       const guarded = ThreadStore.of({
         ...raw,
+        ...(current
+          ? {
+              readExecution: (request: ThreadStorage.ExecutionRead) =>
+                Effect.gen(function* () {
+                  const execution = yield* raw.readExecution(request);
+
+                  const observed = {
+                    tag: "ExecutionCheckpoint",
+                    records: Option.isSome(execution) ? execution.value.operational.length + 1 : 0,
+                    bytes: Option.isSome(execution)
+                      ? new TextEncoder().encode(
+                          yield* Schema.encodeEffect(
+                            Schema.fromJsonString(ThreadStorage.ExecutionCheckpoint),
+                          )(execution.value),
+                        ).length
+                      : 0,
+                  };
+
+                  reads.push(observed);
+                  maxPageRecords = Math.max(maxPageRecords, observed.records);
+                  maxPageBytes = Math.max(maxPageBytes, observed.bytes);
+                  yield* check(
+                    observed.records <= 256 && observed.bytes <= 32 * 1024 * 1024,
+                    "Aging active read exceeded its bounded payload budget",
+                  ).pipe(Effect.orDie);
+
+                  return execution;
+                }).pipe(Effect.orDie),
+            }
+          : {}),
         read: (request) =>
           Stream.unwrap(
             Effect.sync(() => {
@@ -603,8 +728,17 @@ export const runAgingCase = Effect.fn("diagnostic.aging.run")(function* (storeSi
         observe: () => Stream.die("Aging recovery attempted whole-Thread observation"),
       });
 
+      const beforeSettlement = Effect.gen(function* () {
+        if (!current) return;
+        const execution = yield* guarded.readExecution({ threadId, runId });
+
+        if (Option.isNone(execution))
+          return yield* BenchmarkError.make({ message: "Missing active aged completion" });
+        terminalExecution = execution.value;
+      }).pipe(Effect.orDie);
+
       const runtime = yield* seed
-        .makeRuntime(true)
+        .makeRuntime(true, beforeSettlement)
         .pipe(
           Effect.provideService(ThreadStore, guarded),
           Effect.provideService(ThreadReader, ThreadReader.fromStore(guarded)),
@@ -657,11 +791,9 @@ export const runAgingCase = Effect.fn("diagnostic.aging.run")(function* (storeSi
       );
       const after = yield* raw.inspectTail(tailRequest);
 
-      const cursor = (yield* select({
-        _tag: "RunContinuation",
-        runId: runIdForSubmission(seed.older.submissionId),
-        throughSequence: after.tailSequence,
-      }))[0]?.record.payload;
+      const cursor = current
+        ? terminalExecution?.progress
+        : yield* historicalProgress(runId, before.tailSequence);
 
       yield* check(
         cursor?._tag === "RunContinuation" &&
@@ -669,7 +801,26 @@ export const runAgingCase = Effect.fn("diagnostic.aging.run")(function* (storeSi
           JSON.stringify(cursor.savedContext) === JSON.stringify(seed.cursor.savedContext),
         "Aged recovery changed the original input/context references",
       );
-      for (const expected of [seed.input, seed.context]) {
+      if (current) {
+        if (terminalExecution === undefined || seed.execution === undefined)
+          return yield* BenchmarkError.make({ message: "Missing active aging context capture" });
+
+        const original = (execution: ThreadStorage.ExecutionCheckpoint) =>
+          execution.operational.filter(
+            ({ payload }) => payload._tag === "RunStarted" || payload._tag === "RunContextRecorded",
+          );
+
+        yield* check(
+          (yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Array(RecordEnvelope)))(
+            original(terminalExecution),
+          )) ===
+            (yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Array(RecordEnvelope)))(
+              original(seed.execution),
+            )) && Option.isNone(yield* raw.readExecution({ threadId, runId })),
+          "Aged Run replaced its original clock/context or retained completed obligations",
+        );
+      }
+      for (const expected of seed.canonicalOriginals) {
         const actual = (yield* select({ _tag: "RecordId", recordId: expected.record.recordId }))[0];
 
         yield* check(
@@ -692,19 +843,38 @@ export const runAgingCase = Effect.fn("diagnostic.aging.run")(function* (storeSi
 
       const settled = own.filter(({ record }) => record.payload._tag === "ToolCallSettled");
 
+      const operational = current
+        ? (terminalExecution?.operational ?? [])
+        : own.map(({ record }) => record);
+
+      const originalContext = current
+        ? operational.find((record) => record.recordId === seed.context.recordId)
+        : (yield* select({ _tag: "RecordId", recordId: seed.context.recordId }))[0]?.record;
+
+      yield* check(
+        originalContext !== undefined &&
+          (yield* Schema.encodeEffect(Schema.fromJsonString(RecordEnvelope))(originalContext)) ===
+            (yield* Schema.encodeEffect(Schema.fromJsonString(RecordEnvelope))(seed.context)),
+        "Aged recovery changed its original evaluated context",
+      );
+
       yield* check(
         settled.length === 1 &&
           settled[0]?.record.payload._tag === "ToolCallSettled" &&
           settled[0].record.payload.result === "confirmed older result" &&
           settled[0].sequence > before.tailSequence &&
-          own.filter(({ record }) => record.payload._tag === "RunStarted").length === 1 &&
-          own.some(
-            ({ record }) =>
-              record.payload._tag === "RunCompleted" && record.payload.output === "done",
+          operational.filter(({ payload }) => payload._tag === "RunStarted").length === 1 &&
+          operational.some(
+            ({ payload }) => payload._tag === "RunCompleted" && payload.output === "done",
           ) &&
           own.some(
             ({ record, sequence }) =>
-              record.payload._tag === "SubmissionSettled" && sequence > before.tailSequence,
+              record.payload._tag === "SubmissionSettled" &&
+              record.payload.outcome === "completed" &&
+              record.payload.result === "done" &&
+              record.payload.runId === runId &&
+              record.payload.submissionId === seed.older.submissionId &&
+              sequence > before.tailSequence,
           ),
         "Missing original Run completion or late factual settlement",
       );

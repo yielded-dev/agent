@@ -7,7 +7,7 @@ import * as ContextTools from "@yielded/agent/context-tools";
 import { digestDefinitions, digestDefinition } from "@yielded/agent/digest";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpointError } from "@yielded/agent/durable-failpoint";
-import { ThreadId } from "@yielded/agent/identifiers";
+import { ThreadId, type RunId } from "@yielded/agent/identifiers";
 import * as MemoryNotes from "@yielded/agent/memory-notes";
 import { MemoryKey, MemoryReader } from "@yielded/agent/memory-store";
 import { CanonicalRecordEnvelope, DefinitionDigestInput } from "@yielded/agent/records";
@@ -15,7 +15,7 @@ import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { memoryStoreLayer } from "@yielded/agent/sql-memory-store";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import * as ThreadContextHistory from "@yielded/agent/thread-context-history";
-import { ThreadStore } from "@yielded/agent/thread-store";
+import { ExecutionCheckpoint, ThreadStore } from "@yielded/agent/thread-store";
 import {
   Clock,
   Console,
@@ -45,7 +45,13 @@ import {
   type RestartEvidence,
 } from "./contracts.ts";
 import { gradePhase } from "./grade.ts";
-import { readLog, readNotes, continuationEvidence, notesNamespace } from "./host-evidence.ts";
+import {
+  readLog,
+  readNotes,
+  continuationEvidence,
+  notesNamespace,
+  originalExecutionFacts,
+} from "./host-evidence.ts";
 import {
   makeLiveClient,
   MAX_INPUT_TOKENS,
@@ -368,70 +374,74 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
   const attempt = Effect.fn("ContextContinuity.attempt")(function* (
     phase: ScenarioPhase,
     restart: (typeof RESTARTS)[number] | undefined,
-    previousNotes: { revision: string | null; text: string } | undefined,
+    previous: Pick<ResumeCheckpoint, "notes" | "execution"> | undefined,
   ) {
     let atKill: Effect.Effect<void> = Effect.die("Kill services not acquired");
+    let atSettlement: Effect.Effect<void> = Effect.die("Settlement services not acquired");
+    let activeBeforeSettlement: ExecutionCheckpoint | undefined;
 
-    const pauseForKill = Effect.gen(function* () {
-      if (options.processId === undefined)
-        return yield* Effect.die("Missing supervised process identity");
-      const notes = yield* readNotes(key);
-      const log = yield* readLog(threadId);
+    const pauseForKill = (runId: RunId) =>
+      Effect.gen(function* () {
+        if (options.processId === undefined)
+          return yield* Effect.die("Missing supervised process identity");
+        const notes = yield* readNotes(key);
+        const log = yield* readLog(threadId);
+        const execution = yield* continuationEvidence(threadId, runId);
 
-      const startedRun = log.findLast(({ record }) => record.payload._tag === "RunStarted")?.record
-        .payload;
+        if (execution.status !== "present")
+          return yield* Effect.die("No active execution at kill barrier");
 
-      if (startedRun?._tag !== "RunStarted") return yield* Effect.die("No run at kill barrier");
+        const encodedLog = yield* Effect.forEach(log, (record) =>
+          Schema.encodeEffect(Schema.fromJsonString(CanonicalRecordEnvelope))(record),
+        );
 
-      const encodedLog = yield* Effect.forEach(log, (record) =>
-        Schema.encodeEffect(Schema.fromJsonString(CanonicalRecordEnvelope))(record),
-      );
+        yield* fs.writeFileString(
+          path.join(options.outputDirectory, `canonical-barrier-${phase.index}.ndjson`),
+          `${encodedLog.join("\n")}\n`,
+        );
+        yield* fs.writeFileString(canonicalPath, `${encodedLog.join("\n")}\n`);
+        yield* flush();
+        if (
+          report.usage.reservedCostMicrousd !== 0 ||
+          report.usage.calls !== report.usage.completedCalls
+        )
+          return yield* Effect.die("Cannot restart an unmetered provider call");
 
-      yield* fs.writeFileString(
-        path.join(options.outputDirectory, `canonical-barrier-${phase.index}.ndjson`),
-        `${encodedLog.join("\n")}\n`,
-      );
-      yield* fs.writeFileString(canonicalPath, `${encodedLog.join("\n")}\n`);
-      yield* flush();
-      if (
-        report.usage.reservedCostMicrousd !== 0 ||
-        report.usage.calls !== report.usage.completedCalls
-      )
-        return yield* Effect.die("Cannot restart an unmetered provider call");
+        const saved: ResumeCheckpoint = {
+          version: 1,
+          report,
+          phase: phase.index,
+          runId,
+          execution: execution.checkpoint,
+          processId: options.processId,
+          notes,
+        };
 
-      const saved: ResumeCheckpoint = {
-        version: 1,
-        report,
-        phase: phase.index,
-        runId: startedRun.runId,
-        processId: options.processId,
-        notes,
-      };
+        const json = yield* Schema.encodeEffect(Schema.fromJsonString(ResumeCheckpoint))(saved);
 
-      const json = yield* Schema.encodeEffect(Schema.fromJsonString(ResumeCheckpoint))(saved);
+        yield* fs.writeFileString(`${checkpointPath}.tmp`, json);
+        yield* fs.rename(`${checkpointPath}.tmp`, checkpointPath);
+        const barrierPath = path.join(options.outputDirectory, `barrier-${phase.index}.json`);
 
-      yield* fs.writeFileString(`${checkpointPath}.tmp`, json);
-      yield* fs.rename(`${checkpointPath}.tmp`, checkpointPath);
-      const barrierPath = path.join(options.outputDirectory, `barrier-${phase.index}.json`);
+        yield* fs.writeFileString(`${barrierPath}.tmp`, json);
+        yield* fs.rename(`${barrierPath}.tmp`, barrierPath);
 
-      yield* fs.writeFileString(`${barrierPath}.tmp`, json);
-      yield* fs.rename(`${barrierPath}.tmp`, barrierPath);
-
-      // No scope closes and no failure is returned. Only the supervisor's SIGKILL ends this attempt.
-      return yield* Effect.never;
-    }).pipe(Effect.orDie);
+        // No scope closes and no failure is returned. Only the supervisor's SIGKILL ends this attempt.
+        return yield* Effect.never;
+      }).pipe(Effect.orDie);
 
     const host = NodeDurableAgentRuntime.layer({
       filename: path.join(options.outputDirectory, "thread.sqlite"),
       deploymentId: "context-continuity-eval-v1",
-      producerId: `context-eval-${phase.index}-${previousNotes === undefined ? "initial" : "resumed"}`,
-      ...(hardRestart ? { ownershipLeaseDuration: 2_000, leaseRenewalInterval: 500 } : {}),
+      producerId: `context-eval-${phase.index}-${previous === undefined ? "initial" : "resumed"}`,
       runtimeFailpoint: (location) =>
         location === restart?.location
           ? hardRestart
             ? Effect.suspend(() => atKill)
             : Effect.fail(DurableRuntimeFailpointError.make({ location }))
-          : Effect.void,
+          : location === "terminalize:before-publication"
+            ? Effect.suspend(() => atSettlement)
+            : Effect.void,
     }).pipe(Layer.provide(observedCompactor((evidence) => compactions.push(evidence))));
 
     const memory = memoryStoreLayer.pipe(Layer.provide(host));
@@ -466,11 +476,7 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
 
     return yield* Effect.gen(function* () {
       const runtime = yield* DurableAgentRuntime;
-
-      atKill = pauseForKill.pipe(
-        Effect.provideService(ThreadStore, yield* ThreadStore),
-        Effect.provideService(MemoryReader, yield* MemoryReader),
-      );
+      const store = yield* ThreadStore;
       // Reacquisition reads the same persisted document before any resumed model call.
       const reopenedNotes = yield* readNotes(key);
 
@@ -487,7 +493,40 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
 
       const runId = runIdForSubmission(receipt.submissionId);
 
-      if (previousNotes !== undefined) {
+      atKill = pauseForKill(runId).pipe(
+        Effect.provideService(ThreadStore, store),
+        Effect.provideService(MemoryReader, yield* MemoryReader),
+      );
+      atSettlement = Effect.gen(function* () {
+        const execution = yield* continuationEvidence(threadId, runId);
+
+        if (execution.status !== "present")
+          return yield* Effect.die("No active execution before settlement");
+        if (
+          previous !== undefined &&
+          JSON.stringify(originalExecutionFacts(execution.checkpoint)) !==
+            JSON.stringify(originalExecutionFacts(previous.execution))
+        )
+          return yield* Effect.die("Recovered Run changed its original clock or saved context");
+        activeBeforeSettlement = execution.checkpoint;
+        yield* fs.writeFileString(
+          path.join(options.outputDirectory, "active-run-continuation.json"),
+          yield* Schema.encodeEffect(Schema.fromJsonString(RunContinuationEvidence))(execution),
+        );
+      }).pipe(Effect.provideService(ThreadStore, store), Effect.orDie);
+
+      if (previous !== undefined) {
+        const recovered = yield* continuationEvidence(threadId, runId);
+        const encode = Schema.encodeSync(Schema.fromJsonString(ExecutionCheckpoint));
+
+        if (
+          recovered.status !== "present" ||
+          encode(recovered.checkpoint) !== encode(previous.execution)
+        )
+          return yield* EvaluationError.make({
+            stage: "restart",
+            message: "Active Run context, original clock or accounting changed across recovery",
+          });
         const boundary = RESTARTS.find((item) => item.phase === phase.index);
 
         if (boundary === undefined)
@@ -500,9 +539,9 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
           phase: phase.index,
           location: boundary.location,
           runId,
-          notesRevisionBefore: previousNotes.revision,
+          notesRevisionBefore: previous.notes.revision,
           notesRevisionAfter: reopenedNotes.revision,
-          notesTextUnchanged: previousNotes.text === reopenedNotes.text,
+          notesTextUnchanged: previous.notes.text === reopenedNotes.text,
           mechanism: hardRestart ? "SIGKILL" : "service-reacquisition",
           processBefore: hardRestart ? (checkpoint?.processId ?? null) : null,
           processAfter: hardRestart ? (options.processId ?? null) : null,
@@ -536,6 +575,7 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
         : yield* runtime.processThread(agent, threadId).pipe(Effect.exit);
 
       records = yield* readLog(threadId);
+      const execution = yield* continuationEvidence(threadId, runId);
 
       const encoded = yield* Effect.forEach(records, (record) =>
         Schema.encodeEffect(Schema.fromJsonString(CanonicalRecordEnvelope))(record),
@@ -544,9 +584,7 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
       yield* fs.writeFileString(canonicalPath, `${encoded.join("\n")}\n`);
       yield* fs.writeFileString(
         path.join(options.outputDirectory, "run-continuation.json"),
-        yield* Schema.encodeEffect(Schema.fromJsonString(RunContinuationEvidence))(
-          continuationEvidence(records),
-        ),
+        yield* Schema.encodeEffect(Schema.fromJsonString(RunContinuationEvidence))(execution),
       );
       const notes = yield* readNotes(key);
 
@@ -578,8 +616,15 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
               Schema.is(DurableRuntimeFailpointError)(reason.error) &&
               reason.error.location === restart.location,
           )
-        )
-          return { kind: "restart", notes, runId } as const;
+        ) {
+          if (execution.status !== "present")
+            return yield* EvaluationError.make({
+              stage: "restart",
+              message: "Interrupted Run lost its active checkpoint",
+            });
+
+          return { kind: "restart", notes, runId, execution: execution.checkpoint } as const;
+        }
 
         return yield* EvaluationError.make({
           stage: "runtime",
@@ -589,7 +634,9 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
       const settlement = exit.value.find((value) => value.submissionId === receipt.submissionId);
 
       const completed = records.flatMap(({ record }) =>
-        record.payload._tag === "RunCompleted" && record.payload.runId === runId
+        record.payload._tag === "SubmissionSettled" &&
+        record.payload.submissionId === receipt.submissionId &&
+        record.payload.runId === runId
           ? [record.payload]
           : [],
       );
@@ -597,19 +644,23 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
       if (
         settlement?.outcome !== "completed" ||
         completed.length !== 1 ||
-        completed[0]?.finishReason !== undefined
+        completed[0]?.outcome !== "completed" ||
+        completed[0]?.finishReason !== undefined ||
+        activeBeforeSettlement === undefined ||
+        execution.status !== "missing"
       )
         return yield* EvaluationError.make({
           stage: "runtime",
           message: `Phase ${phase.index} did not complete normally; inspect canonical evidence`,
         });
-      const output = yield* Schema.decodeUnknownEffect(ProjectStatus)(completed[0]?.output);
+      const output = yield* Schema.decodeUnknownEffect(ProjectStatus)(completed[0]?.result);
 
       return {
         kind: "completed",
         output,
         runId,
         notes,
+        execution: activeBeforeSettlement,
         modelCalls: settlement.usageSummary?.modelCalls ?? 0,
       } as const;
     }).pipe(Effect.provide(services), Effect.scoped);
@@ -625,10 +676,10 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
       let result = yield* attempt(
         phase,
         resuming ? undefined : restart,
-        resuming ? checkpoint.notes : undefined,
+        resuming ? checkpoint : undefined,
       );
 
-      if (result.kind === "restart") result = yield* attempt(phase, undefined, result.notes);
+      if (result.kind === "restart") result = yield* attempt(phase, undefined, result);
       if (result.kind !== "completed")
         return yield* EvaluationError.make({
           stage: "restart",

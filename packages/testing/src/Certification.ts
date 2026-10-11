@@ -18,7 +18,7 @@ import { ThreadId, RunId, ToolCallId, TurnId, type AgentId } from "@yielded/agen
 import { DefinitionDigests, DeploymentId, Digest, ProducerId } from "@yielded/agent/records";
 import { childThreadIdFor } from "@yielded/agent/run-journal";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
-import { layer as runStorageLayer } from "@yielded/agent/run-storage";
+import { layer as runStorageLayer, type StorageOwner } from "@yielded/agent/run-storage";
 import type { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentPolicy } from "@yielded/agent/subagent";
@@ -31,7 +31,6 @@ import {
   SubmissionLedger,
   SubmissionLookupById,
   UnknownResolutionCommand,
-  DEFAULT_OWNERSHIP_LEASE_DURATION,
 } from "@yielded/agent/submission-ledger";
 import {
   type CertificationCaseResult,
@@ -61,7 +60,6 @@ import {
   Stream,
 } from "effect";
 import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
-import { TestClock } from "effect/testing";
 
 import { makeCertificationReport } from "./internal/certification-report.ts";
 
@@ -79,7 +77,7 @@ import { makeCertificationReport } from "./internal/certification-report.ts";
  *   After the injected fault the runner asserts the state stays CLASSIFIABLE (recovery +
  *   the public unblocking operations `resolveUnknown`/`resolveApproval` are the only levers
  *   used) and that the re-drive CONVERGES to `verifyThreadInvariants` with `requireAllSettled`,
- *   including the complete canonical digest chain from native paged verification.
+ *   including schema, identity, order and active state from native paged verification.
  * - **Tier 3 — real loss lever**: recorded honestly. A durable adapter either supplies a
  *   `CertificationCrashLever` executed in this run, cites its committed real-loss evidence
  *   (process-kill / eviction suites), or the certificate says `not-exercised`. A non-durable
@@ -87,8 +85,8 @@ import { makeCertificationReport } from "./internal/certification-report.ts";
  *
  * The runner is adapter-neutral and platform-neutral: it imports nothing Node-only, so the
  * same entry point runs under `@effect/vitest` on Node and inside workerd (storage-cloudflare's
- * in-workerd runner). It must run under a TestClock (Tier 1 drives lease expiry through
- * virtual time), and requires only `Crypto.Crypto` from the environment.
+ * in-workerd runner). Tier 1 uses a TestClock to show that elapsed time cannot replace a live
+ * owner; only `Crypto.Crypto` is required from the environment.
  */
 
 // ---------------------------------------------------------------------------
@@ -121,22 +119,13 @@ export interface CertifyDurableAdaptersOptions<LedgerE = never, StoreE = never> 
     LedgerE,
     Crypto.Crypto
   >;
-  readonly threadStore: Layer.Layer<ThreadStore, StoreE, Crypto.Crypto>;
+  readonly threadStore: Layer.Layer<ThreadStore | StorageOwner, StoreE, Crypto.Crypto>;
   /** Defaults to `WakeScheduler.layerNoop`; the runner re-drives lanes explicitly. */
   readonly wakeScheduler?: Layer.Layer<WakeScheduler> | undefined;
   /** Executes Tier 3 in this run; takes precedence over `tierThreeEvidence`. */
   readonly crashLever?: CertificationCrashLever | undefined;
   /** Repository-relative citations of committed real-loss suites (Tier 3 `recorded-evidence`). */
   readonly tierThreeEvidence?: ReadonlyArray<string> | undefined;
-  /**
-   * The candidate ledger's configured ownership lease (defaults to the D5 default, 30s).
-   * Every Tier-2 re-drive round advances the TestClock past this lease before reclaiming:
-   * a live lease may block ALL new claims (the SQL adapters do; the memory reference also
-   * allows same-producer reclaim), so the adapter-NEUTRAL recovery lever after a mid-Attempt
-   * fault is lease expiry — exactly the documented D5 liveness mechanism, driven through
-   * virtual time.
-   */
-  readonly ownershipLeaseDuration?: Duration.Duration | undefined;
 }
 
 /** The six Tier-2 scenario shapes in sweep order. */
@@ -706,7 +695,7 @@ const MAX_REDRIVE_ROUNDS = 8;
  * Verify one lane after convergence: canonical export + every lane Submission the ledger or
  * the log names (the same collection rule as the admin `verify` member), fed to the shared
  * invariant checker in convergence mode WITH the captured per-batch producer directory, so
- * the digest chain is fully recomputed instead of skipped.
+ * retained history and active state are checked.
  */
 const verifyLane = Effect.fnUntraced(function* (lane: ThreadId) {
   const store = yield* ThreadStore;
@@ -736,16 +725,12 @@ const failureTagOf = <E>(cause: Cause.Cause<E>): string => {
   return "defect";
 };
 
-type SweepOutcome = Pick<
-  CertificationSweepResult,
-  "failpointFired" | "status" | "digestChainVerified" | "detail"
->;
+type SweepOutcome = Pick<CertificationSweepResult, "failpointFired" | "status" | "detail">;
 
 /** Discover a clean path, or arm one location; both drives converge and verify real storage. */
 const runSweepCell = Effect.fnUntraced(function* (
   scenario: CertificationScenario,
   location: DurableRuntimeFailpointLocation | undefined,
-  leaseAdvance: Duration.Duration,
   reached: Set<DurableRuntimeFailpointLocation>,
 ) {
   const ledger = yield* SubmissionLedger;
@@ -755,7 +740,6 @@ const runSweepCell = Effect.fnUntraced(function* (
   const failed = (detail: string, fired: boolean): SweepOutcome => ({
     failpointFired: fired,
     status: "failed",
-    digestChainVerified: false,
     detail: detail.slice(0, 4_096),
   });
 
@@ -831,9 +815,7 @@ const runSweepCell = Effect.fnUntraced(function* (
   let converged = false;
 
   for (let round = 0; round < MAX_REDRIVE_ROUNDS && !converged; round++) {
-    // Expire any lease a faulted Attempt left behind (D5): virtual time is the
-    // adapter-neutral reclaim lever — a live lease may block every new claim.
-    yield* TestClock.adjust(leaseAdvance);
+    // A failed drive closes its scoped generation before recovery can select another owner.
     yield* Effect.exit(runtime.runRecovery());
     for (const lane of lanes) {
       yield* Effect.exit(driveLane(lane));
@@ -888,8 +870,7 @@ const runSweepCell = Effect.fnUntraced(function* (
     return failed(`did not converge within ${MAX_REDRIVE_ROUNDS} re-drive rounds`, wasFired);
   }
 
-  // Every lane of the cell must verify in convergence mode with a recomputed digest chain.
-  let digestChainVerified = true;
+  // Every lane must pass retained-history and active-state verification in convergence mode.
   const failedChecks: Array<string> = [];
 
   for (const lane of lanes) {
@@ -904,24 +885,15 @@ const runSweepCell = Effect.fnUntraced(function* (
           `${lane}:${check.name}${check.detail === undefined ? "" : ` (${check.detail})`}`,
         );
       }
-      if (check.name === "digest-chain" && check.status !== "passed") {
-        digestChainVerified = false;
-      }
     }
   }
-  if (failedChecks.length > 0 || !digestChainVerified) {
-    return failed(
-      failedChecks.length > 0
-        ? `invariant checks failed: ${failedChecks.join("; ")}`
-        : "the digest chain was not fully recomputed",
-      wasFired,
-    );
+  if (failedChecks.length > 0) {
+    return failed(`invariant checks failed: ${failedChecks.join("; ")}`, wasFired);
   }
 
   return {
     failpointFired: wasFired,
     status: wasFired ? "converged" : "not-triggered",
-    digestChainVerified,
   } satisfies SweepOutcome;
 });
 
@@ -1012,22 +984,17 @@ export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
           deploymentId: Schema.decodeSync(DeploymentId)("deployment-certification"),
           producerId: Schema.decodeSync(ProducerId)("producer-certification"),
           settlementPollInterval: Duration.millis(50),
-          leaseRenewalInterval: Duration.seconds(5),
           abortPollInterval: Duration.millis(50),
         }),
       ),
     ),
   );
 
-  const leaseAdvance = Duration.millis(
-    Duration.toMillis(options.ownershipLeaseDuration ?? DEFAULT_OWNERSHIP_LEASE_DURATION) + 1_000,
-  );
-
   const program = Effect.gen(function* () {
     const ledger = yield* SubmissionLedger;
 
     // Tier 2 — discover each deterministic shape without a fault. Unreached locations
-    // would all repeat this same clean drive, including its full digest verification.
+    // would all repeat this same clean drive, including its full invariant verification.
     const tier2: Array<CertificationSweepResult> = [];
 
     const discoveries: Array<{
@@ -1039,7 +1006,7 @@ export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
     for (const scenario of CERTIFICATION_SCENARIOS) {
       const reached = new Set<DurableRuntimeFailpointLocation>();
 
-      const outcome = yield* runSweepCell(scenario, undefined, leaseAdvance, reached);
+      const outcome = yield* runSweepCell(scenario, undefined, reached);
 
       discoveries.push({ scenario, outcome, reached });
     }
@@ -1068,7 +1035,7 @@ export const certifyDurableAdapters = <LedgerE = never, StoreE = never>(
           );
 
           if (location === undefined) break;
-          outcomes.set(location, yield* runSweepCell(scenario, location, leaseAdvance, reached));
+          outcomes.set(location, yield* runSweepCell(scenario, location, reached));
         }
       }
       for (const location of DurableRuntimeFailpointLocation.literals) {

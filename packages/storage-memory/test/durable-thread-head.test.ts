@@ -28,30 +28,33 @@ import {
   ProducerId,
   RecordEnvelope,
 } from "@yielded/agent/records";
-import { projectRunJournal, turnIdForRun, turnResponseBatch } from "@yielded/agent/run-journal";
+import {
+  projectRunJournal,
+  runIdForSubmission,
+  turnIdForRun,
+  turnResponseBatch,
+} from "@yielded/agent/run-journal";
 import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-options";
-import { layer as runStorageLayer } from "@yielded/agent/run-storage";
+import { layer as runStorageLayer, RunStorage } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
   ClaimRequest,
   IdempotencyKey,
   LedgerError,
-  OwnershipRenewal,
-  OwnershipToken,
   Principal,
   QueueSequence,
   RecoverySnapshotRequest,
-  ReleaseOwnershipRequest,
   SubmissionLedger,
 } from "@yielded/agent/submission-ledger";
 import { DurableRuntimeFailpointTestControl } from "@yielded/agent/testing/durable-failpoint-test-control";
 import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import {
   ThreadExportRequest,
-  FencedAppendRequest,
+  AppendRequest,
   ThreadTailRequest,
   ThreadRead,
   ThreadStore,
+  type ExecutionCheckpoint,
 } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
@@ -134,7 +137,6 @@ const baseLayer = Layer.mergeAll(
   DurableRuntimeConfig.layer({
     deploymentId: Schema.decodeSync(DeploymentId)("head-test"),
     producerId: Schema.decodeSync(ProducerId)("head-test"),
-    leaseRenewalInterval: Duration.seconds(5),
     settlementPollInterval: Duration.millis(100),
   }),
 ).pipe(Layer.provideMerge(NodeCrypto.layer));
@@ -499,11 +501,10 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
           });
 
           yield* store.append(
-            FencedAppendRequest.make({
+            AppendRequest.make({
               threadId: current.threadId,
               expectedTailSequence: tail.tailSequence,
-              expectedTailDigest: tail.tailDigest,
-              producerEpoch: tail.producerEpoch,
+
               batch: CanonicalBatch.make({
                 batchId: Schema.decodeSync(CanonicalBatch.fields.batchId)("retained-history"),
                 producerId: Schema.decodeSync(ProducerId)("head-test"),
@@ -613,6 +614,24 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
 
       for (const restart of [true]) {
         const requests: Array<Prompt.Prompt> = [];
+        const completing: Array<ExecutionCheckpoint> = [];
+
+        const observeCompletion = (receipt: Receipt) =>
+          failpoints.setHandler((location) =>
+            location === "terminalize:before-publication"
+              ? store
+                  .readExecution({
+                    threadId: receipt.threadId,
+                    runId: runIdForSubmission(receipt.submissionId),
+                  })
+                  .pipe(
+                    Effect.map((execution) => {
+                      if (Option.isSome(execution)) completing.push(execution.value);
+                    }),
+                    Effect.orDie,
+                  )
+              : Effect.void,
+          );
 
         const model = Model.make(
           "scripted",
@@ -677,7 +696,9 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
           options(`fresh-reset-${restart}`, "first"),
         );
 
+        yield* observeCompletion(first);
         expect(Option.isSome(yield* runtime.processThreadHead(first.threadId))).toBe(true);
+        yield* failpoints.clear;
 
         const original = yield* readTestThread(
           store,
@@ -704,7 +725,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
             Exit.isFailure(yield* Effect.exit(runtime.processThreadHead(second.threadId))),
           ).toBe(true);
           expect(requests).toHaveLength(1);
-          expect((yield* snapshot(second)).ownership).toBeUndefined();
+          expect((yield* snapshot(second)).hasOwner).toBe(false);
 
           const interrupted = yield* readTestThread(
             store,
@@ -721,7 +742,9 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
 
         const resumed = restart ? yield* freshRuntime : runtime;
 
+        yield* observeCompletion(second);
         expect(Option.isSome(yield* resumed.processThreadHead(second.threadId))).toBe(true);
+        yield* failpoints.clear;
         expect(requests).toHaveLength(2);
         const outgoing = JSON.stringify(requests[1]);
 
@@ -736,9 +759,36 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
         );
 
         expect(final.records.slice(0, original.records.length)).toEqual(original.records);
+        expect(completing).toHaveLength(2);
         expect(
-          final.records.filter((entry) => entry.record.payload._tag === "RunStarted"),
+          completing.flatMap((execution) =>
+            execution.operational.filter(({ payload }) => payload._tag === "RunStarted"),
+          ),
         ).toHaveLength(2);
+        expect(completing.map((execution) => execution.progress.runId)).toEqual(
+          [first, second].map((receipt) => runIdForSubmission(receipt.submissionId)),
+        );
+        for (const receipt of [first, second]) {
+          const runId = runIdForSubmission(receipt.submissionId);
+
+          expect(yield* store.readExecution({ threadId: receipt.threadId, runId })).toEqual(
+            Option.none(),
+          );
+
+          const settlements = final.records.filter(
+            ({ record: { payload } }) =>
+              payload._tag === "SubmissionSettled" && payload.submissionId === receipt.submissionId,
+          );
+
+          expect(settlements).toHaveLength(1);
+          expect(settlements[0]?.record.payload).toMatchObject({
+            runId,
+            outcome: "completed",
+            historyRecordCount: final.records.filter(
+              ({ record: { payload } }) => "runId" in payload && payload.runId === runId,
+            ).length,
+          });
+        }
 
         const resets = final.records.filter(
           (entry) => entry.record.payload._tag === "CompactionCreated",
@@ -961,25 +1011,36 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
           expect(Exit.isFailure(interrupted)).toBe(true);
           expect(preparations).toEqual(["large"]);
           expect(requests.map((request) => request.model)).toEqual(["large"]);
-          expect((yield* snapshot(receipt)).ownership).toBeUndefined();
+          expect((yield* snapshot(receipt)).hasOwner).toBe(false);
         }
 
-        const before = yield* readTestThread(
-          store,
-          ThreadExportRequest.make({ threadId: receipt.threadId }),
-        );
+        const runId = runIdForSubmission(receipt.submissionId);
+        const executionBefore = yield* store.readExecution({ threadId: receipt.threadId, runId });
 
-        const startedBefore = before.records.filter(
-          (entry) => entry.record.payload._tag === "RunStarted",
-        );
+        const startedBefore = Option.isSome(executionBefore)
+          ? executionBefore.value.operational.filter(({ payload }) => payload._tag === "RunStarted")
+          : [];
 
         expect(startedBefore).toHaveLength(restart ? 1 : 0);
 
         yield* failpoints.clear;
         if (restart) yield* TestClock.adjust("5 seconds");
         const resumed = restart ? yield* freshRuntime : first;
+        const completing: Array<ExecutionCheckpoint> = [];
+
+        yield* failpoints.setHandler((location) =>
+          location === "terminalize:before-publication"
+            ? store.readExecution({ threadId: receipt.threadId, runId }).pipe(
+                Effect.map((execution) => {
+                  if (Option.isSome(execution)) completing.push(execution.value);
+                }),
+                Effect.orDie,
+              )
+            : Effect.void,
+        );
         const settled = yield* resumed.processThreadHead(receipt.threadId);
 
+        yield* failpoints.clear;
         expect(Option.isSome(settled)).toBe(true);
         const selected = scenario === "failed-tool" ? "large" : "small";
 
@@ -1005,12 +1066,17 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
           ThreadExportRequest.make({ threadId: receipt.threadId }),
         );
 
-        const startedAfter = after.records.filter(
-          (entry) => entry.record.payload._tag === "RunStarted",
+        expect(completing).toHaveLength(1);
+
+        const startedAfter = completing[0]!.operational.filter(
+          ({ payload }) => payload._tag === "RunStarted",
         );
 
         expect(startedAfter).toHaveLength(1);
         if (restart) expect(startedAfter).toEqual(startedBefore);
+        expect(yield* store.readExecution({ threadId: receipt.threadId, runId })).toEqual(
+          Option.none(),
+        );
         expect(
           after.records.filter((entry) => entry.record.payload._tag === "ToolStepSettled"),
         ).toHaveLength(1);
@@ -1040,6 +1106,9 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
 
         expect(terminal).toMatchObject({
           outcome: "completed",
+          historyRecordCount: after.records.filter(
+            ({ record: { payload } }) => "runId" in payload && payload.runId === runId,
+          ).length,
           usageSummary: {
             modelCalls: 2,
             inputTokens: { total: 175 },
@@ -1098,7 +1167,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
       if (Option.isSome(result)) expect(result.value.submissionId).toBe(first.submissionId);
       expect((yield* runtime.submissionStatus(first))._tag).toBe("settled");
       expect((yield* runtime.submissionStatus(second))._tag).toBe("pending");
-      expect((yield* snapshot(second)).ownership).toBeUndefined();
+      expect((yield* snapshot(second)).hasOwner).toBe(false);
       expect((yield* snapshot(second)).submission.state).toBe("ready");
       expect(yield* Ref.get(closed)).toBe(1);
 
@@ -1140,7 +1209,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
       const result = yield* Effect.exit(runtime.processThreadHead(receipt.threadId));
 
       expect(Exit.isFailure(result)).toBe(true);
-      expect((yield* snapshot(receipt)).ownership).toBeUndefined();
+      expect((yield* snapshot(receipt)).hasOwner).toBe(false);
 
       yield* Ref.set(armed, false);
       expect((yield* runtime.submissionStatus(receipt))._tag).toBe("pending");
@@ -1156,8 +1225,8 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
       const runtime = yield* makeRuntime().pipe(
         Effect.provideService(SubmissionLedger, {
           ...ledger,
-          claim: (request) =>
-            ledger.claim(request).pipe(
+          selectHead: (request) =>
+            ledger.selectHead(request).pipe(
               Effect.tap(() => Deferred.succeed(acquired, undefined)),
               Effect.tap(() => Deferred.await(handoff)),
             ),
@@ -1174,17 +1243,15 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
       yield* Effect.yieldNow;
       yield* Deferred.succeed(handoff, undefined);
       yield* Fiber.join(interrupt);
-      expect((yield* snapshot(receipt)).ownership).toBeUndefined();
+      expect((yield* snapshot(receipt)).hasOwner).toBe(false);
       expect((yield* runtime.submissionStatus(receipt))._tag).toBe("pending");
     }),
   );
 
-  // Regression: 405916b0 restarted the first-renewal interval after binding preparation.
-  // Cleanup and stale-owner tests do not cover a healthy owner made reclaimable by that delay.
+  // Slow setup must keep exclusive ownership even after an arbitrary amount of time.
   it.effect("keeps its claim live after slow binding selection", () =>
     Effect.gen(function* () {
-      const ledger = yield* SubmissionLedger;
-      const config = yield* DurableRuntimeConfig;
+      const storage = yield* RunStorage.pipe(Effect.provide(runStorageLayer()));
       const selecting = yield* Deferred.make<void>();
       const started = yield* Deferred.make<void>();
       const release = yield* Deferred.make<void>();
@@ -1204,10 +1271,6 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
       const binding = yield* DurableWorkerBinding.make(agent, digests);
 
       const runtime = yield* makeRuntime([binding]).pipe(
-        Effect.provideService(DurableRuntimeConfig, {
-          ...config,
-          leaseRenewalInterval: Duration.seconds(10),
-        }),
         Effect.provideService(CurrentBindingSelection, {
           key: "slow-selection",
           select: () =>
@@ -1230,12 +1293,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
       yield* Deferred.await(started);
       yield* TestClock.adjust("6 seconds");
 
-      const competitor = yield* ledger.claim(
-        ClaimRequest.make({
-          threadId: receipt.threadId,
-          producerId: Schema.decodeSync(ProducerId)("competing-worker"),
-        }),
-      );
+      const competitor = yield* storage.claim(ClaimRequest.make({ threadId: receipt.threadId }));
 
       try {
         expect(Option.isNone(competitor)).toBe(true);
@@ -1247,87 +1305,38 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
     }),
   );
 
-  it.effect(
-    "detaches a waiter and releases the latest renewed token when its Attempt is interrupted",
-    () =>
-      Effect.gen(function* () {
-        const ledger = yield* SubmissionLedger;
-        const started = yield* Deferred.make<void>();
-        const renewalReturned = yield* Deferred.make<void>();
-        const renewalHandoff = yield* Deferred.make<void>();
-        const renewedToken = Schema.decodeSync(OwnershipToken)("renewed-token");
-        const originalToken = yield* Ref.make<Option.Option<OwnershipToken>>(Option.none());
-        const releasedTokens = yield* Ref.make<ReadonlyArray<OwnershipToken>>([]);
-        const closed = yield* Ref.make(false);
+  it.effect("detaches a waiter and releases the owner when its Attempt is interrupted", () =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const closed = yield* Ref.make(false);
 
-        const agent = Agent.withModel(
-          definition,
-          makeModel(
-            Stream.fromEffect(Deferred.succeed(started, undefined)).pipe(
-              Stream.drain,
-              Stream.concat(Stream.never),
-            ),
-            Ref.set(closed, true),
+      const agent = Agent.withModel(
+        definition,
+        makeModel(
+          Stream.fromEffect(Deferred.succeed(started, undefined)).pipe(
+            Stream.drain,
+            Stream.concat(Stream.never),
           ),
-        );
+          Ref.set(closed, true),
+        ),
+      );
 
-        const binding = yield* DurableWorkerBinding.make(agent, digests);
+      const binding = yield* DurableWorkerBinding.make(agent, digests);
+      const runtime = yield* makeRuntime([binding]);
+      const receipt = yield* runtime.submit(agent, "first", options("owner-interrupt", "first"));
+      const worker = yield* runtime.processThreadHead(receipt.threadId).pipe(Effect.forkChild);
 
-        const runtime = yield* makeRuntime([binding]).pipe(
-          Effect.provideService(SubmissionLedger, {
-            ...ledger,
-            renewOwnership: (request) =>
-              ledger.renewOwnership(request).pipe(
-                Effect.tap(() => Deferred.await(started)),
-                Effect.tap((renewed) =>
-                  Ref.set(originalToken, Option.some(renewed.ownershipToken)),
-                ),
-                Effect.map((renewed) =>
-                  OwnershipRenewal.make({ ...renewed, ownershipToken: renewedToken }),
-                ),
-                Effect.tap(() => Deferred.succeed(renewalReturned, undefined)),
-                Effect.tap(() => Deferred.await(renewalHandoff)),
-              ),
-            releaseOwnership: (request) =>
-              Effect.gen(function* () {
-                yield* Ref.update(releasedTokens, (tokens) => [...tokens, request.ownershipToken]);
-                const original = yield* Ref.get(originalToken);
+      yield* Deferred.await(started);
+      const waiter = yield* runtime.awaitSettlement(receipt).pipe(Effect.forkChild);
 
-                return yield* ledger.releaseOwnership(
-                  ReleaseOwnershipRequest.make({
-                    ...request,
-                    ownershipToken:
-                      request.ownershipToken === renewedToken && Option.isSome(original)
-                        ? original.value
-                        : request.ownershipToken,
-                  }),
-                );
-              }),
-          }),
-        );
-
-        const receipt = yield* runtime.submit(agent, "first", options("renewed", "first"));
-
-        const worker = yield* runtime.processThreadHead(receipt.threadId).pipe(Effect.forkChild);
-
-        yield* Deferred.await(started);
-        yield* TestClock.adjust("5 seconds");
-        yield* Deferred.await(renewalReturned);
-        const waiter = yield* runtime.awaitSettlement(receipt).pipe(Effect.forkChild);
-
-        yield* Fiber.interrupt(waiter);
-        expect((yield* snapshot(receipt)).ownership).toBeDefined();
-        expect(yield* Ref.get(closed)).toBe(false);
-        const interrupt = yield* Fiber.interrupt(worker).pipe(Effect.forkChild);
-
-        yield* Effect.yieldNow;
-        yield* Deferred.succeed(renewalHandoff, undefined);
-        yield* Fiber.join(interrupt);
-        expect(yield* Ref.get(releasedTokens)).toEqual([renewedToken]);
-        expect((yield* snapshot(receipt)).ownership).toBeUndefined();
-        expect(yield* Ref.get(closed)).toBe(true);
-        expect((yield* runtime.submissionStatus(receipt))._tag).toBe("pending");
-      }),
+      yield* Fiber.interrupt(waiter);
+      expect((yield* snapshot(receipt)).hasOwner).toBe(true);
+      expect(yield* Ref.get(closed)).toBe(false);
+      yield* Fiber.interrupt(worker);
+      expect((yield* snapshot(receipt)).hasOwner).toBe(false);
+      expect(yield* Ref.get(closed)).toBe(true);
+      expect((yield* runtime.submissionStatus(receipt))._tag).toBe("pending");
+    }),
   );
 
   it.effect(
@@ -1359,7 +1368,7 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
         expect(
           (yield* runtime.recoverSubmission(receipt.submissionId).pipe(Effect.flip))._tag,
         ).toBe("DurableRuntimeFailpointError");
-        expect((yield* snapshot(receipt)).ownership).toBeUndefined();
+        expect((yield* snapshot(receipt)).hasOwner).toBe(false);
         expect((yield* runtime.submissionStatus(receipt))._tag).toBe("pending");
         yield* control.clear;
         yield* runtime.recoverSubmission(receipt.submissionId);

@@ -29,12 +29,14 @@ The cleanup lines remove only declaration artifacts emitted by older package bui
 disposable checkouts. Every other modified or untracked file fails clean-checkout validation.
 
 Comparison staging aliases historical PascalCase exports to the current kebab-case paths without
-changing their implementations. Settlement seeds conditionally load the compared revision’s publisher;
-older revisions use their own reservation Schema and append the same canonical settlement before
-finalization. A missing export selects that older protocol, while a broken existing module fails.
+changing their implementations. The current fixture uses the single-owner storage and settlement ports. Compare revisions
+with the current record format; use the retained older fixture for historical storage formats.
 No candidate implementation or dependency installation is substituted for the baseline. Workers explicitly provide the same Effect AI identity generator
 to both revisions so releases predating default IDs remain runnable. These compatibility choices
 apply only to the comparison fixtures; they add no published export aliases or runtime fallbacks.
+Unfinished Runs use `ThreadStore.readExecution` when that port is available. Historical comparison
+builds read their actual canonical progress rows in the fixture's bounded setup/verification range.
+An absent or invalid checkpoint on a current build fails; it never selects the historical path.
 
 The performance workflow runs only by manual dispatch. Select exact base/head refs, a fixed
 profile, optional comma-separated case IDs, and optional whole-process or steady-state CPU profiling. A blank base defaults
@@ -157,7 +159,7 @@ or paid execution is configured here.
 | Prompt history            | A small answer with 64 KiB or 1 MiB of prior text. History creation occurs before timing.                                                                                                                                                                                                                                                                          |
 | Parallel tools and rounds | Eight 2 ms tools per round, concurrency four, one or four rounds. Subsequent normalized provider requests must contain every successful result. Actual overlap, call bounds, and finalizers are checked.                                                                                                                                                           |
 | Fresh durable submission  | A new Submission after 0/256/2,048 retained canonical records in a file-backed SQLite database. Each sample creates its own database; setup/seeding is excluded. Timing includes reopening the full Node durable runtime, admission, execution, and settlement.                                                                                                    |
-| Run recovery              | Commit a native rollover and canonical continuation, inject the public after-append fault, close the runtime, and reopen the same file. Measure resuming the same Submission separately from fresh submission. One completed tool must not run again; the resumed answer must be canonical.                                                                        |
+| Run recovery              | Commit a native rollover and its active checkpoint, inject the public after-append fault, close the runtime, and reopen the same file. Measure resuming the same Submission separately from fresh submission. One completed tool must not run again; the resumed answer must be canonical.                                                                         |
 | Settled ledger            | Seed settled adapter rows in a separate lane without growing canonical history. Measure reopening the Node runtime, fresh admission, a full public nonterminal scan, execution, and settlement. The scan must return only the new Submission. Seed construction uses each revision’s public settlement protocol and retains one canonical settlement per seed row. |
 
 Retained-history seeds contain ThreadCreated followed by complete input/model/completion triples
@@ -172,10 +174,10 @@ record count. These are adapter fixtures of completed retained Runs, with no out
 Submissions. The provider callback must receive every seeded question and answer before fresh
 inference; Run resume must receive the handoff without retired history. The separate
 64 KiB/1 MiB prompt cases assert their exact history text at the same callback. Each measured
-durable completion must have one new canonical RunCompleted with the exact output and retain
+durable completion must have one new canonical SubmissionSettled with the exact output and retain
 the entire original archive. Seed writes use the adapters' normal public
 operations and existing failpoints. The benchmark introduces no persisted format or migration.
-SQLite uses the production Node assembly and its default scheduling, lease, and durability
+SQLite uses the production Node assembly and its default scheduling and durability
 configuration; recovery cases additionally install the documented host rollover preparation.
 Database teardown and evidence reads are outside the warm-operation interval.
 
@@ -202,10 +204,16 @@ settlement outcomes/failures and the observed compaction phase. A successful wor
 Effect can return a failed settlement; it does not by itself prove a successful Attempt.
 `compactionCommitMs` measures the atomic compaction and progress publication from
 `compaction:before-canonical-append` through `compaction:after-canonical-append`, before the fault.
-It includes the original compaction fact, continuation preparation and their shared append
+It includes the original compaction fact, checkpoint preparation and their shared append
 and is never added to the later recovery interval. Raw samples include observed retained prompt
 message counts. Incomplete or mismatched-runtime batches are explicitly reported and excluded
 from comparison summaries.
+
+Current-checkpoint verification captures real active state before terminal publication, compares
+the original clock/context and cumulative accounting across recovery, and checks normal retirement
+after canonical settlement. These observations are part of the existing operation clock; terminal
+exports and artifact encoding stay outside it. Source fingerprints identify this verification work.
+Captured active state does not attest discarded intermediate checkpoint revisions.
 
 `attemptMs` includes setup, the operation, verification, and scope cleanup; `setupMs` ends at the
 operation's start clock and includes initial checkpoint preparation for recovery. Neither is added
@@ -257,7 +265,7 @@ Read the full spread and raw samples before drawing a conclusion. Re-run a suspe
 with another matched cohort. Small-sample p95, local source timings, or differing provider workloads
 do not establish an SLO, Cloudflare CPU billing, or a competitive ranking. Deterministic engine
 and adapter work-budget tests remain the PR regression gates; timing evidence complements them.
-The manual diagnostics below separate fairness and lock contention from isolated run latency.
+The manual diagnostics below separate worker fairness and ledger observations from isolated run latency.
 Keep timing informational until repeated matched cohorts establish a workload-specific relative
 and absolute regression threshold. Current hosted runs show substantial machine and storage
 variance; one small-sample tail estimate or percentage alone is not a release gate. Confirm a
@@ -289,12 +297,15 @@ Select `long-thread-aging-256-131328` explicitly; it does not expand the default
 vp run perf:diagnose --base-dir /tmp/effect-agent-base --case long-thread-aging-256-131328 --out-dir /tmp/aging-001
 ```
 
-Both compared revisions must support native layout-21 archives and selected Run recovery.
+Both compared revisions must support native archives and selected Run recovery.
 The aging module is loaded only for these opt-in cases, so ordinary diagnostics can still compare
 revisions predating these APIs.
 
 Each worker executes one uncertain mutation, interrupts its owner, archives the original Run's
-input/context, and settles a later Run. It removes disposable checkpoints, appends 256 unrelated
+canonical input/model evidence, and settles a later Run. Its evaluated context remains in the
+authoritative active checkpoint on current builds; historical builds retain it in canonical history.
+The later Run must leave that unresolved state unchanged. The worker removes disposable recovery
+projections, appends 256 unrelated
 `RepairAnnotated` facts, and closes the SQLite database before copying it. The same unfinished Run
 then ages to 131,328 unrelated facts in the source database. Each sample resumes fresh copies of
 both closed snapshots under a changed binding, preserving identical original Run and Receipt IDs.
@@ -314,8 +325,10 @@ on an acquired SQLite runtime. Seed creation, database copies, runtime acquisiti
 and independent canonical verification are excluded; `totalMs` is the sum of the two resume
 intervals. Selected-read counters cover the runtime's `ThreadStore` boundary, including runtime
 construction; adapter-native ledger SQL and explicit setup/verification reads are outside that
-guard. Payload bytes describe canonical records, not process heap. The case preserves layout 21,
-`effect-agent/thread@3`, and archive formats.
+guard. Current execution reads are included in the guard: their logical progress/operational record
+counts and full encoded checkpoint bytes must remain bounded and identical in shape across ages.
+Payload bytes describe returned evidence, not process heap. The case uses each revision's public
+archive and checkpoint ports without rewriting canonical or active state.
 
 Select `long-thread-store-size` for the same factual-resolution and resumption operation with
 the selected Thread fixed at exactly 100,000 canonical records and a separate Thread containing
@@ -366,21 +379,15 @@ replay, runtime status observation, and active finalization are measured separat
 includes its ordinary recovery-snapshot work. The statement counter excludes the driver's
 transaction BEGIN/COMMIT commands.
 
-Contention cases compare the same replay/status operation while another Node process holds a
-SQLite write transaction for zero, 25, or 100 milliseconds after a readiness handshake. That
-process releases its lock independently of the observer's event loop. Observer latency excludes
-process startup and handshake; the report retains both the requested-window duration and full
-lock occupancy through rollback. Writer and observer timestamps share Node's same-host `hrtime`
-domain; overlap uses the conservative interval after acquisition and before rollback begins.
-Samples that miss the writer window remain in the report with `noWriterOverlap=1`; consult the
-overlap counters before claiming contention. A healthy read may finish while the writer still
-holds its lock. These cases do not measure event-loop lag or change the adapter's busy timeout.
-A subsequent public write and scoped process finalization verify release.
+SQLite diagnostics use one file owner. Settled replay and status cases run through that owner;
+opening a second writer against its database is outside the supported storage contract.
 
 Fairness cases run four independent tool-heavy Threads and one short Thread with one, two, or
 four registered Node host workers. Each busy Run uses four 100-millisecond tools with concurrency
 two. Initial-backlog and warm-arrival cases retain every Thread's admission, Attempt/provider
-entry, observed settlement, active maxima, and finalizers. Request-to-Attempt time includes
+entry, observed settlement, active maxima, and finalizers. Current builds capture each lane's actual
+started/completed operational evidence before publication, then verify the canonical settlement and
+checkpoint retirement. Request-to-Attempt time includes
 admission; observed settlement includes ordinary wake and polling cadence. Warm arrival records
 actual activity rather than assuming all workers are saturated. Host creation, canonical
 verification, and shutdown remain outside the operation clock. These probes preserve existing

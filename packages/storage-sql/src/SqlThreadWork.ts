@@ -36,8 +36,8 @@ import {
 import { Crypto, Effect, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import { makeSqlSettlementIntervals } from "./internal/settlement-intervals.ts";
 import { sqliteJsonText } from "./internal/sql-json.ts";
+import { makeCanonicalStorage, recordBatchId, RECORD_TAGS } from "./SqlCanonicalStorage.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 import { canonicalRecordJson } from "./SqlThreadArchiveRange.ts";
 import { canonicalRecordMetadata, canonicalRecordPointers } from "./SqlThreadNativeReads.ts";
@@ -70,14 +70,6 @@ export const createSqlThreadWorkTables = Effect.fnUntraced(function* (namespace?
     sql.onDialectOrElse({ pg: () => 'TEXT COLLATE "C"', orElse: () => "TEXT" }),
   );
 
-  yield* sql`CREATE TABLE IF NOT EXISTS ${table("effect_agent_work_index")} (
-    thread_id ${text} PRIMARY KEY NOT NULL, version ${integer} NOT NULL,
-    state ${text} NOT NULL, through_sequence ${integer} NOT NULL,
-    reporting ${integer} NOT NULL, entry_count ${integer} NOT NULL
-  )`.pipe(
-    execute,
-    Effect.mapError((cause) => failure("create work index", cause)),
-  );
   yield* sql`CREATE TABLE IF NOT EXISTS ${table("effect_agent_work_entries")} (
     thread_id ${text} NOT NULL, id ${text} NOT NULL, message_id ${text},
     entry_json ${text} NOT NULL, created_sequence ${integer} NOT NULL, owner_tag ${text} NOT NULL, worker_thread_id ${text}, worker_update ${integer}, handoff_kind ${text}, PRIMARY KEY (thread_id, id)
@@ -110,21 +102,6 @@ export const createSqlThreadWorkTables = Effect.fnUntraced(function* (namespace?
     execute,
     Effect.mapError((cause) => failure("create peer lookup", cause)),
   );
-  yield* sql`CREATE INDEX IF NOT EXISTS effect_agent_work_entries_foreign_child
-    ON ${table("effect_agent_work_entries")} (thread_id, id) WHERE owner_tag='Child' OR handoff_kind IN ('reservation','child-accounting')`.pipe(
-    execute,
-    Effect.mapError((cause) => failure("create foreign child lookup", cause)),
-  );
-  yield* sql`CREATE INDEX IF NOT EXISTS effect_agent_work_entries_foreign_worker
-    ON ${table("effect_agent_work_entries")} (thread_id, id) WHERE owner_tag IN ('WorkerInput','WorkerEffects','Report') OR handoff_kind='worker-stop'`.pipe(
-    execute,
-    Effect.mapError((cause) => failure("create foreign worker lookup", cause)),
-  );
-  yield* sql`CREATE INDEX IF NOT EXISTS effect_agent_work_entries_foreign_delivery
-    ON ${table("effect_agent_work_entries")} (thread_id, id) WHERE handoff_kind IN ('peer','update','report')`.pipe(
-    execute,
-    Effect.mapError((cause) => failure("create foreign delivery lookup", cause)),
-  );
   yield* sql`CREATE INDEX IF NOT EXISTS effect_agent_records_delivery_predecessor
     ON ${table("effect_agent_canonical_records")} (thread_id, record_tag, sequence) WHERE handoff = 1`.pipe(
     execute,
@@ -138,6 +115,8 @@ const Header = Schema.Struct({
   through_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
   reporting: SqlInteger.pipe(Schema.decodeTo(Schema.Literals([0, 1, 2]))),
   entry_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
+  worker_input_sequence: Schema.NullOr(SqlInteger),
+  worker_settlement_sequence: Schema.NullOr(SqlInteger),
   actual_count: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
 });
 
@@ -160,8 +139,8 @@ const metadataFailure = (cause: Schema.SchemaError) => failure("decode work meta
 
 const RebuildRow = Schema.Struct({
   sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-  record_id: RecordId,
-  batch_id: CanonicalRecordEnvelope.fields.batchId,
+  record_id: Schema.fromJsonString(RecordId),
+  batch_id: Schema.fromJsonString(CanonicalRecordEnvelope.fields.batchId),
   record_bytes: SqlInteger.pipe(Schema.decodeTo(Schema.Natural)),
 });
 
@@ -178,6 +157,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
   const crypto = yield* Crypto.Crypto;
   const { table, execute } = yield* makeSqlQuery(options.namespace);
   const recordJson = canonicalRecordJson(sql, options.namespace);
+  const physical = yield* makeCanonicalStorage(options.namespace);
   let tablesPresent = false;
 
   // Schema presence belongs to this storage session. Owners invalidate it with their other
@@ -190,8 +170,6 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     pg: () => sql``,
     orElse: () => sql`INDEXED BY effect_agent_submissions_nonterminal`,
   });
-
-  const intervals = yield* makeSqlSettlementIntervals(options.namespace);
 
   const deliveryIndex = sql.onDialectOrElse({
     pg: () => sql``,
@@ -241,9 +219,9 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       sql.onDialectOrElse({
         pg: () => sql`SELECT COUNT(*) AS count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
         WHERE n.nspname=${options.namespace ?? "public"} AND c.relkind='r'
-          AND c.relname IN ('effect_agent_work_index', 'effect_agent_work_entries')`,
+          AND c.relname IN ('effect_agent_threads', 'effect_agent_work_entries')`,
         orElse: () => sql`SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table'
-        AND name IN ('effect_agent_work_index', 'effect_agent_work_entries')`,
+        AND name IN ('effect_agent_threads', 'effect_agent_work_entries')`,
       }),
     );
 
@@ -257,9 +235,10 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
   const header = Effect.fnUntraced(function* (threadId: ThreadId) {
     if (!(yield* present())) return undefined;
 
-    const rows = yield* query(sql`SELECT version, state, through_sequence, reporting, entry_count,
+    const rows =
+      yield* query(sql`SELECT work_version AS version, work_state AS state, work_through_sequence AS through_sequence, work_reporting AS reporting, work_entry_count AS entry_count, worker_input_sequence, worker_settlement_sequence,
       (SELECT COUNT(*) FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId}) AS actual_count
-      FROM ${table("effect_agent_work_index")} WHERE thread_id=${threadId}`);
+      FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`);
 
     const decoded = yield* decodeHeader(rows).pipe(Effect.orElseSucceed(() => undefined));
 
@@ -328,7 +307,23 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     record: CanonicalRecord,
     rebuild = false,
   ) {
-    yield* intervals.apply(threadId, sequence, record);
+    if (record.payload._tag === "CompactionCreated" && record.payload.kind === "rollover") {
+      const rows = Array.from({ length: 53 }, (_, height) => ({
+        thread_id: threadId,
+        height,
+        bucket: Math.floor(
+          record.payload._tag === "CompactionCreated"
+            ? record.payload.coversThrough / 2 ** height
+            : 0,
+        ),
+        sequence,
+      }));
+
+      for (let at = 0; at < rows.length; at += 25)
+        yield* query(
+          sql`INSERT INTO ${table("effect_agent_rollover_buckets")} ${sql.insert(rows.slice(at, at + 25))} ${rebuild ? sql`ON CONFLICT DO NOTHING` : sql``}`,
+        );
+    }
     const pointers = canonicalRecordPointers(record);
 
     // Fresh canonical sequences have no old pointers. Bounded rebuild repairs their derivatives.
@@ -370,6 +365,8 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       Effect.provideService(Crypto.Crypto, crypto),
     );
 
+    let delta = 0;
+
     for (const change of changes) {
       if (change._tag === "WorkerMode") {
         workerMode = change.mode;
@@ -385,10 +382,13 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
           )
             continue;
         }
+
         // apply/rebuild already hold the native writer, so this comparison and delete are atomic.
-        yield* query(
-          sql`DELETE FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId} AND id=${change.id}`,
+        const deleted = yield* query(
+          sql`DELETE FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId} AND id=${change.id} RETURNING id`,
         );
+
+        delta -= deleted.length;
         continue;
       }
 
@@ -402,7 +402,10 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
 
         if (rows.length > 0) continue;
       }
-      const entry = advanceWorkEntry(yield* getEntry(threadId, change.entry.id), change.entry);
+      const previous = yield* getEntry(threadId, change.entry.id);
+      const entry = advanceWorkEntry(previous, change.entry);
+
+      if (previous === undefined) delta++;
 
       const encoded = yield* encodeWorkEntry(entry).pipe(
         Effect.mapError((cause) => failure("encode work entry", cause)),
@@ -419,34 +422,53 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
           created_sequence=excluded.created_sequence, owner_tag=excluded.owner_tag, worker_thread_id=excluded.worker_thread_id, worker_update=excluded.worker_update, handoff_kind=excluded.handoff_kind`);
     }
 
-    return workerMode;
+    return { workerMode, delta };
   });
 
-  const saveHeader = Effect.fnUntraced(function* (
-    threadId: ThreadId,
+  const headerFields = (
     through: CanonicalSequence,
     workerMode: WorkerReportingMode,
     state: "ready" | "rebuilding",
-  ) {
-    const reporting = workerMode === "standard" ? 1 : workerMode === "private" ? 2 : 0;
-
-    yield* decodeCountRow(
-      yield* query(sql`INSERT INTO ${table("effect_agent_work_index")} (thread_id, version, state, through_sequence, reporting, entry_count)
-        VALUES (${threadId}, ${WORK_INDEX_VERSION}, ${state}, ${through}, ${reporting},
-          (SELECT COUNT(*) FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId}))
-        ON CONFLICT (thread_id) DO UPDATE SET version=excluded.version, state=excluded.state,
-          through_sequence=excluded.through_sequence, reporting=excluded.reporting, entry_count=excluded.entry_count
-        RETURNING entry_count AS count`),
-    ).pipe(Effect.mapError(metadataFailure));
+    count: number,
+    input: number | null,
+    settlement: number | null,
+  ) => ({
+    work_version: WORK_INDEX_VERSION,
+    work_state: state,
+    work_through_sequence: through,
+    work_reporting: workerMode === "standard" ? 1 : workerMode === "private" ? 2 : 0,
+    work_entry_count: count,
+    worker_input_sequence: input,
+    worker_settlement_sequence: settlement,
   });
 
-  /** Only for newly materialized/imported Threads, inside their publication transaction. */
+  const saveHeader = (threadId: ThreadId, fields: ReturnType<typeof headerFields>) =>
+    query(
+      sql`UPDATE ${table("effect_agent_threads")} SET ${sql.update(fields)} WHERE thread_id=${threadId}`,
+    );
+
+  /** Only a new owner may be initialized; nullable created_at is not a materialized Thread. */
   const initialize = Effect.fnUntraced(function* (threadId: ThreadId) {
     if (!(yield* present())) return;
-    yield* query(
-      sql`DELETE FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId}`,
+    yield* query(sql`INSERT INTO ${table("effect_agent_threads")} (thread_id, created_at, tail_sequence)
+      VALUES (${threadId}, NULL, 0) ON CONFLICT(thread_id) DO NOTHING`);
+  });
+
+  /** Activation is exceptional; two indexed scalar seeks seed a populated Worker once. */
+  const workerExecutionThrough = Effect.fnUntraced(function* (threadId: ThreadId, through: number) {
+    const [prior] = yield* decode(
+      Schema.Tuple([
+        Schema.Struct({
+          input: Schema.NullOr(SqlInteger),
+          settlement: Schema.NullOr(SqlInteger),
+        }),
+      ]),
+      yield* query(sql`SELECT
+        (SELECT sequence FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${threadId} AND record_tag=${RECORD_TAGS.UserInputRecorded} AND run_id IS NOT NULL AND sequence<=${through} ORDER BY sequence DESC LIMIT 1) AS input,
+        (SELECT sequence FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${threadId} AND record_tag=${RECORD_TAGS.SubmissionSettled} AND run_id IS NOT NULL AND sequence<=${through} ORDER BY sequence DESC LIMIT 1) AS settlement`),
     );
-    yield* saveHeader(threadId, CanonicalSequence.make(0), "none", "ready");
+
+    return prior;
   });
 
   /** Called with captured canonical records; a rebuilding/missing catalogue stays unavailable. */
@@ -468,15 +490,34 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       current.state !== "ready" ||
       current.through_sequence !== firstSequence - 1
     )
-      return;
+      return undefined;
     let workerMode = workerReportingMode(current.reporting);
     let through = current.through_sequence;
+    let count = current.entry_count;
+    let input = current.worker_input_sequence;
+    let settlement = current.worker_settlement_sequence;
 
     for (const record of records) {
       through = CanonicalSequence.make(through + 1);
-      workerMode = yield* fold(threadId, through, record, workerMode);
+      const folded = yield* fold(threadId, through, record, workerMode);
+
+      if (workerMode === "none" && folded.workerMode !== "none") {
+        const prior = yield* workerExecutionThrough(threadId, through - 1);
+
+        input = prior.input;
+        settlement = prior.settlement;
+      }
+      workerMode = folded.workerMode;
+      count += folded.delta;
+      if (workerMode !== "none") {
+        if (record.payload._tag === "UserInputRecorded" && record.payload.runId !== undefined)
+          input = through;
+        if (record.payload._tag === "SubmissionSettled" && record.payload.runId !== undefined)
+          settlement = through;
+      }
     }
-    yield* saveHeader(threadId, through, workerMode, "ready");
+
+    return headerFields(through, workerMode, "ready", count, input, settlement);
   });
 
   /** Source insert hook, including deduplication; seed only an absent, unmaterialized owner. */
@@ -492,22 +533,149 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       const retained = yield* query(sql`SELECT 1 AS retained WHERE
         EXISTS (SELECT 1 FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId})
         OR EXISTS (SELECT 1 FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${threadId})
-        OR EXISTS (SELECT 1 FROM ${table("effect_agent_work_index")} WHERE thread_id=${threadId})
         OR EXISTS (SELECT 1 FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId})`);
 
       if (retained.length === 0) yield* initialize(threadId);
 
       return;
     }
-    yield* query(
-      sql`DELETE FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId} AND message_id=${JSON.stringify(messageId)}`,
+
+    const removed = yield* query(
+      sql`DELETE FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId} AND message_id=${JSON.stringify(messageId)} RETURNING id`,
     );
-    yield* saveHeader(
-      threadId,
-      current.through_sequence,
-      workerReportingMode(current.reporting),
-      current.state,
+
+    if (removed.length > 0)
+      yield* saveHeader(
+        threadId,
+        headerFields(
+          current.through_sequence,
+          workerReportingMode(current.reporting),
+          current.state,
+          current.entry_count - removed.length,
+          current.worker_input_sequence,
+          current.worker_settlement_sequence,
+        ),
+      );
+  });
+
+  /** Explicit maintenance only: bounded canonical hydration and exact sparse-key membership. */
+  const verifyPointers = Effect.fnUntraced(function* (threadId: ThreadId) {
+    const current = yield* requireReady(threadId).pipe(
+      Effect.mapError((cause) => failure("verify work header", cause)),
     );
+
+    const boundedRecord = sql`CASE WHEN ${sql.onDialectOrElse({
+      pg: () => sql`octet_length(${recordJson})`,
+      orElse: () => sql`length(CAST(${recordJson} AS BLOB))`,
+    })}<=${MAX_WORK_REBUILD_BYTES} THEN ${recordJson} ELSE NULL END`;
+
+    const Point = Schema.Struct({
+      sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
+      record_json: Schema.String,
+    });
+
+    const record = Effect.fnUntraced(function* (row: typeof Point.Type) {
+      if (new TextEncoder().encode(row.record_json).byteLength > MAX_WORK_REBUILD_BYTES)
+        return yield* failure("verify oversized pointer target");
+
+      return yield* Schema.decodeEffect(Schema.fromJsonString(ExportRecord))(row.record_json).pipe(
+        Effect.mapError((cause) => failure("verify pointer target", cause)),
+      );
+    });
+
+    let after = 0;
+    let expectedBuckets = 0;
+
+    while (true) {
+      const [row] = yield* decode(
+        Schema.Array(Point),
+        yield* query(sql`SELECT sequence, ${boundedRecord} AS record_json
+          FROM ${table("effect_agent_canonical_records")}
+          WHERE thread_id=${threadId} AND record_tag=${RECORD_TAGS.CompactionCreated}
+            AND sequence>${after} AND sequence<=${current.through_sequence} ORDER BY sequence LIMIT 1`),
+      );
+
+      if (row === undefined) break;
+      const fact = yield* record(row);
+
+      if (fact.payload._tag !== "CompactionCreated") return yield* failure("verify rollover tag");
+      if (fact.payload.kind === "rollover") {
+        const coversThrough = fact.payload.coversThrough;
+
+        // Twenty-five two-key predicates stay below the native parameter bound.
+        for (let start = 0; start < 53; start += 25) {
+          const predicates = Array.from({ length: Math.min(25, 53 - start) }, (_, offset) => {
+            const height = start + offset;
+
+            return sql`(height=${height} AND bucket=${Math.floor(coversThrough / 2 ** height)})`;
+          });
+
+          const [found] = yield* decode(
+            CountRow,
+            yield* query(sql`SELECT COUNT(*) AS count
+            FROM ${table("effect_agent_rollover_buckets")} WHERE thread_id=${threadId}
+              AND sequence=${row.sequence} AND (${sql.join(" OR ", false)(predicates)})`),
+          );
+
+          if (found.count !== predicates.length)
+            return yield* failure("verify missing rollover bucket");
+        }
+        expectedBuckets += 53;
+      }
+      after = row.sequence;
+    }
+
+    const [actual] = yield* decode(
+      CountRow,
+      yield* query(sql`SELECT COUNT(*) AS count
+      FROM ${table("effect_agent_rollover_buckets")} WHERE thread_id=${threadId}`),
+    );
+
+    if (actual.count !== expectedBuckets)
+      return yield* failure("verify extraneous rollover bucket");
+
+    const [origin] = yield* decode(
+      Schema.Array(Point),
+      yield* query(sql`
+      SELECT sequence, ${boundedRecord} AS record_json FROM ${table("effect_agent_canonical_records")}
+      WHERE thread_id=${threadId} AND record_tag=${RECORD_TAGS.WorkerOriginRecorded}
+        AND sequence<=${current.through_sequence} ORDER BY sequence DESC LIMIT 1`),
+    );
+
+    let expectedMode: WorkerReportingMode = "none";
+
+    if (origin !== undefined) {
+      const fact = yield* record(origin);
+
+      if (fact.payload._tag !== "WorkerOriginRecorded")
+        return yield* failure("verify Worker origin tag");
+
+      const changes = yield* workIndexChanges(
+        CanonicalRecordEnvelope.make({
+          threadId,
+          sequence: origin.sequence,
+          record: fact,
+          batchId: BatchId.make("work-index"),
+          offset: ObservationOffset.make(`work-index:${origin.sequence}`),
+        }),
+        "none",
+      ).pipe(Effect.provideService(Crypto.Crypto, crypto));
+
+      for (const change of changes) if (change._tag === "WorkerMode") expectedMode = change.mode;
+    }
+    if (workerReportingMode(current.reporting) !== expectedMode)
+      return yield* failure("verify Worker reporting mode");
+
+    const expected =
+      expectedMode === "none"
+        ? { input: null, settlement: null }
+        : yield* workerExecutionThrough(threadId, current.through_sequence);
+
+    if (
+      current.worker_input_sequence !== expected.input ||
+      current.worker_settlement_sequence !== expected.settlement
+    )
+      return yield* failure("verify Worker execution pointers");
   });
 
   const storage: ThreadWorkStorage = {
@@ -639,12 +807,9 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
           SELECT thread_id FROM (
             SELECT thread_id FROM (
               SELECT canonical.thread_id FROM ${table("effect_agent_threads")} AS canonical
-              LEFT JOIN ${table("effect_agent_work_index")} AS work ON work.thread_id=canonical.thread_id
-              WHERE (work.thread_id IS NULL OR work.version IS NULL OR work.version<>${WORK_INDEX_VERSION}
-                OR work.state IS NULL OR work.state<>'ready'
-                OR work.through_sequence IS NULL OR work.through_sequence<>canonical.tail_sequence
-                OR work.entry_count IS NULL OR work.entry_count<>0
-                OR work.reporting IS NULL OR work.reporting NOT IN (0, 1, 2))
+              WHERE (canonical.work_version<>${WORK_INDEX_VERSION}
+                OR canonical.work_state<>'ready' OR canonical.work_through_sequence<>canonical.tail_sequence
+                OR canonical.work_entry_count<>0 OR canonical.work_reporting NOT IN (0, 1, 2))
               ${after === undefined ? sql`` : sql`AND canonical.thread_id>${after}`}
               ORDER BY canonical.thread_id LIMIT ${limit}
             ) AS canonical_owners
@@ -683,10 +848,17 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
           let current = yield* header(request.threadId);
 
           if (request.restart || current === undefined) {
+            // Reset the sparse tree once; rebuilding each plain sequence must not scan it.
+            yield* query(
+              sql`DELETE FROM ${table("effect_agent_rollover_buckets")} WHERE thread_id=${request.threadId}`,
+            );
             yield* query(
               sql`DELETE FROM ${table("effect_agent_work_entries")} WHERE thread_id=${request.threadId}`,
             );
-            yield* saveHeader(request.threadId, CanonicalSequence.make(0), "none", "rebuilding");
+            yield* saveHeader(
+              request.threadId,
+              headerFields(CanonicalSequence.make(0), "none", "rebuilding", 0, null, null),
+            );
             current = {
               version: WORK_INDEX_VERSION,
               state: "rebuilding",
@@ -694,6 +866,8 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
               reporting: 0,
               entry_count: 0,
               actual_count: 0,
+              worker_input_sequence: null,
+              worker_settlement_sequence: null,
             };
           }
           if (current.through_sequence > observedTail)
@@ -701,7 +875,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
 
           const plan = yield* decode(
             Schema.Array(RebuildRow),
-            yield* query(sql`SELECT sequence, record_id, batch_id,
+            yield* query(sql`SELECT sequence, record_id, ${recordBatchId(sql, options.namespace)} AS batch_id,
           ${sql.onDialectOrElse({ pg: () => sql`octet_length(${recordJson})`, orElse: () => sql`length(CAST(${recordJson} AS BLOB))` })} AS record_bytes
           FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${request.threadId} AND sequence>${current.through_sequence}
             AND sequence<=${observedTail} ORDER BY sequence LIMIT ${request.limit ?? MAX_WORK_REBUILD_RECORDS}`),
@@ -709,6 +883,9 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
 
           let through = current.through_sequence;
           let workerMode = workerReportingMode(current.reporting);
+          let count = current.entry_count;
+          let input = current.worker_input_sequence;
+          let settlement = current.worker_settlement_sequence;
           let processedBytes = 0;
           let processedRecords = 0;
 
@@ -739,16 +916,31 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
 
             const metadata = canonicalRecordMetadata({ canonical: record, wire });
 
-            yield* query(sql`UPDATE ${table("effect_agent_canonical_records")} SET ${sql.update(metadata.columns)}
+            yield* query(sql`UPDATE ${table("effect_agent_canonical_records")} SET ${sql.update({ ...metadata.columns, run_id: metadata.columns.run_id === null ? null : yield* physical.run(request.threadId, metadata.columns.run_id) })}
             WHERE thread_id=${request.threadId} AND sequence=${row.sequence}`);
             yield* query(
               sql`DELETE FROM ${table("effect_agent_record_runs")} WHERE thread_id=${request.threadId} AND sequence=${row.sequence}`,
             );
             for (const runId of metadata.runIds)
               yield* query(sql`INSERT INTO ${table("effect_agent_record_runs")} (thread_id, run_id, sequence)
-            VALUES (${request.threadId}, ${runId}, ${row.sequence})`);
+            VALUES (${request.threadId}, ${yield* physical.run(request.threadId, runId)}, ${row.sequence})`);
             yield* indexCanonicalPointers(request.threadId, row.sequence, record, true);
-            workerMode = yield* fold(request.threadId, row.sequence, record, workerMode);
+            const folded = yield* fold(request.threadId, row.sequence, record, workerMode);
+
+            if (workerMode === "none" && folded.workerMode !== "none") {
+              const prior = yield* workerExecutionThrough(request.threadId, row.sequence - 1);
+
+              input = prior.input;
+              settlement = prior.settlement;
+            }
+            workerMode = folded.workerMode;
+            count += folded.delta;
+            if (workerMode !== "none") {
+              if (record.payload._tag === "UserInputRecorded" && record.payload.runId !== undefined)
+                input = row.sequence;
+              if (record.payload._tag === "SubmissionSettled" && record.payload.runId !== undefined)
+                settlement = row.sequence;
+            }
             through = row.sequence;
             processedBytes += row.record_bytes;
             processedRecords++;
@@ -759,7 +951,10 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
             return yield* failure("rebuild missing canonical records");
           const state = through === latestTail ? "ready" : "rebuilding";
 
-          yield* saveHeader(request.threadId, through, workerMode, state);
+          yield* saveHeader(
+            request.threadId,
+            headerFields(through, workerMode, state, count, input, settlement),
+          );
 
           return WorkIndexProgress.make({
             version: WORK_INDEX_VERSION,
@@ -775,5 +970,5 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     }),
   };
 
-  return { storage, initialize, apply, transferDelivery, invalidate };
+  return { storage, initialize, apply, transferDelivery, invalidate, verifyPointers };
 });

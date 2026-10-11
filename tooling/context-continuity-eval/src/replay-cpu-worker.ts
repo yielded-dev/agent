@@ -5,18 +5,16 @@ import {
 import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
 import * as Agent from "@yielded/agent/agent";
 import { ContextCompactor } from "@yielded/agent/context-compactor";
-import { digestCanonicalBatch, digestDefinitions, digestJson } from "@yielded/agent/digest";
+import { digestDefinitions, digestJson } from "@yielded/agent/digest";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
-import { RunId, TurnId } from "@yielded/agent/identifiers";
+import { RunId, SubmissionId, TurnId } from "@yielded/agent/identifiers";
 import {
   BatchId,
   CanonicalBatch,
   DeploymentId,
   DefinitionDigestInput,
-  Digest,
   ModelResponseRecorded,
   PersistedJson,
-  ProducerEpoch,
   RecordEnvelope,
   RecordId,
   RunCompleted,
@@ -24,18 +22,20 @@ import {
   ThreadCreated,
   UserInputRecorded,
 } from "@yielded/agent/records";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunContextPreparation } from "@yielded/agent/run-options";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import {
-  FencedAppendRequest,
+  AppendRequest,
   ThreadExportRequest,
   ThreadExportSource,
   streamExport,
   ThreadMaterialization,
   ThreadStore,
   ThreadTailRequest,
+  type ExecutionCheckpoint,
 } from "@yielded/agent/thread-store";
-import { Cause, Context, Crypto, DateTime, Effect, Layer, Schema, Stream } from "effect";
+import { Cause, Context, Crypto, DateTime, Effect, Layer, Option, Schema, Stream } from "effect";
 import { DurableObject, WorkerEnvironment } from "effect-cf";
 import {
   AiError,
@@ -76,7 +76,6 @@ const State = Schema.Struct({
   seedRecords: Schema.Natural,
   phase: Schema.Natural,
   seedDigest: Schema.NullOr(Schema.String),
-  seedTailDigest: Schema.NullOr(Digest),
   incarnation: Schema.NullOr(ReplayCpuIncarnation),
   operations: Schema.Array(ReplayCpuOperation).check(Schema.isMaxLength(10)),
 });
@@ -84,6 +83,7 @@ const State = Schema.Struct({
 const SeedRequest = Schema.Struct({ records: Schema.Literals([10, 1000]) });
 // Mint lazily inside a request: Workers do not allow random values at module evaluation.
 let moduleIncarnation: string | undefined;
+const beforeSettlementByContext = new WeakMap<object, Effect.Effect<void>>();
 
 class BenchError extends Schema.TaggedError<BenchError>()("BenchError", {
   message: Schema.String,
@@ -117,10 +117,11 @@ const work = Tool.make("work", {
 });
 
 const toolkit = Toolkit.make(work);
+const outputSchema = Schema.Struct({ answer: Schema.String });
 
 const definition = Agent.make("issue692-hosted", {
   input: Schema.String,
-  output: Schema.Struct({ answer: Schema.String }),
+  output: outputSchema,
   instructions:
     "Use the retained project context. Execute the two small work calls, then return the requested phase answer.",
   toolkit,
@@ -186,7 +187,6 @@ const application = Layer.unwrap(
             seedRecords: 0,
             phase: 0,
             seedDigest: null,
-            seedTailDigest: null,
             incarnation: null,
             operations: [],
           }
@@ -201,6 +201,8 @@ const application = Layer.unwrap(
     let calls = 0;
     let finalizers = 0;
     let toolCalls = 0;
+    const activeExecutions: Array<{ phase: number; execution: ExecutionCheckpoint }> = [];
+    let retiredExecutions = 0;
 
     const captures: Array<{
       phase: number;
@@ -288,6 +290,30 @@ const application = Layer.unwrap(
         const definitions = yield* digestDefinitions(declarations);
         const deploymentId = DeploymentId.make("issue692-hosted-v1");
         const json = (value: unknown) => Schema.decodeUnknownEffect(JsonObject)(value);
+        const current = typeof store.readExecution === "function";
+        let activeRunId: RunId | undefined;
+
+        // Observe authoritative state before normal terminal publication retires it.
+        // This read belongs to the operation; encoding and audit stay in evidence().
+        beforeSettlementByContext.set(
+          ctx,
+          Effect.gen(function* () {
+            if (!current) return;
+            if (activeRunId === undefined)
+              return yield* BenchError.make({ message: "Missing active operation identity" });
+            const execution = yield* store.readExecution({ threadId, runId: activeRunId });
+
+            if (
+              Option.isNone(execution) ||
+              execution.value.progress.runId !== activeRunId ||
+              activeExecutions.length !== state.phase - 1
+            )
+              return yield* BenchError.make({
+                message: "Missing or repeated active checkpoint capture",
+              });
+            activeExecutions.push({ phase: state.phase, execution: execution.value });
+          }).pipe(Effect.orDie),
+        );
 
         const boundary = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>) =>
           effect.pipe(
@@ -313,15 +339,12 @@ const application = Layer.unwrap(
             records: pages.flatMap((page) => page.records),
             batches: pages.flatMap((page) => page.batches),
             tailSequence: last.tailSequence,
-            tailDigest: last.tailDigest,
           };
         });
 
         const seed = Effect.fn("issue692.seed")(function* (count: 10 | 1000) {
           yield* check(state.seedRecords === 0 && state.phase === 0, "Seed already initialized");
-          yield* store.materialize(
-            ThreadMaterialization.make({ threadId, producerEpoch: ProducerEpoch.make(0) }),
-          );
+          yield* store.materialize(ThreadMaterialization.make({ threadId }));
           for (let start = 0; start < count; start += 128) {
             const records: Array<RecordEnvelope> = [];
 
@@ -354,7 +377,6 @@ const application = Layer.unwrap(
                   turnId: TurnId.make(`seed-turn-${index}`),
                   turn: 1,
                   messages,
-                  messagesDigest: yield* digestJson(messages),
                   runScopedPrefixLength: 1,
                 });
               } else payload = RunCompleted.make({ runId, output });
@@ -375,7 +397,7 @@ const application = Layer.unwrap(
             const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
             yield* store.append(
-              FencedAppendRequest.make({
+              AppendRequest.make({
                 threadId,
                 batch: CanonicalBatch.make({
                   batchId: BatchId.make(`seed-${start}`),
@@ -383,8 +405,6 @@ const application = Layer.unwrap(
                   records: [first, ...rest],
                 }),
                 expectedTailSequence: tail.tailSequence,
-                expectedTailDigest: tail.tailDigest,
-                producerEpoch: tail.producerEpoch,
               }),
             );
           }
@@ -395,7 +415,6 @@ const application = Layer.unwrap(
             ...state,
             seedRecords: count,
             incarnation,
-            seedTailDigest: log.tailDigest,
             seedDigest: yield* digestJson(
               yield* Schema.encodeEffect(Schema.Array(RecordEnvelope))(
                 log.records.map((entry) => entry.record),
@@ -446,8 +465,18 @@ const application = Layer.unwrap(
               definitions,
             });
 
+            activeRunId = runIdForSubmission(receipt.submissionId);
+
             yield* runtime.processThreadResolved(threadId);
             const settlement = yield* runtime.awaitSettlement(receipt);
+
+            if (current && settlement.outcome === "completed") {
+              yield* check(
+                Option.isNone(yield* store.readExecution({ threadId, runId: activeRunId })),
+                "Completed replay-CPU operation retained execution obligations",
+              );
+              retiredExecutions++;
+            }
 
             const result = {
               phase,
@@ -496,7 +525,6 @@ const application = Layer.unwrap(
 
           const expectedCompactions = [1, 4, 6, 9].filter((phase) => phase <= state.phase).length;
           let nextSequence = state.seedRecords + 1;
-          let tailDigest = state.seedTailDigest;
           const producers = new Map(log.batches.map((batch) => [batch.batchId, batch.producerId]));
           const seen = new Set<string>();
 
@@ -513,13 +541,10 @@ const application = Layer.unwrap(
 
             while (end < log.records.length && log.records[end]?.batchId === entry.batchId) end++;
             const records = log.records.slice(start, end);
-            const [first, ...rest] = records.map((record) => record.record);
             const producerId = producers.get(entry.batchId);
 
             if (
-              first === undefined ||
               producerId === undefined ||
-              tailDigest === null ||
               seen.has(entry.batchId) ||
               records.some(
                 (record, index) =>
@@ -530,19 +555,10 @@ const application = Layer.unwrap(
               break;
             }
             seen.add(entry.batchId);
-            tailDigest = yield* digestCanonicalBatch(
-              tailDigest,
-              CanonicalBatch.make({
-                batchId: entry.batchId,
-                producerId,
-                records: [first, ...rest],
-              }),
-            );
             nextSequence += records.length;
             start = end;
           }
-          batchesUnchanged &&=
-            nextSequence === log.tailSequence + 1 && tailDigest === log.tailDigest;
+          batchesUnchanged &&= nextSequence === log.tailSequence + 1;
 
           const audits = yield* Effect.forEach(captures, ({ phase, call, prompt }) =>
             Effect.gen(function* () {
@@ -586,11 +602,15 @@ const application = Layer.unwrap(
             }),
           );
 
-          const latest = log.records.findLast(
-            ({ record }) => record.payload._tag === "RunContinuation",
-          );
+          // Only historical comparison builds have a canonical progress row to inspect.
+          // Current builds report the real live observation, separately from retirement.
+          const latest = current
+            ? undefined
+            : log.records.findLast(({ record }) => record.payload._tag === "RunContinuation");
 
-          const progress = latest?.record.payload;
+          const captured = activeExecutions.at(-1);
+
+          const progress = current ? captured?.execution.progress : latest?.record.payload;
 
           const encodedProgress =
             progress?._tag === "RunContinuation"
@@ -598,10 +618,20 @@ const application = Layer.unwrap(
               : undefined;
 
           const continuation =
-            latest !== undefined && encodedProgress !== undefined
+            encodedProgress !== undefined
               ? {
                   present: true,
-                  sequence: latest.sequence,
+                  observation: current ? "active-before-settlement" : "historical-canonical",
+                  ...(captured === undefined
+                    ? { sequence: latest?.sequence }
+                    : {
+                        phase: captured.phase,
+                        throughSequence: captured.execution.throughSequence,
+                        operational: yield* Schema.encodeEffect(Schema.Array(RecordEnvelope))(
+                          captured.execution.operational,
+                        ),
+                        retired: retiredExecutions === state.phase,
+                      }),
                   encodedBytes: bytes(JSON.stringify(encodedProgress)),
                   progress: encodedProgress,
                 }
@@ -619,6 +649,55 @@ const application = Layer.unwrap(
             batchesUnchanged,
             prefixUnchanged,
             successful,
+            activeExecutionsMatch:
+              !current ||
+              (activeExecutions.length === state.phase &&
+                activeExecutions.every(({ phase, execution }, index) => {
+                  const operation = state.operations[index];
+
+                  const runId =
+                    operation === undefined
+                      ? undefined
+                      : runIdForSubmission(SubmissionId.make(operation.submissionId));
+
+                  const starts = execution.operational.filter(
+                    ({ payload }) => payload._tag === "RunStarted",
+                  );
+
+                  const contexts = execution.operational.filter(
+                    ({ payload }) => payload._tag === "RunContextRecorded",
+                  );
+
+                  const completed = execution.operational.filter(
+                    ({ payload }) => payload._tag === "RunCompleted",
+                  );
+
+                  const result = completed[0]?.payload;
+
+                  const output =
+                    result?._tag === "RunCompleted"
+                      ? Schema.decodeUnknownOption(outputSchema)(result.output)
+                      : Option.none();
+
+                  return (
+                    phase === index + 1 &&
+                    execution.progress.runId === runId &&
+                    execution.progress.submissionId === operation?.submissionId &&
+                    execution.progress.accounting.modelCalls === 2 &&
+                    starts.length === 1 &&
+                    starts[0]?.payload._tag === "RunStarted" &&
+                    starts[0].payload.runId === runId &&
+                    contexts.length === 1 &&
+                    contexts[0]?.recordId === execution.progress.savedContext?.recordId &&
+                    completed.length === 1 &&
+                    result?._tag === "RunCompleted" &&
+                    result.runId === runId &&
+                    result.finishReason === undefined &&
+                    Option.isSome(output) &&
+                    output.value.answer === `phase-${phase}-ok`
+                  );
+                })),
+            executionsRetired: !current || retiredExecutions === state.phase,
             compactionCountMatches: compactions.length === expectedCompactions,
             capturesComplete:
               audits.length === state.phase * 2 &&
@@ -644,7 +723,32 @@ const application = Layer.unwrap(
               state.phase * 2,
             canonicalSettlementsMatch:
               log.records.filter(({ record }) => record.payload._tag === "SubmissionSettled")
-                .length === state.phase,
+                .length === state.phase &&
+              state.operations.every((operation) => {
+                const settlements = log.records.filter(
+                  ({ record }) =>
+                    record.payload._tag === "SubmissionSettled" &&
+                    record.payload.submissionId === operation.submissionId,
+                );
+
+                const settled = settlements[0]?.record.payload;
+
+                const output =
+                  settled?._tag === "SubmissionSettled"
+                    ? Schema.decodeUnknownOption(outputSchema)(settled.result)
+                    : Option.none();
+
+                return (
+                  settlements.length === 1 &&
+                  settled?._tag === "SubmissionSettled" &&
+                  settled.runId === runIdForSubmission(SubmissionId.make(operation.submissionId)) &&
+                  settled.outcome === "completed" &&
+                  settled.finishReason === undefined &&
+                  (!current || settled.usageSummary?.modelCalls === 2) &&
+                  Option.isSome(output) &&
+                  output.value.answer === `phase-${operation.phase}-ok`
+                );
+              }),
           };
 
           const result = yield* json({
@@ -690,6 +794,12 @@ export class ReplayCpuThread extends ThreadObject.make(application, {
   deploymentId: "issue692-hosted-v1",
   producerPrefix: "issue692-hosted",
   maxDatabaseBytes: 32 * 1024 * 1024,
+  runtimeFailpoint: (ctx) => (location) =>
+    location === "terminalize:before-publication"
+      ? Effect.suspend(
+          () => beforeSettlementByContext.get(ctx) ?? Effect.die("Replay observer not initialized"),
+        )
+      : Effect.void,
 }) {
   seed(records: 10 | 1000) {
     return this[DurableObject.RunSymbol](Effect.flatMap(Bench, (bench) => bench.seed(records)));

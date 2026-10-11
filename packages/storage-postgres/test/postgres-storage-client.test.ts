@@ -26,7 +26,7 @@ it.effect(
 
         yield* ThreadStore.pipe(Effect.asVoid, Effect.provide(PostgresStorage.threadStoreLayer()));
 
-        yield* sql`INSERT INTO effect_agent_threads VALUES ('retained', '2026-10-05', 0, 'digest', 0)`;
+        yield* sql`INSERT INTO effect_agent_threads (thread_id, created_at, tail_sequence) VALUES ('retained', '2026-10-05', 0)`;
         const retained = yield* sql`SELECT * FROM effect_agent_threads`;
 
         yield* sql`ALTER INDEX effect_agent_submissions_nonterminal SET (fillfactor = 80)`;
@@ -38,7 +38,7 @@ it.effect(
 
         yield* open;
         expect(yield* sql`SELECT version FROM effect_agent_storage_version`).toEqual([
-          { version: 21n },
+          { version: 25n },
         ]);
         expect(yield* sql`SELECT * FROM effect_agent_threads`).toEqual(retained);
         yield* open;
@@ -50,7 +50,7 @@ it.effect(
 
         expect(rejected).toBeInstanceOf(PostgresStorageCompatibilityError);
         expect(yield* sql`SELECT version FROM effect_agent_storage_version`).toEqual([
-          { version: 21n },
+          { version: 25n },
         ]);
         expect(
           yield* sql`SELECT to_regclass('public.effect_agent_schema') IS NOT NULL AS header`,

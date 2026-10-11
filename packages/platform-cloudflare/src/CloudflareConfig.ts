@@ -1,7 +1,6 @@
 import { DEFAULT_MAX_STORED_VALUE_BYTES } from "@yielded/agent-storage-cloudflare/do-storage-config";
 import { DeploymentId } from "@yielded/agent/records";
-import { DEFAULT_OWNERSHIP_LEASE_DURATION } from "@yielded/agent/submission-ledger";
-import { Context, Duration, Schema } from "effect";
+import { Context, Schema } from "effect";
 
 /**
  * Schema-validated configuration for the Cloudflare durable runtime (deployment spec §4:
@@ -79,8 +78,8 @@ export class CloudflareAdmissionLimitsValue extends Schema.Class<CloudflareAdmis
 /**
  * Validated Cloudflare durable runtime configuration. The producer identity of one
  * Thread Object is `{producerPrefix}:{threadId}` — stable across incarnations of
- * the same deployment, distinct across deployments — and producer-epoch fencing (not the
- * producer name) remains the correctness authority (DUR-006).
+ * the same deployment, distinct across deployments. The Object owns its Thread exclusively;
+ * scoped local generations reject callbacks from an earlier Run owner.
  */
 export class CloudflareDurableRuntimeConfigValue extends Schema.Class<CloudflareDurableRuntimeConfigValue>(
   "@effect-agent/platform-cloudflare/CloudflareDurableRuntimeConfigValue",
@@ -88,8 +87,6 @@ export class CloudflareDurableRuntimeConfigValue extends Schema.Class<Cloudflare
   deploymentId: DeploymentId,
   /** Head of the minted producer identity `{producerPrefix}:{threadId}`. */
   producerPrefix: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
-  /** Submission ownership lease duration (D5); fences work across Object incarnations. */
-  ownershipLeaseDuration: PositiveMillis,
   /**
    * Base delay of exponential backoff when a pass fails or makes no progress.
    * Half this delay (rounded up, at least 1ms) also pre-arms mutations, including
@@ -100,8 +97,6 @@ export class CloudflareDurableRuntimeConfigValue extends Schema.Class<Cloudflare
   alarmBackoffCap: PositiveMillis,
   /** `awaitSettlement` ledger re-check cadence when no wake arrives. */
   settlementPollInterval: PositiveMillis,
-  /** Worker ownership-lease renewal cadence during an active Attempt. */
-  leaseRenewalInterval: PositiveMillis,
   /** Active-Run abort-intent poll cadence. */
   abortPollInterval: PositiveMillis,
   /** Canonical observation poll cadence of the Durable Object store. */
@@ -113,7 +108,7 @@ export class CloudflareDurableRuntimeConfigValue extends Schema.Class<Cloudflare
     Schema.isGreaterThan(0),
     Schema.isLessThanOrEqualTo(2_000_000),
   ),
-  /** Opt-in full payload/digest-chain audit while opening the store. */
+  /** Opt-in full history and active-state validation while opening the store. */
   verifyOnOpen: Schema.Boolean,
   limits: CloudflareAdmissionLimitsValue,
 }) {}
@@ -126,11 +121,9 @@ export class CloudflareDurableRuntimeConfig extends Context.Service<
 
 /** Documented production defaults applied by `ThreadObject.layer`. */
 export const CLOUDFLARE_RUNTIME_DEFAULTS = {
-  ownershipLeaseDuration: Duration.toMillis(DEFAULT_OWNERSHIP_LEASE_DURATION),
   alarmBackoffBase: 100,
   alarmBackoffCap: 5_000,
   settlementPollInterval: 500,
-  leaseRenewalInterval: 10_000,
   abortPollInterval: 500,
   observationPollInterval: 25,
   projectionDispatchTimeoutMillis: 30_000,

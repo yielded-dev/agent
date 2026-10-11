@@ -30,7 +30,6 @@ export interface WorkerStartAdmission {
   readonly continuationOf?: WorkerContinuation;
   readonly access: "send";
   readonly tailSequence: CanonicalSequence;
-  readonly tailDigest: Digest;
 }
 
 /** Host-verified source input; absence never means the latest input in the Thread. */

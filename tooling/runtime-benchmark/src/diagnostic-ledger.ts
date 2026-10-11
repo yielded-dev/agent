@@ -1,6 +1,3 @@
-import process from "node:process";
-import { fileURLToPath } from "node:url";
-
 import { Agent } from "@yielded/agent";
 import { NodeDurableAgentRuntime } from "@yielded/agent-platform-node/node-durable-agent-runtime";
 import { ScriptedModel } from "@yielded/agent-testing/scripted-model";
@@ -20,7 +17,6 @@ import {
 import { runIdForSubmission } from "@yielded/agent/run-journal";
 import {
   AdmissionRequest,
-  ClaimRequest,
   IdempotencyKey,
   MarkReadyRequest,
   Principal,
@@ -32,20 +28,14 @@ import {
 } from "@yielded/agent/submission-ledger";
 import type { Settlement } from "@yielded/agent/submission-ledger";
 import type { SubmissionStatus } from "@yielded/agent/submission-status";
-import { FencedAppendRequest, ThreadStore, ThreadTailRequest } from "@yielded/agent/thread-store";
 import {
-  Clock,
-  Context,
-  DateTime,
-  Effect,
-  FileSystem,
-  Layer,
-  Option,
-  Schema,
-  Stream,
-} from "effect";
+  AppendRequest,
+  ThreadMaterialization,
+  ThreadStore,
+  ThreadTailRequest,
+} from "@yielded/agent/thread-store";
+import { Clock, Context, DateTime, Effect, FileSystem, Layer, Schema, Stream } from "effect";
 import { Model, Toolkit } from "effect/ai";
-import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { SqlClient } from "effect/sql/SqlClient";
 import { CurrentTransformer, type Statement } from "effect/sql/Statement";
 
@@ -56,21 +46,8 @@ import {
   type DiagnosticCase,
   type DiagnosticResult,
 } from "./diagnostic-contracts.js";
-import {
-  nodeMonotonicNanos,
-  writerOverlap,
-  WriterOptions,
-  WriterResult,
-} from "./diagnostic-writer.js";
-
 export { ledgerCases } from "./diagnostic-cases.js";
 import { publishSeedSettlement } from "./settlement.js";
-
-/** Test-only scheduling input; real diagnostic cases observe immediately after the go signal. */
-export const DiagnosticLedgerWaitForWriterRelease = Context.Reference(
-  "runtime-benchmark/DiagnosticLedgerWaitForWriterRelease",
-  { defaultValue: () => false },
-);
 
 const digest = Digest.make("a".repeat(64));
 const definitions = DefinitionDigests.make({ agent: digest, model: digest, tools: digest });
@@ -115,10 +92,6 @@ const publish = Effect.fn("diagnostic.ledger.publish")(function* (index: number)
   const admitted = yield* admit(index);
 
   yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
-  const claim = yield* ledger.claim(ClaimRequest.make({ threadId: seedThread, producerId }));
-
-  if (Option.isNone(claim))
-    return yield* BenchmarkError.make({ message: "Ledger seed claim missing" });
   const settlementId = submissionSettlementId(admitted.submissionId);
 
   const record = RecordEnvelope.make({
@@ -138,16 +111,15 @@ const publish = Effect.fn("diagnostic.ledger.publish")(function* (index: number)
   });
 
   const store = yield* ThreadStore;
+
+  yield* store.materialize(ThreadMaterialization.make({ threadId: seedThread }));
   const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId: seedThread }));
 
   yield* publishSeedSettlement(
     admitted.submissionId,
-    claim.value.ownershipToken,
-    FencedAppendRequest.make({
+    AppendRequest.make({
       threadId: seedThread,
-      producerEpoch: claim.value.producerEpoch,
       expectedTailSequence: tail.tailSequence,
-      expectedTailDigest: tail.tailDigest,
       batch: CanonicalBatch.make({
         batchId: submissionSettlementBatchId(admitted.submissionId),
         producerId,
@@ -317,14 +289,11 @@ const scanCase = Effect.fn("diagnostic.ledger.scan")(function* (
 
 const settledCase = Effect.fn("diagnostic.ledger.settled")(function* (
   workload: DiagnosticCase,
-  filename: string,
   setupStarted: bigint,
 ) {
   const progress = yield* DiagnosticProgress;
   const ledger = yield* SubmissionLedger;
   const runtime = yield* DurableAgentRuntime;
-  const fs = yield* FileSystem.FileSystem;
-  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const mode = workload.parameters.mode;
   let request: SettlementFinalization;
   let modelCalls = 0;
@@ -389,95 +358,17 @@ const settledCase = Effect.fn("diagnostic.ledger.settled")(function* (
     modelCalls === (mode === 1 ? 0 : 1) && modelFinalizers === modelCalls,
     "Runtime seed model work or finalization mismatch",
   );
-  const holdMs = workload.parameters.holdMs ?? -1;
-  const directory = yield* fs.makeTempDirectoryScoped({ prefix: "diagnostic-ledger-writer-" });
-  let writer: ChildProcessSpawner.ChildProcessHandle | undefined;
-  let operationStarted = 0n;
-
-  yield* Effect.addFinalizer(() =>
-    Effect.gen(function* () {
-      if (writer === undefined) return;
-      yield* check(!(yield* writer.isRunning), "External writer survived its Scope");
-      yield* progress.mark({
-        name: "writer.scope.closed",
-        elapsedMs:
-          operationStarted === 0n
-            ? 0
-            : Number((yield* Clock.monotonicTimeNanos) - operationStarted) / 1e6,
-      });
-    }).pipe(Effect.orDie),
-  );
-  if (holdMs >= 0) {
-    const options = yield* Schema.decodeUnknownEffect(WriterOptions)({
-      filename,
-      directory,
-      holdMs,
-    });
-
-    writer = yield* spawner.spawn(
-      ChildProcess.make(
-        process.execPath,
-        [
-          fileURLToPath(
-            new URL(
-              import.meta.url.endsWith(".ts") ? "./diagnostic-writer.ts" : "./diagnostic-writer.js",
-              import.meta.url,
-            ),
-          ),
-        ],
-        {
-          env: {
-            RUNTIME_DIAGNOSTIC_WRITER: yield* Schema.encodeEffect(
-              Schema.fromJsonString(WriterOptions),
-            )(options),
-            NODE_NO_WARNINGS: "1",
-          },
-          extendEnv: true,
-          stdin: "ignore",
-          stdout: "ignore",
-          stderr: "pipe",
-        },
-      ),
-    );
-  }
-  if (writer !== undefined) {
-    const activeWriter = writer;
-
-    yield* Effect.gen(function* () {
-      while (!(yield* fs.exists(`${directory}/ready`))) {
-        if (!(yield* activeWriter.isRunning)) {
-          const stderr = yield* activeWriter.stderr.pipe(Stream.decodeText(), Stream.mkString);
-
-          return yield* BenchmarkError.make({
-            message: `External SQLite writer exited before acquiring lock: ${stderr}`,
-          });
-        }
-        yield* Effect.sleep("1 millis");
-      }
-    }).pipe(Effect.timeout("5 seconds"));
-    yield* progress.mark({ name: "writer.acquired", elapsedMs: 0 });
-  }
   const setupMs = Number((yield* Clock.monotonicTimeNanos) - setupStarted) / 1e6;
 
   yield* progress.phase("operation");
-  if (writer !== undefined) yield* fs.writeFileString(`${directory}/go`, "go");
-  if (writer !== undefined && (yield* DiagnosticLedgerWaitForWriterRelease)) yield* writer.exitCode;
   const queries: Array<Query> = [];
   const durations: Array<number> = [];
   const observations: Array<Settlement | SubmissionStatus> = [];
 
-  const observerIntervals: Array<{
-    readonly startedNanos: bigint;
-    readonly finishedNanos: bigint;
-  }> = [];
-
   const started = yield* Clock.monotonicTimeNanos;
-
-  operationStarted = started;
 
   for (let index = 0; index < (workload.parameters.repeats ?? 1); index++) {
     const callStarted = yield* Clock.monotonicTimeNanos;
-    const startedNanos = yield* nodeMonotonicNanos;
 
     const observation = yield* Effect.gen(function* () {
       return mode === 3 && receipt !== undefined
@@ -493,10 +384,7 @@ const settledCase = Effect.fn("diagnostic.ledger.settled")(function* (
       ),
     );
 
-    const finishedNanos = yield* nodeMonotonicNanos;
-
     durations.push(Number((yield* Clock.monotonicTimeNanos) - callStarted) / 1e6);
-    observerIntervals.push({ startedNanos, finishedNanos });
     observations.push(observation);
   }
   const totalMs = Number((yield* Clock.monotonicTimeNanos) - started) / 1e6;
@@ -518,80 +406,17 @@ const settledCase = Effect.fn("diagnostic.ledger.settled")(function* (
       "Observation changed authoritative settlement",
     );
   }
-  let heldMs = 0;
-  let lockMs = 0;
-  let overlapMs = 0;
-  let observationsWithWriterOverlap = 0;
-  let observationsStartingWithWriter = 0;
-  let observationsFinishedWhileHeld = 0;
-
-  if (writer !== undefined) {
-    const stderr = yield* writer.stderr.pipe(Stream.decodeText(), Stream.mkString);
-
-    yield* check((yield* writer.exitCode) === 0, `External SQLite writer failed: ${stderr}`);
-
-    const result = yield* Schema.decodeEffect(Schema.fromJsonString(WriterResult))(
-      yield* fs.readFileString(`${directory}/result.json`),
-    );
-
-    heldMs = result.heldMs;
-    lockMs = result.lockMs;
-
-    // Exact timestamps remain available even when the requested hold window missed the call.
-    const rawBoundaries = [
-      ["writer.acquired", result.acquiredNanos],
-      ["writer.releaseStarted", result.releaseStartedNanos],
-      ["writer.released", result.releasedNanos],
-      ...observerIntervals.flatMap(
-        (interval, index) =>
-          [
-            [`observer.${index}.started`, interval.startedNanos],
-            [`observer.${index}.finished`, interval.finishedNanos],
-          ] as const,
-      ),
-    ] as const;
-
-    for (const [boundary, nanos] of rawBoundaries)
-      yield* progress.mark({
-        name: `node-hrtime.${boundary}.${nanos}`,
-        elapsedMs: Number((yield* Clock.monotonicTimeNanos) - started) / 1e6,
-      });
-    for (const interval of observerIntervals) {
-      const overlap = writerOverlap(result, interval);
-
-      overlapMs += overlap.overlapMs;
-      observationsWithWriterOverlap += Number(overlap.overlapMs > 0);
-      observationsStartingWithWriter += Number(overlap.heldAtStart);
-      observationsFinishedWhileHeld += Number(overlap.finishedWhileHeld);
-    }
-    yield* check(!(yield* writer.isRunning), "External writer remains running");
-    yield* progress.mark({
-      name: "writer.closed",
-      elapsedMs: Number((yield* Clock.monotonicTimeNanos) - started) / 1e6,
-    });
-  }
-  // A real subsequent write proves release, outside the observation clock.
+  // A later admission checks that observation left the owner usable.
   yield* admit(1);
 
   return {
     totalMs,
     metrics: [
       { name: "setup", value: setupMs },
-      { name: "writerHold", value: heldMs },
-      { name: "writerLock", value: lockMs },
-      { name: "writerObserverOverlap", value: overlapMs },
       ...durations.map((value, index) => ({ name: `observation.${index}`, value })),
     ],
     counters: [
       { name: "observations", value: durations.length },
-      { name: "writers", value: Number(writer !== undefined) },
-      { name: "observationsWithWriterOverlap", value: observationsWithWriterOverlap },
-      { name: "observationsStartingWithWriter", value: observationsStartingWithWriter },
-      { name: "observationsFinishedWhileHeld", value: observationsFinishedWhileHeld },
-      {
-        name: "noWriterOverlap",
-        value: Number(writer !== undefined && observationsWithWriterOverlap === 0),
-      },
       { name: "seedModelCalls", value: modelCalls },
       { name: "seedModelFinalizers", value: modelFinalizers },
       ...(yield* inspectQueries(queries, started)),
@@ -636,7 +461,7 @@ export const runLedgerCase = Effect.fn("diagnostic.runLedgerCase")(function* (
     return yield* (
       workload.parameters.mode === 0
         ? scanCase(workload, setupStarted, seedSetupMs)
-        : settledCase(workload, filename, setupStarted)
+        : settledCase(workload, setupStarted)
     ).pipe(Effect.provide(host(filename)));
   }).pipe(Effect.scoped);
 });

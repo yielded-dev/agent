@@ -10,19 +10,28 @@ import {
   type SqlStorageProgressKind,
 } from "@yielded/agent-storage-sql/sql-storage-progress";
 import { lifecyclePublicationLayer } from "@yielded/agent/lifecycle-publication";
-import { MessageDeliveryRecord } from "@yielded/agent/message-delivery";
+import { MessageDeliveryRecord, MessageDeliveryStore } from "@yielded/agent/message-delivery";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import {
   makeMessageDeliveryFixture,
   messageDeliveryStoreConformanceCases,
 } from "@yielded/agent/testing/message-delivery-store-conformance";
-import { DateTime, Effect, Layer, Option, Result, Schema, Tracer } from "effect";
+import { ThreadArchive, ThreadImport } from "@yielded/agent/thread-import";
+import {
+  ThreadStore,
+  ThreadTailRequest,
+  ThreadMaterialization,
+  ThreadExport,
+  ThreadExportRequest,
+} from "@yielded/agent/thread-store";
+import { DateTime, Effect, Layer, Option, Result, Schema, Stream, Tracer } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { expect, it } from "vite-plus/test";
 
 import { doMessageDeliveryStoreLayer } from "../src/DoMessageDeliveryStore.ts";
 import { DoStorageConfig, DoStorageConfigValue } from "../src/DoStorageConfig.ts";
 import { DoStorageFailpoint } from "../src/DoStorageFailpoint.ts";
+import { layer as threadLayer } from "../src/DoThreadStore.ts";
 import { initializeDoJournal } from "../src/internal/do-journal.ts";
 import { withThreadStorage } from "./harness.ts";
 
@@ -34,7 +43,6 @@ const storeLayer = (storage: DurableObjectStorage) =>
         DoStorageConfig,
         DoStorageConfigValue.make({
           observationPollInterval: 1,
-          ownershipLeaseDuration: 30_000,
           maxStoredValueBytes: 1_900_000,
           verifyOnOpen: false,
         }),
@@ -251,6 +259,153 @@ it("applies the consuming adapter's stored-value bound to a shared pending view"
       expect(Result.isFailure(cached) && cached.failure.operation).toBe("stored-value-bytes");
     }).pipe(Effect.provide([SqliteClient.layer({ storage }), BrowserCrypto.layer]), Effect.scoped),
   ));
+
+// A pending delivery can own storage before any conversation has been materialized.
+it("preserves early deliveries when enabling lifecycle publication and materializing the Thread", async () => {
+  const transfer = await withThreadStorage(
+    `early-delivery-lifecycle-${crypto.randomUUID()}`,
+    (storage) =>
+      Effect.gen(function* () {
+        const record = yield* makeMessageDeliveryFixture("early-delivery");
+
+        yield* Effect.flatMap(MessageDeliveryStore, (store) => store.insert(record)).pipe(
+          Effect.provide(storeLayer(storage)),
+        );
+        yield* Effect.gen(function* () {
+          const store = yield* ThreadStore;
+          const request = ThreadTailRequest.make({ threadId: record.key.ownerThreadId });
+          const before = yield* store.inspectTail(request).pipe(Effect.result);
+
+          expect(Result.isFailure(before) && before.failure._tag).toBe("ThreadNotMaterialized");
+          yield* store.materialize(
+            ThreadMaterialization.make({ threadId: record.key.ownerThreadId }),
+          );
+          expect((yield* store.inspectTail(request)).tailSequence).toBe(0);
+          expect(yield* store.lifecyclePublications!.pending(0, 1)).toEqual([]);
+        }).pipe(
+          Effect.provide(
+            threadLayer({ storage }).pipe(
+              Layer.provide(lifecyclePublicationLayer.pipe(Layer.provide(BrowserCrypto.layer))),
+            ),
+          ),
+        );
+
+        const retained = yield* Effect.flatMap(MessageDeliveryStore, (store) =>
+          store.get(record.key),
+        ).pipe(Effect.provide(storeLayer(storage)));
+
+        expect(retained).toEqual(record);
+
+        // Requested regression: idle transfer retains a refused delivery-only owner's identity.
+        // This owner stays unmaterialized, independently of the lifecycle case above.
+        const original = yield* makeMessageDeliveryFixture("closed-delivery", "closed-owner");
+
+        return yield* Effect.gen(function* () {
+          const deliveries = yield* MessageDeliveryStore;
+          const store = yield* ThreadStore;
+          const threadId = original.key.ownerThreadId;
+          const tailRequest = ThreadTailRequest.make({ threadId });
+          const exportRequest = ThreadExportRequest.make({ threadId });
+
+          yield* deliveries.insert(original);
+          const before = yield* store.inspectTail(tailRequest).pipe(Effect.result);
+
+          expect(Result.isFailure(before) && before.failure._tag).toBe("ThreadNotMaterialized");
+          const pending = yield* store.export(exportRequest).pipe(Effect.result);
+
+          const claimed = yield* deliveries.change(original.key, {
+            _tag: "Claim",
+            expectedVersion: original.version,
+            nowMillis: 0,
+          });
+
+          const closed = yield* deliveries.change(original.key, {
+            _tag: "Refuse",
+            expectedVersion: claimed.version,
+            nowMillis: 1,
+            code: "recipient-refused",
+          });
+
+          expect(closed.status).toBe("refused");
+          const beforeExport = yield* store.inspectTail(tailRequest).pipe(Effect.result);
+
+          expect(Result.isFailure(beforeExport) && beforeExport.failure._tag).toBe(
+            "ThreadNotMaterialized",
+          );
+          const page = yield* store.export(exportRequest);
+
+          expect(page.tailSequence).toBe(0);
+          expect(page.records).toEqual([]);
+          expect(page.batches).toEqual([]);
+          expect(page.deliveries).toEqual([closed]);
+          expect(page.cursor).toBeUndefined();
+          expect(Result.isFailure(pending) && pending.failure).toMatchObject({
+            _tag: "ThreadExportRejected",
+            reason: "non-idle",
+          });
+          expect(Result.isFailure(pending) && pending.failure.message).toContain("not idle");
+          const after = yield* store.inspectTail(tailRequest).pipe(Effect.result);
+
+          expect(Result.isFailure(after) && after.failure._tag).toBe("ThreadNotMaterialized");
+          expect(yield* deliveries.get(original.key)).toEqual(closed);
+
+          return {
+            original,
+            closed,
+            wire: yield* Schema.encodeEffect(Schema.fromJsonString(ThreadExport))(page),
+          };
+        }).pipe(Effect.provide([threadLayer({ storage }), storeLayer(storage)]));
+      }).pipe(Effect.provide(BrowserCrypto.layer)),
+  );
+
+  await withThreadStorage(`closed-delivery-import-${crypto.randomUUID()}`, (storage) =>
+    Effect.gen(function* () {
+      const store = yield* ThreadStore;
+      const importer = yield* ThreadImport;
+      const deliveries = yield* MessageDeliveryStore;
+      const threadId = transfer.original.key.ownerThreadId;
+      const tailRequest = ThreadTailRequest.make({ threadId });
+
+      const missing = yield* store
+        .export(ThreadExportRequest.make({ threadId }))
+        .pipe(Effect.result);
+
+      expect(Result.isFailure(missing) && missing.failure._tag).toBe("ThreadNotMaterialized");
+      const before = yield* store.inspectTail(tailRequest).pipe(Effect.result);
+
+      expect(Result.isFailure(before) && before.failure._tag).toBe("ThreadNotMaterialized");
+
+      const archive = yield* Schema.decodeEffect(Schema.fromJsonString(ThreadArchive))(
+        transfer.wire,
+      );
+
+      // A detached destination can retain disposable keys from an earlier incarnation.
+      // Import must clear them even when the Thread ID and sequence are reused.
+      const checkpointKey = `prompt-checkpoint/${JSON.stringify(threadId)}/00000`;
+
+      storage.sql.exec(
+        "INSERT INTO effect_agent_meta (key, value) VALUES (?, ?)",
+        checkpointKey,
+        "stale prompt checkpoint",
+      );
+      const imported = yield* importer.import(Stream.succeed(archive));
+
+      expect([
+        ...storage.sql.exec("SELECT key FROM effect_agent_meta WHERE key = ?", checkpointKey),
+      ]).toEqual([]);
+      expect(imported.tailSequence).toBe(0);
+      expect((yield* store.inspectTail(tailRequest)).tailSequence).toBe(0);
+      expect(yield* deliveries.get(transfer.original.key)).toEqual(transfer.closed);
+      expect(yield* deliveries.insert(transfer.original)).toEqual(transfer.closed);
+      expect(yield* deliveries.nextDeadline()).toBeNull();
+      const page = yield* store.export(ThreadExportRequest.make({ threadId }));
+
+      expect(page.records).toEqual([]);
+      expect(page.deliveries).toEqual([transfer.closed]);
+      expect(page.cursor).toBeUndefined();
+    }).pipe(Effect.provide([threadLayer({ storage }), storeLayer(storage), BrowserCrypto.layer])),
+  );
+});
 
 for (const [index, testCase] of messageDeliveryStoreConformanceCases.entries()) {
   it(`${testCase.name}`, () =>

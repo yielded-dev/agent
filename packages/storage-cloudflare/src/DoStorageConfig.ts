@@ -1,7 +1,6 @@
 import { Context, Schema } from "effect";
 
 const ObservationPollInterval = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
-const OwnershipLeaseMillis = Schema.Int.check(Schema.isGreaterThan(0));
 
 /**
  * Default per-value byte bound, kept under the Durable Object platform's 2 MB SQLite value
@@ -27,22 +26,14 @@ export class DoStorageConfigValue extends Schema.Class<DoStorageConfigValue>(
 )({
   observationPollInterval: ObservationPollInterval,
   /**
-   * Submission ownership lease duration in milliseconds (D5). Inside one Durable Object the
-   * object itself is the serialized owner, so the lease's primary DC role is fencing work
-   * across DO incarnations (an evicted incarnation's claim becomes reclaimable); correctness
-   * never depends on it because every canonical append is fenced by producer epoch.
-   */
-  ownershipLeaseDuration: OwnershipLeaseMillis,
-  /**
    * Maximum bytes for any single stored text value (canonical batch/record JSON, admission
    * input payload, checkpoint JSON). Enforced typed BEFORE any write; must stay under the
    * platform's 2 MB per-value limit.
    */
   maxStoredValueBytes: MaxStoredValueBytes,
   /**
-   * Re-verify every stored payload and digest chain while opening the store. Per-operation
-   * Schema decoding and the digest chain already fail clearly on corrupt rows, so the full
-   * scan is an explicit opt-in integrity audit rather than a startup requirement.
+   * Audit stored payload schemas, identities, and batch coverage while opening the store.
+   * Per-operation Schema decoding remains enabled; this complete scan is an explicit opt-in.
    */
   verifyOnOpen: Schema.Boolean,
 }) {}

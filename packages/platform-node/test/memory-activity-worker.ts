@@ -1,7 +1,11 @@
 import { NodeCrypto } from "@effect/platform-node";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { activityProcessorStoreLayer } from "@yielded/agent-storage-sqlite/sqlite-activity-store";
-import { layer as sqliteThreadStoreLayer } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
+import {
+  threadStoreLayer,
+  storageConfigLayer,
+  storageFailpointLayer,
+} from "@yielded/agent-storage-sqlite/sqlite-thread-store";
 import { type PreparedActivity } from "@yielded/agent/activity-store";
 import { processCommittedActivity } from "@yielded/agent/committed-activity";
 import {
@@ -98,7 +102,6 @@ const applyPrepared = Effect.fn("MemoryActivityWorker.applyPrepared")(function* 
         ...output.content,
         metadata: {
           ...output.content.metadata,
-          sourceRecordDigest: work.recordDigest,
           sourceWorkId: work.workId,
         },
       },
@@ -124,21 +127,28 @@ export const memoryActivityWorker = Effect.gen(function* () {
         : Effect.void,
   });
 
-  const sql = SqliteClient.layer({ filename: config.database, busyTimeout: 5_000 });
+  const options = { filename: config.database, busyTimeout: 5_000 };
+  const sql = SqliteClient.layer({ ...options, disableWAL: true });
 
   const adapters = Layer.mergeAll(
     activityProcessorStoreLayer.pipe(Layer.provide(sql)),
     memoryStoreLayerWithFailpoints.pipe(
       Layer.provide(Layer.merge(sql, Layer.succeed(MemoryMutationFailpoint, failpoint))),
     ),
-    sqliteThreadStoreLayer({ filename: config.database, busyTimeout: 5_000 }),
+    threadStoreLayer.pipe(
+      Layer.provide([
+        sql,
+        storageConfigLayer(options),
+        storageFailpointLayer(options),
+        NodeCrypto.layer,
+      ]),
+    ),
     NodeCrypto.layer,
   );
 
   const pass = yield* processCommittedActivity({
     key: activityKey,
-    owner: config.mode === "crash-after-apply" ? "first-process" : "second-process",
-    limits: { maxRecords: 16, pageSize: 4, timeoutMillis: 1_000, leaseMillis: 2_200 },
+    limits: { maxRecords: 16, pageSize: 4, timeoutMillis: 1_000 },
     extract: (record) =>
       extractionOutput(record, config.mode === "recover-divergent").pipe(
         Effect.tap(() =>

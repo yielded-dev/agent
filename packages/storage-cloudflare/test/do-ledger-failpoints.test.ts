@@ -7,6 +7,7 @@ import {
 import { ledgerLayer } from "@yielded/agent-storage-cloudflare/do-submission-ledger";
 import { layer as storeLayer } from "@yielded/agent-storage-cloudflare/do-thread-store";
 import { digestJson } from "@yielded/agent/digest";
+import type { StorageOwner } from "@yielded/agent/run-storage";
 import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
   AbortCommand,
@@ -26,7 +27,6 @@ import {
   MarkUnknownRequest,
   OwnershipLost,
   ReleaseChildBudgetRequest,
-  ReleaseOwnershipRequest,
   ResolutionCompletedWithResult,
   ResolutionNeverHappened,
   RevertJoiningRequest,
@@ -41,16 +41,14 @@ import {
 import type { ThreadStore } from "@yielded/agent/thread-store";
 import { Cause, Effect, Exit, Option, Ref, Schema, type Crypto } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
-import { TestClock } from "effect/testing";
 import { describe, expect, it } from "vite-plus/test";
 
+import { withSubmissionOwner } from "../../../test/fixtures/ledger-read-contracts.ts";
 import {
   admission,
   thread,
-  OTHER_PRODUCER,
   sequence,
   settlementPublication,
-  TEST_PRODUCER,
   toolCall,
   withThreadStorage,
 } from "./harness.ts";
@@ -94,7 +92,7 @@ const makeFailpointHarness = (storage: DurableObjectStorage) =>
       effect: Effect.Effect<
         A,
         E,
-        SubmissionLedger | SettlementPublisher | ThreadStore | Crypto.Crypto
+        SubmissionLedger | SettlementPublisher | ThreadStore | StorageOwner | Crypto.Crypto
       >,
     ) =>
       Effect.provide(effect, [
@@ -120,7 +118,7 @@ const makeFailpointHarness = (storage: DurableObjectStorage) =>
   });
 
 describe("DoSubmissionLedger failpoints", () => {
-  it("recovers ledger identity and ownership after lost acknowledgements", () =>
+  it("recovers ledger identity and input progress after lost acknowledgements", () =>
     withThreadStorage("wp1-failpoints-base", (storage) =>
       Effect.gen(function* () {
         const { select, failingLedger, withSql } = yield* makeFailpointHarness(storage);
@@ -137,29 +135,6 @@ describe("DoSubmissionLedger failpoints", () => {
           }),
         );
 
-        const ownershipRows = withSql(
-          Effect.gen(function* () {
-            const sql = yield* SqlClientService.SqlClient;
-
-            return yield* sql<Record<string, unknown>>`
-              SELECT submission_id, attempt_id, ownership_token, producer_epoch, lease_expires_at
-              FROM effect_agent_submission_ownership
-            `;
-          }),
-        );
-
-        const attemptRows = withSql(
-          Effect.gen(function* () {
-            const sql = yield* SqlClientService.SqlClient;
-
-            return yield* sql<Record<string, unknown>>`
-              SELECT attempt_id, submission_id, producer_epoch
-              FROM effect_agent_attempts
-              ORDER BY producer_epoch
-            `;
-          }),
-        );
-
         const publicationRows = withSql(
           Effect.gen(function* () {
             const sql = yield* SqlClientService.SqlClient;
@@ -167,7 +142,7 @@ describe("DoSubmissionLedger failpoints", () => {
             return yield* sql<
               Record<string, unknown>
             >`SELECT record_id FROM effect_agent_canonical_records
-            WHERE json_extract(record_json, '$.payload._tag') = 'SubmissionSettled'`;
+            WHERE json_extract(payload_json, '$._tag') = 'SubmissionSettled'`;
           }),
         );
 
@@ -178,17 +153,6 @@ describe("DoSubmissionLedger failpoints", () => {
             return yield* sql<Record<string, unknown>>`
               SELECT submission_id, reason, requested_at
               FROM effect_agent_abort_intents
-            `;
-          }),
-        );
-
-        const threadRows = withSql(
-          Effect.gen(function* () {
-            const sql = yield* SqlClientService.SqlClient;
-
-            return yield* sql<Record<string, unknown>>`
-              SELECT thread_id, producer_epoch
-              FROM effect_agent_threads
             `;
           }),
         );
@@ -231,58 +195,45 @@ describe("DoSubmissionLedger failpoints", () => {
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            return yield* ledger.claim(
-              ClaimRequest.make({ threadId: thread(lane), producerId: TEST_PRODUCER }),
-            );
+            return yield* ledger.selectHead(ClaimRequest.make({ threadId: thread(lane) }));
           }),
         );
 
         yield* select("ledger:claim:after");
         expectInjectedFailure(yield* claimOnce.pipe(Effect.exit), "ledger:claim:after");
-        const orphanedOwnership = yield* ownershipRows;
-
-        expect(orphanedOwnership).toHaveLength(1);
-        expect(orphanedOwnership[0]?.producer_epoch).toBe(1);
-        expect(yield* threadRows).toEqual([{ thread_id: lane, producer_epoch: 1 }]);
-        expect((yield* submissionStates)[0]?.state).toBe("running");
-        expect(yield* attemptRows).toHaveLength(1);
-        // The orphaned lease blocks until expiry; a later Attempt (in DC: the next
-        // incarnation's alarm pass) reclaims at a higher epoch.
+        expect((yield* submissionStates)[0]?.state).toBe("ready");
         yield* select(undefined);
-        expect(Option.isNone(yield* claimOnce)).toBe(true);
-        yield* TestClock.adjust(30_001);
         const claim = yield* claimOnce;
 
         expect(Option.isSome(claim)).toBe(true);
         if (Option.isNone(claim)) return;
-        expect(claim.value.producerEpoch).toBe(2);
-        expect(yield* attemptRows).toHaveLength(2);
 
         const markInputOnce = failingLedger(
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            yield* ledger.markInputApplied(
-              MarkInputAppliedRequest.make({
-                submissionId: admitted.submissionId,
-                ownershipToken: claim.value.ownershipToken,
-                recordId: submissionInputRecordId(admitted.submissionId),
-                sequence: sequence(1),
-              }),
-            );
+            yield* ledger
+              .markInputApplied(
+                MarkInputAppliedRequest.make({
+                  submissionId: admitted.submissionId,
+                  recordId: submissionInputRecordId(admitted.submissionId),
+                  sequence: sequence(1),
+                }),
+              )
+              .pipe(withSubmissionOwner(admitted.submissionId));
           }),
         );
 
         yield* select(undefined);
         yield* markInputOnce;
 
-        const publication = yield* failingLedger(
-          settlementPublication(admitted, claim.value.ownershipToken, "completed"),
-        );
+        const publication = yield* failingLedger(settlementPublication(admitted, "completed"));
 
         const reserveOnce = failingLedger(
           Effect.gen(function* () {
-            return yield* (yield* SettlementPublisher).publish(publication.request);
+            return yield* (yield* SettlementPublisher)
+              .publish(publication.request)
+              .pipe(withSubmissionOwner(publication.request.submissionId));
           }),
         );
 
@@ -316,7 +267,6 @@ describe("DoSubmissionLedger failpoints", () => {
         );
         expect((yield* submissionStates)[0]?.finalized_at).not.toBeNull();
         expect((yield* submissionStates)[0]?.state).toBe("settled");
-        expect(yield* ownershipRows).toEqual([]);
         yield* select(undefined);
         const settlement = yield* finalizeOnce;
 
@@ -363,50 +313,6 @@ describe("DoSubmissionLedger failpoints", () => {
         const intent = yield* abortOnce;
 
         expect(intent.reason).toBe("failpoint abort");
-
-        const abortClaim = yield* failingLedger(
-          Effect.gen(function* () {
-            const ledger = yield* SubmissionLedger;
-
-            return yield* ledger.claim(
-              ClaimRequest.make({
-                threadId: thread(abortLane),
-                producerId: OTHER_PRODUCER,
-              }),
-            );
-          }),
-        );
-
-        expect(Option.isSome(abortClaim)).toBe(true);
-        if (Option.isNone(abortClaim)) return;
-
-        const releaseOnce = failingLedger(
-          Effect.gen(function* () {
-            const ledger = yield* SubmissionLedger;
-
-            yield* ledger.releaseOwnership(
-              ReleaseOwnershipRequest.make({
-                submissionId: abortAdmitted.submissionId,
-                ownershipToken: abortClaim.value.ownershipToken,
-              }),
-            );
-          }),
-        );
-
-        yield* select("ledger:release:after");
-        expectInjectedFailure(yield* releaseOnce.pipe(Effect.exit), "ledger:release:after");
-        expect(yield* ownershipRows).toEqual([]);
-        expect(
-          (yield* submissionStates).find((row) => row.submission_id === abortAdmitted.submissionId)
-            ?.state,
-        ).toBe("ready");
-        yield* select(undefined);
-        const retriedRelease = yield* releaseOnce.pipe(Effect.exit);
-
-        expect(Exit.isFailure(retriedRelease)).toBe(true);
-        if (Exit.isFailure(retriedRelease)) {
-          expect(Cause.squash(retriedRelease.cause)).toBeInstanceOf(OwnershipLost);
-        }
       }),
     ));
 
@@ -430,17 +336,6 @@ describe("DoSubmissionLedger failpoints", () => {
                 unknown_tool_call_ids_json
               FROM effect_agent_submissions
               ORDER BY thread_id, queue_sequence
-            `;
-          }),
-        );
-
-        const ownershipRows = withSql(
-          Effect.gen(function* () {
-            const sql = yield* SqlClientService.SqlClient;
-
-            return yield* sql<Record<string, unknown>>`
-              SELECT submission_id, ownership_token
-              FROM effect_agent_submission_ownership
             `;
           }),
         );
@@ -474,7 +369,7 @@ describe("DoSubmissionLedger failpoints", () => {
 
         const lane = "thread-p5-failpoints";
 
-        const { host, hostClaim, queued, queuedSecond } = yield* failingLedger(
+        const { host, queued, queuedSecond } = yield* failingLedger(
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
@@ -498,9 +393,7 @@ describe("DoSubmissionLedger failpoints", () => {
               MarkReadyRequest.make({ submissionId: queuedSecond.submissionId }),
             );
 
-            const claim = yield* ledger.claim(
-              ClaimRequest.make({ threadId: thread(lane), producerId: TEST_PRODUCER }),
-            );
+            const claim = yield* ledger.selectHead(ClaimRequest.make({ threadId: thread(lane) }));
 
             if (Option.isNone(claim)) return yield* Effect.die("missing host claim");
 
@@ -512,14 +405,15 @@ describe("DoSubmissionLedger failpoints", () => {
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            return yield* ledger.claimJoining(
-              ClaimJoiningRequest.make({
-                threadId: thread(lane),
-                hostSubmissionId: host.submissionId,
-                ownershipToken: hostClaim.ownershipToken,
-                maxCount: 1,
-              }),
-            );
+            return yield* ledger
+              .claimJoining(
+                ClaimJoiningRequest.make({
+                  threadId: thread(lane),
+                  hostSubmissionId: host.submissionId,
+                  maxCount: 1,
+                }),
+              )
+              .pipe(withSubmissionOwner(host.submissionId));
           }),
         );
 
@@ -544,14 +438,15 @@ describe("DoSubmissionLedger failpoints", () => {
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            yield* ledger.markJoined(
-              MarkJoinedRequest.make({
-                submissionId: queued.submissionId,
-                ownershipToken: hostClaim.ownershipToken,
-                recordId: submissionInputRecordId(queued.submissionId),
-                sequence: sequence(2),
-              }),
-            );
+            yield* ledger
+              .markJoined(
+                MarkJoinedRequest.make({
+                  submissionId: queued.submissionId,
+                  recordId: submissionInputRecordId(queued.submissionId),
+                  sequence: sequence(2),
+                }),
+              )
+              .pipe(withSubmissionOwner(host.submissionId));
           }),
         );
 
@@ -605,13 +500,14 @@ describe("DoSubmissionLedger failpoints", () => {
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            return yield* ledger.suspend(
-              SuspendRequest.make({
-                submissionId: host.submissionId,
-                ownershipToken: hostClaim.ownershipToken,
-                reason: ApprovalPendingSuspension.make({ toolCallIds: [toolCall("call-fp-b")] }),
-              }),
-            );
+            return yield* ledger
+              .suspend(
+                SuspendRequest.make({
+                  submissionId: host.submissionId,
+                  reason: ApprovalPendingSuspension.make({ toolCallIds: [toolCall("call-fp-b")] }),
+                }),
+              )
+              .pipe(withSubmissionOwner(host.submissionId));
           }),
         );
 
@@ -621,7 +517,6 @@ describe("DoSubmissionLedger failpoints", () => {
 
         expect(suspendedMarker?.state).toBe("suspended");
         expect(suspendedMarker?.suspended_reason_json).not.toBeNull();
-        expect(yield* ownershipRows).toEqual([]);
         yield* select(undefined);
         const retriedSuspend = yield* suspendOnce.pipe(Effect.exit);
 
@@ -779,7 +674,7 @@ describe("DoSubmissionLedger failpoints", () => {
         const reservationId = S2_FAILPOINT_RESERVATION;
         const delegationCall = toolCall("call-s2-fp");
 
-        const { child, parent, parentClaim } = yield* failingLedger(
+        const { child, parent } = yield* failingLedger(
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
@@ -795,10 +690,9 @@ describe("DoSubmissionLedger failpoints", () => {
 
             yield* ledger.markReady(MarkReadyRequest.make({ submissionId: child.submissionId }));
 
-            const claim = yield* ledger.claim(
+            const claim = yield* ledger.selectHead(
               ClaimRequest.make({
                 threadId: thread(parentLane),
-                producerId: TEST_PRODUCER,
               }),
             );
 
@@ -818,16 +712,17 @@ describe("DoSubmissionLedger failpoints", () => {
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            return yield* ledger.reserveChildBudget(
-              ChildBudgetReservationRequest.make({
-                reservationId,
-                parentSubmissionId: parent.submissionId,
-                parentToolCallId: delegationCall,
-                ownershipToken: parentClaim.ownershipToken,
-                allocation,
-                allocationDigest,
-              }),
-            );
+            return yield* ledger
+              .reserveChildBudget(
+                ChildBudgetReservationRequest.make({
+                  reservationId,
+                  parentSubmissionId: parent.submissionId,
+                  parentToolCallId: delegationCall,
+                  allocation,
+                  allocationDigest,
+                }),
+              )
+              .pipe(withSubmissionOwner(parent.submissionId));
           }),
         );
 
@@ -850,13 +745,14 @@ describe("DoSubmissionLedger failpoints", () => {
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            return yield* ledger.attachChildToReservation(
-              AttachChildToReservationRequest.make({
-                reservationId,
-                ownershipToken: parentClaim.ownershipToken,
-                childSubmissionId: child.submissionId,
-              }),
-            );
+            return yield* ledger
+              .attachChildToReservation(
+                AttachChildToReservationRequest.make({
+                  reservationId,
+                  childSubmissionId: child.submissionId,
+                }),
+              )
+              .pipe(withSubmissionOwner(parent.submissionId));
           }),
         );
 
@@ -914,39 +810,37 @@ describe("DoSubmissionLedger failpoints", () => {
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            const suspended = yield* ledger.suspend(
-              SuspendRequest.make({
-                submissionId: parent.submissionId,
-                ownershipToken: parentClaim.ownershipToken,
-                reason: WaitingForChildSuspension.make({
-                  children: [
-                    WaitingChild.make({
-                      toolCallId: delegationCall,
-                      childSubmissionId: child.submissionId,
-                    }),
-                  ],
+            const suspended = yield* ledger
+              .suspend(
+                SuspendRequest.make({
+                  submissionId: parent.submissionId,
+                  reason: WaitingForChildSuspension.make({
+                    children: [
+                      WaitingChild.make({
+                        toolCallId: delegationCall,
+                        childSubmissionId: child.submissionId,
+                      }),
+                    ],
+                  }),
                 }),
-              }),
-            );
+              )
+              .pipe(withSubmissionOwner(parent.submissionId));
 
             expect(suspended).toBe("suspended");
 
-            const childClaim = yield* ledger.claim(
+            const childClaim = yield* ledger.selectHead(
               ClaimRequest.make({
                 threadId: thread(childLane),
-                producerId: TEST_PRODUCER,
               }),
             );
 
             if (Option.isNone(childClaim)) return yield* Effect.die("missing child claim");
 
-            const publication = yield* settlementPublication(
-              child,
-              childClaim.value.ownershipToken,
-              "completed",
-            );
+            const publication = yield* settlementPublication(child, "completed");
 
-            yield* (yield* SettlementPublisher).publish(publication.request);
+            yield* (yield* SettlementPublisher)
+              .publish(publication.request)
+              .pipe(withSubmissionOwner(publication.request.submissionId));
             yield* ledger.finalizeSettlement(
               SettlementFinalization.make({
                 submissionId: child.submissionId,

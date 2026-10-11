@@ -6,43 +6,37 @@ import {
   type PostgresStorageFailpointLocation,
   PostgresWriteContention,
 } from "@yielded/agent-storage-postgres/postgres-storage-error";
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { SubmissionId } from "@yielded/agent/identifiers";
 import { ReadRecord } from "@yielded/agent/record-format";
 import {
   CanonicalBatch,
   CanonicalRecord,
   CanonicalSequence,
-  ProducerEpoch,
   RunCompleted,
   UserInputRecorded,
   type CanonicalRecordPayload,
 } from "@yielded/agent/records";
 import {
   type SelectedThreadRead,
-  FencedAppendRequest,
+  AppendRequest,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
   ThreadCheckpoint,
-  ThreadExport,
   ThreadExportRequest,
   ThreadMaterialization,
   ThreadRead,
   ThreadStore,
   ThreadStoreError,
   type AppendResult,
-  streamExport,
-  ThreadExportSource,
 } from "@yielded/agent/thread-store";
 import { Cause, DateTime, Effect, Exit, Fiber, Layer, Option, Ref, Schema, Stream } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 
-import { WRITER_LOCK_KEY } from "../src/internal/postgres-storage.ts";
 import {
   clientLayer,
   storage as makeStorage,
   singleConnectionStorage,
-  whileHoldingWriterLock,
+  whileHoldingTableLock,
   withTemporaryDatabase,
 } from "./harness.ts";
 
@@ -54,7 +48,6 @@ const id = <A>(schema: Schema.Codec<A, string>, value: string): A =>
   Schema.decodeSync(schema)(value);
 
 const sequence = (value: number) => Schema.decodeSync(CanonicalSequence)(value);
-const epoch = (value: number) => Schema.decodeSync(ProducerEpoch)(value);
 const isThreadStoreError = Schema.is(ThreadStoreError);
 const isCompatibilityError = Schema.is(PostgresStorageCompatibilityError);
 const encodeRecords = Schema.encodeEffect(Schema.Array(CanonicalRecord));
@@ -104,19 +97,15 @@ const inputRecord = (recordId: string, input: string): CanonicalRecord =>
 const append = (
   store: ThreadStore["Service"],
   canonicalBatch: CanonicalBatch,
-  tail: Pick<AppendResult, "lastSequence" | "tailDigest"> = {
+  tail: Pick<AppendResult, "lastSequence"> = {
     lastSequence: sequence(0),
-    tailDigest: EMPTY_TAIL_DIGEST,
   },
-  producerEpoch: ProducerEpoch = epoch(1),
 ) =>
   store.append(
-    FencedAppendRequest.make({
+    AppendRequest.make({
       threadId,
       batch: canonicalBatch,
       expectedTailSequence: tail.lastSequence,
-      expectedTailDigest: tail.tailDigest,
-      producerEpoch,
     }),
   );
 
@@ -184,9 +173,7 @@ describe("PostgresThreadStore faults", () => {
             Effect.gen(function* () {
               const store = yield* ThreadStore;
 
-              yield* store.materialize(
-                ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-              );
+              yield* store.materialize(ThreadMaterialization.make({ threadId }));
               const appended = yield* append(store, canonicalBatch);
 
               expect(appended.replayed).toBe(false);
@@ -212,13 +199,15 @@ describe("PostgresThreadStore faults", () => {
                 ),
               ).toEqual(yield* encodeRecords([record]));
 
-              const exported = yield* store
-                .export(ThreadExportRequest.make({ threadId }))
-                .pipe(Effect.flatMap(Schema.encodeEffect(ThreadExport)));
+              const retained = yield* store
+                .read(ThreadRead.make({ threadId, limit: 2 }))
+                .pipe(Stream.runCollect);
 
-              expect(exported.records.map((envelope) => envelope.record)).toEqual(
-                yield* encodeRecords([record]),
-              );
+              expect(
+                yield* Effect.forEach(retained, (envelope) =>
+                  Schema.encodeEffect(ReadRecord)(envelope.record),
+                ),
+              ).toEqual(yield* encodeRecords([record]));
             }),
           );
         });
@@ -236,17 +225,13 @@ describe("PostgresThreadStore faults", () => {
           const first = inputRecord("unicode-identity-first", "private input");
           const second = inputRecord("unicode-identity-second", "valid owner input");
 
-          yield* store.materialize(
-            ThreadMaterialization.make({ threadId: validId, producerEpoch: epoch(1) }),
-          );
+          yield* store.materialize(ThreadMaterialization.make({ threadId: validId }));
 
           const tail = yield* store.append(
-            FencedAppendRequest.make({
+            AppendRequest.make({
               threadId: validId,
               batch: batch("unicode-identity-first", [first]),
               expectedTailSequence: sequence(0),
-              expectedTailDigest: EMPTY_TAIL_DIGEST,
-              producerEpoch: epoch(1),
             }),
           );
 
@@ -256,9 +241,7 @@ describe("PostgresThreadStore faults", () => {
             const malformedId = id(ThreadMaterialization.fields.threadId, malformed);
 
             const mutation = yield* store
-              .materialize(
-                ThreadMaterialization.make({ threadId: malformedId, producerEpoch: epoch(2) }),
-              )
+              .materialize(ThreadMaterialization.make({ threadId: malformedId }))
               .pipe(Effect.exit);
 
             const read = yield* store
@@ -274,28 +257,23 @@ describe("PostgresThreadStore faults", () => {
 
           const validAppend = yield* store
             .append(
-              FencedAppendRequest.make({
+              AppendRequest.make({
                 threadId: validId,
                 batch: batch("unicode-identity-second", [second]),
                 expectedTailSequence: tail.lastSequence,
-                expectedTailDigest: tail.tailDigest,
-                producerEpoch: epoch(1),
               }),
             )
             .pipe(Effect.exit);
 
-          const exported = yield* streamExport({ threadId: validId }).pipe(
-            Stream.provide(ThreadExportSource.layer()),
-            Stream.flatMap((page) => Stream.fromIterable(page.records)),
-            Stream.take(3),
-            Stream.runCollect,
-          );
+          const retained = yield* store
+            .read(ThreadRead.make({ threadId: validId, limit: 3 }))
+            .pipe(Stream.runCollect);
 
           expect({
             rejected,
             validAppend: Exit.isSuccess(validAppend),
-            threadId: exported[0]?.threadId,
-            records: yield* encodeRecords(exported.map((envelope) => envelope.record)),
+            threadId: retained[0]?.threadId,
+            records: yield* encodeRecords(retained.map((envelope) => envelope.record)),
           }).toEqual({
             rejected: [
               { mutation: true, read: true },
@@ -318,9 +296,7 @@ describe("PostgresThreadStore faults", () => {
           const store = yield* ThreadStore;
           const writerSql = yield* SqlClientService.SqlClient;
 
-          yield* store.materialize(
-            ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-          );
+          yield* store.materialize(ThreadMaterialization.make({ threadId }));
           const [{ pid }] = yield* writerSql<{ pid: number }>`SELECT pg_backend_pid() AS pid`;
           const pending = batch("cancelled-writer", [inputRecord("cancelled-record", "retry")]);
 
@@ -334,7 +310,7 @@ describe("PostgresThreadStore faults", () => {
                 () =>
                   Effect.gen(function* () {
                     yield* blocker.executeUnprepared(
-                      `SELECT pg_advisory_xact_lock(${WRITER_LOCK_KEY})`,
+                      "LOCK TABLE effect_agent_threads IN SHARE MODE",
                       [],
                       undefined,
                     );
@@ -343,7 +319,7 @@ describe("PostgresThreadStore faults", () => {
                     yield* Effect.gen(function* () {
                       while (true) {
                         const waiting = yield* blocker.executeUnprepared(
-                          "SELECT 1 FROM pg_locks WHERE pid = $1 AND locktype = 'advisory' AND NOT granted",
+                          "SELECT 1 FROM pg_locks WHERE pid = $1 AND locktype = 'relation' AND NOT granted",
                           [pid],
                           undefined,
                         );
@@ -402,14 +378,12 @@ describe("PostgresThreadStore faults", () => {
           yield* Ref.set(active, true);
 
           const injected = yield* store
-            .materialize(ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }))
+            .materialize(ThreadMaterialization.make({ threadId }))
             .pipe(Effect.exit);
 
           expect(Exit.isFailure(injected)).toBe(true);
           yield* Ref.set(active, false);
-          yield* store.materialize(
-            ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-          );
+          yield* store.materialize(ThreadMaterialization.make({ threadId }));
         }).pipe(Effect.provide(storage.threadStore));
       }),
     ),
@@ -497,9 +471,7 @@ describe("PostgresThreadStore faults", () => {
           Effect.gen(function* () {
             const store = yield* ThreadStore;
 
-            yield* store.materialize(
-              ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-            );
+            yield* store.materialize(ThreadMaterialization.make({ threadId }));
             yield* append(store, batch("corrupt-1", [inputRecord("corrupt-record-1", "Osaka")]));
           }),
         );
@@ -510,7 +482,7 @@ describe("PostgresThreadStore faults", () => {
 
             yield* sql`
               UPDATE effect_agent_canonical_records
-              SET record_json = '{"schemaVersion":2}'
+              SET payload_json = '{"schemaVersion":2}'
               WHERE thread_id = ${threadId}
                 AND sequence = 1
             `;
@@ -553,19 +525,19 @@ describe("PostgresThreadStore faults", () => {
             const sql = yield* SqlClientService.SqlClient;
 
             return yield* sql<Record<string, unknown>>`
-              SELECT sequence, record_json
+              SELECT sequence, payload_json
               FROM effect_agent_canonical_records
               WHERE thread_id = ${threadId}
             `;
           }),
         );
 
-        expect(rows).toEqual([{ sequence: 1n, record_json: '{"schemaVersion":2}' }]);
+        expect(rows).toEqual([{ sequence: 1n, payload_json: '{"schemaVersion":2}' }]);
       }),
     ),
   );
 
-  it.effect("classifies cross-connection write contention as retryable typed contention", () =>
+  it.effect("classifies a native table lock timeout as retryable typed contention", () =>
     withTemporaryDatabase((url) =>
       Effect.gen(function* () {
         const first = yield* withStorage(
@@ -573,9 +545,7 @@ describe("PostgresThreadStore faults", () => {
           Effect.gen(function* () {
             const store = yield* ThreadStore;
 
-            yield* store.materialize(
-              ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-            );
+            yield* store.materialize(ThreadMaterialization.make({ threadId }));
 
             return yield* append(store, batch("busy-1", [inputRecord("busy-record-1", "before")]));
           }),
@@ -583,15 +553,14 @@ describe("PostgresThreadStore faults", () => {
 
         const contendedBatch = batch("busy-2", [inputRecord("busy-record-2", "after")]);
 
-        // Opening a store takes the writer lock itself, so the competing producer must arrive
-        // after the store is open. `lock_timeout = 0` disables the bound in Postgres, so the
+        // Hold the administrative table lock after storage initialization. `lock_timeout = 0` disables the bound in Postgres, so the
         // shortest bounded wait is used instead.
         // The retry runs on the SAME store over its single pooled connection: a timed-out lock
         // wait aborts the open transaction, and only a rollback makes that connection reusable.
         const { contended, retried } = yield* Effect.gen(function* () {
           const store = yield* ThreadStore;
 
-          const contended = yield* whileHoldingWriterLock(
+          const contended = yield* whileHoldingTableLock(
             url,
             append(store, contendedBatch, first).pipe(Effect.exit),
           );
@@ -660,7 +629,6 @@ describe("PostgresThreadStore faults", () => {
                 yield* store.materialize(
                   ThreadMaterialization.make({
                     threadId,
-                    producerEpoch: epoch(1),
                   }),
                 );
               }),
@@ -690,7 +658,6 @@ describe("PostgresThreadStore faults", () => {
                 yield* store.materialize(
                   ThreadMaterialization.make({
                     threadId,
-                    producerEpoch: epoch(1),
                   }),
                 );
               }),
@@ -773,7 +740,6 @@ describe("PostgresThreadStore faults", () => {
 
               expect(exported.records).toEqual([]);
               expect(exported.tailSequence).toBe(0);
-              expect(exported.tailDigest).toBe(EMPTY_TAIL_DIGEST);
             }),
         );
 
@@ -805,7 +771,7 @@ describe("PostgresThreadStore faults", () => {
           schemaVersion: 1,
           threadId,
           throughSequence: recoveredAppend.lastSequence,
-          tailDigest: recoveredAppend.tailDigest,
+
           state: { destination: "Sapporo" },
           createdAt: at(3),
         });

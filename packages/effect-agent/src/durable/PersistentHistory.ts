@@ -14,7 +14,6 @@ import {
   DeploymentId,
   ModelCompleted,
   PersistedJson,
-  ProducerEpoch,
   ProducerId,
   RecordEnvelope,
   RecordId,
@@ -22,17 +21,17 @@ import {
   UserInputRecorded,
 } from "./Records.ts";
 import { promptFromCanonicalRecords } from "./RunJournal.ts";
+import { StorageOwner } from "./RunStorage.ts";
 import {
   ThreadIdentityRequest,
   SelectedThreadRead,
   type ThreadIdentity,
   ThreadMaterialization,
   ThreadStore,
-  FencedAppendRequest,
+  AppendRequest,
   type ThreadStoreFailure,
 } from "./ThreadStore.ts";
 
-const HISTORY_EPOCH = Schema.decodeSync(ProducerEpoch)(0);
 const HISTORY_DEPLOYMENT = Schema.decodeSync(DeploymentId)("persistent-history");
 const batchId = Schema.decodeSync(BatchId);
 const producer = Schema.decodeSync(ProducerId);
@@ -56,7 +55,7 @@ const storageError = (threadId: ThreadId, cause: ThreadStoreFailure) =>
     threadId,
     cause._tag === "AppendConflict"
       ? "conflict"
-      : cause._tag === "FenceRejected"
+      : cause._tag === "OwnershipLost"
         ? "fenced"
         : cause._tag === "ThreadNotMaterialized"
           ? "not-found"
@@ -67,14 +66,22 @@ const storageError = (threadId: ThreadId, cause: ThreadStoreFailure) =>
 
 /**
  * Provide retained history to the normal AgentRuntime entry points. Each successful Run appends
- * one three-record batch. Staging is private to that Run; interruption discards it. Epoch zero
- * and the loaded tail fence stale writers without replaying external execution. A storage failure
+ * one three-record batch. Staging is private to that Run; interruption discards it. The scoped
+ * storage owner and the loaded tail reject stale writes without replaying external execution. A storage failure
  * after append may leave the whole Run recorded. Adapter failpoints cover both durable mutations.
  */
 export const layer = Layer.effect(
   ThreadHistory,
   Effect.gen(function* () {
     const store = yield* ThreadStore;
+    const owner = yield* StorageOwner;
+
+    const checkOwner = (threadId: ThreadId) =>
+      Effect.suspend(() =>
+        owner.isClosed()
+          ? Effect.fail(historyError(threadId, "fenced", "The storage owner has closed"))
+          : Effect.void,
+      );
 
     const readHistory = Effect.fnUntraced(function* (base: ThreadIdentity) {
       const threadId = base.threadId;
@@ -94,11 +101,7 @@ export const layer = Layer.effect(
             Effect.mapError((cause) => storageError(threadId, cause)),
           );
 
-      if (
-        base.admissions > 0 ||
-        base.producerEpoch !== HISTORY_EPOCH ||
-        (yield* selected("DurableHistoryOwner")).length > 0
-      )
+      if (base.hasAdmissions || (yield* selected("DurableHistoryOwner")).length > 0)
         return yield* historyError(
           threadId,
           "incompatible",
@@ -163,8 +166,9 @@ export const layer = Layer.effect(
           ),
         );
 
+      yield* checkOwner(threadId);
       yield* store
-        .materialize(ThreadMaterialization.make({ threadId, producerEpoch: HISTORY_EPOCH }))
+        .materialize(ThreadMaterialization.make({ threadId }))
         .pipe(Effect.mapError((cause) => storageError(threadId, cause)));
 
       const base = yield* store
@@ -174,7 +178,6 @@ export const layer = Layer.effect(
       const prompt = yield* readHistory(base);
 
       const expectedTailSequence = base.tailSequence;
-      const expectedTailDigest = base.tailDigest;
       const initialPromptLength = prompt.content.length;
 
       const createdAt = yield* DateTime.now;
@@ -282,11 +285,9 @@ export const layer = Layer.effect(
 
           yield* store
             .append(
-              FencedAppendRequest.make({
+              AppendRequest.make({
                 threadId,
-                producerEpoch: HISTORY_EPOCH,
                 expectedTailSequence,
-                expectedTailDigest,
                 batch: CanonicalBatch.make({
                   batchId: batchId(`history:${runId}`),
                   producerId: producer(`history:${runId}`),
@@ -312,7 +313,10 @@ export const layer = Layer.effect(
                 }),
               }),
             )
-            .pipe(Effect.mapError((cause) => storageError(threadId, cause)));
+            .pipe(
+              Effect.mapError((cause) => storageError(threadId, cause)),
+              (write) => owner.withMutation(Effect.andThen(checkOwner(threadId), write)),
+            );
         }),
       };
     });

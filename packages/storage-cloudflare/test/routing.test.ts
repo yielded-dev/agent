@@ -16,10 +16,11 @@ import {
   routedMessageDeliveryStoreLayer,
   routedSubmissionLedgerLayer,
 } from "@yielded/agent-storage-cloudflare/port-routing";
-import { digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { digestJson } from "@yielded/agent/digest";
 import { lifecyclePublicationLayer } from "@yielded/agent/lifecycle-publication";
 import { MessageDeliveryStore, readPending } from "@yielded/agent/message-delivery";
 import { type PersistedJson } from "@yielded/agent/records";
+import { StorageOwner } from "@yielded/agent/run-storage";
 import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
   AttachChildToReservationRequest,
@@ -31,7 +32,6 @@ import {
   LedgerError,
   MarkReadyRequest,
   RecoverySnapshotRequest,
-  RenewOwnershipRequest,
   SettlementFinalization,
   SubmissionLedger,
   SubmissionLookupById,
@@ -49,7 +49,7 @@ import {
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
 import { runInDurableObject } from "cloudflare:test";
-import type { Crypto } from "effect";
+import type { Crypto, Scope } from "effect";
 import { Effect, Layer, Option, Schema, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -58,16 +58,13 @@ import {
   thread,
   threadStub,
   id,
-  epoch,
   settlementPublication,
   TEST_PRINCIPAL,
-  TEST_PRODUCER,
   toolCall,
   withThreadStorage,
 } from "./harness.ts";
 
 const submissionId = (value: string) => id(MarkReadyRequest.fields.submissionId, value);
-const ownershipToken = (value: string) => id(RenewOwnershipRequest.fields.ownershipToken, value);
 const idempotencyKey = (value: string) => id(IdempotencyKey, value);
 
 const isLedgerError = Schema.is(LedgerError);
@@ -124,7 +121,16 @@ const transportLayer = (state: TransportControl) =>
 const withRoutedPorts = <A, E>(
   objectName: string,
   state: TransportControl,
-  build: Effect.Effect<A, E, SubmissionLedger | ThreadStore | MessageDeliveryStore | Crypto.Crypto>,
+  build: Effect.Effect<
+    A,
+    E,
+    | SubmissionLedger
+    | ThreadStore
+    | MessageDeliveryStore
+    | Crypto.Crypto
+    | StorageOwner
+    | Scope.Scope
+  >,
   includeCheckpoints = true,
 ): Promise<A> =>
   runInDurableObject(threadStub(objectName), (_instance, doState) =>
@@ -161,6 +167,7 @@ const withRoutedPorts = <A, E>(
                       materialize: store.materialize,
                       append: store.append,
                       read: store.read,
+                      readExecution: store.readExecution,
                       readPrompt: store.readPrompt,
                       observe: store.observe,
                       export: store.export,
@@ -169,7 +176,7 @@ const withRoutedPorts = <A, E>(
                       ...(store.work === undefined ? {} : { work: store.work }),
                     },
               ),
-              Layer.provide(
+              Layer.provideMerge(
                 Layer.mergeAll(
                   storeLayer({ storage: doState.storage, observationPollInterval: 1 }),
                   transportLayer(state),
@@ -179,6 +186,7 @@ const withRoutedPorts = <A, E>(
             BrowserCrypto.layer,
           ),
         ),
+        Effect.scoped,
       ),
     ),
   );
@@ -194,12 +202,19 @@ const claimedLocalLane = Effect.fn("RoutingTest.claimedLocalLane")(function* (
 
   yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
 
-  const claimed = yield* ledger.claim(
-    ClaimRequest.make({ threadId: thread(threadId), producerId: TEST_PRODUCER }),
+  const owner = yield* StorageOwner;
+
+  const claimed = yield* owner.acquire(
+    thread(threadId),
+    ledger.selectHead(ClaimRequest.make({ threadId: thread(threadId) })),
+  );
+
+  yield* (yield* ThreadStore).materialize(
+    ThreadMaterialization.make({ threadId: thread(threadId) }),
   );
 
   expect(Option.isSome(claimed)).toBe(true);
-  const claim: Claim = Option.getOrThrow(claimed);
+  const claim: Claim = Option.getOrThrow(claimed).claim;
 
   return { admitted, claim };
 });
@@ -270,14 +285,12 @@ describe("cross-DO port routing", () => {
           _tag: "ThreadNotMaterialized",
           threadId,
         });
-        yield* store.materialize(ThreadMaterialization.make({ threadId, producerEpoch: epoch(3) }));
+        yield* store.materialize(ThreadMaterialization.make({ threadId }));
         const empty = yield* store.readIdentity(request);
 
         expect(empty).toMatchObject({
           threadId,
           tailSequence: 0,
-          tailDigest: EMPTY_TAIL_DIGEST,
-          producerEpoch: 3,
           records: [],
         });
 
@@ -355,11 +368,7 @@ describe("cross-DO port routing", () => {
         const ledger = yield* SubmissionLedger;
         const settled = yield* claimedLocalLane(childConv, "wp2-settled-child", { part: 1 });
 
-        const publication = yield* settlementPublication(
-          settled.admitted,
-          settled.claim.ownershipToken,
-          "completed",
-        );
+        const publication = yield* settlementPublication(settled.admitted, "completed");
 
         yield* (yield* SettlementPublisher).publish(publication.request);
         yield* ledger.finalizeSettlement(
@@ -378,6 +387,7 @@ describe("cross-DO port routing", () => {
         return { settled: settled.admitted, pending };
       }).pipe(
         Effect.provide([ledgerLayer({ storage }), storeLayer({ storage }), BrowserCrypto.layer]),
+        Effect.scoped,
       ),
     );
 
@@ -394,7 +404,6 @@ describe("cross-DO port routing", () => {
         const outcome = yield* ledger.suspend(
           SuspendRequest.make({
             submissionId: lane.admitted.submissionId,
-            ownershipToken: lane.claim.ownershipToken,
             reason: WaitingForChildSuspension.make({
               children: [
                 WaitingChild.make({
@@ -415,6 +424,7 @@ describe("cross-DO port routing", () => {
         return lane.admitted;
       }).pipe(
         Effect.provide([ledgerLayer({ storage }), storeLayer({ storage }), BrowserCrypto.layer]),
+        Effect.scoped,
       ),
     );
 
@@ -443,22 +453,18 @@ describe("cross-DO port routing", () => {
       Effect.gen(function* () {
         const ledger = yield* SubmissionLedger;
 
+        const owner = yield* StorageOwner;
+
         const claimed = Option.getOrThrow(
-          yield* ledger.claim(
-            ClaimRequest.make({
-              threadId: thread(childConv),
-              producerId: TEST_PRODUCER,
-            }),
+          yield* owner.acquire(
+            thread(childConv),
+            ledger.selectHead(ClaimRequest.make({ threadId: thread(childConv) })),
           ),
-        );
+        ).claim;
 
         expect(claimed.submissionId).toBe(children.pending.submissionId);
 
-        const publication = yield* settlementPublication(
-          children.pending,
-          claimed.ownershipToken,
-          "completed",
-        );
+        const publication = yield* settlementPublication(children.pending, "completed");
 
         yield* (yield* SettlementPublisher).publish(publication.request);
         yield* ledger.finalizeSettlement(
@@ -469,6 +475,7 @@ describe("cross-DO port routing", () => {
         );
       }).pipe(
         Effect.provide([ledgerLayer({ storage }), storeLayer({ storage }), BrowserCrypto.layer]),
+        Effect.scoped,
       ),
     );
 
@@ -534,10 +541,9 @@ describe("cross-DO port routing", () => {
           );
 
         yield* expectCrossLedger(
-          ledger.claim(
+          ledger.selectHead(
             ClaimRequest.make({
               threadId: thread(foreignConv),
-              producerId: TEST_PRODUCER,
             }),
           ),
         );
@@ -548,7 +554,6 @@ describe("cross-DO port routing", () => {
               reservationId: id(ChildReservationId, "wp2-cross-reservation"),
               parentSubmissionId: foreignSid,
               parentToolCallId: toolCall("wp2-cross"),
-              ownershipToken: ownershipToken("wp2-cross-token"),
               allocation: { budget: 1 },
               allocationDigest: yield* digestJson({ budget: 1 }),
             }),
@@ -639,6 +644,7 @@ describe("cross-DO port routing", () => {
         expect(rows.map((row) => row.submissionId)).toEqual([established.submissionId]);
       }).pipe(
         Effect.provide([ledgerLayer({ storage }), storeLayer({ storage }), BrowserCrypto.layer]),
+        Effect.scoped,
       ),
     );
   });
@@ -672,7 +678,6 @@ describe("cross-DO port routing", () => {
             reservationId: id(ChildReservationId, "wp2-enrich-reservation"),
             parentSubmissionId: lane.admitted.submissionId,
             parentToolCallId: toolCall("wp2-enrich-call"),
-            ownershipToken: lane.claim.ownershipToken,
             allocation,
             allocationDigest,
           }),
@@ -680,7 +685,6 @@ describe("cross-DO port routing", () => {
         yield* ledger.attachChildToReservation(
           AttachChildToReservationRequest.make({
             reservationId: id(ChildReservationId, "wp2-enrich-reservation"),
-            ownershipToken: lane.claim.ownershipToken,
             childSubmissionId: child.submissionId,
           }),
         );

@@ -281,19 +281,19 @@ submission's recovery decision with `recoverSubmission`. `submissionStatus` is t
 nonblocking read; `inspectSubmissionStatus` is reserved for trusted workers. Pending status and
 an empty processing result do not imply completion.
 
-| Import                                                  | Use                                                 |
-| ------------------------------------------------------- | --------------------------------------------------- |
-| `@yielded/agent/persistent-history`                     | Persistent history implementation                   |
-| `@yielded/agent/thread-store`                           | History storage contracts                           |
-| `@yielded/agent/run-continuation`                       | Canonical Run progress and work discovery contracts |
-| `@yielded/agent/thread-history`                         | Interpreter history service                         |
-| `@yielded/agent/durable-agent-runtime`                  | Durable runtime                                     |
-| `@yielded/agent/submission-ledger`                      | Accepted-work storage contracts                     |
-| `@yielded/agent/git-hub-workflow-source`                | GitHub event source                                 |
-| `@yielded/agent/testing/certification`                  | Adapter certification                               |
-| `@yielded/agent/testing/thread-store-conformance`       | History conformance                                 |
-| `@yielded/agent/testing/submission-ledger-conformance`  | Accepted-work conformance                           |
-| `@yielded/agent/testing/durable-failpoint-test-control` | Runtime failpoint controls                          |
+| Import                                                  | Use                                               |
+| ------------------------------------------------------- | ------------------------------------------------- |
+| `@yielded/agent/persistent-history`                     | Persistent history implementation                 |
+| `@yielded/agent/thread-store`                           | History storage contracts                         |
+| `@yielded/agent/run-continuation`                       | Current Run progress and work discovery contracts |
+| `@yielded/agent/thread-history`                         | Interpreter history service                       |
+| `@yielded/agent/durable-agent-runtime`                  | Durable runtime                                   |
+| `@yielded/agent/submission-ledger`                      | Accepted-work storage contracts                   |
+| `@yielded/agent/git-hub-workflow-source`                | GitHub event source                               |
+| `@yielded/agent/testing/certification`                  | Adapter certification                             |
+| `@yielded/agent/testing/thread-store-conformance`       | History conformance                               |
+| `@yielded/agent/testing/submission-ledger-conformance`  | Accepted-work conformance                         |
+| `@yielded/agent/testing/durable-failpoint-test-control` | Runtime failpoint controls                        |
 
 <a id="effect-agent-workflow"></a>
 
@@ -357,16 +357,18 @@ for conditional document updates and terminal withdrawal. It initializes only me
 Use `memoryReaderLayer` when the application needs no writer. See
 [memory lifecycle](/guide/context-management/#memory-lifecycle).
 
-`activityProcessorStoreLayer` provides independent leases, prepared output, and per-Thread
-progress for finite committed-activity passes. Its tables and fencing epochs are separate from
-the Thread journal and submission ledger.
+`activityProcessorStoreLayer` retains prepared output and a cursor per processor/version/Thread
+for finite committed-activity passes. Sessions belong to Scope; live Layers share one native
+SQL client and local owner. Its fresh activity format is independent of the Thread journal and
+submission ledger, with no persisted ownership or lease.
 
 <a id="effect-agent-storage-postgres"></a>
 
 ### `@yielded/agent-storage-postgres`
 
-Stores thread history and pending work in one Postgres database, which several Node processes may
-share. Rejects incompatible stored versions; no migration path is promised.
+Stores thread history and pending work in one Postgres database. Route each Thread and activity
+consumer key to one process and share its SQL client across live Layers; there is no distributed
+ownership fallback. Rejects incompatible stored versions; no migration path is promised.
 Requires Postgres 16 or newer.
 
 `PostgresStorage.layer` provides `ThreadStore`, `ThreadReader`, `SubmissionLedger`, and

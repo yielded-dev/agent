@@ -5,6 +5,7 @@ import type {
   PostgresStorageInitializationError,
 } from "@yielded/agent-storage-postgres/postgres-storage-error";
 import type { ActivityMutationFailure, ActivityStoreError } from "@yielded/agent/activity-store";
+import type { StorageOwner } from "@yielded/agent/run-storage";
 import type { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import type { SubmissionLedger } from "@yielded/agent/submission-ledger";
 import type { ThreadImport } from "@yielded/agent/thread-import";
@@ -17,11 +18,13 @@ type Ledger = ReturnType<typeof PostgresStorage.submissionLedgerLayer>;
 
 expectTypeOf<Layer.Services<Persistence>>().toEqualTypeOf<SqlClient | Crypto.Crypto>();
 expectTypeOf<Layer.Success<Persistence>>().toEqualTypeOf<
-  ThreadStore | ThreadReader | ThreadImport | SubmissionLedger | SettlementPublisher
+  ThreadStore | ThreadReader | ThreadImport | SubmissionLedger | SettlementPublisher | StorageOwner
 >();
 expectTypeOf<Layer.Error<Persistence>>().toEqualTypeOf<PostgresStorageInitializationError>();
 expectTypeOf<Layer.Services<Ledger>>().toEqualTypeOf<SqlClient | Crypto.Crypto>();
-expectTypeOf<Layer.Success<Ledger>>().toEqualTypeOf<SubmissionLedger | SettlementPublisher>();
+expectTypeOf<Layer.Success<Ledger>>().toEqualTypeOf<
+  SubmissionLedger | SettlementPublisher | StorageOwner
+>();
 expectTypeOf<Layer.Error<Ledger>>().toEqualTypeOf<PostgresStorageInitializationError>();
 expectTypeOf<
   Layer.Services<ReturnType<typeof PostgresStorage.scheduleStoreLayer>>

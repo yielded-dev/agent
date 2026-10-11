@@ -3,6 +3,7 @@ import { Cause, Effect, Exit, Option, Schema } from "effect";
 
 import { DurableRuntimeFailpointLocation } from "./DurableFailpoint.ts";
 import { inspectForeignDiagnostic, safeUnknownString } from "./internal/foreign-diagnostic.ts";
+import type { StorageOwner } from "./RunStorage.ts";
 import type { SettlementPublisher } from "./SettlementPublisher.ts";
 import type { SubmissionLedger } from "./SubmissionLedger.ts";
 import { LedgerCapabilities } from "./SubmissionLedger.ts";
@@ -85,13 +86,6 @@ export class CertificationSweepResult extends Schema.Class<CertificationSweepRes
   /** The armed fault actually fired (one-shot) somewhere in the cell's drive or re-drive. */
   failpointFired: Schema.Boolean,
   status: CertificationSweepStatus,
-  /**
-   * Every lane's digest chain recomputed from `EMPTY_TAIL_DIGEST` and matched the exported
-   * tail — fully discharged here because the runner captures per-batch producer identity at
-   * append time (the port-only admin `verify` reports this check `skipped` instead).
-   * Unreached locations may share the scenario's clean-run verification.
-   */
-  digestChainVerified: Schema.Boolean,
   detail: Schema.optionalKey(BoundedCertificationDetail),
 }) {}
 
@@ -187,12 +181,12 @@ const caseResult = <A, E>(
  * captured per-case (never short-circuiting the sweep), so a certificate always reports the
  * complete contract surface. Requires the co-owned `SubmissionLedger`, `ThreadStore`, and
  * `SettlementPublisher` plus `Crypto.Crypto`, and must run under a TestClock (the ledger cases
- * drive lease expiry through virtual time).
+ * verify that elapsed time never replaces a live owner).
  */
 export const certifyPorts = Effect.fn("Thread.certifyPorts")(function* (): Effect.fn.Return<
   ReadonlyArray<CertificationCaseResult>,
   never,
-  SubmissionLedger | ThreadStore | SettlementPublisher | Crypto.Crypto
+  SubmissionLedger | ThreadStore | SettlementPublisher | StorageOwner | Crypto.Crypto
 > {
   const results: Array<CertificationCaseResult> = [];
 

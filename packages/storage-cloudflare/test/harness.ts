@@ -5,7 +5,6 @@ import {
   DefinitionDigests,
   DeploymentId,
   Digest,
-  ProducerEpoch,
   ProducerId,
   RecordEnvelope,
   SubmissionSettled,
@@ -26,10 +25,14 @@ import {
   submissionSettlementBatchId,
   submissionSettlementRecordId,
   type AdmissionResult,
-  type OwnershipToken,
   type ParentLinkage,
 } from "@yielded/agent/submission-ledger";
-import { ThreadStore, ThreadTailRequest, FencedAppendRequest } from "@yielded/agent/thread-store";
+import {
+  ThreadStore,
+  ThreadTailRequest,
+  ThreadMaterialization,
+  AppendRequest,
+} from "@yielded/agent/thread-store";
 import { env, runInDurableObject } from "cloudflare:test";
 import { DateTime, Effect, Schema } from "effect";
 import { TestClock } from "effect/testing";
@@ -54,8 +57,8 @@ export const scheduleStub = (name: string) => env.SCHEDULES.get(env.SCHEDULES.id
  * inside workerd. The 0.21.x pool shares Durable Object storage across tests within a run,
  * so callers mint a UNIQUE object name per test/case (mirroring how the SQLite suites mint a
  * temporary database file per case). A manual `TestClock.layer()` is provided at the root
- * so the shared conformance cases can drive lease expiry
- * through virtual time exactly as they do under `@effect/vitest`'s `it.effect` on Node.
+ * so the shared conformance cases can advance time while holding a local owner
+ * exactly as they do under `@effect/vitest`'s `it.effect` on Node.
  */
 export const withThreadStorage = <A, E>(
   name: string,
@@ -78,7 +81,6 @@ export const id = <A>(schema: Schema.Codec<A, string>, value: string): A =>
   Schema.decodeSync(schema)(value);
 
 export const thread = (value: string) => id(AdmissionRequest.fields.threadId, value);
-export const epoch = (value: number) => Schema.decodeSync(ProducerEpoch)(value);
 export const sequence = (value: number) => Schema.decodeSync(CanonicalSequence)(value);
 export const at = (millis: number) => DateTime.toUtc(DateTime.makeUnsafe(millis));
 export const toolCall = (value: string) => id(ApprovalDecisionCommand.fields.toolCallId, value);
@@ -119,7 +121,6 @@ export const admission = Effect.fn("DoLedgerTest.admission")(function* (
 
 export const settlementPublication = Effect.fn("DoLedgerTest.settlementPublication")(function* (
   admitted: AdmissionResult,
-  ownershipToken: OwnershipToken,
   outcome: SettlementOutcome,
 ) {
   const settlementId = submissionSettlementId(admitted.submissionId);
@@ -158,18 +159,19 @@ export const settlementPublication = Effect.fn("DoLedgerTest.settlementPublicati
   );
 
   const threadId = snapshot.submission.threadId;
+
+  yield* store.materialize(ThreadMaterialization.make({ threadId }));
   const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
   return {
     settlementId,
     request: SettlementPublication.make({
       submissionId: admitted.submissionId,
-      authority: { _tag: "Owned", ownershipToken },
-      append: FencedAppendRequest.make({
+      authority: { _tag: "Owned" },
+      append: AppendRequest.make({
         threadId,
-        producerEpoch: tail.producerEpoch,
         expectedTailSequence: tail.tailSequence,
-        expectedTailDigest: tail.tailDigest,
+
         batch: CanonicalBatch.make({
           producerId: TEST_PRODUCER,
           batchId: submissionSettlementBatchId(admitted.submissionId),

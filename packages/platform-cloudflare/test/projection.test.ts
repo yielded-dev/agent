@@ -1,6 +1,6 @@
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import type { Receipt } from "@yielded/agent/receipt";
-import { ProducerEpoch, type PersistedJson } from "@yielded/agent/records";
+import { type PersistedJson } from "@yielded/agent/records";
 import {
   AbortCommand,
   AbortIntentRequest,
@@ -12,7 +12,7 @@ import {
   type SettlementFinalization,
 } from "@yielded/agent/submission-ledger";
 import {
-  FencedAppendRequest,
+  AppendRequest,
   ThreadMaterialization,
   ThreadRead,
   ThreadStore,
@@ -137,16 +137,13 @@ const prepareAppend = (thread: string, count: number) =>
         const store = yield* ThreadStore;
         const threadId = decodeThreadId(thread);
 
-        yield* store.materialize(
-          ThreadMaterialization.make({ threadId, producerEpoch: ProducerEpoch.make(0) }),
-        );
+        yield* store.materialize(ThreadMaterialization.make({ threadId }));
         const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
-        return yield* Schema.decodeUnknownEffect(FencedAppendRequest)({
+        return yield* Schema.decodeUnknownEffect(AppendRequest)({
           threadId,
-          producerEpoch: tail.producerEpoch,
           expectedTailSequence: tail.tailSequence,
-          expectedTailDigest: tail.tailDigest,
+
           batch: {
             batchId: `projection-batch-${tail.tailSequence}`,
             producerId: "projection-test",
@@ -164,7 +161,7 @@ const prepareAppend = (thread: string, count: number) =>
     ),
   );
 
-const append = (thread: string, request: FencedAppendRequest) =>
+const append = (thread: string, request: AppendRequest) =>
   runInDurableObject(stub(thread), (instance) =>
     instance[DurableObject.RunSymbol](
       Effect.flatMap(ThreadStore, (store) => store.append(request)),
@@ -398,10 +395,22 @@ describe("live Thread projection and alarm backfill", () => {
             ),
           );
 
-          const completed = records.find(({ record }) => record.payload._tag === "RunCompleted")
-            ?.record.payload;
+          const settled = records.find(
+            ({ record }) =>
+              record.payload._tag === "SubmissionSettled" &&
+              record.payload.submissionId === state.settlement.submissionId,
+          )?.record.payload;
 
-          if (completed?._tag === "RunCompleted") published.push(completed.output);
+          if (
+            settled?._tag !== "SubmissionSettled" ||
+            settled.outcome !== "completed" ||
+            settled.result === undefined
+          )
+            return yield* DurableAlarmError.make({
+              operation: "fixture host control",
+              message: "Settled reply has no completed outcome",
+            });
+          published.push(settled.result);
         }).pipe(
           Effect.mapError((cause) =>
             DurableAlarmError.make({

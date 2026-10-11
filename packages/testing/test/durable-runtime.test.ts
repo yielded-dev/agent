@@ -32,15 +32,7 @@ import { ToolExecutionClass } from "@yielded/agent/durable-step";
 import type { SubmissionId } from "@yielded/agent/identifiers";
 import { ThreadId, ToolCallId } from "@yielded/agent/identifiers";
 import * as Output from "@yielded/agent/output";
-import {
-  CanonicalRecordEnvelope,
-  DefinitionDigests,
-  DeploymentId,
-  Digest,
-  ProducerId,
-  RecordEnvelope,
-  RunCompleted,
-} from "@yielded/agent/records";
+import { DefinitionDigests, DeploymentId, Digest, ProducerId } from "@yielded/agent/records";
 import {
   projectRunJournal,
   promptFromCanonicalRecords,
@@ -257,7 +249,6 @@ const configLayer = DurableRuntimeConfig.layer({
   deploymentId: Schema.decodeSync(DeploymentId)("deployment-durable"),
   producerId: Schema.decodeSync(ProducerId)("producer-durable"),
   settlementPollInterval: Duration.millis(100),
-  leaseRenewalInterval: Duration.seconds(5),
   abortPollInterval: Duration.millis(100),
 });
 
@@ -273,62 +264,6 @@ const baseLayer = Layer.mergeAll(
 const testLayer = DurableAgentRuntime.layer
   .pipe(Layer.provide(runStorageLayer()))
   .pipe(Layer.provideMerge(baseLayer));
-
-const AnswerCompletionOutput = Schema.Struct({ answer: Schema.String });
-
-const isAnswerCompletionOutput = Schema.is(AnswerCompletionOutput);
-
-const corruptCompletionOutput = (output: Schema.Json): Schema.Json => {
-  if (isAnswerCompletionOutput(output)) return { answer: "hostile replacement" };
-
-  return output;
-};
-
-const corruptCompletionEnvelope = (envelope: CanonicalRecordEnvelope): CanonicalRecordEnvelope => {
-  const payload = envelope.record.payload;
-
-  if (payload._tag !== "RunCompleted") return envelope;
-
-  return CanonicalRecordEnvelope.make({
-    ...envelope,
-    record: RecordEnvelope.make({
-      ...envelope.record,
-      payload: RunCompleted.make({
-        ...payload,
-        output: corruptCompletionOutput(payload.output),
-        ...(payload.runDisposition === undefined ? {} : { runDisposition: payload.runDisposition }),
-        ...(payload.finishReason === undefined ? {} : { finishReason: payload.finishReason }),
-        ...(payload.exhausted === undefined ? {} : { exhausted: payload.exhausted }),
-      }),
-    }),
-  });
-};
-
-const corruptedCompletionStoreLayer = Layer.effect(
-  ThreadStore,
-  Effect.gen(function* () {
-    const inner = yield* ThreadStore;
-
-    return ThreadStore.of({
-      ...inner,
-      read: (request) => inner.read(request).pipe(Stream.map(corruptCompletionEnvelope)),
-    });
-  }),
-).pipe(
-  Layer.provideMerge(MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive))),
-);
-
-const corruptedCompletionBaseLayer = Layer.mergeAll(
-  corruptedCompletionStoreLayer,
-  WakeScheduler.layerNoop,
-  DurableRuntimeFailpointTestControl.layer,
-  ToolReconciler.uncertain,
-  configLayer,
-).pipe(Layer.provideMerge(NodeCrypto.layer));
-
-const corruptedCompletionTestLayer = DurableAgentRuntime.layer
-  .pipe(Layer.provide(runStorageLayer()))
-  .pipe(Layer.provideMerge(corruptedCompletionBaseLayer));
 
 class ProgressWaitTestControl extends Context.Service<
   ProgressWaitTestControl,
@@ -885,6 +820,19 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
 
         expect(scripted.prompts[index]!.content.slice(0, previous.length)).toEqual(previous);
       }
+
+      const retained = yield* readLog(threadId);
+
+      expect(
+        retained.filter(({ record }) =>
+          ["RunContinuation", "RunStarted", "RunContextRecorded", "RunCompleted"].includes(
+            record.payload._tag,
+          ),
+        ),
+      ).toEqual([]);
+      expect(
+        retained.filter(({ record }) => record.payload._tag === "SubmissionSettled"),
+      ).toHaveLength(3);
     }),
   );
 
@@ -993,7 +941,7 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
         1,
       );
       expect(payloads.filter((payload) => payload._tag === "ToolCallSettled")).toHaveLength(1);
-      expect(payloads.filter((payload) => payload._tag === "RunCompleted")).toHaveLength(1);
+      expect(payloads.filter((payload) => payload._tag === "RunCompleted")).toHaveLength(0);
       expect(payloads.filter((payload) => payload._tag === "SubmissionSettled")).toHaveLength(1);
       expect(payloads.findLast((payload) => payload._tag === "SubmissionSettled")).toMatchObject({
         _tag: "SubmissionSettled",
@@ -1090,7 +1038,7 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
           records.filter(({ record }) => record.payload._tag === "ToolCallSettled"),
         ).toHaveLength(1);
         expect(records.filter(({ record }) => record.payload._tag === "RunCompleted")).toHaveLength(
-          1,
+          0,
         );
         expect(
           records.findLast(({ record }) => record.payload._tag === "SubmissionSettled")?.record
@@ -1285,7 +1233,7 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
           expect(correctionPrompt).toContain("premature-0");
           const after = (yield* readLog(thread)).map((envelope) => envelope.record.payload);
 
-          expect(after.filter((payload) => payload._tag === "RunCompleted")).toHaveLength(1);
+          expect(after.filter((payload) => payload._tag === "RunCompleted")).toHaveLength(0);
           expect(after.filter((payload) => payload._tag === "SubmissionSettled")).toHaveLength(1);
           expect(after.filter((payload) => payload._tag === "ModelResponseRecorded")).toHaveLength(
             3,
@@ -1296,53 +1244,6 @@ layer(testLayer)("DUR P4 DurableAgentRuntime", (it) => {
         }),
     );
   }
-});
-
-layer(corruptedCompletionTestLayer)("RUN-032 recovered completion validation", (it) => {
-  it.effect("rejects a recovered receipt completion that disagrees with the canonical result", () =>
-    Effect.gen(function* () {
-      const runtime = yield* DurableAgentRuntime;
-      const { definition, tools } = makeReceiptCompletionFixture();
-      const scripted = yield* makeScriptedModel(() => receiptCreateParts);
-      const createCalls = yield* Ref.make(0);
-      const respondCalls = yield* Ref.make(0);
-
-      const toolLayer = tools.toLayer({
-        create: () =>
-          Ref.update(createCalls, (count) => count + 1).pipe(
-            Effect.as({ name: "Canonical name", href: "/projects/canonical-1", complete: true }),
-          ),
-        respond: (parameters) =>
-          Ref.update(respondCalls, (count) => count + 1).pipe(Effect.as(parameters)),
-      });
-
-      const agent = Agent.withModel(definition, scripted.model);
-      const thread = "thread-hostile-receipt-completion";
-
-      yield* runtime.submit(
-        agent,
-        { question: "Create a project." },
-        submitOptions(thread, "hostile-receipt-completion-1"),
-      );
-      yield* armFailpoint("terminalize:before-publication");
-
-      const crashed = yield* Effect.exit(
-        runtime.processThread(agent, decodeThreadId(thread)).pipe(Effect.provide(toolLayer)),
-      );
-
-      expect(failureTag(crashed)).toBe("DurableRuntimeFailpointError");
-      yield* clearFailpoint;
-
-      const recovered = yield* Effect.exit(
-        runtime.processThread(agent, decodeThreadId(thread)).pipe(Effect.provide(toolLayer)),
-      );
-
-      expect(failureTag(recovered)).toBe("ThreadStoreError");
-      expect(yield* Ref.get(createCalls)).toBe(1);
-      expect(yield* Ref.get(respondCalls)).toBe(0);
-      expect(scripted.prompts).toHaveLength(1);
-    }),
-  );
 });
 
 layer(testLayer)("RUN-026 durable compaction and usage re-seed", (it) => {
@@ -2146,14 +2047,25 @@ layer(testLayer)("RUN-030 durable execution duration", (it) => {
               RecoverySnapshotRequest.make({ submissionId: receipt.submissionId }),
             );
 
-            expect(pending.ownership).toBeUndefined();
+            expect(pending.hasOwner).toBe(false);
             expect(pending.submission.state).not.toBe("settled");
             const before = yield* readLog(thread);
 
             expect(
               before.filter(({ record }) => record.payload._tag === "ToolCallSettled"),
             ).toHaveLength(1);
-            const start = before.find(({ record }) => record.payload._tag === "RunStarted");
+            const store = yield* ThreadStore;
+
+            const active = yield* store.readExecution({
+              threadId: receipt.threadId,
+              runId: runIdForSubmission(receipt.submissionId),
+            });
+
+            expect(Option.isSome(active)).toBe(true);
+            expect(
+              Option.isSome(active) &&
+                active.value.operational.some(({ payload }) => payload._tag === "RunStarted"),
+            ).toBe(true);
 
             yield* TestClock.adjust(Duration.seconds(30));
             const second = yield* runtime.processThreadHead(receipt.threadId);
@@ -2165,9 +2077,15 @@ layer(testLayer)("RUN-030 durable execution duration", (it) => {
             expect(yield* Ref.get(toolCalls)).toBe(1);
             const after = yield* readLog(thread);
 
-            expect(after.filter(({ record }) => record.payload._tag === "RunStarted")).toEqual([
-              start,
-            ]);
+            expect(after.filter(({ record }) => record.payload._tag === "RunStarted")).toEqual([]);
+            expect(
+              Option.isNone(
+                yield* store.readExecution({
+                  threadId: receipt.threadId,
+                  runId: runIdForSubmission(receipt.submissionId),
+                }),
+              ),
+            ).toBe(true);
             expect(
               after.flatMap(({ record }) =>
                 record.payload._tag === "ModelResponseRecorded"
@@ -2323,7 +2241,7 @@ layer(testLayer)("deployment continuity", (it) => {
           RecoverySnapshotRequest.make({ submissionId: later.submissionId }),
         );
 
-        expect(ownerBefore.ownership).toBeDefined();
+        expect(ownerBefore.hasOwner).toBe(true);
         const explanation = yield* runtime.explain(original.submissionId);
 
         expect({
@@ -2355,8 +2273,8 @@ layer(testLayer)("deployment continuity", (it) => {
         expect(
           (yield* ledger.loadRecoverySnapshot(
             RecoverySnapshotRequest.make({ submissionId: later.submissionId }),
-          )).ownership,
-        ).toEqual(ownerBefore.ownership);
+          )).hasOwner,
+        ).toBe(true);
         expect(yield* lookupState(original.submissionId)).toBe("unknown");
         yield* Deferred.succeed(release, undefined);
         const completed = yield* Fiber.join(worker);
@@ -2862,7 +2780,7 @@ layer(testLayer)("independent input scheduling", (it) => {
             ).toEqual([first.submissionId, second.submissionId, third.submissionId]);
             expect(
               records.filter(({ record }) => record.payload._tag === "RunStarted"),
-            ).toHaveLength(3);
+            ).toHaveLength(0);
             expect(
               records.filter(({ record }) => record.payload._tag === "SubmissionSettled"),
             ).toHaveLength(3);
@@ -2875,7 +2793,7 @@ layer(testLayer)("independent input scheduling", (it) => {
                 RecoverySnapshotRequest.make({ submissionId: receipt.submissionId }),
               );
 
-              expect(snapshot.ownership).toBeUndefined();
+              expect(snapshot.hasOwner).toBe(false);
               expect(snapshot.submission.receiptId).toBe(receipt.receiptId);
               expect(snapshot.submission.state).toBe("settled");
               expect(snapshot.submission.principal).toBe(
@@ -2889,11 +2807,11 @@ layer(testLayer)("independent input scheduling", (it) => {
               if (settled.outcome === "completed") {
                 const completion = records.find(
                   ({ record }) =>
-                    record.payload._tag === "RunCompleted" &&
+                    record.payload._tag === "SubmissionSettled" &&
                     record.payload.runId === runIdForSubmission(receipt.submissionId),
                 );
 
-                expect(completion?.record.payload).toMatchObject({ output: { answer: question } });
+                expect(completion?.record.payload).toMatchObject({ result: { answer: question } });
               }
             }
 

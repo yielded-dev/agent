@@ -6,10 +6,18 @@ import { NodeDurableHost } from "@yielded/agent-platform-node/node-durable-host"
 import * as SqliteThreadStore from "@yielded/agent-storage-sqlite/sqlite-thread-store";
 import * as Agent from "@yielded/agent/agent";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
-import { CanonicalRecordEnvelope } from "@yielded/agent/records";
+import { Receipt } from "@yielded/agent/receipt";
+import { CanonicalRecordEnvelope, CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { ThreadArchive, ThreadImport } from "@yielded/agent/thread-import";
-import { ThreadExport, ThreadExportRequest, streamExport } from "@yielded/agent/thread-store";
-import { Effect, FileSystem, Layer, Schema, Stream } from "effect";
+import {
+  ThreadExport,
+  ThreadExportRequest,
+  ThreadTailRequest,
+  ThreadStore,
+  streamExport,
+} from "@yielded/agent/thread-store";
+import { Effect, FileSystem, Layer, Option, Result, Schema, Stream } from "effect";
 import { LanguageModel, Model, type Prompt } from "effect/ai";
 
 import {
@@ -20,11 +28,11 @@ import {
   checkpointDefinition,
   checkpointParts,
   decodeThreadId,
+  crashSubmitOptions,
   makeCheckpointToolLayer,
   supplierCounts,
 } from "./fixtures.ts";
 import {
-  CHILD_LEASE_MS,
   assertConvergence,
   expectKilled,
   lookupByKey,
@@ -38,17 +46,6 @@ const openDatabase = (filename: string) =>
   Effect.acquireRelease(
     Effect.sync(() => new DatabaseSync(filename)),
     (db) => Effect.sync(() => db.close()),
-  );
-
-const derivativeCounts = (db: DatabaseSync) =>
-  Schema.decodeUnknownSync(Schema.Struct({ ownership: Schema.Int, attempts: Schema.Int }))(
-    db
-      .prepare(
-        `SELECT
-          (SELECT COUNT(*) FROM effect_agent_submission_ownership) AS ownership,
-          (SELECT COUNT(*) FROM effect_agent_attempts) AS attempts`,
-      )
-      .get(),
   );
 
 // This process-loss fixture is small; bound its comparison buffers independently of the
@@ -81,25 +78,18 @@ const exportFixture = Effect.fnUntraced(function* (filename: string, request: Th
 });
 
 const comparablePage = Effect.fnUntraced(function* (page: ThreadExport) {
-  const {
-    snapshotId: _,
-    cursor: __,
-    snapshot,
-    ...facts
-  } = yield* Schema.encodeEffect(ThreadExport)(page);
+  const { cursor: _, ...facts } = yield* Schema.encodeEffect(ThreadExport)(page);
 
-  const { revision: ___, ...counts } = snapshot;
-
-  return { ...facts, snapshot: counts };
+  return facts;
 });
 
-// A real current-format worker loses its process after canonical compaction. Transfer must
-// discard execution authority while preserving original input, context, progress and admissions.
+// Lose a real process after compaction. Active work stays on its original owner;
+// only completed history and durable receipt identities move to a fresh store.
 layer(NodeFileSystem.layer, { excludeTestServices: true })(
   "Thread transfer after process loss",
   (it) => {
     it.effect(
-      "exports current canonical progress, imports a fresh store, and resumes the original Run",
+      "refuses active transfer, recovers the source, and moves its idle history and receipts",
       () =>
         withCrashSite((site) =>
           Effect.gen(function* () {
@@ -114,7 +104,6 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               thread: "checkpoint-crash",
               key: "checkpoint-crash",
               supplierDir: site.supplier,
-              leaseMillis: CHILD_LEASE_MS,
               killAt: "compaction:after-canonical-append",
             });
 
@@ -123,52 +112,48 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
               Effect.gen(function* () {
                 const db = yield* openDatabase(site.db);
 
-                expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 21 });
+                expect(db.prepare("SELECT record_format FROM effect_agent_schema").get()).toEqual({
+                  record_format: CURRENT_RECORD_FORMAT,
+                });
                 expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
-                expect(derivativeCounts(db)).toEqual({ ownership: 1, attempts: 1 });
               }),
             );
             const sourceBytes = yield* fs.readFile(site.db);
-            const pages = yield* exportFixture(site.db, request);
-            const exported = pages[0]?.page;
+            const refused = yield* Effect.result(exportFixture(site.db, request));
 
-            if (exported === undefined) return yield* Effect.die("Missing transfer fixture page");
-            const sourceRecords = pages.flatMap(({ page }) => page.records);
-
-            expect(
-              sourceRecords.some(({ record }) => record.payload._tag === "RunContinuation"),
-            ).toBe(true);
-
-            const imported = yield* Effect.gen(function* () {
-              const importer = yield* ThreadImport;
-
-              return yield* importer.import(
-                Stream.fromIterable(pages.map(({ archive }) => archive)),
-              );
-            }).pipe(Effect.provide(SqliteThreadStore.layer({ filename: target })));
-
-            expect(imported.tailSequence).toBe(exported.tailSequence);
-            expect(imported.tailDigest).toBe(exported.tailDigest);
             expect(yield* fs.readFile(site.db)).toEqual(sourceBytes);
-            const restored = yield* exportFixture(target, request);
+            expect(yield* fs.exists(target)).toBe(false);
+            expect(Result.isFailure(refused)).toBe(true);
+            if (Result.isFailure(refused))
+              expect(refused.failure).toMatchObject({
+                _tag: "ThreadExportRejected",
+                reason: "non-idle",
+              });
 
-            expect(yield* Effect.forEach(restored, ({ page }) => comparablePage(page))).toEqual(
-              yield* Effect.forEach(pages, ({ page }) => comparablePage(page)),
-            );
-            yield* Effect.scoped(
-              Effect.gen(function* () {
-                const db = yield* openDatabase(target);
-
-                expect(derivativeCounts(db)).toEqual({ ownership: 0, attempts: 0 });
-              }),
-            );
-
-            yield* withHost(
-              target,
+            const resumed = yield* withHost(
+              site.db,
               Effect.gen(function* () {
                 const host = yield* NodeDurableHost;
                 const runtime = yield* DurableAgentRuntime;
                 const submission = yield* lookupByKey("checkpoint-crash", "checkpoint-crash");
+                const store = yield* ThreadStore;
+
+                const execution = Option.getOrThrow(
+                  yield* store.readExecution({
+                    threadId,
+                    runId: runIdForSubmission(submission.submissionId),
+                  }),
+                );
+
+                const sourceRecords = yield* readLog("checkpoint-crash");
+
+                expect(
+                  execution.operational.filter(({ payload }) => payload._tag === "RunStarted"),
+                ).toHaveLength(1);
+                expect(execution.progress.savedContext).toBeDefined();
+                if (store.verification === undefined)
+                  return yield* Effect.die("Native source verification is unavailable");
+                expect((yield* store.verification.verify({ threadId })).ok).toBe(true);
 
                 expect(submission.state).toBe("input-applied");
                 expect(
@@ -218,17 +203,135 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
                   yield* encode(sourceRecords),
                 );
                 expect(
-                  records.filter(({ record }) => record.payload._tag === "RunStarted"),
+                  records.filter(
+                    ({ record }) =>
+                      record.payload._tag === "UserInputRecorded" &&
+                      record.payload.kind === "user" &&
+                      record.payload.runId === execution.progress.runId,
+                  ),
                 ).toHaveLength(1);
+                expect(
+                  records.filter(({ record }) =>
+                    [
+                      "RunStarted",
+                      "RunContextRecorded",
+                      "RunCompleted",
+                      "RunContinuation",
+                    ].includes(record.payload._tag),
+                  ),
+                ).toEqual([]);
+                expect(
+                  Option.isNone(
+                    yield* store.readExecution({ threadId, runId: execution.progress.runId }),
+                  ),
+                ).toBe(true);
                 expect(supplierCounts(site.supplier)).toEqual({
                   "checkpoint-read:checkpoint-read-1": 1,
                   "checkpoint-read:checkpoint-read-2": 1,
                   "checkpoint-read:checkpoint-read-3": 1,
                 });
                 yield* assertConvergence("checkpoint-crash", [submission.submissionId]);
+
+                const receipt = Receipt.make({
+                  threadId,
+                  submissionId: submission.submissionId,
+                  receiptId: submission.receiptId,
+                  queueSequence: submission.queueSequence,
+                });
+
+                return { receipt, status: yield* runtime.submissionStatus(receipt) };
               }),
               { runContext: checkpointContextLayer },
             );
+
+            const settledSourceBytes = yield* fs.readFile(site.db);
+            const pages = yield* exportFixture(site.db, request);
+            const exported = pages[0]?.page;
+
+            if (exported === undefined) return yield* Effect.die("Missing idle snapshot");
+            expect(yield* fs.readFile(site.db)).toEqual(settledSourceBytes);
+            expect(pages.length).toBeGreaterThan(1);
+
+            // Truncation must leave no partially published Thread in the destination.
+            yield* Effect.gen(function* () {
+              const importer = yield* ThreadImport;
+              const store = yield* ThreadStore;
+
+              const rejected = yield* Effect.result(
+                importer.import(
+                  Stream.fromIterable(pages.slice(0, -1).map(({ archive }) => archive)),
+                ),
+              );
+
+              expect(Result.isFailure(rejected)).toBe(true);
+              if (Result.isFailure(rejected))
+                expect(rejected.failure).toMatchObject({ _tag: "ThreadImportRejected" });
+
+              const tail = yield* Effect.result(
+                store.inspectTail(ThreadTailRequest.make({ threadId })),
+              );
+
+              expect(Result.isFailure(tail)).toBe(true);
+              if (Result.isFailure(tail))
+                expect(tail.failure).toMatchObject({ _tag: "ThreadNotMaterialized" });
+            }).pipe(Effect.provide(SqliteThreadStore.layer({ filename: target })));
+
+            const imported = yield* Effect.gen(function* () {
+              const importer = yield* ThreadImport;
+
+              return yield* importer.import(
+                Stream.fromIterable(pages.map(({ archive }) => archive)),
+              );
+            }).pipe(Effect.provide(SqliteThreadStore.layer({ filename: target })));
+
+            expect(imported.tailSequence).toBe(exported.tailSequence);
+            const restored = yield* exportFixture(target, request);
+
+            expect(yield* Effect.forEach(restored, ({ page }) => comparablePage(page))).toEqual(
+              yield* Effect.forEach(pages, ({ page }) => comparablePage(page)),
+            );
+
+            yield* withHost(
+              target,
+              Effect.gen(function* () {
+                const runtime = yield* DurableAgentRuntime;
+
+                const model = Model.make(
+                  "scripted",
+                  "idle-transfer",
+                  Layer.effect(
+                    LanguageModel.LanguageModel,
+                    LanguageModel.make({
+                      generateText: () => Effect.die("Idle import dispatched a model"),
+                      streamText: () => Stream.die("Idle import dispatched a model"),
+                    }),
+                  ),
+                );
+
+                const definition = Agent.withModel(checkpointDefinition, model);
+
+                const replayed = yield* runtime.submit(
+                  definition,
+                  { question: CRASH_QUESTION },
+                  crashSubmitOptions("checkpoint-crash", "checkpoint-crash"),
+                );
+
+                expect(replayed).toEqual(resumed.receipt);
+                expect(yield* runtime.submissionStatus(resumed.receipt)).toEqual(resumed.status);
+                expect(
+                  yield* runtime
+                    .processThread(definition, threadId)
+                    .pipe(Effect.provide(makeCheckpointToolLayer(site.supplier))),
+                ).toEqual([]);
+                yield* assertConvergence("checkpoint-crash", [resumed.receipt.submissionId]);
+              }),
+              { runContext: checkpointContextLayer },
+            );
+            expect(supplierCounts(site.supplier)).toEqual({
+              "checkpoint-read:checkpoint-read-1": 1,
+              "checkpoint-read:checkpoint-read-2": 1,
+              "checkpoint-read:checkpoint-read-3": 1,
+            });
           }),
         ),
       30_000,

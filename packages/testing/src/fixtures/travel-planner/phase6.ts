@@ -806,7 +806,6 @@ export const phase6TravelPlannerGoldenEvidence: Schema.Json = [
             },
           ],
         },
-        messagesDigest: "{digest}",
       },
     },
   },
@@ -925,7 +924,6 @@ export const phase6TravelPlannerGoldenEvidence: Schema.Json = [
             },
           ],
         },
-        messagesDigest: "{digest}",
       },
     },
   },
@@ -940,7 +938,7 @@ export const phase6TravelPlannerGoldenEvidence: Schema.Json = [
       deploymentId: "{deploymentId}",
       payload: {
         _tag: "RunCompleted",
-        resultDigest: "{digest}",
+
         runId: "run:{submissionId}",
         output: {
           itineraries: [

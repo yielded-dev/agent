@@ -25,11 +25,12 @@ import {
   AppendConflict,
   ThreadMaterialization,
   ThreadNotMaterialized,
+  ThreadExportRejected,
   ThreadStore,
   ThreadReader,
   ThreadStoreError,
-  FenceRejected,
 } from "@yielded/agent/thread-store";
+import { checkExportSource } from "@yielded/agent/thread-transfer";
 import { WorkDiscoveryUnavailable } from "@yielded/agent/thread-work";
 import type { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import {
@@ -96,6 +97,8 @@ import {
   StoreVerificationResult,
   StoreReadIdentityCall,
   StoreReadIdentityResult,
+  StoreReadExecutionCall,
+  StoreReadExecutionResult,
   StoreMaterializeCall,
   StoreMaterializeResult,
   StoreReadPageCall,
@@ -300,7 +303,7 @@ export const makeLocalSubmissionLookup = (
 
 const NoAdditionalPortFailure = Schema.Never;
 const AbortPortFailure = Schema.Union([SettlementConflict, JoinedToHost]);
-const AppendPortFailure = Schema.Union([ThreadNotMaterialized, AppendConflict, FenceRejected]);
+const AppendPortFailure = Schema.Union([ThreadNotMaterialized, AppendConflict, OwnershipLost]);
 
 /**
  * The fail-fast refusal for any foreign operation OUTSIDE the closed route-capable subset
@@ -717,33 +720,15 @@ const makeRoutedLedgerServices = Effect.fnUntraced(function* (options: RoutedPor
 
     // Every operation below is lane-local by construction (plan §1.3): a foreign address is
     // an out-of-contract call and fails fast typed instead of being quietly distributed.
-    claim: (request) =>
+    selectHead: (request) =>
       options.ownsThread(request.threadId)
-        ? local.claim(request)
+        ? local.selectHead(request)
         : Effect.fail(crossThreadLedgerError("ledger claim", request.threadId)),
 
     claimJoining: (request) =>
       options.ownsThread(request.threadId)
         ? local.claimJoining(request)
         : Effect.fail(crossThreadLedgerError("ledger claim joining", request.threadId)),
-
-    renewOwnership: (request) =>
-      submissionTarget("ledger renew ownership", request.submissionId).pipe(
-        Effect.flatMap((target) =>
-          target._tag === "local"
-            ? local.renewOwnership(request)
-            : Effect.fail(crossThreadLedgerError("ledger renew ownership", target.threadId)),
-        ),
-      ),
-
-    releaseOwnership: (request) =>
-      submissionTarget("ledger release ownership", request.submissionId).pipe(
-        Effect.flatMap((target) =>
-          target._tag === "local"
-            ? local.releaseOwnership(request)
-            : Effect.fail(crossThreadLedgerError("ledger release ownership", target.threadId)),
-        ),
-      ),
 
     markInputApplied: (request) =>
       submissionTarget("ledger mark input applied", request.submissionId).pipe(
@@ -877,7 +862,6 @@ export const routedSettlementPublisherLayer = (options: RoutedPortOptions) =>
           ThreadStoreError,
           ThreadNotMaterialized,
           AppendConflict,
-          FenceRejected,
         ]),
       );
 
@@ -1001,6 +985,16 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
   };
 
   const routed = ThreadStore.of({
+    readExecution: (request) =>
+      options.ownsThread(request.threadId)
+        ? local.readExecution(request)
+        : foreignStoreCall(
+            "read execution",
+            request.threadId,
+            StoreReadExecutionCall.make({ request }),
+            StoreReadExecutionResult,
+            ThreadNotMaterialized,
+          ).pipe(Effect.map((reply) => reply.checkpoint)),
     archives: {
       page: (request) =>
         options.ownsThread(request.threadId)
@@ -1024,7 +1018,7 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
               request.threadId,
               StoreRangeSealCall.make({ request }),
               StoreRangeSealResult,
-              Schema.Union([ThreadNotMaterialized, FenceRejected]),
+              ThreadNotMaterialized,
             ).pipe(Effect.map((reply) => reply.range)),
       archive: (request) =>
         options.ownsThread(request.threadId)
@@ -1036,7 +1030,7 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
               request.threadId,
               StoreRangeArchiveCall.make({ request }),
               StoreRangeArchiveResult,
-              Schema.Union([ThreadNotMaterialized, FenceRejected]),
+              ThreadNotMaterialized,
             ).pipe(Effect.map((reply) => reply.range)),
       verify: (request) =>
         options.ownsThread(request.threadId)
@@ -1127,8 +1121,7 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
         Effect.filterOrFail(
           (capacity) =>
             capacity.threadId === request.threadId &&
-            capacity.tailSequence === request.expectedTailSequence &&
-            capacity.tailDigest === request.expectedTailDigest,
+            capacity.tailSequence === request.expectedTailSequence,
           () => crossThreadStoreError("worker capacity response mismatch", request.threadId),
         ),
       ),
@@ -1168,7 +1161,7 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
             request.threadId,
             StoreMaterializeCall.make({ request }),
             StoreMaterializeResult,
-            FenceRejected,
+            NoAdditionalPortFailure,
           ).pipe(Effect.asVoid),
 
     append: (request) =>
@@ -1242,15 +1235,19 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
           ),
 
     export: (request) =>
-      options.ownsThread(request.threadId)
-        ? local.export(request)
-        : foreignStoreCall(
-            "thread export",
-            request.threadId,
-            StoreExportCall.make({ request }),
-            StoreExportResult,
-            ThreadNotMaterialized,
-          ).pipe(Effect.map((reply) => reply.export)),
+      checkExportSource(request.threadId).pipe(
+        Effect.andThen(
+          options.ownsThread(request.threadId)
+            ? local.export(request)
+            : foreignStoreCall(
+                "thread export",
+                request.threadId,
+                StoreExportCall.make({ request }),
+                StoreExportResult,
+                Schema.Union([ThreadNotMaterialized, ThreadExportRejected]),
+              ).pipe(Effect.map((reply) => reply.export)),
+        ),
+      ),
 
     // Observation and checkpoints are lane-local: the closed route-capable store subset
     // includes exact-Thread work pages and rebuild, but no global Object enumeration.
@@ -1778,6 +1775,15 @@ export const executePortRequest = Effect.fnUntraced(function* (
         store
           .inspectTail(request.request)
           .pipe(Effect.map((tail) => StoreInspectTailResult.make({ tail }))),
+      );
+    }
+    case "StoreReadExecution": {
+      const store = yield* ThreadStore;
+
+      return yield* capture(
+        store
+          .readExecution(request.request)
+          .pipe(Effect.map((checkpoint) => StoreReadExecutionResult.make({ checkpoint }))),
       );
     }
     case "StoreReadIdentity": {

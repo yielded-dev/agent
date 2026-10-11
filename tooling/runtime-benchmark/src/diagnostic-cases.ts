@@ -66,18 +66,11 @@ export const ledgerCases: ReadonlyArray<DiagnosticCase> = [
     parameters: { mode: 0, settled: 0, unfinished: 768 },
   },
   { name: "ledger-finalize-active", family: "ledger", parameters: { mode: 1, repeats: 1 } },
-  ...[2, 3].flatMap((mode) => [
-    {
-      name: `ledger-${mode === 2 ? "replay" : "status"}-repeat-${mode === 2 ? 32 : 16}`,
-      family: "ledger" as const,
-      parameters: { mode, repeats: mode === 2 ? 32 : 16, holdMs: -1 },
-    },
-    ...[0, 25, 100].map((holdMs) => ({
-      name: `ledger-${mode === 2 ? "replay" : "status"}-writer-${holdMs}`,
-      family: "ledger" as const,
-      parameters: { mode, repeats: 1, holdMs },
-    })),
-  ]),
+  ...[2, 3].map((mode) => ({
+    name: `ledger-${mode === 2 ? "replay" : "status"}-repeat-${mode === 2 ? 32 : 16}`,
+    family: "ledger" as const,
+    parameters: { mode, repeats: mode === 2 ? 32 : 16 },
+  })),
 ];
 
 export const fairnessCases: ReadonlyArray<DiagnosticCase> = [1, 2, 4].flatMap((workerConcurrency) =>

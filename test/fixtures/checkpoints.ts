@@ -1,6 +1,6 @@
-import { digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { digestJson } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
-import { CanonicalBatch, CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
+import { CanonicalBatch, CanonicalSequence, Digest } from "@yielded/agent/records";
 import { AdmissionRequest, SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import {
@@ -13,7 +13,7 @@ import {
   ThreadMaterialization,
   ThreadRead,
   ThreadStore,
-  FencedAppendRequest,
+  AppendRequest,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
 } from "@yielded/agent/thread-store";
@@ -23,11 +23,11 @@ import { expect } from "vite-plus/test";
 
 // Frozen bytes with required compatibility metadata, independent of the current encoder.
 export const historicalCheckpointJson =
-  '{"schemaVersion":1,"threadId":"checkpoint-history","throughSequence":0,"tailDigest":"0000000000000000000000000000000000000000000000000000000000000000","engineVersion":"historical-engine","agentDefinitionDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","modelDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","toolDigest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state":{"historical":true},"createdAt":"2026-09-01T00:00:00.000Z"}';
+  '{"schemaVersion":1,"threadId":"checkpoint-history","throughSequence":0,"engineVersion":"historical-engine","agentDefinitionDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","modelDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","toolDigest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","state":{"historical":true},"createdAt":"2026-09-01T00:00:00.000Z"}';
 
 const threadId = Schema.decodeSync(ThreadId)("checkpoint-history");
 const zero = Schema.decodeSync(CanonicalSequence)(0);
-const epoch = Schema.decodeSync(ProducerEpoch)(1);
+const definitionDigest = Digest.make("0".repeat(64));
 
 export const seedCheckpoint = Effect.fn("CheckpointFixture.seed")(function* (historical: boolean) {
   const store = yield* ThreadStore;
@@ -37,7 +37,7 @@ export const seedCheckpoint = Effect.fn("CheckpointFixture.seed")(function* (his
   expect(checkpoints).toBeDefined();
   if (checkpoints === undefined) return;
 
-  yield* store.materialize(ThreadMaterialization.make({ threadId, producerEpoch: epoch }));
+  yield* store.materialize(ThreadMaterialization.make({ threadId }));
   const ledger = yield* SubmissionLedger;
 
   const pending = yield* Schema.decodeEffect(AdmissionRequest)({
@@ -46,13 +46,13 @@ export const seedCheckpoint = Effect.fn("CheckpointFixture.seed")(function* (his
     idempotencyKey: "checkpoint-pending",
     agentId: "checkpoint-agent",
     deploymentId: "checkpoint-deployment",
-    agentDigests: { agent: EMPTY_TAIL_DIGEST, model: EMPTY_TAIL_DIGEST, tools: EMPTY_TAIL_DIGEST },
+    agentDigests: { agent: definitionDigest, model: definitionDigest, tools: definitionDigest },
     inputPayload: "pending input",
     inputDigest: yield* digestJson("pending input"),
   });
 
   yield* ledger.admit(pending);
-  let tail = { lastSequence: zero, tailDigest: EMPTY_TAIL_DIGEST };
+  let tail = { lastSequence: zero };
 
   for (const index of [1, 2]) {
     const batch = yield* Schema.decodeEffect(CanonicalBatch)({
@@ -76,12 +76,10 @@ export const seedCheckpoint = Effect.fn("CheckpointFixture.seed")(function* (his
     });
 
     tail = yield* store.append(
-      FencedAppendRequest.make({
+      AppendRequest.make({
         threadId,
         batch,
         expectedTailSequence: tail.lastSequence,
-        expectedTailDigest: tail.tailDigest,
-        producerEpoch: epoch,
       }),
     );
     if (index === 1 && !historical) {
@@ -93,10 +91,7 @@ export const seedCheckpoint = Effect.fn("CheckpointFixture.seed")(function* (his
         schemaVersion: 1,
         threadId,
         throughSequence: tail.lastSequence,
-        tailDigest: tail.tailDigest,
-        state: yield* Schema.encodeEffect(ThreadProjection)(
-          replayThread(threadId, records, tail.tailDigest),
-        ),
+        state: yield* Schema.encodeEffect(ThreadProjection)(replayThread(threadId, records)),
         createdAt: DateTime.makeUnsafe("2026-09-01T00:00:00.000Z"),
       });
 
@@ -104,8 +99,8 @@ export const seedCheckpoint = Effect.fn("CheckpointFixture.seed")(function* (his
     }
   }
   if (historical) {
-    yield* sql`INSERT INTO effect_agent_checkpoints (thread_id, through_sequence, tail_digest, checkpoint_json)
-      VALUES (${threadId}, 0, ${EMPTY_TAIL_DIGEST}, ${historicalCheckpointJson})`;
+    yield* sql`INSERT INTO effect_agent_checkpoints (thread_id, through_sequence, checkpoint_json)
+      VALUES (${threadId}, 0, ${historicalCheckpointJson})`;
   }
 });
 
@@ -135,7 +130,7 @@ export const assertCheckpoint = Effect.fn("CheckpointFixture.assert")(function* 
     )
     .pipe(Effect.flip);
 
-  expect(stateConflict).toMatchObject({ _tag: "CheckpointRejected", reason: "digest-mismatch" });
+  expect(stateConflict).toMatchObject({ _tag: "CheckpointRejected", reason: "corrupt" });
   if (historical) {
     expect(JSON.stringify(encoded)).toBe(historicalCheckpointJson);
 
@@ -143,7 +138,6 @@ export const assertCheckpoint = Effect.fn("CheckpointFixture.assert")(function* 
       schemaVersion: checkpoint.schemaVersion,
       threadId: checkpoint.threadId,
       throughSequence: checkpoint.throughSequence,
-      tailDigest: checkpoint.tailDigest,
       state: checkpoint.state,
       createdAt: checkpoint.createdAt,
     });
@@ -154,7 +148,7 @@ export const assertCheckpoint = Effect.fn("CheckpointFixture.assert")(function* 
 
     expect(removalConflict).toMatchObject({
       _tag: "CheckpointRejected",
-      reason: "digest-mismatch",
+      reason: "corrupt",
     });
     for (const field of [
       "engineVersion",
@@ -164,14 +158,14 @@ export const assertCheckpoint = Effect.fn("CheckpointFixture.assert")(function* 
     ] as const) {
       const changed = ThreadCheckpoint.make({
         ...checkpoint,
-        [field]: field === "engineVersion" ? "changed-engine" : EMPTY_TAIL_DIGEST,
+        [field]: field === "engineVersion" ? "changed-engine" : definitionDigest,
       });
 
       const failure = yield* checkpoints
         .save(SaveCheckpointRequest.make({ checkpoint: changed }))
         .pipe(Effect.flip);
 
-      expect(failure).toMatchObject({ _tag: "CheckpointRejected", reason: "digest-mismatch" });
+      expect(failure).toMatchObject({ _tag: "CheckpointRejected", reason: "corrupt" });
     }
 
     const rows = yield* sql<{
@@ -184,7 +178,6 @@ export const assertCheckpoint = Effect.fn("CheckpointFixture.assert")(function* 
       "schemaVersion",
       "threadId",
       "throughSequence",
-      "tailDigest",
       "state",
       "createdAt",
     ]);
@@ -197,8 +190,8 @@ export const assertCheckpoint = Effect.fn("CheckpointFixture.assert")(function* 
     const full = yield* readTestThread(store, { threadId });
 
     expect(suffix).toHaveLength(1);
-    expect(replayThreadFromCheckpoint(projection, suffix, full.tailDigest)).toEqual(
-      replayThread(threadId, full.records, full.tailDigest),
+    expect(replayThreadFromCheckpoint(projection, suffix)).toEqual(
+      replayThread(threadId, full.records),
     );
   }
 });

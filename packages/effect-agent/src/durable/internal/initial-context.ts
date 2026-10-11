@@ -1,7 +1,6 @@
 import { Effect, Option, Schema, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
-import { digestJson } from "../Digest.ts";
 import { CanonicalSequence, type CanonicalRecordEnvelope } from "../Records.ts";
 import { RunJournalError, toolCallSettledRecordId } from "../RunJournal.ts";
 import { submissionSettlementRecordId } from "../SubmissionLedger.ts";
@@ -65,40 +64,7 @@ export const initialContext = Effect.fnUntraced(function* (original: CanonicalRe
     return undefined;
   };
 
-  const contexts = yield* reader
-    .read({
-      threadId,
-      selection: { _tag: "LatestRunContext", throughSequence: through },
-      page: { limit: 1 },
-    })
-    .pipe(Stream.take(2), Stream.runCollect);
-
-  if (contexts.length > 1) return yield* invalid("Initial context locator is ambiguous");
   let after = CanonicalSequence.make(0);
-  const base = contexts[0];
-
-  if (base !== undefined) {
-    const context = base.record.payload;
-
-    if (
-      base.threadId !== threadId ||
-      base.sequence > through ||
-      context._tag !== "RunContextRecorded" ||
-      context.historyThrough >= base.sequence ||
-      context.historyThrough > through
-    )
-      return yield* invalid("Prior context locator has an invalid admission boundary");
-    after = CanonicalSequence.make(context.historyFrom - 1);
-    for (const ref of context.retained) {
-      const fact = yield* getRecord({ threadId, recordId: ref.recordId });
-
-      if (Option.isNone(fact) || fact.value.sequence !== ref.sequence)
-        return yield* invalid("Prior context has a missing retained fact");
-      const error = retain(fact.value);
-
-      if (error !== undefined) return yield* error;
-    }
-  }
 
   while (after < through) {
     const page = yield* reader
@@ -179,12 +145,9 @@ export const initialContext = Effect.fnUntraced(function* (original: CanonicalRe
               part.id === payload.toolCallId &&
               part.name === payload.toolName,
           ),
-      ) ||
-      (yield* digestJson(response.messages).pipe(
-        Effect.mapError(() => invalid("Late Tool declaration integrity is unavailable")),
-      )) !== response.messagesDigest
+      )
     )
-      return yield* invalid("Late Tool declaration arguments or digest are invalid");
+      return yield* invalid("Late Tool declaration arguments are invalid");
     const error = retain(declaration);
 
     if (error !== undefined) return yield* error;

@@ -2,12 +2,20 @@ import { CloudflareThreadClient } from "@yielded/agent-platform-cloudflare/cloud
 import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
 import { type Receipt } from "@yielded/agent/durable-agent-runtime";
 import { type DurableRuntimeFailpointLocation } from "@yielded/agent/durable-failpoint";
-import { AbortCommand } from "@yielded/agent/submission-ledger";
+import {
+  AbortCommand,
+  IdempotencyKey,
+  Principal,
+  SubmissionLedger,
+  SubmissionLookupByKey,
+} from "@yielded/agent/submission-ledger";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { Effect } from "effect";
+import { DurableObject } from "effect-cf";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  alarmAttemptHolds,
   armRuntimeEviction,
   armStorageEviction,
   armedEvictionsRemaining,
@@ -125,96 +133,114 @@ describe("Cross-Object child admission, wake, and abort ownership", () => {
   }, 40_000);
 
   it("a child never runs a Turn before its lineage record is canonical", async () => {
-    // The admitted, lineage-less child must defer to the parent's establishment
-    // (SUB-016), never run ahead of it. This row pins the discipline cross-Object: the parent
-    // Object dies at subagent:after-admit on EVERY pass while the child's own alarms run.
+    // The child admission is durable at after-admit, before lineage or readiness. Arm the
+    // transport fault at that exact hit, then evict the real parent Object before it proceeds.
     const location: DurableRuntimeFailpointLocation = "subagent:after-admit";
     const ref = lane("child-awaits-lineage");
     const faultSuffix = `:${delegateCallIdFor(ref)}`;
 
-    // The retry floor leaves time to arm the transport fault after admission. A second
-    // eviction covers a concurrent delivery; once the fault is armed, every parent
-    // recovery pass answers Indeterminate (SUB-031) and the parent provably CANNOT complete
-    // establishment during the child-side probes.
     armRuntimeEviction(ref, location, location);
-    const receipt = await submitCoordinator(ref, `${ref}-key`);
-    const child = childThreadOf(receipt, ref);
+    alarmAttemptHolds.set(ref, {
+      location,
+      entered: Effect.sync(() => armTransportFault(faultSuffix)),
+      release: Effect.void,
+      finished: Effect.void,
+    });
+    try {
+      const receipt = await submitCoordinator(ref, `${ref}-key`);
+      const child = childThreadOf(receipt, ref);
 
-    // Drive the parent until the routed admission is durable in the CHILD's Object — the
-    // same pass then dies at after-admit, so no lineage record exists there. Then cut the
-    // parent→child transport so the admission stays authoritative but unreachable.
-    await drainDelegationUntil([ref], async () => (await laneRows(child, SUBAGENTS)).length === 1);
-    armTransportFault(faultSuffix);
+      await drainDelegationUntil([ref], async () => armedEvictionsRemaining(ref) < 2);
+      expect(armedEvictionsRemaining(ref), "the first native eviction must have fired").toBe(1);
 
-    // The transport fault must actually be holding the parent back before the probe window
-    // means anything: the buffer stops burning once every parent pass answers Indeterminate.
-    await waitFor(async () => {
-      const before = armedEvictionsRemaining(ref);
+      // Exercise the parent's routed admission reader. The native RPC fault must yield
+      // Indeterminate, not absence; a stable counter alone does not establish that boundary.
+      const requested = payloadsOf(await readCanonical(ref, SUBAGENTS), "SubagentRequested")[0]
+        ?.record.payload;
 
-      await new Promise((resolve) => setTimeout(resolve, 25));
+      if (requested?._tag !== "SubagentRequested") throw new Error("Expected SubagentRequested");
 
-      return before > 0 && armedEvictionsRemaining(ref) === before;
-    }, "the armed-eviction burn to stop under the transport fault");
+      const resolution = await runInDurableObject(stubFor(ref, SUBAGENTS), (instance) =>
+        instance[DurableObject.RunSymbol](
+          SubmissionLedger.use((ledger) =>
+            ledger.resolveAdmission(
+              SubmissionLookupByKey.make({
+                threadId: requested.childThreadId,
+                principal: Principal.make(requested.childPrincipal),
+                idempotencyKey: IdempotencyKey.make(requested.childIdempotencyKey),
+              }),
+            ),
+          ),
+        ),
+      );
 
-    // Await the child's maintenance owner before observing quiescence: an automatic
-    // alarm delivery can temporarily clear the slot while its pass is still running.
-    // The transport fault prevents parent establishment throughout these safety checks.
-    await waitFor(async () => {
-      let completed = true;
+      expect(resolution).toMatchObject({
+        _tag: "Indeterminate",
+        reason: expect.stringContaining("injected transport fault"),
+      });
 
-      try {
-        await runInDurableObject(stubFor(child, SUBAGENTS), (instance) =>
-          Promise.resolve(instance.alarm()),
-        );
-      } catch {
-        // A parent hint can race its doomed incarnation; retained work must still quiesce.
-        completed = false;
-      }
-      const rows = await laneRows(child, SUBAGENTS);
+      // Await the child's maintenance owner before observing quiescence: an automatic
+      // alarm delivery can temporarily clear the slot while its pass is still running.
+      // The transport fault prevents parent establishment throughout these safety checks.
+      await waitFor(async () => {
+        let completed = true;
 
-      expect(rows).toHaveLength(1);
-      expect(rows[0]?.state, "child state before parent establishment").toBe("admitted");
+        try {
+          await runInDurableObject(stubFor(child, SUBAGENTS), (instance) =>
+            Promise.resolve(instance.alarm()),
+          );
+        } catch {
+          // A parent hint can race its doomed incarnation; retained work must still quiesce.
+          completed = false;
+        }
+        const rows = await laneRows(child, SUBAGENTS);
+
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.state, "child state before parent establishment").toBe("admitted");
+        expect(childModelInvocations(ref)).toBe(0);
+
+        return completed && (await scheduledAlarm(child, SUBAGENTS)) === null;
+      }, "child maintenance to quiesce while awaiting parent establishment");
       expect(childModelInvocations(ref)).toBe(0);
+      expect(
+        await scheduledAlarm(child, SUBAGENTS),
+        "AwaitParentEstablishment is a stable external wait and must quiesce (#93)",
+      ).toBeNull();
 
-      return completed && (await scheduledAlarm(child, SUBAGENTS)) === null;
-    }, "child maintenance to quiesce while awaiting parent establishment");
-    expect(childModelInvocations(ref)).toBe(0);
-    expect(
-      await scheduledAlarm(child, SUBAGENTS),
-      "AwaitParentEstablishment is a stable external wait and must quiesce (#93)",
-    ).toBeNull();
+      // The WP1 admin surface names the deferral: the child Object explains its own lane.
+      const explainedRaw: unknown = await Promise.resolve(
+        stubFor(child, SUBAGENTS).explainEncoded({}),
+      );
 
-    // The WP1 admin surface names the deferral: the child Object explains its own lane.
-    const explainedRaw: unknown = await Promise.resolve(
-      stubFor(child, SUBAGENTS).explainEncoded({}),
-    );
+      const explained = await Effect.runPromise(ThreadObject.decodeAdminResponse(explainedRaw));
 
-    const explained = await Effect.runPromise(ThreadObject.decodeAdminResponse(explainedRaw));
+      expect(explained._tag).toBe("ExplainedRecovery");
+      if (explained._tag === "ExplainedRecovery") {
+        expect(explained.explanations).toHaveLength(1);
+        expect(explained.explanations[0]?.decision._tag).toBe("AwaitParentEstablishment");
+        expect(explained.explanations[0]?.disposition).toBe("deferred");
+      }
 
-    expect(explained._tag).toBe("ExplainedRecovery");
-    if (explained._tag === "ExplainedRecovery") {
-      expect(explained.explanations).toHaveLength(1);
-      expect(explained.explanations[0]?.decision._tag).toBe("AwaitParentEstablishment");
-      expect(explained.explanations[0]?.disposition).toBe("deferred");
+      // Heal the transport: the remaining armed eviction still fires, then idempotent
+      // establishment completes the child with lineage BEFORE readiness and one invocation.
+      healTransportFault(faultSuffix);
+      await drainDelegationUntil([ref, child], allLanesSettled(ref, child));
+      expect(armedEvictionsRemaining(ref), "every armed eviction must have fired").toBe(0);
+      await assertDelegationConverged(completedDelegation(receipt, ref));
+      const childRecords = await readCanonical(child, SUBAGENTS);
+      const tags = childRecords.map((envelope) => envelope.record.payload._tag);
+      const lineageIndex = tags.indexOf("SubagentLineageRecorded");
+      const firstTurnIndex = tags.indexOf("ModelResponseRecorded");
+
+      expect(lineageIndex, "the child log must carry its lineage record").toBeGreaterThanOrEqual(0);
+      expect(firstTurnIndex, "the child must have run exactly after establishment").toBeGreaterThan(
+        lineageIndex,
+      );
+      expect(childModelInvocations(ref)).toBe(1);
+    } finally {
+      alarmAttemptHolds.delete(ref);
+      healTransportFault(faultSuffix);
     }
-
-    // Heal the transport: the parent's idempotent establishment burns the remaining armed
-    // evictions, completes the child (lineage BEFORE readiness), and the delegation
-    // converges on one invocation.
-    healTransportFault(faultSuffix);
-    await drainDelegationUntil([ref, child], allLanesSettled(ref, child));
-    expect(armedEvictionsRemaining(ref), "every armed eviction must have fired").toBe(0);
-    await assertDelegationConverged(completedDelegation(receipt, ref));
-    const childRecords = await readCanonical(child, SUBAGENTS);
-    const tags = childRecords.map((envelope) => envelope.record.payload._tag);
-    const lineageIndex = tags.indexOf("SubagentLineageRecorded");
-    const firstTurnIndex = tags.indexOf("ModelResponseRecorded");
-
-    expect(lineageIndex, "the child log must carry its lineage record").toBeGreaterThanOrEqual(0);
-    expect(firstTurnIndex, "the child must have run exactly after establishment").toBeGreaterThan(
-      lineageIndex,
-    );
-    expect(childModelInvocations(ref)).toBe(1);
   }, 60_000);
 
   // -------------------------------------------------------------------------

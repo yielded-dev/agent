@@ -16,14 +16,10 @@ import {
   type ProducerId,
 } from "../Records.ts";
 import { workerOriginRecordId } from "../RunJournal.ts";
-import type {
-  AppendConflict,
-  FenceRejected,
-  ThreadNotMaterialized,
-  ThreadStoreError,
-} from "../ThreadStore.ts";
+import type { OwnershipLost } from "../SubmissionLedger.ts";
+import type { AppendConflict, ThreadNotMaterialized, ThreadStoreError } from "../ThreadStore.ts";
 import {
-  FencedAppendRequest,
+  AppendRequest,
   ThreadIdentityRequest,
   ThreadTailRequest,
   ThreadStore,
@@ -45,10 +41,8 @@ export const threadCreatedRecordId = (threadId: ThreadId): RecordId =>
 
 /**
  * Coordinator invariant: every Thread's first canonical record is `ThreadCreated`,
- * so `tailSequence >= 1` is the deterministic already-created check. A lost race (conflict or
- * fence) is verified against that invariant instead of being trusted blindly. An admitted
- * child can be claimed before it is runnable; that advances the shared storage fence without
- * appending anything. Re-read and retry that initialization race with the current fence.
+ * so `tailSequence >= 1` is the deterministic already-created check. Concurrent admissions
+ * re-read this invariant after a tail conflict before considering initialization complete.
  */
 export const ensureThreadCreated = Effect.fnUntraced(
   function* (
@@ -58,7 +52,7 @@ export const ensureThreadCreated = Effect.fnUntraced(
     definitions: DefinitionDigests,
   ): Effect.fn.Return<
     void,
-    ThreadStoreError | ThreadNotMaterialized | AppendConflict | FenceRejected,
+    ThreadStoreError | ThreadNotMaterialized | AppendConflict | OwnershipLost,
     ThreadStore | WakeScheduler
   > {
     const store = yield* ThreadStore;
@@ -80,7 +74,7 @@ export const ensureThreadCreated = Effect.fnUntraced(
 
     yield* store
       .append(
-        FencedAppendRequest.make({
+        AppendRequest.make({
           threadId,
           batch: CanonicalBatch.make({
             batchId: threadCreatedBatchId(threadId),
@@ -88,12 +82,10 @@ export const ensureThreadCreated = Effect.fnUntraced(
             records: [record],
           }),
           expectedTailSequence: tail.tailSequence,
-          expectedTailDigest: tail.tailDigest,
-          producerEpoch: tail.producerEpoch,
         }),
       )
       .pipe(
-        Effect.catchTag(["AppendConflict", "FenceRejected"], (error) =>
+        Effect.catchTag("AppendConflict", (error) =>
           store
             .inspectTail(ThreadTailRequest.make({ threadId }))
             .pipe(
@@ -110,7 +102,7 @@ export const ensureThreadCreated = Effect.fnUntraced(
     effect.pipe(
       Effect.retry({
         times: 7,
-        while: (error) => error._tag === "AppendConflict" || error._tag === "FenceRejected",
+        while: (error) => error._tag === "AppendConflict",
       }),
     ),
 );
@@ -152,11 +144,10 @@ export const ensureWorkerOrigin = Effect.fnUntraced(
 
       const appended = yield* store
         .append(
-          FencedAppendRequest.make({
+          AppendRequest.make({
             threadId: origin.worker.threadId,
-            producerEpoch: current.producerEpoch,
             expectedTailSequence: current.tailSequence,
-            expectedTailDigest: current.tailDigest,
+
             batch: CanonicalBatch.make({
               batchId: Schema.decodeSync(BatchId)(id),
               producerId: config.producerId,
@@ -175,7 +166,7 @@ export const ensureWorkerOrigin = Effect.fnUntraced(
         )
         .pipe(
           Effect.as(true),
-          Effect.catchTag(["AppendConflict", "FenceRejected"], () => Effect.succeed(false)),
+          Effect.catchTag("AppendConflict", () => Effect.succeed(false)),
         );
 
       if (appended) {

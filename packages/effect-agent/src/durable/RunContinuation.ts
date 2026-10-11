@@ -59,20 +59,28 @@ import {
   submissionSettlementRecordId,
   submissionSettlementBatchId,
 } from "./SubmissionLedger.ts";
-import { getRecord, getRunInput, ThreadReader, ThreadStoreError } from "./ThreadStore.ts";
+import {
+  CommitBatch,
+  ExecutionCheckpoint,
+  ExecutionUpdate,
+  getRecord,
+  getRunInput,
+  ThreadReader,
+  ThreadStoreError,
+} from "./ThreadStore.ts";
 
 export { RunContinuation, RunContextRecorded, EvidenceReference } from "./Records.ts";
 
-/** The fenced writer selected at the owning resource boundary, never execution authority. */
+/** Writer and progress sequencer selected at the local owner's resource boundary. */
 export class CurrentRunWriter extends Context.Service<
   CurrentRunWriter,
-  Pick<RunWriter, "threadId" | "tail" | "append">
+  Pick<RunWriter, "threadId" | "tail" | "append" | "withProgress">
 >()("@effect-agent/thread/CurrentRunWriter") {}
 
 /** Settlement publication keeps its original atomic authority and claim-scoped implementation. */
 export class CurrentRunSettlement extends Context.Service<
   CurrentRunSettlement,
-  Pick<RunStorageSession, "threadId" | "tail" | "publishSettlement">
+  Pick<RunStorageSession, "threadId" | "tail" | "publishSettlement" | "withProgress">
 >()("@effect-agent/thread/CurrentRunSettlement") {}
 
 /** Canonical reads pinned to the append owner's current transaction or mutation gate. */
@@ -114,7 +122,7 @@ const validateBatchHeader = Schema.decodeSync(
   }),
 );
 
-const validateBatchCount = Schema.decodeSync(
+const validateBatchCount = Schema.decodeUnknownSync(
   Schema.NonEmptyArray(Schema.Unknown).check(Schema.isMaxLength(256)),
 );
 
@@ -124,7 +132,7 @@ const ContinuationBytes = Schema.Struct({
 });
 
 /** One private snapshot for every retry; callers cannot change facts while awaiting the gate. */
-const captureFacts = (batch: CanonicalBatch) =>
+const captureFacts = (batch: CommitBatch) =>
   Effect.try({
     try: () => {
       const header = validateBatchHeader(batch);
@@ -157,6 +165,12 @@ export const prepareProgressAppend = (
 const factUsageCharge = (facts: ReadonlyArray<RecordEnvelope>): number =>
   facts.reduce((bytes, record) => bytes + recordEncoding(record).progress.terminalUsageBytes, 0);
 
+/** These values belong to the active Run, not its permanent conversation history. */
+export const isOperationalRecord = ({ payload }: RecordEnvelope): boolean =>
+  payload._tag === "RunStarted" ||
+  payload._tag === "RunContextRecorded" ||
+  payload._tag === "RunCompleted";
+
 export const readContinuation = Effect.fnUntraced(function* (
   threadId: ThreadId,
   runId: RunId,
@@ -164,29 +178,45 @@ export const readContinuation = Effect.fnUntraced(function* (
 ) {
   const reader = yield* ThreadReader;
 
-  const records = yield* Stream.runCollect(
-    reader.read({
-      threadId,
-      selection: { _tag: "RunContinuation", runId, throughSequence },
-      page: { limit: 1 },
-    }),
-  );
+  const loaded = yield* reader
+    .readExecution({ threadId, runId })
+    .pipe(
+      Effect.catchTag("ThreadNotMaterialized", (cause) =>
+        throughSequence === 0
+          ? Effect.succeed(Option.none())
+          : failure("Active Run history is not materialized", cause),
+      ),
+    );
 
-  if (records.length > 1) return yield* failure("Ambiguous canonical Run continuation");
-  const value = records[0];
+  if (Option.isNone(loaded)) return Option.none();
+  const value = loaded.value;
 
-  if (value === undefined)
-    return Option.none<CanonicalRecordEnvelope & { continuation: RunContinuation }>();
   if (
-    value.record.payload._tag !== "RunContinuation" ||
-    value.record.payload.runId !== runId ||
-    value.threadId !== threadId ||
-    value.sequence > throughSequence ||
-    canonicalRecordBytes(value.record) > MAX_RUN_CONTINUATION_BYTES
+    value.progress.runId !== runId ||
+    value.progressRecord.payload._tag !== "RunContinuation" ||
+    !Schema.toEquivalence(RunContinuation)(value.progressRecord.payload, value.progress) ||
+    value.throughSequence > throughSequence ||
+    canonicalRecordBytes(value.progressRecord) > MAX_RUN_CONTINUATION_BYTES ||
+    value.operational.some(
+      (record) => !isOperationalRecord(record) || !executionRunIds(record).includes(runId),
+    ) ||
+    new Set(value.operational.map((record) => record.recordId)).size !== value.operational.length
   )
-    return yield* failure("Invalid canonical Run continuation locator");
+    return yield* failure("Invalid active Run checkpoint");
 
-  return Option.some({ ...value, continuation: value.record.payload });
+  return Option.some({ ...value, record: value.progressRecord, continuation: value.progress });
+});
+
+/** Resolve an active-only fact without presenting it as a canonical envelope or sequence. */
+export const resolveExecutionEvidence = Effect.fnUntraced(function* (
+  threadId: ThreadId,
+  checkpoint: ExecutionCheckpoint,
+  ref: EvidenceReference,
+) {
+  const operational = checkpoint.operational.find((record) => record.recordId === ref.recordId);
+  const record = operational ?? (yield* resolveEvidence(threadId, ref)).record;
+
+  return record;
 });
 
 /** Each selected page is at most eight records; total resident encoded evidence is bounded. */
@@ -293,88 +323,72 @@ export const readRunEvidenceSnapshot = Effect.fnUntraced(function* (
   const progress = yield* readContinuation(threadId, runId, throughSequence);
 
   if (Option.isNone(progress)) {
-    if (
-      own.some(
-        ({ record }) =>
-          !isPreContinuationFact(record) ||
-          (record.payload._tag === "SubmissionSettled" && record.payload.runId === runId),
+    const terminal = own.findLast(
+      ({ record }) => record.payload._tag === "SubmissionSettled" && record.payload.runId === runId,
+    );
+
+    if (terminal?.record.payload._tag === "SubmissionSettled") {
+      if (
+        terminal.record.payload.historyRecordCount === undefined ||
+        own.filter((entry) => entry.sequence <= terminal.sequence).length !==
+          terminal.record.payload.historyRecordCount
       )
-    )
-      return yield* failure(
-        "Selected execution has no canonical continuation; rebuild its locator explicitly",
-      );
+        return yield* failure("Settled Run history is incomplete");
+
+      return records;
+    }
+    if (own.some(({ record }) => !isPreContinuationFact(record)))
+      return yield* failure("Active execution has no durable checkpoint");
 
     return records;
   }
-  const envelope = progress.value;
-  const cursor = envelope.continuation;
+  const checkpoint = progress.value;
+  const cursor = checkpoint.continuation;
 
   if (cursor.submissionId !== submissionId)
-    return yield* failure("Selected continuation has another admitted owner");
-  const byId = new Map(records.map((entry) => [entry.record.recordId, entry]));
-
-  const resolve = Effect.fnUntraced(function* (ref: EvidenceReference) {
-    const found = byId.get(ref.recordId);
-
-    if (found === undefined) {
-      yield* resolveEvidence(threadId, ref);
-
-      return yield* failure(
-        "Selected canonical locator omits required evidence; rebuild it explicitly",
-      );
-    }
-    if ((yield* reference(found.record)).digest !== ref.digest)
-      return yield* failure("Selected canonical evidence has invalid integrity");
-
-    return found;
-  });
-
+    return yield* failure("Active checkpoint has another admitted owner");
+  if (
+    own.filter((entry) => entry.sequence <= checkpoint.throughSequence).length !==
+      checkpoint.canonicalRecords ||
+    !validateSuffix(own, checkpoint.throughSequence)
+  )
+    return yield* failure("Selected execution history is incomplete or exceeds its suffix bound");
+  const resolve = (ref: EvidenceReference) => resolveExecutionEvidence(threadId, checkpoint, ref);
   const input = yield* resolve(cursor.originalInput);
 
   if (
-    input.record.payload._tag !== "UserInputRecorded" ||
-    input.record.payload.submissionId !== submissionId ||
-    input.record.payload.kind !== "user" ||
-    input.record.payload.runId !== runId
+    input.payload._tag !== "UserInputRecorded" ||
+    input.payload.submissionId !== submissionId ||
+    input.payload.kind !== "user" ||
+    input.payload.runId !== runId
   )
-    return yield* failure("Selected continuation has no original accepted input");
-  const frontier = yield* resolve(cursor.lastFact);
-
-  if (
-    frontier.batchId !== envelope.batchId ||
-    frontier.sequence >= envelope.sequence ||
-    own.filter((entry) => entry.sequence <= frontier.sequence).length !== cursor.recordCount ||
-    !validateSuffix(own, envelope.sequence)
-  )
-    return yield* failure("Selected canonical evidence is incomplete or exceeds its suffix bound");
+    return yield* failure("Active checkpoint has no original accepted input");
+  yield* resolve(cursor.lastFact);
   if (cursor.savedContext !== undefined) {
     const context = yield* resolve(cursor.savedContext);
 
-    if (
-      context.record.payload._tag !== "RunContextRecorded" ||
-      context.record.payload.runId !== runId
-    )
-      return yield* failure("Selected continuation has invalid saved context evidence");
+    if (context.payload._tag !== "RunContextRecorded" || context.payload.runId !== runId)
+      return yield* failure("Active checkpoint has invalid saved context");
   }
   if (cursor.latestResponse !== undefined) {
     const response = yield* resolve(cursor.latestResponse);
 
     if (
-      response.record.payload._tag !== "ModelResponseRecorded" ||
-      response.record.payload.runId !== runId ||
-      response.record.payload.turn !== cursor.accounting.committedTurns
+      response.payload._tag !== "ModelResponseRecorded" ||
+      response.payload.runId !== runId ||
+      response.payload.turn !== cursor.accounting.committedTurns
     )
-      return yield* failure("Selected continuation has invalid operation evidence");
+      return yield* failure("Active checkpoint has invalid operation evidence");
   }
   if (cursor.terminal !== undefined) {
     const terminal = yield* resolve(cursor.terminal);
 
     if (
-      terminal.record.payload._tag !== "RunCompleted" &&
-      terminal.record.payload._tag !== "RunFailed" &&
-      terminal.record.payload._tag !== "SubmissionSettled"
+      terminal.payload._tag !== "RunCompleted" &&
+      terminal.payload._tag !== "RunFailed" &&
+      terminal.payload._tag !== "SubmissionSettled"
     )
-      return yield* failure("Selected continuation has invalid terminal evidence");
+      return yield* failure("Active checkpoint has invalid terminal evidence");
   }
 
   return records;
@@ -383,12 +397,27 @@ export const readRunEvidenceSnapshot = Effect.fnUntraced(function* (
 /** Called inside the adapter's existing mutation, before publishing any fact or index. */
 export const validateProgressAppend = Effect.fnUntraced(function* (
   records: ReadonlyArray<ProgressAppendRecord>,
+  updates: ReadonlyArray<ExecutionUpdate> = [],
 ): Effect.fn.Return<void, ThreadStoreError, ProgressAppendReader> {
   const reader = yield* ProgressAppendReader;
+
+  if (records.some((record) => record.continuation !== undefined))
+    return yield* failure("Interpreter progress must be committed as active execution state");
+
+  const operational = new Map(
+    updates.flatMap((update) => update.facts.map((fact) => [fact.recordId, fact] as const)),
+  );
+
+  const factsAndProgress = [
+    ...records,
+    ...prepareProgressAppend([...operational.values()]),
+    ...prepareProgressAppend(updates.map((update) => update.checkpoint.progressRecord)),
+  ];
+
   const seen = new Set<RunId>();
   let progressStarted = false;
 
-  for (const record of records) {
+  for (const record of factsAndProgress) {
     const next = record.continuation;
 
     if (next === undefined) {
@@ -403,11 +432,22 @@ export const validateProgressAppend = Effect.fnUntraced(function* (
       return yield* failure("One atomic batch cannot publish conflicting Run progress");
     seen.add(next.runId);
 
-    const facts = records.filter(
+    const update = updates.find((value) => value.checkpoint.progress.runId === next.runId);
+
+    if (
+      update === undefined ||
+      !Schema.toEquivalence(RunContinuation)(next, update.checkpoint.progress) ||
+      update.previousRevision + 1 !== next.revision ||
+      update.facts.some((fact) => !isOperationalRecord(fact)) ||
+      (update.retire && (next.position !== "settled" || next.terminal === undefined))
+    )
+      return yield* failure("Invalid active execution transition");
+
+    const facts = factsAndProgress.filter(
       (fact) => fact.continuation === undefined && fact.runIds.includes(next.runId),
     );
 
-    const frontier = facts.at(-1);
+    const frontier = facts.find((fact) => fact.recordId === next.lastFact.recordId);
     const prior = yield* reader.previous(next.runId);
 
     const retained =
@@ -483,6 +523,7 @@ interface ProgressState {
   readonly results: ReadonlyMap<ToolCallId, ToolCallSettled>;
   readonly completionBytes?: number;
   readonly childResults: ReadonlyMap<ToolCallId, ChildResultCapacity>;
+  readonly checkpoint?: ExecutionCheckpoint;
 }
 
 type CapacityState = Omit<ProgressState, "continuation" | "record"> & {
@@ -824,186 +865,66 @@ const advanceFacts = Effect.fnUntraced(function* (
 });
 
 /**
- * Offline integrity guardrail. Every continuation is reproducible from its immutable facts;
- * this scan is explicit verification, never normal recovery or an execution authority.
- * Import skips range projection after checking original boundaries and retained references;
- * cold recovery must compare the saved Prompt digest before using that context.
+ * Verify retained history. Mutable checkpoint revisions are deliberately not historical proof.
+ * Active original context is still checked against its exact retained historyDigest.
  */
 export const verifyRunContinuations = Effect.fnUntraced(function* (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
-  options?: { readonly verifyContext?: boolean },
+  options?: {
+    readonly verifyContext?: boolean;
+    readonly executions?: ReadonlyArray<ExecutionCheckpoint>;
+  },
 ) {
-  const byId = new Map(records.map((entry) => [entry.record.recordId, entry]));
-  const states = new Map<RunId, ProgressState>();
-  const preparations = new Map<RunId, Array<RecordEnvelope>>();
-  const equivalent = Schema.toEquivalence(RunContinuation);
-  let start = 0;
+  const inputs = records.filter(
+    ({ record }) =>
+      record.payload._tag === "UserInputRecorded" &&
+      record.payload.kind === "user" &&
+      record.payload.submissionId !== undefined,
+  );
 
-  while (start < records.length) {
-    const first = records[start]!;
-    let end = start + 1;
+  if (records.some(({ record }) => record.payload._tag === "RunContinuation"))
+    return yield* failure("Mutable interpreter progress is not canonical history");
+  for (const input of inputs) {
+    const payload = input.record.payload;
 
-    while (end < records.length && records[end]!.batchId === first.batchId) end++;
-    const batch = records.slice(start, end);
-    const seen = new Set<RunId>();
-    let progressStarted = false;
+    if (payload._tag !== "UserInputRecorded" || payload.submissionId === undefined) continue;
+    const runId = runIdForSubmission(payload.submissionId);
+    const own = records.filter((entry) => executionRunIds(entry.record).includes(runId));
 
-    for (const entry of batch) {
-      const cursor = entry.record.payload;
-
-      if (cursor._tag !== "RunContinuation") {
-        if (progressStarted) return yield* failure("Execution facts follow their continuation");
-        continue;
-      }
-      progressStarted = true;
-      if (seen.has(cursor.runId)) return yield* failure("Conflicting progress in one batch");
-      seen.add(cursor.runId);
-      const previous = states.get(cursor.runId);
-      const initial = previous === undefined ? (preparations.get(cursor.runId) ?? []) : [];
-
-      const facts = batch.filter(
-        ({ record }) =>
-          record.payload._tag !== "RunContinuation" &&
-          executionRunIds(record).includes(cursor.runId),
-      );
-
-      const original =
-        previous === undefined
-          ? [...initial, ...facts.map(({ record }) => record)].find(
-              ({ payload }) =>
-                payload._tag === "UserInputRecorded" &&
-                payload.kind === "user" &&
-                payload.runId === cursor.runId &&
-                payload.submissionId === cursor.submissionId,
-            )
-          : undefined;
-
-      if (
-        cursor.runId !== runIdForSubmission(cursor.submissionId) ||
-        (previous === undefined && original === undefined)
-      )
-        return yield* failure("Continuation has no exact original admitted input");
-      if (
-        initial.some((fact) => !isPreContinuationFact(fact)) ||
-        initial.length > MAX_RUN_RECOVERY_SUFFIX_RECORDS
-      )
-        return yield* failure("Run preparation exceeds its bounded canonical prefix");
-
-      const initialBytes = initial.reduce(
-        (bytes, record) => bytes + canonicalRecordBytes(record),
-        0,
-      );
-
-      if (initialBytes > MAX_RUN_RECOVERY_SUFFIX_BYTES)
-        return yield* failure("Run preparation exceeds its byte bound");
-      for (const entry of facts) {
-        const savedContext = entry.record.payload;
-
-        if (savedContext._tag !== "RunContextRecorded") continue;
-
-        const originalEntry = byId.get(
-          previous?.continuation.originalInput.recordId ?? original!.recordId,
-        );
-
-        if (originalEntry === undefined || entry.sequence <= originalEntry.sequence)
-          return yield* failure("Context has no exact original input boundary");
-        yield* validateContextBoundary(savedContext, originalEntry).pipe(
-          Effect.mapError((cause) => failure("Context has an invalid admission boundary", cause)),
-        );
-        if (options?.verifyContext !== false)
-          yield* readRunContext(
-            savedContext,
-            originalEntry,
-            (yield* reference(entry.record)).digest,
-          ).pipe(
-            Effect.mapError((cause) => failure("Context differs from its original history", cause)),
-          );
-      }
-
-      const next = yield* advanceFacts(
-        previous,
-        facts.map(({ record }) => record),
-        cursor.submissionId,
-        initialBytes,
-      );
-
-      const frontier = facts.at(-1);
-
-      if (
-        frontier === undefined ||
-        frontier.sequence >= entry.sequence ||
-        frontier.batchId !== entry.batchId
-      )
-        return yield* failure("Continuation frontier was not atomically published");
-      const cursorBytes = canonicalRecordBytes(entry.record);
-
-      if (cursorBytes > MAX_RUN_CONTINUATION_BYTES)
-        return yield* failure("Continuation exceeds its encoded bound");
-
-      const expected = yield* RunContinuation.makeEffect({
-        version: 1,
-        runId: cursor.runId,
-        submissionId: cursor.submissionId,
-        revision: (previous?.continuation.revision ?? 0) + 1,
-        recordCount: (previous?.continuation.recordCount ?? initial.length) + facts.length,
-        recordBytes: (previous?.continuation.recordBytes ?? initialBytes) + next.factBytes,
-        turn: next.turn,
-        turnBytes: next.turnBase + cursorBytes,
-        terminalBytes: next.terminalBytes + (next.closing ? cursorBytes : 0),
-        terminalRecords: next.terminalRecords,
-        terminalUsageBytes: next.terminalUsageBytes,
-        originalInput: previous?.continuation.originalInput ?? (yield* reference(original!)),
-        ...(next.savedContext === undefined ? {} : { savedContext: next.savedContext }),
-        ...(next.latestResponse === undefined ? {} : { latestResponse: next.latestResponse }),
-        ...(next.terminal === undefined ? {} : { terminal: next.terminal }),
-        lastFact: yield* reference(frontier.record),
-        position: next.position,
-        accounting: next.accounting,
-      }).pipe(Effect.mapError((cause) => failure("Invalid recomputed Run continuation", cause)));
-
-      if (!equivalent(expected, cursor))
-        return yield* failure("Continuation differs from its recomputable canonical facts");
-      states.set(cursor.runId, {
-        continuation: expected,
-        record: entry.record,
-        ...(next.response === undefined ? {} : { response: next.response }),
-        results: next.results,
-        childResults: next.childResults,
-        ...(next.completionBytes === undefined ? {} : { completionBytes: next.completionBytes }),
-      });
-      preparations.delete(cursor.runId);
-    }
-    for (const { record } of batch) {
-      if (record.payload._tag === "RunContinuation") continue;
-      for (const runId of executionRunIds(record)) {
-        if (seen.has(runId)) continue;
-        if (states.has(runId))
-          return yield* failure("Execution fact is missing its atomic continuation");
-        const pending = preparations.get(runId) ?? [];
-
-        pending.push(record);
-        preparations.set(runId, pending);
-      }
-    }
-    start = end;
-  }
-  for (const [runId, pending] of preparations) {
-    const accepted = pending.some(
-      ({ payload }) =>
-        payload._tag === "UserInputRecorded" &&
-        payload.kind === "user" &&
-        payload.submissionId !== undefined &&
-        runIdForSubmission(payload.submissionId) === runId,
+    const terminal = own.findLast(
+      ({ record }) => record.payload._tag === "SubmissionSettled" && record.payload.runId === runId,
     );
 
-    if (
-      accepted &&
-      (pending.some((record) => !isPreContinuationFact(record)) ||
-        pending.length > MAX_RUN_RECOVERY_SUFFIX_RECORDS ||
-        pending.reduce((bytes, record) => bytes + canonicalRecordBytes(record), 0) >
-          MAX_RUN_RECOVERY_SUFFIX_BYTES)
-    )
-      return yield* failure("Accepted Run execution is missing its canonical continuation");
+    if (terminal?.record.payload._tag === "SubmissionSettled") {
+      if (
+        terminal.record.payload.historyRecordCount === undefined ||
+        own.filter((entry) => entry.sequence <= terminal.sequence).length !==
+          terminal.record.payload.historyRecordCount
+      )
+        return yield* failure("Terminal history differs from its retained fact count");
+      continue;
+    }
+    if (options?.verifyContext === false) continue;
+    const checkpoint = options?.executions?.find((value) => value.progress.runId === runId);
+
+    if (checkpoint === undefined) {
+      if (own.some(({ record }) => !isPreContinuationFact(record)))
+        return yield* failure("Active execution is missing its authoritative checkpoint");
+      continue;
+    }
+
+    const saved = checkpoint.operational.find(
+      ({ payload }) => payload._tag === "RunContextRecorded",
+    );
+
+    if (saved?.payload._tag === "RunContextRecorded") {
+      yield* validateContextBoundary(saved.payload, input).pipe(
+        Effect.mapError((cause) => failure("Context has an invalid admission boundary", cause)),
+      );
+      yield* readRunContext(saved.payload, input, saved.recordId).pipe(
+        Effect.mapError((cause) => failure("Context differs from its original history", cause)),
+      );
+    }
   }
 });
 
@@ -1136,8 +1057,11 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
       }
     }
     if (continuation.position === "settling" && continuation.terminal !== undefined) {
-      const terminal = yield* provide(resolveEvidence(threadId, continuation.terminal));
-      const payload = terminal.record.payload;
+      const terminal = yield* provide(
+        resolveExecutionEvidence(threadId, loaded.value, continuation.terminal),
+      );
+
+      const payload = terminal.payload;
 
       if (payload._tag === "RunCompleted")
         completionBytes =
@@ -1150,6 +1074,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     return {
       continuation,
       record: loaded.value.record,
+      checkpoint: loaded.value,
       ...(response === undefined ? {} : { response }),
       results,
       childResults,
@@ -1165,8 +1090,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     const textBytes = (value: string) => utf8ByteLength(JSON.stringify(value));
     const refBytes = (value: EvidenceReference) => utf8ByteLength(JSON.stringify(value));
 
-    const ref = (recordId: RecordId) =>
-      EvidenceReference.make({ recordId, digest: progress.lastFact.digest });
+    const ref = (recordId: RecordId) => EvidenceReference.make({ recordId });
 
     const fits = (batchId: string, lastFact: EvidenceReference, terminal?: EvidenceReference) =>
       // Only these identities change. The fixed allowance covers scalar and timestamp growth.
@@ -1295,7 +1219,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         groups.set(runId, facts);
       }
     }
-    const continuations: Array<RecordEnvelope> = [];
+    const executions: Array<ExecutionUpdate> = [];
     const accepted = new Map<RunId, ProgressState>();
 
     for (const [runId, facts] of groups) {
@@ -1311,6 +1235,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
 
       let originalCount = 0;
       let initialBytes = 0;
+      let originalSequence = previous?.checkpoint?.originalSequence;
 
       if (previous === undefined && original === undefined) {
         const input = yield* provide(getRunInput({ threadId, runId }));
@@ -1323,6 +1248,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
           continue;
 
         original = input.value.record;
+        originalSequence = input.value.sequence;
       }
 
       const submissionId =
@@ -1339,6 +1265,31 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         return yield* failure("Run has no accepted original input");
 
       if (previous === undefined) {
+        const settled = yield* provide(
+          getRecord({
+            threadId,
+            recordId: submissionSettlementRecordId(submissionId),
+          }),
+        );
+
+        if (
+          Option.isSome(settled) &&
+          settled.value.sequence <= after &&
+          settled.value.record.payload._tag === "SubmissionSettled" &&
+          settled.value.record.payload.runId === runId &&
+          settled.value.record.payload.historyRecordCount !== undefined &&
+          facts.every(
+            ({ payload }) =>
+              payload._tag === "WorkerReportPrepared" ||
+              payload._tag === "SubmissionSettled" ||
+              payload._tag === "ToolCallSettled" ||
+              payload._tag === "ToolCallResolved" ||
+              payload._tag === "SubagentJoined",
+          )
+        )
+          // Independent obligations can record factual closure after interpreter retirement.
+          continue;
+
         const selected = yield* provide(
           Stream.runCollect(
             runEvidence(threadId, submissionId, after).pipe(
@@ -1354,13 +1305,34 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
           existing.some(({ record }) => !isPreContinuationFact(record))
         )
           return yield* failure(
-            "Run execution has no canonical continuation or exceeds its preparation bound",
+            `Run execution has no active checkpoint or exceeds its preparation bound (${facts.map((fact) => fact.payload._tag).join(", ")})`,
           );
         originalCount = existing.length;
         initialBytes = existing.reduce(
           (bytes, entry) => bytes + canonicalRecordBytes(entry.record),
           0,
         );
+      }
+
+      const canonicalRecords =
+        (previous?.checkpoint?.canonicalRecords ?? originalCount) +
+        facts.filter((fact) => !isOperationalRecord(fact)).length;
+
+      for (let index = 0; index < facts.length; index++) {
+        const fact = facts[index]!;
+        const payload = fact.payload;
+
+        if (payload._tag !== "SubmissionSettled" || payload.runId !== runId) continue;
+
+        const retained = captureRecord(
+          RecordEnvelope.make({
+            ...fact,
+            payload: { ...payload, historyRecordCount: canonicalRecords },
+          }),
+        ).canonical;
+
+        facts[index] = retained;
+        ownedRecords[ownedRecords.indexOf(fact)] = retained;
       }
 
       const originalInput =
@@ -1481,11 +1453,46 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         return yield* capacityFailure(
           "Encoded continuation exceeds 8192 bytes including its envelope",
         );
-      continuations.push(record);
+
+      const operational = new Map(
+        (previous?.checkpoint?.operational ?? []).map((fact) => [fact.recordId, fact]),
+      );
+
+      const changed = facts.filter(isOperationalRecord);
+
+      for (const fact of changed) {
+        const prior = operational.get(fact.recordId);
+
+        if (prior !== undefined && recordEncoding(prior).json !== recordEncoding(fact).json)
+          return yield* failure("An active Run fact cannot change after becoming durable");
+        operational.set(fact.recordId, fact);
+      }
+
+      const checkpoint = yield* ExecutionCheckpoint.makeEffect({
+        version: 1,
+        progress: continuation,
+        progressRecord: record,
+        operational: [...operational.values()],
+        canonicalRecords,
+        originalSequence:
+          originalSequence ??
+          CanonicalSequence.make(
+            after +
+              ownedRecords
+                .filter((fact) => !isOperationalRecord(fact))
+                .findIndex((fact) => fact.recordId === originalInput.recordId) +
+              1,
+          ),
+        throughSequence: CanonicalSequence.make(
+          after + ownedRecords.filter((fact) => !isOperationalRecord(fact)).length,
+        ),
+        batchId: batch.batchId,
+      }).pipe(Effect.mapError((cause) => failure("Active execution exceeds its bounds", cause)));
 
       const state = {
         continuation,
         record,
+        checkpoint,
         ...(response === undefined ? {} : { response }),
         results,
         childResults,
@@ -1502,25 +1509,39 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
           usageCharge,
         );
       yield* checkFutureShapes(state);
+      executions.push(
+        ExecutionUpdate.make({
+          previousRevision: previous?.continuation.revision ?? 0,
+          checkpoint,
+          facts: changed,
+          // Pending operations and handoffs retain their own recovery rows and original facts.
+          retire: position === "settled",
+        }),
+      );
       accepted.set(runId, state);
     }
 
-    if (ownedRecords.length + continuations.length > 256)
+    if (ownedRecords.length + executions.length > 256)
       return yield* failure("Progress and facts exceed the atomic batch bound");
 
-    const prepared = new CanonicalBatch(
+    const prepared = new CommitBatch(
       {
         ...batch,
-        records: [ownedRecords[0]!, ...ownedRecords.slice(1), ...continuations],
+        records: ownedRecords.filter((fact) => !isOperationalRecord(fact)),
       },
       { disableChecks: true },
     );
 
     return {
       batch: prepared,
+      executions,
       accept: () => {
         for (const record of batch.records) reservations.delete(record.recordId);
-        for (const [runId, state] of accepted) cached.set(runId, state);
+        for (const [runId, state] of accepted) {
+          if (executions.find((update) => update.checkpoint.progress.runId === runId)?.retire)
+            cached.delete(runId);
+          else cached.set(runId, state);
+        }
         // Administrative writers can address many old Runs; retention is still bounded.
         while (cached.size > 8) {
           const first = cached.keys().next().value;
@@ -1540,67 +1561,92 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     return (yield* writer.tail).sequence;
   });
 
-  const commitCaptured = Effect.fnUntraced(function* (batch: CanonicalBatch) {
-    const writer = yield* CurrentRunWriter;
+  const commitCaptured = Effect.fnUntraced(
+    function* (batch: CanonicalBatch) {
+      const writer = yield* CurrentRunWriter;
 
-    for (let retries = 0; ; retries++) {
-      const prepared = yield* prepare(batch, yield* tail).pipe(
-        Effect.catchTag("ThreadNotMaterialized", (cause) =>
-          failure("Selected Run disappeared during progress publication", cause),
-        ),
-      );
+      for (let retries = 0; ; retries++) {
+        const prepared = yield* prepare(batch, yield* tail).pipe(
+          Effect.catchTag("ThreadNotMaterialized", (cause) =>
+            failure("Selected Run disappeared during progress publication", cause),
+          ),
+        );
 
-      const result = yield* writer.append(prepared.batch).pipe(
-        Effect.catchTag("AppendConflict", (conflict) => {
-          if (conflict.reason !== "tail" || retries >= 8) return Effect.fail(conflict);
-          cached.clear();
+        const result = yield* writer.append(prepared.batch, prepared.executions).pipe(
+          Effect.catchTag("AppendConflict", (conflict) => {
+            if (conflict.reason !== "tail" || retries >= 8) return Effect.fail(conflict);
+            cached.clear();
 
-          return Effect.succeed(undefined);
-        }),
-      );
+            return Effect.succeed(undefined);
+          }),
+        );
 
-      if (result === undefined) continue;
+        if (result === undefined) continue;
 
-      if (result.replayed) cached.clear();
-      else prepared.accept();
+        if (result.replayed) cached.clear();
+        else prepared.accept();
 
-      return result;
-    }
-  }, gate.withPermits(1));
+        return result;
+      }
+    },
+    (effect) =>
+      Effect.flatMap(CurrentRunWriter, (writer) =>
+        writer.withProgress(gate.withPermits(1)(effect)),
+      ),
+  );
 
-  const publishCaptured = Effect.fnUntraced(function* (batch: CanonicalBatch) {
-    const publisher = yield* CurrentRunSettlement;
+  const publishCaptured = Effect.fnUntraced(
+    function* (batch: CanonicalBatch) {
+      const publisher = yield* CurrentRunSettlement;
 
-    if (publisher.threadId !== threadId)
-      return yield* failure("Settlement publisher belongs to another Thread");
+      if (publisher.threadId !== threadId)
+        return yield* failure("Settlement publisher belongs to another Thread");
 
-    for (let retries = 0; ; retries++) {
-      const prepared = yield* prepare(batch, (yield* publisher.tail).sequence).pipe(
-        Effect.catchTag("ThreadNotMaterialized", (cause) =>
-          failure("Selected Run disappeared during progress publication", cause),
-        ),
-      );
+      for (let retries = 0; ; retries++) {
+        const prepared = yield* prepare(batch, (yield* publisher.tail).sequence).pipe(
+          Effect.catchTag("ThreadNotMaterialized", (cause) =>
+            failure("Selected Run disappeared during progress publication", cause),
+          ),
+        );
 
-      const result = yield* publisher.publishSettlement(prepared.batch).pipe(
-        Effect.catchTag("AppendConflict", (conflict) => {
-          if (conflict.reason !== "tail" || retries >= 8) return Effect.fail(conflict);
-          cached.clear();
+        const first = prepared.batch.records[0];
 
-          return Effect.succeed(undefined);
-        }),
-      );
+        if (first === undefined)
+          return yield* failure("Settlement must publish a retained terminal fact");
 
-      if (result === undefined) continue;
+        const terminalBatch = yield* CanonicalBatch.makeEffect({
+          ...prepared.batch,
+          records: [first, ...prepared.batch.records.slice(1)],
+        }).pipe(
+          Effect.mapError((cause) =>
+            failure("Settlement must publish a retained terminal fact", cause),
+          ),
+        );
 
-      if (result.replayed) cached.clear();
-      else prepared.accept();
+        const result = yield* publisher.publishSettlement(terminalBatch, prepared.executions).pipe(
+          Effect.catchTag("AppendConflict", (conflict) => {
+            if (conflict.reason !== "tail" || retries >= 8) return Effect.fail(conflict);
+            cached.clear();
 
-      return result;
-    }
-  }, gate.withPermits(1));
+            return Effect.succeed(undefined);
+          }),
+        );
 
-  const commit = (batch: CanonicalBatch) =>
-    captureFacts(batch).pipe(Effect.flatMap(commitCaptured));
+        if (result === undefined) continue;
+
+        if (result.replayed) cached.clear();
+        else prepared.accept();
+
+        return result;
+      }
+    },
+    (effect) =>
+      Effect.flatMap(CurrentRunSettlement, (writer) =>
+        writer.withProgress(gate.withPermits(1)(effect)),
+      ),
+  );
+
+  const commit = (batch: CommitBatch) => captureFacts(batch).pipe(Effect.flatMap(commitCaptured));
 
   const publish = (batch: CanonicalBatch) =>
     captureFacts(batch).pipe(Effect.flatMap(publishCaptured));

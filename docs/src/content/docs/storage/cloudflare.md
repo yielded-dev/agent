@@ -16,13 +16,14 @@ Memory stores
 over the same owner share its transaction gate and document, receipt, and usage views.
 Failed transactions discard cached state.
 
-Sequential Runs reuse one verified prompt in the runtime's Scope. After eviction, a disposable
-checkpoint seeds the same cache by authenticating its historical log head and canonical
-`historyDigest`, then projecting a bounded suffix. Warm Runs replace the checkpoint every 16
+Sequential Runs reuse one prompt in the runtime's Scope while its Thread sequence is unchanged.
+After eviction, a disposable checkpoint checks its captured `historyDigest` and projects a bounded
+suffix of completed Runs. Idle import deletes persisted prompt checkpoints in the import transaction,
+so a reused Thread ID cannot reuse an earlier snapshot. Warm Runs replace the checkpoint every 16
 Runs; a cold load refreshes it after settlement. No separate alarm is required.
 
 The resident cache has a 16 MiB retention estimate and a 16,384-message bound; persisted prompt
-JSON is limited to 16 MiB. Missing or incompatible checkpoints, intervening claims, interleaved
+JSON is limited to 16 MiB. Missing or incompatible checkpoints, interleaved
 work, compaction, and suffixes above the memory allowance or 1,024 prompt records use canonical
 reconstruction. Compaction reconstructs canonical boundaries on demand. Unfinished Run recovery
 and explicit verification always rebuild from canonical facts; exports omit these derivatives.
@@ -47,7 +48,7 @@ for application queries.
 `@yielded/agent-storage-cloudflare` also exposes `DoThreadStore` and
 `DoSubmissionLedger` for custom assemblies. Their convenience Layers accept
 `ctx.storage` and supply the SQL client and Crypto. Both stores must use the same
-database so ownership claims fence the same records. These adapters provide storage
+database and scoped owner so local generations guard the same records. These adapters provide storage
 ports; acquiring them alone does not drive agent execution or recovery.
 
 Use the adapters for ordinary writes. If maintenance writes private adapter tables directly,

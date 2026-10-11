@@ -2,9 +2,9 @@ import { Effect, Schema, Stream } from "effect";
 
 import type { RunId, ThreadId } from "../core/Identifiers.ts";
 import { IntegrityCheck, IntegrityReport, type IntegrityCheckName } from "./Admin.ts";
-import { EMPTY_TAIL_DIGEST } from "./Digest.ts";
+import { recordEncoding } from "./internal/record-encoding.ts";
 import { CanonicalSequence, type CanonicalRecordEnvelope, type RecordId } from "./Records.ts";
-import { canonicalRunIds, reference, verifyRunContinuations } from "./RunContinuation.ts";
+import { canonicalRunIds, verifyRunContinuations } from "./RunContinuation.ts";
 import {
   submissionInputRecordId,
   submissionSettlementRecordId,
@@ -18,11 +18,18 @@ import {
   finishThreadImport,
   rebuildImportedSubmission,
   verifyImportedReferences,
-  verifyImportedSettlementOrder,
+  verifyImportedInputOrder,
   ThreadImportRejected,
   ThreadImportReader,
+  validateImportedExecution,
+  validateImportedRunExecution,
 } from "./ThreadImport.ts";
-import { ThreadExport, ThreadStoreError, type ThreadCheckpoint } from "./ThreadStore.ts";
+import {
+  ThreadExport,
+  ThreadStoreError,
+  type ThreadCheckpoint,
+  type ExecutionCheckpoint,
+} from "./ThreadStore.ts";
 
 /** All reads share the export snapshot. No lifetime identity sets or materialization. */
 export interface ThreadInvariantInput<E = ThreadStoreError, R = never> {
@@ -31,6 +38,8 @@ export interface ThreadInvariantInput<E = ThreadStoreError, R = never> {
   /** Complete directory, including settled rows, ordered by queueSequence. */
   readonly submissions: Stream.Stream<SubmissionSnapshot, E, R>;
   readonly runs: Stream.Stream<RunId, E, R>;
+  /** Includes orphan active rows; never obtained through idle-only public export. */
+  readonly executions: Stream.Stream<ExecutionCheckpoint, E, R>;
   readonly checkpoint?: ThreadCheckpoint;
   readonly checkpointsSupported?: boolean;
   readonly requireAllSettled?: boolean;
@@ -49,7 +58,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
 
   const progress = makeThreadImportProgress();
 
-  // Canonical pages, not the disposable Run directory, determine what must be recomputed.
+  // Canonical pages, not the disposable Run directory, determine which retained facts to check.
   // Retain only one bounded selection; interleaved Runs may require another explicit read.
   let verifiedRun:
     | { readonly runId: RunId; readonly records: ReadonlyMap<RecordId, CanonicalRecordEnvelope> }
@@ -74,7 +83,12 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
         });
       after = entry.sequence;
     }
-    yield* verifyRunContinuations(records);
+    yield* verifyRunContinuations(records, { verifyContext: false });
+    yield* validateImportedRunExecution(
+      input.threadId,
+      runId,
+      progress.manifest?.tailSequence ?? CanonicalSequence.make(0),
+    );
     const byId = new Map(records.map((entry) => [entry.record.recordId, entry]));
 
     verifiedRun = { runId, records: byId };
@@ -83,7 +97,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
   });
 
   let lastInputQueue = -1;
-  let checkpointDigest = input.checkpoint?.throughSequence === 0 ? EMPTY_TAIL_DIGEST : undefined;
+  let checkpointBound = input.checkpoint?.throughSequence === 0;
 
   yield* Stream.runForEach(input.pages, (page) =>
     Effect.gen(function* () {
@@ -92,16 +106,10 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
 
       const prepared = yield* Schema.encodeEffect(ThreadExport)(page).pipe(
         Effect.flatMap(Schema.decodeUnknownEffect(ThreadArchive)),
-        Effect.flatMap((archive) =>
-          prepareImportPage(progress, archive, { allowExternalObligations: true }),
-        ),
+        Effect.flatMap((archive) => prepareImportPage(progress, archive, { verification: true })),
         Effect.match({
           onFailure: (e) => {
-            for (const name of [
-              "schema-round-trip",
-              "sequence-contiguity",
-              "digest-chain",
-            ] as const)
+            for (const name of ["schema-round-trip", "sequence-contiguity"] as const)
               fail(name, e.message);
 
             return undefined;
@@ -112,8 +120,7 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
 
       if (prepared === undefined) return;
       for (const batch of prepared.batches)
-        if (batch.lastSequence === input.checkpoint?.throughSequence)
-          checkpointDigest = batch.tailDigest;
+        if (batch.lastSequence === input.checkpoint?.throughSequence) checkpointBound = true;
       for (const entry of prepared.records) {
         yield* Effect.gen(function* () {
           for (const runId of canonicalRunIds(entry.record)) {
@@ -123,11 +130,11 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
               selected === undefined ||
               selected.sequence !== entry.sequence ||
               selected.batchId !== entry.batchId ||
-              (yield* reference(selected.record)).digest !== (yield* reference(entry.record)).digest
+              recordEncoding(selected.record).json !== recordEncoding(entry.record).json
             )
               fail(
                 "continuation-evidence",
-                `Canonical record ${entry.record.recordId} is missing or differs from recomputed Run evidence`,
+                `Canonical record ${entry.record.recordId} is missing or differs from retained Run evidence`,
               );
           }
         }).pipe(
@@ -182,9 +189,20 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
       onSuccess: () => undefined,
       onFailure: (e) => {
         fail("sequence-contiguity", e.message);
-        fail("digest-chain", e.message);
       },
     }),
+  );
+  yield* Stream.runForEach(input.executions, (checkpoint) =>
+    validateImportedExecution(
+      input.threadId,
+      checkpoint,
+      progress.manifest?.tailSequence ?? CanonicalSequence.make(0),
+    ).pipe(
+      Effect.match({
+        onSuccess: () => undefined,
+        onFailure: (e) => fail("continuation-evidence", e.message),
+      }),
+    ),
   );
   yield* Stream.runForEach(input.runs, (runId) =>
     readVerifiedRun(runId).pipe(
@@ -245,9 +263,9 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
         );
       if (input.requireAllSettled && row.state !== "settled")
         fail("all-settled", `Submission ${row.submissionId} is ${row.state}`);
-      yield* verifyImportedSettlementOrder(row).pipe(
+      yield* verifyImportedInputOrder(row).pipe(
         Effect.catchIf(Schema.is(ThreadImportRejected), (e) =>
-          Effect.sync(() => fail("fifo-settlement-order", e.message)),
+          Effect.sync(() => fail("input-before-settlement", e.message)),
         ),
       );
     }),
@@ -260,19 +278,17 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
     fail("all-settled", "No submissions are known");
   if (
     input.checkpoint !== undefined &&
-    (input.checkpoint.threadId !== input.threadId ||
-      checkpointDigest !== input.checkpoint.tailDigest)
+    (input.checkpoint.threadId !== input.threadId || !checkpointBound)
   )
-    fail("checkpoint-binding", "Checkpoint is not bound to a recomputed batch tail");
+    fail("checkpoint-binding", "Checkpoint is not bound to a complete canonical batch tail");
 
   const names: Array<IntegrityCheckName> = [
     "schema-round-trip",
     "record-identity",
     "sequence-contiguity",
-    "digest-chain",
     "continuation-evidence",
     "fifo-input-order",
-    "fifo-settlement-order",
+    "input-before-settlement",
     "terminal-uniqueness",
     "ledger-canonical-agreement",
     "checkpoint-binding",

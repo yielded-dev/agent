@@ -49,7 +49,6 @@ import {
   ThreadRead,
   ThreadStore,
   ThreadStoreError,
-  FenceRejected,
 } from "@yielded/agent/thread-store";
 import { WorkDiscoveryUnavailable } from "@yielded/agent/thread-work";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
@@ -209,6 +208,7 @@ const isMutatingPortRequest = (request: PortRequest): boolean => {
     case "LedgerFundingOwner":
     case "StoreReadPage":
     case "StoreReadPrompt":
+    case "StoreReadExecution":
     case "StoreWorkPage":
     case "StoreInspectTail":
     case "StoreReadIdentity":
@@ -399,6 +399,7 @@ const requirePortThread = (request: PortRequest) => {
     case "StoreAppend":
     case "StoreReadPage":
     case "StoreReadPrompt":
+    case "StoreReadExecution":
     case "StoreInspectTail":
     case "StoreReadIdentity":
     case "StoreCountPeerMessages":
@@ -756,7 +757,6 @@ export const AdminFailure = Schema.Union([
   ThreadStoreError,
   ThreadNotMaterialized,
   AppendConflict,
-  FenceRejected,
   DurableRuntimeFailpointError,
   DurableAlarmError,
   HostProtocolError,

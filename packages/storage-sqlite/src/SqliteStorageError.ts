@@ -1,5 +1,5 @@
 import { SqlStorageFailpointLocation as SqliteStorageFailpointLocation } from "@yielded/agent-storage-sql/sql-storage-failpoint";
-import { CanonicalSequence, ProducerEpoch } from "@yielded/agent/records";
+import { CanonicalSequence } from "@yielded/agent/records";
 import { Schema } from "effect";
 
 /** The SQLite file uses a private-development format this adapter cannot read. */
@@ -54,23 +54,8 @@ export class SqliteAppendConflict extends Schema.TaggedError<SqliteAppendConflic
   "SqliteAppendConflict",
   {
     message: Schema.String,
-    reason: Schema.Literals(["batch-digest", "record-identity", "tail"]),
+    reason: Schema.Literals(["batch-content", "record-identity", "tail", "stale-command"]),
     actualTailSequence: Schema.optionalKey(CanonicalSequence),
-    actualTailDigest: Schema.optionalKey(Schema.String),
-  },
-) {}
-
-/**
- * A producer epoch does not match the Thread's current writer registration. Appends
- * require the exact registered epoch, so both older and newer unregistered epochs are fenced;
- * a newer epoch takes over by materializing first.
- */
-export class SqliteFenceRejected extends Schema.TaggedError<SqliteFenceRejected>()(
-  "SqliteFenceRejected",
-  {
-    actualEpoch: ProducerEpoch,
-    message: Schema.String,
-    producerEpoch: ProducerEpoch,
   },
 ) {}
 

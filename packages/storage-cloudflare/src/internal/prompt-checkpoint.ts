@@ -1,7 +1,6 @@
 import { utf8ByteLength } from "@yielded/agent/digest";
 import {
   MAX_PROMPT_CHECKPOINT_BYTES,
-  MAX_PROMPT_CHECKPOINT_RUNS,
   PromptCheckpoint,
   PromptCheckpointHead,
   PromptCheckpointRead,
@@ -32,7 +31,10 @@ const decodeRows = Schema.decodeUnknownEffect(
 
 const decodeWrite = Schema.decodeEffect(PromptCheckpoint);
 const decodeRead = Schema.decodeEffect(PromptCheckpointRead);
-const prefixFor = (threadId: string) => `prompt-checkpoint/${JSON.stringify(threadId)}/`;
+
+export const promptCheckpointPrefix = (threadId: string) =>
+  `prompt-checkpoint/${JSON.stringify(threadId)}/`;
+
 const keyFor = (prefix: string, chunk: number) => prefix + String(chunk).padStart(5, "0");
 
 /**
@@ -50,7 +52,7 @@ export const makePromptCheckpoints = (
       .read(
         Effect.gen(function* () {
           const request = yield* decodeRead(input);
-          const prefix = prefixFor(request.threadId);
+          const prefix = promptCheckpointPrefix(request.threadId);
 
           // Every row repeats the Thread ID. Bound those known key bytes separately from
           // the prompt and header so supported long IDs do not consume the prompt allowance.
@@ -75,8 +77,7 @@ export const makePromptCheckpoints = (
 
           if (
             header.threadId !== request.threadId ||
-            request.producerEpoch <= header.producerEpoch ||
-            request.producerEpoch - header.producerEpoch > MAX_PROMPT_CHECKPOINT_RUNS ||
+            header.historyThrough >= header.throughSequence ||
             header.chunks !== rows.length - 1 ||
             rows.some((row, index) => row.key !== keyFor(prefix, index))
           )
@@ -85,13 +86,10 @@ export const makePromptCheckpoints = (
 
           if (
             head === undefined ||
-            head.producer_epoch !== request.producerEpoch ||
+            head.tail_sequence !== request.throughSequence ||
             head.tail_sequence < header.throughSequence
           )
             return Option.none();
-          const [anchor] = yield* journal.getTailDigestAt(request.threadId, header.throughSequence);
-
-          if (anchor !== header.tailDigest) return Option.none();
           let bytes = 0;
 
           for (const row of rows) {
@@ -113,8 +111,12 @@ export const makePromptCheckpoints = (
     Effect.gen(function* () {
       const checkpoint = yield* decodeWrite(input);
 
-      if (utf8ByteLength(checkpoint.promptJson) > MAX_PROMPT_CHECKPOINT_BYTES) return;
-      const prefix = prefixFor(checkpoint.threadId);
+      if (
+        utf8ByteLength(checkpoint.promptJson) > MAX_PROMPT_CHECKPOINT_BYTES ||
+        checkpoint.historyThrough >= checkpoint.throughSequence
+      )
+        return;
+      const prefix = promptCheckpointPrefix(checkpoint.threadId);
       const chunks: Array<string> = [];
       // Three UTF-8 bytes per UTF-16 code unit is a conservative bound. Keep surrogate pairs
       // together so SQLite never normalizes an isolated half while persisting a chunk.
@@ -137,13 +139,7 @@ export const makePromptCheckpoints = (
           Effect.gen(function* () {
             const [head] = yield* journal.getThread(checkpoint.threadId);
 
-            if (
-              head === undefined ||
-              head.producer_epoch !== checkpoint.producerEpoch ||
-              head.tail_sequence !== checkpoint.throughSequence ||
-              head.tail_digest !== checkpoint.tailDigest
-            )
-              return;
+            if (head === undefined || head.tail_sequence !== checkpoint.throughSequence) return;
             yield* sql`DELETE FROM effect_agent_meta WHERE key >= ${prefix} AND key < ${prefix + "~"}`;
             for (const [index, value] of [header, ...chunks].entries())
               yield* sql`INSERT INTO effect_agent_meta (key, value) VALUES (${keyFor(prefix, index)}, ${value})`;

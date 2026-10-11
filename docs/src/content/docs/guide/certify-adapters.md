@@ -18,9 +18,9 @@ returns one schema-encoded report.
 
 ## Implement the store contract
 
-A `ThreadStore` materializes a thread, appends fenced batches, reads or observes
-records, exports history, and inspects the tail. Appends must be atomic, digest-bound, idempotent by
-batch ID, checked against the expected tail, and fenced by producer epoch. Reads decode stored
+A `ThreadStore` materializes a thread, appends atomic batches, reads or observes
+records, exports history, and inspects the tail. Appends must be atomic, idempotent by batch ID, checked against the expected tail, and
+protected by the scoped local owner. Reads decode stored
 values through schemas.
 
 Implement `readPrompt` as sparse, ascending pages through a captured canonical sequence, including
@@ -36,32 +36,38 @@ reconstruction uses that same transaction.
 must run the generic checkpoint conformance suite. Retained-history execution does not use it.
 
 A new `ThreadCheckpoint` needs only `schemaVersion`, `threadId`,
-`throughSequence`, `tailDigest`, `state`, and `createdAt`. Adapters bind the sequence and digest
+`throughSequence`, `state`, and `createdAt`. Adapters bind the sequence
 to a canonical batch tail; consumers decode `state` and decide whether its projection version
-supports suffix replay. `ThreadProjection` uses version 3 and rejects older snapshots so
+supports suffix replay. `ThreadProjection` uses version 4 and rejects older snapshots so
 consumers can rebuild from canonical records.
 
-Canonical execution progress is separate from application checkpoints. Implement native
-`RunContinuation` reads for the newest owner record at or before a captured tail, bounded sorted
-`RunEvidence` pages, and retained `WorkHandoffs` pages. Publish their indexes with the canonical
-facts under the same epoch, expected-tail, and idempotency checks. Exact evidence references use
-logical record identities and content digests; physical storage layout cannot change their meaning.
+Authoritative execution progress is separate from application checkpoints. Implement
+`ThreadStore.readExecution` for the current versioned Run checkpoint, bounded sorted `RunEvidence`
+pages, and retained `WorkHandoffs` pages. Commit checkpoint replacements and history facts in one
+transaction under the same owner, expected-tail and idempotency checks. Progress-only commits
+do not advance the canonical tail, so checkpoint revision comparisons are mandatory.
+Exact evidence references use
+logical record identities and canonical sequence positions; physical storage layout cannot change their meaning.
 
 An append containing progress must reject conflicting revisions, changed original references,
-regressed accounting, or a frontier outside the same batch before writing. Preparations stay
-indexed after Run settlement; destination acknowledgement owns closure. An index grants no
+regressed accounting, or a frontier outside the same commit before writing. Remove active state
+with canonical terminal proof; unresolved obligations retain their own rows. Keep active verification
+independent of idle-only export. Preparations stay indexed after Run settlement; destination
+acknowledgement owns closure. An index grants no
 execution authority, and missing required evidence is a typed fault, not an empty completed Run.
 See [Run continuations](/concepts/durability/#run-continuations) for recovery bounds.
 
-This unreleased format accepts only fresh layout-21 storage and `effect-agent/thread@3` archives.
+This unreleased format accepts only fresh layout-25 storage and `effect-agent/thread@6` archives.
 Refuse predecessor, newer, or ambiguous layouts before any DDL or record mutation. Preserve the
 rejected store; there is no layout upgrade or historical record decoder.
 
 Thread age has no canonical record ceiling. Export and verification stream bounded pages. Keep each
 `ThreadRead` page at or below 1,024 records and each `CanonicalBatch` at or below 256. An export
-must preserve one captured tail and independent fact revision across its bounded pages, including
-all immutable admissions, accepted commands, deliveries, and cross-range dependencies. Implement
-exact native locators and streaming verification; never silently treat one page as complete history.
+requires application quiescence and must reject any pending work before returning a page. Keep
+one captured tail and manifest of closed admissions, applied commands and terminal delivery facts.
+No transfer revision is maintained on ordinary writes. Import consumes a completed archive and
+publishes into an empty Thread atomically. Implement exact native locators and bounded verification;
+never silently treat one page as complete history.
 
 Implement `SubmissionLedger.readAbortIntent` as a strongly consistent read of one submission's
 abort intent. The runtime polls this method during execution, so its work must stay independent
@@ -104,9 +110,9 @@ const certificate = Effect.gen(function* () {
 ```
 
 Provide `Crypto.Crypto` with `NodeCrypto.layer` on Node or `BrowserCrypto.layer` in workerd. Run
-with a `TestClock` through `@effect/vitest` or a manual `TestClock.layer()` root. Tier 1 advances
-leases, and tier 2 advances past the ownership lease during recovery. Pass
-`ownershipLeaseDuration` when the ledger uses a different lease.
+with a `TestClock` through `@effect/vitest` or a manual `TestClock.layer()` root. The owner test
+checks that elapsed time never permits a takeover; recovery closes the failed Attempt's Scope
+before acquiring its replacement.
 
 If both ports share a connection, pass the same combined layer instance to both fields. Layer
 memoization will acquire it once.
@@ -156,8 +162,8 @@ scenario and the exact never-fired set. Dedicated suites and crash matrices cove
 background-worker, and Agent-update paths.
 Those dedicated suites run separately; the certificate runner does not execute them.
 
-The final invariant check recomputes the digest chain from `EMPTY_TAIL_DIGEST` and uses the same
-checker as the administrative `verify` operation.
+The final invariant check validates schema, identity, sequence, retained history and active state
+using the administrative `verify` operation.
 
 <a id="tier-3-evidence"></a>
 

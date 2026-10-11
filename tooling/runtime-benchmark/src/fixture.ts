@@ -13,12 +13,12 @@ import { AgentId, RunId, ThreadId } from "@yielded/agent/identifiers";
 import {
   BatchId,
   CanonicalBatch,
+  CanonicalSequence,
   DefinitionDigests,
   DeploymentId,
   Digest,
   ModelCompleted,
   PersistedJson,
-  ProducerEpoch,
   ProducerId,
   RecordEnvelope,
   RecordId,
@@ -33,7 +33,6 @@ import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunContextPreparation } from "@yielded/agent/run-options";
 import {
   AdmissionRequest,
-  ClaimRequest,
   IdempotencyKey,
   MarkReadyRequest,
   Principal,
@@ -186,7 +185,6 @@ const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number)
   yield* store.materialize(
     ThreadStorage.ThreadMaterialization.make({
       threadId,
-      producerEpoch: Schema.decodeSync(ProducerEpoch)(0),
     }),
   );
   for (let start = 0; start < count; start += 256) {
@@ -260,12 +258,10 @@ const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number)
     const tail = yield* store.inspectTail(ThreadStorage.ThreadTailRequest.make({ threadId }));
 
     yield* store.append(
-      ThreadStorage.FencedAppendRequest.make({
+      ThreadStorage.AppendRequest.make({
         threadId,
         batch,
         expectedTailSequence: tail.tailSequence,
-        expectedTailDigest: tail.tailDigest,
-        producerEpoch: tail.producerEpoch,
       }),
     );
   }
@@ -274,7 +270,10 @@ const seedHistory = Effect.fn("benchmark.seedHistory")(function* (count: number)
 /** Comparison-only adaptation: retain historical export semantics without changing adapters. */
 const exportArchive = (): Stream.Stream<
   ThreadStorage.ThreadExport,
-  ThreadStorage.ThreadStoreError | ThreadStorage.ThreadNotMaterialized | BenchmarkError,
+  | ThreadStorage.ThreadStoreError
+  | ThreadStorage.ThreadNotMaterialized
+  | ThreadStorage.ThreadExportRejected
+  | BenchmarkError,
   ThreadStorage.ThreadStore | ThreadStorage.ThreadExportSource
 > => {
   const request = ThreadStorage.ThreadExportRequest.make({ threadId });
@@ -310,9 +309,6 @@ const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
     );
 
     yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
-    const claim = yield* ledger.claim(ClaimRequest.make({ threadId: seedThread, producerId }));
-
-    if (Option.isNone(claim)) return yield* check(false, "Ledger seed could not claim its row");
     const settlementId = submissionSettlementId(admitted.submissionId);
 
     const payload = yield* Schema.decodeEffect(SubmissionSettledRecord)(
@@ -342,12 +338,9 @@ const seedLedger = Effect.fn("benchmark.seedLedger")(function* (count: number) {
 
     yield* publishSeedSettlement(
       admitted.submissionId,
-      claim.value.ownershipToken,
-      ThreadStorage.FencedAppendRequest.make({
+      ThreadStorage.AppendRequest.make({
         threadId: seedThread,
-        producerEpoch: claim.value.producerEpoch,
         expectedTailSequence: tail.tailSequence,
-        expectedTailDigest: tail.tailDigest,
         batch: CanonicalBatch.make({
           batchId: submissionSettlementBatchId(admitted.submissionId),
           producerId,
@@ -654,6 +647,9 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
       const fs = yield* FileSystem.FileSystem;
       const directory = yield* fs.makeTempDirectoryScoped({ prefix: "runtime-benchmark-" });
       const filename = `${directory}/thread.sqlite`;
+      let recoveryExecution: ThreadStorage.ExecutionCheckpoint | undefined;
+      let terminalExecution: ThreadStorage.ExecutionCheckpoint | undefined;
+      let atSettlement: Effect.Effect<void> = Effect.die("Settlement observer not acquired");
 
       const host = (crash: boolean) =>
         NodeDurableAgentRuntime.layer({
@@ -683,6 +679,7 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
             : {}),
           runtimeFailpoint: (location) =>
             Effect.gen(function* () {
+              if (location === "terminalize:before-publication") yield* atSettlement;
               if (location === "compaction:before-canonical-append")
                 compactionStarted = yield* Clock.monotonicTimeNanos;
               if (location === "compaction:after-canonical-append") {
@@ -720,7 +717,53 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
 
       const finish = Effect.gen(function* () {
         const runtime = yield* DurableAgentRuntime;
+        const store = yield* ThreadStorage.ThreadStore;
         const receipt = yield* submit;
+        const runId = runIdForSubmission(receipt.submissionId);
+
+        // Historical comparison revisions retain operational rows in canonical history.
+        // An available current-state port must never fall back when its evidence is missing.
+        const current = typeof store.readExecution === "function";
+
+        if (recoveryExecution !== undefined) {
+          const reopened = yield* store.readExecution({ threadId, runId });
+
+          yield* check(
+            Option.isSome(reopened) &&
+              (yield* Schema.encodeEffect(Schema.fromJsonString(ThreadStorage.ExecutionCheckpoint))(
+                reopened.value,
+              )) ===
+                (yield* Schema.encodeEffect(
+                  Schema.fromJsonString(ThreadStorage.ExecutionCheckpoint),
+                )(recoveryExecution)),
+            "Recovery changed the active original context, clock or cumulative accounting",
+          );
+        }
+        atSettlement = Effect.gen(function* () {
+          if (!current) return;
+          const execution = yield* store.readExecution({ threadId, runId });
+
+          if (Option.isNone(execution))
+            return yield* BenchmarkError.make({ message: "Missing active terminal execution" });
+          terminalExecution = execution.value;
+          if (recoveryExecution !== undefined) {
+            const original = (value: ThreadStorage.ExecutionCheckpoint) =>
+              value.operational.filter(
+                ({ payload }) =>
+                  payload._tag === "RunStarted" || payload._tag === "RunContextRecorded",
+              );
+
+            yield* check(
+              (yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Array(RecordEnvelope)))(
+                original(terminalExecution),
+              )) ===
+                (yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Array(RecordEnvelope)))(
+                  original(recoveryExecution),
+                )),
+              "Recovered Run replaced its original clock or evaluated context",
+            );
+          }
+        }).pipe(Effect.orDie);
 
         if (workload.kind === "ledger") {
           const ledger = yield* SubmissionLedger;
@@ -736,6 +779,13 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
 
         yield* markFinish;
         yield* check(settlement.outcome === "completed", "Durable submission did not complete");
+        if (current)
+          yield* check(
+            terminalExecution?.progress.runId === runId &&
+              Option.isNone(yield* store.readExecution({ threadId, runId })) &&
+              settlement.usageSummary?.modelCalls === (workload.kind === "recovery" ? 2 : 1),
+            "Durable completion lost active evidence, cumulative usage or checkpoint retirement",
+          );
         let completed = 0;
         let retained = 0;
 
@@ -745,17 +795,23 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
               for (const { record } of page.records) {
                 if (record.recordId.startsWith("retained-")) retained++;
                 if (
-                  record.payload._tag === "RunCompleted" &&
-                  record.payload.runId === runIdForSubmission(receipt.submissionId)
+                  record.payload._tag === "SubmissionSettled" &&
+                  record.payload.submissionId === receipt.submissionId &&
+                  record.payload.runId === runId
                 ) {
                   completed++;
-                  yield* verify(record.payload.output);
+                  yield* check(
+                    record.payload.outcome === "completed" &&
+                      record.payload.finishReason === undefined,
+                    "Canonical durable outcome did not complete normally",
+                  );
+                  yield* verify(record.payload.result);
                 }
               }
             }),
           ),
         );
-        yield* check(completed === 1, "Expected one canonical RunCompleted");
+        yield* check(completed === 1, "Expected one canonical SubmissionSettled");
         yield* check(
           retained === (workload.kind === "ledger" ? 0 : workload.records),
           "Retained canonical archive changed during the measured submission",
@@ -776,27 +832,42 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
             compactionCommitMs,
           });
           const store = yield* ThreadStorage.ThreadStore;
+          const runId = runIdForSubmission(receipt.submissionId);
 
-          const tail = yield* store.inspectTail(ThreadStorage.ThreadTailRequest.make({ threadId }));
+          if (typeof store.readExecution === "function") {
+            const execution = yield* store.readExecution({ threadId, runId });
 
-          const continuation = yield* store
-            .read({
-              threadId,
-              selection: {
-                _tag: "RunContinuation",
-                runId: runIdForSubmission(receipt.submissionId),
-                throughSequence: tail.tailSequence,
-              },
-              page: { limit: 1 },
-            })
-            .pipe(Stream.runHead);
+            if (Option.isNone(execution) || execution.value.progress.runId !== runId)
+              return yield* BenchmarkError.make({
+                message: "Recovery fixture has no owning active execution",
+              });
+            recoveryExecution = execution.value;
+          } else {
+            // Older revisions really persisted these rows. Inspect their canonical
+            // stream during untimed checkpoint setup without requiring a retired selector.
+            const continuation = yield* store
+              .read(
+                ThreadStorage.ThreadRead.make({
+                  threadId,
+                  afterSequence: CanonicalSequence.make(workload.records),
+                  limit: 256,
+                }),
+              )
+              .pipe(
+                Stream.filter(
+                  ({ record }) =>
+                    record.payload._tag === "RunContinuation" && record.payload.runId === runId,
+                ),
+                Stream.runLast,
+              );
 
-          yield* check(
-            Option.isSome(continuation) &&
-              continuation.value.record.payload._tag === "RunContinuation" &&
-              continuation.value.record.payload.runId === runIdForSubmission(receipt.submissionId),
-            "Recovery fixture has no owning canonical progress",
-          );
+            yield* check(
+              Option.isSome(continuation) &&
+                continuation.value.record.payload._tag === "RunContinuation" &&
+                continuation.value.record.payload.runId === runId,
+              "Historical recovery fixture has no owning canonical progress",
+            );
+          }
           yield* inspectScript;
         }).pipe(
           Effect.provide(Layer.mergeAll(host(true), model([script(toolParts(0, 1))]), handlers)),

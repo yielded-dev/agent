@@ -43,7 +43,7 @@ import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { ScheduledInputRefused, ScheduledInputRetryable } from "@yielded/agent/schedule";
 import { SubmissionLedger, SubmissionLookupByKey } from "@yielded/agent/submission-ledger";
 import { PreparedInput } from "@yielded/agent/subscription";
-import { ThreadExportRequest, ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
+import { ThreadTailRequest, ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import { Context, Duration, Effect, Layer, Option, Schema, Stream } from "effect";
@@ -139,7 +139,6 @@ const makeHarness = Effect.fn(function* (
       DurableRuntimeConfig.layer({
         deploymentId: Schema.decodeSync(DeploymentId)("peer-test"),
         producerId: Schema.decodeSync(ProducerId)("peer-test"),
-        leaseRenewalInterval: Duration.seconds(5),
         settlementPollInterval: Duration.millis(100),
       }),
       Layer.succeed(PeerAuthorizer, {
@@ -283,7 +282,7 @@ const makeHarness = Effect.fn(function* (
   const driver = yield* makeDriver();
 
   const history = Effect.fnUntraced(function* (threadId: ThreadId) {
-    const page = yield* store.export(ThreadExportRequest.make({ threadId }));
+    const page = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
     if (page.tailSequence > 1024) return yield* Effect.die("Fixture history exceeds 1024 records");
     let bytes = 0;
@@ -415,7 +414,8 @@ describe("durable peer messaging boundaries", () => {
             .send({ ...peer, encodedInput: { text: "changed" }, idempotencyKey: key("message") })
             .pipe(Effect.flip),
         ).toMatchObject({ reason: "conflict" });
-        expect((yield* h.history(sourceThread)).tailDigest).toBe(before.tailDigest);
+        expect((yield* h.history(sourceThread)).records).toEqual(before.records);
+
         expect(
           h.controls.authorizations.some(
             (request) =>
@@ -528,7 +528,7 @@ describe("durable peer messaging boundaries", () => {
             _tag: "AdmissionPolicyError",
             reason: "refused",
           });
-          expect((yield* h.history(destinationThread)).tailDigest).toBe(before.tailDigest);
+
           expect(
             Option.isNone(
               yield* h.ledger.lookup(
@@ -544,7 +544,8 @@ describe("durable peer messaging boundaries", () => {
         expect(
           yield* h.submitEnvelope({ ...envelope, input: { text: "changed" } }).pipe(Effect.flip),
         ).toMatchObject({ _tag: "AdmissionPolicyError", reason: "refused" });
-        expect((yield* h.history(destinationThread)).tailDigest).toBe(before.tailDigest);
+
+        expect((yield* h.history(destinationThread)).records).toEqual(before.records);
         expect((yield* h.row(pending.message)).status).toBe("pending");
       }).pipe(Effect.scoped),
   );
@@ -581,7 +582,8 @@ describe("durable peer messaging boundaries", () => {
               .pipe(Effect.flip),
           ).toMatchObject({ reason: "invalid-reference" });
         }
-        expect((yield* h.history(destinationThread)).tailDigest).toBe(before.tailDigest);
+
+        expect((yield* h.history(destinationThread)).records).toEqual(before.records);
         expect(yield* h.proofs(destinationThread)).toHaveLength(0);
         expect(
           (yield* h.deliveries.list({ ownerThreadId: destinationThread, limit: 10 })).items,
@@ -713,7 +715,8 @@ describe("durable peer messaging boundaries", () => {
       const before = yield* h.history(sourceThread);
 
       expect(yield* h.send("third").pipe(Effect.flip)).toMatchObject({ reason: "capacity" });
-      expect((yield* h.history(sourceThread)).tailDigest).toBe(before.tailDigest);
+      expect((yield* h.history(sourceThread)).records).toEqual(before.records);
+
       expect(
         (yield* h.deliveries.list({ ownerThreadId: sourceThread, limit: 10 })).items,
       ).toHaveLength(1);
@@ -799,7 +802,8 @@ describe("durable peer messaging boundaries", () => {
       expect(refused.status).toBe("refused");
       expect(refused.refusal).toBe("message-denied");
       expect(refused.receipt).toBeNull();
-      expect((yield* h.history(destinationThread)).tailDigest).toBe(before.tailDigest);
+      expect((yield* h.history(destinationThread)).records).toEqual(before.records);
+
       h.controls.denied = () => false;
       expect(yield* h.driver.process(pending.message)).toEqual(refused);
       expect((yield* h.send()).status).toBe("refused");

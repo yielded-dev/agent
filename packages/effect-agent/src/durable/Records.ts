@@ -8,7 +8,6 @@ import { Update } from "../core/AgentUpdates.ts";
 import * as FailureDiagnostic from "../core/FailureDiagnostic.ts";
 import {
   AgentId,
-  AttemptId,
   ThreadId,
   DelegationId,
   ReceiptId,
@@ -53,7 +52,7 @@ export const DeploymentId = Schema.NonEmptyString.pipe(
 
 export type DeploymentId = typeof DeploymentId.Type;
 
-/** Identity of a fenced canonical-log producer. */
+/** Identity of a canonical-log producer. */
 export const ProducerId = Schema.NonEmptyString.pipe(
   Schema.brand("@effect-agent/thread/ProducerId"),
 );
@@ -80,13 +79,6 @@ export const CanonicalSequence = Schema.Natural.pipe(
 );
 
 export type CanonicalSequence = typeof CanonicalSequence.Type;
-
-/** Monotonic fencing epoch for a Thread producer. */
-export const ProducerEpoch = Schema.Natural.pipe(
-  Schema.brand("@effect-agent/thread/ProducerEpoch"),
-);
-
-export type ProducerEpoch = typeof ProducerEpoch.Type;
 
 const BoundedText = Schema.String.check(Schema.isMaxLength(64 * 1024));
 const BoundedName = Schema.NonEmptyString.check(Schema.isMaxLength(256));
@@ -367,7 +359,6 @@ export class ToolUnavailable extends Schema.TaggedClass<ToolUnavailable>()("Tool
  * One committed model Turn. `messages` carries the Schema-encoded Effect AI Prompt messages this
  * Turn appended (assistant response plus any tool-call declarations), committed atomically at the
  * Turn boundary so a recovering Attempt can rebuild the next Prompt from canonical records alone.
- * `messagesDigest` pins the exact encoded content.
  */
 const ModelResponseRecordedFields = Schema.Struct({
   /** Original bound for each application result; replacement Bindings cannot enlarge it. */
@@ -387,7 +378,6 @@ const ModelResponseRecordedFields = Schema.Struct({
   turnId: TurnId,
   turn: TurnNumber,
   messages: PersistedJson,
-  messagesDigest: Digest,
   /**
    * Number of leading messages that belong only to this Run's evaluated instructions and wake
    * input. They remain canonical. An unfinished Run retains this exact evaluated prefix;
@@ -566,17 +556,13 @@ export class ToolApprovalDecided extends Schema.TaggedClass<ToolApprovalDecided>
 }) {}
 
 /**
- * Conservative interruption audit before resuming inference without a canonical response.
- * The preceding fencing generation may include retirement or repair, so this marks incomplete
- * usage coverage and possible duplicate provider cost, not an exact missing-call count.
+ * A Run resumed inference without a retained response. One marker makes usage coverage
+ * incomplete; it does not count missing provider calls or retain Attempt history.
  */
 export class ModelResponseInterrupted extends Schema.TaggedClass<ModelResponseInterrupted>(
   "@effect-agent/thread/ModelResponseInterrupted",
 )("ModelResponseInterrupted", {
   runId: RunId,
-  supersededEpoch: ProducerEpoch,
-  attemptId: AttemptId,
-  reason: BoundedText,
 }) {}
 
 /** Disposable call cancellation: no response or Tool declaration is canonical. */
@@ -626,7 +612,6 @@ const RunCompletedFields = Schema.Struct({
   runId: RunId,
   output: PersistedJson,
   /** Integrity of validated terminal values, independent of future application codecs. */
-  resultDigest: Schema.optionalKey(Digest),
   /** Application disposition captured with an ordinary completion. */
   runDisposition: Schema.optionalKey(PersistedJson),
   /** Honest soft-landing marker, present exactly when `exhausted` is present. */
@@ -681,6 +666,8 @@ const RawSubmissionSettled = Schema.Struct({
   receiptId: ReceiptId,
   outcome: SettlementOutcome,
   runId: Schema.optionalKey(RunId),
+  /** Number of retained owning facts through this terminal commit, excluding mutable progress. */
+  historyRecordCount: Schema.optionalKey(Schema.Natural),
   result: Schema.optionalKey(PersistedJson),
   /**
    * Application-defined, Schema-encoded disposition for an ordinary completed
@@ -852,8 +839,7 @@ export class SubagentStarted extends Schema.TaggedClass<SubagentStarted>(
 
 /**
  * PARENT-log record of one verified child settlement join:
- * the child's canonical Settlement identity and outcome, the digests pinning the verified child
- * result and the bounded projected parent result, the child usage summary, and the FINAL
+ * the child's canonical Settlement identity and outcome, the child usage summary, and the FINAL
  * consumed/released accounting decision for the reservation. It commits in ONE atomic batch with
  * the parent `ToolCallSettled` record (SUB-019); `beginChildBudgetRelease` replays
  * `finalAccounting` from this record, so canonical history authorizes the release (DUR-015).
@@ -866,8 +852,6 @@ export class SubagentJoined extends Schema.TaggedClass<SubagentJoined>(
   childSubmissionId: SubmissionId,
   childSettlementId: SettlementId,
   childOutcome: SettlementOutcome,
-  childResultDigest: Digest,
-  projectedResultDigest: Digest,
   usageSummary: PersistedJson,
   usage: Schema.optionalKey(RunTotals),
   delegatedUsage: Schema.optionalKey(RunTotals),
@@ -1106,8 +1090,8 @@ export class SubtreeBudgetReserved extends Schema.TaggedClass<SubtreeBudgetReser
   },
 ) {}
 
-/** Logical canonical identity and content integrity, independent of hot-storage location. */
-export const EvidenceReference = Schema.Struct({ recordId: RecordId, digest: Digest });
+/** Fact identity; active-only references resolve inside their Run checkpoint. */
+export const EvidenceReference = Schema.Struct({ recordId: RecordId });
 export type EvidenceReference = typeof EvidenceReference.Type;
 
 /**
@@ -1215,12 +1199,12 @@ export const RunPosition = Schema.Literals([
 ]);
 
 /**
- * Canonical interpreter progress, co-committed with lastFact under the Thread fence.
- * lastFact is the exact accounted frontier in the same atomic batch; its logical
- * sequence is resolved from canonical evidence rather than predicted by a producer.
- * References resolve within this Thread. Operation results, call identities, approvals,
- * delivery obligations, and context payloads stay in their own canonical owners.
- * Neither this record nor its latest-record index grants execution authority.
+ * Current interpreter progress, replaced atomically with lastFact under the Thread fence.
+ * lastFact is the exact accounted frontier of the same commit. References resolve within this
+ * Thread's history or its authoritative active checkpoint. Results, operation declarations,
+ * approvals and delivery obligations remain canonical; evaluated context and validated completion
+ * belong to active state. Neither the checkpoint nor its revision grants execution authority.
+ * Retired intermediate revisions are not historical verification evidence.
  */
 export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
   "RunContinuation",
@@ -1233,11 +1217,11 @@ export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
     recordCount: Schema.Natural.check(
       Schema.isLessThanOrEqualTo(MAX_RUN_EVIDENCE_RECORDS + RUN_TERMINAL_RESERVE_RECORDS),
     ),
-    /** Cumulative owning fact bytes, excluding continuation records. */
+    /** Cumulative committed owning fact bytes, excluding progress; deletion never refunds them. */
     recordBytes: Schema.Natural.check(
       Schema.isLessThanOrEqualTo(MAX_RUN_EVIDENCE_BYTES + MAX_RUN_TERMINAL_BYTES),
     ),
-    /** Logical Turn whose incremental canonical bytes are currently being charged. */
+    /** Logical Turn whose incremental durable commit bytes are currently being charged. */
     turn: Schema.Natural,
     turnBytes: Schema.Natural.check(
       Schema.isLessThanOrEqualTo(MAX_TURN_CANONICAL_BYTES + MAX_RUN_TERMINAL_BYTES),
@@ -1258,10 +1242,10 @@ export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
 ) {}
 
 /** Bump only when the meaning of an existing record changes, independently of SQL layout. */
-export const CURRENT_RECORD_VERSION = 3;
-export const CURRENT_RECORD_FORMAT = "effect-agent/thread@3";
+export const CURRENT_RECORD_VERSION = 6;
+export const CURRENT_RECORD_FORMAT = "effect-agent/thread@6";
 
-/** Supported canonical facts. Unsupported control records must fail before execution. */
+/** Durable fact and execution-command schemas. Unsupported controls fail before execution. */
 export const KnownRecordPayload = Schema.Union([
   ThreadCreated,
   UserInputRecorded,
@@ -1309,8 +1293,8 @@ export const CanonicalRecordPayload = KnownRecordPayload;
 export type CanonicalRecordPayload = typeof CanonicalRecordPayload.Type;
 
 /**
- * Versioned record envelope stored in an atomic batch. Thread ordering is assigned only
- * when the batch is committed.
+ * Versioned durable fact. Retained history acquires Thread ordering at its atomic commit;
+ * active operational facts keep their identities without a canonical sequence.
  */
 export class RecordEnvelope extends Schema.Class<RecordEnvelope>(
   "@effect-agent/thread/RecordEnvelope",
@@ -1379,6 +1363,7 @@ export const PromptRecordPayload = Schema.TaggedUnion({
   SubmissionSettled: {
     runId: Schema.optionalKey(RunId),
     submissionId: SubmissionId,
+    outcome: SettlementOutcome,
   },
 });
 

@@ -21,7 +21,13 @@ import {
 } from "@yielded/agent/durable-failpoint";
 import { ToolExecutionClass } from "@yielded/agent/durable-step";
 import { ThreadId } from "@yielded/agent/identifiers";
-import { DefinitionDigests, DefinitionDigestInput, Digest } from "@yielded/agent/records";
+import {
+  DefinitionDigests,
+  DefinitionDigestInput,
+  Digest,
+  type RecordEnvelope,
+} from "@yielded/agent/records";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-options";
 import {
   IdempotencyKey,
@@ -42,6 +48,7 @@ import {
   Fiber,
   FileSystem,
   Layer,
+  Option,
   Ref,
   Schema,
   Stream,
@@ -633,6 +640,7 @@ describe("NodeDurableAgentRuntime", () => {
 
         const accepted = yield* Effect.gen(function* () {
           const runtime = yield* DurableAgentRuntime;
+          const store = yield* ThreadStore;
 
           const saved = yield* runtime.submit(
             initialAgent,
@@ -659,16 +667,32 @@ describe("NodeDurableAgentRuntime", () => {
           const records = yield* readRecords(saved.threadId);
           const queuedRecords = yield* readRecords(queued.threadId);
 
-          expect(
-            records.filter(({ record }) => record.payload._tag === "RunContextRecorded"),
-          ).toHaveLength(1);
-          expect(queuedRecords.some(({ record }) => record.payload._tag === "RunStarted")).toBe(
-            false,
+          const execution = Option.getOrThrow(
+            yield* store.readExecution({
+              threadId: saved.threadId,
+              runId: runIdForSubmission(saved.submissionId),
+            }),
           );
 
+          expect(
+            execution.operational.filter(({ payload }) => payload._tag === "RunContextRecorded"),
+          ).toHaveLength(1);
+
+          const starts = execution.operational.filter(
+            ({ payload }) => payload._tag === "RunStarted",
+          );
+
+          expect(starts).toHaveLength(1);
+          expect(
+            yield* store.readExecution({
+              threadId: queued.threadId,
+              runId: runIdForSubmission(queued.submissionId),
+            }),
+          ).toEqual(Option.none());
+
           return [
-            { receipt: saved, records },
-            { receipt: queued, records: queuedRecords },
+            { receipt: saved, records, starts },
+            { receipt: queued, records: queuedRecords, starts: undefined },
           ];
         }).pipe(
           Effect.provide(
@@ -718,7 +742,7 @@ describe("NodeDurableAgentRuntime", () => {
               return {
                 result,
                 status,
-                ownership: snapshot.ownership,
+                hasOwner: snapshot.hasOwner,
                 terminal: records.filter(
                   ({ record }) =>
                     record.payload._tag === "RunFailed" ||
@@ -740,7 +764,7 @@ describe("NodeDurableAgentRuntime", () => {
           accepted.map(() => ({
             result: { _tag: "Failure", failure: { _tag: "BindingUnavailable" } },
             status: { _tag: "pending" },
-            ownership: undefined,
+            hasOwner: false,
             terminal: [],
           })),
         );
@@ -759,10 +783,30 @@ describe("NodeDurableAgentRuntime", () => {
           model,
         );
 
+        let inspectStart: Effect.Effect<void> = Effect.void;
+
         yield* Effect.gen(function* () {
           const runtime = yield* DurableAgentRuntime;
+          const store = yield* ThreadStore;
 
-          for (const { receipt, records: prefix } of accepted) {
+          for (const { receipt, records: prefix, starts } of accepted) {
+            const completingStarts: Array<RecordEnvelope> = [];
+
+            inspectStart = store
+              .readExecution({
+                threadId: receipt.threadId,
+                runId: runIdForSubmission(receipt.submissionId),
+              })
+              .pipe(
+                Effect.map((execution) => {
+                  completingStarts.push(
+                    ...Option.getOrThrow(execution).operational.filter(
+                      ({ payload }) => payload._tag === "RunStarted",
+                    ),
+                  );
+                }),
+                Effect.orDie,
+              );
             yield* runtime.processThreadHead(receipt.threadId);
             expect(yield* runtime.submissionStatus(receipt)).toMatchObject({
               _tag: "settled",
@@ -771,9 +815,14 @@ describe("NodeDurableAgentRuntime", () => {
             const records = yield* readRecords(receipt.threadId);
 
             expect(records.slice(0, prefix.length)).toEqual(prefix);
+            expect(completingStarts).toHaveLength(1);
+            if (starts !== undefined) expect(completingStarts).toEqual(starts);
             expect(
-              records.filter(({ record }) => record.payload._tag === "RunStarted"),
-            ).toHaveLength(1);
+              yield* store.readExecution({
+                threadId: receipt.threadId,
+                runId: runIdForSubmission(receipt.submissionId),
+              }),
+            ).toEqual(Option.none());
             expect(
               records.filter(({ record }) => record.payload._tag === "SubmissionSettled"),
             ).toHaveLength(1);
@@ -782,7 +831,10 @@ describe("NodeDurableAgentRuntime", () => {
           Effect.provide(
             NodeDurableHost.layerRegistered(
               [{ agent: compatible, definitions }],
-              runtimeOptions(filename),
+              runtimeOptions(filename, {
+                runtimeFailpoint: (location) =>
+                  location === "terminalize:before-publication" ? inspectStart : Effect.void,
+              }),
             ),
           ),
         );

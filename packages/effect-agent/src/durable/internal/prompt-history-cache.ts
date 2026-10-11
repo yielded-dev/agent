@@ -7,16 +7,13 @@ import { canonicalJson, digestCanonicalJson, utf8ByteLength } from "../Digest.ts
 import {
   CanonicalSequence,
   CURRENT_RECORD_FORMAT,
-  RecordId,
   type CanonicalRecordEnvelope,
   type Digest,
-  type ProducerEpoch,
 } from "../Records.ts";
 import { CurrentRunWriter } from "../RunContinuation.ts";
 import { projectRunJournalStream, RunJournalError } from "../RunJournal.ts";
 import type { RunWriter } from "../RunStorage.ts";
 import {
-  getRecord,
   MAX_PROMPT_CHECKPOINT_BYTES,
   MAX_PROMPT_CHECKPOINT_RUNS,
   ThreadPromptRead,
@@ -49,17 +46,12 @@ export interface PromptHistory {
   encoded: string | undefined;
   bytes: number | undefined;
   digest?: Digest | undefined;
-  readonly refreshedAt?: ProducerEpoch | undefined;
+  readonly runsSinceCheckpoint?: number | undefined;
 }
 
 export interface CachedPromptHistory extends PromptHistory {
   readonly threadId: ThreadId;
   readonly through: CanonicalSequence;
-  readonly tailDigest: Digest;
-  readonly producerEpoch: ProducerEpoch;
-  /** Canonical authentication of the prefix before the suffix folded into this Prompt. */
-  readonly contextRecordId: RecordId;
-  readonly historyDigest: Digest;
 }
 
 /** Internal canonical projection; ownership comes from the ThreadStore read contract. */
@@ -147,7 +139,7 @@ export const digestPromptHistory = (prompt: Prompt.Prompt, history: PromptHistor
 };
 
 /** Writer identity is data; effectful writer ports stay in Effect context. */
-type WriterIdentity = Pick<RunWriter, "threadId" | "producerEpoch">;
+type WriterIdentity = Pick<RunWriter, "threadId">;
 
 /** Fold only complete, sequential Runs. Raw facts and encoded/native messages are bounded. */
 const readSuffix = Effect.fnUntraced(function* (
@@ -156,13 +148,13 @@ const readSuffix = Effect.fnUntraced(function* (
   through: CanonicalSequence,
   firstRun: RunId,
   allowance: number,
+  firstThrough: CanonicalSequence,
 ) {
   const store = yield* ThreadStore;
   const records: Array<JournalRecordEnvelope> = [];
   let after = from;
   let remaining = allowance;
   let active: RunId | undefined;
-  let completed = false;
   let runs = 0;
 
   while (after < through) {
@@ -199,13 +191,12 @@ const readSuffix = Effect.fnUntraced(function* (
         )
           return undefined;
         active = payload.runId;
-        completed = false;
         if (++runs > MAX_PROMPT_CHECKPOINT_RUNS) return undefined;
       } else {
         if (active === undefined || payload.runId !== active) return undefined;
-        if (payload._tag === "RunCompleted") completed = true;
         if (payload._tag === "SubmissionSettled") {
-          if (!completed) return undefined;
+          if (payload.outcome !== "completed" || (runs === 1 && entry.sequence !== firstThrough))
+            return undefined;
           active = undefined;
         }
       }
@@ -260,7 +251,7 @@ const appendJson = (
   (prefix.prompt.content.length > 0 && suffix.prompt.content.length > 0 ? "," : "") +
   suffix.encoded.slice(JSON_PREFIX.length);
 
-/** Memory and persisted prefixes share the same canonical anchor and suffix rules. */
+/** Sequence anchors are unambiguous within one append-only Thread; import discards derivatives. */
 export const makePromptHistoryCache = Effect.fnUntraced(function* () {
   let current: CachedPromptHistory | undefined;
   let closed = false;
@@ -281,82 +272,60 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* () {
       const store = yield* ThreadStore;
 
       if (cached === undefined && store.promptCheckpoints === undefined) return undefined;
-      if (
-        cached !== undefined &&
-        (cached.threadId !== writer.threadId || writer.producerEpoch !== cached.producerEpoch + 1)
-      )
-        return undefined;
+      if (cached !== undefined && cached.threadId !== writer.threadId) return undefined;
       const head = yield* store.inspectTail(ThreadTailRequest.make({ threadId: writer.threadId }));
 
-      if (head.producerEpoch !== writer.producerEpoch) return undefined;
       if (cached !== undefined) {
-        return head.tailSequence === cached.through && head.tailDigest === cached.tailDigest
-          ? cached
-          : undefined;
+        return head.tailSequence === cached.through ? cached : undefined;
       }
       if (store.promptCheckpoints === undefined) return undefined;
 
       const loaded = yield* store.promptCheckpoints.load({
         threadId: writer.threadId,
-        producerEpoch: writer.producerEpoch,
+        throughSequence: head.tailSequence,
       });
 
       if (Option.isNone(loaded)) return undefined;
       const checkpoint = loaded.value;
 
-      const saved = yield* getRecord({
-        threadId: writer.threadId,
-        recordId: checkpoint.contextRecordId,
-      });
-
-      if (Option.isNone(saved)) return undefined;
-      const context = saved.value.record.payload;
-
       if (
-        context._tag !== "RunContextRecorded" ||
-        saved.value.sequence > checkpoint.throughSequence ||
-        context.historyThrough >= saved.value.sequence ||
-        context.historyFrom !== 1 ||
-        context.retained.length !== 0 ||
-        context.contextWindowId !== undefined ||
+        checkpoint.threadId !== writer.threadId ||
+        checkpoint.throughSequence > head.tailSequence ||
+        checkpoint.historyThrough >= checkpoint.throughSequence ||
         utf8ByteLength(checkpoint.promptJson) > MAX_PROMPT_CHECKPOINT_BYTES ||
         2 * checkpoint.promptJson.length > MAX_BYTES ||
         !checkpoint.promptJson.startsWith(JSON_PREFIX) ||
-        (yield* digestCanonicalJson(checkpoint.promptJson)) !== context.historyDigest
+        (yield* digestCanonicalJson(checkpoint.promptJson)) !== checkpoint.historyDigest
       )
         return undefined;
 
       const prefix = yield* decodeCheckpointPrefix(
         checkpoint.promptJson,
-        context.priorHistoryLength,
+        checkpoint.priorHistoryLength,
       );
 
       if (prefix === undefined) return undefined;
 
       const delta = yield* readSuffix(
         writer,
-        context.historyThrough,
+        checkpoint.historyThrough,
         head.tailSequence,
-        context.runId,
+        checkpoint.runId,
         MAX_BYTES - prefix.bytes,
+        checkpoint.throughSequence,
       );
 
       if (
         delta === undefined ||
-        delta.runs !== writer.producerEpoch - checkpoint.producerEpoch ||
         appendedBytes(prefix.bytes, delta) > MAX_BYTES ||
         prefix.prompt.content.length + delta.prompt.content.length > MAX_ENTRIES
       )
         return undefined;
 
-      // A cold load refreshes after this Run. Warm claims then amortize replacements across Runs.
+      // A cold load refreshes after this Run. Warm reuse amortizes replacements across Runs.
       return {
         threadId: writer.threadId,
         through: head.tailSequence,
-        tailDigest: head.tailDigest,
-        producerEpoch: writer.producerEpoch,
-        contextRecordId: checkpoint.contextRecordId,
-        historyDigest: context.historyDigest,
         prompt: Prompt.concat(prefix.prompt, delta.prompt),
         encoded: appendJson(prefix, delta),
         bytes: appendedBytes(prefix.bytes, delta),
@@ -388,6 +357,7 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* () {
         tail.sequence,
         input.runId,
         MAX_BYTES - bytes,
+        tail.sequence,
       );
 
       if (
@@ -399,44 +369,33 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* () {
         return;
       const head = yield* store.inspectTail(ThreadTailRequest.make({ threadId: writer.threadId }));
 
-      if (
-        closed ||
-        head.producerEpoch !== writer.producerEpoch ||
-        head.tailSequence !== tail.sequence ||
-        head.tailDigest !== tail.digest
-      )
-        return;
-      const contextRecordId = RecordId.make(JSON.stringify(["run-context@1", input.runId]));
-
-      const refresh =
-        history.refreshedAt === undefined ||
-        writer.producerEpoch - history.refreshedAt >= MAX_PROMPT_CHECKPOINT_RUNS;
+      if (closed || head.tailSequence !== tail.sequence) return;
+      const runsSinceCheckpoint = (history.runsSinceCheckpoint ?? MAX_PROMPT_CHECKPOINT_RUNS) + 1;
+      const refresh = runsSinceCheckpoint >= MAX_PROMPT_CHECKPOINT_RUNS;
 
       if (refresh && store.promptCheckpoints !== undefined) {
         yield* store.promptCheckpoints
           .save({
-            version: 1,
+            version: 2,
             recordFormat: CURRENT_RECORD_FORMAT,
             threadId: writer.threadId,
-            producerEpoch: writer.producerEpoch,
+            runId: input.runId,
             throughSequence: tail.sequence,
-            tailDigest: tail.digest,
-            contextRecordId,
+            historyThrough: CanonicalSequence.make(original.sequence - 1),
+            priorHistoryLength: history.prompt.content.length,
+            historyDigest: digest,
             promptJson: encoded,
           })
           .pipe(Effect.catch(() => Effect.void));
       }
+      if (closed) return;
       current = {
         threadId: writer.threadId,
         through: tail.sequence,
-        tailDigest: tail.digest,
-        producerEpoch: writer.producerEpoch,
-        contextRecordId,
-        historyDigest: digest,
         prompt: Prompt.concat(history.prompt, delta.prompt),
         encoded: appendJson({ prompt: history.prompt, encoded }, delta),
         bytes: appendedBytes(bytes, delta),
-        refreshedAt: refresh ? writer.producerEpoch : history.refreshedAt,
+        runsSinceCheckpoint: refresh ? 0 : runsSinceCheckpoint,
       };
     },
     Effect.catch(() => Effect.void),

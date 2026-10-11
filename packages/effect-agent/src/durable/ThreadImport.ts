@@ -1,26 +1,32 @@
-import { Context, Effect, Pull, Schema, Stream } from "effect";
+import { Context, Effect, Pull, Schema, Stream, type Scope } from "effect";
 
 import { InputMessage } from "../capabilities/Messaging.ts";
+import type { RunId } from "../core/Identifiers.ts";
 import { SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { WorkerRef } from "../core/Worker.ts";
-import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST, utf8ByteLength } from "./Digest.ts";
-import { validateContextBoundary } from "./internal/run-context.ts";
+import { canonicalJson, digestJson, utf8ByteLength } from "./Digest.ts";
+import { readRunContext, validateContextBoundary } from "./internal/run-context.ts";
 import { ThreadImportReader } from "./internal/thread-import-reader.ts";
+import { ImportSourcePhase } from "./internal/thread-transfer-source.ts";
 import { toolOperationStates } from "./internal/tool-operations.ts";
 import { MessageDeliveryRecord } from "./MessageDelivery.ts";
-import { decodeExportRecord, ExportedRecord, ExportRecord } from "./RecordFormat.ts";
+import { decodeExportRecord } from "./RecordFormat.ts";
 import {
   CanonicalBatch,
   CanonicalRecordEnvelope,
   CanonicalSequence,
   CURRENT_RECORD_FORMAT,
-  Digest,
-  ProducerEpoch,
   RecordEnvelope,
   RecordJson,
+  RunContinuation,
   SubtreeBudgetReserved,
 } from "./Records.ts";
-import { isPreContinuationFact } from "./RunContinuation.ts";
+import {
+  executionRunIds,
+  isOperationalRecord,
+  isPreContinuationFact,
+  validateSuffix,
+} from "./RunContinuation.ts";
 import { runIdForSubmission } from "./RunJournal.ts";
 import { validateCanonicalSettlement, validateJoinedSettlement } from "./SettlementPublisher.ts";
 import {
@@ -37,6 +43,7 @@ import {
   submissionAbortRecordId,
 } from "./SubmissionLedger.ts";
 import {
+  type ExecutionCheckpoint,
   MAX_THREAD_EXPORT_PAGE_BYTES,
   MAX_THREAD_EXPORT_PAGE_RECORDS,
   ThreadAdmission,
@@ -48,14 +55,10 @@ import {
   transferPageFits,
   type ThreadStoreError,
 } from "./ThreadStore.ts";
-import { transferDependencies, transferSnapshotId, transferSections } from "./ThreadTransfer.ts";
+import { transferDependencies, sameTransferManifest, transferSections } from "./ThreadTransfer.ts";
 import { workIndexChanges } from "./ThreadWork.ts";
 
-export {
-  ThreadImportReader,
-  ThreadDeliveryImportReader,
-  type ThreadSettlementPredecessorRequest,
-} from "./internal/thread-import-reader.ts";
+export { ThreadImportReader, ThreadDeliveryImportReader } from "./internal/thread-import-reader.ts";
 
 const sameInputMessage = Schema.toEquivalence(InputMessage);
 
@@ -82,7 +85,6 @@ export class ThreadImportResult extends Schema.Class<ThreadImportResult>(
   threadId: ThreadId,
   format: Schema.String,
   tailSequence: CanonicalSequence,
-  tailDigest: Digest,
   recordCount: Schema.Natural,
   submissionCount: Schema.Natural,
 }) {}
@@ -136,8 +138,6 @@ export interface PreparedImportBatch {
   readonly recordJson: ReadonlyArray<string>;
   readonly firstSequence: CanonicalSequence;
   readonly lastSequence: CanonicalSequence;
-  readonly previousTailDigest: Digest;
-  readonly tailDigest: Digest;
 }
 
 export interface PreparedImportPage {
@@ -222,15 +222,6 @@ export const verifyImportedReferences = Effect.fnUntraced(function* (
       ("sequence" in ref && evidence.sequence !== ref.sequence)
     )
       return yield* invalid("Missing, foreign or forward canonical dependency", entry.threadId);
-
-    const wire = yield* (
-      evidence.record instanceof ExportedRecord
-        ? Schema.encodeEffect(ExportRecord)(evidence.record)
-        : Schema.encodeEffect(RecordEnvelope)(evidence.record)
-    ).pipe(Effect.mapError(() => invalid("Invalid dependency wire", entry.threadId)));
-
-    if ((yield* digest(wire)) !== ref.digest)
-      return yield* invalid("Canonical dependency digest mismatch", entry.threadId);
   }
   if (payload._tag === "WorkerInputRefused") {
     const request = (yield* resolve(payload.reservation.recordId))!.record.payload;
@@ -314,34 +305,183 @@ export const invalidThreadArchive = (message: string, threadId?: ThreadId) =>
 
 const invalid = invalidThreadArchive;
 
-/** Own the first page before entering a destination gate; reuse the same scoped source pull. */
-export const captureImportSource = Effect.fnUntraced(function* <E, R>(
-  pages: Stream.Stream<ThreadArchive, E, R>,
+/** Validate authoritative active state against the same staged/captured history and admissions. */
+export const validateImportedExecution = Effect.fnUntraced(function* (
+  threadId: ThreadId,
+  checkpoint: ExecutionCheckpoint,
+  tailSequence: CanonicalSequence,
 ) {
-  const pull = yield* Stream.toPull(Stream.rechunk(pages, 1));
-  const first = yield* Pull.catchDone(pull, () => Effect.fail(invalid("Missing transfer pages")));
-  const codec = Schema.fromJsonString(ThreadArchive);
+  const reader = yield* ThreadImportReader;
+  const progress = checkpoint.progress;
+  const admission = yield* reader.admission(progress.submissionId);
 
-  const wire = yield* Schema.encodeEffect(codec)(first[0]).pipe(
-    Effect.mapError((cause) => invalid(`Malformed first transfer page: ${cause.message}`)),
+  const own = (yield* reader.runRecords(progress.runId)).filter((entry) =>
+    executionRunIds(entry.record).includes(progress.runId),
   );
 
-  if (utf8ByteLength(wire) > MAX_THREAD_EXPORT_PAGE_BYTES)
-    return yield* invalid("Transfer page exceeds 32 MiB");
+  const local = new Map(checkpoint.operational.map((record) => [record.recordId, record]));
 
-  const owned = yield* Schema.decodeEffect(codec)(wire).pipe(
-    Effect.mapError((cause) => invalid(`Malformed first transfer page: ${cause.message}`)),
-  );
+  if (
+    admission === undefined ||
+    admission.threadId !== threadId ||
+    runIdForSubmission(admission.submissionId) !== progress.runId ||
+    checkpoint.progressRecord.payload._tag !== "RunContinuation" ||
+    !Schema.toEquivalence(RunContinuation)(checkpoint.progressRecord.payload, progress) ||
+    checkpoint.progressRecord.recordId !==
+      JSON.stringify(["continuation@1", progress.runId, checkpoint.batchId]) ||
+    checkpoint.throughSequence > tailSequence ||
+    checkpoint.originalSequence > checkpoint.throughSequence ||
+    local.size !== checkpoint.operational.length ||
+    checkpoint.operational.some(
+      (record) => !isOperationalRecord(record) || !executionRunIds(record).includes(progress.runId),
+    ) ||
+    own.filter((entry) => entry.sequence <= checkpoint.throughSequence).length !==
+      checkpoint.canonicalRecords ||
+    !validateSuffix(own, checkpoint.throughSequence)
+  )
+    return yield* invalid(
+      "Active execution identity, revision or history boundary is invalid",
+      threadId,
+    );
+  for (const id of local.keys())
+    if ((yield* reader.record(id)) !== undefined)
+      return yield* invalid("Operational identity collides with retained history", threadId);
 
-  return Stream.succeed(owned).pipe(Stream.concat(Stream.fromPull(Effect.succeed(pull))));
+  const resolve = Effect.fnUntraced(function* (ref: typeof progress.originalInput) {
+    const retained = yield* reader.record(ref.recordId);
+    const record = local.get(ref.recordId) ?? retained?.record;
+
+    if (
+      record === undefined ||
+      (retained !== undefined &&
+        (retained.threadId !== threadId || retained.sequence > checkpoint.throughSequence)) ||
+      !executionRunIds(record).includes(progress.runId)
+    )
+      return yield* invalid("Active execution reference is missing, foreign or corrupt", threadId);
+
+    return record;
+  });
+
+  const original = yield* reader.record(progress.originalInput.recordId);
+  const input = (yield* resolve(progress.originalInput)).payload;
+
+  if (
+    original === undefined ||
+    original.sequence !== checkpoint.originalSequence ||
+    input._tag !== "UserInputRecorded" ||
+    input.kind !== "user" ||
+    input.runId !== progress.runId ||
+    input.submissionId !== progress.submissionId
+  )
+    return yield* invalid("Active execution has no exact original admitted input", threadId);
+  yield* resolve(progress.lastFact);
+  if (progress.savedContext !== undefined) {
+    const context = yield* resolve(progress.savedContext);
+
+    if (context.payload._tag !== "RunContextRecorded" || !local.has(context.recordId))
+      return yield* invalid("Saved context is not owned active state", threadId);
+    yield* validateContextBoundary(context.payload, original).pipe(
+      Effect.mapError((cause) => invalid(cause.message, threadId)),
+    );
+    yield* readRunContext(context.payload, original, progress.savedContext.recordId).pipe(
+      Effect.mapError((cause) => invalid(cause.message, threadId)),
+    );
+  }
+  if (progress.latestResponse !== undefined) {
+    const response = (yield* resolve(progress.latestResponse)).payload;
+
+    if (
+      response._tag !== "ModelResponseRecorded" ||
+      response.turn !== progress.accounting.committedTurns ||
+      progress.savedContext === undefined
+    )
+      return yield* invalid("Active execution has invalid declared operation evidence", threadId);
+  } else if (progress.accounting.committedTurns !== 0)
+    return yield* invalid("Active accounting has no corresponding response", threadId);
+  if (progress.terminal !== undefined) {
+    const terminal = (yield* resolve(progress.terminal)).payload;
+
+    if (
+      terminal._tag !== "RunCompleted" &&
+      terminal._tag !== "RunFailed" &&
+      terminal._tag !== "SubmissionSettled"
+    )
+      return yield* invalid("Active execution has invalid terminal intent", threadId);
+    if (progress.position === "settled" && terminal._tag !== "SubmissionSettled")
+      return yield* invalid("Settled active state has no canonical terminal outcome", threadId);
+  }
 });
+
+/** An executed unfinished Run cannot be imported without its authoritative operational owner. */
+export const validateImportedRunExecution = Effect.fnUntraced(function* (
+  threadId: ThreadId,
+  runId: RunId,
+  tailSequence: CanonicalSequence,
+) {
+  const reader = yield* ThreadImportReader;
+  const checkpoint = yield* reader.execution(runId);
+
+  if (checkpoint !== undefined)
+    return yield* validateImportedExecution(threadId, checkpoint, tailSequence);
+  const records = yield* reader.runRecords(runId);
+
+  if (
+    records.some(
+      ({ record }) =>
+        record.payload._tag === "UserInputRecorded" &&
+        record.payload.kind === "user" &&
+        record.payload.submissionId !== undefined,
+    ) &&
+    !records.some(
+      ({ record }) => record.payload._tag === "SubmissionSettled" && record.payload.runId === runId,
+    ) &&
+    records.some(({ record }) => !isPreContinuationFact(record))
+  )
+    return yield* invalid("Unfinished execution is missing its authoritative checkpoint", threadId);
+});
+
+/** Own the first page before entering a destination gate; reuse the same scoped source pull. */
+export const captureImportSource = <E, R, A, E2, R2>(
+  pages: Stream.Stream<ThreadArchive, E, R>,
+  use: (captured: Stream.Stream<ThreadArchive, E, R>) => Effect.Effect<A, E2, R2>,
+): Effect.Effect<A, E | E2 | ThreadImportRejected, Exclude<R | R2, Scope.Scope>> =>
+  Effect.scoped(
+    Effect.suspend(() => {
+      const phase = { writing: false };
+
+      return Effect.gen(function* () {
+        const pull = yield* Stream.toPull(Stream.rechunk(pages, 1));
+
+        const first = yield* Pull.catchDone(pull, () =>
+          Effect.fail(invalid("Missing transfer pages")),
+        );
+
+        const codec = Schema.fromJsonString(ThreadArchive);
+
+        const wire = yield* Schema.encodeEffect(codec)(first[0]).pipe(
+          Effect.mapError((cause) => invalid(`Malformed first transfer page: ${cause.message}`)),
+        );
+
+        if (utf8ByteLength(wire) > MAX_THREAD_EXPORT_PAGE_BYTES)
+          return yield* invalid("Transfer page exceeds 32 MiB");
+
+        const owned = yield* Schema.decodeEffect(codec)(wire).pipe(
+          Effect.mapError((cause) => invalid(`Malformed first transfer page: ${cause.message}`)),
+        );
+
+        phase.writing = true;
+
+        return yield* use(
+          Stream.succeed(owned).pipe(Stream.concat(Stream.fromPull(Effect.succeed(pull)))),
+        );
+      }).pipe(Effect.provideService(ImportSourcePhase, phase));
+    }),
+  );
 
 /** Constant-size fold state; identity uniqueness belongs to staged destination indexes. */
 export interface ThreadImportProgress {
   manifest: ThreadArchive | undefined;
   sequence: number;
-  tailDigest: Digest;
-  producerEpoch: number;
   ended: boolean;
   cursor: string | undefined;
   counts: {
@@ -356,8 +496,6 @@ export interface ThreadImportProgress {
 export const makeThreadImportProgress = (): ThreadImportProgress => ({
   manifest: undefined,
   sequence: 0,
-  tailDigest: EMPTY_TAIL_DIGEST,
-  producerEpoch: 1,
   ended: false,
   cursor: undefined,
   counts: { admissions: 0, aborts: 0, approvals: 0, resolutions: 0, deliveries: 0 },
@@ -367,7 +505,7 @@ export const makeThreadImportProgress = (): ThreadImportProgress => ({
 export const prepareImportPage = Effect.fnUntraced(function* (
   state: ThreadImportProgress,
   input: ThreadArchive,
-  options?: { readonly allowExternalObligations?: boolean },
+  options?: { readonly verification?: boolean },
 ) {
   const codec = Schema.fromJsonString(ThreadArchive);
 
@@ -407,44 +545,22 @@ export const prepareImportPage = Effect.fnUntraced(function* (
       reason: "unsupported-format",
       message: `Only ${CURRENT_RECORD_FORMAT} can be imported`,
     });
-  if (!options?.allowExternalObligations && (archive.externalObligations?.length ?? 0) > 0)
-    return yield* ThreadImportRejected.make({
-      threadId,
-      reason: "unsupported-obligations",
-      message: "Live foreign child, worker or delivery ownership must be closed before transfer",
-    });
-
-  const manifest = {
-    format: archive.format,
-    threadId,
-    tailSequence: archive.tailSequence,
-    tailDigest: archive.tailDigest,
-    snapshot: archive.snapshot,
-    ...(archive.workerSeal === undefined ? {} : { workerSeal: archive.workerSeal }),
-    ...(archive.externalObligations === undefined
-      ? {}
-      : { externalObligations: archive.externalObligations }),
-  };
-
-  const snapshotId = yield* transferSnapshotId(manifest);
-
-  if (
-    snapshotId !== archive.snapshotId ||
-    (state.manifest !== undefined &&
-      (state.manifest.snapshotId !== archive.snapshotId || state.manifest.threadId !== threadId))
-  )
-    return yield* invalid("Transfer snapshot changed or its identity is invalid", threadId);
+  if (state.manifest !== undefined && !sameTransferManifest(state.manifest, archive))
+    return yield* invalid("Transfer snapshot changed", threadId);
   if (
     archive.fromSequence !== state.sequence + 1 ||
-    archive.previousTailDigest !== state.tailDigest ||
     (archive.cursor !== undefined && archive.cursor === state.cursor)
   )
-    return yield* invalid("Transfer page position or digest boundary is invalid", threadId);
+    return yield* invalid("Transfer page position is invalid", threadId);
   if (archive.records.length > 0 && transferSections.some((section) => state.counts[section] > 0))
     return yield* invalid("Canonical records follow immutable fact sections", threadId);
   if (
     archive.admissions.length > 0 &&
-    state.counts.aborts + state.counts.approvals + state.counts.resolutions > 0
+    state.counts.aborts +
+      state.counts.approvals +
+      state.counts.resolutions +
+      state.counts.deliveries >
+      0
   )
     return yield* invalid("Admissions follow accepted command sections", threadId);
   const records: Array<CanonicalRecordEnvelope> = [];
@@ -455,7 +571,6 @@ export const prepareImportPage = Effect.fnUntraced(function* (
     const current: Array<RecordEnvelope> = [];
     const encoded: Array<RecordJson> = [];
     const firstSequence = sequence(state.sequence + 1);
-    const previousTailDigest = state.tailDigest;
 
     while (archive.records[index]?.batchId === batch.batchId) {
       const entry = archive.records[index]!;
@@ -467,35 +582,33 @@ export const prepareImportPage = Effect.fnUntraced(function* (
         Effect.mapError((e) => invalid(e.message, threadId)),
       );
 
+      if (record.payload._tag === "RunContinuation")
+        return yield* invalid("Mutable interpreter progress is not canonical history", threadId);
+
       records.push(CanonicalRecordEnvelope.make({ ...entry, record }));
       current.push(record);
       encoded.push(entry.record);
       index++;
       state.sequence++;
-      if (record.payload._tag === "ModelResponseInterrupted")
-        state.producerEpoch = Math.max(state.producerEpoch, record.payload.supersededEpoch + 1);
     }
 
     const canonical = yield* Schema.decodeUnknownEffect(
       Schema.toType(Schema.Struct(CanonicalBatch.fields)),
     )({ ...batch, records: current }).pipe(
       Effect.mapError(() => invalid("Empty or oversized canonical batch", threadId)),
-      Effect.map(CanonicalBatch.make),
+      Effect.map((value) => CanonicalBatch.make(value)),
     );
 
     const batchJson = canonicalJson({ ...batch, records: encoded });
 
     if (utf8ByteLength(batchJson) > 16 * 1024 * 1024)
       return yield* invalid("Canonical batch exceeds 16 MiB", threadId);
-    state.tailDigest = yield* digest({ previousTailDigest, batch: { ...batch, records: encoded } });
     prepared.push({
       batch: canonical,
       batchJson,
       recordJson: encoded.map(canonicalJson),
       firstSequence,
       lastSequence: sequence(state.sequence),
-      previousTailDigest,
-      tailDigest: state.tailDigest,
     });
   }
   if (index !== archive.records.length || state.sequence > archive.tailSequence)
@@ -510,7 +623,7 @@ export const prepareImportPage = Effect.fnUntraced(function* (
       archive.commands.resolutions.length +
       archive.deliveries.length >
       0 &&
-    (state.sequence !== archive.tailSequence || state.tailDigest !== archive.tailDigest)
+    state.sequence !== archive.tailSequence
   )
     return yield* invalid("Immutable sections precede the complete canonical prefix", threadId);
   if (
@@ -521,21 +634,41 @@ export const prepareImportPage = Effect.fnUntraced(function* (
     state.counts.admissions + archive.admissions.length !== archive.snapshot.admissions
   )
     return yield* invalid("Accepted commands precede the complete admission directory", threadId);
+
+  const sectionLength = (section: (typeof transferSections)[number]) =>
+    section === "admissions"
+      ? archive.admissions.length
+      : section === "deliveries"
+        ? archive.deliveries.length
+        : archive.commands[section].length;
+
+  for (let index = 0; index < transferSections.length; index++) {
+    const section = transferSections[index]!;
+
+    if (sectionLength(section) === 0) continue;
+    if (
+      transferSections
+        .slice(0, index)
+        .some((prior) => state.counts[prior] + sectionLength(prior) !== archive.snapshot[prior]) ||
+      transferSections.slice(index + 1).some((later) => state.counts[later] !== 0)
+    )
+      return yield* invalid("Transfer fact sections are out of order", threadId);
+  }
   const required = transferDependencies(records);
 
   if (canonicalJson(required) !== canonicalJson([...archive.dependencies].sort()))
     return yield* invalid("Cross-range dependency directory is incomplete or ambiguous", threadId);
   for (const section of transferSections) {
-    state.counts[section] +=
-      section === "admissions"
-        ? archive.admissions.length
-        : section === "deliveries"
-          ? archive.deliveries.length
-          : archive.commands[section].length;
+    state.counts[section] += sectionLength(section);
     if (state.counts[section] > archive.snapshot[section])
       return yield* invalid(`Too many ${section} facts`, threadId);
   }
   for (const admission of archive.admissions) {
+    if (!options?.verification && admission.settledAt === undefined)
+      return yield* invalid(
+        "Closed admission is missing its stable settlement timestamp",
+        threadId,
+      );
     if (
       admission.threadId !== threadId ||
       (yield* digest(admission.inputPayload)) !== admission.inputDigest
@@ -549,7 +682,9 @@ export const prepareImportPage = Effect.fnUntraced(function* (
 
     if (
       delivery.key.ownerThreadId !== threadId ||
-      delivery.leaseUntilMillis !== null ||
+      (!options?.verification &&
+        (delivery.leaseUntilMillis !== null ||
+          !["processed", "refused"].includes(delivery.status))) ||
       (yield* digest(encoded.envelope)) !== delivery.envelopeDigest
     )
       return yield* invalid("Delivery ownership, lease or envelope digest mismatch", threadId);
@@ -577,36 +712,23 @@ export const finishThreadImport = (state: ThreadImportProgress) =>
       page === undefined ||
       !state.ended ||
       state.sequence !== page.tailSequence ||
-      state.tailDigest !== page.tailDigest ||
       transferSections.some((section) => state.counts[section] !== page.snapshot[section])
     )
       return yield* invalid(
-        "Transfer stream ended before its complete canonical chain and fact sections",
+        "Transfer stream ended before its complete canonical sequence and fact sections",
       );
-    yield* Schema.decodeEffect(ProducerEpoch.check(Schema.isLessThan(Number.MAX_SAFE_INTEGER)))(
-      state.producerEpoch,
-    ).pipe(
-      Effect.mapError(() =>
-        ThreadImportRejected.make({
-          threadId: page.threadId,
-          reason: "unsupported-capacity",
-          message: "Producer generation exhausted",
-        }),
-      ),
-    );
 
     return ThreadImportResult.make({
       threadId: page.threadId,
       format: page.format,
       tailSequence: page.tailSequence,
-      tailDigest: page.tailDigest,
       recordCount: state.sequence,
       submissionCount: state.counts.admissions,
     });
   });
 
-/** Check FIFO against indexed earlier executed inputs, including those still without a settlement. */
-export const verifyImportedSettlementOrder = Effect.fnUntraced(function* (
+/** An executed receipt must settle strictly after its own input. FIFO inputs are checked in one pass. */
+export const verifyImportedInputOrder = Effect.fnUntraced(function* (
   admission: Pick<ThreadAdmission, "threadId" | "submissionId" | "queueSequence">,
 ) {
   const reader = yield* ThreadImportReader;
@@ -627,43 +749,6 @@ export const verifyImportedSettlementOrder = Effect.fnUntraced(function* (
       "Executed settlement has no preceding canonical input",
       admission.threadId,
     );
-
-  yield* Stream.runForEach(
-    reader.settlementPredecessors({
-      submissionId: admission.submissionId,
-      queueSequence: admission.queueSequence,
-      inputSequence: applied.sequence,
-      settlementSequence: settlement.sequence,
-    }),
-    (earlier) =>
-      Effect.gen(function* () {
-        const evidence = yield* reader.runRecords(runIdForSubmission(earlier.submissionId));
-        const unknown = new Set<ToolCallId>();
-        let closed = false;
-
-        for (const fact of evidence) {
-          if (fact.sequence >= applied.sequence) break;
-          const p = fact.record.payload;
-
-          if (
-            p._tag === "AbortRequested" ||
-            p._tag === "SubmissionSettled" ||
-            p._tag === "RunCompleted" ||
-            p._tag === "RunFailed"
-          ) {
-            closed = true;
-            unknown.clear();
-          } else if (p._tag === "ToolCallUnknown" && !closed) unknown.add(p.toolCallId);
-          else if (p._tag === "ToolCallResolved" || p._tag === "ToolCallSettled")
-            unknown.delete(p.toolCallId);
-        }
-        if (unknown.size === 0)
-          return yield* invalid(
-            "Later settlement bypassed work that was not unknown when its input became active",
-            admission.threadId,
-          );
-      }),
-  );
 });
 
 /** Rebuild ONE admitted submission from exact staged evidence; terminal state does not erase uncertainty. */
@@ -948,6 +1033,88 @@ export const rebuildImportedSubmission = Effect.fnUntraced(function* (admission:
     approvals,
     resolutions,
   });
+});
+
+/** Immediate persistent history has no ledger/checkpoint owner, but still needs a terminal Run fact. */
+export const validateClosedRun = Effect.fnUntraced(function* (threadId: ThreadId, runId: RunId) {
+  const reader = yield* ThreadImportReader;
+  const records = yield* reader.runRecords(runId);
+
+  const opened = records.some(
+    ({ record: { payload } }) =>
+      (payload._tag === "UserInputRecorded" ||
+        payload._tag === "RunStarted" ||
+        payload._tag === "ModelResponseRecorded") &&
+      payload.runId === runId,
+  );
+
+  const closed = records.some(
+    ({ record: { payload } }) =>
+      (payload._tag === "RunCompleted" ||
+        payload._tag === "RunFailed" ||
+        payload._tag === "SubmissionSettled") &&
+      payload.runId === runId,
+  );
+
+  if (opened && !closed) return yield* invalid("Transfer contains an unfinished Run", threadId);
+});
+
+/** Idle transfer keeps closed receipts, never the authority to finish their former work. */
+export const rebuildClosedSubmission = Effect.fnUntraced(function* (admission: ThreadAdmission) {
+  if (admission.settledAt === undefined)
+    return yield* invalid(
+      "Closed admission is missing its stable settlement timestamp",
+      admission.threadId,
+    );
+  const rebuilt = yield* rebuildImportedSubmission(admission);
+  const reader = yield* ThreadImportReader;
+
+  if (
+    rebuilt.state !== "settled" ||
+    rebuilt.unknownToolCallIds.length > 0 ||
+    rebuilt.suspension !== undefined
+  )
+    return yield* invalid("Transfer contains unfinished accepted work", admission.threadId);
+  if (rebuilt.abort !== undefined && rebuilt.abort.canonicalRecordId === undefined)
+    return yield* invalid("Transfer contains an unapplied abort", admission.threadId);
+  const records = yield* reader.runRecords(runIdForSubmission(admission.submissionId));
+
+  const decidedApprovals = new Set(
+    records.flatMap(({ record: { payload } }) =>
+      payload._tag === "ToolApprovalDecided" ? [payload.toolCallId] : [],
+    ),
+  );
+
+  if (
+    records.some(
+      ({ record: { payload } }) =>
+        payload._tag === "ToolApprovalRequested" && !decidedApprovals.has(payload.toolCallId),
+    )
+  )
+    return yield* invalid("Transfer contains an unresolved approval", admission.threadId);
+  for (const approval of rebuilt.approvals)
+    if (
+      !records.some(
+        ({ record: { payload } }) =>
+          payload._tag === "ToolApprovalDecided" && payload.toolCallId === approval.toolCallId,
+      )
+    )
+      return yield* invalid("Transfer contains an unapplied approval", admission.threadId);
+  for (const resolution of rebuilt.resolutions)
+    if (
+      resolution.resolution._tag !== "AbortSubmission" &&
+      !records.some(
+        ({ record: { payload } }) =>
+          payload._tag === "ToolCallResolved" &&
+          payload.toolCallId === resolution.toolCallId &&
+          (payload.resolution === "safe-retry" ? "execution" : "factual") ===
+            unknownResolutionKind(resolution.resolution),
+      )
+    )
+      return yield* invalid("Transfer contains an unapplied resolution", admission.threadId);
+  yield* verifyImportedInputOrder(admission);
+
+  return rebuilt;
 });
 
 /** Encode one page at a time and retain upstream stream errors and requirements. */

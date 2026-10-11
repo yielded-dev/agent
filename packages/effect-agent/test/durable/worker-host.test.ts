@@ -36,6 +36,7 @@ import {
   Fiber,
   Option,
   Schema,
+  Semaphore,
   Stream,
 } from "effect";
 import { Toolkit } from "effect/ai";
@@ -65,7 +66,6 @@ import {
   DeploymentId,
   Digest,
   ObservationOffset,
-  ProducerEpoch,
   ProducerId,
   RecordEnvelope,
   RunStartedRecord,
@@ -82,6 +82,7 @@ import {
   makeProgressWriter,
 } from "../../src/durable/RunContinuation.ts";
 import { subagentLineageRecordId, workerOriginRecordId } from "../../src/durable/RunJournal.ts";
+import { StorageOwner, makeStorageOwner, makeRunWriter } from "../../src/durable/RunStorage.ts";
 import {
   AbortIntent,
   AdmissionPolicyError,
@@ -99,7 +100,7 @@ import { PendingSubmission, SettledSubmission } from "../../src/durable/Submissi
 import {
   AppendConflict,
   AppendResult,
-  FenceRejected,
+  type ExecutionCheckpoint,
   ThreadIdentity,
   ThreadNotMaterialized,
   ThreadTail,
@@ -215,9 +216,8 @@ const harness = Effect.fn("workerHostHarness")(function* (
   const now = yield* Clock.currentTimeMillis;
   const crypto = yield* Crypto.Crypto;
   const logs = new Map<ThreadId, Array<CanonicalRecordEnvelope>>();
-  const epochs = new Map<ThreadId, ProducerEpoch>();
-  const appendAttempts: Array<{ readonly threadId: ThreadId; readonly epoch: ProducerEpoch }> = [];
-  const rejectedAppends = { tail: 0, epoch: 0 };
+  const executions = new Map<RunId, ExecutionCheckpoint>();
+  const rejectedAppends = { tail: 0 };
   const deliveries = new Map<string, MessageDeliveryRecord>();
   const submissions = new Map<SubmissionId, SubmissionSnapshot>();
   const settlements = new Map<SubmissionId, Settlement>();
@@ -249,7 +249,6 @@ const harness = Effect.fn("workerHostHarness")(function* (
       }),
     );
     logs.set(threadId, records);
-    if (!epochs.has(threadId)) epochs.set(threadId, Schema.decodeSync(ProducerEpoch)(0));
   };
 
   push(sourceId, ThreadCreated.make({ agentId: sourceAgent.id, definitions }), "source-created");
@@ -286,6 +285,8 @@ const harness = Effect.fn("workerHostHarness")(function* (
     });
   };
 
+  const owner = yield* makeStorageOwner(Semaphore.makeUnsafe(1).withPermits(1));
+
   const fixtureStore = ThreadStore.of({
     readPrompt: () => Stream.die("Worker control requires full canonical evidence"),
     readWorkerCapacity: (request) =>
@@ -303,8 +304,6 @@ const harness = Effect.fn("workerHostHarness")(function* (
           ThreadWorkerCapacity.make({
             threadId: request.threadId,
             tailSequence: request.expectedTailSequence,
-            tailDigest: digest,
-            producerEpoch: epochs.get(request.threadId)!,
             activeWorkers: Math.min(
               new Set(rows.map((row) => row.origin.worker.threadId)).size,
               request.activeLimit + 1,
@@ -366,11 +365,9 @@ const harness = Effect.fn("workerHostHarness")(function* (
           if (entry !== undefined && !selected.includes(entry)) selected.push(entry);
 
         const snapshot = ThreadIdentity.make({
-          admissions: [...submissions.values()].filter((row) => row.threadId === threadId).length,
+          hasAdmissions: [...submissions.values()].some((row) => row.threadId === threadId),
           threadId,
           tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
-          tailDigest: digest,
-          producerEpoch: epochs.get(threadId)!,
           records: selected,
         });
 
@@ -378,6 +375,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
 
         return snapshot;
       }),
+    readExecution: ({ runId }) => Effect.sync(() => Option.fromNullishOr(executions.get(runId))),
     read: (request) =>
       Stream.suspend(() => {
         const all = logs.get(request.threadId) ?? [];
@@ -387,7 +385,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
         if (selection?._tag === "RecordId") {
           records = all.filter((entry) => entry.record.recordId === selection.recordId);
         } else if (selection?._tag === "WorkerExecution") {
-          records = ["UserInputRecorded", "RunStarted"]
+          records = ["UserInputRecorded", "SubmissionSettled"]
             .flatMap((tag) =>
               all
                 .filter(
@@ -444,15 +442,6 @@ const harness = Effect.fn("workerHostHarness")(function* (
                 payload.command.worker.threadId === selection.workerThreadId,
             )
             .slice(-1);
-        } else if (selection?._tag === "RunContinuation") {
-          records = all
-            .filter(
-              ({ sequence, record: { payload } }) =>
-                sequence <= selection.throughSequence &&
-                payload._tag === "RunContinuation" &&
-                payload.runId === selection.runId,
-            )
-            .slice(-1);
         } else if (selection?._tag === "RunEvidence") {
           records = all.filter(
             ({ sequence, record }) =>
@@ -502,8 +491,6 @@ const harness = Effect.fn("workerHostHarness")(function* (
               ThreadTail.make({
                 threadId,
                 tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
-                tailDigest: digest,
-                producerEpoch: epochs.get(threadId)!,
               }),
             );
       }),
@@ -512,22 +499,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
         yield* Effect.yieldNow;
         const records = logs.get(request.threadId) ?? [];
 
-        appendAttempts.push({ threadId: request.threadId, epoch: request.producerEpoch });
-        const currentEpoch = epochs.get(request.threadId)!;
-
-        if (currentEpoch !== request.producerEpoch) {
-          rejectedAppends.epoch++;
-
-          return yield* FenceRejected.make({
-            threadId: request.threadId,
-            attemptedEpoch: request.producerEpoch,
-            actualEpoch: currentEpoch,
-          });
-        }
-        if (
-          records.length !== request.expectedTailSequence ||
-          digest !== request.expectedTailDigest
-        ) {
+        if (records.length !== request.expectedTailSequence) {
           rejectedAppends.tail++;
 
           return yield* AppendConflict.make({
@@ -536,15 +508,31 @@ const harness = Effect.fn("workerHostHarness")(function* (
             reason: "tail",
           });
         }
-        const first = records.length + 1;
+        for (const update of request.executions ?? []) {
+          if (
+            (executions.get(update.checkpoint.progress.runId)?.progress.revision ?? 0) !==
+            update.previousRevision
+          )
+            return yield* AppendConflict.make({
+              threadId: request.threadId,
+              batchId: request.batch.batchId,
+              reason: "tail",
+            });
+        }
+        const first = records.length + (request.batch.records.length > 0 ? 1 : 0);
 
         for (const record of request.batch.records)
           push(request.threadId, record.payload, record.recordId, request.batch.batchId);
 
+        for (const update of request.executions ?? []) {
+          if (update.retire) executions.delete(update.checkpoint.progress.runId);
+          else executions.set(update.checkpoint.progress.runId, update.checkpoint);
+        }
+
         return AppendResult.make({
           firstSequence: Schema.decodeSync(CanonicalSequence)(first),
           lastSequence: Schema.decodeSync(CanonicalSequence)(records.length),
-          tailDigest: digest,
+
           replayed: false,
         });
       }),
@@ -565,11 +553,12 @@ const harness = Effect.fn("workerHostHarness")(function* (
         return yield* writer.commit(request.batch).pipe(
           Effect.provideService(CurrentRunWriter, {
             threadId: request.threadId,
+            withProgress: (body) => owner.withProgress(request.threadId, body),
             tail: Effect.succeed({
               sequence: request.expectedTailSequence,
-              digest: request.expectedTailDigest,
             }),
-            append: (batch) => fixtureStore.append({ ...request, batch }),
+            append: (batch, updates) =>
+              fixtureStore.append({ ...request, batch, executions: updates }),
           }),
         );
       }),
@@ -750,9 +739,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
             ? AdmissionNotAdmitted.make()
             : AdmissionAdmitted.make({ submission: found });
         }),
-      claim: () => Effect.die("Worker fixture only implements ledger lookup"),
-      renewOwnership: () => Effect.die("Worker fixture only implements ledger lookup"),
-      releaseOwnership: () => Effect.die("Worker fixture only implements ledger lookup"),
+      selectHead: () => Effect.die("Worker fixture only implements ledger lookup"),
       markInputApplied: () => Effect.die("Worker fixture only implements ledger lookup"),
       finalizeSettlement: () => Effect.die("Worker fixture only implements ledger lookup"),
       requestAbort: () => Effect.die("Worker fixture only implements ledger lookup"),
@@ -925,18 +912,18 @@ const harness = Effect.fn("workerHostHarness")(function* (
       )
       .pipe(
         Effect.provideService(CurrentRunWriter, {
-          threadId: threadId,
+          threadId,
+          withProgress: (body) => owner.withProgress(threadId, body),
           tail: Effect.sync(() => ({
             sequence: CanonicalSequence.make(logs.get(threadId)?.length ?? 0),
-            digest,
           })),
-          append: (batch) =>
+          append: (batch, updates) =>
             Effect.flatMap(store.inspectTail({ threadId: threadId }), (tail) =>
               store.append({
                 threadId: threadId,
-                producerEpoch: tail.producerEpoch,
+                executions: updates,
                 expectedTailSequence: tail.tailSequence,
-                expectedTailDigest: tail.tailDigest,
+
                 batch,
               }),
             ),
@@ -1023,11 +1010,14 @@ const harness = Effect.fn("workerHostHarness")(function* (
     startRun,
     runtime,
     updates: runtimes.updates,
+    writer: (threadId: ThreadId) =>
+      makeRunWriter(threadId).pipe(
+        Effect.provideService(StorageOwner, owner),
+        Effect.provideService(ThreadStore, updateStore),
+      ),
     host,
     deliveries,
     logs,
-    epochs,
-    appendAttempts,
     rejectedAppends,
     submissions,
     fundingOwners,
@@ -1089,38 +1079,30 @@ layer(NodeCrypto.layer)((it) => {
   );
 
   // Regression: https://github.com/yielded-dev/agent/pull/621
-  for (const advance of ["tail", "epoch"] as const)
-    it.effect(`origin establishment retries a ${advance} advance after its identity snapshot`, () =>
-      Effect.gen(function* () {
-        let onIdentity: Effect.Effect<void, ThreadStoreError> = Effect.void;
-        const h = yield* harness({ afterIdentity: () => Effect.suspend(() => onIdentity) });
-        const started = yield* h.host.start(request(`origin-${advance}-takeover`));
-        const threadId = started.worker.threadId;
+  it.effect("origin establishment retries a tail advance after its identity snapshot", () =>
+    Effect.gen(function* () {
+      let onIdentity: Effect.Effect<void, ThreadStoreError> = Effect.void;
+      const h = yield* harness({ afterIdentity: () => Effect.suspend(() => onIdentity) });
+      const started = yield* h.host.start(request("origin-tail-race"));
+      const threadId = started.worker.threadId;
 
-        const origin = h.submissions.get(started.delivery.receipt!.submissionId)!.workerAdmission!
-          .origin;
+      const origin = h.submissions.get(started.delivery.receipt!.submissionId)!.workerAdmission!
+        .origin;
 
-        h.logs.set(threadId, h.logs.get(threadId)!.slice(0, 1));
-        h.appendAttempts.length = 0;
-
-        onIdentity = Effect.sync(() => {
-          onIdentity = Effect.void;
-          if (advance === "epoch") h.epochs.set(threadId, Schema.decodeSync(ProducerEpoch)(1));
-          else
-            h.push(threadId, UserInputRecorded.make({ kind: "steering", input: "raced" }), "raced");
-        });
-        yield* h.runtime.ensureOrigin(origin);
-        expect(h.rejectedAppends[advance]).toBe(1);
-        expect(h.appendAttempts.map((attempt) => attempt.epoch)).toEqual(
-          advance === "epoch" ? [0, 1] : [0, 0],
-        );
-        expect(h.logs.get(threadId)!.map(({ record }) => record.payload._tag)).toEqual(
-          advance === "epoch"
-            ? ["ThreadCreated", "WorkerOriginRecorded"]
-            : ["ThreadCreated", "UserInputRecorded", "WorkerOriginRecorded"],
-        );
-      }),
-    );
+      h.logs.set(threadId, h.logs.get(threadId)!.slice(0, 1));
+      onIdentity = Effect.sync(() => {
+        onIdentity = Effect.void;
+        h.push(threadId, UserInputRecorded.make({ kind: "steering", input: "raced" }), "raced");
+      });
+      yield* h.runtime.ensureOrigin(origin);
+      expect(h.rejectedAppends.tail).toBe(1);
+      expect(h.logs.get(threadId)!.map(({ record }) => record.payload._tag)).toEqual([
+        "ThreadCreated",
+        "UserInputRecorded",
+        "WorkerOriginRecorded",
+      ]);
+    }),
+  );
 
   // Regression: https://github.com/yielded-dev/agent/commit/6a4f4f870
   it.effect(
@@ -2057,14 +2039,15 @@ layer(NodeCrypto.layer)((it) => {
         const runId = Schema.decodeSync(RunId)(`run:${submission.submissionId}`);
 
         yield* h.startRun(scout.delivery.receipt!);
-        yield* h.updates.emit({
-          submission,
-          runId,
-          producerEpoch: Schema.decodeSync(ProducerEpoch)(0),
-          definitions,
-          updateId: Schema.decodeSync(IdempotencyKey)("scout-finding"),
-          value: { finding: "area concern" },
-        });
+        yield* h.updates
+          .emit({
+            submission,
+            runId,
+            definitions,
+            updateId: Schema.decodeSync(IdempotencyKey)("scout-finding"),
+            value: { finding: "area concern" },
+          })
+          .pipe(Effect.provideService(CurrentRunWriter, yield* h.writer(submission.threadId)));
 
         const update = [...h.deliveries.values()].find((row) =>
           Schema.is(WorkerUpdate)(row.envelope.messageAdmission),

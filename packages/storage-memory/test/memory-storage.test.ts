@@ -1,14 +1,12 @@
 import { NodeCrypto } from "@effect/platform-node";
 import { expect, describe, it } from "@effect/vitest";
 import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { ThreadId, RunId, SubmissionId } from "@yielded/agent/identifiers";
 import {
   CanonicalBatch,
   CanonicalRecord,
   CanonicalRecordEnvelope,
   CanonicalSequence,
-  ProducerEpoch,
   UserInputRecorded,
   type CanonicalRecordPayload,
 } from "@yielded/agent/records";
@@ -22,7 +20,7 @@ import {
   ThreadObservation,
   ThreadRead,
   ThreadStore,
-  FencedAppendRequest,
+  AppendRequest,
 } from "@yielded/agent/thread-store";
 import {
   Cause,
@@ -44,9 +42,7 @@ const threadId = Schema.decodeSync(ThreadId)("thread-memory-1");
 const runId = Schema.decodeSync(RunId)("run-memory-1");
 const submissionId = Schema.decodeSync(SubmissionId)("submission-memory-1");
 const canonicalSequence = Schema.decodeSync(CanonicalSequence);
-const producerEpoch = Schema.decodeSync(ProducerEpoch);
 const ZERO_CANONICAL_SEQUENCE = canonicalSequence(0);
-const FIRST_PRODUCER_EPOCH = producerEpoch(1);
 
 const id = <A>(schema: Schema.Codec<A, string>, value: string): A =>
   Schema.decodeSync(schema)(value);
@@ -96,19 +92,15 @@ const inputRecord = (recordId: string, input: string): CanonicalRecord =>
 const append = (
   store: ThreadStore["Service"],
   canonicalBatch: CanonicalBatch,
-  tail: Pick<AppendResult, "lastSequence" | "tailDigest"> = {
+  tail: Pick<AppendResult, "lastSequence"> = {
     lastSequence: ZERO_CANONICAL_SEQUENCE,
-    tailDigest: EMPTY_TAIL_DIGEST,
   },
-  producerEpochValue: ProducerEpoch = FIRST_PRODUCER_EPOCH,
 ) =>
   store.append(
-    FencedAppendRequest.make({
+    AppendRequest.make({
       threadId,
       batch: canonicalBatch,
       expectedTailSequence: tail.lastSequence,
-      expectedTailDigest: tail.tailDigest,
-      producerEpoch: producerEpochValue,
     }),
   );
 
@@ -117,9 +109,7 @@ describe("MemoryThreadStore", () => {
     Effect.gen(function* () {
       const store = yield* ThreadStore;
 
-      yield* store.materialize(
-        ThreadMaterialization.make({ threadId, producerEpoch: FIRST_PRODUCER_EPOCH }),
-      );
+      yield* store.materialize(ThreadMaterialization.make({ threadId }));
       expect(
         yield* store.read(ThreadRead.make({ threadId, limit: 2 })).pipe(Stream.runCollect),
       ).toEqual([]);
@@ -168,6 +158,7 @@ describe("MemoryThreadStore", () => {
         conformanceCase.run.pipe(
           Effect.updateService(ThreadStore, (store) => ({
             readIdentity: store.readIdentity,
+            readExecution: store.readExecution,
             countPeerMessages: store.countPeerMessages,
             materialize: store.materialize,
             append: store.append,
@@ -194,7 +185,6 @@ describe("MemoryThreadStore", () => {
         yield* store.materialize(
           ThreadMaterialization.make({
             threadId,
-            producerEpoch: FIRST_PRODUCER_EPOCH,
           }),
         );
         const releaseObserver = yield* Deferred.make<void>();
@@ -209,9 +199,8 @@ describe("MemoryThreadStore", () => {
 
         yield* Effect.yieldNow;
 
-        let tail: Pick<AppendResult, "lastSequence" | "tailDigest"> = {
+        let tail: Pick<AppendResult, "lastSequence"> = {
           lastSequence: ZERO_CANONICAL_SEQUENCE,
-          tailDigest: EMPTY_TAIL_DIGEST,
         };
 
         for (let index = 0; index < recordCount; index++) {
@@ -241,7 +230,6 @@ describe("MemoryThreadStore", () => {
       yield* store.materialize(
         ThreadMaterialization.make({
           threadId,
-          producerEpoch: FIRST_PRODUCER_EPOCH,
         }),
       );
 

@@ -5,7 +5,7 @@ import {
   type PostgresStorageFailpointLocation,
   PostgresWriteContention,
 } from "@yielded/agent-storage-postgres/postgres-storage-error";
-import { digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { digestJson } from "@yielded/agent/digest";
 import {
   CanonicalBatch,
   CanonicalSequence,
@@ -20,6 +20,7 @@ import {
   type SettlementOutcome,
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
+import type { StorageOwner } from "@yielded/agent/run-storage";
 import { SettlementPublication, SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import {
   type ParentLinkage,
@@ -43,8 +44,6 @@ import {
   OwnershipLost,
   Principal,
   ReleaseChildBudgetRequest,
-  ReleaseOwnershipRequest,
-  RenewOwnershipRequest,
   ResolutionCompletedWithResult,
   ResolutionNeverHappened,
   RevertJoiningRequest,
@@ -59,19 +58,19 @@ import {
   submissionSettlementBatchId,
   submissionSettlementRecordId,
   type AdmissionResult,
-  type Claim,
 } from "@yielded/agent/submission-ledger";
-import { FencedAppendRequest, ThreadMaterialization } from "@yielded/agent/thread-store";
+import type { ThreadStore } from "@yielded/agent/thread-store";
+import { AppendRequest, ThreadMaterialization } from "@yielded/agent/thread-store";
 import type { Crypto } from "effect";
 import { Cause, DateTime, Effect, Exit, Layer, Option, Ref, Schema } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
-import { TestClock } from "effect/testing";
 
+import { withSubmissionOwner } from "../../../test/fixtures/ledger-read-contracts.ts";
 import {
   clientLayer,
   storage as makeStorage,
   singleConnectionStorage,
-  whileHoldingWriterLock,
+  whileHoldingTableLock,
   withTemporaryDatabase,
 } from "./harness.ts";
 
@@ -88,7 +87,6 @@ const isPostgresStorageFailpointError = Schema.is(PostgresStorageFailpointError)
 
 const TEST_PRINCIPAL = id(Principal, "principal-postgres-ledger");
 const TEST_PRODUCER = id(ProducerId, "producer-postgres-ledger");
-const OTHER_PRODUCER = id(ProducerId, "producer-postgres-ledger-other");
 const TEST_AGENT = id(AdmissionRequest.fields.agentId, "agent-postgres-ledger");
 const TEST_DEPLOYMENT = id(DeploymentId, "deployment-postgres-ledger");
 const TEST_DEFINITION_DIGEST = Schema.decodeSync(Digest)("a".repeat(64));
@@ -126,7 +124,6 @@ const admission = Effect.fn("PostgresLedgerTest.admission")(function* (
 
 const settlementPublication = Effect.fn("PostgresLedgerTest.settlementPublication")(function* (
   admitted: AdmissionResult,
-  claim: Claim,
   threadId: string,
   outcome: SettlementOutcome,
 ) {
@@ -161,12 +158,11 @@ const settlementPublication = Effect.fn("PostgresLedgerTest.settlementPublicatio
 
   return SettlementPublication.make({
     submissionId: admitted.submissionId,
-    authority: { _tag: "Owned", ownershipToken: claim.ownershipToken },
-    append: FencedAppendRequest.make({
+    authority: { _tag: "Owned" },
+    append: AppendRequest.make({
       threadId: thread(threadId),
-      producerEpoch: claim.producerEpoch,
       expectedTailSequence: sequence(0),
-      expectedTailDigest: EMPTY_TAIL_DIGEST,
+
       batch: CanonicalBatch.make({
         batchId: submissionSettlementBatchId(admitted.submissionId),
         producerId: TEST_PRODUCER,
@@ -215,20 +211,26 @@ const makeFailpointHarness = (url: string) =>
     const select = (location: PostgresStorageFailpointLocation | undefined) =>
       Ref.set(active, location);
 
+    const storage = makeStorage(url, {
+      failpoint: (location) =>
+        Ref.get(active).pipe(
+          Effect.flatMap((selected) =>
+            selected === location
+              ? Effect.fail(PostgresStorageFailpointError.make({ location }))
+              : Effect.void,
+          ),
+        ),
+    });
+
     const failingLedger = <A, E>(
-      effect: Effect.Effect<A, E, SubmissionLedger | SettlementPublisher | Crypto.Crypto>,
+      effect: Effect.Effect<
+        A,
+        E,
+        SubmissionLedger | SettlementPublisher | ThreadStore | StorageOwner | Crypto.Crypto
+      >,
     ) =>
       Effect.provide(effect, [
-        makeStorage(url, {
-          failpoint: (location) =>
-            Ref.get(active).pipe(
-              Effect.flatMap((selected) =>
-                selected === location
-                  ? Effect.fail(PostgresStorageFailpointError.make({ location }))
-                  : Effect.void,
-              ),
-            ),
-        }).submissionLedger,
+        Layer.merge(storage.threadStore, storage.submissionLedger),
         NodeCrypto.layer,
       ]);
 
@@ -236,7 +238,7 @@ const makeFailpointHarness = (url: string) =>
   });
 
 describe("PostgresSubmissionLedger faults", () => {
-  it.effect("classifies cross-connection write contention as retryable typed contention", () =>
+  it.effect("classifies a native table lock timeout as retryable typed contention", () =>
     withTemporaryDatabase((url) =>
       Effect.gen(function* () {
         yield* withLedger(
@@ -248,14 +250,17 @@ describe("PostgresSubmissionLedger faults", () => {
           }),
         );
 
-        // Opening a ledger takes the writer lock itself, so the competing producer must arrive
-        // after the ledger is open. `lock_timeout = 0` disables the bound in Postgres, so the
+        // Hold the administrative table lock after storage initialization. `lock_timeout = 0` disables the bound in Postgres, so the
         // shortest bounded wait is used instead.
         const contended = yield* Effect.gen(function* () {
           const ledger = yield* SubmissionLedger;
           const request = yield* admission("thread-busy", "busy-key-2", { step: 2 });
 
-          return yield* whileHoldingWriterLock(url, ledger.admit(request).pipe(Effect.exit));
+          return yield* whileHoldingTableLock(
+            url,
+            ledger.admit(request).pipe(Effect.exit),
+            "effect_agent_submissions",
+          );
         }).pipe(Effect.provide(singleConnectionLedger(url, 50)));
 
         expect(Exit.isFailure(contended)).toBe(true);
@@ -268,7 +273,7 @@ describe("PostgresSubmissionLedger faults", () => {
           }
         }
 
-        // Once the competing writer releases the lock, the identical admission commits.
+        // Once the administrative transaction releases the lock, the identical admission commits.
         const recovered = yield* withLedger(
           url,
           Effect.gen(function* () {
@@ -283,7 +288,7 @@ describe("PostgresSubmissionLedger faults", () => {
     ),
   );
 
-  it.effect("recovers ledger identity and ownership after lost acknowledgements", () =>
+  it.effect("recovers ledger identity and input progress after lost acknowledgements", () =>
     withTemporaryDatabase((url) =>
       Effect.gen(function* () {
         const { select, failingLedger } = yield* makeFailpointHarness(url);
@@ -301,38 +306,13 @@ describe("PostgresSubmissionLedger faults", () => {
           }),
         );
 
-        const ownershipRows = withSql(
-          url,
-          Effect.gen(function* () {
-            const sql = yield* SqlClientService.SqlClient;
-
-            return yield* sql<Record<string, unknown>>`
-              SELECT submission_id, attempt_id, ownership_token, producer_epoch, lease_expires_at
-              FROM effect_agent_submission_ownership
-            `;
-          }),
-        );
-
-        const attemptRows = withSql(
-          url,
-          Effect.gen(function* () {
-            const sql = yield* SqlClientService.SqlClient;
-
-            return yield* sql<Record<string, unknown>>`
-              SELECT attempt_id, submission_id, producer_epoch
-              FROM effect_agent_attempts
-              ORDER BY producer_epoch
-            `;
-          }),
-        );
-
         const canonicalRows = withSql(
           url,
           Effect.gen(function* () {
             const sql = yield* SqlClientService.SqlClient;
 
             return yield* sql<Record<string, unknown>>`
-              SELECT record_id, record_json
+              SELECT record_id, payload_json
               FROM effect_agent_canonical_records
             `;
           }),
@@ -346,18 +326,6 @@ describe("PostgresSubmissionLedger faults", () => {
             return yield* sql<Record<string, unknown>>`
               SELECT submission_id, reason, requested_at
               FROM effect_agent_abort_intents
-            `;
-          }),
-        );
-
-        const threadRows = withSql(
-          url,
-          Effect.gen(function* () {
-            const sql = yield* SqlClientService.SqlClient;
-
-            return yield* sql<Record<string, unknown>>`
-              SELECT thread_id, producer_epoch
-              FROM effect_agent_threads
             `;
           }),
         );
@@ -401,50 +369,37 @@ describe("PostgresSubmissionLedger faults", () => {
         yield* select(undefined);
         yield* markReadyOnce;
 
-        // The lost claim acknowledgement leaves ownership, audit and epoch changes durable.
+        // A lost selection acknowledgement leaves the accepted input available to recovery.
         const claimOnce = failingLedger(
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            return yield* ledger.claim(
-              ClaimRequest.make({ threadId: thread(lane), producerId: TEST_PRODUCER }),
-            );
+            return yield* ledger.selectHead(ClaimRequest.make({ threadId: thread(lane) }));
           }),
         );
 
         yield* select("ledger:claim:after");
         expectInjectedFailure(yield* claimOnce.pipe(Effect.exit), "ledger:claim:after");
-        const orphanedOwnership = yield* ownershipRows;
-
-        expect(orphanedOwnership).toHaveLength(1);
-        expect(orphanedOwnership[0]?.producer_epoch).toBe(1n);
-        expect(yield* threadRows).toEqual([{ thread_id: lane, producer_epoch: 1n }]);
-        expect((yield* submissionStates)[0]?.state).toBe("running");
-        expect(yield* attemptRows).toHaveLength(1);
-        // The orphaned lease blocks until expiry; a later Attempt reclaims at a higher epoch.
+        expect((yield* submissionStates)[0]?.state).toBe("ready");
         yield* select(undefined);
-        expect(Option.isNone(yield* claimOnce)).toBe(true);
-        yield* TestClock.adjust(30_001);
         const claim = yield* claimOnce;
 
         expect(Option.isSome(claim)).toBe(true);
         if (Option.isNone(claim)) return;
-        expect(claim.value.producerEpoch).toBe(2);
-        expect(yield* attemptRows).toHaveLength(2);
 
-        // The committed input marker survives reopen; retry is a no-op.
         const markInputOnce = failingLedger(
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            yield* ledger.markInputApplied(
-              MarkInputAppliedRequest.make({
-                submissionId: admitted.submissionId,
-                ownershipToken: claim.value.ownershipToken,
-                recordId: submissionInputRecordId(admitted.submissionId),
-                sequence: sequence(1),
-              }),
-            );
+            yield* ledger
+              .markInputApplied(
+                MarkInputAppliedRequest.make({
+                  submissionId: admitted.submissionId,
+                  recordId: submissionInputRecordId(admitted.submissionId),
+                  sequence: sequence(1),
+                }),
+              )
+              .pipe(withSubmissionOwner(admitted.submissionId));
           }),
         );
 
@@ -460,39 +415,16 @@ describe("PostgresSubmissionLedger faults", () => {
         yield* select(undefined);
         yield* markInputOnce;
 
-        // The lease extension survives the lost acknowledgement.
-        const renewOnce = failingLedger(
-          Effect.gen(function* () {
-            const ledger = yield* SubmissionLedger;
-
-            return yield* ledger.renewOwnership(
-              RenewOwnershipRequest.make({
-                submissionId: admitted.submissionId,
-                ownershipToken: claim.value.ownershipToken,
-              }),
-            );
-          }),
-        );
-
-        const leaseBeforeRenew = (yield* ownershipRows)[0]?.lease_expires_at;
-
-        yield* TestClock.adjust(1_000);
-        yield* select("ledger:renew:after");
-        expectInjectedFailure(yield* renewOnce.pipe(Effect.exit), "ledger:renew:after");
-        const leaseAfterRenew = (yield* ownershipRows)[0]?.lease_expires_at;
-
-        expect(leaseAfterRenew).not.toBe(leaseBeforeRenew);
-        yield* select(undefined);
-        yield* renewOnce;
-
         // Canonical publication retains the terminal intent for recovery.
-        const publication = yield* settlementPublication(admitted, claim.value, lane, "completed");
+        const publication = yield* settlementPublication(admitted, lane, "completed");
 
         const publishOnce = failingLedger(
           Effect.gen(function* () {
             const publisher = yield* SettlementPublisher;
 
-            return yield* publisher.publish(publication);
+            return yield* publisher
+              .publish(publication)
+              .pipe(withSubmissionOwner(publication.submissionId));
           }),
         );
 
@@ -502,12 +434,12 @@ describe("PostgresSubmissionLedger faults", () => {
 
         expect(publishedRows).toHaveLength(1);
         expect(publishedRows[0]?.record_id).toBe(
-          submissionSettlementRecordId(admitted.submissionId),
+          JSON.stringify(submissionSettlementRecordId(admitted.submissionId)),
         );
         expect((yield* submissionStates)[0]?.finalized_at).not.toBeNull();
         expect((yield* submissionStates)[0]?.state).toBe("settled");
         yield* select(undefined);
-        // Cofinalization released the token; recover the committed receipt through finalization.
+        // Cofinalization closed the owner; recover the committed receipt through finalization.
         expect(yield* publishOnce.pipe(Effect.flip)).toMatchObject({ _tag: "OwnershipLost" });
 
         const finalizeOnce = failingLedger(
@@ -530,7 +462,6 @@ describe("PostgresSubmissionLedger faults", () => {
         );
         expect((yield* submissionStates)[0]?.finalized_at).not.toBeNull();
         expect((yield* submissionStates)[0]?.state).toBe("settled");
-        expect(yield* ownershipRows).toEqual([]);
         yield* select(undefined);
         const settlement = yield* finalizeOnce;
 
@@ -580,49 +511,6 @@ describe("PostgresSubmissionLedger faults", () => {
         expect(intent.reason).toBe("failpoint abort");
 
         // The committed release makes a retry observe OwnershipLost.
-        const abortClaim = yield* failingLedger(
-          Effect.gen(function* () {
-            const ledger = yield* SubmissionLedger;
-
-            return yield* ledger.claim(
-              ClaimRequest.make({
-                threadId: thread(abortLane),
-                producerId: OTHER_PRODUCER,
-              }),
-            );
-          }),
-        );
-
-        expect(Option.isSome(abortClaim)).toBe(true);
-        if (Option.isNone(abortClaim)) return;
-
-        const releaseOnce = failingLedger(
-          Effect.gen(function* () {
-            const ledger = yield* SubmissionLedger;
-
-            yield* ledger.releaseOwnership(
-              ReleaseOwnershipRequest.make({
-                submissionId: abortAdmitted.submissionId,
-                ownershipToken: abortClaim.value.ownershipToken,
-              }),
-            );
-          }),
-        );
-
-        yield* select("ledger:release:after");
-        expectInjectedFailure(yield* releaseOnce.pipe(Effect.exit), "ledger:release:after");
-        expect(yield* ownershipRows).toEqual([]);
-        expect(
-          (yield* submissionStates).find((row) => row.submission_id === abortAdmitted.submissionId)
-            ?.state,
-        ).toBe("ready");
-        yield* select(undefined);
-        const retriedRelease = yield* releaseOnce.pipe(Effect.exit);
-
-        expect(Exit.isFailure(retriedRelease)).toBe(true);
-        if (Exit.isFailure(retriedRelease)) {
-          expect(Cause.squash(retriedRelease.cause)).toBeInstanceOf(OwnershipLost);
-        }
       }),
     ),
   );
@@ -648,18 +536,6 @@ describe("PostgresSubmissionLedger faults", () => {
                 unknown_tool_call_ids_json
               FROM effect_agent_submissions
               ORDER BY thread_id, queue_sequence
-            `;
-          }),
-        );
-
-        const ownershipRows = withSql(
-          url,
-          Effect.gen(function* () {
-            const sql = yield* SqlClientService.SqlClient;
-
-            return yield* sql<Record<string, unknown>>`
-              SELECT submission_id, ownership_token
-              FROM effect_agent_submission_ownership
             `;
           }),
         );
@@ -695,7 +571,7 @@ describe("PostgresSubmissionLedger faults", () => {
 
         const lane = "thread-p5-failpoints";
 
-        const { host, hostClaim, queued, queuedSecond } = yield* failingLedger(
+        const { host, queued, queuedSecond } = yield* failingLedger(
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
@@ -719,9 +595,7 @@ describe("PostgresSubmissionLedger faults", () => {
               MarkReadyRequest.make({ submissionId: queuedSecond.submissionId }),
             );
 
-            const claim = yield* ledger.claim(
-              ClaimRequest.make({ threadId: thread(lane), producerId: TEST_PRODUCER }),
-            );
+            const claim = yield* ledger.selectHead(ClaimRequest.make({ threadId: thread(lane) }));
 
             if (Option.isNone(claim)) return yield* Effect.die("missing host claim");
 
@@ -734,14 +608,15 @@ describe("PostgresSubmissionLedger faults", () => {
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            return yield* ledger.claimJoining(
-              ClaimJoiningRequest.make({
-                threadId: thread(lane),
-                hostSubmissionId: host.submissionId,
-                ownershipToken: hostClaim.ownershipToken,
-                maxCount: 1,
-              }),
-            );
+            return yield* ledger
+              .claimJoining(
+                ClaimJoiningRequest.make({
+                  threadId: thread(lane),
+                  hostSubmissionId: host.submissionId,
+                  maxCount: 1,
+                }),
+              )
+              .pipe(withSubmissionOwner(host.submissionId));
           }),
         );
 
@@ -767,14 +642,15 @@ describe("PostgresSubmissionLedger faults", () => {
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            yield* ledger.markJoined(
-              MarkJoinedRequest.make({
-                submissionId: queued.submissionId,
-                ownershipToken: hostClaim.ownershipToken,
-                recordId: submissionInputRecordId(queued.submissionId),
-                sequence: sequence(2),
-              }),
-            );
+            yield* ledger
+              .markJoined(
+                MarkJoinedRequest.make({
+                  submissionId: queued.submissionId,
+                  recordId: submissionInputRecordId(queued.submissionId),
+                  sequence: sequence(2),
+                }),
+              )
+              .pipe(withSubmissionOwner(host.submissionId));
           }),
         );
 
@@ -845,13 +721,14 @@ describe("PostgresSubmissionLedger faults", () => {
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            return yield* ledger.suspend(
-              SuspendRequest.make({
-                submissionId: host.submissionId,
-                ownershipToken: hostClaim.ownershipToken,
-                reason: ApprovalPendingSuspension.make({ toolCallIds: [toolCall("call-fp-b")] }),
-              }),
-            );
+            return yield* ledger
+              .suspend(
+                SuspendRequest.make({
+                  submissionId: host.submissionId,
+                  reason: ApprovalPendingSuspension.make({ toolCallIds: [toolCall("call-fp-b")] }),
+                }),
+              )
+              .pipe(withSubmissionOwner(host.submissionId));
           }),
         );
 
@@ -861,7 +738,6 @@ describe("PostgresSubmissionLedger faults", () => {
 
         expect(suspendedMarker?.state).toBe("suspended");
         expect(suspendedMarker?.suspended_reason_json).not.toBeNull();
-        expect(yield* ownershipRows).toEqual([]);
         yield* select(undefined);
         const retriedSuspend = yield* suspendOnce.pipe(Effect.exit);
 
@@ -1013,7 +889,7 @@ describe("PostgresSubmissionLedger faults", () => {
         const reservationId = S2_FAILPOINT_RESERVATION;
         const delegationCall = toolCall("call-s2-fp");
 
-        const { child, parent, parentClaim } = yield* failingLedger(
+        const { child, parent } = yield* failingLedger(
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
@@ -1029,10 +905,9 @@ describe("PostgresSubmissionLedger faults", () => {
 
             yield* ledger.markReady(MarkReadyRequest.make({ submissionId: child.submissionId }));
 
-            const claim = yield* ledger.claim(
+            const claim = yield* ledger.selectHead(
               ClaimRequest.make({
                 threadId: thread(parentLane),
-                producerId: TEST_PRODUCER,
               }),
             );
 
@@ -1053,16 +928,17 @@ describe("PostgresSubmissionLedger faults", () => {
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            return yield* ledger.reserveChildBudget(
-              ChildBudgetReservationRequest.make({
-                reservationId,
-                parentSubmissionId: parent.submissionId,
-                parentToolCallId: delegationCall,
-                ownershipToken: parentClaim.ownershipToken,
-                allocation,
-                allocationDigest,
-              }),
-            );
+            return yield* ledger
+              .reserveChildBudget(
+                ChildBudgetReservationRequest.make({
+                  reservationId,
+                  parentSubmissionId: parent.submissionId,
+                  parentToolCallId: delegationCall,
+                  allocation,
+                  allocationDigest,
+                }),
+              )
+              .pipe(withSubmissionOwner(parent.submissionId));
           }),
         );
 
@@ -1086,13 +962,14 @@ describe("PostgresSubmissionLedger faults", () => {
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            return yield* ledger.attachChildToReservation(
-              AttachChildToReservationRequest.make({
-                reservationId,
-                ownershipToken: parentClaim.ownershipToken,
-                childSubmissionId: child.submissionId,
-              }),
-            );
+            return yield* ledger
+              .attachChildToReservation(
+                AttachChildToReservationRequest.make({
+                  reservationId,
+                  childSubmissionId: child.submissionId,
+                }),
+              )
+              .pipe(withSubmissionOwner(parent.submissionId));
           }),
         );
 
@@ -1156,27 +1033,27 @@ describe("PostgresSubmissionLedger faults", () => {
           Effect.gen(function* () {
             const ledger = yield* SubmissionLedger;
 
-            const suspended = yield* ledger.suspend(
-              SuspendRequest.make({
-                submissionId: parent.submissionId,
-                ownershipToken: parentClaim.ownershipToken,
-                reason: WaitingForChildSuspension.make({
-                  children: [
-                    WaitingChild.make({
-                      toolCallId: delegationCall,
-                      childSubmissionId: child.submissionId,
-                    }),
-                  ],
+            const suspended = yield* ledger
+              .suspend(
+                SuspendRequest.make({
+                  submissionId: parent.submissionId,
+                  reason: WaitingForChildSuspension.make({
+                    children: [
+                      WaitingChild.make({
+                        toolCallId: delegationCall,
+                        childSubmissionId: child.submissionId,
+                      }),
+                    ],
+                  }),
                 }),
-              }),
-            );
+              )
+              .pipe(withSubmissionOwner(parent.submissionId));
 
             expect(suspended).toBe("suspended");
 
-            const childClaim = yield* ledger.claim(
+            const childClaim = yield* ledger.selectHead(
               ClaimRequest.make({
                 threadId: thread(childLane),
-                producerId: TEST_PRODUCER,
               }),
             );
 
@@ -1184,9 +1061,9 @@ describe("PostgresSubmissionLedger faults", () => {
 
             const publisher = yield* SettlementPublisher;
 
-            yield* publisher.publish(
-              yield* settlementPublication(child, childClaim.value, childLane, "completed"),
-            );
+            yield* publisher
+              .publish(yield* settlementPublication(child, childLane, "completed"))
+              .pipe(withSubmissionOwner(child.submissionId));
             yield* ledger.finalizeSettlement(
               SettlementFinalization.make({
                 submissionId: child.submissionId,

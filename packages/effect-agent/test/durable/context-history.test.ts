@@ -5,15 +5,9 @@ import {
   ContextHistoryRead,
   ContextHistorySearch,
 } from "@yielded/agent/context-history";
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import type { RecordEnvelope } from "@yielded/agent/records";
-import {
-  CanonicalRecordEnvelope,
-  CanonicalSequence,
-  ProducerEpoch,
-  PersistedJson,
-} from "@yielded/agent/records";
+import { CanonicalRecordEnvelope, CanonicalSequence, PersistedJson } from "@yielded/agent/records";
 import * as ThreadContextHistory from "@yielded/agent/thread-context-history";
 import { ThreadStore, ThreadStoreError, ThreadTail } from "@yielded/agent/thread-store";
 import { Cause, Deferred, Effect, Exit, Fiber, Layer, Schema, Stream } from "effect";
@@ -57,7 +51,6 @@ const response = (position: number, text: string, runId = "run-1") =>
         Prompt.makeMessage("assistant", { content: [Prompt.makePart("text", { text })] }),
       ]),
     ),
-    messagesDigest: digest,
   });
 
 /** Read-only port probe; storage adapter suites own persistence and atomic append behavior. */
@@ -65,6 +58,7 @@ const probe = (initial: ReadonlyArray<CanonicalRecordEnvelope>) => {
   const state = { records: [...initial], pages: [] as Array<number> };
 
   const store = ThreadStore.of({
+    readExecution: () => Effect.die("History lookup does not read active execution state"),
     readPrompt: () => Stream.die("History lookup requires full canonical evidence"),
     readIdentity: () => Effect.die("History lookup must not read worker identity"),
     materialize: () => Effect.die("History lookup cannot materialize Threads"),
@@ -76,8 +70,6 @@ const probe = (initial: ReadonlyArray<CanonicalRecordEnvelope>) => {
         ThreadTail.make({
           threadId: request.threadId,
           tailSequence: sequence(state.records.length),
-          tailDigest: EMPTY_TAIL_DIGEST,
-          producerEpoch: Schema.decodeSync(ProducerEpoch)(0),
         }),
       ),
     read: (request) => {
@@ -202,7 +194,6 @@ describe("canonical context history", () => {
               }),
             ]),
           ),
-          messagesDigest: digest,
         }),
         record(17, {
           _tag: "CompactionCreated",
@@ -273,7 +264,7 @@ describe("canonical context history", () => {
           runId: "run-1",
           turn: 1,
           turnId: "turn-1",
-          messagesDigest: digest,
+
           messages: promptJson(
             Prompt.make([
               Prompt.makeMessage("system", { content: "secret system value" }),

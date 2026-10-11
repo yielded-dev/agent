@@ -12,7 +12,7 @@ import {
 } from "@yielded/agent/submission-ledger";
 import { WorkerCompletion, WorkerUpdate } from "@yielded/agent/worker";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Clock, Effect, Schema } from "effect";
+import { Clock, Deferred, Effect, Option, Schema } from "effect";
 import { DurableObject } from "effect-cf";
 import { TestClock } from "effect/testing";
 import { expect, it } from "vite-plus/test";
@@ -51,6 +51,7 @@ import {
   armRuntimeEviction,
   armedEvictionsRemaining,
   maintenanceClocks,
+  alarmAttemptHolds,
 } from "./fixtures.ts";
 import {
   allSettled,
@@ -58,6 +59,7 @@ import {
   runClient,
   stubFor,
   readCanonical,
+  readExecution,
   scheduledAlarm,
 } from "./harness.ts";
 import {
@@ -319,9 +321,11 @@ it("delivers an accepted worker update before completion after eviction with onl
     );
 
     expect(accepted).toHaveLength(1);
-    expect(interrupted.filter(({ record }) => record.payload._tag === "RunCompleted")).toHaveLength(
-      0,
-    );
+    const interruptedExecution = Option.getOrThrow(await readExecution(started.delivery.receipt!));
+
+    expect(
+      interruptedExecution.operational.filter(({ payload }) => payload._tag === "RunCompleted"),
+    ).toHaveLength(0);
 
     // The post-append failpoint already evicted the child. A second uncontrolled
     // eviction could instead kill recovery's newly acquired delivery lease.
@@ -359,8 +363,8 @@ it("delivers an accepted worker update before completion after eviction with onl
     expect(backgroundUpdatePrompts.at(-1)).toContain("AreaConcern");
     expect(backgroundUpdatePrompts.at(-1)).toContain(started.worker.threadId);
     expect(
-      (await readCanonical(started.worker.threadId)).filter(
-        ({ record }) => record.payload._tag === "RunCompleted",
+      Option.getOrThrow(await readExecution(started.delivery.receipt!)).operational.filter(
+        ({ payload }) => payload._tag === "RunCompleted",
       ),
     ).toHaveLength(0);
     expect((await deliveries()).items).toHaveLength(1);
@@ -534,12 +538,13 @@ it("retains captured worker policies and concurrency across native eviction and 
     const alarm = runDurableObjectAlarm(stubFor(first.worker.threadId)).catch(() => false);
 
     await expect
-      .poll(async () =>
-        (await readCanonical(first.worker.threadId)).some(
-          ({ record }) => record.payload._tag === "RunStarted",
-        ),
+      .poll(
+        async () =>
+          Option.getOrUndefined(await readExecution(acceptedFirst.receipt!))?.operational.filter(
+            ({ payload }) => payload._tag === "RunStarted",
+          ).length,
       )
-      .toBe(true);
+      .toBe(1);
 
     armRuntimeEviction(first.worker.threadId, "turn:after-response-append");
     independentBudgetGates.add(`${source}:task:1`);
@@ -1150,12 +1155,13 @@ it("retains one worker input when its caller loses admission ownership to the so
     firstAlarm = runDurableObjectAlarm(stubFor(started.worker.threadId)).catch(() => false);
 
     await expect
-      .poll(async () =>
-        (await readCanonical(started.worker.threadId)).some(
-          ({ record }) => record.payload._tag === "RunStarted",
-        ),
+      .poll(
+        async () =>
+          Option.getOrUndefined(await readExecution(started.delivery.receipt!))?.operational.filter(
+            ({ payload }) => payload._tag === "RunStarted",
+          ).length,
       )
-      .toBe(true);
+      .toBe(1);
     signal.throwIfAborted();
 
     const sourceDeliveries = () =>
@@ -1328,6 +1334,10 @@ it("retains one worker input when its caller loses admission ownership to the so
 // Regression: https://github.com/yielded-dev/agent/pull/358
 it("retries unavailable worker funding admission with the same durable input identity", async () => {
   const source = `background-cf-independent-outage-${crypto.randomUUID()}`;
+  const completionEntered = Deferred.makeUnsafe<void>();
+  const releaseCompletion = Deferred.makeUnsafe<void>();
+  let workerThread: string | undefined;
+  let completingAlarm: Promise<boolean> | undefined;
 
   await runClient(
     Effect.flatMap(CloudflareThreadClient, (client) =>
@@ -1356,6 +1366,13 @@ it("retries unavailable worker funding admission with the same durable input ide
     const started = await launch();
 
     expect(started.delivery).toMatchObject({ status: "pending", receipt: null, reason: "storage" });
+    workerThread = started.worker.threadId;
+    alarmAttemptHolds.set(workerThread, {
+      location: "terminalize:before-publication",
+      entered: Deferred.succeed(completionEntered, undefined).pipe(Effect.asVoid),
+      release: Deferred.await(releaseCompletion),
+      finished: Effect.void,
+    });
 
     const inspect = () =>
       withOwner(source, (host) =>
@@ -1375,20 +1392,53 @@ it("retries unavailable worker funding admission with the same durable input ide
       worker: started.worker,
       delivery: { message: recovered.message, receipt: recovered.receipt },
     });
+    completingAlarm = runDurableObjectAlarm(stubFor(workerThread));
+    await expect.poll(() => Effect.runPromise(Deferred.isDone(completionEntered))).toBe(true);
+    const completing = Option.getOrThrow(await readExecution(recovered.receipt!));
+
+    expect(
+      completing.operational.filter(({ payload }) => payload._tag === "RunStarted"),
+    ).toHaveLength(1);
+    expect(completing.progress.submissionId).toBe(recovered.receipt!.submissionId);
+    await runInDurableObject(stubFor(workerThread), (instance) =>
+      instance[DurableObject.RunSymbol](Deferred.succeed(releaseCompletion, undefined)),
+    );
+    await completingAlarm;
     await drainAlarmsUntil(started.worker.threadId, allSettled(started.worker.threadId));
     const log = await readCanonical(started.worker.threadId);
 
-    expect(log.filter(({ record }) => record.payload._tag === "RunStarted")).toHaveLength(1);
+    expect(
+      log
+        .filter(({ record }) => record.payload._tag === "UserInputRecorded")
+        .map(({ record }) => record.payload),
+    ).toEqual([
+      expect.objectContaining({
+        submissionId: recovered.receipt!.submissionId,
+        runId: completing.progress.runId,
+        input: { question: "recover the accepted intent" },
+      }),
+    ]);
+    expect(await readExecution(recovered.receipt!)).toEqual(Option.none());
     const sourceLog = await readCanonical(source);
 
     expect(
       sourceLog.filter(({ record }) => record.payload._tag === "WorkerInputRequested"),
     ).toHaveLength(1);
   } finally {
-    independentBudgetGrants.delete(source);
-    independentBudgetAdmissionOutages.delete(source);
-    independentBudgetAuthorityCalls.delete(source);
-    droppedMessageWakes.delete(source);
+    try {
+      if (workerThread !== undefined) {
+        await runInDurableObject(stubFor(workerThread), (instance) =>
+          instance[DurableObject.RunSymbol](Deferred.succeed(releaseCompletion, undefined)),
+        );
+        alarmAttemptHolds.delete(workerThread);
+      }
+      await completingAlarm;
+    } finally {
+      independentBudgetGrants.delete(source);
+      independentBudgetAdmissionOutages.delete(source);
+      independentBudgetAuthorityCalls.delete(source);
+      droppedMessageWakes.delete(source);
+    }
   }
 }, 20_000);
 
@@ -1425,12 +1475,13 @@ it("routes worker stop through its owning Object and keeps queued input fenced a
   );
 
   await expect
-    .poll(async () =>
-      (await readCanonical(started.worker.threadId)).some(
-        ({ record }) => record.payload._tag === "RunStarted",
-      ),
+    .poll(
+      async () =>
+        Option.getOrUndefined(await readExecution(started.delivery.receipt!))?.operational.filter(
+          ({ payload }) => payload._tag === "RunStarted",
+        ).length,
     )
-    .toBe(true);
+    .toBe(1);
 
   const steering = await withOwner(source, (host) =>
     Subagent.followUp(
@@ -1470,7 +1521,12 @@ it("routes worker stop through its owning Object and keeps queued input fenced a
   });
   const records = await readCanonical(started.worker.threadId);
 
-  expect(records.filter(({ record }) => record.payload._tag === "RunStarted")).toHaveLength(1);
+  expect(
+    records
+      .filter(({ record }) => record.payload._tag === "UserInputRecorded")
+      .map(({ record }) => record.payload),
+  ).toEqual([expect.objectContaining({ submissionId: started.delivery.receipt!.submissionId })]);
+  expect(await readExecution(started.delivery.receipt!)).toEqual(Option.none());
   expect(records.some(({ record }) => record.payload._tag === "ToolCallSettled")).toBe(false);
   expect(
     await withOwner(source, (host) =>

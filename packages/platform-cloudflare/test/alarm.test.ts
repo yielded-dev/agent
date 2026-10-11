@@ -10,7 +10,7 @@ import {
   UnknownResolutionCommand,
 } from "@yielded/agent/submission-ledger";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Cause, Clock, Deferred, Effect, Exit, Fiber, Scheduler, Schema } from "effect";
+import { Cause, Clock, Deferred, Effect, Exit, Fiber, Option, Scheduler, Schema } from "effect";
 import { DurableObject } from "effect-cf";
 import { SqlClient } from "effect/sql/SqlClient";
 import { TestClock } from "effect/testing";
@@ -42,6 +42,7 @@ import {
   drainAlarmsUntil,
   laneRows,
   readCanonical,
+  readExecution,
   runClient,
   scheduledAlarm,
   stubFor,
@@ -351,7 +352,7 @@ describe("DC alarm semantics", () => {
             ),
           );
 
-          expect(snapshot.ownership).toBeUndefined();
+          expect(snapshot.hasOwner).toBe(false);
           const before = yield* Effect.promise(() => readCanonical(thread));
 
           expect(before.some(({ record }) => record.payload._tag === "SubmissionSettled")).toBe(
@@ -545,7 +546,44 @@ describe("DC alarm semantics", () => {
         disposition: "unknown",
       });
 
-      const follower = await submitTo(plannerDefinition, thread, `${thread}-follower`);
+      const follower = await (async () => {
+        const entered = Deferred.makeUnsafe<void>();
+        const release = Deferred.makeUnsafe<void>();
+        let running: Promise<boolean> | undefined;
+
+        alarmAttemptHolds.set(thread, {
+          location: "terminalize:before-publication",
+          entered: Deferred.succeed(entered, undefined).pipe(Effect.asVoid),
+          release: Deferred.await(release),
+          finished: Effect.void,
+        });
+        try {
+          const accepted = await submitTo(plannerDefinition, thread, `${thread}-follower`);
+
+          running = runDurableObjectAlarm(stubFor(thread));
+          await expect.poll(() => Effect.runPromise(Deferred.isDone(entered))).toBe(true);
+          const completing = Option.getOrThrow(await readExecution(accepted));
+
+          expect(
+            completing.operational
+              .filter(({ payload }) => payload._tag === "RunCompleted")
+              .map(({ payload }) => payload),
+          ).toEqual([
+            expect.objectContaining({
+              runId: completing.progress.runId,
+              output: { answer: "done" },
+            }),
+          ]);
+
+          return accepted;
+        } finally {
+          await runInDurableObject(stubFor(thread), (instance) =>
+            instance[DurableObject.RunSymbol](Deferred.succeed(release, undefined)),
+          );
+          alarmAttemptHolds.delete(thread);
+          await running;
+        }
+      })();
 
       await drainAlarmsUntil(thread, async () =>
         (await laneRows(thread)).some(
@@ -564,13 +602,9 @@ describe("DC alarm semantics", () => {
       expect((await readCanonical(thread)).map(({ record }) => record.payload)).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            _tag: "RunCompleted",
-            runId: `run:${follower.submissionId}`,
-            output: { answer: "done" },
-          }),
-          expect.objectContaining({
             _tag: "SubmissionSettled",
             submissionId: follower.submissionId,
+            runId: `run:${follower.submissionId}`,
             outcome: "completed",
             result: { answer: "done" },
             usageSummary: expect.objectContaining({ modelCalls: 1 }),
@@ -579,6 +613,10 @@ describe("DC alarm semantics", () => {
       );
       await drainAlarmsUntil(thread, async () => (await scheduledAlarm(thread)) === null);
       const parkedFingerprint = await canonicalFingerprint(thread);
+      const parkedExecution = Option.getOrThrow(await readExecution(receipt));
+
+      expect(parkedExecution.progress.position).toBe("unknown");
+      expect(await readExecution(follower)).toEqual(Option.none());
 
       await runInDurableObject(stubFor(thread), (_instance, state) => {
         state.abort("parked unknown with completed follower");
@@ -588,6 +626,7 @@ describe("DC alarm semantics", () => {
       await runDurableObjectAlarm(stubFor(thread)).catch(() => undefined);
       // DUR-009: the unresolved ordinary call is never auto-replayed by redelivered alarms.
       expect(await canonicalFingerprint(thread)).toBe(parkedFingerprint);
+      expect(await readExecution(receipt)).toEqual(Option.some(parkedExecution));
       expect(
         (await laneRows(thread)).find((row) => row.submission_id === receipt.submissionId)?.state,
       ).toBe("unknown");
@@ -699,6 +738,8 @@ describe("DC alarm semantics", () => {
       );
 
       expect(outcomes.map(({ outcome }) => outcome)).toEqual(["aborted", "completed"]);
+      expect(await readExecution(receipt)).toEqual(Option.none());
+      expect(await readExecution(follower)).toEqual(Option.none());
     },
     30_000,
   );

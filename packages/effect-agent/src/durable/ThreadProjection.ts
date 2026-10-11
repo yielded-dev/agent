@@ -1,12 +1,10 @@
 import { Schema } from "effect";
 
 import { ThreadId, RunId, ToolCallId } from "../core/Identifiers.ts";
-import { EMPTY_TAIL_DIGEST } from "./Digest.ts";
 import type { CanonicalRecordEnvelope } from "./Records.ts";
 import {
   AbortRequested,
   CanonicalSequence,
-  Digest,
   PersistedJson,
   SubagentJoined,
   SubagentLineageRecorded,
@@ -54,17 +52,16 @@ export class SubagentInvocationState extends Schema.Class<SubagentInvocationStat
  * reconstructed from the record stream at any time.
  *
  * Open Tool Calls derive from committed model declarations and close on canonical settlement or
- * resolution. Approval and subagent state are views of the same log. Version 3 uses declaration
+ * resolution. Approval and subagent state are views of the same log. Version 4 uses declaration
  * ownership; older checkpoints must be discarded and rebuilt from current canonical records.
  * Prompt reconstruction reads the canonical response messages directly.
  */
 export class ThreadProjection extends Schema.Class<ThreadProjection>(
   "@effect-agent/thread/ThreadProjection",
 )({
-  schemaVersion: Schema.Literal(3),
+  schemaVersion: Schema.Literal(4),
   threadId: ThreadId,
   throughSequence: CanonicalSequence,
-  tailDigest: Digest,
   inputs: Schema.Array(PersistedJson),
   modelOutputs: Schema.Array(PersistedJson),
   completedRuns: Schema.Array(RunId),
@@ -80,10 +77,9 @@ export class ThreadProjection extends Schema.Class<ThreadProjection>(
 
 export const initialThreadProjection = (threadId: ThreadId): ThreadProjection =>
   ThreadProjection.make({
-    schemaVersion: 3,
+    schemaVersion: 4,
     threadId,
     throughSequence: Schema.decodeSync(CanonicalSequence)(0),
-    tailDigest: EMPTY_TAIL_DIGEST,
     inputs: [],
     modelOutputs: [],
     completedRuns: [],
@@ -137,7 +133,6 @@ const upsertSubagentInvocation = (
 export const reduceThreadRecord = (
   projection: ThreadProjection,
   envelope: CanonicalRecordEnvelope,
-  tailDigest: Digest = projection.tailDigest,
 ): ThreadProjection => {
   const payload = envelope.record.payload;
 
@@ -151,9 +146,16 @@ export const reduceThreadRecord = (
       ? [...projection.modelOutputs, payload.output]
       : projection.modelOutputs;
 
-  const completedRuns =
+  const completedRun =
     payload._tag === "RunCompleted"
-      ? [...projection.completedRuns, payload.runId]
+      ? payload.runId
+      : payload._tag === "SubmissionSettled" && payload.outcome === "completed"
+        ? payload.runId
+        : undefined;
+
+  const completedRuns =
+    completedRun !== undefined && !projection.completedRuns.includes(completedRun)
+      ? [...projection.completedRuns, completedRun]
       : projection.completedRuns;
 
   const failedRuns =
@@ -221,10 +223,9 @@ export const reduceThreadRecord = (
     projection.parentLink ?? (payload._tag === "SubagentLineageRecorded" ? payload : undefined);
 
   return ThreadProjection.make({
-    schemaVersion: 3,
+    schemaVersion: 4,
     threadId: projection.threadId,
     throughSequence: envelope.sequence,
-    tailDigest,
     inputs,
     modelOutputs,
     completedRuns,
@@ -243,9 +244,7 @@ export const reduceThreadRecord = (
 export const replayThread = (
   threadId: ThreadId,
   records: ReadonlyArray<CanonicalRecordEnvelope>,
-  tailDigest: Digest = EMPTY_TAIL_DIGEST,
-): ThreadProjection =>
-  replayThreadFromCheckpoint(initialThreadProjection(threadId), records, tailDigest);
+): ThreadProjection => replayThreadFromCheckpoint(initialThreadProjection(threadId), records);
 
 /**
  * Pure checkpoint replay. A validated checkpoint projection and its canonical tail produce the
@@ -255,12 +254,11 @@ export const replayThread = (
 export const replayThreadFromCheckpoint = (
   checkpoint: ThreadProjection,
   records: ReadonlyArray<CanonicalRecordEnvelope>,
-  tailDigest: Digest = checkpoint.tailDigest,
 ): ThreadProjection => {
   let projection = checkpoint;
 
   for (const record of records) {
-    projection = reduceThreadRecord(projection, record, tailDigest);
+    projection = reduceThreadRecord(projection, record);
   }
 
   return projection;

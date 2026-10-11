@@ -38,7 +38,6 @@ import {
   Principal,
   SubmissionLedger,
   SubmissionLookupById,
-  DEFAULT_OWNERSHIP_LEASE_DURATION,
   RecoverySnapshotRequest,
 } from "@yielded/agent/submission-ledger";
 import { DurableRuntimeFailpointTestControl } from "@yielded/agent/testing/durable-failpoint-test-control";
@@ -47,7 +46,6 @@ import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import {
   Cause,
-  DateTime,
   Deferred,
   Duration,
   Effect,
@@ -186,7 +184,6 @@ const configLayer = DurableRuntimeConfig.layer({
   deploymentId: Schema.decodeSync(DeploymentId)("deployment-durable-approval"),
   producerId: PRODUCER_ID,
   settlementPollInterval: Duration.millis(100),
-  leaseRenewalInterval: Duration.seconds(5),
   abortPollInterval: Duration.millis(100),
 });
 
@@ -326,7 +323,7 @@ const makeRetentionCase = (
               .loadRecoverySnapshot(RecoverySnapshotRequest.make({ submissionId }))
               .pipe(Effect.orDie);
 
-            expect(snapshot.ownership?.attemptId).toBe(attemptId);
+            expect(snapshot.hasOwner).toBe(true);
 
             const records = yield* readLog(thread).pipe(
               Effect.provideService(ThreadStore, store),
@@ -447,7 +444,7 @@ layer(baseLayer)("approval suspension with attempt resources", (it) => {
 
       expect(tags.filter((tag) => tag === "ToolApprovalRequested")).toHaveLength(1);
       expect(tags.filter((tag) => tag === "ToolApprovalDecided")).toHaveLength(1);
-      expect(tags.filter((tag) => tag === "RunStarted")).toHaveLength(1);
+      expect(tags.filter((tag) => tag === "RunStarted")).toHaveLength(0);
     }),
   );
 
@@ -520,7 +517,7 @@ layer(baseLayer)("approval suspension with attempt resources", (it) => {
     );
   }
 
-  it.effect("keeps the existing claim renewal active throughout slow retention", () =>
+  it.effect("keeps the owner active throughout slow retention", () =>
     Effect.gen(function* () {
       const release = yield* Deferred.make<void>();
 
@@ -531,19 +528,9 @@ layer(baseLayer)("approval suspension with attempt resources", (it) => {
       const worker = yield* Effect.forkChild(fixture.process);
 
       yield* fixture.waitForRetention(worker);
-      const initial = (yield* fixture.snapshot).ownership;
-
-      expect(initial).toBeDefined();
-      yield* TestClock.adjust(Duration.sum(DEFAULT_OWNERSHIP_LEASE_DURATION, Duration.seconds(1)));
-      const renewed = (yield* fixture.snapshot).ownership;
-
-      expect(renewed?.attemptId).toBe(initial?.attemptId);
-      expect(
-        renewed &&
-          initial &&
-          DateTime.toEpochMillis(renewed.leaseExpiresAt) >
-            DateTime.toEpochMillis(initial.leaseExpiresAt),
-      ).toBe(true);
+      expect((yield* fixture.snapshot).hasOwner).toBe(true);
+      yield* TestClock.adjust("31 seconds");
+      expect((yield* fixture.snapshot).hasOwner).toBe(true);
       expect(fixture.attachments[0]?.active).toBe(true);
       yield* Deferred.succeed(release, undefined);
       expect(yield* Fiber.join(worker)).toEqual([]);
@@ -571,7 +558,7 @@ layer(baseLayer)("approval suspension with attempt resources", (it) => {
       expect(fixture.lifecycle).toEqual(["acquire", "release"]);
       expect(fixture.resource.open).toBe(false);
       expect(fixture.uses.map(({ tool }) => tool)).toEqual(["use_resource"]);
-      expect((yield* fixture.snapshot).ownership).toBeUndefined();
+      expect((yield* fixture.snapshot).hasOwner).toBe(false);
     }),
   );
 

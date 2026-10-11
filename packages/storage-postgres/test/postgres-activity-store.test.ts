@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@effect/vitest";
+import * as PostgresStorage from "@yielded/agent-storage-postgres/postgres-storage";
 import type { ActivityMutationFailpoint } from "@yielded/agent/activity-store";
 import {
   ActivityBusy,
-  ActivityClaimRequest,
   ActivityMutationFailure,
   ActivityOwnershipLost,
   ActivityProcessorKey,
@@ -11,7 +11,18 @@ import {
   ActivityWorkConflict,
   PreparedActivity,
 } from "@yielded/agent/activity-store";
-import { Cause, Deferred, Effect, Exit, Fiber, Result, Schema } from "effect";
+import {
+  Cause,
+  Context,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Result,
+  Schema,
+  Scope,
+} from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { TestClock } from "effect/testing";
 
@@ -30,9 +41,6 @@ const independentKeys = [
   Schema.decodeSync(ActivityProcessorKey)({ ...key, processorVersion: "v2" }),
 ];
 
-const request = (owner: string, activityKey = key, leaseMillis = 10_000) =>
-  ActivityClaimRequest.make({ key: activityKey, owner, leaseMillis });
-
 const work = (
   sequence: number,
   marker: string,
@@ -45,7 +53,7 @@ const work = (
     sequence,
     workId: marker.repeat(64),
     recordId: `record-${sequence}`,
-    recordDigest: marker.toUpperCase().repeat(64).toLowerCase(),
+
     output,
   });
 
@@ -54,8 +62,10 @@ const storeLayer = (url: string) => storage(url).activityStore;
 const failpointLayer = (url: string, handler: ActivityMutationFailpoint["Service"]["hit"]) =>
   storage(url, { activityFailpoint: handler }).activityStore;
 
-const runStore = <A, E>(url: string, effect: Effect.Effect<A, E, ActivityProcessorStore>) =>
-  effect.pipe(Effect.provide(storeLayer(url)));
+const runStore = <A, E>(
+  url: string,
+  effect: Effect.Effect<A, E, ActivityProcessorStore | Scope.Scope>,
+) => effect.pipe(Effect.scoped, Effect.provide(storeLayer(url)));
 
 const inspect = (url: string, activityKey = key) =>
   runStore(
@@ -70,126 +80,110 @@ const inspect = (url: string, activityKey = key) =>
 const runRaw = <A, E>(url: string, effect: Effect.Effect<A, E, SqlClientService.SqlClient>) =>
   effect.pipe(Effect.provide(clientLayer(url)));
 
+const sharedActivityLayer = PostgresStorage.activityStoreLayer();
+const sharedClientLayer = clientLayer;
+
 describe("Postgres activity processor store", () => {
-  it.effect("preserves pending output across takeover and release, then fences reacquisition", () =>
-    withTemporaryDatabase((url) =>
+  it.effect("preserves a live local owner across elapsed time and rejects closed sessions", () =>
+    withTemporaryDatabase((location) =>
       Effect.gen(function* () {
-        expect(yield* inspect(url)).toBeNull();
+        expect(yield* inspect(location)).toBeNull();
         yield* TestClock.setTime(1_000);
+        const prepared = work(1, "a");
 
         const first = yield* runStore(
-          url,
+          location,
           Effect.gen(function* () {
             const store = yield* ActivityProcessorStore;
-            const claim = yield* store.claim(request("worker"));
-            const prepared = yield* store.prepare({ claim, work: work(1, "a") });
 
-            return { claim, prepared };
+            const lifetime = yield* Effect.acquireRelease(Scope.make(), (scope) =>
+              Scope.close(scope, Exit.void),
+            );
+
+            const session = yield* store.acquire(key).pipe(Scope.provide(lifetime));
+
+            yield* session.prepare(prepared);
+            yield* TestClock.setTime(12_000);
+            const contender = yield* store.acquire(key).pipe(Effect.result);
+
+            expect(Result.isFailure(contender)).toBe(true);
+            if (Result.isFailure(contender))
+              expect(contender.failure).toEqual(ActivityBusy.make({ key }));
+            yield* session.checkActive;
+            yield* Scope.close(lifetime, Exit.void);
+
+            const resumed = yield* store.acquire(key);
+
+            expect(resumed.progress.pending).toEqual(prepared);
+            expect(yield* session.prepare(work(1, "b")).pipe(Effect.flip)).toEqual(
+              ActivityOwnershipLost.make({ key }),
+            );
+            expect(yield* session.advance(prepared.workId).pipe(Effect.flip)).toEqual(
+              ActivityOwnershipLost.make({ key }),
+            );
+            expect((yield* store.inspect(key))?.pending).toEqual(prepared);
+            expect((yield* store.inspect(key))?.throughSequence).toBe(0);
+
+            return resumed;
           }),
         );
 
-        yield* TestClock.setTime(12_000);
-
-        const takeover = yield* runStore(
-          url,
+        const advanced = yield* runStore(
+          location,
           Effect.gen(function* () {
             const store = yield* ActivityProcessorStore;
-            const claim = yield* store.claim(request("takeover"));
+            const session = yield* store.acquire(key);
 
-            expect(claim.epoch).toBe(first.claim.epoch + 1);
-            expect(claim.pending).toEqual(first.prepared);
-            yield* store.release(claim);
-
-            return claim;
-          }),
-        );
-
-        const released = yield* inspect(url);
-
-        expect(released?.owner).toBeNull();
-        expect(released?.pending).toEqual(first.prepared);
-
-        const second = yield* runStore(
-          url,
-          Effect.gen(function* () {
-            const store = yield* ActivityProcessorStore;
-            const claim = yield* store.claim(request("takeover"));
-
-            expect(claim.epoch).toBe(takeover.epoch + 1);
-            expect(claim.pending).toEqual(first.prepared);
+            expect(session.progress.pending).toEqual(prepared);
             yield* TestClock.setTime(13_000);
-            const advanced = yield* store.advance({ claim, workId: first.prepared.workId });
+            expect(yield* first.advance(prepared.workId).pipe(Effect.flip)).toEqual(
+              ActivityOwnershipLost.make({ key }),
+            );
 
-            yield* store.release(claim);
-
-            return { claim, advanced };
+            return yield* session.advance(prepared.workId);
           }),
         );
 
-        expect(second.advanced.throughSequence).toBe(1);
-        expect(second.advanced.pending).toBeNull();
-        const progressed = yield* inspect(url);
-
-        expect(progressed?.throughSequence).toBe(1);
-        expect(progressed?.pending).toBeNull();
-        expect(progressed?.advancedAt).toBe(13_000);
-
-        const third = yield* runStore(
-          url,
-          Effect.gen(function* () {
-            const store = yield* ActivityProcessorStore;
-            const claim = yield* store.claim(request("takeover"));
-
-            const stale = yield* store
-              .advance({ claim: second.claim, workId: first.prepared.workId })
-              .pipe(Effect.flip);
-
-            return { claim, stale };
-          }),
-        );
-
-        expect(third.claim.epoch).toBe(second.claim.epoch + 1);
-        expect(third.stale).toEqual(
-          ActivityOwnershipLost.make({
-            key,
-            owner: second.claim.owner,
-            epoch: second.claim.epoch,
-          }),
-        );
+        expect(advanced.throughSequence).toBe(1);
+        expect(advanced.pending).toBeNull();
+        expect(yield* inspect(location)).toMatchObject({
+          throughSequence: 1,
+          pending: null,
+          advancedAt: 13_000,
+        });
       }),
     ),
   );
 
   it.effect("pins one exact next output and rejects divergent preparation", () =>
-    withTemporaryDatabase((url) =>
+    withTemporaryDatabase((location) =>
       runStore(
-        url,
+        location,
         Effect.gen(function* () {
           const store = yield* ActivityProcessorStore;
-          const claim = yield* store.claim(request("worker"));
+          const session = yield* store.acquire(key);
           const wrongSequence = work(2, "1");
 
-          expect(yield* store.prepare({ claim, work: wrongSequence }).pipe(Effect.flip)).toEqual(
+          expect(yield* session.prepare(wrongSequence).pipe(Effect.flip)).toEqual(
             ActivityWorkConflict.make({ key, workId: wrongSequence.workId }),
           );
-          const wrongKey = independentKeys[1];
-          const wrongOwner = work(1, "2", wrongKey);
+          const wrongKey = work(1, "2", independentKeys[1]);
 
-          expect(yield* store.prepare({ claim, work: wrongOwner }).pipe(Effect.flip)).toEqual(
-            ActivityWorkConflict.make({ key, workId: wrongOwner.workId }),
+          expect(yield* session.prepare(wrongKey).pipe(Effect.flip)).toEqual(
+            ActivityWorkConflict.make({ key, workId: wrongKey.workId }),
           );
           const pinned = work(1, "b", key, { value: "pinned" });
 
-          expect(yield* store.prepare({ claim, work: pinned })).toEqual(pinned);
-          expect(yield* store.prepare({ claim, work: pinned })).toEqual(pinned);
+          expect(yield* session.prepare(pinned)).toEqual(pinned);
+          expect(yield* session.prepare(pinned)).toEqual(pinned);
           const divergent = work(1, "c", key, { value: "different" });
 
-          expect(yield* store.prepare({ claim, work: divergent }).pipe(Effect.flip)).toEqual(
+          expect(yield* session.prepare(divergent).pipe(Effect.flip)).toEqual(
             ActivityWorkConflict.make({ key, workId: divergent.workId }),
           );
           const wrongWorkId = work(1, "3").workId;
 
-          expect(yield* store.advance({ claim, workId: wrongWorkId }).pipe(Effect.flip)).toEqual(
+          expect(yield* session.advance(wrongWorkId).pipe(Effect.flip)).toEqual(
             ActivityWorkConflict.make({ key, workId: wrongWorkId }),
           );
         }),
@@ -197,85 +191,59 @@ describe("Postgres activity processor store", () => {
     ),
   );
 
-  it.effect("keeps thread, processor, and processor-version progress independent", () =>
-    withTemporaryDatabase((url) =>
-      Effect.gen(function* () {
-        yield* runStore(
-          url,
-          Effect.gen(function* () {
-            const store = yield* ActivityProcessorStore;
+  it.effect("shares local activity authority across live storage facets", () =>
+    withTemporaryDatabase((location) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const firstScope = yield* Effect.acquireRelease(Scope.make(), (scope) =>
+            Scope.close(scope, Exit.void),
+          );
 
-            for (const [index, activityKey] of independentKeys.entries()) {
-              const claim = yield* store.claim(request(`worker-${index}`, activityKey));
+          const firstContext = yield* Layer.build(sharedActivityLayer).pipe(
+            Scope.provide(firstScope),
+          );
 
-              if (index === 0) {
-                const prepared = work(1, "d", activityKey);
+          const secondContext = yield* Layer.build(sharedActivityLayer);
+          const first = Context.get(firstContext, ActivityProcessorStore);
+          const second = Context.get(secondContext, ActivityProcessorStore);
+          const old = yield* first.acquire(key);
+          const independent = yield* second.acquire(independentKeys[1]);
 
-                yield* store.prepare({ claim, work: prepared });
-                yield* store.advance({ claim, workId: prepared.workId });
-              }
-            }
-          }),
-        );
-        expect((yield* inspect(url, independentKeys[0]))?.throughSequence).toBe(1);
-        for (const activityKey of independentKeys.slice(1)) {
-          expect((yield* inspect(url, activityKey))?.throughSequence).toBe(0);
-        }
-      }),
-    ),
-  );
+          expect(yield* second.acquire(key).pipe(Effect.flip)).toEqual(ActivityBusy.make({ key }));
+          yield* Scope.close(firstScope, Exit.void);
+          yield* independent.checkActive;
 
-  it.effect("serializes competing claims across independent clients", () =>
-    withTemporaryDatabase((url) =>
-      Effect.gen(function* () {
-        yield* TestClock.setTime(1_000);
+          const current = yield* second.acquire(key);
+          const pinned = work(1, "d");
 
-        const claim = (owner: string) =>
-          runStore(
-            url,
-            Effect.gen(function* () {
-              const store = yield* ActivityProcessorStore;
-
-              return yield* store.claim(request(owner));
-            }),
-          ).pipe(Effect.result);
-
-        const outcomes = yield* Effect.all([claim("one"), claim("two")], {
-          concurrency: "unbounded",
-        });
-
-        expect(outcomes.filter(Result.isSuccess)).toHaveLength(1);
-        expect(outcomes.filter(Result.isFailure)).toHaveLength(1);
-        const failure = outcomes.find(Result.isFailure);
-
-        expect(failure?.failure).toEqual(ActivityBusy.make({ key, leaseExpiresAt: 11_000 }));
-      }),
+          yield* current.prepare(pinned);
+          expect(yield* old.prepare(work(1, "e")).pipe(Effect.flip)).toEqual(
+            ActivityOwnershipLost.make({ key }),
+          );
+          expect((yield* second.inspect(key))?.pending).toEqual(pinned);
+          yield* current.advance(pinned.workId);
+          yield* independent.prepare(work(1, "f", independentKeys[1]));
+        }),
+      ).pipe(Effect.provide(sharedClientLayer(location))),
     ),
   );
 
   it.effect("recovers prepared output and an advanced cursor after lost acknowledgements", () =>
-    withTemporaryDatabase((url) =>
+    withTemporaryDatabase((location) =>
       Effect.gen(function* () {
         yield* TestClock.setTime(1_000);
-
-        const claim = yield* runStore(
-          url,
-          Effect.gen(function* () {
-            const store = yield* ActivityProcessorStore;
-
-            return yield* store.claim(request("worker"));
-          }),
-        );
-
         const prepared = work(1, "e");
 
-        const prepareFailure = yield* Effect.gen(function* () {
-          const store = yield* ActivityProcessorStore;
+        const prepareFailure = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const store = yield* ActivityProcessorStore;
+            const session = yield* store.acquire(key);
 
-          return yield* store.prepare({ claim, work: prepared });
-        }).pipe(
+            return yield* session.prepare(prepared);
+          }),
+        ).pipe(
           Effect.provide(
-            failpointLayer(url, (point) =>
+            failpointLayer(location, (point) =>
               point === "activity:prepare:after"
                 ? Effect.fail(ActivityMutationFailure.make({ point }))
                 : Effect.void,
@@ -287,17 +255,21 @@ describe("Postgres activity processor store", () => {
         expect(prepareFailure).toEqual(
           ActivityMutationFailure.make({ point: "activity:prepare:after" }),
         );
-        expect((yield* inspect(url))?.pending).toEqual(prepared);
-
+        expect((yield* inspect(location))?.pending).toEqual(prepared);
         yield* TestClock.setTime(2_000);
 
-        const advanceFailure = yield* Effect.gen(function* () {
-          const store = yield* ActivityProcessorStore;
+        const advanceFailure = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const store = yield* ActivityProcessorStore;
+            const session = yield* store.acquire(key);
 
-          return yield* store.advance({ claim, workId: prepared.workId });
-        }).pipe(
+            expect(session.progress.pending).toEqual(prepared);
+
+            return yield* session.advance(prepared.workId);
+          }),
+        ).pipe(
           Effect.provide(
-            failpointLayer(url, (point) =>
+            failpointLayer(location, (point) =>
               point === "activity:advance:after"
                 ? Effect.fail(ActivityMutationFailure.make({ point }))
                 : Effect.void,
@@ -309,46 +281,43 @@ describe("Postgres activity processor store", () => {
         expect(advanceFailure).toEqual(
           ActivityMutationFailure.make({ point: "activity:advance:after" }),
         );
-        const recovered = yield* inspect(url);
+        expect(yield* inspect(location)).toMatchObject({
+          throughSequence: 1,
+          pending: null,
+          advancedAt: 2_000,
+        });
+        yield* runStore(
+          location,
+          Effect.gen(function* () {
+            const store = yield* ActivityProcessorStore;
+            const session = yield* store.acquire(key);
 
-        expect(recovered?.throughSequence).toBe(1);
-        expect(recovered?.pending).toBeNull();
-        expect(recovered?.advancedAt).toBe(2_000);
-        expect(
-          yield* runStore(
-            url,
-            Effect.gen(function* () {
-              const store = yield* ActivityProcessorStore;
-
-              return yield* store.advance({ claim, workId: prepared.workId });
-            }),
-          ).pipe(Effect.flip),
-        ).toEqual(ActivityOwnershipLost.make({ key, owner: claim.owner, epoch: claim.epoch }));
+            expect(session.progress.throughSequence).toBe(1);
+            expect(yield* session.advance(prepared.workId).pipe(Effect.flip)).toEqual(
+              ActivityWorkConflict.make({ key, workId: prepared.workId }),
+            );
+            expect((yield* store.inspect(key))?.throughSequence).toBe(1);
+          }),
+        );
       }),
     ),
   );
 
   it.effect("rolls back defects, timeout, and interruption inside state transactions", () =>
-    withTemporaryDatabase((url) =>
+    withTemporaryDatabase((location) =>
       Effect.gen(function* () {
-        const claim = yield* runStore(
-          url,
-          Effect.gen(function* () {
-            const store = yield* ActivityProcessorStore;
-
-            return yield* store.claim(request("worker"));
-          }),
-        );
-
         const prepared = work(1, "f");
 
-        const defect = yield* Effect.gen(function* () {
-          const store = yield* ActivityProcessorStore;
+        const defect = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const store = yield* ActivityProcessorStore;
+            const session = yield* store.acquire(key);
 
-          return yield* store.prepare({ claim, work: prepared });
-        }).pipe(
+            return yield* session.prepare(prepared);
+          }),
+        ).pipe(
           Effect.provide(
-            failpointLayer(url, (point) =>
+            failpointLayer(location, (point) =>
               point === "activity:prepare:after-state" ? Effect.die("prepare defect") : Effect.void,
             ),
           ),
@@ -356,25 +325,29 @@ describe("Postgres activity processor store", () => {
         );
 
         expect(Exit.isFailure(defect) && Cause.hasDies(defect.cause)).toBe(true);
-        expect((yield* inspect(url))?.pending).toBeNull();
+        expect((yield* inspect(location))?.pending ?? null).toBeNull();
 
         yield* runStore(
-          url,
+          location,
           Effect.gen(function* () {
             const store = yield* ActivityProcessorStore;
+            const session = yield* store.acquire(key);
 
-            yield* store.prepare({ claim, work: prepared });
+            yield* session.prepare(prepared);
           }),
         );
         const reached = yield* Deferred.make<void>();
 
-        const advancing = yield* Effect.gen(function* () {
-          const store = yield* ActivityProcessorStore;
+        const advancing = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const store = yield* ActivityProcessorStore;
+            const session = yield* store.acquire(key);
 
-          return yield* store.advance({ claim, workId: prepared.workId });
-        }).pipe(
+            return yield* session.advance(prepared.workId);
+          }),
+        ).pipe(
           Effect.provide(
-            failpointLayer(url, (point) =>
+            failpointLayer(location, (point) =>
               point === "activity:advance:after-state"
                 ? Deferred.succeed(reached, undefined).pipe(Effect.andThen(Effect.never))
                 : Effect.void,
@@ -387,32 +360,58 @@ describe("Postgres activity processor store", () => {
         yield* Deferred.await(reached);
         yield* TestClock.adjust("1 second");
         expect(Exit.isFailure(yield* Fiber.await(advancing))).toBe(true);
-        const afterTimeout = yield* inspect(url);
+        expect(yield* inspect(location)).toMatchObject({ throughSequence: 0, pending: prepared });
 
-        expect(afterTimeout?.throughSequence).toBe(0);
-        expect(afterTimeout?.pending).toEqual(prepared);
+        const interruptedAt = yield* Deferred.make<void>();
 
-        const releaseReached = yield* Deferred.make<void>();
+        const interrupted = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const store = yield* ActivityProcessorStore;
+            const session = yield* store.acquire(key);
 
-        const releasing = yield* Effect.gen(function* () {
-          const store = yield* ActivityProcessorStore;
-
-          return yield* store.release(claim);
-        }).pipe(
+            return yield* session.advance(prepared.workId);
+          }),
+        ).pipe(
           Effect.provide(
-            failpointLayer(url, (point) =>
-              point === "activity:release:after-state"
-                ? Deferred.succeed(releaseReached, undefined).pipe(Effect.andThen(Effect.never))
+            failpointLayer(location, (point) =>
+              point === "activity:advance:after-state"
+                ? Deferred.succeed(interruptedAt, undefined).pipe(Effect.andThen(Effect.never))
                 : Effect.void,
             ),
           ),
           Effect.forkChild,
         );
 
-        yield* Deferred.await(releaseReached);
-        yield* Fiber.interrupt(releasing);
-        expect(Exit.isFailure(yield* Fiber.await(releasing))).toBe(true);
-        expect((yield* inspect(url))?.owner).toBe(claim.owner);
+        yield* Deferred.await(interruptedAt);
+        yield* Fiber.interrupt(interrupted);
+        expect(Exit.isFailure(yield* Fiber.await(interrupted))).toBe(true);
+        expect(yield* inspect(location)).toMatchObject({ throughSequence: 0, pending: prepared });
+      }),
+    ),
+  );
+
+  it.effect("keeps thread, processor, and processor-version progress independent", () =>
+    withTemporaryDatabase((url) =>
+      Effect.gen(function* () {
+        yield* runStore(
+          url,
+          Effect.gen(function* () {
+            const store = yield* ActivityProcessorStore;
+
+            for (const [index, activityKey] of independentKeys.entries()) {
+              const session = yield* store.acquire(activityKey);
+              const prepared = work(1, String(index), activityKey);
+
+              yield* session.prepare(prepared);
+              if (index === 0) yield* session.advance(prepared.workId);
+            }
+          }),
+        );
+        expect((yield* inspect(url, independentKeys[0]))?.throughSequence).toBe(1);
+        for (const activityKey of independentKeys.slice(1)) {
+          expect((yield* inspect(url, activityKey))?.throughSequence).toBe(0);
+          expect((yield* inspect(url, activityKey))?.pending?.key).toEqual(activityKey);
+        }
       }),
     ),
   );
@@ -424,8 +423,9 @@ describe("Postgres activity processor store", () => {
           url,
           Effect.gen(function* () {
             const store = yield* ActivityProcessorStore;
+            const session = yield* store.acquire(key);
 
-            yield* store.claim(request("worker"));
+            yield* session.prepare(work(1, "a"));
           }),
         );
         yield* runRaw(
@@ -433,13 +433,9 @@ describe("Postgres activity processor store", () => {
           Effect.gen(function* () {
             const sql = yield* SqlClientService.SqlClient;
 
-            yield* sql`
-              UPDATE effect_agent_activity_processor_state_v1
-              SET format_version = 2
-              WHERE processor_id = ${key.processorId}
-                AND processor_version = ${key.processorVersion}
-                AND thread_id = ${key.threadId}
-            `;
+            yield* sql.unsafe(
+              "UPDATE effect_agent_activity_processor_state_v2 SET format_version = 3",
+            );
           }),
         );
         expect(yield* inspect(url).pipe(Effect.flip)).toEqual(

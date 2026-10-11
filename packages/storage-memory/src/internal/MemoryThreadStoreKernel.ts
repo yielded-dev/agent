@@ -1,6 +1,7 @@
 import type { RunId, SubmissionId, ThreadId, ToolCallId } from "@yielded/agent/identifiers";
 import type { IdempotencyKey } from "@yielded/agent/receipt";
-import type { Digest, ProducerEpoch, RecordEnvelope, RecordId } from "@yielded/agent/records";
+import type { RecordEnvelope, RecordId } from "@yielded/agent/records";
+import type { StorageOwner } from "@yielded/agent/run-storage";
 import type { SubmissionSnapshot, WorkerLedgerState } from "@yielded/agent/submission-ledger";
 import type {
   PreparedImportPage,
@@ -10,12 +11,11 @@ import type {
 } from "@yielded/agent/thread-import";
 import type {
   AppendResult,
-  FencedAppendRequest,
+  AppendRequest,
   ThreadStoreFailure,
   ThreadTail,
   ThreadAdmission,
   ThreadStoreError,
-  ThreadExport,
   ThreadExportSnapshot,
 } from "@yielded/agent/thread-store";
 import type { TransferFacts, TransferSection } from "@yielded/agent/thread-transfer";
@@ -27,8 +27,7 @@ import type {
 import { Context, type Effect, type Stream } from "effect";
 
 export interface PreparedMemoryAppend {
-  readonly request: FencedAppendRequest;
-  readonly digest: Digest;
+  readonly request: AppendRequest;
   readonly batchJson: string;
 }
 
@@ -39,7 +38,6 @@ export interface MemoryLedgerImport {
     page: PreparedImportPage,
   ) => Effect.Effect<void, ThreadImportRejected | ThreadStoreError>;
   readonly prepareCommit: (
-    producerEpoch: ProducerEpoch,
     workerSeal?: Pick<WorkerLedgerState, "terminal">,
   ) => Effect.Effect<() => void, ThreadImportRejected | ThreadStoreError, ThreadImportReader>;
 }
@@ -47,7 +45,7 @@ export interface MemoryLedgerImport {
 export interface MemoryLedgerTransfer {
   readonly snapshot: (threadId: ThreadId) => Effect.Effect<
     Omit<typeof ThreadExportSnapshot.Type, "deliveries"> & {
-      readonly externalObligations?: ThreadExport["externalObligations"];
+      readonly idle: boolean;
       readonly workerSeal?: Pick<WorkerLedgerState, "terminal">;
     },
     ThreadStoreError
@@ -87,7 +85,7 @@ export interface MemoryDeliveryTransfer {
     messageId: IdempotencyKey,
   ) => ReturnType<ThreadImportReader["Service"]["delivery"]>;
   readonly snapshot: (threadId: ThreadId) => {
-    readonly revision: number;
+    readonly idle: boolean;
     readonly deliveries: number;
   };
   readonly facts: (
@@ -122,6 +120,7 @@ export interface MemoryWorkOwner {
 export class MemoryThreadStoreKernel extends Context.Service<
   MemoryThreadStoreKernel,
   {
+    readonly owner: StorageOwner["Service"];
     readonly withMutation: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
     readonly registerWorkOwner: (
       kind: "admissions" | "deliveries",
@@ -137,7 +136,7 @@ export class MemoryThreadStoreKernel extends Context.Service<
     readonly registerLedgerTransfer: (transfer: MemoryLedgerTransfer) => Effect.Effect<void>;
     readonly registerDeliveryTransfer: (transfer: MemoryDeliveryTransfer) => Effect.Effect<void>;
     readonly prepareAppend: (
-      request: FencedAppendRequest,
+      request: AppendRequest,
     ) => Effect.Effect<PreparedMemoryAppend, ThreadStoreFailure>;
     readonly appendPrepared: (
       prepared: PreparedMemoryAppend,

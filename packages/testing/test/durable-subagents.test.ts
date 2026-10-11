@@ -274,7 +274,6 @@ const configLayer = DurableRuntimeConfig.layer({
   deploymentId: Schema.decodeSync(DeploymentId)("deployment-durable-subagents"),
   producerId: Schema.decodeSync(ProducerId)("producer-durable-subagents"),
   settlementPollInterval: Duration.millis(100),
-  leaseRenewalInterval: Duration.seconds(5),
   abortPollInterval: Duration.millis(100),
 });
 
@@ -869,8 +868,8 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
         expect(
           (yield* ledger.loadRecoverySnapshot(
             RecoverySnapshotRequest.make({ submissionId: parent.submissionId }),
-          )).ownership,
-        ).toBeUndefined();
+          )).hasOwner,
+        ).toBe(false);
         expect(yield* harness.childInvocations).toBe(0);
         yield* harness.runtime.runRecovery();
         expect(payloadsOf(yield* readLog(parent.threadId), "SubagentStarted")).toHaveLength(1);
@@ -936,7 +935,7 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
         const result = yield* Effect.exit(hostileRuntime.processThreadResolved(parent.threadId));
 
         // A declaration contradicting the canonical child request cannot authorize admission.
-        expect(failureTag(result)).toBe("ThreadStoreError");
+        expect(failureTag(result)).toBe("RunJournalError");
         expect(yield* readLog(parent.threadId)).toEqual(before);
         expect(yield* harness.childInvocations).toBe(0);
       }
@@ -1588,7 +1587,7 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
           ),
         );
 
-        expect(laterSnapshot.ownership).toBeDefined();
+        expect(laterSnapshot.hasOwner).toBe(true);
         yield* runtime.resolveUnknown(
           UnknownResolutionCommand.make({
             submissionId: original.submissionId,

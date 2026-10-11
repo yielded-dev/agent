@@ -49,6 +49,8 @@ import {
 } from "@yielded/agent/thread-archive-range";
 import {
   AppendConflict,
+  ExecutionRead,
+  ExecutionCheckpoint,
   AppendResult,
   ThreadExport,
   ThreadPeerCountRequest,
@@ -60,13 +62,13 @@ import {
   ThreadVerificationRequest,
   ThreadMaterialization,
   ThreadNotMaterialized,
+  ThreadExportRejected,
   ThreadReadRequest,
   ThreadPromptRead,
   ThreadStoreError,
   ThreadTail,
   ThreadTailRequest,
-  FenceRejected,
-  FencedAppendRequest,
+  AppendRequest,
 } from "@yielded/agent/thread-store";
 import {
   ThreadWorkRequest,
@@ -230,7 +232,7 @@ export class StoreMaterializeCall extends Schema.TaggedClass<StoreMaterializeCal
 export class StoreAppendCall extends Schema.TaggedClass<StoreAppendCall>(
   "@effect-agent/storage-cloudflare/StoreAppendCall",
 )("StoreAppend", {
-  request: FencedAppendRequest,
+  request: AppendRequest,
 }) {}
 
 /** Routed one-page `ThreadStore.read`; the page bound is the request's own `limit`. */
@@ -258,6 +260,11 @@ export class StoreReadIdentityCall extends Schema.TaggedClass<StoreReadIdentityC
 )("StoreReadIdentity", {
   request: ThreadIdentityRequest,
 }) {}
+
+export class StoreReadExecutionCall extends Schema.TaggedClass<StoreReadExecutionCall>()(
+  "StoreReadExecution",
+  { request: ExecutionRead },
+) {}
 
 export class StoreWorkerCapacityCall extends Schema.TaggedClass<StoreWorkerCapacityCall>()(
   "StoreWorkerCapacity",
@@ -344,6 +351,7 @@ export const PortRequest = Schema.Union([
   StoreReadPromptCall,
   StoreInspectTailCall,
   StoreReadIdentityCall,
+  StoreReadExecutionCall,
   StoreWorkerCapacityCall,
   StoreVerificationCall,
   StoreExportCall,
@@ -432,6 +440,11 @@ export class StoreInspectTailResult extends Schema.TaggedClass<StoreInspectTailR
 )("StoreInspectTailResult", {
   tail: ThreadTail,
 }) {}
+
+export class StoreReadExecutionResult extends Schema.TaggedClass<StoreReadExecutionResult>()(
+  "StoreReadExecutionResult",
+  { checkpoint: Schema.OptionFromNullOr(ExecutionCheckpoint) },
+) {}
 
 export class StoreReadIdentityResult extends Schema.TaggedClass<StoreReadIdentityResult>(
   "@effect-agent/storage-cloudflare/StoreReadIdentityResult",
@@ -538,6 +551,7 @@ export const PortResult = Schema.Union([
   StoreReadPromptResult,
   StoreInspectTailResult,
   StoreReadIdentityResult,
+  StoreReadExecutionResult,
   StoreWorkerCapacityResult,
   StoreVerificationResult,
   StoreExportResult,
@@ -570,8 +584,8 @@ export const PortFailure = Schema.Union([
   ThreadStoreError,
   WorkDiscoveryUnavailable,
   ThreadNotMaterialized,
+  ThreadExportRejected,
   AppendConflict,
-  FenceRejected,
   PortProtocolError,
 ]);
 

@@ -41,6 +41,8 @@ and supplies Crypto. Keep framework packages at one release and use compatible
 Keep the database file on persistent storage. Save the returned `threadId` and pass
 it to later runs to continue the conversation, including after a process restart.
 Provide the history Layer around the complete program or application runtime.
+One process owns each Thread at a time. Share one storage Layer within that process and stop
+its owner before opening a replacement. The managed Node host enforces one live owner per file.
 
 `SqliteThreadStore.layer({ filename, synchronous: "NORMAL" })` opts this store's connection
 into WAL `NORMAL` synchronization; the default is `FULL`. Choose the mode when constructing
@@ -65,12 +67,11 @@ Use [`@yielded/agent-platform-node`](/platforms/node/) when accepted work must
 survive a restart. It assembles SQLite storage, agent registrations, admission,
 recovery, and a worker pool. Run one live host per SQLite file.
 
-For custom durable assemblies, `SqliteSubmissionLedger.ledgerLayer(options)`
-provides the separate accepted-work ledger. Point it at the same database file as
-`SqliteThreadStore.layer(options)` so ownership claims fence the same thread log.
+Custom durable assemblies must share the same scoped storage owner for the Thread log and
+accepted-work ledger. Separately opened writable runtimes do not coordinate through leases.
 
 SQLite tracks layout separately from record meaning. This unreleased protocol opens only fresh
-layout-21 stores with `effect-agent/thread@3` records. Predecessor or ambiguous stores are rejected
+layout-25 stores with `effect-agent/thread@6` records. Predecessor or ambiguous stores are rejected
 before mutation. Same-format export/import installs into an empty destination Thread; no older
 layout upgrade or archive converter is provided. See the
 [operator procedure](/guide/operations/#adopting-these-contracts).

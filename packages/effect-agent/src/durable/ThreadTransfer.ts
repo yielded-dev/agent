@@ -1,13 +1,13 @@
 import { Context, Effect, Schema } from "effect";
 
 import type { ThreadId } from "../core/Identifiers.ts";
-import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST, utf8ByteLength } from "./Digest.ts";
+import { canonicalJson, utf8ByteLength } from "./Digest.ts";
+import { ImportSourcePhase } from "./internal/thread-transfer-source.ts";
 import { transferRecordDependencies } from "./internal/transfer-dependencies.ts";
 import { ExportRecord } from "./RecordFormat.ts";
 import {
   type RecordId,
   CURRENT_RECORD_FORMAT,
-  Digest,
   CanonicalSequence,
   type CanonicalRecordEnvelope,
 } from "./Records.ts";
@@ -16,6 +16,7 @@ import {
   ThreadExport,
   ThreadExportRequest,
   ThreadExportSnapshot,
+  ThreadExportRejected,
   type ThreadNotMaterialized,
   ThreadStoreError,
 } from "./ThreadStore.ts";
@@ -29,17 +30,12 @@ export const transferSections = [
 ] as const;
 
 export type TransferSection = (typeof transferSections)[number];
+
 export type TransferFacts = Pick<ThreadExport, "admissions" | "commands" | "deliveries">;
 
 export type TransferManifest = Pick<
   ThreadExport,
-  | "threadId"
-  | "format"
-  | "tailSequence"
-  | "tailDigest"
-  | "snapshot"
-  | "externalObligations"
-  | "workerSeal"
+  "threadId" | "format" | "tailSequence" | "snapshot" | "workerSeal"
 >;
 
 /** Reads share the adapter's single page transaction. Batch reads hydrate archives. */
@@ -48,7 +44,11 @@ export class ThreadExporterReader extends Context.Service<
   {
     readonly snapshot: (
       threadId: ThreadId,
-    ) => Effect.Effect<TransferManifest, ThreadStoreError | ThreadNotMaterialized>;
+      captured?: TransferManifest,
+    ) => Effect.Effect<
+      TransferManifest,
+      ThreadStoreError | ThreadNotMaterialized | ThreadExportRejected
+    >;
     readonly batch: (
       threadId: ThreadId,
       fromSequence: number,
@@ -71,21 +71,18 @@ export class ThreadExporterReader extends Context.Service<
   }
 >()("@effect-agent/thread/ThreadExporterReader") {}
 
-const Manifest = Schema.Struct({
+export const TransferManifest = Schema.Struct({
   threadId: ThreadExport.fields.threadId,
   format: ThreadExport.fields.format,
   tailSequence: ThreadExport.fields.tailSequence,
-  tailDigest: Digest,
   snapshot: ThreadExportSnapshot,
   workerSeal: ThreadExport.fields.workerSeal,
-  externalObligations: ThreadExport.fields.externalObligations,
 });
 
 const Position = Schema.Struct({
-  snapshotId: Digest,
+  manifest: TransferManifest,
   fromSequence: Schema.Int.check(Schema.isGreaterThan(0)),
-  previousTailDigest: Digest,
-  section: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 5 })),
+  section: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: transferSections.length })),
   consumed: Schema.Natural,
   after: Schema.optionalKey(Schema.String),
 });
@@ -103,19 +100,29 @@ const nextSection = (position: typeof Position.Type) => {
   return { ...retained, section: position.section + 1, consumed: 0 };
 };
 
-export const transferSnapshotId = (manifest: TransferManifest) =>
-  Schema.encodeEffect(Manifest)(manifest).pipe(
-    Effect.mapError(() => failure("Invalid transfer manifest")),
-    Effect.flatMap(digestJson),
-    Effect.mapError(() => failure("Cannot digest transfer snapshot")),
+/** Exact manifest equality replaces a redundant stored snapshot fingerprint. */
+export const sameTransferManifest = Schema.toEquivalence(TransferManifest);
+
+/** Must run BEFORE a source gate, transaction or routed RPC is acquired. */
+export const checkExportSource = (threadId: ThreadId) =>
+  Effect.flatMap(ImportSourcePhase, (phase) =>
+    phase?.writing
+      ? Effect.fail(ThreadExportRejected.make({ threadId, reason: "live-import-source" }))
+      : Effect.void,
   );
 
-/** Exact evidence references outside this page, including references into archived ranges. */
+/** Exact evidence references outside this canonical page. */
 export const transferDependencies = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,
-): ReadonlyArray<RecordId> => {
-  return transferRecordDependencies(records.map((entry) => entry.record));
-};
+): ReadonlyArray<RecordId> =>
+  [...new Set(transferRecordDependencies(records.map((entry) => entry.record)))].sort();
+
+const factCount = (facts: TransferFacts, section: TransferSection): number =>
+  section === "admissions"
+    ? facts.admissions.length
+    : section === "deliveries"
+      ? facts.deliveries.length
+      : facts.commands[section].length;
 
 export const checkTransferPageBytes = (page: ThreadExport) =>
   Schema.encodeEffect(ThreadExport)(page).pipe(
@@ -127,7 +134,7 @@ export const checkTransferPageBytes = (page: ThreadExport) =>
     ),
   );
 
-/** Opaque cursors pin the complete manifest by digest, including the Thread and mutable fact owners. */
+/** Stateless pages require application quiescence; no transfer counter is maintained on writes. */
 export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExportRequest) {
   const reader = yield* ThreadExporterReader;
 
@@ -135,24 +142,21 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
     Effect.mapError(() => failure("Invalid export request")),
   );
 
-  const manifest = yield* reader.snapshot(request.threadId);
-  const snapshotId = yield* transferSnapshotId(manifest);
-
-  let position =
+  const captured =
     request.cursor === undefined
-      ? {
-          snapshotId,
-          fromSequence: 1,
-          previousTailDigest: EMPTY_TAIL_DIGEST,
-          section: 0,
-          consumed: 0,
-        }
+      ? undefined
       : yield* Schema.decodeEffect(Schema.fromJsonString(Position))(request.cursor).pipe(
           Effect.mapError((cause) => failure("Invalid transfer cursor", cause)),
         );
 
-  if (position.snapshotId !== snapshotId || manifest.threadId !== request.threadId)
-    return yield* failure("Source changed during transfer; restart from its first page");
+  const manifest = yield* reader.snapshot(request.threadId, captured?.manifest);
+  let position = captured ?? { manifest, fromSequence: 1, section: 0, consumed: 0 };
+
+  if (!sameTransferManifest(position.manifest, manifest) || manifest.threadId !== request.threadId)
+    return yield* ThreadExportRejected.make({
+      threadId: request.threadId,
+      reason: "source-changed",
+    });
   if (
     manifest.format !== CURRENT_RECORD_FORMAT ||
     position.fromSequence > manifest.tailSequence + 1
@@ -167,7 +171,6 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
   };
 
   const fromSequence = position.fromSequence;
-  const previousTailDigest = position.previousTailDigest;
 
   if (fromSequence <= manifest.tailSequence) {
     canonical = yield* reader.batch(request.threadId, fromSequence);
@@ -193,17 +196,10 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
       ),
     );
 
-    const tail = yield* digestJson({ previousTailDigest, batch: { ...batch, records } }).pipe(
-      Effect.mapError(() => failure("Cannot digest transfer batch")),
-    );
-
     position = {
       ...position,
       fromSequence: fromSequence + records.length,
-      previousTailDigest: tail,
     };
-    if (position.fromSequence > manifest.tailSequence && tail !== manifest.tailDigest)
-      return yield* failure("Canonical transfer chain does not match its captured tail");
   } else {
     while (position.section < transferSections.length) {
       const section = transferSections[position.section]!;
@@ -213,12 +209,7 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
       if (position.consumed === manifest.snapshot[section]) {
         const probe = yield* reader.facts(request.threadId, section, position.after);
 
-        const remaining =
-          section === "admissions"
-            ? probe.facts.admissions.length
-            : section === "deliveries"
-              ? probe.facts.deliveries.length
-              : probe.facts.commands[section].length;
+        const remaining = factCount(probe.facts, section);
 
         if (remaining !== 0) return yield* failure("Native transfer count omits retained facts");
         position = nextSection(position);
@@ -228,12 +219,7 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
 
       facts = page.facts;
 
-      const count =
-        section === "admissions"
-          ? facts.admissions.length
-          : section === "deliveries"
-            ? facts.deliveries.length
-            : facts.commands[section].length;
+      const count = factCount(facts, section);
 
       if (
         count === 0 ||
@@ -253,12 +239,7 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
     const section = transferSections[position.section]!;
     const probe = yield* reader.facts(request.threadId, section, position.after);
 
-    const count =
-      section === "admissions"
-        ? probe.facts.admissions.length
-        : section === "deliveries"
-          ? probe.facts.deliveries.length
-          : probe.facts.commands[section].length;
+    const count = factCount(probe.facts, section);
 
     if (count !== 0) return yield* failure("Native transfer count omits retained facts");
     position = nextSection(position);
@@ -266,9 +247,6 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
 
   const more =
     position.fromSequence <= manifest.tailSequence || position.section < transferSections.length;
-
-  if (!more && position.previousTailDigest !== manifest.tailDigest)
-    return yield* failure("Transfer tail differs from the captured snapshot");
 
   const cursor = more
     ? yield* Schema.encodeEffect(Schema.fromJsonString(Position))(position).pipe(
@@ -278,10 +256,8 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
 
   const page = yield* ThreadExport.makeEffect({
     ...manifest,
-    transferFormat: "effect-agent/thread-transfer@1",
-    snapshotId,
+    transferFormat: "effect-agent/thread-transfer@4",
     fromSequence: Schema.decodeSync(CanonicalSequence)(fromSequence),
-    previousTailDigest,
     ...canonical,
     ...facts,
     dependencies: transferDependencies(canonical.records),

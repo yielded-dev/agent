@@ -2,13 +2,13 @@ import { NodeCrypto } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
 import { type PreparedActivity } from "@yielded/agent/activity-store";
 import {
-  ActivityClaim,
+  ActivityProgress,
+  ActivityOwnershipLost,
   ActivityMutationFailure,
   ActivityProcessorKey,
   ActivityProcessorStore,
 } from "@yielded/agent/activity-store";
 import { ActivityPassLimits, processCommittedActivity } from "@yielded/agent/committed-activity";
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import {
   BatchId,
@@ -16,7 +16,6 @@ import {
   CanonicalSequence,
   DeploymentId,
   ObservationOffset,
-  ProducerEpoch,
   RecordEnvelope,
   RecordId,
   UserInputRecorded,
@@ -49,7 +48,6 @@ const limits = ActivityPassLimits.make({
   maxRecords: 2,
   pageSize: 1,
   timeoutMillis: 1_000,
-  leaseMillis: 2_000,
 });
 
 const record = (number: number, text = `statement ${number}`, offset = `offset:${number}`) =>
@@ -79,7 +77,7 @@ const probe = (initial: ReadonlyArray<CanonicalRecordEnvelope> = [record(1)]) =>
     records: [...initial],
     through: sequence(0),
     pending: null as PreparedActivity | null,
-    epoch: 0,
+    advancedAt: null as number | null,
     prepared: [] as Array<PreparedActivity>,
     released: 0,
     pages: [] as Array<number>,
@@ -87,51 +85,74 @@ const probe = (initial: ReadonlyArray<CanonicalRecordEnvelope> = [record(1)]) =>
     advanceLostAck: false,
   };
 
+  const progress = () =>
+    ActivityProgress.make({
+      version: 2,
+      key,
+      throughSequence: state.through,
+      pending: state.pending,
+      advancedAt: state.advancedAt,
+    });
+
   const store = ActivityProcessorStore.of({
-    inspect: () => Effect.die("The processor must use its claim, not a separate progress read"),
-    claim: (request) =>
+    inspect: () => Effect.die("The processor must use its session, not a separate progress read"),
+    acquire: () =>
       Effect.gen(function* () {
-        state.epoch += 1;
+        let active = true;
 
-        return ActivityClaim.make({
-          ...request,
-          epoch: state.epoch,
-          throughSequence: state.through,
-          pending: state.pending,
-          leaseExpiresAt: (yield* Clock.currentTimeMillis) + request.leaseMillis,
-        });
-      }),
-    prepare: ({ work }) =>
-      Effect.gen(function* () {
-        state.pending = work;
-        state.prepared.push(work);
-        if (state.prepareLostAck) {
-          state.prepareLostAck = false;
+        const checkActive = Effect.suspend(() =>
+          active ? Effect.void : Effect.fail(ActivityOwnershipLost.make({ key })),
+        );
 
-          return yield* ActivityMutationFailure.make({ point: "activity:prepare:after" });
-        }
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            active = false;
+            state.released += 1;
+          }),
+        );
 
-        return work;
-      }),
-    advance: ({ claim }) =>
-      Effect.gen(function* () {
-        state.through = sequence(claim.throughSequence + 1);
-        state.pending = null;
-        if (state.advanceLostAck) {
-          state.advanceLostAck = false;
+        return {
+          progress: progress(),
+          checkActive,
+          prepare: (work) =>
+            checkActive.pipe(
+              Effect.andThen(
+                Effect.gen(function* () {
+                  state.pending = work;
+                  state.prepared.push(work);
+                  if (state.prepareLostAck) {
+                    state.prepareLostAck = false;
 
-          return yield* ActivityMutationFailure.make({ point: "activity:advance:after" });
-        }
+                    return yield* ActivityMutationFailure.make({ point: "activity:prepare:after" });
+                  }
 
-        return ActivityClaim.make({ ...claim, throughSequence: state.through, pending: null });
-      }),
-    release: () =>
-      Effect.sync(() => {
-        state.released += 1;
+                  return work;
+                }),
+              ),
+            ),
+          advance: () =>
+            checkActive.pipe(
+              Effect.andThen(
+                Effect.gen(function* () {
+                  state.through = sequence(state.through + 1);
+                  state.pending = null;
+                  state.advancedAt = yield* Clock.currentTimeMillis;
+                  if (state.advanceLostAck) {
+                    state.advanceLostAck = false;
+
+                    return yield* ActivityMutationFailure.make({ point: "activity:advance:after" });
+                  }
+
+                  return progress();
+                }),
+              ),
+            ),
+        };
       }),
   });
 
   const threads = ThreadStore.of({
+    readExecution: () => Effect.die("Ingestion does not read active execution state"),
     readPrompt: () => Stream.die("Ingestion requires full canonical evidence"),
     readIdentity: () => Effect.die("Ingestion must not read worker identity"),
     materialize: () => Effect.die("Ingestion must not materialize Threads"),
@@ -143,8 +164,6 @@ const probe = (initial: ReadonlyArray<CanonicalRecordEnvelope> = [record(1)]) =>
         ThreadTail.make({
           threadId,
           tailSequence: sequence(state.records.length),
-          tailDigest: EMPTY_TAIL_DIGEST,
-          producerEpoch: Schema.decodeSync(ProducerEpoch)(0),
         }),
       ),
     read: (request) => {
@@ -182,7 +201,6 @@ describe("finite committed activity processing", () => {
 
       const options = {
         key,
-        owner: "worker",
         limits,
         extract: () =>
           Effect.sync(() => {
@@ -220,7 +238,6 @@ describe("finite committed activity processing", () => {
 
       const options = {
         key,
-        owner: "worker",
         limits,
         extract: () =>
           Effect.sync(() => {
@@ -256,61 +273,47 @@ describe("finite committed activity processing", () => {
     },
   );
 
-  it.effect(
-    "rejects gaps, truncated tails, and changed content before applying pinned output",
-    () =>
-      Effect.gen(function* () {
-        const gap = probe([record(2)]);
-        let applied = 0;
+  it.effect("rejects gaps and truncated tails before applying pinned output", () =>
+    Effect.gen(function* () {
+      const gap = probe([record(2)]);
+      let applied = 0;
 
-        const options = {
-          key,
-          owner: "worker",
-          limits,
-          extract: () => Effect.succeed(null),
-          apply: () =>
-            Effect.sync(() => {
-              applied += 1;
-            }),
-        };
+      const options = {
+        key,
+        limits,
+        extract: () => Effect.succeed(null),
+        apply: () =>
+          Effect.sync(() => {
+            applied += 1;
+          }),
+      };
 
-        const gapError = yield* processCommittedActivity(options).pipe(
-          Effect.provide(gap.layer),
-          Effect.flip,
-        );
+      const gapError = yield* processCommittedActivity(options).pipe(
+        Effect.provide(gap.layer),
+        Effect.flip,
+      );
 
-        expect(gapError).toMatchObject({
-          _tag: "ActivityProcessingError",
-          reason: "noncontiguous",
-        });
-        const changed = probe();
+      expect(gapError).toMatchObject({
+        _tag: "ActivityProcessingError",
+        reason: "noncontiguous",
+      });
+      const changed = probe();
 
-        changed.state.prepareLostAck = true;
-        yield* processCommittedActivity(options).pipe(Effect.provide(changed.layer), Effect.exit);
-        const pending = changed.state.pending;
+      changed.state.prepareLostAck = true;
+      yield* processCommittedActivity(options).pipe(Effect.provide(changed.layer), Effect.exit);
+      const pending = changed.state.pending;
 
-        changed.state.records = [];
-        expect(
-          yield* processCommittedActivity(options).pipe(Effect.provide(changed.layer), Effect.flip),
-        ).toMatchObject({ _tag: "ActivityProcessingError", reason: "noncontiguous" });
-        expect(changed.state.pending).toEqual(pending);
-        expect(changed.state.through).toBe(0);
-        expect(changed.state.released).toBe(2);
-        expect(changed.state.pages).toEqual([1]);
-        changed.state.records = [record(1, "mutated canonical source")];
-
-        const changedError = yield* processCommittedActivity(options).pipe(
-          Effect.provide(changed.layer),
-          Effect.flip,
-        );
-
-        expect(changedError).toMatchObject({
-          _tag: "ActivityProcessingError",
-          reason: "noncontiguous",
-        });
-        expect(applied).toBe(0);
-        expect(changed.state.through).toBe(0);
-      }),
+      changed.state.records = [];
+      expect(
+        yield* processCommittedActivity(options).pipe(Effect.provide(changed.layer), Effect.flip),
+      ).toMatchObject({ _tag: "ActivityProcessingError", reason: "noncontiguous" });
+      expect(changed.state.pending).toEqual(pending);
+      expect(changed.state.through).toBe(0);
+      expect(changed.state.released).toBe(2);
+      expect(changed.state.pages).toEqual([1]);
+      expect(applied).toBe(0);
+      expect(changed.state.through).toBe(0);
+    }),
   );
 
   it.effect("finalizes scoped callbacks on timeout and interruption without advancing", () =>
@@ -333,7 +336,6 @@ describe("finite committed activity processing", () => {
 
           const fiber = yield* processCommittedActivity({
             key,
-            owner: "worker",
             limits,
             extract: () => (boundary === "extract" ? waiting : Effect.succeed(null)),
             apply: () =>
@@ -360,49 +362,6 @@ describe("finite committed activity processing", () => {
           expect(p.state.pending !== null).toBe(boundary === "apply");
         }
       }
-    }),
-  );
-
-  it.effect("bounds a hanging release independently of the pass timeout", () =>
-    Effect.gen(function* () {
-      const p = probe();
-      const entered = yield* Deferred.make<void>();
-      let releaseFinalized = false;
-
-      const service = ActivityProcessorStore.of({
-        ...p.store,
-        release: () =>
-          Deferred.succeed(entered, undefined).pipe(
-            Effect.andThen(Effect.never),
-            Effect.ensuring(
-              Effect.sync(() => {
-                releaseFinalized = true;
-              }),
-            ),
-          ),
-      });
-
-      const fiber = yield* processCommittedActivity({
-        key,
-        owner: "worker",
-        limits,
-        extract: () => Effect.succeed(null),
-        apply: () => Effect.void,
-      }).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            Layer.succeed(ActivityProcessorStore, service),
-            Layer.succeed(ThreadStore, p.threads),
-            NodeCrypto.layer,
-          ),
-        ),
-        Effect.forkChild,
-      );
-
-      yield* Deferred.await(entered);
-      yield* TestClock.adjust(500);
-      expect((yield* Fiber.join(fiber)).throughSequence).toBe(1);
-      expect(releaseFinalized).toBe(true);
     }),
   );
 });

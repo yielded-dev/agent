@@ -21,6 +21,7 @@ import {
 import { memoryStoreLayer } from "@yielded/agent/sql-memory-store";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import * as ThreadContextHistory from "@yielded/agent/thread-context-history";
+import { ExecutionCheckpoint } from "@yielded/agent/thread-store";
 import { Context, Effect, Layer, Redacted, Ref, Schema } from "effect";
 import { DurableObject, WorkerEnvironment } from "effect-cf";
 import { IdGenerator } from "effect/ai";
@@ -34,7 +35,13 @@ import {
   CloudflareSnapshot,
 } from "./cloudflare-contracts.ts";
 import { CompactionEvidence, EvaluationError, ModelUsage, RestartEvidence } from "./contracts.ts";
-import { notesNamespace, readLog, readNotes, continuationEvidence } from "./host-evidence.ts";
+import {
+  notesNamespace,
+  readLog,
+  readNotes,
+  continuationEvidence,
+  originalExecutionFacts,
+} from "./host-evidence.ts";
 import { makeLiveClient } from "./live-model.ts";
 import { manifestLayer, observedCompactor } from "./pressure.ts";
 import { RequestAudit, RequestAuditSink } from "./request-audit.ts";
@@ -83,10 +90,12 @@ const State = Schema.Struct({
   usage: ModelUsage,
   compactions: Schema.Array(CompactionEvidence),
   restarts: Schema.Array(RestartEvidence),
+  activeBeforeSettlement: Schema.NullOr(ExecutionCheckpoint),
   pendingRestart: Schema.NullOr(
     Schema.Struct({
       phase: Schema.Natural,
       runId: Schema.String,
+      execution: ExecutionCheckpoint,
       location: RestartEvidence.fields.location,
       revision: Schema.NullOr(Schema.String),
       text: Schema.String,
@@ -142,6 +151,7 @@ const application = Layer.unwrap(
             usage: emptyUsage,
             compactions: [],
             restarts: [],
+            activeBeforeSettlement: null,
             pendingRestart: null,
           }
         : yield* Schema.decodeEffect(Schema.fromJsonString(State))(stored);
@@ -151,6 +161,8 @@ const application = Layer.unwrap(
         stage: "source",
         message: "Persisted Cloudflare candidate identity changed",
       });
+    const resumedExecution = state.pendingRestart?.execution;
+
     state = { ...state, incarnation: state.incarnation + 1 };
     const phase = yield* Ref.make(state.phase);
     const persist = () => put("state", Schema.encodeSync(Schema.fromJsonString(State))(state));
@@ -299,6 +311,17 @@ const application = Layer.unwrap(
         if (state.pendingRestart !== null) {
           const before = state.pendingRestart;
           const notes = yield* currentNotes;
+          const recovered = yield* continuationEvidence(threadId, before.execution.progress.runId);
+          const encode = Schema.encodeSync(Schema.fromJsonString(ExecutionCheckpoint));
+
+          if (
+            recovered.status !== "present" ||
+            encode(recovered.checkpoint) !== encode(before.execution)
+          )
+            return yield* EvaluationError.make({
+              stage: "restart",
+              message: "Active Run context, original clock or accounting changed across eviction",
+            });
 
           state = {
             ...state,
@@ -330,13 +353,17 @@ const application = Layer.unwrap(
                   stage: "phase",
                   message: "Out-of-order Cloudflare phase",
                 });
-              state = { ...state, phase: index };
+              state = { ...state, phase: index, activeBeforeSettlement: null };
               yield* Ref.set(phase, index);
               persist();
             }),
           snapshot: Effect.gen(function* () {
             const records = yield* readLog(threadId);
             const notes = yield* currentNotes;
+
+            const input = records.findLast(
+              ({ record }) => record.payload._tag === "UserInputRecorded",
+            )?.record.payload;
 
             const audits = yield* Effect.forEach(
               ctx.storage.sql
@@ -356,7 +383,11 @@ const application = Layer.unwrap(
               failure: yield* live.failure,
               compactions: state.compactions,
               restarts: state.restarts,
-              runContinuation: continuationEvidence(records),
+              runContinuation: yield* continuationEvidence(
+                threadId,
+                input?._tag === "UserInputRecorded" ? input.runId : undefined,
+              ),
+              activeBeforeSettlement: state.activeBeforeSettlement,
             };
           }).pipe(
             Effect.provide(services),
@@ -373,22 +404,49 @@ const application = Layer.unwrap(
                 (r) => r.phase === state.phase && r.location === location,
               );
 
-              if (boundary === undefined || state.restarts.some((r) => r.phase === boundary.phase))
+              if (
+                location !== "terminalize:before-publication" &&
+                (boundary === undefined || state.restarts.some((r) => r.phase === boundary.phase))
+              )
                 return;
-              const notes = yield* currentNotes;
               const records = yield* readLog(threadId);
 
-              const run = records.findLast(({ record }) => record.payload._tag === "RunStarted")
-                ?.record.payload;
+              const input = records.findLast(
+                ({ record }) => record.payload._tag === "UserInputRecorded",
+              )?.record.payload;
 
-              if (run?._tag !== "RunStarted")
-                return yield* Effect.die("No run at eviction barrier");
+              const execution = yield* continuationEvidence(
+                threadId,
+                input?._tag === "UserInputRecorded" ? input.runId : undefined,
+              );
+
+              if (execution.status !== "present")
+                return yield* Effect.die("No active execution at the evaluation boundary");
+              if (location === "terminalize:before-publication") {
+                if (
+                  resumedExecution !== undefined &&
+                  resumedExecution.progress.runId === execution.checkpoint.progress.runId &&
+                  JSON.stringify(originalExecutionFacts(execution.checkpoint)) !==
+                    JSON.stringify(originalExecutionFacts(resumedExecution))
+                )
+                  return yield* Effect.die(
+                    "Recovered Run changed its original clock or saved context",
+                  );
+                state = { ...state, activeBeforeSettlement: execution.checkpoint };
+                persist();
+
+                return;
+              }
+              if (boundary === undefined) return yield* Effect.die("Missing eviction boundary");
+              const notes = yield* currentNotes;
+
               state = {
                 ...state,
                 usage: yield* live.snapshot,
                 pendingRestart: {
                   ...boundary,
-                  runId: run.runId,
+                  runId: execution.checkpoint.progress.runId,
+                  execution: execution.checkpoint,
                   revision: notes.revision,
                   text: notes.text,
                   incarnation: state.incarnation,
@@ -422,8 +480,6 @@ export class ContinuityThread extends ThreadObject.make(application, {
   namespaceBinding: "THREADS",
   deploymentId: "context-continuity-cloudflare-v1",
   producerPrefix: "context-eval",
-  ownershipLeaseDuration: 2_000,
-  leaseRenewalInterval: 500,
   alarmBackoffBase: 100,
   alarmBackoffCap: 1_000,
   runtimeFailpoint: (ctx) => (location) =>

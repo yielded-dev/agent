@@ -28,6 +28,7 @@ import {
   RecordEnvelope,
   RecordId,
 } from "@yielded/agent/records";
+import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import {
   AbortCommand,
@@ -41,7 +42,7 @@ import {
 } from "@yielded/agent/submission-ledger";
 import { PreparedInput } from "@yielded/agent/subscription";
 import {
-  FencedAppendRequest,
+  AppendRequest,
   ThreadRead,
   ThreadStore,
   ThreadTailRequest,
@@ -74,7 +75,6 @@ import {
   type ThreadRecoveryFaultEvent,
   type ThreadMaintenanceFailpointHandler,
 } from "../src/Alarm.ts";
-import { CloudflareDurableRuntimeConfig } from "../src/CloudflareConfig.ts";
 import type { submit as admitToThread } from "../src/ThreadObject.ts";
 import {
   bookDefinition,
@@ -129,13 +129,24 @@ const localRun =
         instance[DurableObject.RunSymbol](
           Effect.gen(function* () {
             const bindings = yield* makeTestBindings;
-            const config = yield* CloudflareDurableRuntimeConfig;
 
             const observedStore = Layer.effect(
               ThreadStore,
               Effect.map(ThreadStore, (store) =>
                 ThreadStore.of({
                   ...store,
+                  readExecution: (request) =>
+                    store
+                      .readExecution(request)
+                      .pipe(
+                        Effect.catchCause((cause) =>
+                          Effect.failCause(
+                            options.readFailureDefect === undefined
+                              ? cause
+                              : Cause.combine(cause, Cause.die(options.readFailureDefect)),
+                          ),
+                        ),
+                      ),
                   read: (request) =>
                     Stream.suspend(() => {
                       reads.push(request.threadId);
@@ -171,7 +182,6 @@ const localRun =
               Layer.provide(
                 storageConfigLayer({
                   storage: state.storage,
-                  ownershipLeaseDuration: config.ownershipLeaseDuration,
                 }),
               ),
               Layer.provide(DoStorageFailpoint.layer),
@@ -253,33 +263,30 @@ const submit = (thread: string, key: string) =>
 const corruptHistory = (owner: string, thread: string, sequence = 1) =>
   storage(owner, (state) => {
     const row = state.storage.sql
-      .exec<{ record_json: string }>(
-        "SELECT record_json FROM effect_agent_canonical_records WHERE thread_id = ? AND sequence = ?",
+      .exec<{ payload_json: string }>(
+        "SELECT payload_json FROM effect_agent_canonical_records WHERE thread_id = ? AND sequence = ?",
         thread,
         sequence,
       )
       .one();
 
-    const record = JSON.parse(row.record_json);
+    const payload = JSON.parse(row.payload_json);
 
     // Keep native ownership selectors addressable while corrupting the required evidence.
     const corrupted = JSON.stringify({
-      ...record,
-      payload: {
-        _tag: record.payload._tag,
-        ...("runId" in record.payload ? { runId: record.payload.runId } : {}),
-        private_fixture_payload: "never expose this value",
-      },
+      _tag: payload._tag,
+      ...("runId" in payload ? { runId: payload.runId } : {}),
+      private_fixture_payload: "never expose this value",
     });
 
     state.storage.sql.exec(
-      "UPDATE effect_agent_canonical_records SET record_json = ? WHERE thread_id = ? AND sequence = ?",
+      "UPDATE effect_agent_canonical_records SET payload_json = ? WHERE thread_id = ? AND sequence = ?",
       corrupted,
       thread,
       sequence,
     );
 
-    return Effect.runPromise(invalidate(state.storage).pipe(Effect.as(row.record_json)));
+    return Effect.runPromise(invalidate(state.storage).pipe(Effect.as(row.payload_json)));
   });
 
 // Regression: https://github.com/yielded-dev/agent/commit/35b5e858
@@ -438,7 +445,7 @@ it(
             );
 
             expect(queued.submission.state).toBe("ready");
-            expect(queued.ownership).toBeUndefined();
+            expect(queued.hasOwner).toBe(false);
             yield* Deferred.succeed(releaseFirst, undefined);
             yield* Fiber.join(running);
             expect(secondStarted).toBe(true);
@@ -455,7 +462,7 @@ it(
 
             expect(secondSnapshot.submission.state).toBe("settled");
             expect(followerSnapshot.submission.state).toBe("settled");
-            expect(followerSnapshot.ownership).toBeUndefined();
+            expect(followerSnapshot.hasOwner).toBe(false);
 
             const records = yield* ThreadStore.use((store) =>
               Stream.runCollect(
@@ -529,7 +536,7 @@ it(
                 RecoverySnapshotRequest.make({ submissionId: accepted[index]!.submissionId }),
               );
 
-              expect(snapshot.ownership).toBeUndefined();
+              expect(snapshot.hasOwner).toBe(false);
               expect(snapshot.submission.state).not.toBe("settled");
             }
 
@@ -628,11 +635,10 @@ describe("recovery faults independent of execution history", () => {
                 const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
                 return yield* store.append(
-                  FencedAppendRequest.make({
+                  AppendRequest.make({
                     threadId,
-                    producerEpoch: tail.producerEpoch,
                     expectedTailSequence: tail.tailSequence,
-                    expectedTailDigest: tail.tailDigest,
+
                     batch: CanonicalBatch.make({
                       batchId: BatchId.make(messageId),
                       producerId: ProducerId.make("terminal-fault-fixture"),
@@ -702,7 +708,7 @@ describe("recovery faults independent of execution history", () => {
         // Restore only the selected evidence: no wake or source-generation mutation enables retry.
         yield* storage(owner, (state) => {
           state.storage.sql.exec(
-            "UPDATE effect_agent_canonical_records SET record_json = ? WHERE thread_id = ? AND sequence = ?",
+            "UPDATE effect_agent_canonical_records SET payload_json = ? WHERE thread_id = ? AND sequence = ?",
             original,
             owner,
             appended.lastSequence,
@@ -780,23 +786,41 @@ describe("recovery faults independent of execution history", () => {
         yield* TestClock.adjust(5_000);
         const second = yield* run(submit(thread, "second"));
 
-        const records = yield* run(
-          ThreadStore.use((store) =>
-            Stream.runCollect(
-              store.read(ThreadRead.make({ threadId: decodeThreadId(thread), limit: 100 })),
+        const execution = Option.getOrThrow(
+          yield* run(
+            ThreadStore.use((store) =>
+              store.readExecution({
+                threadId: decodeThreadId(thread),
+                runId: runIdForSubmission(first.submissionId),
+              }),
             ),
           ),
         );
 
-        const continuation = records.findLast(
-          ({ record }) =>
-            record.payload._tag === "RunContinuation" &&
-            record.payload.submissionId === first.submissionId,
-        );
+        expect(execution.progress).toMatchObject({
+          submissionId: first.submissionId,
+          position: "awaiting-model",
+        });
 
-        if (continuation === undefined) throw new Error("Expected unfinished Run continuation");
-        // Fault the selected Run's canonical progress, independently of prior settled Runs.
-        const original = yield* corruptHistory(owner, thread, continuation.sequence);
+        // Fault only this unfinished Run's authoritative state; prior history stays immutable.
+        const original = yield* storage(owner, (state) => {
+          const row = state.storage.sql
+            .exec<{ checkpoint_json: string }>(
+              "SELECT checkpoint_json FROM effect_agent_executions WHERE thread_id = ? AND run_id = ?",
+              thread,
+              JSON.stringify(execution.progress.runId),
+            )
+            .one();
+
+          state.storage.sql.exec(
+            "UPDATE effect_agent_executions SET checkpoint_json = ? WHERE thread_id = ? AND run_id = ?",
+            JSON.stringify({ private_fixture_payload: "never expose this value" }),
+            thread,
+            JSON.stringify(execution.progress.runId),
+          );
+
+          return Effect.runPromise(invalidate(state.storage).pipe(Effect.as(row.checkpoint_json)));
+        });
 
         // Interrupt after fault commit but before notification, then reconstruct maintenance.
         yield* localRun(owner, [], {
@@ -816,7 +840,7 @@ describe("recovery faults independent of execution history", () => {
           ["created", thread, first.submissionId],
           ["created", thread, second.submissionId],
         ]);
-        // Metadata discovery succeeds; the selected admission's continuation fails recovery.
+        // Metadata discovery succeeds; the selected admission's checkpoint fails recovery.
         expect(events[0]?.failure).toMatchObject({ phase: "recovery", reason: "failure" });
         expect(
           JSON.stringify(events, (_key, value) =>
@@ -866,10 +890,10 @@ describe("recovery faults independent of execution history", () => {
 
         yield* storage(owner, (state) => {
           state.storage.sql.exec(
-            "UPDATE effect_agent_canonical_records SET record_json = ? WHERE thread_id = ? AND sequence = ?",
+            "UPDATE effect_agent_executions SET checkpoint_json = ? WHERE thread_id = ? AND run_id = ?",
             original,
             thread,
-            continuation.sequence,
+            JSON.stringify(execution.progress.runId),
           );
 
           return Effect.runPromise(invalidate(state.storage));

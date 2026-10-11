@@ -343,8 +343,6 @@ export class PerformanceThread extends ThreadObject.make(application, {
   namespaceBinding: "PERFORMANCE_THREADS",
   deploymentId: "performance-cloudflare-v1",
   producerPrefix: "performance-eval",
-  ownershipLeaseDuration: 2_000,
-  leaseRenewalInterval: 500,
   alarmBackoffBase: 100,
   alarmBackoffCap: 1_000,
   maxQueueDepthPerLane: 1,

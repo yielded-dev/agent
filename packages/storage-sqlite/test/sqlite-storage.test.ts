@@ -10,7 +10,6 @@ import {
   type SqliteStorageFailpointLocation,
   SqliteStorageCompatibilityError,
   SqliteStorageCorruptionError,
-  SqliteWriteContention,
 } from "@yielded/agent-storage-sqlite/sqlite-storage-error";
 import { SqliteStorageFailpoint } from "@yielded/agent-storage-sqlite/sqlite-storage-failpoint";
 import { submissionLedgerLayer } from "@yielded/agent-storage-sqlite/sqlite-submission-ledger";
@@ -21,16 +20,17 @@ import {
   layer,
   storageConfigLayer,
 } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
-import { digestJson, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
+import { digestJson } from "@yielded/agent/digest";
 import { lifecyclePublicationLayer } from "@yielded/agent/lifecycle-publication";
+import * as PersistentHistory from "@yielded/agent/persistent-history";
 import {
   CanonicalBatch,
   CanonicalRecord,
   CanonicalSequence,
   DefinitionDigests,
   Digest,
-  ProducerEpoch,
   RunCompleted,
+  RunPolicyUsageReserved,
   RunStartedRecord,
   UserInputRecorded,
   type CanonicalRecordPayload,
@@ -41,7 +41,7 @@ import {
   readContinuation,
 } from "@yielded/agent/run-continuation";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
-import { makeRunWriter, RunStorage } from "@yielded/agent/run-storage";
+import { makeRunWriter, RunStorage, type StorageOwner } from "@yielded/agent/run-storage";
 import {
   AdmissionRequest,
   ClaimRequest,
@@ -49,25 +49,26 @@ import {
   SubmissionLedger,
 } from "@yielded/agent/submission-ledger";
 import {
+  readTestThread,
   threadStoreConformanceCases,
   threadCheckpointConformanceCases,
 } from "@yielded/agent/testing/thread-store-conformance";
+import { ThreadHistory } from "@yielded/agent/thread-history";
 import {
   ThreadCheckpoint,
   ThreadExportRequest,
+  ThreadIdentityRequest,
   ThreadMaterialization,
   ThreadObservation,
   ThreadRead,
   ThreadStore,
   ThreadStoreError,
   ThreadTailRequest,
-  FencedAppendRequest,
+  AppendRequest,
   LoadCheckpointRequest,
   SaveCheckpointRequest,
   type AppendResult,
   type ThreadReader,
-  streamExport,
-  ThreadExportSource,
 } from "@yielded/agent/thread-store";
 import type { PlatformError, Crypto } from "effect";
 import {
@@ -100,7 +101,6 @@ const id = <A>(schema: Schema.Codec<A, string>, value: string): A =>
   Schema.decodeSync(schema)(value);
 
 const sequence = (value: number) => Schema.decodeSync(CanonicalSequence)(value);
-const epoch = (value: number) => Schema.decodeSync(ProducerEpoch)(value);
 
 const isThreadStoreError = Schema.is(ThreadStoreError);
 
@@ -149,19 +149,15 @@ const inputRecord = (recordId: string, input: string): CanonicalRecord =>
 const append = (
   store: ThreadStore["Service"],
   canonicalBatch: CanonicalBatch,
-  tail: Pick<AppendResult, "lastSequence" | "tailDigest"> = {
+  tail: Pick<AppendResult, "lastSequence"> = {
     lastSequence: sequence(0),
-    tailDigest: EMPTY_TAIL_DIGEST,
   },
-  producerEpoch: ProducerEpoch = epoch(1),
 ) =>
   store.append(
-    FencedAppendRequest.make({
+    AppendRequest.make({
       threadId,
       batch: canonicalBatch,
       expectedTailSequence: tail.lastSequence,
-      expectedTailDigest: tail.tailDigest,
-      producerEpoch,
     }),
   );
 
@@ -180,7 +176,6 @@ const explicitTestStorageLayer = (filename: string) =>
             observationPollInterval: 1,
             busyTimeout: 5_000,
             synchronous: "FULL",
-            ownershipLeaseDuration: 30_000,
             verifyOnOpen: false,
           }),
         ),
@@ -207,8 +202,70 @@ const withTemporaryDatabase = <A, E>(
   ).pipe(Effect.provide(NodeFileSystem.layer));
 
 describe("SqliteThreadStore", () => {
-  // #792 retired recovery-checkpoint writes. Layout 21 persists progress in the same
-  // append as its facts; run-continuation.test.ts covers process loss at compaction,
+  // Admission owns a Thread before its input is materialized in canonical history.
+  it.effect("rejects persistent history for admitted input before canonical append", () =>
+    withTemporaryDatabase((filename) => {
+      const dependencies = Layer.mergeAll(
+        SqliteClient.layer({ filename, disableWAL: true }),
+        storageConfigLayer({ filename }),
+        SqliteStorageFailpoint.layer,
+        NodeCrypto.layer,
+      );
+
+      const services = exclusiveRunStorageLayer.pipe(
+        Layer.provideMerge(exclusiveHostClientLayer.pipe(Layer.provideMerge(dependencies))),
+      );
+
+      return Effect.gen(function* () {
+        const store = yield* ThreadStore;
+        const ledger = yield* SubmissionLedger;
+        const history = yield* ThreadHistory;
+        const request = ThreadIdentityRequest.make({ threadId });
+
+        yield* store.materialize(ThreadMaterialization.make({ threadId }));
+        expect.soft(yield* store.readIdentity(request)).toMatchObject({
+          hasAdmissions: false,
+          tailSequence: 0,
+          records: [],
+        });
+        expect((yield* history.load(threadId)).content).toEqual([]);
+
+        const digest = id(Digest, "a".repeat(64));
+
+        yield* ledger.admit(
+          AdmissionRequest.make({
+            threadId,
+            principal: id(AdmissionRequest.fields.principal, "history-owner"),
+            idempotencyKey: id(AdmissionRequest.fields.idempotencyKey, "pending-history-input"),
+            agentId: id(AdmissionRequest.fields.agentId, "history-agent"),
+            agentDigests: DefinitionDigests.make({ agent: digest, model: digest, tools: digest }),
+            deploymentId: id(AdmissionRequest.fields.deploymentId, "history-deployment"),
+            inputPayload: "pending",
+            inputDigest: yield* digestJson("pending"),
+          }),
+        );
+
+        expect.soft(yield* store.readIdentity(request)).toMatchObject({
+          hasAdmissions: true,
+          tailSequence: 0,
+          records: [],
+        });
+        expect(yield* history.load(threadId).pipe(Effect.flip)).toMatchObject({
+          _tag: "ThreadHistoryError",
+          reason: "incompatible",
+        });
+
+        yield* store.materialize(ThreadMaterialization.make({ threadId: secondThreadId }));
+        expect
+          .soft(yield* store.readIdentity(ThreadIdentityRequest.make({ threadId: secondThreadId })))
+          .toMatchObject({ hasAdmissions: false });
+        expect((yield* history.load(secondThreadId)).content).toEqual([]);
+      }).pipe(Effect.provide(PersistentHistory.layer.pipe(Layer.provideMerge(services))));
+    }),
+  );
+
+  // Layout 22 replaces active progress in the same transaction as its facts;
+  // run-continuation.test.ts covers process loss at compaction,
   // while these restored rows cover rollback and acknowledgement loss at that append.
   for (const [location, mode] of [
     ["append:before", "failure"],
@@ -238,26 +295,33 @@ describe("SqliteThreadStore", () => {
             }),
           );
 
-          let prepared: CanonicalBatch | undefined;
+          let prepared: AppendRequest | undefined;
           let reached = false;
 
           const failed = yield* Effect.gen(function* () {
             const store = yield* ThreadStore;
 
-            yield* store.materialize(
-              ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-            );
-            const writer = yield* makeRunWriter(threadId, epoch(1));
+            yield* store.materialize(ThreadMaterialization.make({ threadId }));
+            const writer = yield* makeRunWriter(threadId);
             const progress = yield* makeProgressWriter(threadId, start.deploymentId);
 
             yield* progress.commit(batch("crash-reopen", [input, start])).pipe(
               Effect.provideService(CurrentRunWriter, {
                 ...writer,
-                append: (compiled) => {
-                  prepared = compiled;
+                append: (compiled, executions) =>
+                  Effect.gen(function* () {
+                    const tail = yield* writer.tail;
 
-                  return writer.append(compiled);
-                },
+                    prepared = AppendRequest.make({
+                      threadId,
+                      expectedTailSequence: tail.sequence,
+
+                      batch: compiled,
+                      ...(executions === undefined ? {} : { executions }),
+                    });
+
+                    return yield* writer.append(compiled, executions);
+                  }),
               }),
             );
           }).pipe(
@@ -284,20 +348,18 @@ describe("SqliteThreadStore", () => {
           if (compiled === undefined) return yield* Effect.die("Progress append was not prepared");
           yield* Effect.gen(function* () {
             const store = yield* ThreadStore;
-            const before = yield* store.export(ThreadExportRequest.make({ threadId }));
+            const before = yield* readTestThread(store, { threadId });
             const committed = location === "append:after";
 
-            expect(before.records).toHaveLength(committed ? 3 : 0);
+            expect(before.records).toHaveLength(committed ? 1 : 0);
             expect(
               Option.isSome(yield* readContinuation(threadId, nativeRunId, before.tailSequence)),
             ).toBe(committed);
-            expect((yield* append(store, compiled)).replayed).toBe(committed);
-            const after = yield* store.export(ThreadExportRequest.make({ threadId }));
+            expect((yield* store.append(compiled)).replayed).toBe(committed);
+            const after = yield* readTestThread(store, { threadId });
 
             expect(after.records.map(({ record }) => record.payload._tag)).toEqual([
               "UserInputRecorded",
-              "RunStarted",
-              "RunContinuation",
             ]);
             expect(
               Option.getOrUndefined(
@@ -308,7 +370,10 @@ describe("SqliteThreadStore", () => {
               recordCount: 2,
               lastFact: { recordId: start.recordId },
             });
-            expect((yield* append(store, compiled)).replayed).toBe(true);
+            const active = yield* store.readExecution({ threadId, runId: nativeRunId });
+
+            expect((yield* store.append(compiled)).replayed).toBe(true);
+            expect(yield* store.readExecution({ threadId, runId: nativeRunId })).toEqual(active);
           }).pipe(Effect.provide(layer({ filename }).pipe(Layer.provideMerge(NodeCrypto.layer))));
         }),
       ),
@@ -320,31 +385,25 @@ describe("SqliteThreadStore", () => {
       Effect.gen(function* () {
         const store = yield* ThreadStore;
 
-        yield* store.materialize(ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }));
+        yield* store.materialize(ThreadMaterialization.make({ threadId }));
         yield* store.append(
-          FencedAppendRequest.make({
+          AppendRequest.make({
             threadId,
-            producerEpoch: epoch(1),
             expectedTailSequence: sequence(0),
-            expectedTailDigest: EMPTY_TAIL_DIGEST,
+
             batch: batch("bad-export-tail", [inputRecord("bad-export-tail", "Kyoto")]),
           }),
         );
-        yield* withSql(
-          filename,
-          Effect.flatMap(
-            SqlClientService.SqlClient,
-            (sql) =>
-              sql`UPDATE effect_agent_threads SET tail_sequence=0 WHERE thread_id=${threadId}`,
-          ),
-        );
+        const sql = yield* SqlClientService.SqlClient;
+
+        yield* sql`UPDATE effect_agent_threads SET tail_sequence=0, work_through_sequence=0 WHERE thread_id=${threadId}`;
         expect(
           yield* store.export(ThreadExportRequest.make({ threadId })).pipe(Effect.flip),
         ).toMatchObject({
           _tag: "ThreadStoreError",
           message: expect.stringContaining("beyond the captured thread tail"),
         });
-      }).pipe(Effect.provide(layer({ filename }))),
+      }).pipe(Effect.provide(explicitTestStorageLayer(filename))),
     ),
   );
 
@@ -378,7 +437,19 @@ describe("SqliteThreadStore", () => {
                 yield* assertCheckpoint(historical);
                 expect(yield* snapshotStore).toEqual(before);
                 expect(yield* sql`PRAGMA user_version`).toEqual(version);
-              }).pipe(Effect.provide(layer({ filename, verifyOnOpen })));
+              }).pipe(
+                Effect.provide(
+                  threadStoreLayer.pipe(
+                    Layer.provide(
+                      Layer.mergeAll(
+                        storageConfigLayer({ filename, verifyOnOpen }),
+                        SqliteStorageFailpoint.layer,
+                        NodeCrypto.layer,
+                      ),
+                    ),
+                  ),
+                ),
+              );
             }
           }).pipe(Effect.provide(SqliteClient.layer({ filename }))),
         ),
@@ -392,9 +463,7 @@ describe("SqliteThreadStore", () => {
           const store = yield* ThreadStore;
           const sql = yield* SqlClientService.SqlClient;
 
-          yield* store.materialize(
-            ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-          );
+          yield* store.materialize(ThreadMaterialization.make({ threadId }));
 
           yield* append(
             store,
@@ -405,7 +474,7 @@ describe("SqliteThreadStore", () => {
             schemaVersion: 1,
             threadId,
             throughSequence: sequence(0),
-            tailDigest: EMPTY_TAIL_DIGEST,
+
             state: {},
             createdAt: at(2),
           });
@@ -421,11 +490,9 @@ describe("SqliteThreadStore", () => {
             yield* Schema.encodeEffect(ThreadCheckpoint)(corrupted),
           );
 
-          const rowDigest = EMPTY_TAIL_DIGEST;
-
           yield* sql`
             UPDATE effect_agent_checkpoints
-            SET checkpoint_json = ${corruptedJson}, tail_digest = ${rowDigest}
+            SET checkpoint_json = ${corruptedJson}
             WHERE thread_id = ${threadId} AND through_sequence = 0
           `;
 
@@ -504,9 +571,7 @@ describe("SqliteThreadStore", () => {
           Effect.gen(function* () {
             const store = yield* ThreadStore;
 
-            yield* store.materialize(
-              ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-            );
+            yield* store.materialize(ThreadMaterialization.make({ threadId }));
             yield* append(store, batch("corrupt-1", [inputRecord("corrupt-record-1", "Osaka")]));
           }),
         );
@@ -517,7 +582,7 @@ describe("SqliteThreadStore", () => {
 
             yield* sql`
               UPDATE effect_agent_canonical_records
-              SET record_json = '{"schemaVersion":2}'
+              SET payload_json = '{"schemaVersion":2}'
               WHERE thread_id = ${threadId}
                 AND sequence = 1
             `;
@@ -563,93 +628,81 @@ describe("SqliteThreadStore", () => {
             const sql = yield* SqlClientService.SqlClient;
 
             return yield* sql<Record<string, unknown>>`
-              SELECT sequence, record_json
+              SELECT sequence, payload_json
               FROM effect_agent_canonical_records
               WHERE thread_id = ${threadId}
             `;
           }),
         );
 
-        expect(rows).toEqual([{ sequence: 1, record_json: '{"schemaVersion":2}' }]);
+        expect(rows).toEqual([{ sequence: 1, payload_json: '{"schemaVersion":2}' }]);
       }),
     ),
   );
 
-  it.effect("exports one transactionally consistent snapshot during a concurrent append", () =>
+  it.effect("serializes a snapshot and a queued append through the same owner", () =>
     withTemporaryDatabase((filename) =>
       Effect.gen(function* () {
-        const first = yield* withStorage(
-          filename,
-          Effect.gen(function* () {
-            const store = yield* ThreadStore;
-
-            yield* store.materialize(
-              ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-            );
-
-            return yield* append(
-              store,
-              batch("snapshot-1", [inputRecord("snapshot-record-1", "before")]),
-            );
-          }),
-        );
-
         const exportStarted = yield* Deferred.make<void>();
         const releaseExport = yield* Deferred.make<void>();
 
-        const exportFiber = yield* Effect.provide(
-          Effect.gen(function* () {
-            const store = yield* ThreadStore;
+        yield* Effect.gen(function* () {
+          const store = yield* ThreadStore;
 
-            return yield* store.export(ThreadExportRequest.make({ threadId }));
-          }),
-          layer({
-            filename,
-            observationPollInterval: 1,
-            failpoint: (location) =>
-              location === "export:after-thread-read"
-                ? Deferred.succeed(exportStarted, undefined).pipe(
-                    Effect.andThen(Deferred.await(releaseExport)),
-                    Effect.asVoid,
-                  )
-                : Effect.void,
-          }),
-        ).pipe(Effect.forkChild);
+          yield* store.materialize(ThreadMaterialization.make({ threadId }));
 
-        yield* Deferred.await(exportStarted);
-        yield* withStorage(
-          filename,
-          Effect.gen(function* () {
-            const store = yield* ThreadStore;
+          const first = yield* append(
+            store,
+            batch("snapshot-1", [
+              canonicalRecord(
+                "snapshot-record-1",
+                UserInputRecorded.make({
+                  submissionId,
+                  kind: "user",
+                  input: "before",
+                }),
+              ),
+            ]),
+          );
 
-            yield* append(
-              store,
-              batch("snapshot-2", [inputRecord("snapshot-record-2", "after")]),
-              first,
-            );
-          }),
+          const exporting = yield* store
+            .export(ThreadExportRequest.make({ threadId }))
+            .pipe(Effect.forkChild);
+
+          yield* Deferred.await(exportStarted);
+
+          const writing = yield* append(
+            store,
+            batch("snapshot-2", [inputRecord("snapshot-record-2", "after")]),
+            first,
+          ).pipe(Effect.forkChild);
+
+          yield* Deferred.succeed(releaseExport, undefined);
+          const snapshot = yield* Fiber.join(exporting);
+
+          yield* Fiber.join(writing);
+          expect(snapshot.tailSequence).toBe(first.lastSequence);
+          expect(snapshot.records).toHaveLength(1);
+
+          const current = yield* store
+            .read(ThreadRead.make({ threadId, limit: 1_024 }))
+            .pipe(Stream.runCollect);
+
+          expect(current).toHaveLength(2);
+        }).pipe(
+          Effect.provide(
+            layer({
+              filename,
+              failpoint: (location) =>
+                location === "export:after-thread-read"
+                  ? Deferred.succeed(exportStarted, undefined).pipe(
+                      Effect.andThen(Deferred.await(releaseExport)),
+                      Effect.asVoid,
+                    )
+                  : Effect.void,
+            }),
+          ),
         );
-        yield* Deferred.succeed(releaseExport, undefined);
-
-        const snapshot = yield* Fiber.join(exportFiber);
-
-        expect(snapshot.tailSequence).toBe(first.lastSequence);
-        expect(snapshot.tailDigest).toBe(first.tailDigest);
-        expect(snapshot.records).toHaveLength(1);
-
-        const current = yield* withStorage(
-          filename,
-          Effect.gen(function* () {
-            return yield* streamExport({ threadId }).pipe(
-              Stream.provide(ThreadExportSource.layer()),
-              Stream.flatMap((page) => Stream.fromIterable(page.records)),
-              Stream.take(3),
-              Stream.runCollect,
-            );
-          }),
-        );
-
-        expect(current).toHaveLength(2);
       }),
     ),
   );
@@ -661,9 +714,7 @@ describe("SqliteThreadStore", () => {
         Effect.gen(function* () {
           const store = yield* ThreadStore;
 
-          yield* store.materialize(
-            ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-          );
+          yield* store.materialize(ThreadMaterialization.make({ threadId }));
 
           const observerFiber = yield* store
             .observe(ThreadObservation.make({ threadId }))
@@ -688,10 +739,10 @@ describe("SqliteThreadStore", () => {
     ),
   );
 
-  // An independently constructed store sharing the exclusive SQL client bypasses the
-  // host's administrative cache refresh. The database must still own tail and fence CAS.
-  it.effect.each(["tail", "fence"] as const)(
-    "honors an independent same-client writer (%s)",
+  // Independently composed ports share one physical owner, and an administrative append
+  // still invalidates a prepared tail while a released capability remains permanently closed.
+  it.effect.each(["tail", "owner"] as const)(
+    "honors the shared owner's current tail and lifetime (%s)",
     (change) =>
       withTemporaryDatabase((filename) => {
         const dependencies = Layer.mergeAll(
@@ -709,7 +760,6 @@ describe("SqliteThreadStore", () => {
           const ledger = yield* SubmissionLedger;
           const storage = yield* RunStorage;
           const independent = Context.get(yield* Layer.build(threadStoreLayer), ThreadStore);
-          const producerId = id(ClaimRequest.fields.producerId, "independent-writer-proof");
           const digest = id(Digest, "a".repeat(64));
 
           const admitted = yield* ledger.admit(
@@ -726,7 +776,7 @@ describe("SqliteThreadStore", () => {
           );
 
           yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
-          const claimed = yield* storage.claim(ClaimRequest.make({ threadId, producerId }));
+          const claimed = yield* storage.claim(ClaimRequest.make({ threadId }));
 
           if (Option.isNone(claimed)) return yield* Effect.die("Run not claimed");
           const session = claimed.value;
@@ -749,11 +799,10 @@ describe("SqliteThreadStore", () => {
 
           if (change === "tail") {
             const external = yield* independent.append(
-              FencedAppendRequest.make({
+              AppendRequest.make({
                 threadId,
-                producerEpoch: session.producerEpoch,
                 expectedTailSequence: before.tailSequence,
-                expectedTailDigest: before.tailDigest,
+
                 batch: fact("independent-fact"),
               }),
             );
@@ -766,29 +815,33 @@ describe("SqliteThreadStore", () => {
             expect(
               yield* sql`SELECT record_id FROM effect_agent_canonical_records
             WHERE thread_id=${threadId} ORDER BY sequence`,
-            ).toEqual([{ record_id: "independent-fact" }, { record_id: "session-fact" }]);
+            ).toEqual([
+              { record_id: JSON.stringify("independent-fact") },
+              { record_id: JSON.stringify("session-fact") },
+            ]);
           } else {
-            yield* independent.materialize(
-              ThreadMaterialization.make({
-                threadId,
-                producerEpoch: epoch(session.producerEpoch + 1),
-              }),
-            );
+            yield* session.release;
+            const replacement = yield* storage.claim(ClaimRequest.make({ threadId }));
+
+            expect(Option.isSome(replacement)).toBe(true);
+            if (Option.isNone(replacement)) return yield* Effect.die("Replacement not acquired");
             const appended = yield* session.append(fact("obsolete-fact")).pipe(Effect.exit);
             const after = yield* independent.inspectTail(tailRequest);
 
             expect(Exit.isFailure(appended)).toBe(true);
             if (Exit.isSuccess(appended)) return;
-            expect(Cause.squash(appended.cause)).toMatchObject({ _tag: "FenceRejected" });
-            expect(after.producerEpoch).toBe(session.producerEpoch + 1);
+            expect(Cause.squash(appended.cause)).toMatchObject({ _tag: "OwnershipLost" });
             expect(after.tailSequence).toBe(before.tailSequence);
-            expect(after.tailDigest).toBe(before.tailDigest);
+            yield* session.release;
+            expect((yield* replacement.value.append(fact("replacement-fact"))).lastSequence).toBe(
+              before.tailSequence + 1,
+            );
           }
         }).pipe(Effect.scoped, Effect.provide(services));
       }),
   );
 
-  it.effect("classifies cross-connection write contention as retryable typed contention", () =>
+  it.effect("refuses a second SQLite owner until the prior connection releases the file", () =>
     withTemporaryDatabase((filename) =>
       Effect.gen(function* () {
         const first = yield* withStorage(
@@ -796,9 +849,7 @@ describe("SqliteThreadStore", () => {
           Effect.gen(function* () {
             const store = yield* ThreadStore;
 
-            yield* store.materialize(
-              ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-            );
+            yield* store.materialize(ThreadMaterialization.make({ threadId }));
 
             return yield* append(store, batch("busy-1", [inputRecord("busy-record-1", "before")]));
           }),
@@ -830,10 +881,10 @@ describe("SqliteThreadStore", () => {
             if (Exit.isFailure(contended)) {
               const error = Cause.squash(contended.cause);
 
-              expect(error).toBeInstanceOf(ThreadStoreError);
-              if (isThreadStoreError(error)) {
-                expect(error.cause).toBeInstanceOf(SqliteWriteContention);
-              }
+              expect(error).toMatchObject({
+                _tag: "SqliteStorageError",
+                operation: "acquire exclusive host",
+              });
             }
           }),
         );
@@ -884,10 +935,11 @@ describe("SqliteThreadStore", () => {
             }),
           );
 
-          let firstBatch: CanonicalBatch | undefined;
+          let firstRequest: AppendRequest | undefined;
+          let reached: SqliteStorageFailpointLocation | undefined;
 
           const withFailpoints = <A, E>(
-            effect: Effect.Effect<A, E, ThreadStore | ThreadReader | Crypto.Crypto>,
+            effect: Effect.Effect<A, E, ThreadStore | ThreadReader | StorageOwner | Crypto.Crypto>,
           ) =>
             Effect.provide(
               effect,
@@ -898,7 +950,13 @@ describe("SqliteThreadStore", () => {
                   Ref.get(active).pipe(
                     Effect.flatMap((selected) =>
                       selected === location
-                        ? Effect.fail(SqliteStorageFailpointError.make({ location }))
+                        ? Effect.sync(() => {
+                            reached = location;
+                          }).pipe(
+                            Effect.andThen(
+                              Effect.fail(SqliteStorageFailpointError.make({ location })),
+                            ),
+                          )
                         : Effect.void,
                     ),
                   ),
@@ -916,9 +974,7 @@ describe("SqliteThreadStore", () => {
             Effect.gen(function* () {
               const store = yield* ThreadStore;
 
-              yield* store.materialize(
-                ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }),
-              );
+              yield* store.materialize(ThreadMaterialization.make({ threadId }));
 
               return yield* append(store, batch("reopen-accepted-input", [acceptedInput]));
             }),
@@ -938,26 +994,37 @@ describe("SqliteThreadStore", () => {
                   Effect.gen(function* () {
                     const store = yield* ThreadStore;
 
-                    if (firstBatch !== undefined) {
-                      yield* append(store, firstBatch, seeded);
+                    if (firstRequest !== undefined) {
+                      yield* store.append(firstRequest);
 
                       return;
                     }
-                    const writer = yield* makeRunWriter(threadId, epoch(1));
+                    const writer = yield* makeRunWriter(threadId);
                     const progress = yield* makeProgressWriter(threadId, start.deploymentId);
 
                     yield* progress.commit(batch("failpoint-append", [start])).pipe(
                       Effect.provideService(CurrentRunWriter, {
                         ...writer,
-                        append: (prepared) =>
-                          Effect.sync(() => {
-                            firstBatch = prepared;
-                          }).pipe(Effect.andThen(writer.append(prepared))),
+                        append: (prepared, executions) =>
+                          Effect.gen(function* () {
+                            const tail = yield* writer.tail;
+
+                            firstRequest = AppendRequest.make({
+                              threadId,
+                              expectedTailSequence: tail.sequence,
+
+                              batch: prepared,
+                              ...(executions === undefined ? {} : { executions }),
+                            });
+
+                            return yield* writer.append(prepared, executions);
+                          }),
                       }),
                     );
                   }),
                 ).pipe(Effect.exit);
 
+                expect(reached).toBe(location);
                 expect(Exit.isFailure(exit)).toBe(true);
                 if (Exit.isFailure(exit)) {
                   const error = Cause.squash(exit.cause);
@@ -985,7 +1052,7 @@ describe("SqliteThreadStore", () => {
                       "UserInputRecorded",
                     ]);
 
-                    return yield* store.export(ThreadExportRequest.make({ threadId }));
+                    return yield* readTestThread(store, { threadId });
                   }),
                 );
 
@@ -993,7 +1060,6 @@ describe("SqliteThreadStore", () => {
                   acceptedInput.recordId,
                 ]);
                 expect(exported.tailSequence).toBe(seeded.lastSequence);
-                expect(exported.tailDigest).toBe(seeded.tailDigest);
               }),
           );
 
@@ -1004,22 +1070,26 @@ describe("SqliteThreadStore", () => {
                 Effect.gen(function* () {
                   const store = yield* ThreadStore;
 
-                  if (firstBatch === undefined)
+                  if (firstRequest === undefined)
                     return yield* Effect.die("Start progress was not prepared");
-                  yield* append(store, firstBatch, seeded);
+                  yield* store.append(firstRequest);
                 }),
               ).pipe(Effect.exit),
             ),
           ).toBe(true);
+          expect(reached).toBe("append:after");
           yield* select(undefined);
 
           const recoveredAppend = yield* withFailpoints(
             Effect.gen(function* () {
               const store = yield* ThreadStore;
 
-              if (firstBatch === undefined)
+              if (firstRequest === undefined)
                 return yield* Effect.die("Start progress was not prepared");
-              const replayed = yield* append(store, firstBatch, seeded);
+              const replayed = yield* store.append(firstRequest);
+
+              expect(firstRequest.batch.records).toEqual([]);
+              expect(replayed.lastSequence).toBe(seeded.lastSequence);
 
               const continuation = yield* readContinuation(
                 threadId,
@@ -1037,6 +1107,58 @@ describe("SqliteThreadStore", () => {
                   .flat()
                   .map(({ fact }) => fact._tag),
               ).toEqual(["UserInputRecorded", "RunStarted"]);
+
+              const divergent = AppendRequest.make({
+                ...firstRequest,
+                executions: firstRequest.executions?.map((update) => ({
+                  ...update,
+                  facts: [
+                    canonicalRecord(
+                      start.recordId,
+                      RunStartedRecord.make({
+                        runId: nativeRunId,
+                        policyAccountingVersion: 1,
+                        maxDurationMillis: 60_000,
+                      }),
+                    ),
+                  ],
+                })),
+              });
+
+              expect(yield* store.append(divergent).pipe(Effect.flip)).toMatchObject({
+                _tag: "AppendConflict",
+                reason: "batch-content",
+              });
+              const writer = yield* makeRunWriter(threadId);
+              const progress = yield* makeProgressWriter(threadId, start.deploymentId);
+
+              yield* progress
+                .commit(
+                  batch("reopen-newer-budget", [
+                    canonicalRecord(
+                      "reopen-newer-budget",
+                      RunPolicyUsageReserved.make({
+                        runId: nativeRunId,
+                        programmaticToolCalls: 1,
+                        finalizationUsed: false,
+                      }),
+                    ),
+                  ]),
+                )
+                .pipe(Effect.provideService(CurrentRunWriter, writer));
+              const newer = yield* store.readExecution({ threadId, runId: nativeRunId });
+              const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
+
+              const stale = yield* store.append(firstRequest).pipe(Effect.exit);
+
+              expect(Exit.isFailure(stale)).toBe(true);
+              if (Exit.isFailure(stale))
+                expect(Cause.squash(stale.cause)).toMatchObject({
+                  _tag: "AppendConflict",
+                  reason: "stale-command",
+                });
+              expect(yield* store.readExecution({ threadId, runId: nativeRunId })).toEqual(newer);
+              expect(yield* store.inspectTail(ThreadTailRequest.make({ threadId }))).toEqual(tail);
 
               return replayed;
             }),
