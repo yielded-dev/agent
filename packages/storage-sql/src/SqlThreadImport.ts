@@ -528,8 +528,9 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
   const makeExportReader = (idle: boolean) =>
     ThreadExporterReader.of({
       snapshot: Effect.fnUntraced(function* (threadId: ThreadId, captured?: TransferManifest) {
+        // A delivery owner can retain closed receipts before its conversation is materialized.
         const headers = yield* query(
-          sql`SELECT thread_id, tail_sequence FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId} AND created_at IS NOT NULL`,
+          sql`SELECT thread_id, tail_sequence FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
         ).pipe(Effect.flatMap((r) => decode(Schema.Array(Header), r)));
 
         const header = headers[0];
