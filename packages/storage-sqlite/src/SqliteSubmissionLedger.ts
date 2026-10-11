@@ -1,5 +1,4 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import { SqliteClient } from "@effect/sql-sqlite-node";
 import { makeSqlSubmissionLedgerKernel } from "@yielded/agent-storage-sql/sql-submission-ledger";
 import { StorageOwner } from "@yielded/agent/run-storage";
 import { SettlementPublisher } from "@yielded/agent/settlement-publisher";
@@ -8,10 +7,10 @@ import type { Crypto } from "effect";
 import { Context, Effect, Layer } from "effect";
 import type * as SqlClientService from "effect/sql/SqlClient";
 
+import { sqliteClientLayer } from "./internal/sqlite-client-layer.ts";
 import { initializeSqliteJournal, sqliteErrors } from "./internal/sqlite-journal.ts";
 import { sqlFailure } from "./internal/sqlite-ledger-errors.ts";
 import { SqliteStorageConfig } from "./SqliteStorageConfig.ts";
-import { SqliteStorageError } from "./SqliteStorageError.ts";
 import { SqliteStorageFailpoint } from "./SqliteStorageFailpoint.ts";
 import {
   exclusiveHostClientLayer,
@@ -66,23 +65,7 @@ export const ledgerLayer = (
           Layer.mergeAll(
             Layer.succeed(SqliteStorageConfig)(config),
             storageFailpointLayer(options),
-            SqliteClient.layer({ filename: options.filename, disableWAL: true }).pipe(
-              Layer.catch((cause) =>
-                Layer.effectContext<
-                  Layer.Success<ReturnType<typeof SqliteClient.layer>>,
-                  SqliteStorageError,
-                  never
-                >(
-                  Effect.fail(
-                    SqliteStorageError.make({
-                      operation: "open SQLite",
-                      message: cause.message,
-                      cause,
-                    }),
-                  ),
-                ),
-              ),
-            ),
+            sqliteClientLayer({ filename: options.filename, disableWAL: true }, "open SQLite"),
             NodeCrypto.layer,
           ),
         ),
