@@ -683,9 +683,9 @@ export class ThreadIdentityRequest extends Schema.Class<ThreadIdentityRequest>(
 )({ threadId: ThreadId }) {}
 
 /**
- * One consistent canonical snapshot: tail/epoch, first record, exact worker origin,
- * then exact subagent lineage. A row selected twice appears only once. Missing
- * identity records remain absent; the snapshot itself grants no execution authority.
+ * One consistent snapshot: Thread ID, canonical tail, admission count, first record,
+ * exact worker origin, then exact subagent lineage. A row selected twice appears only
+ * once. Missing identity records remain absent; the snapshot grants no execution authority.
  */
 export class ThreadIdentity extends Schema.Class<ThreadIdentity>(
   "@effect-agent/thread/ThreadIdentity",

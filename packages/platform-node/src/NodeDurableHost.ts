@@ -182,8 +182,8 @@ const makeHost = Effect.fnUntraced(function* (
       )
     : runResolvedWorkers;
 
-  // Register after the worker fiber: close admission, interrupt/join workers, drain
-  // runtime ownership, then close storage and captured application services.
+  // Register after the worker fiber: close admission, interrupt/join workers, close
+  // local owner generations, then close storage and captured application services.
   yield* Effect.addFinalizer(() => Ref.set(admission, false));
 
   return NodeDurableHost.of({
@@ -221,10 +221,8 @@ const makeHost = Effect.fnUntraced(function* (
  * `startupRecovery` retains the last bounded page of Submission decisions.
  *
  * Shutdown runs in reverse Layer order when the owning Scope closes: `submit` starts refusing
- * with `AdmissionClosed` first, then the runtime Layer's ownership drain releases every claim
- * still held so another host can take over the lanes immediately, then the SQLite resources
- * close. Forced termination at any point stays safe — the durability protocol, not graceful
- * shutdown, provides correctness (DEPLOY-006).
+ * with `AdmissionClosed` first, then workers stop and local owner generations close before
+ * SQLite resources. Accepted work remains recoverable after forced termination (DEPLOY-006).
  */
 export class NodeDurableHost extends Context.Service<
   NodeDurableHost,
@@ -370,8 +368,8 @@ export class NodeDurableHost extends Context.Service<
 /**
  * Acquire a complete Node host and start one bounded, scoped worker pool after recovery.
  * Own the SQLite file exclusively until the host and its storage close. A second connection
- * fails construction; after process death the replacement retires abandoned claims before
- * recovery, without waiting for their leases. Use this host's services for live inspection.
+ * fails construction. Process death releases the file lock; a replacement acquires it before
+ * recovering retained work with fresh local generations. Use this host's services for live inspection.
  * Provide model, tool, instruction, and schema dependencies to this Layer. Reusing the Layer
  * shares the same pool. A worker failure closes admission; observe it with `run` at the process
  * boundary so the application exits and releases the host instead of remaining idle.

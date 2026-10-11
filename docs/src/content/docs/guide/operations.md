@@ -59,9 +59,9 @@ excluding joined inputs, and rejects ambiguous original inputs. Both return an o
 envelope and require only `ThreadReader`. Authorize the owner and locator before reading and
 verify the returned payload; absence alone does not prove an admission was never accepted.
 
-Native stores provide `readIdentity({ threadId })` for the first canonical record and exact worker
-origin/lineage records with their captured tail and owner generation. It is one bounded, consistent
-read, not an authorization grant. Custom ThreadStore adapters must implement this operation;
+Native stores provide `readIdentity({ threadId })` as one bounded, consistent snapshot of the
+Thread ID, canonical tail, admission count, first canonical record and exact worker origin/lineage
+records. It grants no execution authority. Custom ThreadStore adapters must implement this operation;
 deploy matching Cloudflare client and owner packages for its read-only port protocol.
 
 Use the existing `submissionInputRecordId` / `submissionSettlementRecordId` exports from
@@ -200,7 +200,7 @@ an external side effect can redeliver the record. Streams, notifications, callba
 finalizers provide no exactly-once delivery guarantee.
 
 Use [operation spans](/guide/run-agents/#trace-agent-and-model-calls) to diagnose storage and recovery.
-Adapter storage spans cover append, claim, renew, release, publish, and finalize boundaries;
+Adapter storage spans cover admission, head selection, append, publication, and finalization;
 recovery spans cover recovery operations. Hydration and decoding stay within the enclosing
 operation span, without separate spans for individual records or decoded rows.
 
@@ -524,7 +524,7 @@ transaction until validation completes. Memory storage retains all facts in vola
 memory and needs an explicit host memory allowance.
 
 Use `ThreadStore.archives` for storage-owner maintenance: seal the next bounded range of complete batches,
-then archive its `firstSequence` under the current owner generation. SQL adapters copy and verify
+then archive its `firstSequence`. SQL adapters copy and verify
 bounded contents, publish a stable locator, and only then remove hot payload copies in the same
 transaction. Repeat sealing until no unsealed suffix remains. Interruption leaves a reachable copy. Ranges share the Thread's owner gate and continuous
 sequence; they do not reset grants, Run budgets, or live obligations. Exact old-record reads and

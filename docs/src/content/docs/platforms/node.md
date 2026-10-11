@@ -36,7 +36,7 @@ New files are initialized in WAL mode; existing files must already use WAL mode.
 The host option `synchronous: "NORMAL"` opts its connection into WAL `NORMAL`; the default
 is `FULL`. `NORMAL` survives process crashes, but power loss or an OS crash can lose
 acknowledged commits and cause external effects to repeat during recovery.
-Managed storage rejects custom SQLite triggers because the host owns all journal and ownership mutations.
+Thread storage tables allow only the adapter's declared SQLite triggers.
 `workerConcurrency` limits concurrently processed threads and defaults to one.
 The managed host dispatches wake hints through one bounded queue, coalescing repeated hints
 for pending or active threads. A shared periodic ledger scan recovers missed hints.
@@ -93,9 +93,10 @@ constructors remain available for manually managed hosts. Import the class from
 when you run `host.runResolvedWorkers`. The module-level `NodeDurableHost.layer` shown above
 owns worker startup and is the default for an application.
 
-These manual assemblies retain lease-based recovery and do not acquire the automatic host's
-exclusive authority or retire claims on startup. They remain suitable for explicit runtime
-composition; a producer name alone never permits reclaiming a live lease.
+Manual assemblies use the same scoped local ownership and exclusive SQLite storage. Share one
+SQL client across their storage Layers; the application owns worker startup, Thread routing and
+owner lifetime. Stop the old runtime before opening a replacement. Ownership has no durable
+claims, leases or distributed takeover.
 
 Registrations carry application version declarations. Update them when behavior changes,
 including tool implementations that JSON cannot represent. Register one current binding per
@@ -153,12 +154,11 @@ with an admission conflict.
 
 ## Shutdown and recovery
 
-Closing the host's Scope stops admission, releases ownership, and closes SQLite.
-After abrupt process death, including `SIGKILL`, the operating system releases the automatic
-host's connection lock. Its replacement acquires that lock, checks storage compatibility, and
-atomically fences and retires retained claims before ordinary recovery. It does not wait for
-the old ownership lease. Startup, history validation, and provider work still take time.
-Lease, renewal, and wake-scan defaults remain 30 seconds, 10 seconds, and 1 second.
+Closing the host's Scope stops admission, joins workers, closes local owner generations, and
+closes SQLite. After abrupt process death, including `SIGKILL`, the operating system releases
+the exclusive connection lock. The replacement acquires that lock, checks storage compatibility,
+and recovers retained work with fresh local generations. Startup, history validation, and provider
+work still take time. The fallback wake scan defaults to once per second.
 Unconfirmed external tool outcomes require reconciliation or authorized resolution before replay.
 Startup recovery must succeed for every Thread before admission or workers open. A retained-history
 fault or recovery timeout fails host construction with `RecoveryBlocked`; accepted work stays pending.
