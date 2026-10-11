@@ -735,8 +735,13 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             yield* Console.error(
               `Object identity pending: ${cohort.target}/${cohort.object}, attempt ${attempt}, ${outcome}, ${probeWaitMs} ms`,
             );
-            yield* Effect.sleep("2 seconds");
-            continue;
+            if (outcome === "placeholder") {
+              yield* Effect.sleep("2 seconds");
+              continue;
+            }
+            // A live old incarnation may retain its build indefinitely. Once fetch
+            // exists, use the existing acknowledged cold reset to retire it, then
+            // probe the replacement. Never reset a placeholder or retry an error.
           }
           const resetRemaining = 180_000 - probeWaitMs;
 
@@ -774,6 +779,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             ],
           }));
           if (
+            outcome === "ready" &&
             reset.before.build === expectedBuild &&
             (reset.directoryBefore === undefined || reset.directoryBefore.build === expectedBuild)
           )

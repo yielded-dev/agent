@@ -255,8 +255,9 @@ controller and deployed driver; a failed probe restarts that stability window.
 Worker and Object [code updates propagate separately](https://developers.cloudflare.com/durable-objects/platform/known-issues/#code-updates).
 Cold setup first probes the physical Object's identity (including Tardie's Actor directory),
 retrying only a missing placeholder fetch handler or a wrong `BUILD` within a three-minute
-setup bound. Every identity attempt and acknowledged reset is recorded in `readiness`;
-other errors stop the run. Identity probes never import rows or submit turns. The final
+setup bound. An acknowledged cold reset retires a responding old incarnation before
+probing its replacement; placeholders are never reset. Every identity attempt and reset
+is recorded in `readiness`; other errors stop the run. Identity probes never import rows or submit turns. The final
 reset is followed by observer attachment, then the timed input; timing never retries.
 Each Thread checks its build before admission, and completed metrics and all provider receipts
 must match the expected build. A mismatch invalidates the sample; inputs are never retried.
