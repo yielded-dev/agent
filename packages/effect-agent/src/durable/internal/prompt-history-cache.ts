@@ -29,6 +29,9 @@ import { digestRunHistory } from "./run-context.ts";
 const MAX_BYTES = 16 * 1024 * 1024;
 const MAX_ENTRIES = 16_384;
 const MAX_SUFFIX_RECORDS = 1_024;
+// Read a small page per storage snapshot; the aggregate native-value guard below
+// still bounds retained suffix facts before any further page is requested.
+const SUFFIX_PAGE_RECORDS = 8;
 const JSON_PREFIX = '{"content":[';
 const encodePrompt = Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt));
 const parseJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
@@ -242,12 +245,13 @@ const readSuffix = Effect.fnUntraced(function* (
           threadId: writer.threadId,
           afterSequence: after,
           throughSequence: through,
-          limit: 1,
+          limit: SUFFIX_PAGE_RECORDS,
         }),
       )
-      .pipe(Stream.take(2), Stream.runCollect);
+      .pipe(Stream.take(SUFFIX_PAGE_RECORDS + 1), Stream.runCollect);
 
-    if (page.length > 1 || records.length + page.length > MAX_SUFFIX_RECORDS) return undefined;
+    if (page.length > SUFFIX_PAGE_RECORDS || records.length + page.length > MAX_SUFFIX_RECORDS)
+      return undefined;
     for (const entry of page) {
       const payload = entry.record.payload;
 
