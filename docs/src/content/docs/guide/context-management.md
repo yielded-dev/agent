@@ -678,8 +678,8 @@ The host chooses the processor ID and version, eligible records, extractor, dest
 scope, invocation schedule, and Thread discovery. No background worker starts when the package
 is imported. A read-only corpus or direct Markdown recall needs none of these services.
 
-The pass claims its own processor lease and receives any pending output atomically with that
-claim. It captures `ThreadStore.inspectTail` once and reads
+The pass acquires a scoped local session for its processor/version/Thread key, capturing any
+pending output under the shared storage owner's gate. It captures `ThreadStore.inspectTail` once and reads
 bounded, contiguous pages through that prefix. Records appended afterward belong to a later
 pass. Pending work beyond the captured tail fails as `noncontiguous`, including when progress and
 Thread storage were restored to different points. `PersistentHistory` exposes the batch from a
@@ -786,16 +786,15 @@ const limits = ActivityPassLimits.make({
   maxRecords: 128,
   pageSize: 16,
   timeoutMillis: 30_000,
-  leaseMillis: 31_000,
 });
 
-// Supply a unique owner for each worker lifetime and the application's Layers.
-const ingest = (owner: string) => processCommittedActivity({ key, owner, limits, extract, apply });
+// Supply the application's Layers and keep the pass within the storage owner's lifetime.
+const ingest = processCommittedActivity({ key, limits, extract, apply });
 ```
 
-The optional SQLite progress Layer can share a connection with the memory writer. Supply the
-host's existing `ThreadStore` and `Crypto` Layer to the pass as well; the processor never uses
-Thread ownership epochs, `SubmissionLedger`, or engine checkpoints for its own progress.
+Share one native SQL client across live activity Layers for the same storage, alongside the
+memory writer if used. Supply the host's existing `ThreadStore` and `Crypto` Layer to the pass
+as well. Activity progress is independent of Run ownership, `SubmissionLedger`, and engine checkpoints.
 
 ```ts twoslash
 import { SqliteClient } from "@effect/sql-sqlite-node";
@@ -808,13 +807,16 @@ const MemoryProcessing = Layer.mergeAll(activityProcessorStoreLayer, memoryStore
 );
 ```
 
-Every claim acquisition allocates a fresh fencing epoch, including reacquisition by the same
-owner after release. Expired or superseded workers cannot replace pending output or advance
-progress. A destination invocation already in flight may finish the saved output, so its own
-idempotency and conditional writes remain required. Extraction and application each own a Scope;
-the pass has a deadline and release gets at most another 500ms. If release fails, the lease
-expires. The failpoint-enabled Layer exposes initialization and each mutation before, inside,
-and after its transaction for recovery tests.
+One process owns each activity key, including on PostgreSQL; there is no distributed takeover.
+An active session rejects a second acquisition with `ActivityBusy`, regardless of elapsed time.
+Closing its Scope or storage Layer rejects late preparation and advancement with
+`ActivityOwnershipLost`. Acquisition and release write no durable state. After process loss,
+a new owner can immediately recover the cursor and pinned output.
+
+Extraction and application each own a Scope, and the pass has a deadline. A destination call
+already in flight can still finish, so destination idempotency and conditional writes remain
+required. The failpoint-enabled Layer retains the preparation and advancement transaction cuts.
+Activity progress format 2 requires fresh activity stores; existing lease-based stores are rejected.
 SQLite rejects activity progress whose JSON exceeds 16,777,216 JavaScript string code units before
 writing, with `ActivityStoreError` reason `invalid-input`. Rejected writes leave prior progress intact.
 

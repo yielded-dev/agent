@@ -357,16 +357,18 @@ for conditional document updates and terminal withdrawal. It initializes only me
 Use `memoryReaderLayer` when the application needs no writer. See
 [memory lifecycle](/guide/context-management/#memory-lifecycle).
 
-`activityProcessorStoreLayer` provides independent leases, prepared output, and per-Thread
-progress for finite committed-activity passes. Its tables and fencing epochs are separate from
-the Thread journal and submission ledger.
+`activityProcessorStoreLayer` retains prepared output and a cursor per processor/version/Thread
+for finite committed-activity passes. Sessions belong to Scope; live Layers share one native
+SQL client and local owner. Its fresh activity format is independent of the Thread journal and
+submission ledger, with no persisted ownership or lease.
 
 <a id="effect-agent-storage-postgres"></a>
 
 ### `@yielded/agent-storage-postgres`
 
-Stores thread history and pending work in one Postgres database, which several Node processes may
-share. Rejects incompatible stored versions; no migration path is promised.
+Stores thread history and pending work in one Postgres database. Route each Thread and activity
+consumer key to one process and share its SQL client across live Layers; there is no distributed
+ownership fallback. Rejects incompatible stored versions; no migration path is promised.
 Requires Postgres 16 or newer.
 
 `PostgresStorage.layer` provides `ThreadStore`, `ThreadReader`, `SubmissionLedger`, and

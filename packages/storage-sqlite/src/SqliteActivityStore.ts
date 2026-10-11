@@ -23,7 +23,10 @@ export const activityProcessorStoreLayerWithFailpoints: Layer.Layer<
   SqlClientService.SqlClient | ActivityMutationFailpoint
 > = Layer.effect(ActivityProcessorStore, makeActivityStore());
 
-/** SQLite activity progress with the production no-op mutation failpoint. */
+/**
+ * Optional activity progress with scoped local sessions. Share the same SqlClient across
+ * live Layers for one physical database; separate processes cannot share an activity key.
+ */
 export const activityProcessorStoreLayer: Layer.Layer<
   ActivityProcessorStore,
   SqliteActivityInitializationError,

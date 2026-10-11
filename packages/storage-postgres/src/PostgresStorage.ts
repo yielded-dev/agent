@@ -294,7 +294,10 @@ export const subscriptionStoreLayer = (
     }),
   );
 
-/** Independent activity progress over SqlClient; does not initialize the Thread journal. */
+/**
+ * Independent activity progress over one shared SqlClient; does not initialize the Thread journal.
+ * Route each activity key to one process. Sessions are local and close with their owning Scope.
+ */
 export const activityStoreLayer = (options: PostgresStorageOptions = {}) =>
   Layer.effect(
     ActivityProcessorStore,
