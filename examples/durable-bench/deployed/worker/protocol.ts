@@ -278,6 +278,16 @@ export const Metrics = Schema.Struct({
 
 export type Metrics = typeof Metrics.Type;
 
+export const MetricsUnavailable = Schema.Struct({
+  ok: Schema.Literal(false),
+  reason: Schema.Literals(["incarnation-lost", "sample-mismatch"]),
+  identity: Identity,
+  requestedSample: Schema.String,
+  observedSample: Schema.optionalKey(Schema.String),
+});
+
+export const MetricsResult = Schema.Union([Metrics, MetricsUnavailable]);
+
 export const Failure = Schema.Struct({
   ok: Schema.Literal(false),
   error: Schema.String,

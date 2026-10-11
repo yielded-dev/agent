@@ -56,7 +56,7 @@ import {
   ColdResult,
   expectedSeed,
   ImportResult,
-  Metrics,
+  Identity,
   ObjectIdentity,
   RouteReadiness,
   measurementPaths,
@@ -64,6 +64,11 @@ import {
   RestoreChunk,
   type Query,
 } from "./worker/protocol.ts";
+
+class IncarnationLost extends Schema.TaggedError<IncarnationLost>()("IncarnationLost", {
+  message: Schema.String,
+  identity: Identity,
+}) {}
 
 const equalCounts = (a: Readonly<Record<string, number>>, b: Readonly<Record<string, number>>) =>
   Object.keys(a).length === Object.keys(b).length &&
@@ -451,8 +456,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
     const turnsPerEpoch = options.repeats + (options.buildHistory ? 1 : 3);
 
-    const sampleName = (epoch: number, index: number) =>
-      options.buildHistory ? `m${index}` : `e${epoch}-t${index}`;
+    const sampleName = (epoch: number, index: number, attempt = 0) =>
+      options.buildHistory ? `m${index}` : `${attempt === 0 ? "e" : "r"}${epoch}-t${index}`;
 
     const references = new Map<number, Map<string, string[]>>();
     const seedReferences = new Map<number, Map<number, string>>();
@@ -493,6 +498,20 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           );
         }
       }
+      // Recovery uses fresh input IDs with the same shape, after restoring the original fixture.
+      if (!options.buildHistory)
+        for (let epoch = 0; epoch < epochs.length; epoch++) {
+          const retryMessages = [...seededMessages];
+
+          for (let index = 0; index < turnsPerEpoch; index++) {
+            const sample = sampleName(epoch, index, 1);
+
+            expected.set(
+              sample,
+              append(retryMessages, turn(sample, MEASURED_TOOLS), options.textStreaming),
+            );
+          }
+        }
       references.set(size, expected);
     }
 
@@ -581,11 +600,29 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
     const isolateEpochs = new Map<string, number>();
 
-    for (const [epoch, defaultLabel] of epochs.entries()) {
+    const poolCohorts = cohorts;
+
+    const measureEpoch = Effect.fnUntraced(function* (
+      epoch: number,
+      defaultLabel: Label,
+      cohorts: typeof poolCohorts,
+      attempt: number,
+    ) {
+      const active = new Set(cohorts.map(objectKey));
+      const retryCohorts: typeof poolCohorts = [];
+
       // Different formats cannot share persisted state; matching formats can opt into identical pass inputs.
       const restorePass =
         !options.buildHistory &&
         (epoch === 0 || preparedByFormat.size > 1 || options.restoreEachPass === true);
+
+      const recoveryAvailable =
+        restorePass &&
+        (epoch === epochs.length - 1 ||
+          preparedByFormat.size > 1 ||
+          options.restoreEachPass === true);
+
+      const clearBeforeRestore = persistent || epoch > 0 || attempt > 0;
 
       const assignment = (cohort: Pick<Query, "target" | "object">) => {
         const first = firstLabels.get(objectKey(cohort));
@@ -616,7 +653,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
       const deploymentFor = (cohort: Pick<Query, "target" | "object">) => {
         const { compiled, restoreBuild } = assignment(cohort);
-        const bundle = restoring && restoreBuild ? restoreBuild : compiled;
+
+        const bundle =
+          restoring && active.has(objectKey(cohort)) && restoreBuild ? restoreBuild : compiled;
 
         return { bundle: bundle.file, build: `${bundle.sha256}-${runName}-e${epoch}` };
       };
@@ -634,9 +673,11 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           first.bundle,
           first.build,
           options.cpu,
-          [...new Set(cohorts.map(workerName))],
+          [...new Set(poolCohorts.map(workerName))],
           persistent,
-          Object.fromEntries(cohorts.map((cohort) => [workerName(cohort), deploymentFor(cohort)])),
+          Object.fromEntries(
+            poolCohorts.map((cohort) => [workerName(cohort), deploymentFor(cohort)]),
+          ),
         );
       };
 
@@ -1141,7 +1182,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
               const restoreStarted = yield* Clock.currentTimeMillis;
 
-              if (persistent || epoch > 0) {
+              if (clearBeforeRestore) {
                 yield* resetForBuild(cohort);
                 yield* request(url("/restore/clear", cohort), deploy.token, RestoreAck, {});
               }
@@ -1187,7 +1228,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                     epoch,
                     build: label,
                     requests:
-                      (persistent || epoch > 0 ? 2 : 1) +
+                      (clearBeforeRestore ? 2 : 1) +
                       (chunks.get(`${cohort.target}-${cohort.history}`)?.length ?? 0),
                     ms: restoreMs,
                   },
@@ -1401,7 +1442,12 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                 yield* Fiber.join(profiling);
               }
               if (index > 0 && firstAfterReset) reset = yield* resetForBuild(cohort);
-              const query = { ...cohort, sample: sampleName(epoch, index), expectedBuild };
+
+              const query = {
+                ...cohort,
+                sample: sampleName(epoch, index, attempt),
+                expectedBuild,
+              };
 
               const state =
                 !options.buildHistory && index === 0
@@ -1446,6 +1492,13 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                     observeText: !options.buildHistory,
                     expectedDriverBuild: result.infrastructureBuild,
                     cold: options.buildHistory && index === 0,
+                    quiescent: state === "preparation" || index === turnsPerEpoch - 1,
+                    resetBeforeMetrics:
+                      options.verifyIncarnationRecovery === true &&
+                      attempt === 0 &&
+                      epoch === 0 &&
+                      index === 2 &&
+                      cohort === poolCohorts.find((item) => item.target === cohort.target),
                   },
                 );
 
@@ -1472,11 +1525,24 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                       "First visible text did not match the submitted turn's assistant reply.",
                   });
 
-                const metricsUrl = url("/metrics", query);
+                const metrics = measured.value.metrics;
 
-                if (state === "preparation" || index === turnsPerEpoch - 1)
-                  metricsUrl.searchParams.set("quiescent", "true");
-                const metrics = (yield* request(metricsUrl, deploy.token, Metrics)).value;
+                if (!metrics.ok) {
+                  if (
+                    metrics.reason === "incarnation-lost" &&
+                    metrics.identity.build === expectedBuild &&
+                    metrics.identity.firstEntry &&
+                    metrics.requestedSample === query.sample
+                  )
+                    return yield* new IncarnationLost({
+                      message: `Metrics lost with Object incarnation: ${JSON.stringify(metrics)}`,
+                      identity: metrics.identity,
+                    });
+
+                  return yield* new BenchError({
+                    message: `Metrics mismatch: ${JSON.stringify(metrics)}`,
+                  });
+                }
 
                 const priorEpoch = isolateEpochs.get(metrics.identity.isolate);
 
@@ -1512,6 +1578,11 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   return yield* new BenchError({
                     message:
                       "Object or provider receipt build mismatch; sample is invalid and input will not be replayed.",
+                  });
+                if (!firstAfterReset && incarnation !== metrics.identity.incarnation)
+                  return yield* new IncarnationLost({
+                    message: "Warm Object incarnation changed; the entire pass must be restored.",
+                    identity: metrics.identity,
                   });
                 if (
                   !expected ||
@@ -1608,6 +1679,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                           buildVerified: true,
                           objectBuild: metrics.identity.build,
                           isolate: metrics.identity.isolate,
+                          incarnation: metrics.identity.incarnation,
                           ...(metrics.directoryUsed === undefined
                             ? {}
                             : { directoryUsed: metrics.directoryUsed }),
@@ -1654,6 +1726,33 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           }).pipe(
             Effect.scoped,
             (batch) => (profiled ? withProfileBatch(batch) : batch),
+            Effect.catchTag("IncarnationLost", (error) =>
+              Effect.gen(function* () {
+                // Never resubmit an ambiguous input or continue an advanced history. Only a complete
+                // snapshot-backed pass can be replaced, once, after other Objects finish this pass.
+                if (!recoveryAvailable || attempt !== 0 || profiled)
+                  return yield* new BenchError({
+                    message: error.message + "; automatic pass recovery unavailable or exhausted.",
+                  });
+                retryCohorts.push(cohort);
+                yield* update((value) => ({
+                  ...value,
+                  samples: value.samples.map((row) =>
+                    objectKey(row) === objectKey(cohort) && row.epoch === epoch
+                      ? {
+                          ...row,
+                          status: "invalidated",
+                          error: error.message,
+                          invalidatedIdentity: error.identity,
+                        }
+                      : row,
+                  ),
+                }));
+                yield* Console.error(
+                  `${objectKey(cohort)}: incarnation lost; restoring and remeasuring this Object's pass once.`,
+                );
+              }),
+            ),
             Effect.catchCause((cause) =>
               Effect.gen(function* () {
                 if (Cause.hasInterrupts(cause)) return yield* Effect.failCause(cause);
@@ -1671,6 +1770,14 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         },
         { concurrency: options.concurrency, discard: true },
       );
+
+      return retryCohorts;
+    });
+
+    for (const [epoch, defaultLabel] of epochs.entries()) {
+      const retryCohorts = yield* measureEpoch(epoch, defaultLabel, poolCohorts, 0);
+
+      if (retryCohorts.length > 0) yield* measureEpoch(epoch, defaultLabel, retryCohorts, 1);
     }
   }).pipe(Effect.onExit(finish));
 }, Effect.scoped);

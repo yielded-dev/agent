@@ -115,9 +115,9 @@ const connect = Effect.gen(function* () {
     const additional = required.filter((name) => !existing.has(name)).length;
     const free = 500 - namespaces.length - additional;
 
-    if (free < 50)
+    if (free < 100)
       return yield* new BenchError({
-        message: `Durable Object namespace headroom: account has ${namespaces.length}/500; this run needs ${additional} additional namespaces and would leave ${free} free. At least 50 must remain free. Tear down unused bench pools with their owning prefixes before retrying.`,
+        message: `Durable Object namespace headroom: account has ${namespaces.length}/500; this run needs ${additional} additional namespaces and would leave ${free} free. At least 100 must remain free. Tear down unused bench pools with their owning prefixes before retrying.`,
       });
 
     return { existing: namespaces.length, additional, free };

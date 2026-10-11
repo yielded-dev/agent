@@ -240,6 +240,11 @@ export const table = (result: Result): string => {
 
   const lines = [
     ...(result.complete ? [] : ["INCOMPLETE RUN — diagnostic results only.", ""]),
+    ...(result.samples.some((row) => row.status === "invalidated")
+      ? [
+          `Invalidated pass records: ${result.samples.filter((row) => row.status === "invalidated").length}; retained in JSON and replaced by a verified pass.`,
+        ]
+      : []),
     "Driver-observed milliseconds; median [Q1–Q3] of Object medians.",
     "Yielded falls back to settled text if no preview arrives; JSON records firstTextSource.",
     "Object → model uses the Object clock and excludes driver transport. Cold turns exclude observer attachment; first text is n/a for tardie.",

@@ -206,7 +206,13 @@ export class Host {
       }
       if (url.pathname === "/metrics") {
         if (!this.meter.query || this.meter.query.sample !== query.sample)
-          throw new Error("No metrics for this sample/incarnation");
+          return Response.json({
+            ok: false,
+            reason: this.meter.query ? "sample-mismatch" : "incarnation-lost",
+            identity: this.meter.identity(),
+            requestedSample: query.sample,
+            ...(this.meter.query ? { observedSample: this.meter.query.sample } : {}),
+          });
 
         if (url.searchParams.get("quiescent") === "true") {
           await handlers.close?.();

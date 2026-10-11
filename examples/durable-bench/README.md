@@ -35,7 +35,7 @@ optimization when the interval includes zero.
 Quick runs retain one per-Object Worker pool per prefix. Changing pool options destroys
 the previous pool before allocating its replacement. Each Worker declares only its target's
 namespaces (one for Yielded or pi, two for Tardie). A pre-deploy account inventory rejects
-runs that would leave fewer than 50 of the account's 500 namespace slots free.
+runs that would leave fewer than 100 of the account's 500 namespace slots free.
 Every run clears and restores
 its Objects. Histories through 1,000 turns restore before every pass, so both revisions start
 from identical saved state on those same Objects; earlier samples are never reused.
@@ -52,7 +52,7 @@ and the balanced ABBA/BAAB sequence. Both presets preserve the driver timer, col
 restart acknowledgement, warm residency and transcript checks. Each cohort has a
 separate Worker; isolate sharing rejects its measurements. Independent cells run
 concurrently, with `--concurrency` limiting measured Objects and `--build-concurrency`
-limiting restore work. Quick defaults to 12 concurrent Objects; full defaults to six.
+limiting restore work. Quick and full default to 12 concurrent Objects.
 Turns within an Object remain sequential.
 
 ```sh
@@ -246,6 +246,14 @@ tardie's Actor directory and Thread are both restarted. It verifies a new instan
 earlier alarm entry, and a first request. This is a cold Object over retained storage,
 not a cold isolate, cold disk, or newly seeded conversation. Warm samples require the
 same live instance throughout the Object's sequential repeat batch.
+The driver collects metrics after its timer endpoints, before closing the text observer.
+A confirmed lost incarnation invalidates the Object's entire pass; the result retains those
+records. Snapshot-backed passes restore and verify the same Object, repeat preparation,
+and remeasure once with fresh input IDs. A second loss, sample-key mismatch, wrong build,
+or ambiguous turn failure stops the run. Real-history builds and passes that carry history
+into or out of another pass cannot recover this way. `--verify-incarnation-recovery` exercises this path by
+aborting one settled Object per target before metrics; its interrupted passes are classified
+and excluded, so use this diagnostic separately from a latency comparison.
 Tardie's native reference can skip the Actor directory. `directoryUsed` records whether
 the Thread has called it since reset; an unused directory's identity observes residency only.
 
@@ -281,6 +289,7 @@ Request decoding, transcript normalization and fingerprinting run in the provide
 not the measured Object. The Object records response chunks and timestamps; it validates
 SSE and receipts only when post-turn metrics are collected. Every provider fingerprint
 must still match the independent expected transcript.
+Deployment uploads contain executable modules; profiling artifacts retain the source maps locally.
 
 Object-clock markers record provider first token received, first text forwarded and
 settlement relative to entry; receipt latency remains the driver-clock `admissionMs`.

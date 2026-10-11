@@ -11,7 +11,7 @@ import { Effect, Layer, ManagedRuntime, Schema, Stream } from "../../../node_mod
 import { MEASURED_TOOLS, turn } from "../../../src/plan.ts";
 import { COLD_ABORT } from "../../../deployed/worker/host.ts";
 import { PiDO } from "./pi.ts";
-import { BulkFixture, Identity, ObjectIdentity, Metrics, measurementPaths, ProfileTarget, SeedBatch, TextObservation, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
+import { BulkFixture, Identity, ObjectIdentity, MetricsResult, measurementPaths, ProfileTarget, SeedBatch, TextObservation, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
 import { ActorDO, ThreadDO, cloudflareThreadName, coordinate } from "./tardie.ts";
 import { agent, definitions, YieldedDO } from "../../../deployed/worker/yielded.ts";
 
@@ -293,10 +293,11 @@ export default {
         });
 
       if (url.pathname === "/metrics" && actor && response.ok) {
-        const metrics = Schema.decodeUnknownSync(Metrics)(
+        const metrics = Schema.decodeUnknownSync(MetricsResult)(
           await response.json(),
         );
 
+        if (!metrics.ok) return Response.json(metrics);
         const directoryUsed = Schema.decodeUnknownSync(Schema.Boolean)(metrics.directoryUsed);
         const directoryBytes = await actor.bytes();
 

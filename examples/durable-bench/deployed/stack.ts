@@ -56,6 +56,7 @@ export default Alchemy.Stack(
 
     const options = {
       bundle: false,
+      // Profiles retain their maps locally; only executable modules need uploading.
       rules: [],
       workersDev: { enabled: true, previewsEnabled: false },
       compatibility: {
@@ -125,7 +126,6 @@ export default Alchemy.Stack(
             ...options,
             name: workerName,
             main: workerBuilds[workerName]?.bundle ?? bundle,
-            rules: [{ globs: ["*.mjs.map"] }],
             placement: { region: "aws:us-west-1" },
             env: {
               ...env,
