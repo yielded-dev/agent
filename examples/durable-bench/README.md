@@ -253,9 +253,11 @@ Worker readiness requires five seconds of continuously successful build probes f
 controller and deployed driver; a failed probe restarts that stability window.
 
 Worker and Object [code updates propagate separately](https://developers.cloudflare.com/durable-objects/platform/known-issues/#code-updates).
-Before each pass, cold setup waits for the Object's own `BUILD` (including tardie's Actor
-directory), retrying acknowledged resets for up to three minutes. Each attempt is recorded;
-setup errors stop the run. The final reset is followed by observer attachment, then the timed input.
+Cold setup first probes the physical Object's identity (including Tardie's Actor directory),
+retrying only a missing placeholder fetch handler or a wrong `BUILD` within a three-minute
+setup bound. Every identity attempt and acknowledged reset is recorded in `readiness`;
+other errors stop the run. Identity probes never import rows or submit turns. The final
+reset is followed by observer attachment, then the timed input; timing never retries.
 Each Thread checks its build before admission, and completed metrics and all provider receipts
 must match the expected build. A mismatch invalidates the sample; inputs are never retried.
 

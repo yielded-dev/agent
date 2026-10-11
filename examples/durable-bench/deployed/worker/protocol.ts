@@ -163,6 +163,11 @@ export const ImportResult = Schema.Struct({
 
 export type ImportResult = typeof ImportResult.Type;
 
+export const ObjectIdentity = Schema.Struct({
+  identity: Identity,
+  directory: Schema.optionalKey(Identity),
+});
+
 export const ColdResult = Schema.Struct({
   ok: Schema.Boolean,
   before: Identity,

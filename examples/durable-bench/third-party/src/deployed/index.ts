@@ -11,7 +11,7 @@ import { Effect, Layer, ManagedRuntime, Schema, Stream } from "../../../node_mod
 import { MEASURED_TOOLS, turn } from "../../../src/plan.ts";
 import { COLD_ABORT } from "../../../deployed/worker/host.ts";
 import { PiDO } from "./pi.ts";
-import { BulkFixture, Identity, Metrics, ProfileTarget, SeedBatch, TextObservation, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
+import { BulkFixture, Identity, ObjectIdentity, Metrics, ProfileTarget, SeedBatch, TextObservation, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
 import { ActorDO, ThreadDO, cloudflareThreadName, coordinate } from "./tardie.ts";
 import { agent, definitions, YieldedDO } from "../../../deployed/worker/yielded.ts";
 
@@ -135,7 +135,7 @@ export default {
 
       if (mutating && request.method !== "POST")
         return new Response("POST required", { status: 405 });
-      if (!url.pathname.startsWith("/restore/") && !["/prime", "/seed", "/seed-progress", "/cold", "/submit", "/await", "/result", "/run", "/text", "/metrics"].includes(url.pathname))
+      if (!url.pathname.startsWith("/restore/") && !["/identity", "/prime", "/seed", "/seed-progress", "/cold", "/submit", "/await", "/result", "/run", "/text", "/metrics"].includes(url.pathname))
         return new Response("not found", { status: 404 });
 
       const actor =
@@ -174,6 +174,17 @@ export default {
         return new Response(body, {
           headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
         });
+      }
+
+      if (url.pathname === "/identity") {
+        const response = await stub.fetch(new Request(url, { headers: request.headers }));
+
+        if (!response.ok) throw new Error("Object identity probe failed");
+
+        return Response.json(Schema.decodeUnknownSync(ObjectIdentity)({
+          identity: await response.json(),
+          ...(actor === undefined ? {} : { directory: await actor.identity() }),
+        }));
       }
 
       if (url.pathname === "/cold") {

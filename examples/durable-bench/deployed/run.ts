@@ -57,6 +57,7 @@ import {
   expectedSeed,
   ImportResult,
   Metrics,
+  ObjectIdentity,
   RestoreAck,
   RestoreChunk,
   type Query,
@@ -670,8 +671,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         return address;
       };
 
-      // Worker health does not establish the Object's build. Retry only acknowledged
-      // setup resets while it propagates; imports and inputs always get one attempt.
+      // Worker health does not establish the Object's build. Poll read-only identity
+      // before acknowledged setup resets; imports and inputs always get one attempt.
       const resetForBuild = Effect.fnUntraced(function* (cohort: Omit<Query, "expectedBuild">) {
         const expectedBuild = expectedFor(cohort);
         const started = yield* Clock.currentTimeMillis;
@@ -681,12 +682,72 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
           if (remaining <= 0) break;
 
+          // Alchemy's fresh-pool placeholder has no Object fetch handler even after
+          // the Worker router is healthy. Probe without resetting or importing state.
+          const probe = yield* request(
+            url("/identity", cohort),
+            deploy.token,
+            ObjectIdentity,
+            undefined,
+            remaining,
+          ).pipe(
+            Effect.catchTag("BenchError", (error) =>
+              error.message.startsWith("Worker /identity returned HTTP 500;") &&
+              error.message.includes('"error":"Handler does not export a fetch() function."')
+                ? Effect.succeed(undefined)
+                : Effect.fail(error),
+            ),
+          );
+
+          const identity = probe?.value;
+
+          const outcome =
+            identity === undefined
+              ? "placeholder"
+              : identity.identity.build === expectedBuild &&
+                  (identity.directory === undefined || identity.directory.build === expectedBuild)
+                ? "ready"
+                : "wrong-build";
+
+          const probeWaitMs = (yield* Clock.currentTimeMillis) - started;
+
+          yield* update((value) => ({
+            ...value,
+            readiness: [
+              ...value.readiness,
+              {
+                target: cohort.target,
+                object: cohort.object,
+                epoch,
+                expectedBuild,
+                ...(identity === undefined ? {} : { objectBuild: identity.identity.build }),
+                ...(identity?.directory === undefined
+                  ? {}
+                  : { directoryBuild: identity.directory.build }),
+                phase: "identity",
+                outcome,
+                attempt,
+                waitMs: probeWaitMs,
+              },
+            ],
+          }));
+          if (outcome !== "ready") {
+            yield* Console.error(
+              `Object identity pending: ${cohort.target}/${cohort.object}, attempt ${attempt}, ${outcome}, ${probeWaitMs} ms`,
+            );
+            yield* Effect.sleep("2 seconds");
+            continue;
+          }
+          const resetRemaining = 180_000 - probeWaitMs;
+
+          if (resetRemaining <= 0) break;
+
           const reset = (yield* request(
             url("/cold", cohort),
             deploy.token,
             ColdResult,
             {},
-            remaining,
+            resetRemaining,
           )).value;
 
           if (!reset.ok || !reset.threadAborted || reset.directoryAborted === false)
@@ -703,6 +764,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                 epoch,
                 expectedBuild,
                 objectBuild: reset.before.build,
+                phase: "reset",
                 ...(reset.directoryBefore === undefined
                   ? {}
                   : { directoryBuild: reset.directoryBefore.build }),
