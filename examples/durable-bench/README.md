@@ -244,6 +244,9 @@ same live instance throughout the Object's sequential repeat batch.
 Tardie's native reference can skip the Actor directory. `directoryUsed` records whether
 the Thread has called it since reset; an unused directory's identity observes residency only.
 
+Worker readiness requires five seconds of continuously successful build probes from both the
+controller and deployed driver; a failed probe restarts that stability window.
+
 Worker and Object [code updates propagate separately](https://developers.cloudflare.com/durable-objects/platform/known-issues/#code-updates).
 Before each pass, cold setup waits for the Object's own `BUILD` (including tardie's Actor
 directory), retrying acknowledged resets for up to three minutes. Each attempt is recorded;

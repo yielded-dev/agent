@@ -179,9 +179,10 @@ export const deployments = Effect.gen(function* () {
     role = "target",
   ) {
     let consecutive = 0;
+    let healthySince: number | undefined;
     const startedMs = yield* Clock.currentTimeMillis;
 
-    for (let attempt = 0; (yield* Clock.currentTimeMillis) - startedMs < 20_000; attempt++) {
+    for (let attempt = 0; (yield* Clock.currentTimeMillis) - startedMs < 45_000; attempt++) {
       const health = yield* request(
         fromDriver ? driver + "/ready" : endpoint + "/health?probe=" + nonce(),
         state.token,
@@ -189,16 +190,21 @@ export const deployments = Effect.gen(function* () {
         fromDriver ? { targetUrl: endpoint } : undefined,
       ).pipe(Effect.timeout("10 seconds"), Effect.result);
 
-      consecutive =
-        health._tag === "Success" && health.success.value.build === expected ? consecutive + 1 : 0;
-      if (consecutive === 3) {
+      const now = yield* Clock.currentTimeMillis;
+      const healthy = health._tag === "Success" && health.success.value.build === expected;
+
+      consecutive = healthy ? consecutive + 1 : 0;
+      healthySince = healthy ? (healthySince ?? now) : undefined;
+      // A burst of successful probes can still precede stale routing on the next request.
+      // Require sustained success, polling throughout the window instead of sleeping blindly.
+      if (consecutive >= 3 && healthySince !== undefined && now - healthySince >= 5000) {
         yield* Console.error(
           `BENCH_READY ${JSON.stringify({ role, fromDriver, attempts: attempt + 1, elapsedMs: (yield* Clock.currentTimeMillis) - startedMs })}`,
         );
 
         return;
       }
-      if (consecutive === 0) yield* Effect.sleep("250 millis");
+      yield* Effect.sleep("250 millis");
     }
 
     yield* Console.error(
