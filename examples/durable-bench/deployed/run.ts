@@ -529,6 +529,28 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     for (const cohort of cohorts)
       targetOwners.set(workerName(cohort), { target: cohort.target, object: cohort.object });
 
+    const counterbalanced = Boolean(options.baseline && !options.rigorous && !options.buildHistory);
+    const firstLabels = new Map<string, "baseline" | "candidate">();
+
+    if (counterbalanced) {
+      for (const size of options.sizes)
+        for (const ttft of options.ttft)
+          for (const target of options.targets) {
+            const cell = shuffle(
+              cohorts.filter(
+                (cohort) =>
+                  cohort.history === size && cohort.ttftMs === ttft && cohort.target === target,
+              ),
+            );
+
+            for (const [index, cohort] of cell.entries())
+              firstLabels.set(
+                objectKey(cohort),
+                index < Math.ceil(cell.length / 2) ? "baseline" : "candidate",
+              );
+          }
+    }
+
     if (resumed) {
       for (const cohort of cohorts) {
         const rows = result.samples.filter((row) => objectKey(row) === objectKey(cohort));
@@ -556,38 +578,77 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
     const isolateEpochs = new Map<string, number>();
 
-    for (const [epoch, label] of epochs.entries()) {
-      const compiled = builds.get(label);
-
-      const { fixtures = [], chunks = new Map<string, string[]>() } =
-        preparedByBuild.get(label) ?? {};
-
-      const restoreBuild = restoreBuilds.get(label);
-
+    for (const [epoch, defaultLabel] of epochs.entries()) {
       // Different formats cannot share persisted state; matching formats can opt into identical pass inputs.
       const restorePass =
         !options.buildHistory &&
         (epoch === 0 || preparedByFormat.size > 1 || options.restoreEachPass === true);
 
-      if (!compiled) return yield* new BenchError({ message: "Missing target build." });
+      const assignment = (cohort: Pick<Query, "target" | "object">) => {
+        const first = firstLabels.get(objectKey(cohort));
+
+        const label =
+          first === undefined
+            ? defaultLabel
+            : epoch === 0
+              ? first
+              : first === "baseline"
+                ? "candidate"
+                : "baseline";
+
+        const compiled = builds.get(label);
+
+        if (!compiled) throw new Error("Missing target build.");
+
+        return {
+          label,
+          compiled,
+          restoreBuild: restoreBuilds.get(label),
+          fixtures: preparedByBuild.get(label)?.fixtures ?? [],
+          chunks: preparedByBuild.get(label)?.chunks ?? new Map<string, string[]>(),
+        };
+      };
+
+      let restoring = restorePass;
+
+      const deploymentFor = (cohort: Pick<Query, "target" | "object">) => {
+        const { compiled, restoreBuild } = assignment(cohort);
+        const bundle = restoring && restoreBuild ? restoreBuild : compiled;
+
+        return { bundle: bundle.file, build: `${bundle.sha256}-${runName}-e${epoch}` };
+      };
+
+      const expectedFor = (cohort: Pick<Query, "target" | "object">) => deploymentFor(cohort).build;
+      const firstCohort = cohorts[0];
+
+      if (!firstCohort) return yield* new BenchError({ message: "Missing sample cohort." });
+
+      const deployPass = () => {
+        const first = deploymentFor(firstCohort);
+
+        return deploy.targets(
+          targetStack,
+          first.bundle,
+          first.build,
+          options.cpu,
+          [...new Set(cohorts.map(workerName))],
+          persistent,
+          Object.fromEntries(cohorts.map((cohort) => [workerName(cohort), deploymentFor(cohort)])),
+        );
+      };
+
       telemetryFrom = Math.min(telemetryFrom, yield* Clock.currentTimeMillis);
       targetStarted = true;
-      const initialBuild = restorePass && restoreBuild ? restoreBuild : compiled;
-      let expectedBuild = `${initialBuild.sha256}-${runName}-e${epoch}`;
 
       yield* phase("deploy");
 
       let endpoints = resumed
-        ? (yield* deploy.attach(runName, expectedBuild, resumed.infrastructureBuild ?? ""))
-            .endpoints
-        : yield* deploy.targets(
-            targetStack,
-            initialBuild.file,
-            expectedBuild,
-            options.cpu,
-            [...new Set(cohorts.map(workerName))],
-            persistent,
-          );
+        ? (yield* deploy.attach(
+            runName,
+            expectedFor(firstCohort),
+            resumed.infrastructureBuild ?? "",
+          )).endpoints
+        : yield* deployPass();
 
       targetWorkers = Object.keys(endpoints);
 
@@ -604,7 +665,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
         for (const [key, value] of Object.entries(query))
           address.searchParams.set(key, String(value));
-        address.searchParams.set("expectedBuild", expectedBuild);
+        address.searchParams.set("expectedBuild", expectedFor(query));
 
         return address;
       };
@@ -612,6 +673,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       // Worker health does not establish the Object's build. Retry only acknowledged
       // setup resets while it propagates; imports and inputs always get one attempt.
       const resetForBuild = Effect.fnUntraced(function* (cohort: Omit<Query, "expectedBuild">) {
+        const expectedBuild = expectedFor(cohort);
         const started = yield* Clock.currentTimeMillis;
 
         for (let attempt = 1; attempt <= 90; attempt++) {
@@ -676,6 +738,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           ),
           (cohort) =>
             Effect.gen(function* () {
+              const { label, fixtures, chunks } = assignment(cohort);
+              const expectedBuild = expectedFor(cohort);
+
               if (options.buildHistory) {
                 const previous = result.histories.find(
                   (row) => objectKey(row) === objectKey(cohort),
@@ -1021,6 +1086,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         yield* Effect.forEach(
           cohorts,
           Effect.fnUntraced(function* (cohort) {
+            const { fixtures } = assignment(cohort);
+            const expectedBuild = expectedFor(cohort);
+
             const fixture = fixtures.find(
               (item) => item.target === cohort.target && item.history === cohort.history,
             );
@@ -1053,17 +1121,10 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       }
 
       yield* phase("measurement");
-      if (restorePass && restoreBuild) {
+      if (restorePass) {
         yield* phase("deploy");
-        expectedBuild = `${compiled.sha256}-${runName}-e${epoch}`;
-        endpoints = yield* deploy.targets(
-          targetStack,
-          compiled.file,
-          expectedBuild,
-          options.cpu,
-          [...new Set(cohorts.map(workerName))],
-          persistent,
-        );
+        restoring = false;
+        endpoints = yield* deployPass();
         yield* phase("measurement");
       }
       const isolateOwners = new Map<string, Set<string>>();
@@ -1103,7 +1164,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       }
 
       yield* Console.error(
-        `Measuring ${label}, pass ${epoch + 1}/${epochs.length}: ${cohorts.length} Objects, concurrency ${options.concurrency}…`,
+        `Measuring ${counterbalanced ? "counterbalanced AB/BA" : defaultLabel}, pass ${epoch + 1}/${epochs.length}: ${cohorts.length} Objects, concurrency ${options.concurrency}…`,
       );
       yield* Effect.forEach(
         shuffle(
@@ -1113,6 +1174,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           ),
         ),
         (cohort) => {
+          const { label } = assignment(cohort);
+          const expectedBuild = expectedFor(cohort);
+
           const profiled =
             epoch === 0 &&
             options.profileAfter === undefined &&
@@ -1206,6 +1270,14 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
               const sample: Sample = {
                 ...query,
                 build: label,
+                ...(counterbalanced
+                  ? {
+                      order:
+                        firstLabels.get(objectKey(cohort)) === "baseline"
+                          ? ("AB" as const)
+                          : ("BA" as const),
+                    }
+                  : {}),
                 epoch,
                 repeat: index,
                 state,

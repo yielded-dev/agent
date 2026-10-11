@@ -306,12 +306,12 @@ export const table = (result: Result): string => {
     lines.push(
       "Same-Object paired medians; delta is candidate − baseline. 95% percentile bootstrap CI resamples whole Objects (10,000 draws).",
       "",
-      "| Cell / metric | Baseline ms | Candidate ms | Paired delta ms [95% CI] | Paired ratio [95% CI] |",
-      "|---|---:|---:|---:|---:|",
+      "| Cell / metric | Baseline ms | Candidate ms | Paired delta ms [95% CI] | Paired ratio [95% CI] | First − second pass ms [95% CI] |",
+      "|---|---:|---:|---:|---:|---:|",
     );
     for (const [cell, samples] of group(
-      rows.filter((row) => row.target === "yielded"),
-      (row) => `${row.history}/${row.ttftMs}/${row.state}`,
+      rows,
+      (row) => `${row.target}/${row.history}/${row.ttftMs}/${row.state}`,
     )) {
       for (const metric of ["driverMs", "firstTextMs"] as const) {
         const pairs = [...group(samples, (row) => row.object).values()].flatMap((turns) => {
@@ -325,14 +325,37 @@ export const table = (result: Result): string => {
             metric,
           );
 
+          const first = objectMedians(
+            turns.filter((row) => row.order !== undefined && row.epoch === 0),
+            metric,
+          )[0];
+
+          const second = objectMedians(
+            turns.filter((row) => row.order !== undefined && row.epoch === 1),
+            metric,
+          )[0];
+
           return baseline.length === 1 && candidate.length === 1
-            ? [{ baseline: baseline[0]!, candidate: candidate[0]! }]
+            ? [
+                {
+                  baseline: baseline[0]!,
+                  candidate: candidate[0]!,
+                  orderDelta:
+                    first === undefined || second === undefined ? undefined : first - second,
+                },
+              ]
             : [];
         });
 
         if (!pairs.length) continue;
         const deltas = pairs.map((pair) => pair.candidate - pair.baseline);
         const ratios = pairs.map((pair) => pair.candidate / pair.baseline);
+
+        const orderDeltas = pairs.flatMap((pair) =>
+          pair.orderDelta === undefined ? [] : [pair.orderDelta],
+        );
+
+        const balanced = orderDeltas.length === pairs.length;
         let seed = 0x12345678;
 
         const draws = Array.from({ length: 10000 }, () => {
@@ -347,14 +370,20 @@ export const table = (result: Result): string => {
           return {
             delta: median(indices.map((index) => deltas[index]!)),
             ratio: median(indices.map((index) => ratios[index]!)),
+            order: balanced ? median(indices.map((index) => orderDeltas[index]!)) : NaN,
           };
         });
 
         const deltaDraws = draws.map((draw) => draw.delta);
         const ratioDraws = draws.map((draw) => draw.ratio);
+        const orderDraws = draws.map((draw) => draw.order);
+
+        const orderInterval = balanced
+          ? `${n(median(orderDeltas))} [${n(quantile(orderDraws, 0.025))}, ${n(quantile(orderDraws, 0.975))}]`
+          : "n/a";
 
         lines.push(
-          `| ${cell}/${metric === "driverMs" ? "completion" : "first text"} | ${n(median(pairs.map((pair) => pair.baseline)))} | ${n(median(pairs.map((pair) => pair.candidate)))} | ${n(median(deltas))} [${n(quantile(deltaDraws, 0.025))}, ${n(quantile(deltaDraws, 0.975))}] | ${median(ratios).toFixed(3)}× [${quantile(ratioDraws, 0.025).toFixed(3)}, ${quantile(ratioDraws, 0.975).toFixed(3)}] |`,
+          `| ${cell}/${metric === "driverMs" ? "completion" : "first text"} | ${n(median(pairs.map((pair) => pair.baseline)))} | ${n(median(pairs.map((pair) => pair.candidate)))} | ${n(median(deltas))} [${n(quantile(deltaDraws, 0.025))}, ${n(quantile(deltaDraws, 0.975))}] | ${median(ratios).toFixed(3)}× [${quantile(ratioDraws, 0.025).toFixed(3)}, ${quantile(ratioDraws, 0.975).toFixed(3)}] | ${orderInterval} |`,
         );
       }
     }

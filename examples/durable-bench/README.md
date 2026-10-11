@@ -24,9 +24,12 @@ Quick defaults to Yielded, 1,000 historical turns, TTFT 0 and 12 Objects. Each b
 runs one excluded preparation turn, resets the isolate, then measures a cold turn,
 four sequential warm turns and a second cold turn after another reset. Preparation
 awaits native post-settlement writers so revision-specific derived state exists. Both builds
-measure the same Objects. `--baseline <ref>` selects another baseline. The report
+measure the same Objects. Within each target/history/TTFT cell, quick randomly assigns half
+the Objects to baseline then candidate (AB), and half to candidate then baseline (BA),
+swapping revisions in the second pass; an odd Object count differs by one between orders.
+`--baseline <ref>` selects another baseline. The report
 includes Object medians, paired differences and ratios with Object-level bootstrap 95% CIs,
-and setup, measurement and teardown wall times. Screening does not establish a small
+the first-pass minus second-pass order effect, and setup, measurement and teardown wall times. Screening does not establish a small
 optimization when the interval includes zero.
 
 Quick runs retain one per-Object Worker pool per prefix. Changing pool options destroys

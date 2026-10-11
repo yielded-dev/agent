@@ -3,6 +3,8 @@ import * as Cloudflare from "alchemy/Cloudflare";
 import { Clock, Config, Console, Effect, Layer, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 
+import { WorkerBuild } from "./model.ts";
+
 // Record API wall time without URLs, headers, account identifiers, or response bodies.
 const deploymentHttp = Layer.effect(
   HttpClient.HttpClient,
@@ -105,6 +107,11 @@ export default Alchemy.Stack(
 
     const provider = yield* Config.NonEmptyString("DURABLE_BENCH_PROVIDER");
 
+    const workerBuilds: Readonly<Record<string, WorkerBuild>> = yield* Config.schema(
+      Schema.fromJsonString(Schema.Record(Schema.String, WorkerBuild)),
+      "DURABLE_BENCH_WORKER_BUILDS",
+    ).pipe(Config.withDefault({}));
+
     const workers = yield* Effect.forEach(
       names,
       Effect.fnUntraced(function* (workerName) {
@@ -117,11 +124,12 @@ export default Alchemy.Stack(
           {
             ...options,
             name: workerName,
-            main: bundle,
+            main: workerBuilds[workerName]?.bundle ?? bundle,
             rules: [{ globs: ["*.mjs.map"] }],
             placement: { region: "aws:us-west-1" },
             env: {
               ...env,
+              BUILD: workerBuilds[workerName]?.build ?? build,
               CPU: cpu,
               PROVIDER_URL: provider,
               ...(target === "yielded"

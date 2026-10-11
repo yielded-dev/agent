@@ -66,7 +66,9 @@ export const command = Command.make(
     ),
     concurrency: positive("concurrency").pipe(
       Flag.optional,
-      Flag.withDescription("Concurrent measured Objects (default: 6); turns stay sequential"),
+      Flag.withDescription(
+        "Concurrent measured Objects (quick: 12; full: 6); turns stay sequential",
+      ),
     ),
     buildConcurrency: positive("build-concurrency").pipe(
       Flag.optional,

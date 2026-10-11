@@ -71,10 +71,14 @@ export type Invocation = typeof Invocation.Type;
 export const FirstTextSource = Schema.Literals(["watchText", "watchEvents", "settlementRecord"]);
 export type FirstTextSource = typeof FirstTextSource.Type;
 
+export const WorkerBuild = Schema.Struct({ bundle: Schema.String, build: Schema.String });
+export type WorkerBuild = typeof WorkerBuild.Type;
+
 export const Sample = Schema.Struct({
   ...Query.fields,
   build: Schema.Literals(["working", "baseline", "candidate"]),
   epoch: Schema.Natural,
+  order: Schema.optionalKey(Schema.Literals(["AB", "BA"])),
   repeat: Schema.Natural,
   state: Schema.Literals(["cold", "warmup", "warm", "preparation"]),
   preparationTables: Schema.optionalKey(Counts),

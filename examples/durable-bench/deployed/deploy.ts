@@ -4,7 +4,7 @@ import { Clock, Console, Effect, FileSystem, Schedule, Schema } from "effect";
 
 import { build } from "./build.ts";
 import { Cloudflare, request } from "./cloudflare.ts";
-import { Health } from "./model.ts";
+import { Health, WorkerBuild } from "./model.ts";
 import {
   BenchError,
   directory,
@@ -40,6 +40,7 @@ export const deployments = Effect.gen(function* () {
     build: Schema.String,
     cpu: Schema.Boolean,
     workers: Schema.optionalKey(Workers),
+    workerBuilds: Schema.optionalKey(Schema.Record(Name, WorkerBuild)),
     namespaceLayout: Schema.optionalKey(Schema.Literal("selected-target")),
   });
 
@@ -140,6 +141,7 @@ export const deployments = Effect.gen(function* () {
           DURABLE_BENCH_INFRA_PREFIX: state.infrastructurePrefix,
           DURABLE_BENCH_NAME: stack.name,
           DURABLE_BENCH_WORKERS: JSON.stringify(stack.workers ?? [stack.name]),
+          DURABLE_BENCH_WORKER_BUILDS: JSON.stringify(stack.workerBuilds ?? {}),
           DURABLE_BENCH_BUNDLE: stack.bundle,
           DURABLE_BENCH_BUILD: stack.build,
           DURABLE_BENCH_TOKEN: state.token,
@@ -226,14 +228,24 @@ export const deployments = Effect.gen(function* () {
     );
   });
 
-  const readyTargets = (workers: readonly string[], revision: string) =>
+  const readyTargets = (
+    workers: readonly string[],
+    revision: string,
+    workerBuilds: Readonly<Record<string, WorkerBuild>> = {},
+  ) =>
     Effect.forEach(
       workers,
       (name) =>
-        Effect.all([ready(url(name), revision), ready(url(name), revision, true)], {
-          concurrency: 2,
-          discard: true,
-        }),
+        Effect.all(
+          [
+            ready(url(name), workerBuilds[name]?.build ?? revision),
+            ready(url(name), workerBuilds[name]?.build ?? revision, true),
+          ],
+          {
+            concurrency: 2,
+            discard: true,
+          },
+        ),
       { concurrency: workers.length, discard: true },
     );
 
@@ -303,9 +315,14 @@ export const deployments = Effect.gen(function* () {
     cpu: boolean,
     workers: readonly string[],
     persistent = false,
+    workerBuilds: Readonly<Record<string, WorkerBuild>> = {},
   ) {
     yield* Schema.decodeUnknownEffect(Name)(name);
     const names = yield* Schema.decodeUnknownEffect(ownedWorkers(name))(workers);
+
+    yield* Schema.decodeUnknownEffect(Schema.Record(Name, WorkerBuild))(workerBuilds);
+    if (Object.keys(workerBuilds).some((worker) => !names.includes(worker)))
+      return yield* new BenchError({ message: "Worker build assignment is outside its pool." });
 
     // One retained pool per prefix. Retire legacy four-binding pools before allocating replacements.
     for (const old of Object.values(state.targets))
@@ -324,6 +341,26 @@ export const deployments = Effect.gen(function* () {
       yield* fs.copyFile(bundle + ".map", join(retained, basename(bundle) + ".map"));
     }
 
+    const retainedBuilds: Record<string, WorkerBuild> = {};
+    const copied = new Map([[revision, persistent ? join(retained, basename(bundle)) : bundle]]);
+
+    for (const [worker, assigned] of Object.entries(workerBuilds)) {
+      let file = copied.get(assigned.build);
+
+      if (!file) {
+        const destination = join(privateDirectory, name, "bundles", assigned.build);
+
+        file = persistent ? join(destination, basename(assigned.bundle)) : assigned.bundle;
+        if (persistent) {
+          yield* fs.makeDirectory(destination, { recursive: true });
+          yield* fs.copyFile(assigned.bundle, file);
+          yield* fs.copyFile(assigned.bundle + ".map", file + ".map");
+        }
+        copied.set(assigned.build, file);
+      }
+      retainedBuilds[worker] = { bundle: file, build: assigned.build };
+    }
+
     const stack: Stack = {
       name,
       kind: "target",
@@ -331,6 +368,7 @@ export const deployments = Effect.gen(function* () {
       build: revision,
       cpu,
       workers: names,
+      workerBuilds: retainedBuilds,
       namespaceLayout: "selected-target",
     };
 
@@ -339,7 +377,7 @@ export const deployments = Effect.gen(function* () {
     yield* Console.error(`Uploading ${names.length} target Worker(s)…`);
     yield* alchemy(stack, "deploy");
 
-    const health = readyTargets(names, revision);
+    const health = readyTargets(names, revision, retainedBuilds);
 
     yield* health.pipe(
       Effect.catchTag("BenchError", () =>
