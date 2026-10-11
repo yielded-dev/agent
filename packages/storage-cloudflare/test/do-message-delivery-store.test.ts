@@ -379,8 +379,20 @@ it("preserves early deliveries when enabling lifecycle publication and materiali
         transfer.wire,
       );
 
+      // A detached destination can retain disposable keys from an earlier incarnation.
+      // Import must clear them even when the Thread ID and sequence are reused.
+      const checkpointKey = `prompt-checkpoint/${JSON.stringify(threadId)}/00000`;
+
+      storage.sql.exec(
+        "INSERT INTO effect_agent_meta (key, value) VALUES (?, ?)",
+        checkpointKey,
+        "stale prompt checkpoint",
+      );
       const imported = yield* importer.import(Stream.succeed(archive));
 
+      expect([
+        ...storage.sql.exec("SELECT key FROM effect_agent_meta WHERE key = ?", checkpointKey),
+      ]).toEqual([]);
       expect(imported.tailSequence).toBe(0);
       expect((yield* store.inspectTail(tailRequest)).tailSequence).toBe(0);
       expect(yield* deliveries.get(transfer.original.key)).toEqual(transfer.closed);

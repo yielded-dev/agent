@@ -895,20 +895,21 @@ export class LoadCheckpointRequest extends Schema.Class<LoadCheckpointRequest>(
   atOrBeforeSequence: Schema.optionalKey(CanonicalSequence),
 }) {}
 
-/** A bounded, disposable prior Prompt. Its bytes must match the named canonical Run context. */
+/** A bounded, disposable prior Prompt, checked against its captured historyDigest. */
 export const MAX_PROMPT_CHECKPOINT_BYTES = 16 * 1024 * 1024;
 
 /** Maximum ordinary Runs between full prompt replacements and in a cold catch-up suffix. */
 export const MAX_PROMPT_CHECKPOINT_RUNS = 16;
 
 export const PromptCheckpointHead = Schema.Struct({
-  version: Schema.Literal(1),
+  version: Schema.Literal(2),
   recordFormat: Schema.Literal(CURRENT_RECORD_FORMAT),
   threadId: ThreadId,
-  producerEpoch: ProducerEpoch,
+  runId: RunId,
   throughSequence: CanonicalSequence,
-  tailDigest: Digest,
-  contextRecordId: RecordId,
+  historyThrough: CanonicalSequence,
+  priorHistoryLength: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16_384 })),
+  historyDigest: Digest,
 });
 
 export const PromptCheckpoint = Schema.Struct({
@@ -921,17 +922,17 @@ export type PromptCheckpoint = typeof PromptCheckpoint.Type;
 
 export const PromptCheckpointRead = Schema.Struct({
   threadId: ThreadId,
-  producerEpoch: ProducerEpoch,
+  throughSequence: CanonicalSequence,
 });
 
 export type PromptCheckpointRead = typeof PromptCheckpointRead.Type;
 
 /**
  * Optional cold-context acceleration, separate from application checkpoints. Save only after
- * canonical settlement. Replace the prior value atomically, fenced at the exact supplied head.
- * Load only under the current producer epoch, authenticating the saved historical batch head.
- * The runtime validates the bounded suffix and one ordinary claim per intervening completed Run.
- * Any incompatible head, fence, context digest or suffix is a cache miss.
+ * canonical settlement. Replace the prior value atomically at the exact supplied sequence.
+ * One process owns the Thread; import only targets empty Threads and atomically deletes these
+ * derivatives. The runtime validates the content digest and a bounded suffix of completed Runs.
+ * Any incompatible head, content digest or suffix is a cache miss.
  * Never export these bytes or use them as execution/compaction evidence.
  */
 export interface PromptCheckpoints {

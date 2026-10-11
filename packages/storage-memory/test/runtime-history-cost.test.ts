@@ -23,7 +23,7 @@ import {
   RepairAnnotated,
   ThreadCreated,
 } from "@yielded/agent/records";
-import { promptFromCanonicalRecords } from "@yielded/agent/run-journal";
+import { promptFromCanonicalRecords, runIdForSubmission } from "@yielded/agent/run-journal";
 import { RunToolAuthorization } from "@yielded/agent/run-options";
 import { layer as runStorageLayer, RunStorage } from "@yielded/agent/run-storage";
 import {
@@ -363,6 +363,8 @@ it.live(
       const threadId = ThreadId.make("warm-history-cost");
       let promptRecords = 0;
       let observed = Prompt.empty;
+      let activeRunId: RunId | undefined;
+      let observedHistoryDigest: Digest | undefined;
       const readSequences = new Set<number>();
 
       const counted = ThreadStore.of({
@@ -399,11 +401,26 @@ it.live(
           LanguageModel.LanguageModel,
           LanguageModel.make({
             generateText: () => Effect.succeed([]),
-            streamText: (request) => {
-              observed = request.prompt;
+            streamText: (request) =>
+              Stream.fromEffect(
+                Effect.gen(function* () {
+                  observed = request.prompt;
+                  if (activeRunId === undefined) return yield* Effect.die("Missing submitted Run");
+                  const execution = yield* store.readExecution({ threadId, runId: activeRunId });
 
-              return Stream.fromIterable(response);
-            },
+                  if (Option.isNone(execution))
+                    return yield* Effect.die("Missing active execution");
+
+                  const context = execution.value.operational.find(
+                    ({ payload }) => payload._tag === "RunContextRecorded",
+                  )?.payload;
+
+                  expect(context?._tag).toBe("RunContextRecorded");
+                  if (context?._tag !== "RunContextRecorded")
+                    return yield* Effect.die("Missing saved context");
+                  observedHistoryDigest = context.historyDigest;
+                }).pipe(Effect.orDie),
+              ).pipe(Stream.flatMap(() => Stream.fromIterable(response))),
           }),
         ),
       );
@@ -417,11 +434,9 @@ it.live(
           const before = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
           yield* store.append(
-            FencedAppendRequest.make({
+            AppendRequest.make({
               threadId,
-              producerEpoch: before.producerEpoch,
               expectedTailSequence: before.tailSequence,
-              expectedTailDigest: before.tailDigest,
               batch: CanonicalBatch.make({
                 batchId: BatchId.make("external-history-append"),
                 producerId: ProducerId.make("independent-writer"),
@@ -452,26 +467,25 @@ it.live(
         const input = `input ${turn}: café 😀`;
 
         readSequences.clear();
+        observedHistoryDigest = undefined;
 
-        yield* runtime.submit(agent, input, {
+        const receipt = yield* runtime.submit(agent, input, {
           threadId,
           principal: Principal.make("history-cost"),
           idempotencyKey: IdempotencyKey.make(`warm-${turn}`),
           definitions,
         });
+
+        activeRunId = runIdForSubmission(receipt.submissionId);
         if (turn === 24) {
           const beforeClaim = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
-          const foreign = yield* storage
-            .claim(ClaimRequest.make({ threadId, producerId: ProducerId.make("foreign-owner") }))
-            .pipe(Effect.scoped);
+          const foreign = yield* storage.claim(ClaimRequest.make({ threadId })).pipe(Effect.scoped);
 
           if (Option.isNone(foreign)) return yield* Effect.die("Foreign claim was not granted");
           const afterClaim = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
           expect(afterClaim.tailSequence).toBe(beforeClaim.tailSequence);
-          expect(afterClaim.tailDigest).toBe(beforeClaim.tailDigest);
-          expect(afterClaim.producerEpoch).toBe(beforeClaim.producerEpoch + 1);
         }
         const settled = yield* runtime.processThread(agent, threadId);
 
@@ -490,7 +504,7 @@ it.live(
             ),
           ),
         );
-        if (turn === 24 || turn === 26) {
+        if (turn === 26) {
           const prefix = prior.find(
             ({ record }) => record.payload._tag === "ModelResponseRecorded",
           );
@@ -500,22 +514,11 @@ it.live(
           expect(readSequences.has(prefix.sequence)).toBe(true);
         }
 
-        const records = yield* store
-          .read(ThreadRead.make({ threadId, limit: 1_024 }))
-          .pipe(Stream.runCollect);
-
-        const context = records.findLast(
-          ({ record }) => record.payload._tag === "RunContextRecorded",
-        )?.record.payload;
-
-        expect(context?._tag).toBe("RunContextRecorded");
-        if (context?._tag !== "RunContextRecorded")
-          return yield* Effect.die("Missing saved context");
-        expect(context.historyDigest).toBe(yield* digestJson(encode(expected)));
+        expect(observedHistoryDigest).toBe(yield* digestJson(encode(expected)));
       }
-      const warm = [...counts.slice(1, 24), counts[25], counts[27]];
+      const warm = [...counts.slice(1, 26), counts[27]];
 
-      expect(warm).toEqual(Array.makeBy(25, () => counts[1]));
+      expect(warm).toEqual(Array.makeBy(26, () => counts[1]));
       expect(Math.max(...warm.map((count) => count ?? Infinity))).toBeLessThanOrEqual(8);
     }).pipe(Effect.provide(base), Effect.scoped),
 );
