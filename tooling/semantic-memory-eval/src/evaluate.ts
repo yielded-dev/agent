@@ -111,7 +111,6 @@ const ACTIVITY_LIMITS = ActivityPassLimits.make({
   maxRecords: 1,
   pageSize: 1,
   timeoutMillis: 5_000,
-  leaseMillis: 6_500,
 });
 
 const THREAD_ID = Schema.decodeSync(ThreadId)("semantic-memory-evaluation-source");
@@ -285,7 +284,6 @@ const applyActivity = Effect.fn("SemanticMemoryEvaluation.applyActivity")(functi
 const processOne = (extractionCalls: { value: number }) =>
   processCommittedActivity({
     key: PROCESSOR_KEY,
-    owner: "semantic-memory-evaluation-worker",
     limits: ACTIVITY_LIMITS,
     extract: (record: CanonicalRecordEnvelope) => {
       extractionCalls.value += 1;
