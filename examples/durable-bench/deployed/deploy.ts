@@ -39,12 +39,6 @@ export const deployments = Effect.gen(function* () {
     build: Schema.String,
     cpu: Schema.Boolean,
     workers: Schema.optionalKey(Workers),
-    versions: Schema.optionalKey(
-      Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.String)),
-    ),
-    activation: Schema.optionalKey(
-      Schema.Struct({ id: Schema.String, versions: Schema.Record(Schema.String, Schema.String) }),
-    ),
   });
 
   type Stack = typeof Stack.Type;
@@ -128,7 +122,6 @@ export const deployments = Effect.gen(function* () {
         DURABLE_BENCH_INFRA_PREFIX: state.infrastructurePrefix,
         DURABLE_BENCH_NAME: stack.name,
         DURABLE_BENCH_WORKERS: JSON.stringify(stack.workers ?? [stack.name]),
-        DURABLE_BENCH_ACTIVATION: JSON.stringify(stack.activation ?? null),
         DURABLE_BENCH_BUNDLE: stack.bundle,
         DURABLE_BENCH_BUILD: stack.build,
         DURABLE_BENCH_TOKEN: state.token,
@@ -256,39 +249,26 @@ export const deployments = Effect.gen(function* () {
   ) {
     yield* Schema.decodeUnknownEffect(Name)(name);
     const names = yield* Schema.decodeUnknownEffect(ownedWorkers(name))(workers);
-    const previous = state.targets[name];
-    const cached = persistent ? previous?.versions?.[revision] : undefined;
-
-    const reused =
-      previous !== undefined &&
-      cached !== undefined &&
-      names.every((worker) => cached[worker] !== undefined);
-
     const retained = join(privateDirectory, name, "bundles", revision);
 
-    if (persistent && !reused) {
+    if (persistent) {
       yield* fs.makeDirectory(retained, { recursive: true });
       yield* fs.copyFile(bundle, join(retained, basename(bundle)));
       yield* fs.copyFile(bundle + ".map", join(retained, basename(bundle) + ".map"));
     }
 
-    let stack: Stack = reused
-      ? { ...previous, activation: { id: nonce(), versions: cached } }
-      : {
-          name,
-          kind: "target",
-          bundle: persistent ? join(retained, basename(bundle)) : bundle,
-          build: revision,
-          cpu,
-          workers: names,
-          ...(persistent ? { versions: previous?.versions ?? {} } : {}),
-        };
+    const stack: Stack = {
+      name,
+      kind: "target",
+      bundle: persistent ? join(retained, basename(bundle)) : bundle,
+      build: revision,
+      cpu,
+      workers: names,
+    };
 
     state = { ...state, targets: { ...state.targets, [name]: stack } };
     yield* save(stateFile, state);
-    yield* Console.error(
-      `${reused ? "Activating cached versions on" : "Uploading"} ${names.length} target Worker(s)…`,
-    );
+    yield* Console.error(`Uploading ${names.length} target Worker(s)…`);
     yield* alchemy(stack, "deploy");
 
     const health = readyTargets(names, revision);
@@ -304,43 +284,6 @@ export const deployments = Effect.gen(function* () {
         }),
       ),
     );
-
-    if (persistent && !reused) {
-      const versions = yield* Effect.forEach(
-        names,
-        Effect.fnUntraced(function* (worker) {
-          const deployments = yield* cloud.api(
-            `workers/scripts/${worker}/deployments`,
-            Schema.Struct({
-              deployments: Schema.Array(
-                Schema.Struct({
-                  versions: Schema.Array(
-                    Schema.Struct({ version_id: Schema.String, percentage: Schema.Number }),
-                  ),
-                }),
-              ),
-            }),
-          );
-
-          const live = deployments.deployments[0]?.versions;
-
-          if (live?.length !== 1 || live[0]?.percentage !== 100)
-            return yield* new BenchError({
-              message: "Expected one fully deployed Worker version.",
-            });
-
-          return [worker, live[0].version_id] as const;
-        }),
-        { concurrency: 12 },
-      );
-
-      stack = {
-        ...stack,
-        versions: { ...stack.versions, [revision]: Object.fromEntries(versions) },
-      };
-      state = { ...state, targets: { ...state.targets, [name]: stack } };
-      yield* save(stateFile, state);
-    }
 
     const endpoints: Readonly<Record<string, string>> = Object.fromEntries(
       names.map((worker) => [worker, url(worker)]),

@@ -29,10 +29,11 @@ includes Object medians, paired differences and ratios with Object-level bootstr
 and setup, measurement and teardown wall times. Screening does not establish a small
 optimization when the interval includes zero.
 
-Quick runs retain their per-Object Workers and uploaded versions. Every run clears and restores
+Quick runs retain their per-Object Workers. Every run clears and restores
 its Objects, then measures both revisions on those same Objects; earlier samples are never reused.
-Bundle hashes select cached Worker versions, so subsequent passes activate them without uploading
-again. Full, profiling and tardie runs use fresh Workers. Remove all retained resources when done:
+Each pass uploads a fresh version and rejects Worker-isolate reuse across passes. Activating an
+already uploaded version can retain the previous isolate, including in an A/A control, so version
+activation is not used. Full, profiling and tardie runs use fresh Workers. Remove retained resources when done:
 
 ```sh
 DURABLE_BENCH_PREFIX=bench-change vp run -F @yielded/agent-example-durable-bench deployed -- --teardown

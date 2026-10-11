@@ -1,13 +1,11 @@
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
-import { Config, Effect, Layer, Schema } from "effect";
-
-import { Deployment, deploymentProvider } from "./version.ts";
+import { Config, Effect, Schema } from "effect";
 
 export default Alchemy.Stack(
   "durable-bench",
   {
-    providers: Layer.mergeAll(Cloudflare.providers(), deploymentProvider()),
+    providers: Cloudflare.providers(),
     state: Alchemy.localState(),
   },
   Effect.gen(function* () {
@@ -77,18 +75,6 @@ export default Alchemy.Stack(
 
     const provider = yield* Config.NonEmptyString("DURABLE_BENCH_PROVIDER");
 
-    const activation = yield* Config.schema(
-      Schema.fromJsonString(
-        Schema.NullOr(
-          Schema.Struct({
-            id: Schema.String,
-            versions: Schema.Record(Schema.String, Schema.String),
-          }),
-        ),
-      ),
-      "DURABLE_BENCH_ACTIVATION",
-    ).pipe(Config.withDefault(null));
-
     const workers = yield* Effect.forEach(
       names,
       Effect.fnUntraced(function* (workerName) {
@@ -113,15 +99,6 @@ export default Alchemy.Stack(
             },
           },
         );
-
-        const version = activation?.versions[workerName];
-
-        if (version !== undefined && activation !== null)
-          yield* Deployment(`activate-${workerName}`, {
-            worker: worker.workerName,
-            version,
-            activation: activation.id,
-          });
 
         return { name: workerName, url: worker.url };
       }),

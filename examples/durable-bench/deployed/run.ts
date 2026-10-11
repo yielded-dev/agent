@@ -289,7 +289,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       );
       if (persistent)
         yield* Console.error(
-          "Worker versions retained for reuse; --teardown destroys and verifies all resources for this prefix.",
+          "Worker pool retained; --teardown destroys and verifies all resources for this prefix.",
         );
       for (const profile of result.profiles) yield* Console.error(`Profile: ${profile.file}`);
       if (preserved)
@@ -512,6 +512,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       }
     }
 
+    const isolateEpochs = new Map<string, number>();
+
     for (const [epoch, label] of epochs.entries()) {
       const compiled = builds.get(label);
 
@@ -519,7 +521,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       telemetryFrom = Math.min(telemetryFrom, yield* Clock.currentTimeMillis);
       targetStarted = true;
       const initialBuild = epoch === 0 && restoreBuild ? restoreBuild : compiled;
-      let expectedBuild = initialBuild.sha256 + (persistent ? "" : `-e${epoch}`);
+      let expectedBuild = `${initialBuild.sha256}-${runName}-e${epoch}`;
 
       yield* phase("deploy");
 
@@ -999,7 +1001,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       yield* phase("measurement");
       if (epoch === 0 && restoreBuild) {
         yield* phase("deploy");
-        expectedBuild = compiled.sha256 + (persistent ? "" : `-e${epoch}`);
+        expectedBuild = `${compiled.sha256}-${runName}-e${epoch}`;
         endpoints = yield* deploy.targets(
           targetStack,
           compiled.file,
@@ -1191,6 +1193,14 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                 if (state === "preparation" || index === turnsPerEpoch - 1)
                   metricsUrl.searchParams.set("quiescent", "true");
                 const metrics = (yield* request(metricsUrl, deploy.token, Metrics)).value;
+
+                const priorEpoch = isolateEpochs.get(metrics.identity.isolate);
+
+                if (priorEpoch !== undefined && priorEpoch !== epoch)
+                  return yield* new BenchError({
+                    message: "Worker isolate survived a revision pass; timing rejected.",
+                  });
+                isolateEpochs.set(metrics.identity.isolate, epoch);
 
                 const expected = references.get(query.history)?.get(query.sample);
 
