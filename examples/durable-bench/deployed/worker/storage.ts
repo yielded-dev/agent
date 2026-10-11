@@ -52,7 +52,7 @@ const Manifest = Schema.Struct({
   format: ThreadArchive.fields.format,
   threadId: ThreadArchive.fields.threadId,
   tailSequence: ThreadArchive.fields.tailSequence,
-  tailDigest: ThreadArchive.fields.tailDigest,
+
   snapshot: ThreadArchive.fields.snapshot,
   externalObligations: ThreadArchive.fields.externalObligations,
 });

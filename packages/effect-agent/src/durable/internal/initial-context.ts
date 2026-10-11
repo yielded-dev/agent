@@ -1,7 +1,6 @@
 import { Effect, Option, Schema, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
-import { digestJson } from "../Digest.ts";
 import { CanonicalSequence, type CanonicalRecordEnvelope } from "../Records.ts";
 import { RunJournalError, toolCallSettledRecordId } from "../RunJournal.ts";
 import { submissionSettlementRecordId } from "../SubmissionLedger.ts";
@@ -146,12 +145,9 @@ export const initialContext = Effect.fnUntraced(function* (original: CanonicalRe
               part.id === payload.toolCallId &&
               part.name === payload.toolName,
           ),
-      ) ||
-      (yield* digestJson(response.messages).pipe(
-        Effect.mapError(() => invalid("Late Tool declaration integrity is unavailable")),
-      )) !== response.messagesDigest
+      )
     )
-      return yield* invalid("Late Tool declaration arguments or digest are invalid");
+      return yield* invalid("Late Tool declaration arguments are invalid");
     const error = retain(declaration);
 
     if (error !== undefined) return yield* error;

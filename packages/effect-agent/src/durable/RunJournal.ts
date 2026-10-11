@@ -605,7 +605,7 @@ export interface RunJournalContext {
   readonly historyFrom: CanonicalSequence;
   readonly boundaries: ReadonlyArray<JournalBoundary>;
   readonly contextWindowId?: string | undefined;
-  readonly digest: string;
+  readonly recordId: RecordId;
 }
 
 /**
@@ -1743,8 +1743,6 @@ const modelResponseRecord = Effect.fnUntraced(function* (
     ),
   );
 
-  const messagesDigest = yield* digestJson(messages);
-
   const modelUsage =
     input.usage?.modelUsage === undefined
       ? undefined
@@ -1789,7 +1787,6 @@ const modelResponseRecord = Effect.fnUntraced(function* (
       turnId: input.turnId,
       turn: input.turn,
       messages,
-      messagesDigest,
       ...(runScopedPrefixLength === undefined ? {} : { runScopedPrefixLength }),
       ...(modelUsage === undefined ? {} : { modelUsage }),
       ...(input.unobservedModelCalls === undefined || input.unobservedModelCalls === 0
@@ -1859,21 +1856,6 @@ const toolSettledRecords = Effect.fnUntraced(function* (
   return toolRecords;
 });
 
-/** Integrity of the original validated terminal values; never a current-code projection. */
-export const runCompletionDigest = (
-  completion: Pick<
-    RunCompleted,
-    "runId" | "output" | "runDisposition" | "finishReason" | "exhausted"
-  >,
-) =>
-  digestJson({
-    runId: completion.runId,
-    output: completion.output,
-    runDisposition: completion.runDisposition ?? null,
-    finishReason: completion.finishReason ?? null,
-    exhausted: completion.exhausted ?? null,
-  });
-
 const runCompletionRecord = Effect.fnUntraced(function* (input: TurnCommitInput) {
   if (input.runCompletion === undefined) return undefined;
   const completion = { runId: input.runId, ...input.runCompletion };
@@ -1886,7 +1868,6 @@ const runCompletionRecord = Effect.fnUntraced(function* (input: TurnCommitInput)
     deploymentId: input.deploymentId,
     payload: RunCompleted.make({
       ...completion,
-      resultDigest: yield* runCompletionDigest(completion),
     }),
   });
 });

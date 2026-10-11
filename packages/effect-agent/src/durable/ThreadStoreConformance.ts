@@ -16,9 +16,9 @@ import {
   SubagentGrant,
   SubagentReservationAmounts,
 } from "../core/SubagentContract.ts";
-import { EMPTY_TAIL_DIGEST } from "./Digest.ts";
-import type { Digest, CanonicalRecordEnvelope } from "./Records.ts";
 import {
+  Digest,
+  type CanonicalRecordEnvelope,
   BatchId,
   CanonicalBatch,
   CanonicalSequence,
@@ -125,7 +125,7 @@ export const readTestThread = Effect.fnUntraced(function* (
   return {
     threadId: tail.threadId,
     tailSequence: tail.tailSequence,
-    tailDigest: tail.tailDigest,
+
     records,
   };
 });
@@ -145,7 +145,9 @@ const CONFORMANCE_CREATED_AT = DateTime.toUtc(DateTime.makeUnsafe(1));
 const ZERO_SEQUENCE = decodeSequence(0);
 const EPOCH_ONE = decodeEpoch(1);
 const EPOCH_TWO = decodeEpoch(2);
-const EMPTY_TAIL = { lastSequence: ZERO_SEQUENCE, tailDigest: EMPTY_TAIL_DIGEST } as const;
+const DEFINITION_DIGEST = Digest.make("0".repeat(64));
+
+const EMPTY_TAIL = { lastSequence: ZERO_SEQUENCE } as const;
 const isAppendConflict = Schema.is(AppendConflict);
 const isFenceRejected = Schema.is(FenceRejected);
 const isCheckpointRejected = Schema.is(CheckpointRejected);
@@ -188,7 +190,7 @@ const materialize = Effect.fn("ThreadStoreConformance.materialize")(function* (
 const append = Effect.fn("ThreadStoreConformance.append")(function* (
   threadId: ThreadId,
   canonicalBatch: CanonicalBatch,
-  tail: Pick<AppendResult, "lastSequence" | "tailDigest"> = EMPTY_TAIL,
+  tail: Pick<AppendResult, "lastSequence"> = EMPTY_TAIL,
   producerEpoch: ProducerEpoch = EPOCH_ONE,
 ) {
   const store = yield* ThreadStore;
@@ -198,7 +200,7 @@ const append = Effect.fn("ThreadStoreConformance.append")(function* (
       threadId,
       batch: canonicalBatch,
       expectedTailSequence: tail.lastSequence,
-      expectedTailDigest: tail.tailDigest,
+
       producerEpoch,
     }),
   );
@@ -210,16 +212,11 @@ const readAll = Effect.fn("ThreadStoreConformance.readAll")(function* (threadId:
   return yield* store.read(ThreadRead.make({ threadId, limit: 1_024 })).pipe(Stream.runCollect);
 });
 
-const checkpointAt = (
-  threadId: ThreadId,
-  throughSequence: CanonicalSequence,
-  tailDigest: Digest,
-): ThreadCheckpoint =>
+const checkpointAt = (threadId: ThreadId, throughSequence: CanonicalSequence): ThreadCheckpoint =>
   ThreadCheckpoint.make({
     schemaVersion: 1,
     threadId,
     throughSequence,
-    tailDigest,
     state: { conformance: true },
     createdAt: CONFORMANCE_CREATED_AT,
   });
@@ -321,9 +318,7 @@ const atomicBatchVisibility = conformanceCase(
       const exported = yield* store.export(ThreadExportRequest.make({ threadId }));
 
       yield* ensure(
-        exported.records.length === 3 &&
-          exported.tailSequence === committed.lastSequence &&
-          exported.tailDigest === committed.tailDigest,
+        exported.records.length === 3 && exported.tailSequence === committed.lastSequence,
         "A conflicting batch must leave no partial prefix behind",
       );
     }),
@@ -351,8 +346,7 @@ const idempotentReplay = conformanceCase(
       yield* ensure(
         replayed.replayed &&
           replayed.firstSequence === first.firstSequence &&
-          replayed.lastSequence === first.lastSequence &&
-          replayed.tailDigest === first.tailDigest,
+          replayed.lastSequence === first.lastSequence,
         "Replaying an identical batch must return the original result with replayed set",
       );
 
@@ -362,8 +356,8 @@ const idempotentReplay = conformanceCase(
       );
 
       yield* ensure(
-        isAppendConflict(altered) && altered.reason === "batch-digest",
-        "A batch ID replayed with different content must conflict with reason batch-digest",
+        isAppendConflict(altered) && altered.reason === "batch-content",
+        "A batch ID replayed with different content must conflict with reason batch-content",
       );
 
       const read = yield* readAll(threadId);
@@ -395,23 +389,8 @@ const tailConflict = conformanceCase(
         "A stale expected tail sequence must conflict with reason tail",
       );
       yield* ensure(
-        isAppendConflict(staleSequence) &&
-          staleSequence.actualTailSequence === first.lastSequence &&
-          staleSequence.actualTailDigest === first.tailDigest,
+        isAppendConflict(staleSequence) && staleSequence.actualTailSequence === first.lastSequence,
         "A tail conflict must carry the actual committed tail as a resume hint",
-      );
-
-      const staleDigest = yield* expectFailure(
-        "an append declaring the right sequence with the wrong digest",
-        append(threadId, batch("tail-batch-2", [record("tail-record-2", "second")]), {
-          lastSequence: first.lastSequence,
-          tailDigest: EMPTY_TAIL_DIGEST,
-        }),
-      );
-
-      yield* ensure(
-        isAppendConflict(staleDigest) && staleDigest.reason === "tail",
-        "A stale expected tail digest must conflict with reason tail",
       );
 
       const recovered = yield* append(
@@ -565,7 +544,7 @@ const checkpointBoundaries = conformanceCase(
           "saving a checkpoint for an unmaterialized Thread",
           checkpoints.save(
             SaveCheckpointRequest.make({
-              checkpoint: checkpointAt(threadId, ZERO_SEQUENCE, EMPTY_TAIL_DIGEST),
+              checkpoint: checkpointAt(threadId, ZERO_SEQUENCE),
             }),
           ),
         ),
@@ -590,11 +569,7 @@ const checkpointBoundaries = conformanceCase(
         "a checkpoint claiming a sequence beyond the committed tail",
         checkpoints.save(
           SaveCheckpointRequest.make({
-            checkpoint: checkpointAt(
-              threadId,
-              decodeSequence(first.lastSequence + 1),
-              first.tailDigest,
-            ),
+            checkpoint: checkpointAt(threadId, decodeSequence(first.lastSequence + 1)),
           }),
         ),
       );
@@ -604,25 +579,12 @@ const checkpointBoundaries = conformanceCase(
         "A checkpoint ahead of the tail must be rejected with reason ahead-of-tail",
       );
 
-      const digestMismatch = yield* expectFailure(
-        "a checkpoint whose digest does not match the canonical chain",
-        checkpoints.save(
-          SaveCheckpointRequest.make({
-            checkpoint: checkpointAt(threadId, first.lastSequence, EMPTY_TAIL_DIGEST),
-          }),
-        ),
-      );
-
-      yield* ensure(
-        isCheckpointRejected(digestMismatch) && digestMismatch.reason === "digest-mismatch",
-        "A checkpoint with a mismatched digest must be rejected with reason digest-mismatch",
-      );
       yield* ensure(
         Option.isNone(yield* checkpoints.load(LoadCheckpointRequest.make({ threadId }))),
         "Rejected checkpoints must not become loadable",
       );
 
-      const valid = checkpointAt(threadId, first.lastSequence, first.tailDigest);
+      const valid = checkpointAt(threadId, first.lastSequence);
 
       yield* checkpoints.save(SaveCheckpointRequest.make({ checkpoint: valid }));
       yield* checkpoints.save(SaveCheckpointRequest.make({ checkpoint: valid }));
@@ -630,10 +592,8 @@ const checkpointBoundaries = conformanceCase(
       const loaded = yield* checkpoints.load(LoadCheckpointRequest.make({ threadId }));
 
       yield* ensure(
-        Option.isSome(loaded) &&
-          loaded.value.throughSequence === first.lastSequence &&
-          loaded.value.tailDigest === first.tailDigest,
-        "A valid checkpoint must load bound to its canonical sequence and digest",
+        Option.isSome(loaded) && loaded.value.throughSequence === first.lastSequence,
+        "A valid checkpoint must load bound to its canonical sequence",
       );
 
       const beforeCheckpoint = yield* checkpoints.load(
@@ -680,16 +640,13 @@ const tailInspection = conformanceCase(
       const empty = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
       yield* ensure(
-        empty.tailSequence === ZERO_SEQUENCE &&
-          empty.tailDigest === EMPTY_TAIL_DIGEST &&
-          empty.producerEpoch === EPOCH_ONE,
+        empty.tailSequence === ZERO_SEQUENCE && empty.producerEpoch === EPOCH_ONE,
         "An empty Thread must report the zero tail and its registered epoch",
       );
       const emptyIdentity = yield* store.readIdentity(ThreadIdentityRequest.make({ threadId }));
 
       yield* ensure(
         emptyIdentity.tailSequence === ZERO_SEQUENCE &&
-          emptyIdentity.tailDigest === EMPTY_TAIL_DIGEST &&
           emptyIdentity.producerEpoch === EPOCH_ONE &&
           emptyIdentity.records.length === 0,
         "A materialized empty identity remains distinct from a missing Thread",
@@ -703,8 +660,7 @@ const tailInspection = conformanceCase(
       const afterAppend = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
       yield* ensure(
-        afterAppend.tailSequence === first.lastSequence &&
-          afterAppend.tailDigest === first.tailDigest,
+        afterAppend.tailSequence === first.lastSequence,
         "Tail inspection must match the latest AppendResult",
       );
       // Regression: https://github.com/yielded-dev/agent/commit/6a4f4f870
@@ -713,7 +669,6 @@ const tailInspection = conformanceCase(
       yield* ensure(
         identity.threadId === threadId &&
           identity.tailSequence === first.lastSequence &&
-          identity.tailDigest === first.tailDigest &&
           identity.producerEpoch === EPOCH_ONE &&
           identity.records.length === 1 &&
           identity.records[0]?.record.recordId === workerOriginRecordId(threadId),
@@ -723,7 +678,7 @@ const tailInspection = conformanceCase(
       const resumed = yield* append(
         threadId,
         batch("inspect-batch-2", [record("inspect-record-2", "second")]),
-        { lastSequence: afterAppend.tailSequence, tailDigest: afterAppend.tailDigest },
+        { lastSequence: afterAppend.tailSequence },
         afterAppend.producerEpoch,
       );
 
@@ -737,7 +692,7 @@ const tailInspection = conformanceCase(
         append(
           threadId,
           batch("inspect-stale-identity", [record("inspect-record-3", "third")]),
-          { lastSequence: identity.tailSequence, tailDigest: identity.tailDigest },
+          { lastSequence: identity.tailSequence },
           identity.producerEpoch,
         ),
       );
@@ -762,7 +717,7 @@ const tailInspection = conformanceCase(
         append(
           threadId,
           batch("inspect-stale-epoch", [record("inspect-record-3", "third")]),
-          { lastSequence: beforeTakeover.tailSequence, tailDigest: beforeTakeover.tailDigest },
+          { lastSequence: beforeTakeover.tailSequence },
           beforeTakeover.producerEpoch,
         ),
       );
@@ -781,7 +736,6 @@ const tailInspection = conformanceCase(
         batch("inspect-retry-identity", [record("inspect-record-3", "third")]),
         {
           lastSequence: afterTakeoverIdentity.tailSequence,
-          tailDigest: afterTakeoverIdentity.tailDigest,
         },
         afterTakeoverIdentity.producerEpoch,
       );
@@ -880,9 +834,9 @@ const nativeWorkerAccounting = conformanceCase(
         source: { _tag: "programmatic" as const, agentId, threadId },
         budgetScope: "worker-run" as const,
         targetDigests: {
-          agent: EMPTY_TAIL_DIGEST,
-          model: EMPTY_TAIL_DIGEST,
-          tools: EMPTY_TAIL_DIGEST,
+          agent: DEFINITION_DIGEST,
+          model: DEFINITION_DIGEST,
+          tools: DEFINITION_DIGEST,
         },
         policy: AgentPolicy.make({
           maxTurns: 1,
@@ -931,7 +885,7 @@ const nativeWorkerAccounting = conformanceCase(
           parameters: {},
           createdAtMillis: 0,
         },
-        inputDigest: EMPTY_TAIL_DIGEST,
+        inputDigest: DEFINITION_DIGEST,
       });
 
       let tail = yield* append(
@@ -989,7 +943,6 @@ const nativeWorkerAccounting = conformanceCase(
       yield* ensure(
         identity.threadId === threadId &&
           identity.tailSequence === tail.lastSequence &&
-          identity.tailDigest === tail.tailDigest &&
           identity.producerEpoch === EPOCH_ONE &&
           identity.records.length === 3 &&
           identity.records.map(({ record }) => record.recordId).join() ===
@@ -1074,7 +1027,7 @@ const nativeWorkerAccounting = conformanceCase(
         "Worker state excludes conversation and another Run's accounting, retaining completed lifetime reservations",
       );
       yield* ensure(
-        accounting.tailSequence === tail.lastSequence && accounting.tailDigest === tail.tailDigest,
+        accounting.tailSequence === tail.lastSequence,
         "The accounting snapshot carries the full canonical CAS tail",
       );
       // Regression: https://github.com/yielded-dev/agent/blob/c721a292205e06185f0136c3ed05dcf53e29ca66/packages/effect-agent/src/durable/SqlThreadNativeReads.ts#L195-L214

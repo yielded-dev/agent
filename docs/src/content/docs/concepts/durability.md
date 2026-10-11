@@ -33,13 +33,13 @@ Replay rebuilds conversation projections from canonical records without executin
 checkpoints and indexes are disposable. An unfinished Run's execution checkpoint is authoritative
 operational state and must be retained with its history.
 
-The execution protocol uses `effect-agent/thread@4` records in fresh layout-22 stores.
+The execution protocol uses `effect-agent/thread@5` records in fresh layout-23 stores.
 This format is unreleased: install matching runtime and storage packages, and retain predecessor
 stores with their matching release. Opening or importing a predecessor format fails before mutation;
 this release has no converter, predecessor decoder, or layout upgrade.
 
 Same-format archives preserve canonical records, immutable admission facts, accepted commands and
-current execution checkpoints in `effect-agent/thread-transfer@2` pages.
+current execution checkpoints in `effect-agent/thread-transfer@3` pages.
 Pending admissions need not have reached the log. Import validates every reference and rebuilds
 operational state in an empty Thread without importing execution ownership. Unresolved ordinary
 mutating calls remain Unknown. See [backup and restore](/guide/operations/#adopting-these-contracts).
@@ -80,15 +80,15 @@ response with no application tool calls commits atomically with that active comp
 `ExecutionCheckpoint` holds the current `RunContinuation`: preparing context, awaiting a model,
 processing declared operations, waiting, uncertain, or settling. Its revision advances in the same
 fenced transaction as new history facts; a progress-only commit leaves the history tail unchanged.
-The ledger alone admits work and grants ownership. Normal settlement removes the checkpoint and
-its retry receipts atomically with the terminal fact. Unresolved operations retain their checkpoint
+The ledger alone admits work and grants ownership. Settlement removes the checkpoint and
+its retry receipts atomically with the terminal fact. Unresolved operations retain their own rows
 until their obligations close. Terminal delivery reports can append without restarting a Run.
 SQL append retries after retirement compare retained canonical content; discarded operational intent
 is no longer available for comparison.
 
-Offline `verify` checks the history hash chain, retained fact counts and references, and each active
+Offline `verify` checks schema, identity, sequence, retained fact counts and references, and each active
 checkpoint's original context digest. It cannot replay discarded checkpoint revisions or verify
-the evaluated context of a settled Run. The history log remains the terminal outcome authority.
+the evaluated context of a settled Run. The history log remains the terminal outcome authority. It provides no tamper evidence.
 
 ```mermaid
 flowchart LR
@@ -96,7 +96,7 @@ flowchart LR
   B --> C[Append history + replace active checkpoint]
   C --> D[Exact input, saved context, and operation evidence]
   D --> B
-  C --> E[Settlement: retain history, retire closed execution]
+  C --> E[Settlement: retain history, delete Run state]
 ```
 
 The continuation contains cumulative policy and model charges plus bounded, integrity-checked
@@ -274,18 +274,18 @@ replacement takes ownership. Recovery uses the same current binding selection as
 default, or explicit host selection from the canonical Submission). It validates a strongly
 consistent canonical prefix before classifying the last committed boundary:
 
-| Last committed boundary                           | Recovery                                                                     |
-| ------------------------------------------------- | ---------------------------------------------------------------------------- |
-| admission without readiness                       | finish materialization and readiness                                         |
-| ready input with no attempted execution           | leave input application to the normal worker claim                           |
-| input appended without its ledger marker          | repair the marker without applying input twice                               |
-| `RunStarted`                                      | preserve the original deadline                                               |
-| incomplete model response                         | retry inference when policy allows; provider charges may repeat              |
-| committed ordinary mutating call without a result | reconcile or record `UnknownToolOutcome`                                     |
-| initial pending or denied approval                | preserve the blocked batch; no handler started                               |
-| canonical tool or Durable Step result             | reuse the recorded result                                                    |
-| `RunCompleted`                                    | preserve stored output and disposition; validate `resultDigest` when present |
-| canonical settlement without ledger finalization  | finalize from history                                                        |
+| Last committed boundary                           | Recovery                                                        |
+| ------------------------------------------------- | --------------------------------------------------------------- |
+| admission without readiness                       | finish materialization and readiness                            |
+| ready input with no attempted execution           | leave input application to the normal worker claim              |
+| input appended without its ledger marker          | repair the marker without applying input twice                  |
+| `RunStarted`                                      | preserve the original deadline                                  |
+| incomplete model response                         | retry inference when policy allows; provider charges may repeat |
+| committed ordinary mutating call without a result | reconcile or record `UnknownToolOutcome`                        |
+| initial pending or denied approval                | preserve the blocked batch; no handler started                  |
+| canonical tool or Durable Step result             | reuse the recorded result                                       |
+| `RunCompleted`                                    | preserve stored output, total usage and disposition             |
+| canonical settlement without ledger finalization  | finalize from history                                           |
 
 Joined input follows the same rule. Claimed input without a canonical append returns to ready.
 Appended input rejoins its host run and settles with it. Approval must be canonical before work

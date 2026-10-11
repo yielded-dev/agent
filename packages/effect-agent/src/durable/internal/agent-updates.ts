@@ -309,8 +309,7 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
         .pipe(Effect.mapError(storage));
 
       if (tail.producerEpoch !== request.producerEpoch) return yield* storage();
-      if (tail.tailSequence !== history.tailSequence || tail.tailDigest !== history.tailDigest)
-        continue;
+      if (tail.tailSequence !== history.tailSequence) continue;
       yield* failpoint.hit("update:before-canonical-append");
 
       const appended = yield* store
@@ -319,7 +318,7 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
             threadId: request.submission.threadId,
             producerEpoch: request.producerEpoch,
             expectedTailSequence: history.tailSequence,
-            expectedTailDigest: history.tailDigest,
+
             batch: CanonicalBatch.make({
               batchId: Schema.decodeSync(BatchId)(id),
               producerId: options.producerId,

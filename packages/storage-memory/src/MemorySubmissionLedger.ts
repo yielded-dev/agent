@@ -1564,7 +1564,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             return SettlementPublicationResult.make({
               record: existing.record,
               tailSequence: tail.tailSequence,
-              tailDigest: tail.tailDigest,
               replayed: true,
             });
           if (stored.row.state === "settled")
@@ -1577,7 +1576,6 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
           return SettlementPublicationResult.make({
             record,
             tailSequence: appended.lastSequence,
-            tailDigest: appended.tailDigest,
             replayed: false,
           });
         }),

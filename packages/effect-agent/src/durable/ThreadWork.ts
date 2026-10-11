@@ -14,12 +14,12 @@ import {
   type CanonicalRecordEnvelope,
   type ModelResponseRecorded,
 } from "./Records.ts";
-import { canonicalRecordBytes, reference, resolveEvidence } from "./RunContinuation.ts";
+import { canonicalRecordBytes, resolveEvidence } from "./RunContinuation.ts";
 import { runIdForSubmission } from "./RunJournal.ts";
 import type { SubmissionWorkItem } from "./SubmissionLedger.ts";
 import { ThreadReader, ThreadStore, ThreadStoreError } from "./ThreadStore.ts";
 
-export const WORK_INDEX_VERSION = 2;
+export const WORK_INDEX_VERSION = 3;
 export const MAX_WORK_PAGE_ENTRIES = 128;
 export const MAX_WORK_ENTRY_BYTES = 8 * 1024;
 export const MAX_WORK_PAGE_BYTES = MAX_WORK_PAGE_ENTRIES * MAX_WORK_ENTRY_BYTES;
@@ -71,7 +71,7 @@ export type WorkOwner = typeof WorkOwner.Type;
 
 export const WorkStateReference = Schema.Union([
   Schema.Struct({ _tag: Schema.Literal("Submission"), submissionId: SubmissionId }),
-  Schema.Struct({ _tag: Schema.Literal("Canonical"), recordId: RecordId, digest: Digest }),
+  Schema.Struct({ _tag: Schema.Literal("Canonical"), recordId: RecordId }),
   Schema.Struct({
     _tag: Schema.Literal("Delivery"),
     messageId: IdempotencyKey,
@@ -103,7 +103,6 @@ export const ThreadWorkEntry = Schema.Struct({
   receiptId: Schema.optionalKey(ReceiptId),
   queueSequence: Schema.optionalKey(QueueSequence),
   originRecordId: Schema.optionalKey(RecordId),
-  originDigest: Schema.optionalKey(Digest),
   /** Separate accepted-update capacity from ordinary message/worker transport. */
   partition: Schema.optionalKey(Schema.Literals(["ordinary", "update"])),
 });
@@ -116,7 +115,6 @@ export const CanonicalWorkEntry = Schema.Struct({
   createdSequence: CanonicalSequence,
   updatedSequence: CanonicalSequence,
   originRecordId: RecordId,
-  originDigest: Digest,
 });
 
 export type CanonicalWorkEntry = typeof CanonicalWorkEntry.Type;
@@ -520,7 +518,6 @@ export const workIndexChanges = Effect.fnUntraced(function* (
     ]).has(payload._tag)
   )
     return [] as ReadonlyArray<WorkIndexChange>;
-  const ref = yield* reference(record);
 
   const remove = (kind: string, ...ids: ReadonlyArray<string>): WorkIndexChange => ({
     _tag: "Remove",
@@ -537,13 +534,12 @@ export const workIndexChanges = Effect.fnUntraced(function* (
     entry: {
       id,
       owner,
-      stateReference: { _tag: "Canonical", ...ref },
+      stateReference: { _tag: "Canonical", recordId: record.recordId },
       state,
       ...(wait === undefined ? {} : { wait }),
       createdSequence: sequence,
       updatedSequence: sequence,
       originRecordId: record.recordId,
-      originDigest: ref.digest,
     },
   });
 
@@ -717,5 +713,4 @@ export const advanceWorkEntry = (
         ...next,
         createdSequence: previous.createdSequence,
         originRecordId: previous.originRecordId,
-        originDigest: previous.originDigest,
       };

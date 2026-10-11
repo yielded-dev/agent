@@ -146,7 +146,7 @@ const prepareAppend = (thread: string, count: number) =>
           threadId,
           producerEpoch: tail.producerEpoch,
           expectedTailSequence: tail.tailSequence,
-          expectedTailDigest: tail.tailDigest,
+
           batch: {
             batchId: `projection-batch-${tail.tailSequence}`,
             producerId: "projection-test",

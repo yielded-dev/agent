@@ -88,7 +88,7 @@ export const ensureThreadCreated = Effect.fnUntraced(
             records: [record],
           }),
           expectedTailSequence: tail.tailSequence,
-          expectedTailDigest: tail.tailDigest,
+
           producerEpoch: tail.producerEpoch,
         }),
       )
@@ -156,7 +156,7 @@ export const ensureWorkerOrigin = Effect.fnUntraced(
             threadId: origin.worker.threadId,
             producerEpoch: current.producerEpoch,
             expectedTailSequence: current.tailSequence,
-            expectedTailDigest: current.tailDigest,
+
             batch: CanonicalBatch.make({
               batchId: Schema.decodeSync(BatchId)(id),
               producerId: config.producerId,

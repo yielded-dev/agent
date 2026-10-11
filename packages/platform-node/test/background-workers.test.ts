@@ -1293,22 +1293,13 @@ it.effect(
           { outcome: "completed" },
         ]);
 
-        // The denied navigation response is still unresolved, so its Run evidence remains available.
-        const deniedExecution = Option.getOrThrow(
+        // The operation retains its own unresolved obligation; settled interpreter state retires.
+        expect(
           yield* history.readExecution({
             threadId: start.worker.threadId,
             runId: runIdForSubmission(receipt.submissionId),
           }),
-        );
-
-        expect(deniedExecution.progress.position).toBe("settled");
-        expect(
-          deniedExecution.operational.filter(({ payload }) => payload._tag === "RunStarted"),
-        ).toEqual(
-          Option.getOrThrow(heldExecution).operational.filter(
-            ({ payload }) => payload._tag === "RunStarted",
-          ),
-        );
+        ).toEqual(Option.none());
         expect(
           yield* history.readExecution({
             threadId: start.worker.threadId,

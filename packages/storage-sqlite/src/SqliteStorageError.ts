@@ -54,9 +54,8 @@ export class SqliteAppendConflict extends Schema.TaggedError<SqliteAppendConflic
   "SqliteAppendConflict",
   {
     message: Schema.String,
-    reason: Schema.Literals(["batch-digest", "record-identity", "tail"]),
+    reason: Schema.Literals(["batch-content", "record-identity", "tail"]),
     actualTailSequence: Schema.optionalKey(CanonicalSequence),
-    actualTailDigest: Schema.optionalKey(Schema.String),
   },
 ) {}
 

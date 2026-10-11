@@ -415,7 +415,8 @@ describe("durable peer messaging boundaries", () => {
             .send({ ...peer, encodedInput: { text: "changed" }, idempotencyKey: key("message") })
             .pipe(Effect.flip),
         ).toMatchObject({ reason: "conflict" });
-        expect((yield* h.history(sourceThread)).tailDigest).toBe(before.tailDigest);
+        expect((yield* h.history(sourceThread)).records).toEqual(before.records);
+
         expect(
           h.controls.authorizations.some(
             (request) =>
@@ -528,7 +529,7 @@ describe("durable peer messaging boundaries", () => {
             _tag: "AdmissionPolicyError",
             reason: "refused",
           });
-          expect((yield* h.history(destinationThread)).tailDigest).toBe(before.tailDigest);
+
           expect(
             Option.isNone(
               yield* h.ledger.lookup(
@@ -544,7 +545,8 @@ describe("durable peer messaging boundaries", () => {
         expect(
           yield* h.submitEnvelope({ ...envelope, input: { text: "changed" } }).pipe(Effect.flip),
         ).toMatchObject({ _tag: "AdmissionPolicyError", reason: "refused" });
-        expect((yield* h.history(destinationThread)).tailDigest).toBe(before.tailDigest);
+
+        expect((yield* h.history(destinationThread)).records).toEqual(before.records);
         expect((yield* h.row(pending.message)).status).toBe("pending");
       }).pipe(Effect.scoped),
   );
@@ -581,7 +583,8 @@ describe("durable peer messaging boundaries", () => {
               .pipe(Effect.flip),
           ).toMatchObject({ reason: "invalid-reference" });
         }
-        expect((yield* h.history(destinationThread)).tailDigest).toBe(before.tailDigest);
+
+        expect((yield* h.history(destinationThread)).records).toEqual(before.records);
         expect(yield* h.proofs(destinationThread)).toHaveLength(0);
         expect(
           (yield* h.deliveries.list({ ownerThreadId: destinationThread, limit: 10 })).items,
@@ -713,7 +716,8 @@ describe("durable peer messaging boundaries", () => {
       const before = yield* h.history(sourceThread);
 
       expect(yield* h.send("third").pipe(Effect.flip)).toMatchObject({ reason: "capacity" });
-      expect((yield* h.history(sourceThread)).tailDigest).toBe(before.tailDigest);
+      expect((yield* h.history(sourceThread)).records).toEqual(before.records);
+
       expect(
         (yield* h.deliveries.list({ ownerThreadId: sourceThread, limit: 10 })).items,
       ).toHaveLength(1);
@@ -799,7 +803,8 @@ describe("durable peer messaging boundaries", () => {
       expect(refused.status).toBe("refused");
       expect(refused.refusal).toBe("message-denied");
       expect(refused.receipt).toBeNull();
-      expect((yield* h.history(destinationThread)).tailDigest).toBe(before.tailDigest);
+      expect((yield* h.history(destinationThread)).records).toEqual(before.records);
+
       h.controls.denied = () => false;
       expect(yield* h.driver.process(pending.message)).toEqual(refused);
       expect((yield* h.send()).status).toBe("refused");

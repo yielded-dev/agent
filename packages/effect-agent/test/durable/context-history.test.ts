@@ -5,7 +5,6 @@ import {
   ContextHistoryRead,
   ContextHistorySearch,
 } from "@yielded/agent/context-history";
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import type { RecordEnvelope } from "@yielded/agent/records";
 import {
@@ -57,7 +56,6 @@ const response = (position: number, text: string, runId = "run-1") =>
         Prompt.makeMessage("assistant", { content: [Prompt.makePart("text", { text })] }),
       ]),
     ),
-    messagesDigest: digest,
   });
 
 /** Read-only port probe; storage adapter suites own persistence and atomic append behavior. */
@@ -77,7 +75,7 @@ const probe = (initial: ReadonlyArray<CanonicalRecordEnvelope>) => {
         ThreadTail.make({
           threadId: request.threadId,
           tailSequence: sequence(state.records.length),
-          tailDigest: EMPTY_TAIL_DIGEST,
+
           producerEpoch: Schema.decodeSync(ProducerEpoch)(0),
         }),
       ),
@@ -203,7 +201,6 @@ describe("canonical context history", () => {
               }),
             ]),
           ),
-          messagesDigest: digest,
         }),
         record(17, {
           _tag: "CompactionCreated",
@@ -274,7 +271,7 @@ describe("canonical context history", () => {
           runId: "run-1",
           turn: 1,
           turnId: "turn-1",
-          messagesDigest: digest,
+
           messages: promptJson(
             Prompt.make([
               Prompt.makeMessage("system", { content: "secret system value" }),

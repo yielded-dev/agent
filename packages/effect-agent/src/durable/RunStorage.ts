@@ -2,7 +2,7 @@ import type { Scope } from "effect";
 import { Cause, Clock, Context, Duration, Effect, Layer, Option, Schema, Semaphore } from "effect";
 
 import type { SubmissionId, ThreadId } from "../core/Identifiers.ts";
-import type { CanonicalBatch, CanonicalSequence, Digest, ProducerEpoch } from "./Records.ts";
+import type { CanonicalBatch, CanonicalSequence, ProducerEpoch } from "./Records.ts";
 import {
   SettlementPublication,
   type SettlementPublicationFailure,
@@ -88,7 +88,7 @@ export interface RunOwnership {
 export interface RunWriter {
   readonly threadId: ThreadId;
   readonly producerEpoch: ProducerEpoch;
-  readonly tail: Effect.Effect<{ readonly sequence: CanonicalSequence; readonly digest: Digest }>;
+  readonly tail: Effect.Effect<{ readonly sequence: CanonicalSequence }>;
   readonly append: (
     batch: CommitBatch,
     executions?: ReadonlyArray<ExecutionUpdate>,
@@ -205,7 +205,7 @@ export const makeRunWriter = Effect.fnUntraced(function* (
   const store = yield* ThreadStore;
   const initial = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
   const gate = yield* Semaphore.make(1);
-  let tail = { sequence: initial.tailSequence, digest: initial.tailDigest };
+  let tail = { sequence: initial.tailSequence };
 
   const refresh = gate.withPermits(1)(
     Effect.gen(function* () {
@@ -217,7 +217,7 @@ export const makeRunWriter = Effect.fnUntraced(function* (
           attemptedEpoch: producerEpoch,
           actualEpoch: current.producerEpoch,
         });
-      tail = { sequence: current.tailSequence, digest: current.tailDigest };
+      tail = { sequence: current.tailSequence };
     }),
   );
 
@@ -233,21 +233,19 @@ export const makeRunWriter = Effect.fnUntraced(function* (
                 batch,
                 ...(executions === undefined ? {} : { executions }),
                 expectedTailSequence: tail.sequence,
-                expectedTailDigest: tail.digest,
               }),
             )
             .pipe(
               Effect.catchTag("AppendConflict", (conflict) => {
                 // Same-epoch administrative repair may advance the tail. Only a failed tail CAS
-                // permits retry; epoch, batch-digest, and record-identity failures still propagate.
+                // permits retry; epoch, batch-content, and record-identity failures still propagate.
                 if (
                   conflict.reason !== "tail" ||
                   conflict.actualTailSequence === undefined ||
-                  conflict.actualTailDigest === undefined ||
                   retries >= 8
                 )
                   return Effect.fail(conflict);
-                tail = { sequence: conflict.actualTailSequence, digest: conflict.actualTailDigest };
+                tail = { sequence: conflict.actualTailSequence };
 
                 // Progress must be rebuilt from the winning revision, never resent verbatim.
                 if (executions !== undefined) return Effect.fail(conflict);
@@ -257,7 +255,7 @@ export const makeRunWriter = Effect.fnUntraced(function* (
             );
 
           if (result === undefined) continue;
-          tail = { sequence: result.lastSequence, digest: result.tailDigest };
+          tail = { sequence: result.lastSequence };
 
           return result;
         }
@@ -461,7 +459,7 @@ export const make = Effect.gen(function* () {
                                   threadId: request.threadId,
                                   producerEpoch: claimed.producerEpoch,
                                   expectedTailSequence: tail.sequence,
-                                  expectedTailDigest: tail.digest,
+
                                   batch,
                                   ...(executions === undefined ? {} : { executions }),
                                 }),
@@ -474,13 +472,11 @@ export const make = Effect.gen(function* () {
                             if (
                               conflict.reason !== "tail" ||
                               conflict.actualTailSequence === undefined ||
-                              conflict.actualTailDigest === undefined ||
                               retries >= 8
                             )
                               return Effect.fail(conflict);
                             tail = {
                               sequence: conflict.actualTailSequence,
-                              digest: conflict.actualTailDigest,
                             };
 
                             if (executions !== undefined)

@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "dialect": "draft-2020-12",
   "schema": {
     "type": "object",
@@ -1047,9 +1047,6 @@
         "messages": {
           "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
         },
-        "messagesDigest": {
-          "type": "string"
-        },
         "runScopedPrefixLength": {
           "type": "integer",
           "exclusiveMinimum": 0
@@ -1085,8 +1082,7 @@
         "runId",
         "turnId",
         "turn",
-        "messages",
-        "messagesDigest"
+        "messages"
       ],
       "additionalProperties": true
     },
@@ -1449,9 +1445,6 @@
         },
         "output": {
           "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
-        },
-        "resultDigest": {
-          "type": "string"
         },
         "runDisposition": {
           "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
@@ -2084,12 +2077,6 @@
           "type": "string",
           "enum": ["completed", "failed", "aborted"]
         },
-        "childResultDigest": {
-          "type": "string"
-        },
-        "projectedResultDigest": {
-          "type": "string"
-        },
         "usageSummary": {
           "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
         },
@@ -2115,8 +2102,6 @@
         "childSubmissionId",
         "childSettlementId",
         "childOutcome",
-        "childResultDigest",
-        "projectedResultDigest",
         "usageSummary",
         "reservationId",
         "finalAccounting"
@@ -2895,12 +2880,9 @@
             "recordId": {
               "type": "string",
               "minLength": 1
-            },
-            "digest": {
-              "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["recordId"],
           "additionalProperties": true
         },
         "stop": {
@@ -2909,12 +2891,9 @@
             "recordId": {
               "type": "string",
               "minLength": 1
-            },
-            "digest": {
-              "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["recordId"],
           "additionalProperties": true
         },
         "deliveryVersion": {
@@ -3313,15 +3292,12 @@
                 "type": "string",
                 "minLength": 1
               },
-              "digest": {
-                "type": "string"
-              },
               "sequence": {
                 "type": "integer",
                 "minimum": 0
               }
             },
-            "required": ["recordId", "digest", "sequence"],
+            "required": ["recordId", "sequence"],
             "additionalProperties": true
           },
           "maxItems": 4096
@@ -3416,12 +3392,9 @@
             "recordId": {
               "type": "string",
               "minLength": 1
-            },
-            "digest": {
-              "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["recordId"],
           "additionalProperties": true
         },
         "savedContext": {
@@ -3430,12 +3403,9 @@
             "recordId": {
               "type": "string",
               "minLength": 1
-            },
-            "digest": {
-              "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["recordId"],
           "additionalProperties": true
         },
         "latestResponse": {
@@ -3444,12 +3414,9 @@
             "recordId": {
               "type": "string",
               "minLength": 1
-            },
-            "digest": {
-              "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["recordId"],
           "additionalProperties": true
         },
         "terminal": {
@@ -3458,12 +3425,9 @@
             "recordId": {
               "type": "string",
               "minLength": 1
-            },
-            "digest": {
-              "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["recordId"],
           "additionalProperties": true
         },
         "lastFact": {
@@ -3472,12 +3436,9 @@
             "recordId": {
               "type": "string",
               "minLength": 1
-            },
-            "digest": {
-              "type": "string"
             }
           },
-          "required": ["recordId", "digest"],
+          "required": ["recordId"],
           "additionalProperties": true
         },
         "position": {

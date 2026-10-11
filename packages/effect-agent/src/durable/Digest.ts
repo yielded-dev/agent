@@ -4,7 +4,7 @@ import { Hex } from "effect/encoding";
 
 import { canonicalJson as stringifyCanonicalJson } from "./internal/canonical-json.ts";
 import type { DefinitionDigestInput } from "./Records.ts";
-import { CanonicalBatch, DefinitionDigests, Digest } from "./Records.ts";
+import { DefinitionDigests, Digest } from "./Records.ts";
 
 /** Measure persisted text without allocating a UTF-8 copy. */
 export { utf8ByteLength } from "../core/internal/utf8.ts";
@@ -47,25 +47,6 @@ export const digestJson = (value: Schema.Json): Effect.Effect<Digest, DigestErro
 /** Hash captured canonical JSON directly, sharing its encoding with accounting and storage. */
 export const digestCanonicalJson = (json: string) => digestText(json);
 
-/** Hash a privately captured, schema-encoded canonical batch without serializing it again. */
-export const digestCanonicalBatchJson = (previousTailDigest: Digest, batchJson: string) =>
-  digestText(`{"batch":${batchJson},"previousTailDigest":${JSON.stringify(previousTailDigest)}}`);
-
-/** Digest a canonical batch together with the prior tail to form an append-only hash chain. */
-export const digestCanonicalBatch = (
-  previousTailDigest: Digest,
-  batch: CanonicalBatch,
-): Effect.Effect<Digest, DigestError, Crypto.Crypto> =>
-  Schema.encodeEffect(CanonicalBatch)(batch).pipe(
-    Effect.mapError(() => DigestError.make({ message: "Canonical batch encoding failed" })),
-    Effect.flatMap((encoded) =>
-      digestJson({
-        previousTailDigest,
-        batch: encoded,
-      }),
-    ),
-  );
-
 /** Digest one schema-encoded Agent, Model, or Toolkit definition. */
 export const digestDefinition = (definition: Schema.Json) => digestJson(definition);
 
@@ -78,7 +59,3 @@ export const digestDefinitions = (
     model: digestDefinition(definitions.model),
     tools: digestDefinition(definitions.tools),
   }).pipe(Effect.map((digests) => DefinitionDigests.make(digests)));
-
-export const EMPTY_TAIL_DIGEST = Schema.decodeSync(Digest)(
-  "0000000000000000000000000000000000000000000000000000000000000000",
-);

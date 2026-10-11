@@ -7,11 +7,10 @@ import {
   contextWindowId,
   contextWindowMessage,
 } from "@yielded/agent/compaction";
-import { digestCanonicalBatch, EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { ThreadId, SubmissionId, ToolCallId } from "@yielded/agent/identifiers";
+import type { CanonicalBatch } from "@yielded/agent/records";
 import {
   BatchId,
-  CanonicalBatch,
   CanonicalRecordEnvelope,
   CanonicalSequence,
   DeploymentId,
@@ -322,13 +321,6 @@ describe("run journal batch split (plan §2.1)", () => {
           }
           const batch = yield* turnResponseBatch(turnInput(history.content));
 
-          const plainBatch = yield* Schema.decodeEffect(Schema.fromJsonString(CanonicalBatch))(
-            JSON.stringify(Schema.encodeSync(CanonicalBatch)(batch)),
-          );
-
-          expect(yield* digestCanonicalBatch(EMPTY_TAIL_DIGEST, batch)).toBe(
-            yield* digestCanonicalBatch(EMPTY_TAIL_DIGEST, plainBatch),
-          );
           const projected = yield* projectRunJournal(envelopesOf([batch]), RUN_ID);
           const encoded = Schema.encodeSync(Prompt.Prompt)(projected.prompt);
 

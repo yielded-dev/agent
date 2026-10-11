@@ -4,18 +4,17 @@ import { InputMessage } from "../capabilities/Messaging.ts";
 import type { RunId } from "../core/Identifiers.ts";
 import { SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { WorkerRef } from "../core/Worker.ts";
-import { canonicalJson, digestJson, EMPTY_TAIL_DIGEST, utf8ByteLength } from "./Digest.ts";
+import { canonicalJson, digestJson, utf8ByteLength } from "./Digest.ts";
 import { readRunContext, validateContextBoundary } from "./internal/run-context.ts";
 import { ThreadImportReader } from "./internal/thread-import-reader.ts";
 import { toolOperationStates } from "./internal/tool-operations.ts";
 import { MessageDeliveryRecord } from "./MessageDelivery.ts";
-import { decodeExportRecord, ExportedRecord, ExportRecord } from "./RecordFormat.ts";
+import { decodeExportRecord } from "./RecordFormat.ts";
 import {
   CanonicalBatch,
   CanonicalRecordEnvelope,
   CanonicalSequence,
   CURRENT_RECORD_FORMAT,
-  Digest,
   ProducerEpoch,
   RecordEnvelope,
   RecordJson,
@@ -26,7 +25,6 @@ import {
   executionRunIds,
   isOperationalRecord,
   isPreContinuationFact,
-  reference,
   validateSuffix,
 } from "./RunContinuation.ts";
 import { runIdForSubmission } from "./RunJournal.ts";
@@ -44,6 +42,7 @@ import {
   submissionSettlementRecordId,
   submissionAbortRecordId,
 } from "./SubmissionLedger.ts";
+import type { ExecutionCheckpoint } from "./ThreadStore.ts";
 import {
   MAX_THREAD_EXPORT_PAGE_BYTES,
   MAX_THREAD_EXPORT_PAGE_RECORDS,
@@ -52,7 +51,6 @@ import {
   ThreadAbortFact,
   ThreadApprovalFact,
   ThreadResolutionFact,
-  ExecutionCheckpoint,
   ThreadExecutionFact,
   makeTransferFactCheck,
   transferPageFits,
@@ -93,7 +91,6 @@ export class ThreadImportResult extends Schema.Class<ThreadImportResult>(
   threadId: ThreadId,
   format: Schema.String,
   tailSequence: CanonicalSequence,
-  tailDigest: Digest,
   recordCount: Schema.Natural,
   submissionCount: Schema.Natural,
 }) {}
@@ -147,8 +144,6 @@ export interface PreparedImportBatch {
   readonly recordJson: ReadonlyArray<string>;
   readonly firstSequence: CanonicalSequence;
   readonly lastSequence: CanonicalSequence;
-  readonly previousTailDigest: Digest;
-  readonly tailDigest: Digest;
 }
 
 export interface PreparedImportPage {
@@ -233,15 +228,6 @@ export const verifyImportedReferences = Effect.fnUntraced(function* (
       ("sequence" in ref && evidence.sequence !== ref.sequence)
     )
       return yield* invalid("Missing, foreign or forward canonical dependency", entry.threadId);
-
-    const wire = yield* (
-      evidence.record instanceof ExportedRecord
-        ? Schema.encodeEffect(ExportRecord)(evidence.record)
-        : Schema.encodeEffect(RecordEnvelope)(evidence.record)
-    ).pipe(Effect.mapError(() => invalid("Invalid dependency wire", entry.threadId)));
-
-    if ((yield* digest(wire)) !== ref.digest)
-      return yield* invalid("Canonical dependency digest mismatch", entry.threadId);
   }
   if (payload._tag === "WorkerInputRefused") {
     const request = (yield* resolve(payload.reservation.recordId))!.record.payload;
@@ -375,8 +361,7 @@ export const validateImportedExecution = Effect.fnUntraced(function* (
       record === undefined ||
       (retained !== undefined &&
         (retained.threadId !== threadId || retained.sequence > checkpoint.throughSequence)) ||
-      !executionRunIds(record).includes(progress.runId) ||
-      (yield* reference(record)).digest !== ref.digest
+      !executionRunIds(record).includes(progress.runId)
     )
       return yield* invalid("Active execution reference is missing, foreign or corrupt", threadId);
 
@@ -404,7 +389,7 @@ export const validateImportedExecution = Effect.fnUntraced(function* (
     yield* validateContextBoundary(context.payload, original).pipe(
       Effect.mapError((cause) => invalid(cause.message, threadId)),
     );
-    yield* readRunContext(context.payload, original, progress.savedContext.digest).pipe(
+    yield* readRunContext(context.payload, original, progress.savedContext.recordId).pipe(
       Effect.mapError((cause) => invalid(cause.message, threadId)),
     );
   }
@@ -487,7 +472,6 @@ export const captureImportSource = Effect.fnUntraced(function* <E, R>(
 export interface ThreadImportProgress {
   manifest: ThreadArchive | undefined;
   sequence: number;
-  tailDigest: Digest;
   producerEpoch: number;
   ended: boolean;
   cursor: string | undefined;
@@ -504,7 +488,6 @@ export interface ThreadImportProgress {
 export const makeThreadImportProgress = (): ThreadImportProgress => ({
   manifest: undefined,
   sequence: 0,
-  tailDigest: EMPTY_TAIL_DIGEST,
   producerEpoch: 1,
   ended: false,
   cursor: undefined,
@@ -567,7 +550,6 @@ export const prepareImportPage = Effect.fnUntraced(function* (
     format: archive.format,
     threadId,
     tailSequence: archive.tailSequence,
-    tailDigest: archive.tailDigest,
     snapshot: archive.snapshot,
     ...(archive.workerSeal === undefined ? {} : { workerSeal: archive.workerSeal }),
     ...(archive.externalObligations === undefined
@@ -585,10 +567,9 @@ export const prepareImportPage = Effect.fnUntraced(function* (
     return yield* invalid("Transfer snapshot changed or its identity is invalid", threadId);
   if (
     archive.fromSequence !== state.sequence + 1 ||
-    archive.previousTailDigest !== state.tailDigest ||
     (archive.cursor !== undefined && archive.cursor === state.cursor)
   )
-    return yield* invalid("Transfer page position or digest boundary is invalid", threadId);
+    return yield* invalid("Transfer page position is invalid", threadId);
   if (archive.records.length > 0 && transferSections.some((section) => state.counts[section] > 0))
     return yield* invalid("Canonical records follow immutable fact sections", threadId);
   if (
@@ -609,7 +590,6 @@ export const prepareImportPage = Effect.fnUntraced(function* (
     const current: Array<RecordEnvelope> = [];
     const encoded: Array<RecordJson> = [];
     const firstSequence = sequence(state.sequence + 1);
-    const previousTailDigest = state.tailDigest;
 
     while (archive.records[index]?.batchId === batch.batchId) {
       const entry = archive.records[index]!;
@@ -644,15 +624,12 @@ export const prepareImportPage = Effect.fnUntraced(function* (
 
     if (utf8ByteLength(batchJson) > 16 * 1024 * 1024)
       return yield* invalid("Canonical batch exceeds 16 MiB", threadId);
-    state.tailDigest = yield* digest({ previousTailDigest, batch: { ...batch, records: encoded } });
     prepared.push({
       batch: canonical,
       batchJson,
       recordJson: encoded.map(canonicalJson),
       firstSequence,
       lastSequence: sequence(state.sequence),
-      previousTailDigest,
-      tailDigest: state.tailDigest,
     });
   }
   if (index !== archive.records.length || state.sequence > archive.tailSequence)
@@ -668,7 +645,7 @@ export const prepareImportPage = Effect.fnUntraced(function* (
       archive.deliveries.length +
       archive.executions.length >
       0 &&
-    (state.sequence !== archive.tailSequence || state.tailDigest !== archive.tailDigest)
+    state.sequence !== archive.tailSequence
   )
     return yield* invalid("Immutable sections precede the complete canonical prefix", threadId);
   if (
@@ -729,14 +706,6 @@ export const prepareImportPage = Effect.fnUntraced(function* (
     )
       return yield* invalid("Delivery ownership, lease or envelope digest mismatch", threadId);
   }
-  for (const fact of archive.executions) {
-    const encoded = yield* Schema.encodeEffect(ExecutionCheckpoint)(fact.checkpoint).pipe(
-      Effect.mapError(() => invalid("Invalid active execution", threadId)),
-    );
-
-    if ((yield* digest(encoded)) !== fact.digest)
-      return yield* invalid("Active execution digest mismatch", threadId);
-  }
   state.manifest = {
     ...archive,
     records: [],
@@ -761,11 +730,10 @@ export const finishThreadImport = (state: ThreadImportProgress) =>
       page === undefined ||
       !state.ended ||
       state.sequence !== page.tailSequence ||
-      state.tailDigest !== page.tailDigest ||
       transferSections.some((section) => state.counts[section] !== page.snapshot[section])
     )
       return yield* invalid(
-        "Transfer stream ended before its complete canonical chain and fact sections",
+        "Transfer stream ended before its complete canonical sequence and fact sections",
       );
     yield* Schema.decodeEffect(ProducerEpoch.check(Schema.isLessThan(Number.MAX_SAFE_INTEGER)))(
       state.producerEpoch,
@@ -783,7 +751,6 @@ export const finishThreadImport = (state: ThreadImportProgress) =>
       threadId: page.threadId,
       format: page.format,
       tailSequence: page.tailSequence,
-      tailDigest: page.tailDigest,
       recordCount: state.sequence,
       submissionCount: state.counts.admissions,
     });

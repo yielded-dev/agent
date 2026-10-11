@@ -2,7 +2,7 @@ import { NodeCrypto } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
 import { MemorySubmissionLedgerLive } from "@yielded/agent-storage-memory/memory-submission-ledger";
 import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
-import { EMPTY_TAIL_DIGEST, digestJson } from "@yielded/agent/digest";
+import { digestJson } from "@yielded/agent/digest";
 import { DurableAgentRuntime, DurableRuntimeConfig } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
 import { AgentId, ThreadId, type SubmissionId } from "@yielded/agent/identifiers";
@@ -149,7 +149,6 @@ const seedHistory = Effect.fn("RecoveryHistoryTest.seedHistory")(function* (
   );
 
   let tailSequence = ZERO_SEQUENCE;
-  let tailDigest = EMPTY_TAIL_DIGEST;
 
   for (let start = 0; start < HISTORY_RECORDS; start += 256) {
     const size = Math.min(256, HISTORY_RECORDS - start);
@@ -187,13 +186,12 @@ const seedHistory = Effect.fn("RecoveryHistoryTest.seedHistory")(function* (
           records: [first, ...rest],
         }),
         expectedTailSequence: tailSequence,
-        expectedTailDigest: tailDigest,
+
         producerEpoch: FIRST_EPOCH,
       }),
     );
 
     tailSequence = appended.lastSequence;
-    tailDigest = appended.tailDigest;
   }
 });
 
@@ -242,7 +240,7 @@ describe("DurableAgentRuntime recovery history", () => {
               FencedAppendRequest.make({
                 threadId: THREAD_ID,
                 expectedTailSequence: tail.tailSequence,
-                expectedTailDigest: tail.tailDigest,
+
                 producerEpoch: tail.producerEpoch,
                 batch: CanonicalBatch.make({
                   batchId: submissionInputBatchId(admitted.submissionId),

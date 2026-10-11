@@ -1,7 +1,6 @@
 import { NodeCrypto } from "@effect/platform-node";
 import { expect, describe, it } from "@effect/vitest";
 import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { ThreadId, RunId, SubmissionId } from "@yielded/agent/identifiers";
 import {
   CanonicalBatch,
@@ -96,9 +95,8 @@ const inputRecord = (recordId: string, input: string): CanonicalRecord =>
 const append = (
   store: ThreadStore["Service"],
   canonicalBatch: CanonicalBatch,
-  tail: Pick<AppendResult, "lastSequence" | "tailDigest"> = {
+  tail: Pick<AppendResult, "lastSequence"> = {
     lastSequence: ZERO_CANONICAL_SEQUENCE,
-    tailDigest: EMPTY_TAIL_DIGEST,
   },
   producerEpochValue: ProducerEpoch = FIRST_PRODUCER_EPOCH,
 ) =>
@@ -107,7 +105,7 @@ const append = (
       threadId,
       batch: canonicalBatch,
       expectedTailSequence: tail.lastSequence,
-      expectedTailDigest: tail.tailDigest,
+
       producerEpoch: producerEpochValue,
     }),
   );
@@ -210,9 +208,8 @@ describe("MemoryThreadStore", () => {
 
         yield* Effect.yieldNow;
 
-        let tail: Pick<AppendResult, "lastSequence" | "tailDigest"> = {
+        let tail: Pick<AppendResult, "lastSequence"> = {
           lastSequence: ZERO_CANONICAL_SEQUENCE,
-          tailDigest: EMPTY_TAIL_DIGEST,
         };
 
         for (let index = 0; index < recordCount; index++) {

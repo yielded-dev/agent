@@ -367,7 +367,6 @@ export class ToolUnavailable extends Schema.TaggedClass<ToolUnavailable>()("Tool
  * One committed model Turn. `messages` carries the Schema-encoded Effect AI Prompt messages this
  * Turn appended (assistant response plus any tool-call declarations), committed atomically at the
  * Turn boundary so a recovering Attempt can rebuild the next Prompt from canonical records alone.
- * `messagesDigest` pins the exact encoded content.
  */
 const ModelResponseRecordedFields = Schema.Struct({
   /** Original bound for each application result; replacement Bindings cannot enlarge it. */
@@ -387,7 +386,6 @@ const ModelResponseRecordedFields = Schema.Struct({
   turnId: TurnId,
   turn: TurnNumber,
   messages: PersistedJson,
-  messagesDigest: Digest,
   /**
    * Number of leading messages that belong only to this Run's evaluated instructions and wake
    * input. They remain canonical. An unfinished Run retains this exact evaluated prefix;
@@ -626,7 +624,6 @@ const RunCompletedFields = Schema.Struct({
   runId: RunId,
   output: PersistedJson,
   /** Integrity of validated terminal values, independent of future application codecs. */
-  resultDigest: Schema.optionalKey(Digest),
   /** Application disposition captured with an ordinary completion. */
   runDisposition: Schema.optionalKey(PersistedJson),
   /** Honest soft-landing marker, present exactly when `exhausted` is present. */
@@ -854,8 +851,7 @@ export class SubagentStarted extends Schema.TaggedClass<SubagentStarted>(
 
 /**
  * PARENT-log record of one verified child settlement join:
- * the child's canonical Settlement identity and outcome, the digests pinning the verified child
- * result and the bounded projected parent result, the child usage summary, and the FINAL
+ * the child's canonical Settlement identity and outcome, the child usage summary, and the FINAL
  * consumed/released accounting decision for the reservation. It commits in ONE atomic batch with
  * the parent `ToolCallSettled` record (SUB-019); `beginChildBudgetRelease` replays
  * `finalAccounting` from this record, so canonical history authorizes the release (DUR-015).
@@ -868,8 +864,6 @@ export class SubagentJoined extends Schema.TaggedClass<SubagentJoined>(
   childSubmissionId: SubmissionId,
   childSettlementId: SettlementId,
   childOutcome: SettlementOutcome,
-  childResultDigest: Digest,
-  projectedResultDigest: Digest,
   usageSummary: PersistedJson,
   usage: Schema.optionalKey(RunTotals),
   delegatedUsage: Schema.optionalKey(RunTotals),
@@ -1108,8 +1102,8 @@ export class SubtreeBudgetReserved extends Schema.TaggedClass<SubtreeBudgetReser
   },
 ) {}
 
-/** Fact identity and content integrity; active-only references resolve inside their Run checkpoint. */
-export const EvidenceReference = Schema.Struct({ recordId: RecordId, digest: Digest });
+/** Fact identity; active-only references resolve inside their Run checkpoint. */
+export const EvidenceReference = Schema.Struct({ recordId: RecordId });
 export type EvidenceReference = typeof EvidenceReference.Type;
 
 /**
@@ -1260,8 +1254,8 @@ export class RunContinuation extends Schema.TaggedClass<RunContinuation>()(
 ) {}
 
 /** Bump only when the meaning of an existing record changes, independently of SQL layout. */
-export const CURRENT_RECORD_VERSION = 4;
-export const CURRENT_RECORD_FORMAT = "effect-agent/thread@4";
+export const CURRENT_RECORD_VERSION = 5;
+export const CURRENT_RECORD_FORMAT = "effect-agent/thread@5";
 
 /** Durable fact and execution-command schemas. Unsupported controls fail before execution. */
 export const KnownRecordPayload = Schema.Union([

@@ -216,9 +216,6 @@ export const resolveExecutionEvidence = Effect.fnUntraced(function* (
   const operational = checkpoint.operational.find((record) => record.recordId === ref.recordId);
   const record = operational ?? (yield* resolveEvidence(threadId, ref)).record;
 
-  if ((yield* reference(record)).digest !== ref.digest)
-    return yield* failure("Active Run evidence has invalid integrity");
-
   return record;
 });
 
@@ -442,11 +439,7 @@ export const validateProgressAppend = Effect.fnUntraced(function* (
       !Schema.toEquivalence(RunContinuation)(next, update.checkpoint.progress) ||
       update.previousRevision + 1 !== next.revision ||
       update.facts.some((fact) => !isOperationalRecord(fact)) ||
-      (update.retire &&
-        (next.position !== "settled" ||
-          next.terminal === undefined ||
-          (next.latestResponse !== undefined &&
-            next.accounting.accountedToolTurn < next.accounting.committedTurns)))
+      (update.retire && (next.position !== "settled" || next.terminal === undefined))
     )
       return yield* failure("Invalid active execution transition");
 
@@ -928,7 +921,7 @@ export const verifyRunContinuations = Effect.fnUntraced(function* (
       yield* validateContextBoundary(saved.payload, input).pipe(
         Effect.mapError((cause) => failure("Context has an invalid admission boundary", cause)),
       );
-      yield* readRunContext(saved.payload, input, (yield* reference(saved)).digest).pipe(
+      yield* readRunContext(saved.payload, input, saved.recordId).pipe(
         Effect.mapError((cause) => failure("Context differs from its original history", cause)),
       );
     }
@@ -1097,8 +1090,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     const textBytes = (value: string) => utf8ByteLength(JSON.stringify(value));
     const refBytes = (value: EvidenceReference) => utf8ByteLength(JSON.stringify(value));
 
-    const ref = (recordId: RecordId) =>
-      EvidenceReference.make({ recordId, digest: progress.lastFact.digest });
+    const ref = (recordId: RecordId) => EvidenceReference.make({ recordId });
 
     const fits = (batchId: string, lastFact: EvidenceReference, terminal?: EvidenceReference) =>
       // Only these identities change. The fixed allowance covers scalar and timestamp growth.
@@ -1288,10 +1280,14 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
           settled.value.record.payload.historyRecordCount !== undefined &&
           facts.every(
             ({ payload }) =>
-              payload._tag === "WorkerReportPrepared" || payload._tag === "SubmissionSettled",
+              payload._tag === "WorkerReportPrepared" ||
+              payload._tag === "SubmissionSettled" ||
+              payload._tag === "ToolCallSettled" ||
+              payload._tag === "ToolCallResolved" ||
+              payload._tag === "SubagentJoined",
           )
         )
-          // Terminal reports are delivery obligations, not resumed interpreter execution.
+          // Independent obligations can record factual closure after interpreter retirement.
           continue;
 
         const selected = yield* provide(
@@ -1518,11 +1514,8 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
           previousRevision: previous?.continuation.revision ?? 0,
           checkpoint,
           facts: changed,
-          // Unresolved declared operations retain their recovery/accounting owner after terminal.
-          retire:
-            position === "settled" &&
-            (response === undefined || accounting.accountedToolTurn >= response.turn) &&
-            childResults.size === 0,
+          // Pending operations and handoffs retain their own recovery rows and original facts.
+          retire: position === "settled",
         }),
       );
       accepted.set(runId, state);

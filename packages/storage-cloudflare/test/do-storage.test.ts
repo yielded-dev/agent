@@ -18,7 +18,6 @@ import {
   SqlStorageProgress,
   SqlStorageProgressError,
 } from "@yielded/agent-storage-sql/sql-storage-progress";
-import { EMPTY_TAIL_DIGEST } from "@yielded/agent/digest";
 import { lifecyclePublicationLayer } from "@yielded/agent/lifecycle-publication";
 import {
   CanonicalBatch,
@@ -121,7 +120,7 @@ it("reopens atomic start progress and pending lifecycle intent after rollback an
                 threadId,
                 producerEpoch: epoch(1),
                 expectedTailSequence: tail.sequence,
-                expectedTailDigest: tail.digest,
+
                 batch: compiled,
                 ...(executions === undefined ? {} : { executions }),
               });
@@ -315,7 +314,7 @@ describe("DoThreadStore", () => {
                     threadId,
                     producerEpoch: epoch(1),
                     expectedTailSequence: tail.sequence,
-                    expectedTailDigest: tail.digest,
+
                     batch: compiled,
                     ...(executions === undefined ? {} : { executions }),
                   });
@@ -399,7 +398,7 @@ describe("DoThreadStore", () => {
               threadId,
               producerEpoch: epoch(0),
               expectedTailSequence: sequence(0),
-              expectedTailDigest: EMPTY_TAIL_DIGEST,
+
               batch: batch(`diagnostic:${decoder}`, [
                 inputRecord(`diagnostic:${decoder}`, privateValue),
               ]),
@@ -459,7 +458,7 @@ describe("DoThreadStore", () => {
             threadId,
             producerEpoch: epoch(1),
             expectedTailSequence: sequence(0),
-            expectedTailDigest: EMPTY_TAIL_DIGEST,
+
             batch: batch("bad-export-tail", [inputRecord("bad-export-tail", "Kyoto")]),
           }),
         );
@@ -520,7 +519,7 @@ describe("DoThreadStore", () => {
                 inputRecord("checkpoint-metadata-input", "Kyoto"),
               ]),
               expectedTailSequence: sequence(0),
-              expectedTailDigest: EMPTY_TAIL_DIGEST,
+
               producerEpoch: epoch(1),
             }),
           );
@@ -529,7 +528,7 @@ describe("DoThreadStore", () => {
             schemaVersion: 1,
             threadId,
             throughSequence: sequence(0),
-            tailDigest: EMPTY_TAIL_DIGEST,
+
             state: {},
             createdAt: at(2),
           });
@@ -545,13 +544,10 @@ describe("DoThreadStore", () => {
             yield* Schema.encodeEffect(ThreadCheckpoint)(corrupted),
           );
 
-          const rowDigest = EMPTY_TAIL_DIGEST;
-
           yield* Effect.sync(() =>
             storage.sql.exec(
-              "UPDATE effect_agent_checkpoints SET checkpoint_json = ?, tail_digest = ? WHERE thread_id = ? AND through_sequence = 0",
+              "UPDATE effect_agent_checkpoints SET checkpoint_json = ? WHERE thread_id = ? AND through_sequence = 0",
               corruptedJson,
-              rowDigest,
               threadId,
             ),
           );
@@ -627,7 +623,7 @@ describe("DoThreadStore", () => {
       Effect.gen(function* () {
         const store = yield* ThreadStore;
         const threadId = thread("thread-large-read-snapshot");
-        let tail = { lastSequence: sequence(0), tailDigest: EMPTY_TAIL_DIGEST };
+        let tail = { lastSequence: sequence(0) };
 
         yield* store.materialize(ThreadMaterialization.make({ threadId, producerEpoch: epoch(1) }));
 
@@ -640,7 +636,7 @@ describe("DoThreadStore", () => {
               threadId,
               batch: batch(`large-batch-${name}`, [inputRecord(`large-record-${name}`, input)]),
               expectedTailSequence: tail.lastSequence,
-              expectedTailDigest: tail.tailDigest,
+
               producerEpoch: epoch(1),
             }),
           );
@@ -787,7 +783,7 @@ describe("DoThreadStore", () => {
                 inputRecord("value-bound-record", "x".repeat(2_048)),
               ]),
               expectedTailSequence: sequence(0),
-              expectedTailDigest: EMPTY_TAIL_DIGEST,
+
               producerEpoch: epoch(1),
             }),
           )

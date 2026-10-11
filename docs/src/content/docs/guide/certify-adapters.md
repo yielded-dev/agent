@@ -36,9 +36,9 @@ reconstruction uses that same transaction.
 must run the generic checkpoint conformance suite. Retained-history execution does not use it.
 
 A new `ThreadCheckpoint` needs only `schemaVersion`, `threadId`,
-`throughSequence`, `tailDigest`, `state`, and `createdAt`. Adapters bind the sequence and digest
+`throughSequence`, `state`, and `createdAt`. Adapters bind the sequence
 to a canonical batch tail; consumers decode `state` and decide whether its projection version
-supports suffix replay. `ThreadProjection` uses version 3 and rejects older snapshots so
+supports suffix replay. `ThreadProjection` uses version 4 and rejects older snapshots so
 consumers can rebuild from canonical records.
 
 Authoritative execution progress is separate from application checkpoints. Implement
@@ -57,7 +57,7 @@ indexed after Run settlement; destination acknowledgement owns closure. An index
 execution authority, and missing required evidence is a typed fault, not an empty completed Run.
 See [Run continuations](/concepts/durability/#run-continuations) for recovery bounds.
 
-This unreleased format accepts only fresh layout-22 storage and `effect-agent/thread@4` archives.
+This unreleased format accepts only fresh layout-23 storage and `effect-agent/thread@5` archives.
 Refuse predecessor, newer, or ambiguous layouts before any DDL or record mutation. Preserve the
 rejected store; there is no layout upgrade or historical record decoder.
 
@@ -160,8 +160,8 @@ scenario and the exact never-fired set. Dedicated suites and crash matrices cove
 background-worker, and Agent-update paths.
 Those dedicated suites run separately; the certificate runner does not execute them.
 
-The final invariant check recomputes the digest chain from `EMPTY_TAIL_DIGEST` and uses the same
-checker as the administrative `verify` operation.
+The final invariant check validates schema, identity, sequence, retained history and active state
+using the administrative `verify` operation.
 
 <a id="tier-3-evidence"></a>
 

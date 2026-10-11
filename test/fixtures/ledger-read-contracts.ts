@@ -106,7 +106,6 @@ const publish = Effect.fn("LedgerReadFixture.publish")(function* (
         threadId: submission.threadId,
         producerEpoch: tail.producerEpoch,
         expectedTailSequence: tail.tailSequence,
-        expectedTailDigest: tail.tailDigest,
         batch: CanonicalBatch.make({
           batchId: submissionSettlementBatchId(submission.submissionId),
           producerId,
