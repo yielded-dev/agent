@@ -250,8 +250,8 @@ The driver collects metrics after its timer endpoints, before closing the text o
 A confirmed lost incarnation invalidates the Object's entire pass; the result retains those
 records. Snapshot-backed passes restore and verify the same Object, repeat preparation,
 and remeasure once with fresh input IDs. A second loss, sample-key mismatch, wrong build,
-or ambiguous turn failure stops the run. Real-history builds and passes that carried prior
-pass state cannot recover this way. `--verify-incarnation-recovery` exercises this path by
+or ambiguous turn failure stops the run. Real-history builds and passes that carry history
+into or out of another pass cannot recover this way. `--verify-incarnation-recovery` exercises this path by
 aborting one settled Object per target before metrics; its interrupted passes are classified
 and excluded, so use this diagnostic separately from a latency comparison.
 Tardie's native reference can skip the Actor directory. `directoryUsed` records whether

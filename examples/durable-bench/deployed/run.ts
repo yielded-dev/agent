@@ -616,6 +616,14 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         !options.buildHistory &&
         (epoch === 0 || preparedByFormat.size > 1 || options.restoreEachPass === true);
 
+      const recoveryAvailable =
+        restorePass &&
+        (epoch === epochs.length - 1 ||
+          preparedByFormat.size > 1 ||
+          options.restoreEachPass === true);
+
+      const clearBeforeRestore = persistent || epoch > 0 || attempt > 0;
+
       const assignment = (cohort: Pick<Query, "target" | "object">) => {
         const first = firstLabels.get(objectKey(cohort));
 
@@ -1174,7 +1182,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
               const restoreStarted = yield* Clock.currentTimeMillis;
 
-              if (persistent || epoch > 0) {
+              if (clearBeforeRestore) {
                 yield* resetForBuild(cohort);
                 yield* request(url("/restore/clear", cohort), deploy.token, RestoreAck, {});
               }
@@ -1220,7 +1228,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                     epoch,
                     build: label,
                     requests:
-                      (persistent || epoch > 0 ? 2 : 1) +
+                      (clearBeforeRestore ? 2 : 1) +
                       (chunks.get(`${cohort.target}-${cohort.history}`)?.length ?? 0),
                     ms: restoreMs,
                   },
@@ -1722,7 +1730,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
               Effect.gen(function* () {
                 // Never resubmit an ambiguous input or continue an advanced history. Only a complete
                 // snapshot-backed pass can be replaced, once, after other Objects finish this pass.
-                if (!restorePass || attempt !== 0 || profiled)
+                if (!recoveryAvailable || attempt !== 0 || profiled)
                   return yield* new BenchError({
                     message: error.message + "; automatic pass recovery unavailable or exhausted.",
                   });
