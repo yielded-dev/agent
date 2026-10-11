@@ -60,8 +60,9 @@ envelope and require only `ThreadReader`. Authorize the owner and locator before
 verify the returned payload; absence alone does not prove an admission was never accepted.
 
 Native stores provide `readIdentity({ threadId })` as one bounded, consistent snapshot of the
-Thread ID, canonical tail, admission count, first canonical record and exact worker origin/lineage
-records. It grants no execution authority. Custom ThreadStore adapters must implement this operation;
+Thread ID, canonical tail, `hasAdmissions`, first canonical record and exact worker origin/lineage
+records. `hasAdmissions` includes settled admissions and accepted input not yet present in history.
+The snapshot grants no execution authority. Custom ThreadStore adapters must implement this operation;
 deploy matching Cloudflare client and owner packages for its read-only port protocol.
 
 Use the existing `submissionInputRecordId` / `submissionSettlementRecordId` exports from

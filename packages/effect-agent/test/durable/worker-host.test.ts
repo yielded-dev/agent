@@ -365,7 +365,7 @@ const harness = Effect.fn("workerHostHarness")(function* (
           if (entry !== undefined && !selected.includes(entry)) selected.push(entry);
 
         const snapshot = ThreadIdentity.make({
-          admissions: [...submissions.values()].filter((row) => row.threadId === threadId).length,
+          hasAdmissions: [...submissions.values()].some((row) => row.threadId === threadId),
           threadId,
           tailSequence: Schema.decodeSync(CanonicalSequence)(records.length),
           records: selected,

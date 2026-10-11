@@ -22,6 +22,7 @@ import {
 } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
 import { digestJson } from "@yielded/agent/digest";
 import { lifecyclePublicationLayer } from "@yielded/agent/lifecycle-publication";
+import * as PersistentHistory from "@yielded/agent/persistent-history";
 import {
   CanonicalBatch,
   CanonicalRecord,
@@ -52,9 +53,11 @@ import {
   threadStoreConformanceCases,
   threadCheckpointConformanceCases,
 } from "@yielded/agent/testing/thread-store-conformance";
+import { ThreadHistory } from "@yielded/agent/thread-history";
 import {
   ThreadCheckpoint,
   ThreadExportRequest,
+  ThreadIdentityRequest,
   ThreadMaterialization,
   ThreadObservation,
   ThreadRead,
@@ -199,6 +202,68 @@ const withTemporaryDatabase = <A, E>(
   ).pipe(Effect.provide(NodeFileSystem.layer));
 
 describe("SqliteThreadStore", () => {
+  // Admission owns a Thread before its input is materialized in canonical history.
+  it.effect("rejects persistent history for admitted input before canonical append", () =>
+    withTemporaryDatabase((filename) => {
+      const dependencies = Layer.mergeAll(
+        SqliteClient.layer({ filename, disableWAL: true }),
+        storageConfigLayer({ filename }),
+        SqliteStorageFailpoint.layer,
+        NodeCrypto.layer,
+      );
+
+      const services = exclusiveRunStorageLayer.pipe(
+        Layer.provideMerge(exclusiveHostClientLayer.pipe(Layer.provideMerge(dependencies))),
+      );
+
+      return Effect.gen(function* () {
+        const store = yield* ThreadStore;
+        const ledger = yield* SubmissionLedger;
+        const history = yield* ThreadHistory;
+        const request = ThreadIdentityRequest.make({ threadId });
+
+        yield* store.materialize(ThreadMaterialization.make({ threadId }));
+        expect.soft(yield* store.readIdentity(request)).toMatchObject({
+          hasAdmissions: false,
+          tailSequence: 0,
+          records: [],
+        });
+        expect((yield* history.load(threadId)).content).toEqual([]);
+
+        const digest = id(Digest, "a".repeat(64));
+
+        yield* ledger.admit(
+          AdmissionRequest.make({
+            threadId,
+            principal: id(AdmissionRequest.fields.principal, "history-owner"),
+            idempotencyKey: id(AdmissionRequest.fields.idempotencyKey, "pending-history-input"),
+            agentId: id(AdmissionRequest.fields.agentId, "history-agent"),
+            agentDigests: DefinitionDigests.make({ agent: digest, model: digest, tools: digest }),
+            deploymentId: id(AdmissionRequest.fields.deploymentId, "history-deployment"),
+            inputPayload: "pending",
+            inputDigest: yield* digestJson("pending"),
+          }),
+        );
+
+        expect.soft(yield* store.readIdentity(request)).toMatchObject({
+          hasAdmissions: true,
+          tailSequence: 0,
+          records: [],
+        });
+        expect(yield* history.load(threadId).pipe(Effect.flip)).toMatchObject({
+          _tag: "ThreadHistoryError",
+          reason: "incompatible",
+        });
+
+        yield* store.materialize(ThreadMaterialization.make({ threadId: secondThreadId }));
+        expect
+          .soft(yield* store.readIdentity(ThreadIdentityRequest.make({ threadId: secondThreadId })))
+          .toMatchObject({ hasAdmissions: false });
+        expect((yield* history.load(secondThreadId)).content).toEqual([]);
+      }).pipe(Effect.provide(PersistentHistory.layer.pipe(Layer.provideMerge(services))));
+    }),
+  );
+
   // Layout 22 replaces active progress in the same transaction as its facts;
   // run-continuation.test.ts covers process loss at compaction,
   // while these restored rows cover rollback and acknowledgement loss at that append.

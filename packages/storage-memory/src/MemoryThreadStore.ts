@@ -2395,10 +2395,9 @@ const makeThreadStore = Effect.gen(function* () {
       return yield* ThreadIdentity.makeEffect({
         threadId: request.threadId,
         tailSequence: thread.tailSequence,
-        admissions:
-          ledgerTransfer === undefined
-            ? 0
-            : (yield* ledgerTransfer.snapshot(request.threadId)).admissions,
+        hasAdmissions:
+          ledgerTransfer !== undefined &&
+          (yield* ledgerTransfer.snapshot(request.threadId)).admissions > 0,
         records: selected.filter(
           (entry, index) =>
             selected.findIndex((other) => other.record.recordId === entry.record.recordId) ===

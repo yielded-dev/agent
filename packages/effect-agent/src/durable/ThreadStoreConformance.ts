@@ -581,8 +581,10 @@ const tailInspection = conformanceCase(
       const emptyIdentity = yield* store.readIdentity(ThreadIdentityRequest.make({ threadId }));
 
       yield* ensure(
-        emptyIdentity.tailSequence === ZERO_SEQUENCE && emptyIdentity.records.length === 0,
-        "A materialized empty identity remains distinct from a missing Thread",
+        emptyIdentity.tailSequence === ZERO_SEQUENCE &&
+          emptyIdentity.records.length === 0 &&
+          emptyIdentity.hasAdmissions === false,
+        "A materialized empty identity has no admissions and remains distinct from a missing Thread",
       );
 
       const first = yield* append(
