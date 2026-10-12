@@ -1,72 +1,56 @@
 ---
 title: Cloudflare
-description: Store thread history and accepted work in Durable Object SQLite.
+description: Persist each Thread owner's history and unfinished work in Durable Object SQLite.
 ---
 
 <a id="cloudflare"></a>
 
-Cloudflare stores thread history and accepted work in Durable Object SQLite.
-Each Object owns its database, separate from other Objects. Records survive Object
-eviction and reconstruction. While the Object is live, the adapters share bounded,
-write-through memory for thread headers, submissions, recovery state, and the journal tail.
-Native reads reuse those committed views; cache misses reload validated rows. Canonical row
-retention shares one eight-MiB serialized-byte budget across the isolate, rather than allocating
-that allowance to each Object. Decoded row views are released with their retained raw rows.
-Memory stores
-over the same owner share its transaction gate and document, receipt, and usage views.
-Failed transactions discard cached state.
-
-Sequential Runs reuse one prompt in the runtime's Scope while its Thread sequence is unchanged.
-After eviction, a disposable checkpoint checks its captured `historyDigest` and projects a bounded
-suffix of completed Runs. Idle import deletes persisted prompt checkpoints in the import transaction,
-so a reused Thread ID cannot reuse an earlier snapshot. Warm Runs replace the checkpoint every 16
-Runs; a cold load refreshes it after settlement. No separate alarm is required.
-
-The resident cache has a 16 MiB retention estimate and a 16,384-message bound; persisted prompt
-JSON is limited to 16 MiB. Missing or incompatible checkpoints, interleaved
-work, compaction, and suffixes above the memory allowance or 1,024 prompt records use canonical
-reconstruction. Compaction reconstructs canonical boundaries on demand. Unfinished Run recovery
-and explicit verification always rebuild from canonical facts; exports omit these derivatives.
-The active model prompt still grows with uncompacted conversation bytes.
+Cloudflare storage belongs to a SQLite Durable Object. Its records survive eviction;
+its live resources and cached views belong to the current Object incarnation.
+Different Objects have separate databases. Your routing determines which Object
+owns a Thread.
 
 ## Run durable agents
 
-Use [`@yielded/agent-platform-cloudflare`](/platforms/cloudflare/) for the complete
-host. `ThreadObject.layer` and `ThreadObject.make` assemble storage, registrations,
-admission, RPC, and alarm-driven recovery. The
-[Cloudflare setup](/platforms/cloudflare/#create-the-thread-object) includes the
-agent, provider, Object class, and binding configuration. No separate storage Layer
-is needed.
+Use [`ThreadObject.make`](/platforms/cloudflare/#create-the-thread-object) for the
+complete host. It assembles the stores, registered agents, admission, and alarm-driven
+recovery. The [runnable travel planner](https://github.com/yielded-dev/agent/tree/main/examples/travel-planner)
+shows the Worker and Object together. No additional storage Layer is needed there.
+
+For example, the planner's Thread Object retains accepted input while the user's
+browser disconnects. A later alarm can continue the work. Reconnecting reads
+canonical history; Object-local live text is only a provisional preview.
 
 ## Use an existing Object
 
-If your application already owns a SQLite Durable Object, follow
-[custom host integration](/platforms/cloudflare/#share-an-application-object) to share
-its database and alarm slot with the runtime. Reuse the host's Effect SQL client
-for application queries.
+For an application-owned Object, use
+[`ThreadObject.layerInHost`](/platforms/cloudflare/#share-an-application-object).
+Share one Effect SQL client and mutation gate with its related application state.
+The [shared-owner example](https://github.com/yielded-dev/agent/blob/main/packages/platform-cloudflare/examples/shared-owner.ts)
+shows the composition.
 
 `@yielded/agent-storage-cloudflare` also exposes `DoThreadStore` and
-`DoSubmissionLedger` for custom assemblies. Their convenience Layers accept
-`ctx.storage` and supply the SQL client and Crypto. Both stores must use the same
-database and scoped owner so local generations guard the same records. These adapters provide storage
-ports; acquiring them alone does not drive agent execution or recovery.
+`DoSubmissionLedger` for custom hosts. Their convenience Layers accept the same
+`ctx.storage` and supply SQL and Crypto. Acquiring storage alone starts no agent
+execution or recovery driver.
 
-Use the adapters for ordinary writes. If maintenance writes private adapter tables directly,
-call `DoThreadStore.invalidate(ctx.storage)` afterward, before serving port reads. Keep
-port operations quiesced during both steps and enroll the write with the host's mutation gate.
-This invalidates the adapters' shared views;
-it does not change durable data. Canonical records remain append-only.
+| Concern                              | Responsibility         |
+| ------------------------------------ | ---------------------- |
+| Retained history and unfinished work | Object SQLite          |
+| Current execution ownership          | One live Object owner  |
+| Recovery scheduling                  | Host alarm integration |
+| Thread access and placement          | Your application       |
 
-Background worker starts validate authority and reserve capacity at the source, then admit and
-initialize the child through one destination RPC. Custom routed assemblies must install
-`PortRouting.routedWorkerAdmissionLayer` alongside the routed ledger and thread store. The
-owner-side port handler requires `WakeScheduler` and `DurableRuntimeFailpoint` and must run
-mutations through the host's maintenance gate. `ThreadObject.make` and `ThreadObject.layerInHost`
-provide this wiring, including enrollment of affected maintenance lanes. Upgrade the framework,
-storage and host packages together; stored records and retry receipts need no reset.
+Stores initialize a fresh database or open the [supported layout](/storage/).
+Unsupported layouts fail before initialization. Caches and prompt checkpoints are
+derived state; they do not replace canonical history or unfinished Run checkpoints.
+
+Use the adapter for normal writes. Direct SQL maintenance must quiesce port
+operations, use the host mutation gate, and call `DoThreadStore.invalidate(ctx.storage)`
+before reads resume. Canonical records remain append-only.
 
 ## Optional shared memory
 
-Thread history and memory shared across threads have different owners. For shared
-documents, recall, and routed memory operations, see
-[Cloudflare shared memory](/platforms/cloudflare/#shared-memory).
+Documents shared across Threads have separate ownership from conversation history.
+See [Cloudflare shared memory](/platforms/cloudflare/#shared-memory) for namespace
+selection, authorization, and a complete example.

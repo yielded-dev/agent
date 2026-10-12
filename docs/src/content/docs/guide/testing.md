@@ -1,114 +1,73 @@
 ---
 title: Deterministic testing
-description: Script model turns and test agent behavior with Effect layers.
+description: Exercise the real agent runtime with scripted model responses and certify custom storage adapters.
 ---
 
 <a id="deterministic-testing"></a>
 
-`@yielded/agent-testing` provides a deterministic Effect AI `LanguageModel` layer. Use it to test
-the real interpreter without network access, credentials, provider latency, or model variance.
+`@yielded/agent-testing` replaces the model provider with scripted responses while retaining the
+real interpreter, tools, and output validation. Use it to verify integration behavior without
+credentials, network calls, or model variance.
 
 ## Provide a scripted model layer
 
-```ts
+```ts twoslash
 import { ScriptedModel } from "@yielded/agent-testing/scripted-model";
 import { Model } from "effect/ai";
 
-const TestModel = Model.make("scripted", "test-model", ScriptedModel.layer(turns));
-```
-
-A script can emit text, reasoning, tool calls, usage, malformed sequences, typed model failures,
-or a stream that waits for interruption. Hooks can inspect the normalized Prompt and detect stream
-finalization.
-
-## Choose a testing entry point
-
-The package root exports the `ScriptedModel` module namespace. Import its service, request,
-turn, hook types, and schemas directly from `@yielded/agent-testing/scripted-model`.
-Specialized helpers have separate paths:
-
-| Import                                             | Contents                                                |
-| -------------------------------------------------- | ------------------------------------------------------- |
-| `@yielded/agent-testing/certification`             | Durable adapter certification                           |
-| `@yielded/agent-testing/chaos`                     | Seeded plans and convergence checks                     |
-| `@yielded/agent-testing/code-executor-conformance` | `CodeExecutor` adapter conformance                      |
-| `@yielded/agent-testing/code-executor-substitute`  | Deterministic in-process executor substitute            |
-| `@yielded/agent-testing/travel-planner`            | Travel Planner definitions, services, and scenarios     |
-| `@yielded/agent-testing/docs-researcher`           | Docs Researcher definitions and MCP delegation fixtures |
-
-These paths ship JavaScript and declarations. Install the storage and runtime adapters used by
-your tests directly.
-
-Mutable runtime failpoint controls live in `@yielded/agent/testing/durable-failpoint-test-control`.
-Its `.layer` provides the production failpoint service and mutable test control over one Ref.
-`@yielded/agent-storage-cloudflare/testing/do-storage-failpoint-testing` exports
-`evictionFailpointHandler`.
-
-## Exercise the public runtime
-
-Provide the same layers as the application. Override the default `IdGenerator` reference with
-a deterministic counter when assertions depend on stable IDs.
-
-```ts
-import { InMemory } from "@yielded/agent";
-import { IdGenerator } from "@yielded/agent/id-generator";
-import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
-import { Effect, Layer, Ref, Schema } from "effect";
-
-const DeterministicIdGeneratorLive = Layer.effect(
-  IdGenerator,
-  Effect.gen(function* () {
-    const sequence = yield* Ref.make(0);
-    const next = Ref.updateAndGet(sequence, (n) => n + 1);
-
-    return IdGenerator.of({
-      nextThreadId: next.pipe(Effect.map((n) => Schema.decodeSync(ThreadId)(`thread-${n}`))),
-      nextRunId: next.pipe(Effect.map((n) => Schema.decodeSync(RunId)(`run-${n}`))),
-      nextTurnId: next.pipe(Effect.map((n) => Schema.decodeSync(TurnId)(`turn-${n}`))),
-    });
-  }),
-);
-
-const TestRuntimeLive = Layer.mergeAll(
-  InMemory.layer,
-  ToolkitLive,
-  DomainServicesTest,
-  DeterministicIdGeneratorLive,
-);
-
-it.effect("commits tool results in declaration order", () =>
-  AgentRuntime.run(Definition, input).pipe(
-    Effect.provide(TestModel),
-    Effect.provide(TestRuntimeLive),
-    Effect.tap((result) => Effect.sync(() => expect(result.output).toEqual(expected))),
-  ),
+const TestModel = Model.make(
+  "scripted",
+  "test-model",
+  ScriptedModel.layer([
+    {
+      _tag: "Stream",
+      parts: [
+        { type: "text-start", id: "answer" },
+        { type: "text-delta", id: "answer", delta: "ready" },
+        { type: "text-end", id: "answer" },
+        {
+          type: "finish",
+          reason: "stop",
+          usage: { inputTokens: { total: 1 }, outputTokens: { total: 1 } },
+        },
+      ],
+      termination: { _tag: "Complete" },
+    },
+  ]),
 );
 ```
 
-This runs the public definition, binding, toolkit handlers, scheduler, stream reducer, and output
-decoder. Completed `run` calls need no extra caller Scope. Assert run-local finalizers after the
-call or interrupted fiber finishes. Keep a Scope around `start` and resources acquired by the test.
+Provide `TestModel` in place of the provider Layer for a text-output Agent. Keep the application's
+runtime and handler composition. Each scripted Turn is consumed once; inspection exposes requests,
+remaining turns, and `assertExhausted`. Hooks can inspect the normalized prompt or observe stream
+finalization. Scripts can also emit tool calls, fail, or wait for interruption.
 
 <a id="what-to-assert"></a>
 
 ## Assert behavior beyond output
 
-Useful assertions include:
+Choose assertions for your integration's actual risks: authorized tools, expected output, resource
+cleanup, or the outcome after restart. A scripted model proves how the runtime handles the supplied
+response; it does not prove that a real model will choose that response.
 
-- normalized Prompt content and available tool names;
-- parameter decoding and typed failures;
-- the complete semantic `RunEvent` trace;
-- actual completion order and committed declaration order;
-- policy exhaustion and approval suspension;
-- interruption and finalizers;
-- inferred `Effect<A, E, R>` types.
+The [testing package](https://github.com/yielded-dev/agent/tree/main/packages/testing) includes
+executable travel-planner and researcher fixtures. Use live evaluation separately when the question
+is model quality.
 
-## Test storage contracts, not implementations
+## Certify storage adapters
 
-Run shared conformance cases against every memory, SQLite, or custom store. The thread cases
-cover materialization, idempotent append, tail conflicts, fencing, observation offsets, export, and
-corruption. Stores with `ThreadStore.checkpoints` also run
-`threadCheckpointConformanceCases`.
+Run `certifyDurableAdapters` from `@yielded/agent-testing/certification` against your combined
+`SubmissionLedger` and `ThreadStore` Layers in a TestClock-backed environment with Crypto.
+Use disposable storage. If both ports share a connection root, pass the same combined Layer instance.
 
-Durable adapters also need ledger conformance, failpoint coverage, and real process-loss tests.
-See [Certify storage adapters](/guide/certify-adapters/).
+| Evidence | What it exercises                             |
+| -------- | --------------------------------------------- |
+| Tier 1   | Shared storage-port contracts                 |
+| Tier 2   | Coordinator recovery across injected failures |
+| Tier 3   | Real process loss or eviction                 |
+
+Inspect the full report. Tier 3 distinguishes execution in this run, cited evidence, and
+`not-exercised`; a passing in-process suite does not establish crash durability. Custom subscription
+stores have separate conformance cases. See the
+[certification entry point](https://github.com/yielded-dev/agent/blob/main/packages/testing/src/Certification.ts)
+for adapter requirements and the report contract.

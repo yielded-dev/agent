@@ -1,64 +1,68 @@
 ---
 title: Agent messaging
-description: Send durable messages between independent agent threads through fixed, authorized routes.
+description: Send retained input between independent Threads through fixed, application-authorized routes.
 ---
 
 <a id="agent-messaging"></a>
 
-Use peer messaging when independent agents need to exchange input. For a parent that launches and
-steers a child worker, use [background subagents](/guide/subagents/background/) instead.
+Peer messaging sends typed input to an independent Agent Thread. The destination owns its input
+Schema; your host chooses the route and authorizes the sender. Use [background subagents](/guide/subagents/)
+when the sender also owns the recipient's creation and lifetime.
 
 ## Send messages through fixed peer routes
 
-Peers are independent Agent Threads. Their input Schema belongs to the receiving Definition:
+```ts twoslash
+import { Agent, Messaging } from "@yielded/agent";
+import { Schema } from "effect";
+import { Toolkit } from "effect/ai";
 
-```ts
+const advisor = Agent.make("advisor", {
+  input: Schema.String,
+  output: Schema.String,
+  instructions: "Suggest one next action for the request.",
+  toolkit: Toolkit.empty,
+});
+
 const Advisor = Messaging.peer("advisor", { target: advisor });
 const send = Messaging.sendTool(Advisor);
-// Programmatic: Messaging.send(Advisor, input, { idempotencyKey })
 ```
 
-Provide the caller-bound `MessagingHost` returned by
-`durableRuntime.messagingHost({ sourceThreadId, principal })` for programmatic operations.
-The interpreter provides native tools with the actual caller facet. `sendTool`, `replyTool`,
-`inboxTool`, `inspectTool`, and `retryTool` each derive a native Tool, Toolkit, and handler Layer;
-install only the operations the host wants to expose.
-The runtime provides `MessagingHost.forTool` through Effect context with the same per-Run
-identity check and unavailable default as worker tools.
+Give the sending Agent `send.toolkit` and provide `send.layer`. Register the destination, then
+configure `PeerRoutes` and `PeerAuthorizer` on the durable host. Both deny by default. A model
+chooses the input, never an arbitrary Thread address or principal.
 
-`PeerRoutes` maps a source, fixed peer name, and registered target to a destination Thread.
-`PeerAuthorizer` separately authorizes context, read, send, and control and returns a stable
-delivery principal. Both deny by default. Reply authorization receives the recorded sender
-address and the original `reply` operation. Incoming messages confer no reverse send grant or
-worker management grant. Use `Subagent.followUp` for worker input; a peer route cannot bypass
-worker admission and budget ownership.
+For application code, acquire `runtime.messagingHost({ sourceThreadId, principal })` and provide
+it to `Messaging.send`. Supply a stable `idempotencyKey`; retries must retain the same input.
 
-The runtime retains authenticated sender and return-address metadata separately from application
-input, backed by a canonical source proof. `Messaging.inbox` returns bounded provenance from
-authorized sender Threads. `Messaging.reply` requires one of those actual inbound references
-and checks its sender against the declared peer. A send's optional `inReplyTo` is correlation
-only. Models cannot choose arbitrary destination Threads, principals, or return addresses.
+## Read delivery status
 
-`Messaging.send` and `reply` return a retained message status. `pending` means outbound work is
-stored; `accepted` includes the destination Receipt; `processed` includes its Settlement. Use
-`Messaging.inspect` with the same message reference to read status. Retention and acceptance do
-not prove execution. The bounded `reason` identifies the latest retry failure, definite refusal,
-or parking reason; private diagnostics remain in storage. Automatic retries preserve the exact destination,
-input, principal, code version, and admission identity, including after a lost admission reply.
-`Messaging.retry` renews a parked delivery's finite retry budget after control authorization;
-conclusively refused and processed deliveries cannot be rewound.
+| Status      | What it proves                                               |
+| ----------- | ------------------------------------------------------------ |
+| `pending`   | The source retained outbound work                            |
+| `accepted`  | The destination admitted it and returned a receipt           |
+| `processed` | The destination recorded its settlement                      |
+| `parked`    | Automatic retries stopped; authorized intervention is needed |
+| `refused`   | Delivery was conclusively refused                            |
 
-Default delivery limits are eight automatic attempts, a 30-second attempt timeout, exponential
-backoff from 1 to 60 seconds, and a 24-hour peer deadline. Exhaustion parks work; rejection remains
-inspectable. `PeerMessageCapacity` bounds canonical send intents across all peers and principals
-in a source Thread (default 256, maximum 1,000), including preparations whose insertion failed.
-The delivery store separately bounds pending and retained rows. Neither history nor deduplication
-evidence is automatically deleted. Effect spans identify preparation, admission, and driver
-operations; persisted failures contain bounded codes rather than raw application errors.
+A retained message reference is not a submission receipt, and acceptance is not execution.
+Use `Messaging.inspect` on the same reference. `Messaging.retry` renews a parked delivery's
+bounded retry allowance without changing its frozen destination, principal, or input. It cannot
+rewind processed or conclusively refused work.
 
-Node's scoped delivery pump and Cloudflare's persisted alarms rediscover stored obligations even
-after both Runs settle and wake hints are lost. During an active Cloudflare maintenance pass,
-message delivery continues alongside source execution, so a message can reach its destination
-before the source Run finishes. Progress still needs a functioning host and
-available capacity. The [canonical Cloudflare application](https://github.com/yielded-dev/agent/tree/main/examples/travel-planner)
-provides the runnable application entrypoint.
+The default delivery policy permits eight attempts with a 30-second attempt timeout and a
+24-hour peer deadline. Source Threads also have a finite canonical-send capacity; completed
+sends do not automatically free it. Choose capacity and retention deliberately for long-lived
+messaging workloads.
+
+## Reply with current authority
+
+`Messaging.inbox` returns authenticated inbound references. `Messaging.reply` uses one of those
+references and rechecks send authority. Receiving a message does not grant permission to reply;
+`inReplyTo` on a send is correlation only. Peer routes cannot bypass worker admission rules.
+
+Node's scoped delivery pump and Cloudflare maintenance recover retained deliveries after restart.
+They need a functioning host and available capacity. Child completion, report delivery, and the
+parent's response remain separate outcomes.
+
+See the [Cloudflare application](https://github.com/yielded-dev/agent/tree/main/examples/travel-planner)
+for a runnable host, and [operations](/guide/operations/) for observing and controlling accepted work.

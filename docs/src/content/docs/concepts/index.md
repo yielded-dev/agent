@@ -1,27 +1,16 @@
 ---
 title: Architecture
-description: Understand Yielded Agent's execution model, resource boundaries, budgets, and durable recovery.
+description: Understand Thread ownership, execution boundaries, recovery, and limits.
 ---
 
-<a id="architecture"></a>
+A Thread separates conversation history, active work, and model context. Your application
+chooses the host and controls access; Yielded Agent advances the work under that host's ownership.
 
-Understand how Yielded Agent runs work, bounds its resources, and recovers recorded progress.
-These pages explain the contracts behind the [implementation guides](/guide/).
+| Reader question                                         | Page                                      |
+| ------------------------------------------------------- | ----------------------------------------- |
+| How do Thread, Run, Attempt, and Turn fit together?     | [Runtime model](/concepts/runtime-model/) |
+| What survives interruption, and what remains uncertain? | [Durability](/concepts/durability/)       |
+| What bounds execution and spending?                     | [Budgets and limits](/concepts/budgets/)  |
 
-## Agent execution
-
-[The runtime model](/concepts/runtime-model/) defines the turn, ownership, recovery, and wake rules
-shared by runtime, storage, and platform changes.
-
-## Budgets and limits
-
-[Budgets and bounded autonomy](/concepts/budgets/) explains execution ceilings, shared delegation
-allowances, token limits, and cost accounting.
-
-## Durability and recovery
-
-[Persistence and durability](/concepts/durability/) explains accepted work, recorded results,
-ownership loss, child recovery, and uncertain external effects.
-
-For host-specific setup, see [Platforms](/platforms/). For package boundaries and
-advanced configuration, see [Reference](/reference/).
+Continue with [platforms](/platforms/) to choose where ownership lives, or
+[context management](/guide/context-management/) to see how the model's working view stays small.

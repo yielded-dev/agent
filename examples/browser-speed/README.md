@@ -42,7 +42,7 @@ Wikipedia winner. Page text is untrusted input. Tools do not expose arbitrary Ja
 The reusable browser tools come from `@yielded/agent/browser-use`: `BrowserUse.make({ mode })`
 for the model agent and `BrowserUse.runJev` for Jev, both over the upstream native controller.
 Wikipedia eligibility, route choice, verification, model configuration, and the comparison UI
-remain here. [Consumer setup](../../docs/src/content/docs/guide/browser.md#let-jev-drive-the-browser).
+remain here. [Consumer setup](../../docs/src/content/docs/guide/browser.md#interact-with-a-browser).
 
 The task board uses self-contained HTML and exposes observed clicks, fills, and selections.
 Its preset verifier checks the complete saved board before accepting completion. A mismatch

@@ -1,11 +1,13 @@
 ---
 title: In-memory
-description: Keep conversations across runs in one application Scope.
+description: Share conversations within an application Scope without persistent storage.
 ---
 
 <a id="in-memory"></a>
 
-Use `InMemory.layer` from `@yielded/agent` to share conversation history across runs:
+`InMemory.layer` keeps conversations and attached-subagent reservations in one
+application Scope. It is useful for trying an agent, local sessions, and work that
+can end with the process. No storage package is required.
 
 ```ts twoslash
 // ---cut---
@@ -22,44 +24,36 @@ const conversation = Effect.gen(function* () {
 }).pipe(Effect.provide(InMemory.layer));
 ```
 
-Here, `planner` is an [agent definition](/guide/agents/). Supply its model and tool
-services around the program; see [getting started](/guide/getting-started/) for
-complete provider setup. No storage package is needed.
+Supply the agent's model and tool services around this program. The
+[runnable planner](https://github.com/yielded-dev/agent/tree/main/docs/snippets/travel-planner)
+contains the complete setup.
 
 ## Share the application Scope
 
-Provide the Layer once around the conversation, or use one `ManagedRuntime` for a
-long-lived application. A new Layer acquisition creates a separate store. Reuse the
-returned `threadId` for follow-ups; omitting it starts a new conversation.
+Provide the Layer once around the conversation, or acquire it in one
+`ManagedRuntime` shared by your request handlers. Rebuilding it creates separate
+state. Save the returned Thread ID for follow-ups; omitting it starts a new Thread.
 
-`InMemory.layer` shares conversation history and attached-subagent reservations.
-History records complete messages and tool batches as execution advances. If a
-later step fails or is interrupted, earlier recorded updates remain available.
+Complete history updates remain available if a later step fails or is interrupted.
+Closing the Scope or losing the process discards everything. No interrupted Run
+can recover after process loss.
 
-State stays available while the application Scope remains open, within the store's
-capacity limits. Closing the Scope or losing the process loses that state. See
-[in-memory conversations](/guide/threads/#in-memory-conversations) for limits and
-history inspection.
+| Built-in conversation limit      | Maximum |
+| -------------------------------- | ------- |
+| Threads per store                | 256     |
+| Messages per Thread              | 1,024   |
+| Encoded content per Thread       | 4 MiB   |
+| Encoded content across the store | 64 MiB  |
 
-## Canonical stores for tests and custom assemblies
+These are storage bounds, separate from an agent's token and tool budgets. Exceeding
+one fails with `ThreadLimitExceeded`.
 
-`@yielded/agent-storage-memory` supplies implementations of the canonical
-`ThreadStore`, `SubmissionLedger` and `SettlementPublisher` ports. These are useful
-for adapter tests and custom runtime assemblies. The ledger and publisher share the
-thread store's mutation boundary. Assemble them with
-`MemorySubmissionLedgerLive.pipe(Layer.provideMerge(MemoryThreadStoreLive))` so each
-assembly owns one store. They are separate from the conversation store supplied by
-`InMemory.layer`; the submission ledger reports itself as non-durable.
+## Canonical stores for custom assemblies
 
-When using `memoryMessageDeliveryStoreLayer`, merge it with the ledger before
-providing the same `MemoryThreadStoreLive`. Thread exports then identify retained
-deliveries as external obligations, and import refuses to overwrite delivery work.
+`@yielded/agent-storage-memory` implements canonical Thread, Submission, and settlement
+ports for tests and custom runtimes. Its ledger is explicitly non-durable. These
+ports are separate from the conversation store supplied by `InMemory.layer` and
+must share one storage owner when composed.
 
-`MemoryThreadStoreLive`, imported from
-`@yielded/agent-storage-memory/memory-thread-store`, provides `ThreadStore` and
-requires a platform Crypto Layer. Providing it to `PersistentHistory.layer` uses
-the [whole successful-run commit policy](/guide/threads/#retain-completed-runs),
-while still keeping all records in memory.
-
-For history that survives a restart, choose [SQLite](/storage/sqlite/) or [Postgres](/storage/postgres/).
-To recover unfinished work as well, use a [durable platform](/platforms/).
+Choose [persistent history](/storage/sqlite/) to retain completed Runs after restart,
+or a [durable platform](/platforms/) to recover accepted work as well.

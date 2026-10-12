@@ -1,0 +1,152 @@
+---
+title: Cloudflare
+description: Let Durable Objects own Thread execution, persistence, and recovery alarms.
+---
+
+import { FlowMap } from "@yielded/starlight-theme/components";
+
+<a id="cloudflare"></a>
+
+A Thread Object owns a conversation's durable state and live execution. Your Worker
+authenticates requests and routes them to that owner. SQLite retains accepted work
+across eviction; alarms bring the Object back to advance it.
+
+<FlowMap
+  title="Cloudflare Thread ownership"
+  description="Your Worker sends authorized input to a Thread Object. The Object commits to its SQLite database and effect-cf alarms drive pending work."
+  columns={2}
+  nodes={[
+    {
+      id: "worker",
+      at: [1, 1],
+      owner: "app",
+      title: "Your Worker",
+      note: "Authenticate and route",
+    },
+    {
+      id: "thread",
+      at: [2, 1],
+      owner: "library",
+      title: "Thread Object",
+      note: "Admit, execute, recover",
+    },
+    {
+      id: "alarm",
+      at: [2, 2],
+      owner: "external",
+      title: "effect-cf alarms",
+      note: "Wake pending work",
+    },
+    {
+      id: "storage",
+      at: [3, 1],
+      owner: "external",
+      title: "Object SQLite",
+      note: "History and unfinished work",
+    },
+  ]}
+  edges={[
+    { from: "worker", to: "thread", label: "RPC" },
+    { from: "alarm", to: "thread" },
+    { from: "thread", to: "storage", label: "commit" },
+  ]}
+/>
+
+## Create the thread object
+
+Install `@yielded/agent-platform-cloudflare@beta`, `effect`, `effect-cf`, and your
+provider. Reuse the [example agent and provider setup](https://github.com/yielded-dev/agent/blob/main/docs/snippets/travel-planner/node-agent.ts):
+
+```ts twoslash
+// @types: @cloudflare/workers-types
+import { definitions, ModelLive, OpenAiLive, planner } from "./node-agent.ts";
+// ---cut---
+import { ThreadObject } from "@yielded/agent-platform-cloudflare";
+import { Layer } from "effect";
+
+const RuntimeLive = ThreadObject.layer([{ agent: planner, model: ModelLive, definitions }]).pipe(
+  Layer.provide(OpenAiLive),
+);
+
+export class TravelThread extends ThreadObject.make(RuntimeLive, {
+  namespaceBinding: "THREADS",
+  deploymentId: "travel-planner",
+  producerPrefix: "travel-worker",
+}) {}
+```
+
+Bind the exported class as a SQLite Durable Object under `THREADS`, enable
+`nodejs_compat`, and supply the provider secret. The
+[runnable travel planner](https://github.com/yielded-dev/agent/tree/main/examples/travel-planner)
+includes deployment and application wiring. No separate storage Layer is needed.
+
+## Connect from your Worker
+
+`CloudflareThreadClient.layerFromBinding({ namespace: env.THREADS })` supplies the
+client. Submit authenticated input with a Thread ID, principal, idempotency key, and
+definition digests. Admission arms maintenance before accepting work and returns a
+receipt after durable writes. It enqueues execution; the receipt is not the result.
+
+Use `awaitSettlementRecord(receipt)` for the canonical terminal record and decode
+ordinary completed output with the agent's Schema. Use `readPage` and `awaitProgress`
+for retained updates. Cancelling observation does not abort accepted work.
+
+<a id="preview-live-text"></a>
+
+`watchText(threadId)` supplies provisional text. Reconcile it against canonical
+records; reset or discard drafts as directed by its frames. Canonical completion
+permanently retires matching drafts, including after reconnects. Drafts disappear on eviction.
+
+## Recovery and limits
+
+`effect-cf` owns the native alarm. `ThreadObject.make` registers manual Thread
+maintenance and composes application registrations from `options.alarms`. Do not
+write the raw alarm slot or replace its handler.
+
+`dispatchAfterEvent` defaults to **false**. To opt in, provide
+`DurableObjectAlarm.ScheduleConfiguration` with `{ dispatchAfterEvent: true }` through
+`Layer.provideMerge` on the application Layer. Native alarms remain the recovery driver.
+
+| Setting                          | Default                     |
+| -------------------------------- | --------------------------- |
+| Admission queue depth per Thread | 256 nonterminal Submissions |
+| Encoded input limit              | 1,900,000 bytes             |
+| Database admission ceiling       | 9,000,000,000 bytes         |
+| Failed/no-progress pass backoff  | 100 ms base, 5 seconds cap  |
+
+An alarm has a ten-minute cooperative yield boundary and fourteen-minute watchdog.
+These are event limits; agent `maxDuration` applies to each active durable Attempt
+using the Run's original allowance. Suspension is outside that duration. An explicit
+Unknown outcome stays unresolved; a restart does not authorize replay.
+
+## Configure runtime services
+
+Provide model, tool, and context Layers before constructing the Object. They are
+acquired per incarnation. Keep initialization local and bounded; eviction does not
+guarantee finalizers. Use scoped operations or `eventLayer` for timely cleanup.
+Keep RPC private and configure `operationAuthorizer`; its default trusts service possession.
+
+<a id="agent-tracing"></a>
+
+Acquire `CloudflareTracer.layer` in `eventLayer` for invocation-specific tracing.
+
+## Share an application Object
+
+Use `ThreadObject.layerInHost` to place logical Threads in an existing Object.
+Share its SQL client and mutation gate; keep placement stable. Register
+`ThreadObject.alarms` with the host's `DurableObjectAlarm.mergeAll` and call
+`ThreadMaintenance.ensureAlarm` during local initialization. Follow the
+[shared-owner example](https://github.com/yielded-dev/agent/blob/main/packages/platform-cloudflare/examples/shared-owner.ts).
+
+## Shared memory
+
+`MemoryObject.make` and `CloudflareMemoryClient` provide separately owned documents
+shared across Threads. You choose namespaces and authorize access. See the
+[memory example](https://github.com/yielded-dev/agent/blob/main/packages/platform-cloudflare/examples/memory.ts)
+and [context guide](/guide/context-management/).
+
+## AI Gateway
+
+The Node-safe `/cloudflare-ai-gateway` subpath configures upstream provider clients;
+model behavior stays with Effect AI. [Browser](/guide/browser/) and
+[Code Mode](/guide/code-mode/) adapters are independent capabilities.

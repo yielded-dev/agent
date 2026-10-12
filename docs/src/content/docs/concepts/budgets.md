@@ -1,197 +1,100 @@
 ---
-title: Budgets & bounded autonomy
-description: Set run limits and choose what happens when they are reached.
+title: Budgets and limits
+description: Public policy defaults, exhaustion behavior, and the scope of execution limits.
 ---
 
-<a id="budgets-bounded-autonomy"></a>
+The Agent Definition bounds work; the application chooses limits appropriate to its model
+and tools. A durable Run keeps cumulative accounting across replacement Attempts.
+Model-context capacity and Thread history are separate from those execution budgets.
 
-Every agent has finite turn, tool call, and duration bounds. Policy also decides whether an
-exhausted run returns one constrained final answer or fails.
+## Policy defaults
 
-Normal work stops at a turn or tool call limit. Final-answer policy may allow one constrained
-grace turn. Token and cost usage are checked at turn boundaries, so measured usage may cross the
-threshold. `maxDuration` is a deadline and can interrupt in-flight work.
+Pass a partial `policy` to `Agent.make`. Omitted fields use standalone defaults; delegated
+children can inherit the parent's policy within their delegation ceilings.
 
-## The stop policy
+| Option                        | Default                                                                 | Meaning                                                                |
+| ----------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `maxTurns`                    | `12`                                                                    | Model turns per Run                                                    |
+| `maxToolCalls`                | `24`                                                                    | Tool calls, including programmatic calls                               |
+| `maxDuration`                 | `"5 minutes"`                                                           | Ordinary Run deadline; active Attempt deadline for durable execution   |
+| `toolConcurrency`             | `4`                                                                     | Parallel application handlers per batch                                |
+| `repeatedFailureLimit`        | `3`                                                                     | Consecutive terminal tool failures                                     |
+| `onExhaustion`                | `"final-answer"`                                                        | Turn, tool-call, and token exhaustion behavior                         |
+| `tokenBudget`                 | Unset                                                                   | Cumulative input and output tokens                                     |
+| `costBudgetMicrousd`          | Unset                                                                   | Estimated cost in millionths of a US dollar                            |
+| `completionReserveTokens`     | 20% of `tokenBudget`, capped at `4,096`; `4,096` without a token budget | Capacity reserved for final delivery                                   |
+| `contextTokenLimit`           | Unset                                                                   | Estimated live context that triggers compaction                        |
+| `toolResultBounds.maxBytes`   | `51,200`                                                                | Encoded bytes per application tool result                              |
+| `runStatus`                   | `"off"`                                                                 | Set `"appended"` for a derived status message in model requests        |
+| `restartOnJoinedInput`        | Off                                                                     | Replace a disposable model call on joined input, at most twice per Run |
+| `modelRetries`                | `0`                                                                     | Retry a qualifying model failure before content arrives                |
+| `compaction.keepRecentTokens` | `20,000`                                                                | Recent context preserved during compaction                             |
+| `compaction.mode`             | `"prune-then-summarize"`                                                | Compaction strategy                                                    |
 
-The agent definition fixes its `AgentPolicy`:
-
-```ts
-AgentPolicy.make({
-  maxTurns: 12,
-  maxToolCalls: 24,
-  maxDuration: "5 minutes",
-  toolConcurrency: 4,
-  repeatedFailureLimit: 3,
-  tokenBudget: 80_000,
-  completionReserveTokens: 8_000,
-  costBudgetMicrousd: 2_000_000,
-  onExhaustion: "final-answer",
+```ts twoslash
+import { Agent } from "@yielded/agent";
+import { Schema } from "effect";
+import { Toolkit } from "effect/ai";
+// ---cut---
+const researcher = Agent.make("researcher", {
+  input: Schema.String,
+  output: Schema.Struct({ answer: Schema.String }),
+  instructions: "Answer from the available evidence.",
+  toolkit: Toolkit.empty,
+  policy: {
+    maxTurns: 8,
+    maxToolCalls: 16,
+    maxDuration: "2 minutes",
+    tokenBudget: 80_000,
+    contextTokenLimit: 32_000,
+    completionReserveTokens: 4_000,
+  },
 });
 ```
 
-| Bound                     | What it limits                                 | Result at the limit              |
-| ------------------------- | ---------------------------------------------- | -------------------------------- |
-| `maxTurns`                | model requests per run                         | follows `onExhaustion`           |
-| `maxToolCalls`            | declared and programmatic tool calls           | follows `onExhaustion`           |
-| `maxDuration`             | logical run time, including durable suspension | typed failure                    |
-| `tokenBudget`             | cumulative input and output tokens             | follows `onExhaustion` once      |
-| `completionReserveTokens` | capacity held for finalization                 | ends research before reserve use |
-| `costBudgetMicrousd`      | estimated run cost                             | typed failure                    |
-| `repeatedFailureLimit`    | consecutive terminal tool failures             | typed failure                    |
-| `toolConcurrency`         | parallel tool handlers per batch               | limits concurrency               |
+[Context management](/guide/context-management/) explains compaction and oversized tool results.
+The [travel planner](https://github.com/yielded-dev/agent/tree/main/examples/travel-planner)
+shows policies in a complete application.
 
-`AgentPolicyError.limit` names a failed bound. DN and DC persist the same value in
-`SubmissionSettled.policyLimit`.
+## At the limit
 
-## Transient provider failures
+`onExhaustion: "final-answer"` allows at most one constrained finalization opportunity for
+turn, tool-call, or token exhaustion. A completed result carries
+`finishReason: "budget-exhausted"` and the exhausted dimension. Use `"fail"` when a partial
+answer is not acceptable. Duration, estimated cost, and repeated failure limits always fail.
 
-`modelRetries` repeats a model call that failed before streaming any content, when the failure
-is a retryable `AiError` or a stream error part with a numeric HTTP `code` or `status` of 429 or
-5xx. Provider-defined tools exposed to the call must all be marked `Tool.Readonly`: hosted
-execution can happen before any response part arrives. Calls that already streamed text,
-reasoning, or a tool call are never repeated. The default is `0`, which surfaces the first
-failure unchanged.
+Usage is measured at response boundaries and can cross a threshold. These budgets are not
+prepaid provider spending caps. A strict monetary ceiling requires host admission that reserves
+possible charges before calling the provider. Cost budgets require the host's
+`estimateCostMicrousd`; a missing estimator or unknown pricing fails with a typed cost-policy error.
 
-Waits double from one second up to thirty seconds. A longer provider `retryAfter` takes
-precedence, and all waiting counts toward `maxDuration`.
+Durable `maxDuration` uses the original allowance for each active Attempt; eviction,
+suspension, and missing-binding waits do not consume it. An actual duration exhaustion remains
+terminal across recovery. Other cumulative counters do not reset.
 
-## Exhaustion: final answer or failure
+`modelRetries` applies only before content, for retryable failures. Hosted tools must all be
+marked readonly. Backoff counts toward the active deadline; streamed content prevents retry.
 
-`onExhaustion: "final-answer"` is the default for turns, tool calls, and tokens.
+## Caller and delegation limits
 
-1. An over-budget tool batch executes no handlers. Each call becomes a synthetic failed result
-   that asks the model to answer from existing evidence. DN and DC do not durably declare the
-   rejected batch.
-2. Later model requests forbid tools through `toolChoice: "none"`. If the definition owns a
-   completion tool, only its singleton call remains allowed.
-3. Turn exhaustion permits one grace turn. A second grace turn is impossible.
-4. Completion records `finishReason: "budget-exhausted"` and an `exhausted` value of `tokens`,
-   `tool-calls`, or `turns`.
-5. Any disallowed tool call fails with `ModelProtocolError` before execution.
+`turnAllowance` and `toolCallAllowance` can tighten one Run's policy, never raise it.
+Subagents reserve from a shared pool with their own count, concurrency, duration, and result
+bounds. Unknown usage stays charged conservatively. See the [subagent reference](/reference/subagents/).
 
-Synthetic rejections do not count toward `repeatedFailureLimit` because no handler ran.
+Optional usage-budget hooks share accounting across application scopes such as tenant and
+Thread. Code Mode separately bounds inner host calls; its default concurrency is four.
+See [Code Mode](/guide/code-mode/) for its caller-visible limits.
 
-`onExhaustion: "fail"` rejects work past the bound. The final permitted turn may still finish
-through the definition's singleton completion tool. Use this mode when a partial answer is invalid.
+## Durable storage bounds
 
-Duration, cost, and repeated tool failure always fail. Token exhaustion gets at most one
-constrained final answer.
+| Boundary                                           | Limit                   |
+| -------------------------------------------------- | ----------------------- |
+| Individual persisted JSON payload                  | 1 MiB                   |
+| Whole canonical record wire                        | 4 MiB                   |
+| Logical committed record JSON per Turn             | 4 MiB                   |
+| Run execution dispatch                             | 16,384 facts and 32 MiB |
+| Distinct application tool-call IDs per durable Run | 4,096                   |
 
-## Per-run allowances
-
-A caller may tighten turn and tool call limits for one run:
-
-```ts
-AgentRuntime.run(agent, input, { toolCallAllowance: 8, turnAllowance: 4 });
-```
-
-The effective limit is `min(policy bound, max(1, floor(allowance)))`. The runtime ignores
-non-finite allowances. A run allowance never raises the definition's ceiling.
-
-## Hierarchical usage budgets
-
-`@yielded/agent` can apply shared budgets in this order:
-`global → tenant → agent → thread → run`.
-
-```ts
-Effect.gen(function* () {
-  const root = yield* makeUsageBudgetRoot(
-    UsageBudgetNodeConfig.make({
-      level: "tenant",
-      id: "acme",
-      limits: UsageBudgetLimits.make({ maxCostMicrousd: 50_000_000 }),
-    }),
-  );
-  const runNode = yield* root.child(
-    UsageBudgetNodeConfig.make({ level: "run", id: runId, limits: runLimits }),
-  );
-  return yield* AgentRuntime.run(agent, input, { budget: toRunBudgetHook(runNode) });
-});
-```
-
-Consumption is atomic across the ancestor chain. A rejected increment changes no node and fails
-as `BudgetExceeded` with the scope and bound. The run budget hook checks the model stream and tool
-batches. It accounts for observed usage after the fact; it does not reserve a provider's maximum
-charge before I/O.
-
-## Delegation budgets
-
-A requested child tool call allowance is bounded independently by the reservation and definition:
-
-```text
-effective allowance = min(normalized request, reserved tool calls, definition maxToolCalls)
-```
-
-`SubagentPolicy` limits child count, concurrency, turns, tool calls, duration, tokens, cost, and
-result bytes. The parent reserves the slice before starting the child and releases it once after
-settlement. An overrun remains charged and reduces later headroom. The child's stop policy still
-controls its run and final-answer behavior.
-
-Omitted child policy fields inherit the parent's defaults; explicit child settings override
-those defaults within the delegation ceilings. Omitted delegation policy uses one parent-sized
-pool shared by child invocations. Inheritance supplies limits, not new budget credit.
-An explicit delegation policy derives aggregate caps by multiplying per-child limits by
-`maxChildren`; `parentCaps` can replace those caps. Every delegation in one parent Run must
-use the same aggregate caps. The pool covers delegated work separately from the parent's own
-turn and tool-call counters.
-
-Durable admission checks the recorded pool before reserving another child. Recovery restores
-the child's resolved policy and existing reservation. Unknown usage remains charged
-conservatively, and admission fails closed on inconsistent caps or exhausted concurrency.
-
-### Independently funded workers
-
-A root may request `budgetScope: "worker-run"` for a background worker only when the native
-`WorkerBudgetAuthorizer` permits its exact source, target, and allocation. Immutable delegation
-lineage still controls Tool grants and depth; accounting belongs to the worker's logical Run.
-New Runs reuse the configured allowance, while joined input and every recovery Attempt share the
-existing Run's usage. No cumulative token or cost cap is invented when that dimension is omitted.
-Attached descendants remain bounded by the immediate worker Run's reserved subtree. See the
-[subagent reference](/reference/subagents/#independently-fund-background-runs) for host configuration.
-
-<a id="containment-and-the-extension-flow"></a>
-
-### Request a larger child budget
-
-`failureMode: "return"` converts expected child failures into model-visible result data. Engine
-suspension and durability failures stay in the error channel.
-
-`toolCallAllowance: { default, fromParameters }` grants one child invocation a tool call allowance
-under its reservation and definition ceilings. This applies to ephemeral and durable children.
-To extend work:
-
-1. the child reaches its allowance and returns a partial result with `budgetExhausted`;
-2. the parent starts a new delegation with a larger author-owned parameter;
-3. the runtime clamps the new allowance, and the child continues from forwarded findings.
-
-An extension creates a new child thread. It cannot enlarge a live reservation. Durable
-establishment records the effective allowance before the child becomes runnable. Each replacement
-attempt restores that allowance and the committed tool-call usage, including after approval
-suspension or ownership loss. Recovery never grants a fresh budget. The child's settlement carries
-the exhaustion marker for the parent's result projection.
-
-## Programmatic calls and Code Mode
-
-Code Mode checks and reserves `maxToolCalls` before each inner handler. Exhaustion becomes that
-call's outcome. Reservations are serialized across concurrent calls and never refunded after
-admission. The turn boundary then enforces the combined declared and programmatic count.
-`CodeExecutionLimits.maxHostCallConcurrency` independently bounds inner calls per pass (default 4,
-maximum 64); the outer `toolConcurrency` still bounds simultaneous generated programs.
-
-## Sizing guidance
-
-- Raise `maxTurns` with `maxToolCalls` for research agents. Repeated read cycles often use one of
-  each.
-- A token quota cannot guarantee a dollar ceiling. Strict spending admission must reserve the
-  maximum request charge before provider I/O, including finalization and cache misses.
-- Split independent work into bounded child runs. Grant a larger follow-up only when the partial
-  result warrants it.
-
-<a id="where-the-rules-live"></a>
-
-## Related guides
-
-- [Agent definitions guide](/guide/agents/) covers policy declarations.
-- [Run and stream guide](/guide/run-agents/) covers finish reasons and Run options.
-- [Persistence & durability](/concepts/durability/#attached-subagents) covers child recovery.
+The durable log has no lifetime record cap. Reservations can refuse a dispatch before its byte
+ceiling to retain room for outcomes and failure settlement. These limits do not replace model
+context sizing or the application's physical storage capacity.

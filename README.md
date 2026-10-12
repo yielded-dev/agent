@@ -19,142 +19,75 @@
   <a href="https://yielded.dev">yielded.dev</a>
 </p>
 
-Build TypeScript agents with [Effect](https://github.com/Effect-TS/effect) and Effect AI.
-Define inputs, outputs, and tools with schemas. Yielded Agent runs the loop, executes tools,
-and validates the result — with typed errors, streaming, and bounded execution.
+Yielded Agent builds **durable agent Threads** in TypeScript with Effect and Effect AI.
+Define schemas, instructions, and tools. The runtime runs the model/tool loop, validates
+output, and can retain accepted work across process restarts.
 
-Yielded Agent was previously published as **Effect Agent**.
-See the [package migration guide](https://yielded.dev/agent/guide/migration/) for updated names and imports.
+A Thread is the conversation; a Run is one logical execution; an Attempt is one period advancing it.
+Additional input can join an active Run.
+Model context, history, and recovery state have separate lifetimes, so a long conversation
+can be compacted without discarding its committed history.
 
-## Install
+## What you own
+
+Your application supplies authorization, tool handlers, model services, and storage.
+Yielded Agent supplies typed execution, bounded work, approvals, and recovery under a
+single owner per Thread. Native Effect AI tools and provider Layers work directly.
+
+A durable receipt means the runtime owes a terminal settlement. Recorded results are reused;
+uncertain ordinary mutations require reconciliation. Durable Steps need external idempotency.
+There is no exactly-once external execution guarantee.
+[Read the durability contract](https://yielded.dev/agent/concepts/durability/).
+
+## Try it
 
 ```sh
-bun add @yielded/agent@beta
+bun add @yielded/agent@beta effect
 ```
-
-Use an [Effect AI provider](docs/src/content/docs/guide/getting-started.md) for model access.
-
-Prefer named namespace imports from package roots, such as `import { Agent } from "@yielded/agent"`.
-Direct module paths use kebab-case, such as `@yielded/agent/agent-runtime`; see the
-[import guide](docs/src/content/docs/reference/packages.md#public-imports) for direct imports and lazy loading.
-
-Public beta: APIs and stored data may change before 1.0. Check the
-[storage requirements](docs/src/content/docs/guide/operations.md#adopting-these-contracts)
-before adopting a new release.
-
-## A basic agent
 
 ```ts
 import { Agent, AgentRuntime } from "@yielded/agent";
-import { Effect, Schema } from "effect";
+import { Schema } from "effect";
 import { Toolkit } from "effect/ai";
 
-const planner = Agent.make("travel-planner", {
-  input: Schema.Struct({ city: Schema.String, days: Schema.Int }),
-  output: Schema.Struct({ itinerary: Schema.Array(Schema.String) }),
-  instructions: ({ city, days }) => `Plan ${days} days in ${city}. Suggest one activity per day.`,
+const triage = Agent.make("triage", {
+  input: Schema.String,
+  output: Schema.Struct({
+    severity: Schema.Literals(["low", "medium", "high", "critical"]),
+    explanation: Schema.String,
+  }),
+  instructions: "Classify the bug report and explain the severity in one sentence.",
   toolkit: Toolkit.empty,
-  policy: { maxTurns: 6, maxToolCalls: 10, maxDuration: "2 minutes" },
+  policy: { maxTurns: 2, maxToolCalls: 1, maxDuration: "30 seconds" },
 });
 
-const program = Effect.gen(function* () {
-  const result = yield* AgentRuntime.run(planner, { city: "Lisbon", days: 2 });
-  yield* Effect.log(result.output.itinerary); // readonly string[]
-});
+const result = AgentRuntime.run(triage, "Users cannot sign in.");
 ```
 
-The output is schema-validated. Supply your model and runtime services to run it:
+Supply a model and history Layer to execute the Effect. The
+[getting-started guide](https://yielded.dev/agent/guide/getting-started/) has complete provider
+setup, installation, and an executable entry point.
 
-<details>
-<summary>Run this example with OpenAI</summary>
+## Choose a host
 
-Save the code above and the setup below as `agent.ts`.
+| Need                        | Choice                                            |
+| --------------------------- | ------------------------------------------------- |
+| Process-local conversations | `InMemory.layer`                                  |
+| Retained successful history | SQLite or PostgreSQL adapter                      |
+| Durable Node service        | Supplied SQLite host, or a custom PostgreSQL host |
+| Durable Cloudflare service  | SQLite-backed Thread Objects                      |
 
-```ts
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
-import { BunRuntime } from "@effect/platform-bun";
-import { InMemory } from "@yielded/agent";
-import { Config, Layer } from "effect";
-import { FetchHttpClient } from "effect/http";
+[How it works](https://yielded.dev/agent/concepts/runtime-model/) ·
+[Platforms](https://yielded.dev/agent/platforms/) ·
+[Packages](https://yielded.dev/agent/reference/packages/)
 
-const AppLive = Layer.mergeAll(OpenAiLanguageModel.model("gpt-6-astra"), InMemory.layer).pipe(
-  Layer.provide(OpenAiClient.layerConfig({ apiKey: Config.Redacted("OPENAI_API_KEY") })),
-  Layer.provide(FetchHttpClient.layer),
-);
-
-BunRuntime.runMain(program.pipe(Effect.provide(AppLive)));
-```
-
-```sh
-export OPENAI_API_KEY="your-api-key"
-bun agent.ts
-```
-
-</details>
-
-## Give it tools
-
-Use native Effect AI tools with typed parameters, results, and Effect handlers:
-
-```ts
-import { Tool } from "effect/ai";
-
-const SearchActivities = Tool.make("search_activities", {
-  description: "Find activities in a city.",
-  parameters: Schema.Struct({ city: Schema.String }),
-  success: Schema.Array(Schema.String),
-});
-
-const TravelTools = Toolkit.make(SearchActivities);
-const TravelToolsLive = TravelTools.toLayer({
-  // Sample data; replace with your database or API.
-  search_activities: ({ city }) =>
-    Effect.succeed(city === "Lisbon" ? ["Riverside walk", "Food market"] : []),
-});
-```
-
-Define these before `planner`, set its `toolkit` to `TravelTools`, and add `TravelToolsLive`
-to `Layer.mergeAll` above.
-[More about tools, approvals, and MCP →](docs/src/content/docs/guide/tools.md)
-
-## Stream progress
-
-Use the same agent and services to observe text, tool activity, and lifecycle events:
-
-```ts
-import { Stream } from "effect";
-
-const streaming = AgentRuntime.stream(planner, { city: "Lisbon", days: 2 }).pipe(
-  Stream.runForEach((event) => Effect.log(event._tag)),
-  Effect.provide(AppLive),
-);
-
-BunRuntime.runMain(streaming);
-```
-
-Use this in place of the earlier `BunRuntime.runMain` call.
-[More about streaming and interactive input →](docs/src/content/docs/guide/run-agents.md)
-
-## More examples
-
-- [Travel planner](docs/snippets/travel-planner/) — complete agent, tools, and provider setup.
-- [Subagents](docs/src/content/docs/guide/subagents.md), [browser tools](docs/src/content/docs/guide/browser.md), and
-  [Code Mode](docs/src/content/docs/guide/code-mode.md) — delegate research, browse pages, and execute code.
-- [Storage backends](docs/src/content/docs/storage/index.md), [persistent threads](docs/src/content/docs/guide/threads.md),
-  [durable execution](docs/src/content/docs/concepts/durability.md), and
-  [Effect Workflows](docs/src/content/docs/guide/workflows.md) — keep history and resume work.
-- [Cloudflare travel planner](examples/travel-planner/) and the [PR reviewer](packages/pr-review/README.md).
-- [Browser speed lab](examples/browser-speed/) — chat-driven browser tasks with independent verification and a timing waterfall.
-
-Read [the runtime model](docs/src/content/docs/concepts/runtime-model.md) for turn, ownership, and wake rules.
-Start with the [getting-started guide](docs/src/content/docs/guide/getting-started.md), or explore the
-[package map](docs/src/content/docs/reference/packages.md#capability-inventory) and
-[deployment guide](docs/src/content/docs/guide/operations.md#authorization-and-isolation).
+See the [travel planner](examples/travel-planner/), [runnable snippets](docs/snippets/travel-planner/),
+and [durable benchmark](examples/durable-bench/) for complete applications and comparisons.
 
 ## Development
 
-Framework packages live in `packages/*`, and runnable examples live in `examples/*`.
-Use Vite+ for repository commands. Bun is the package manager.
+Framework packages live in `packages/*`; runnable applications live in `examples/*`.
+Use Vite+ for repository commands and Bun as the package manager.
 
 ```sh
 vp install
@@ -162,12 +95,6 @@ vp run docs:dev
 vp run ready
 ```
 
-`vp run ready` runs static checks, tests, package builds, and the documentation build with link
-validation. Before changing code, read the [toolchain guide](docs/TOOLCHAIN.md),
-[glossary](GLOSSARY.md), and [contributor instructions](AGENTS.md).
-
-## Similar projects and inspiration
-
-We took inspiration from [Flue](https://github.com/withastro/flue) and
-[Pi](https://github.com/earendil-works/pi) for parts of the agent loop, interaction model, and
-durability design.
+Read [AGENTS.md](AGENTS.md), the [glossary](GLOSSARY.md), and the
+[toolchain guide](docs/TOOLCHAIN.md) before contributing. The full gate includes static checks,
+tests, package builds, and the documentation build with link validation.

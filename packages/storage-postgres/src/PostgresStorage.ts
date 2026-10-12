@@ -152,7 +152,11 @@ export const layerWith = (options: PostgresStorageOptions) =>
     ),
   );
 
-/** Thread history and submissions with default settings. Requires SqlClient and Crypto. */
+/**
+ * Thread history and submissions with default settings. Requires SqlClient and Crypto.
+ * SQL text parameters, including identities, must exclude NUL and unpaired UTF-16
+ * surrogates. Canonical JSON payload strings remain intact through escaped encoding.
+ */
 export const layer = layerWith({});
 
 /** Standalone thread history over the application's SqlClient and Crypto. */

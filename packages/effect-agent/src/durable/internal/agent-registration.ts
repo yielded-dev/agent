@@ -73,7 +73,11 @@ export const definitionDigestsEqual = (
   left.tools === right.tools &&
   Schema.toEquivalence(Schema.UndefinedOr(ReplayContract))(left.replay, right.replay);
 
-/** Change an operation version when its meaning, durable Steps or idempotency keys change. */
+/**
+ * Explicit versions must cover every current Tool. Change a version when handler meaning,
+ * durable Step names/codecs, external idempotency keys, authorization, completion projection,
+ * or child/report protocols change. JSON Schema cannot detect handler or codec-transform changes.
+ */
 export interface ReplayVersions {
   readonly tools: Readonly<Record<string, PersistedJson>>;
 }
