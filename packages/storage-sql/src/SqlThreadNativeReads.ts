@@ -2,6 +2,7 @@ import { RunId, ThreadId } from "@yielded/agent/identifiers";
 import { decodeExportRecord } from "@yielded/agent/record-format";
 import {
   type CanonicalRecord,
+  type RunContinuation,
   CURRENT_RECORD_FORMAT,
   MAX_CANONICAL_RECORD_BYTES,
   MAX_RUN_RECOVERY_SUFFIX_RECORDS,
@@ -20,8 +21,6 @@ import {
   canonicalRunIds,
   canonicalRecordBytes,
   isWorkHandoff,
-  ProgressAppendReader,
-  validateProgressAppend,
 } from "@yielded/agent/run-continuation";
 import {
   runIdForSubmission,
@@ -293,85 +292,71 @@ export const makeExecutionRead = Effect.fnUntraced(function* (namespace?: string
   );
 });
 
-/** Reuse the revision validator's predecessor from this append transaction, never across appends. */
-export const makeProgressAppendValidation = Effect.fnUntraced(function* (namespace?: string) {
+/** Read initial canonical evidence inside the append transaction, bounded by its captured tail. */
+export const makeInitialProgressRead = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
 
-  return Effect.fnUntraced(function* (
-    request: RawAppendRequest,
-    previous: ProgressAppendReader["Service"]["previous"],
-  ) {
-    yield* validateProgressAppend(
-      request.progress,
-      request.executionWrites.map(({ update }) => update),
-    ).pipe(
-      Effect.provideService(ProgressAppendReader, {
-        previous,
-        initial: (next) =>
+  return Effect.fnUntraced(
+    function* (request: RawAppendRequest, next: RunContinuation) {
+      const selected = yield* makeSelectedReads(
+        (row) =>
           Effect.gen(function* () {
-            const selected = yield* makeSelectedReads(
-              (row) =>
-                Effect.gen(function* () {
-                  const wire = yield* decodeRecordWire(row.record_json);
+            const wire = yield* decodeRecordWire(row.record_json);
 
-                  const record = yield* decodeExportRecord(CURRENT_RECORD_FORMAT, wire);
+            const record = yield* decodeExportRecord(CURRENT_RECORD_FORMAT, wire);
 
-                  return new CanonicalRecordEnvelope(
-                    {
-                      threadId: row.thread_id,
-                      sequence: row.sequence,
-                      batchId: row.batch_id,
-                      // This private selection consumes only records, never an observation cursor.
-                      offset: ObservationOffset.make(`progress-validation:${row.sequence}`),
-                      record,
-                    },
-                    { disableChecks: true },
-                  );
-                }).pipe(Effect.mapError((cause) => failure("decode initial preparation", cause))),
-              namespace,
-            ).pipe(
-              Effect.provideService(SqlClient.SqlClient, sql),
-              Effect.provideService(SelectedReadOwner, {
-                snapshot: (effect) => effect,
-                tail: () =>
-                  Effect.succeed({
-                    tail_sequence: request.expectedTailSequence,
-                  }),
-              }),
+            return new CanonicalRecordEnvelope(
+              {
+                threadId: row.thread_id,
+                sequence: row.sequence,
+                batchId: row.batch_id,
+                // This private selection consumes only records, never an observation cursor.
+                offset: ObservationOffset.make(`progress-validation:${row.sequence}`),
+                record,
+              },
+              { disableChecks: true },
             );
+          }).pipe(Effect.mapError((cause) => failure("decode initial preparation", cause))),
+        namespace,
+      ).pipe(
+        Effect.provideService(SqlClient.SqlClient, sql),
+        Effect.provideService(SelectedReadOwner, {
+          snapshot: (effect) => effect,
+          tail: () => Effect.succeed({ tail_sequence: request.expectedTailSequence }),
+        }),
+      );
 
-            const records: Array<CanonicalRecord> = [];
-            let afterSequence = CanonicalSequence.make(0);
-            let bytes = 0;
+      const records: Array<CanonicalRecord> = [];
+      let afterSequence = CanonicalSequence.make(0);
+      let bytes = 0;
 
-            while (true) {
-              const page = yield* selected.read({
-                threadId: request.threadId,
-                selection: {
-                  _tag: "RunEvidence",
-                  runId: next.runId,
-                  submissionId: next.submissionId,
-                  throughSequence: request.expectedTailSequence,
-                },
-                page: { limit: 8, afterSequence },
-              });
+      while (true) {
+        const page = yield* selected.read({
+          threadId: request.threadId,
+          selection: {
+            _tag: "RunEvidence",
+            runId: next.runId,
+            submissionId: next.submissionId,
+            throughSequence: request.expectedTailSequence,
+          },
+          page: { limit: 8, afterSequence },
+        });
 
-              for (const entry of page) {
-                records.push(entry.record);
-                bytes += canonicalRecordBytes(entry.record);
-                if (
-                  records.length > MAX_RUN_RECOVERY_SUFFIX_RECORDS ||
-                  bytes > MAX_RUN_RECOVERY_SUFFIX_BYTES
-                )
-                  return yield* failure("Initial Run preparation exceeds its recovery bound");
-                afterSequence = entry.sequence;
-              }
-              if (page.length < 8) return records;
-            }
-          }).pipe(Effect.mapError((cause) => failure("read initial preparation", cause))),
-      }),
-    );
-  });
+        for (const entry of page) {
+          records.push(entry.record);
+          bytes += canonicalRecordBytes(entry.record);
+          if (
+            records.length > MAX_RUN_RECOVERY_SUFFIX_RECORDS ||
+            bytes > MAX_RUN_RECOVERY_SUFFIX_BYTES
+          )
+            return yield* failure("Initial Run preparation exceeds its recovery bound");
+          afterSequence = entry.sequence;
+        }
+        if (page.length < 8) return records;
+      }
+    },
+    Effect.mapError((cause) => failure("read initial preparation", cause)),
+  );
 });
 
 const Row = Schema.Struct({

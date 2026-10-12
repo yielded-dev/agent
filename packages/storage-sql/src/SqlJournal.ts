@@ -4,6 +4,7 @@ import { type RunId, ThreadId } from "@yielded/agent/identifiers";
 import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import type { Digest } from "@yielded/agent/records";
 import { CanonicalSequence } from "@yielded/agent/records";
+import { ProgressAppendReader, validateProgressAppend } from "@yielded/agent/run-continuation";
 import {
   AppendConflict,
   CheckpointRejected,
@@ -39,7 +40,7 @@ import {
 } from "./SqlThreadArchiveRange.ts";
 import {
   type CanonicalRecordMetadata,
-  makeProgressAppendValidation,
+  makeInitialProgressRead,
   makeExecutionRead,
   StoredExecution,
   decodeStoredExecution,
@@ -135,7 +136,7 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
   const sql = yield* SqlClient.SqlClient;
   const { table, execute } = yield* makeSqlQuery(namespace);
   const read = yield* makeExecutionRead(namespace);
-  const validateProgress = yield* makeProgressAppendValidation(namespace);
+  const readInitial = yield* makeInitialProgressRead(namespace);
 
   const failed = (message: string, cause?: unknown) =>
     ThreadStoreError.make({
@@ -282,7 +283,15 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
           return yield* failed("Execution retirement has no canonical settlement proof");
       }
     }
-    yield* validateProgress(request, (runId) => Effect.succeed(prior.get(runId)));
+    yield* validateProgressAppend(
+      request.progress,
+      request.executionWrites.map(({ update }) => update),
+    ).pipe(
+      Effect.provideService(ProgressAppendReader, {
+        previous: (runId) => Effect.succeed(prior.get(runId)),
+        initial: (next) => readInitial(request, next),
+      }),
+    );
   });
 
   const commit = Effect.fnUntraced(function* (request: RawAppendRequest, _result: RawAppendResult) {
