@@ -22,7 +22,12 @@ import {
 import { Effect, Option, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import { hotRecordJson, recordBatchId, storedBatchHeader } from "./SqlCanonicalStorage.ts";
+import {
+  hotRecordBytes,
+  hotRecordJson,
+  recordBatchId,
+  storedBatchHeader,
+} from "./SqlCanonicalStorage.ts";
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 
 const bytes = utf8ByteLength;
@@ -48,6 +53,24 @@ export const canonicalRecordJson = (
 
   return sql`COALESCE(${hotRecordJson(sql, namespace, alias)}, (
     SELECT a.record_json FROM ${table("effect_agent_archive_records")} a
+    WHERE a.thread_id=${owner}.thread_id AND a.sequence=${owner}.sequence
+      AND (SELECT r.state='archived' AND r.locator IS NOT NULL
+        FROM ${table("effect_agent_journal_ranges")} r
+        WHERE r.thread_id=a.thread_id AND r.first_sequence=a.range_first_sequence)
+  ))`;
+};
+
+/** Match canonicalRecordJson's hot precedence and archived locator without assembling hot wire. */
+export const canonicalRecordBytes = (
+  sql: SqlClient.SqlClient,
+  namespace?: string,
+  alias?: string,
+) => {
+  const table = (name: string) => sql(namespace === undefined ? name : `${namespace}.${name}`);
+  const owner = sql(alias ?? "effect_agent_canonical_records");
+
+  return sql`COALESCE(${hotRecordBytes(sql, namespace, alias)}, (
+    SELECT octet_length(a.record_json) FROM ${table("effect_agent_archive_records")} a
     WHERE a.thread_id=${owner}.thread_id AND a.sequence=${owner}.sequence
       AND (SELECT r.state='archived' AND r.locator IS NOT NULL
         FROM ${table("effect_agent_journal_ranges")} r

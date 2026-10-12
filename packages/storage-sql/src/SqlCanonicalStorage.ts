@@ -148,6 +148,20 @@ export const hotRecordJson = (sql: SqlClient.SqlClient, namespace?: string, alia
     FROM ${envelopes} e WHERE e.envelope_key=${owner}.envelope_key)`;
 };
 
+/** Count stored wire bytes from column metadata; missing fragments still produce NULL. */
+export const hotRecordBytes = (sql: SqlClient.SqlClient, namespace?: string, alias?: string) => {
+  const owner = sql(alias ?? "effect_agent_canonical_records");
+
+  const envelopes = sql(
+    namespace === undefined ? "effect_agent_envelopes" : `${namespace}.effect_agent_envelopes`,
+  );
+
+  return sql`(SELECT octet_length(e.prefix) + octet_length(${owner}.created_at_json)
+    + octet_length(e.before_payload) + octet_length(${owner}.payload_json)
+    + octet_length(e.before_record_id) + octet_length(${owner}.record_id) + octet_length(e.suffix)
+    FROM ${envelopes} e WHERE e.envelope_key=${owner}.envelope_key)`;
+};
+
 /** A sequence belongs to the nearest preceding commit only when that commit covers it. */
 export const recordBatchId = (sql: SqlClient.SqlClient, namespace?: string, alias?: string) => {
   const owner = sql(alias ?? "effect_agent_canonical_records");

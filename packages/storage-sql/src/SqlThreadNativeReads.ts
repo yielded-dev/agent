@@ -57,7 +57,10 @@ import type { Fragment } from "effect/sql/Statement";
 import { RECORD_TAGS, recordBatchId, runKey } from "./SqlCanonicalStorage.ts";
 import type { RawAppendRequest } from "./SqlJournal.ts";
 import { makeSqlQuery, SqlInteger, makeSqlTransaction } from "./SqlStorage.ts";
-import { canonicalRecordJson } from "./SqlThreadArchiveRange.ts";
+import {
+  canonicalRecordBytes as storedRecordBytes,
+  canonicalRecordJson,
+} from "./SqlThreadArchiveRange.ts";
 
 /** Closed library tags must match SQLite partial-index predicates at prepare time. */
 export const SQL_PROMPT_PREDICATE = `record_tag IN (${PROMPT_EVIDENCE_TAGS.map((tag) => RECORD_TAGS[tag]).join(", ")})`;
@@ -413,10 +416,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
 
   const decodePromptPlan = Schema.decodeUnknownEffect(Schema.Array(PromptReadPlanRow));
 
-  const promptRecordBytes = sql.onDialectOrElse({
-    pg: () => sql`octet_length(${recordJson})`,
-    orElse: () => sql`length(CAST(${recordJson} AS BLOB))`,
-  });
+  const promptRecordBytes = storedRecordBytes(sql, namespace);
 
   const decodePromptRows = Schema.decodeUnknownEffect(
     Schema.Array(

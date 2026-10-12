@@ -12,6 +12,7 @@ import {
 } from "@yielded/agent-storage-sql/sql-lifecycle-publication";
 import { SqlStorageProgress } from "@yielded/agent-storage-sql/sql-storage-progress";
 import {
+  canonicalRecordBytes,
   canonicalRecordJson,
   makeSqlThreadArchiveRange,
 } from "@yielded/agent-storage-sql/sql-thread-archive-range";
@@ -440,6 +441,7 @@ const makeJournal = (
     }).pipe(Effect.provideService(SqlClient.SqlClient, sql));
 
     const recordJson = canonicalRecordJson(sql);
+    const recordBytes = canonicalRecordBytes(sql);
 
     const physical = yield* makeCanonicalStorage().pipe(
       Effect.provideService(SqlClient.SqlClient, sql),
@@ -963,7 +965,7 @@ const makeJournal = (
       const planRows = yield* sql<Record<string, unknown>>`
       SELECT
         sequence,
-        length(CAST(${recordJson} AS BLOB)) AS record_json_bytes
+        ${recordBytes} AS record_json_bytes
       FROM effect_agent_canonical_records
       WHERE thread_id = ${request.threadId}
         AND sequence > ${request.fromSequenceExclusive}
