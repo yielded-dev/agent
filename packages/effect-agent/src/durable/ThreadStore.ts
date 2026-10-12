@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Option, Result, Schema, Stream, Struct } from "effect";
+import { Context, Effect, Layer, Option, Predicate, Result, Schema, Stream, Struct } from "effect";
 
 import { ReceiptId, RunId, SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
@@ -345,7 +345,7 @@ const validateRecordCount = Schema.decodeUnknownSync(
 
 const executionJson = Schema.fromJsonString(ExecutionUpdate);
 const encodeExecution = Schema.encodeSync(executionJson);
-const decodeExecution = Schema.decodeSync(executionJson);
+const decodeExecution = Schema.decodeUnknownSync(ExecutionUpdate);
 
 const capturedAppends = new WeakMap<AppendRequest, PreparedAppend>();
 
@@ -392,6 +392,8 @@ export interface PreparedAppend extends AppendRequest {
   readonly executionWrites: ReadonlyArray<{
     readonly update: ExecutionUpdate;
     readonly json: string;
+    /** Checkpoint wire from the same detached, validated execution capture. */
+    readonly checkpointJson: string;
     readonly bytes: number;
   }>;
   readonly records: ReadonlyArray<{
@@ -424,10 +426,19 @@ export const PreparedAppend = {
           const executionWrites = Object.freeze(
             (input.executions ?? []).map((update) => {
               const json = encodeExecution(update);
+              const wire: unknown = JSON.parse(json);
+              const decoded = decodeExecution(wire);
+
+              if (!Predicate.hasProperty(wire, "checkpoint"))
+                throw ThreadStoreError.make({
+                  operation: "prepare durable commit",
+                  message: "Captured execution has no checkpoint wire",
+                });
 
               return Object.freeze({
-                update: decodeExecution(json),
+                update: decoded,
                 json,
+                checkpointJson: JSON.stringify(wire.checkpoint),
                 bytes: utf8ByteLength(json),
               });
             }),

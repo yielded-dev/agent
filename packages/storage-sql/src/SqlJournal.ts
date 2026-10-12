@@ -114,11 +114,7 @@ export interface RawAppendRequest {
     }
   >;
   readonly progress: PreparedAppend["progress"];
-  readonly executionWrites: ReadonlyArray<
-    PreparedAppend["executionWrites"][number] & {
-      readonly checkpointJson: string;
-    }
-  >;
+  readonly executionWrites: PreparedAppend["executionWrites"];
   /** Fingerprint of canonical bytes and new operational facts for bounded active retries. */
   readonly commitDigest: Digest;
 }
