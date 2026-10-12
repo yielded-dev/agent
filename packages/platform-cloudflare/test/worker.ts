@@ -20,8 +20,14 @@ import { RecalledMemory } from "@yielded/agent/memory";
 import { MemoryLookup } from "@yielded/agent/memory-reference";
 import { MemoryWrite, MemoryDocument } from "@yielded/agent/memory-store";
 import { ScheduleAuthorizer, ScheduleFailpoint } from "@yielded/agent/schedule";
-import { Clock, Effect, Layer, Schema } from "effect";
-import { DurableObject, DurableObjectState, RpcTracing, WorkerEnvironment } from "effect-cf";
+import { Clock, Context, Effect, Layer, Schema } from "effect";
+import {
+  DurableObject,
+  DurableObjectAlarm,
+  DurableObjectState,
+  RpcTracing,
+  WorkerEnvironment,
+} from "effect-cf";
 
 import { ThreadMaintenance } from "../src/Alarm.ts";
 import { layerFromBindings } from "../src/internal/layers.ts";
@@ -242,12 +248,17 @@ const progressIncarnation = (ctx: DurableObjectState): number => {
 };
 
 // Initialization arms maintenance alarms before event-only layers are available.
-const maintenanceClockLayer = Layer.effect(
-  Clock.Clock,
+const maintenanceClockLayer = Layer.effectContext(
   Effect.gen(function* () {
     const identity = yield* ThreadObjectIdentity;
+    const clock = maintenanceClocks.get(identity.threadId);
 
-    return maintenanceClocks.get(identity.threadId) ?? (yield* Clock.Clock);
+    // Tests with a controlled clock drive maintenance explicitly between assertions.
+    return clock === undefined
+      ? Context.make(Clock.Clock, yield* Clock.Clock)
+      : Context.make(Clock.Clock, clock).pipe(
+          Context.add(DurableObjectAlarm.ScheduleConfiguration, { dispatchAfterEvent: false }),
+        );
   }),
 );
 

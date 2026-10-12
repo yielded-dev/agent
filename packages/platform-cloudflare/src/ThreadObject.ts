@@ -52,7 +52,7 @@ import {
 } from "@yielded/agent/thread-store";
 import { WorkDiscoveryUnavailable } from "@yielded/agent/thread-work";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Effect, Layer, Option, Schema, Stream, type Scope } from "effect";
+import { Context, Effect, Layer, Option, Schema, Stream, type Scope } from "effect";
 import {
   DurableObject as EffectCfDurableObject,
   DurableObjectAlarm,
@@ -1267,7 +1267,21 @@ export const make = <
 
       return yield* state.blockConcurrencyWhile(
         Effect.gen(function* () {
-          const services = yield* Layer.buildWithScope(application, scope);
+          const applicationServices = yield* Layer.buildWithScope(application, scope);
+
+          const scheduling = Context.get(
+            applicationServices,
+            DurableObjectAlarm.ScheduleConfiguration,
+          );
+
+          const services = Context.add(
+            applicationServices,
+            DurableObjectAlarm.ScheduleConfiguration,
+            {
+              ...scheduling,
+              dispatchAfterEvent: scheduling.dispatchAfterEvent ?? true,
+            },
+          );
 
           yield* gateEndpoint.pipe(Effect.provide(services));
 
