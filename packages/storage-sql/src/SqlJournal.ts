@@ -1,12 +1,13 @@
 import { sqlStorageOwner } from "./internal/SqlOwner.ts";
 export { sqlStorageOwner } from "./internal/SqlOwner.ts";
-import { ThreadId } from "@yielded/agent/identifiers";
+import { type RunId, ThreadId } from "@yielded/agent/identifiers";
 import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import type { Digest } from "@yielded/agent/records";
 import { CanonicalSequence } from "@yielded/agent/records";
 import {
   AppendConflict,
   CheckpointRejected,
+  type ExecutionCheckpoint,
   type PreparedAppend,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
@@ -134,6 +135,7 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
   const sql = yield* SqlClient.SqlClient;
   const { table, execute } = yield* makeSqlQuery(namespace);
   const read = yield* makeExecutionRead(namespace);
+  const validateProgress = yield* makeProgressAppendValidation(namespace);
 
   const failed = (message: string, cause?: unknown) =>
     ThreadStoreError.make({
@@ -212,18 +214,20 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
   });
 
   const validate = Effect.fnUntraced(function* (request: RawAppendRequest) {
-    const seen = new Set<string>();
+    // Both validators use this transaction's predecessor; never retain it across appends.
+    const prior = new Map<RunId, ExecutionCheckpoint["progress"] | undefined>();
 
     for (const { update } of request.executionWrites) {
       const checkpoint = update.checkpoint;
       const next = checkpoint.progress;
 
-      if (seen.has(next.runId)) return yield* failed("Duplicate execution update");
-      seen.add(next.runId);
+      if (prior.has(next.runId)) return yield* failed("Duplicate execution update");
 
       const previous = Option.getOrUndefined(
         yield* read({ threadId: request.threadId, runId: next.runId }),
       );
+
+      prior.set(next.runId, previous?.progress);
 
       if ((previous?.progress.revision ?? 0) !== update.previousRevision) {
         // Already retained operational facts cannot be charged again after their retry window.
@@ -278,6 +282,7 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
           return yield* failed("Execution retirement has no canonical settlement proof");
       }
     }
+    yield* validateProgress(request, (runId) => Effect.succeed(prior.get(runId)));
   });
 
   const commit = Effect.fnUntraced(function* (request: RawAppendRequest, _result: RawAppendResult) {
@@ -332,7 +337,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
 >(options: SqlJournalOptions<S, C, W, F>) {
   const sql = yield* SqlClient.SqlClient;
   const { table: relation, execute } = yield* makeSqlQuery(options.namespace);
-  const validateProgress = yield* makeProgressAppendValidation(options.namespace);
   const executions = yield* makeSqlExecutions(options.namespace);
   const physical = yield* makeCanonicalStorage(options.namespace);
 
@@ -627,7 +631,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     );
 
     yield* executions.validate(request);
-    yield* validateProgress(request);
 
     const result = RawAppendResult.make({
       firstSequence,

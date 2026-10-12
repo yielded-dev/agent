@@ -7610,24 +7610,27 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         join: joinSubagent,
       };
 
-      const toolAuthorization: RunToolAuthorizationHook<AgentToolAuthorizationCheckError> = {
-        authorize: (request: RunToolAuthorizationRequest) =>
-          inheritedGrant !== undefined &&
-          !inheritedGrant.allowedToolNames.includes(request.call.toolName)
-            ? Effect.succeed({
-                _tag: "denied",
-                reason: "Tool exceeds the worker's immutable grant",
-              })
-            : runToolAuthorization.authorize({
-                ...request,
-                // Preserve the admitted wire value even when an Agent Schema's decode/encode
-                // pair normalizes differently on a second pass.
-                input: submission.inputPayload,
-                ...(Schema.is(FrameworkMessage)(submission.messageAdmission)
-                  ? { frameworkMessage: submission.messageAdmission }
-                  : {}),
-              }),
-      };
+      const toolAuthorization: RunToolAuthorizationHook<AgentToolAuthorizationCheckError> =
+        inheritedGrant === undefined && runToolAuthorization === RunToolAuthorization.allowAllPolicy
+          ? runToolAuthorization
+          : {
+              authorize: (request: RunToolAuthorizationRequest) =>
+                inheritedGrant !== undefined &&
+                !inheritedGrant.allowedToolNames.includes(request.call.toolName)
+                  ? Effect.succeed({
+                      _tag: "denied",
+                      reason: "Tool exceeds the worker's immutable grant",
+                    })
+                  : runToolAuthorization.authorize({
+                      ...request,
+                      // Preserve the admitted wire value even when an Agent Schema's decode/encode
+                      // pair normalizes differently on a second pass.
+                      input: submission.inputPayload,
+                      ...(Schema.is(FrameworkMessage)(submission.messageAdmission)
+                        ? { frameworkMessage: submission.messageAdmission }
+                        : {}),
+                    }),
+            };
 
       const options: RunOptions<
         | CoordinatorHalt

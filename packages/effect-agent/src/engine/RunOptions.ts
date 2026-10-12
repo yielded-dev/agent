@@ -203,7 +203,7 @@ export interface RunApprovalRequest {
 
 /** Approval policy preparation is deadline-bounded; canonical acceptance stays host-owned. */
 export interface RunApprovalHook<Error = never, Requirements = never> {
-  /** Retain the whole batch's required requests before any decision can release dispatch proof. */
+  /** Retain a nonempty batch's required requests before any decision can release dispatch proof. */
   readonly prepareBatch?:
     | ((requests: ReadonlyArray<RunApprovalRequest>) => Effect.Effect<void, Error, Requirements>)
     | undefined;
@@ -509,10 +509,15 @@ export class RunToolAuthorization extends Context.Service<
   RunToolAuthorization,
   RunToolAuthorizationHook<AgentToolAuthorizationCheckError>
 >()("@effect-agent/engine/RunToolAuthorization") {
+  /** Immutable built-in policy; its identity lets the interpreter omit absent host checks. */
+  static readonly allowAllPolicy: RunToolAuthorizationHook = Object.freeze({
+    authorize: () => Effect.succeed({ _tag: "allowed" as const }),
+  });
+
   /** Explicit compatibility policy: Tool execution requires no additional host authorization. */
   static readonly allowAll: Layer.Layer<RunToolAuthorization> = Layer.succeed(
     RunToolAuthorization,
-    { authorize: () => Effect.succeed({ _tag: "allowed" }) },
+    RunToolAuthorization.allowAllPolicy,
   );
 }
 

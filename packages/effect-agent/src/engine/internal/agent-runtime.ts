@@ -1805,8 +1805,6 @@ const prepareApprovalRequest = <Tools extends Record<string, Tool.Any>>(
       const decodedParams = prepared.validation.success;
       const approval = prepared.tool.needsApproval;
 
-      if (approval === undefined || approval === false) return undefined;
-
       const required =
         typeof approval === "function"
           ? yield* Effect.suspend(() => {
@@ -1861,14 +1859,13 @@ const preflightApproval = Effect.fnUntraced(function* <
   context: RunContext,
   turnId: TurnId,
   prepared: PreparedToolCall<Tools>,
-  request: RunApprovalRequest | undefined,
+  request: RunApprovalRequest,
   options: RunOptions<HookError, HookRequirements>,
 ): Effect.fn.Return<
   void,
   HookError | ModelProtocolError | AgentPolicyError | AgentApprovalDenied | AgentApprovalPending,
   HookRequirements | Tool.HandlerServices<ToolUnion<Tools>>
 > {
-  if (request === undefined) return;
   const hook = options.approval;
 
   const decision =
@@ -1958,7 +1955,7 @@ const preflightToolAuthorization = Effect.fnUntraced(function* <HookError, HookR
             }),
         };
 
-  if (authorization === undefined) return;
+  if (authorization === undefined || authorization === RunToolAuthorization.allowAllPolicy) return;
 
   const decision = yield* prepareWithinDeadline(
     context,
@@ -2559,29 +2556,45 @@ const executeToolBatch = Effect.fnUntraced(function* <
 
   yield* checkpointExecution(context, durability);
 
-  const approvals = yield* Effect.forEach(prepared, (call) =>
-    Effect.map(prepareApprovalRequest(context, turnId, call), (request) => ({ call, request })),
+  const approvalCalls = prepared.filter(
+    (call) =>
+      Result.isSuccess(call.validation) &&
+      call.tool.needsApproval !== undefined &&
+      call.tool.needsApproval !== false,
   );
 
-  if (options.approval?.prepareBatch !== undefined)
-    yield* options.approval.prepareBatch(
-      approvals.flatMap(({ request }) => (request === undefined ? [] : [request])),
+  if (approvalCalls.length > 0) {
+    const approvals = yield* Effect.forEach(approvalCalls, (call) =>
+      Effect.map(prepareApprovalRequest(context, turnId, call), (request) => ({ call, request })),
     );
-  yield* checkpointExecution(context, durability);
-  for (const { call, request } of approvals) {
-    yield* preflightApproval(context, turnId, call, request, options);
+
+    const required = approvals.flatMap(({ request }) => (request === undefined ? [] : [request]));
+
+    if (options.approval?.prepareBatch !== undefined && required.length > 0)
+      yield* options.approval.prepareBatch(required);
     yield* checkpointExecution(context, durability);
+    for (const { call, request } of approvals) {
+      if (request === undefined) continue;
+      yield* preflightApproval(context, turnId, call, request, options);
+      yield* checkpointExecution(context, durability);
+    }
   }
-  for (const call of executableDescriptors) {
-    yield* preflightToolAuthorization(
-      context,
-      turnId,
-      turn,
-      call,
-      options,
-      toolkit.tools[call.toolName]?.annotations ?? Context.empty(),
-    );
-    yield* checkpointExecution(context, durability);
+  if (
+    (options.toolAuthorization !== undefined &&
+      options.toolAuthorization !== RunToolAuthorization.allowAllPolicy) ||
+    options.subagentGrant !== undefined
+  ) {
+    for (const call of executableDescriptors) {
+      yield* preflightToolAuthorization(
+        context,
+        turnId,
+        turn,
+        call,
+        options,
+        toolkit.tools[call.toolName]?.annotations ?? Context.empty(),
+      );
+      yield* checkpointExecution(context, durability);
+    }
   }
   if (
     durability !== undefined &&
@@ -5554,14 +5567,13 @@ const makeTurn = <
 
       const visibility = yield* RunToolVisibility;
 
-      const catalog = yield* prepareWithinDeadline(
-        context,
-        eligibleCatalog(
-          agent.definition,
-          { threadId: context.threadId, runId: context.runId, turn, input: context.input },
-          options.subagentGrant,
-          options.delegationDepth ?? options.parentLink?.depth ?? 0,
-        ),
+      const catalog = yield* eligibleCatalog(
+        agent.definition,
+        { threadId: context.threadId, runId: context.runId, turn, input: context.input },
+        options.subagentGrant,
+        options.delegationDepth ?? options.parentLink?.depth ?? 0,
+      ).pipe((effect) =>
+        visibility === undefined ? effect : prepareWithinDeadline(context, effect),
       );
 
       if (modelContext.toolSelection !== undefined)
@@ -7772,14 +7784,13 @@ const makeResumeTurn = <
           message: "Resumed progressive Turn is missing its original Tool exposure",
         });
 
-      context.toolCatalog = yield* prepareWithinDeadline(
-        context,
-        eligibleCatalog(
-          agent.definition,
-          { threadId: context.threadId, runId: context.runId, turn, input: context.input },
-          options.subagentGrant,
-          options.delegationDepth ?? options.parentLink?.depth ?? 0,
-        ),
+      context.toolCatalog = yield* eligibleCatalog(
+        agent.definition,
+        { threadId: context.threadId, runId: context.runId, turn, input: context.input },
+        options.subagentGrant,
+        options.delegationDepth ?? options.parentLink?.depth ?? 0,
+      ).pipe((effect) =>
+        visibility === undefined ? effect : prepareWithinDeadline(context, effect),
       );
       context.toolExposure =
         resume.toolExposure === undefined ? undefined : yield* decodeSnapshot(resume.toolExposure);

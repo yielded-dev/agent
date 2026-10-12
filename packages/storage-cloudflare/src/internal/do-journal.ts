@@ -15,7 +15,6 @@ import {
   canonicalRecordJson,
   makeSqlThreadArchiveRange,
 } from "@yielded/agent-storage-sql/sql-thread-archive-range";
-import { makeProgressAppendValidation } from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { makeSqlThreadWork } from "@yielded/agent-storage-sql/sql-thread-work";
 import { ThreadId } from "@yielded/agent/identifiers";
 import {
@@ -395,10 +394,6 @@ const makeJournal = (
         cause,
       });
 
-    const validateProgress = yield* makeProgressAppendValidation().pipe(
-      Effect.provideService(SqlClient.SqlClient, sql),
-    );
-
     const executions = yield* makeSqlExecutions().pipe(
       Effect.provideService(SqlClient.SqlClient, sql),
     );
@@ -739,7 +734,6 @@ const makeJournal = (
       );
 
       yield* executionConflict(executions.validate(request));
-      yield* validateProgress(request);
 
       const result = RawAppendResult.make({
         firstSequence,

@@ -1733,7 +1733,8 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         const state = yield* loadState(runId, yield* tail);
 
         if (state === undefined) return yield* failure("Execution has no canonical Run progress");
-        yield* checkFutureShapes(state);
+        // Accepted states were shape-checked during preparation; recovered states still need proof.
+        if (cached.get(runId) !== state) yield* checkFutureShapes(state);
         if (state.continuation.position !== "settling" && state.continuation.position !== "settled")
           yield* checkCapacity(state);
       }),

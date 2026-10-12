@@ -293,26 +293,20 @@ export const makeExecutionRead = Effect.fnUntraced(function* (namespace?: string
   );
 });
 
-/** Caller owns the existing append transaction; no snapshot or nested transaction here. */
+/** Reuse the revision validator's predecessor from this append transaction, never across appends. */
 export const makeProgressAppendValidation = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
-  const readExecution = yield* makeExecutionRead(namespace);
 
-  return Effect.fnUntraced(function* (request: RawAppendRequest) {
+  return Effect.fnUntraced(function* (
+    request: RawAppendRequest,
+    previous: ProgressAppendReader["Service"]["previous"],
+  ) {
     yield* validateProgressAppend(
       request.progress,
       request.executionWrites.map(({ update }) => update),
     ).pipe(
       Effect.provideService(ProgressAppendReader, {
-        previous: (runId) =>
-          readExecution({ threadId: request.threadId, runId }).pipe(
-            Effect.map(
-              Option.match({
-                onNone: () => undefined,
-                onSome: (checkpoint) => checkpoint.progress,
-              }),
-            ),
-          ),
+        previous,
         initial: (next) =>
           Effect.gen(function* () {
             const selected = yield* makeSelectedReads(
