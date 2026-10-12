@@ -255,21 +255,25 @@ jobs:
           - suite: storage-cloudflare
             filters: -F @yielded/agent-storage-cloudflare
             stateful: true
-    services:
-      postgres:
-        image: ${{ matrix.postgres && format('mirror.gcr.io/library/postgres:{0}-alpine', matrix.postgres) || '' }}
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: effect_agent
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
     steps:
+      # Unauthenticated pulls are rate limited per registry, and Google's Docker Hub
+      # cache only holds popular tags. Take the official image from the first source
+      # that serves it.
+      - name: Start PostgreSQL
+        if: ${{ matrix.postgres }}
+        env:
+          TAG: ${{ matrix.postgres }}-alpine
+        run: |
+          for image in mirror.gcr.io/library/postgres public.ecr.aws/docker/library/postgres docker.io/library/postgres; do
+            docker pull --quiet "$image:$TAG" && break
+            image=
+          done
+          test -n "$image"
+          docker run --detach --name postgres --publish 5432:5432 \
+            --env POSTGRES_USER=postgres --env POSTGRES_PASSWORD=postgres --env POSTGRES_DB=effect_agent \
+            "$image:$TAG"
+          timeout 120 sh -c 'until docker exec postgres pg_isready -h 127.0.0.1 -U postgres -d effect_agent; do sleep 1; done'
+
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
