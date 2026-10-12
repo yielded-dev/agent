@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Option, Result, Schema, Stream, Struct } from "effect";
+import { Context, DateTime, Effect, Layer, Option, Result, Schema, Stream, Struct } from "effect";
 
 import { ReceiptId, RunId, SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
@@ -347,6 +347,33 @@ const executionJson = Schema.fromJsonString(ExecutionUpdate);
 const encodeExecution = Schema.encodeSync(executionJson);
 const decodeExecution = Schema.decodeSync(executionJson);
 
+/** The JSON round trip owns this graph; freeze it before exposing the cached capture. */
+const freezeExecution = (update: ExecutionUpdate): ExecutionUpdate => {
+  // Warm only Schema-decoded timestamps: arbitrary JSON may contain DateTime's marker key.
+  // Their non-enumerable UTC-parts caches must remain readable after the graph is frozen.
+  Object.freeze(DateTime.toPartsUtc(update.checkpoint.progressRecord.createdAt));
+  for (const record of update.checkpoint.operational) {
+    Object.freeze(DateTime.toPartsUtc(record.createdAt));
+  }
+  for (const record of update.facts) {
+    Object.freeze(DateTime.toPartsUtc(record.createdAt));
+  }
+
+  const pending: Array<object> = [update];
+
+  while (pending.length > 0) {
+    const value = pending.pop();
+
+    if (value === undefined) continue;
+    for (const child of Object.values(value)) {
+      if (typeof child === "object" && child !== null) pending.push(child);
+    }
+    Object.freeze(value);
+  }
+
+  return update;
+};
+
 const capturedAppends = new WeakMap<AppendRequest, PreparedAppend>();
 
 /**
@@ -426,7 +453,7 @@ export const PreparedAppend = {
               const json = encodeExecution(update);
 
               return Object.freeze({
-                update: decodeExecution(json),
+                update: freezeExecution(decodeExecution(json)),
                 json,
                 bytes: utf8ByteLength(json),
               });
@@ -481,6 +508,10 @@ export const PreparedAppend = {
             },
             { disableChecks: true },
           );
+
+          // Constructors may copy array inputs; freeze the containers actually returned.
+          Object.freeze(request.batch.records);
+          if (request.executions !== undefined) Object.freeze(request.executions);
 
           const records = Object.freeze(
             encodings.map(({ canonical, json, wire, bytes }) =>
