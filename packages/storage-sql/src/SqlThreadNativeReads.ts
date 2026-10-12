@@ -1293,11 +1293,12 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
             yield* requireReadyWork(request.threadId, tail.tail_sequence);
 
             // Canonical handoffs disappear on transfer; every retained delivery identity suppresses
-            // its old handoff, including terminal identities. Both candidates contain only live rows.
+            // its old handoff, including terminal identities. Terminal capacity expires without
+            // deleting the exact receipt or decoding any historical envelopes.
             const peer = sql.onDialectOrElse({
               pg: () => sql`(read_metadata ->> 'peer') = 'true'`,
               orElse: () =>
-                sql`json_extract(record_json, '$.envelope.messageAdmission.schemaVersion') = 1`,
+                sql`json_extract(record_json, '$.envelope.messageAdmission.peerName') IS NOT NULL`,
             });
 
             const rows = yield* sql`SELECT message_id FROM (
@@ -1310,6 +1311,10 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
             FROM ${relation("effect_agent_message_deliveries")} ${recoveryIndex(sql, "effect_agent_message_deliveries_peer")}
             WHERE owner_thread_id=${request.threadId} AND state NOT IN ('processed', 'refused') AND ${peer}
             ORDER BY message_id LIMIT ${request.limit}) AS deliveries
+          UNION SELECT message_id FROM (SELECT ${sql.onDialectOrElse({ pg: () => sql`(read_metadata ->> 'messageId')`, orElse: () => sql`json_quote(message_id)` })} AS message_id
+            FROM ${relation("effect_agent_message_deliveries")} ${recoveryIndex(sql, "effect_agent_message_deliveries_peer_retained")}
+            WHERE owner_thread_id=${request.threadId} AND peer_retained_until_millis > ${request.nowMillis}
+            ORDER BY peer_retained_until_millis, message_id LIMIT ${request.limit}) AS retained
           ) AS live_peers LIMIT ${request.limit}`.pipe(execute);
 
             return rows.length;

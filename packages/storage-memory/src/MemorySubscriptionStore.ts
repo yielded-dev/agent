@@ -3,6 +3,7 @@ import { compareScheduleNames } from "@yielded/agent/schedule-transition";
 import {
   AcceptedEvent,
   DeliveryChange,
+  defaultSubscriptionLimits,
   SubscriptionChange,
   SourcePartition,
   SubscriptionDelivery,
@@ -26,10 +27,17 @@ import {
   validateEventRetention,
   subscriptionCanSelect,
   subscriptionDeliveryCanSelect,
+  subscriptionUsesCapacity,
+  subscriptionDeliveryUsesCapacity,
 } from "@yielded/agent/subscription-transition";
 import { Clock, Effect, Layer, Ref, Result, Schema } from "effect";
 
-interface MemorySubscriptionState {
+interface RegistrationCapacity {
+  readonly registrationExpiries: ReadonlyArray<number>;
+  readonly ownerRegistrationExpiries: ReadonlyMap<string, ReadonlyArray<number>>;
+}
+
+interface MemorySubscriptionState extends RegistrationCapacity {
   readonly sequence: number;
   readonly retentionDeadline: number | null;
   readonly tombstoneCount: number;
@@ -45,10 +53,11 @@ interface MemorySubscriptionState {
   readonly deliveries: ReadonlyMap<string, string>;
   readonly registrationIndex: ReadonlyMap<string, RegistrationIndex>;
   readonly candidateIndex: ReadonlyMap<string, ReadonlyArray<string>>;
-  readonly ownerRegistrationCounts: ReadonlyMap<string, number>;
   readonly eventIndex: ReadonlyMap<string, EventIndex>;
   readonly deliveryIndex: ReadonlyMap<string, DeliveryIndex>;
   readonly ownerDeliveryCounts: ReadonlyMap<string, number>;
+  readonly liveDeliveryCount: number;
+  readonly pendingEventCount: number;
   readonly scanCursors: SubscriptionScanCursors;
 }
 
@@ -180,6 +189,71 @@ const insertKey = (keys: ReadonlyArray<string>, key: string): ReadonlyArray<stri
   return [...keys.slice(0, at), key, ...keys.slice(at)];
 };
 
+// Count unexpired registrations without reading retained history. Keeping sorted expiry values
+// also makes clock changes safe; expiry alone never deletes or rewrites the canonical record.
+const expiryUpperBound = (expiries: ReadonlyArray<number>, nowMillis: number): number => {
+  let low = 0;
+  let high = expiries.length;
+
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    const expiry = expiries[middle];
+
+    if (expiry !== undefined && expiry <= nowMillis) low = middle + 1;
+    else high = middle;
+  }
+
+  return low;
+};
+
+const registrationCount = (
+  current: MemorySubscriptionState,
+  nowMillis: number,
+  ownerId?: string,
+): number => {
+  const expiries =
+    ownerId === undefined
+      ? current.registrationExpiries
+      : (current.ownerRegistrationExpiries.get(ownerId) ?? []);
+
+  return expiries.length - expiryUpperBound(expiries, nowMillis);
+};
+
+const registrationExpiriesAfter = (
+  current: RegistrationCapacity,
+  before: SubscriptionRecord | undefined,
+  after: SubscriptionRecord,
+): RegistrationCapacity => {
+  const expiry = (record: SubscriptionRecord | undefined) =>
+    record !== undefined && (record.state === "active" || record.state === "paused")
+      ? (record.configuration.expiresAtMillis ?? Number.POSITIVE_INFINITY)
+      : null;
+
+  const previous = expiry(before);
+  const next = expiry(after);
+
+  const replace = (expiries: ReadonlyArray<number>): ReadonlyArray<number> => {
+    if (previous === next) return expiries;
+    const updated = [...expiries];
+
+    if (previous !== null) updated.splice(expiryUpperBound(updated, previous) - 1, 1);
+    if (next !== null) updated.splice(expiryUpperBound(updated, next), 0, next);
+
+    return updated;
+  };
+
+  const owners = new Map(current.ownerRegistrationExpiries);
+  const expiries = replace(owners.get(after.key.ownerId) ?? []);
+
+  if (expiries.length === 0) owners.delete(after.key.ownerId);
+  else owners.set(after.key.ownerId, expiries);
+
+  return {
+    registrationExpiries: replace(current.registrationExpiries),
+    ownerRegistrationExpiries: owners,
+  };
+};
+
 const recoveryCountsAfter = (
   current: MemorySubscriptionState,
   next: ReadonlyMap<string, RegistrationIndex>,
@@ -218,10 +292,13 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
     deliveries: new Map(),
     registrationIndex: new Map(),
     candidateIndex: new Map(),
-    ownerRegistrationCounts: new Map(),
+    registrationExpiries: [],
+    ownerRegistrationExpiries: new Map(),
     eventIndex: new Map(),
     deliveryIndex: new Map(),
     ownerDeliveryCounts: new Map(),
+    liveDeliveryCount: 0,
+    pendingEventCount: 0,
     scanCursors: { events: "", deliveries: "", recovery: 0 },
   });
 
@@ -247,6 +324,7 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
 
       yield* requirePartition(record.key, "register-partition");
       yield* failpoint.hit("subscription:register:before");
+      const nowMillis = yield* Clock.currentTimeMillis;
 
       const result = yield* Effect.uninterruptible(
         Ref.modify(
@@ -279,11 +357,16 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
                 limits.maxLifetimeMillis
             )
               return [Result.fail(error("capacity", "lifetime")), current];
-            if (current.registrations.size >= limits.maxRegistrations)
+            if (
+              subscriptionUsesCapacity(record, nowMillis) &&
+              registrationCount(current, nowMillis) >= limits.maxRegistrations
+            )
               return [Result.fail(error("capacity", "registrations")), current];
-            const ownerCount = current.ownerRegistrationCounts.get(record.key.ownerId) ?? 0;
-
-            if (ownerCount >= limits.maxRegistrationsPerOwner)
+            if (
+              subscriptionUsesCapacity(record, nowMillis) &&
+              registrationCount(current, nowMillis, record.key.ownerId) >=
+                limits.maxRegistrationsPerOwner
+            )
               return [Result.fail(error("capacity", "owner-registrations")), current];
             const assigned = { ...record, ordinal: current.sequence + 1 };
             const encoded = encode(SubscriptionRecord, assigned, "register-encode");
@@ -305,9 +388,6 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
             const candidateKey = candidateIndexKey(assigned);
 
             candidateIndex.set(candidateKey, [...(candidateIndex.get(candidateKey) ?? []), key]);
-            const ownerRegistrationCounts = new Map(current.ownerRegistrationCounts);
-
-            ownerRegistrationCounts.set(assigned.key.ownerId, ownerCount + 1);
 
             return [
               Result.succeed(assigned),
@@ -318,7 +398,7 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
                 registrationIndex,
                 recoveryCounts: recoveryCountsAfter(current, registrationIndex, [key]),
                 candidateIndex,
-                ownerRegistrationCounts,
+                ...registrationExpiriesAfter(current, undefined, assigned),
               },
             ];
           },
@@ -358,89 +438,105 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
     },
   );
 
-  const change: SubscriptionStore["Service"]["change"] = Effect.fnUntraced(
-    function* (input, expectedRevision, inputChange) {
-      const key = yield* requireKey(input, "change-key");
-      const change = yield* validate(SubscriptionChange, inputChange, "change");
+  const change: SubscriptionStore["Service"]["change"] = Effect.fnUntraced(function* (
+    input,
+    expectedRevision,
+    inputChange,
+    inputLimits = defaultSubscriptionLimits,
+  ) {
+    const key = yield* requireKey(input, "change-key");
+    const change = yield* validate(SubscriptionChange, inputChange, "change");
+    const limits = yield* validate(SubscriptionLimits, inputLimits, "change-limits");
 
-      yield* validate(Schema.Int.check(Schema.isGreaterThan(0)), expectedRevision, "revision");
-      yield* failpoint.hit("subscription:change:before");
+    yield* validate(Schema.Int.check(Schema.isGreaterThan(0)), expectedRevision, "revision");
+    yield* failpoint.hit("subscription:change:before");
+    const nowMillis = yield* Clock.currentTimeMillis;
 
-      const updated = yield* Effect.uninterruptible(
-        Ref.modify(
-          state,
-          (
-            current,
-          ): readonly [
-            Result.Result<SubscriptionRecord, SubscriptionError>,
-            MemorySubscriptionState,
-          ] => {
-            const storageKey = subscriptionKeyString(key);
-            const text = current.registrations.get(storageKey);
+    const updated = yield* Effect.uninterruptible(
+      Ref.modify(
+        state,
+        (
+          current,
+        ): readonly [
+          Result.Result<SubscriptionRecord, SubscriptionError>,
+          MemorySubscriptionState,
+        ] => {
+          const storageKey = subscriptionKeyString(key);
+          const text = current.registrations.get(storageKey);
 
-            if (text === undefined)
-              return [Result.fail(error("not-found", "subscription")), current];
-            const existing = decode(SubscriptionRecord, text, "change-record");
+          if (text === undefined) return [Result.fail(error("not-found", "subscription")), current];
+          const existing = decode(SubscriptionRecord, text, "change-record");
 
-            if (Result.isFailure(existing)) return [existing, current];
-            const updated = applySubscriptionChange(existing.success, expectedRevision, change);
+          if (Result.isFailure(existing)) return [existing, current];
+          const updated = applySubscriptionChange(existing.success, expectedRevision, change);
 
-            if (Result.isFailure(updated)) return [updated, current];
-            const revised = { ...updated.success, ordinal: current.sequence + 1 };
-            const encoded = encode(SubscriptionRecord, revised, "change-encode");
+          if (Result.isFailure(updated)) return [updated, current];
+          if (
+            !subscriptionUsesCapacity(existing.success, nowMillis) &&
+            subscriptionUsesCapacity(updated.success, nowMillis)
+          ) {
+            if (registrationCount(current, nowMillis) >= limits.maxRegistrations)
+              return [Result.fail(error("capacity", "registrations")), current];
+            if (
+              registrationCount(current, nowMillis, key.ownerId) >= limits.maxRegistrationsPerOwner
+            )
+              return [Result.fail(error("capacity", "owner-registrations")), current];
+          }
+          const revised = { ...updated.success, ordinal: current.sequence + 1 };
+          const encoded = encode(SubscriptionRecord, revised, "change-encode");
 
-            if (Result.isFailure(encoded)) return [Result.fail(encoded.failure), current];
-            const registrations = new Map(current.registrations);
+          if (Result.isFailure(encoded)) return [Result.fail(encoded.failure), current];
+          const registrations = new Map(current.registrations);
 
-            registrations.set(storageKey, encoded.success);
-            const registrationIndex = new Map(current.registrationIndex);
+          registrations.set(storageKey, encoded.success);
+          const registrationIndex = new Map(current.registrationIndex);
 
-            registrationIndex.set(storageKey, {
-              key,
-              ordinal: revised.ordinal,
-              state: revised.state,
-              recoveryKey: revised.recovery === null ? null : candidateIndexKey(revised),
-              recoveryAt: revised.recovery?.nextAttemptAtMillis ?? null,
-            });
-            const candidateIndex = new Map(current.candidateIndex);
-            const oldKey = candidateIndexKey(existing.success);
-            const nextKey = candidateIndexKey(revised);
+          registrationIndex.set(storageKey, {
+            key,
+            ordinal: revised.ordinal,
+            state: revised.state,
+            recoveryKey: revised.recovery === null ? null : candidateIndexKey(revised),
+            recoveryAt: revised.recovery?.nextAttemptAtMillis ?? null,
+          });
+          const candidateIndex = new Map(current.candidateIndex);
+          const oldKey = candidateIndexKey(existing.success);
+          const nextKey = candidateIndexKey(revised);
 
+          {
+            candidateIndex.set(
+              oldKey,
+              (candidateIndex.get(oldKey) ?? []).filter((key) => key !== storageKey),
+            );
+            candidateIndex.set(
+              nextKey,
+              [...(candidateIndex.get(nextKey) ?? []), storageKey].sort(
+                (a, b) =>
+                  (registrationIndex.get(a)?.ordinal ?? 0) -
+                  (registrationIndex.get(b)?.ordinal ?? 0),
+              ),
+            );
+          }
+
+          return [
+            Result.succeed(revised),
             {
-              candidateIndex.set(
-                oldKey,
-                (candidateIndex.get(oldKey) ?? []).filter((key) => key !== storageKey),
-              );
-              candidateIndex.set(
-                nextKey,
-                [...(candidateIndex.get(nextKey) ?? []), storageKey].sort(
-                  (a, b) =>
-                    (registrationIndex.get(a)?.ordinal ?? 0) -
-                    (registrationIndex.get(b)?.ordinal ?? 0),
-                ),
-              );
-            }
+              ...current,
+              sequence: revised.ordinal,
+              registrations,
+              registrationIndex,
+              candidateIndex,
+              ...registrationExpiriesAfter(current, existing.success, revised),
+              recoveryCounts: recoveryCountsAfter(current, registrationIndex, [storageKey]),
+            },
+          ];
+        },
+      ),
+    ).pipe(Effect.flatMap(Effect.fromResult));
 
-            return [
-              Result.succeed(revised),
-              {
-                ...current,
-                sequence: revised.ordinal,
-                registrations,
-                registrationIndex,
-                candidateIndex,
-                recoveryCounts: recoveryCountsAfter(current, registrationIndex, [storageKey]),
-              },
-            ];
-          },
-        ),
-      ).pipe(Effect.flatMap(Effect.fromResult));
+    yield* failpoint.hit("subscription:change:after");
 
-      yield* failpoint.hit("subscription:change:after");
-
-      return updated;
-    },
-  );
+    return updated;
+  });
 
   const cancel: SubscriptionStore["Service"]["cancel"] = Effect.fnUntraced(
     function* (input, expectedRevision) {
@@ -518,6 +614,7 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
                 ...current,
                 registrations,
                 registrationIndex,
+                ...registrationExpiriesAfter(current, decoded.success, cancelled),
                 recoveryCounts: recoveryCountsAfter(current, registrationIndex, [storageKey]),
               },
             ];
@@ -570,7 +667,7 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
             if (Result.isFailure(horizon)) return [Result.fail(horizon.failure), current];
             if (jsonBytes(event.payload) > limits.maxPayloadBytes)
               return [Result.fail(error("capacity", "payload-bytes")), current];
-            if (current.events.size - current.tombstoneCount >= limits.maxEvents)
+            if (current.pendingEventCount >= limits.maxEvents)
               return [Result.fail(error("capacity", "events")), current];
 
             const accepted: AcceptedEvent = {
@@ -601,6 +698,7 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
                 sequence: accepted.cutoff,
                 events,
                 eventIndex,
+                pendingEventCount: current.pendingEventCount + 1,
                 eventKeys: insertKey(current.eventKeys, accepted.eventId),
                 retentionHorizon: limits.retention?.replayHorizonMillis ?? current.retentionHorizon,
                 retentionDeadline:
@@ -681,6 +779,11 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
         "select-deliveries",
       );
 
+      if (
+        new Set(deliveries.map((delivery) => subscriptionDeliveryKeyString(delivery.key))).size !==
+        deliveries.length
+      )
+        return yield* error("validation", "duplicate-delivery");
       const limits = yield* validate(SubscriptionLimits, inputLimits, "select-limits");
 
       yield* requirePartition(suppliedEvent, "select-partition");
@@ -723,6 +826,11 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
             const additionIndex: Array<readonly [string, DeliveryIndex, string]> = [];
             const registrationUpdates: Array<readonly [string, RegistrationIndex]> = [];
             const owners = new Map(current.ownerDeliveryCounts);
+
+            let registrationCapacity: RegistrationCapacity = {
+              registrationExpiries: current.registrationExpiries,
+              ownerRegistrationExpiries: current.ownerRegistrationExpiries,
+            };
 
             for (const delivery of deliveries) {
               const recordText = current.registrations.get(
@@ -800,9 +908,14 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
                   consumedKey,
                   { ...indexed, state: "consumed", recoveryAt: null, recoveryKey: null },
                 ]);
+                registrationCapacity = registrationExpiriesAfter(
+                  registrationCapacity,
+                  record.success,
+                  consumed,
+                );
               }
             }
-            if (current.deliveries.size + additions.length > limits.maxDeliveries)
+            if (current.liveDeliveryCount + additions.length > limits.maxDeliveries)
               return [Result.fail(error("capacity", "deliveries")), current];
             const registrations = new Map(current.registrations);
 
@@ -859,12 +972,15 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
                 events,
                 eventIndex,
                 deliveries: nextDeliveries,
+                liveDeliveryCount: current.liveDeliveryCount + additions.length,
+                pendingEventCount: current.pendingEventCount - Number(complete),
                 deliveryKeys: additions.reduce(
                   (keys, [key]) => insertKey(keys, key),
                   current.deliveryKeys,
                 ),
                 deliveryIndex,
                 ownerDeliveryCounts: owners,
+                ...registrationCapacity,
               },
             ];
           },
@@ -926,7 +1042,7 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
             }
             if (!subscriptionCanSelect(record.success, accepted.success, effectiveNowMillis, true))
               return [Result.fail(error("conflict", "catch-up-eligibility")), current];
-            if (current.deliveries.size >= limits.maxDeliveries)
+            if (current.liveDeliveryCount >= limits.maxDeliveries)
               return [Result.fail(error("capacity", "deliveries")), current];
             const ownerCount = current.ownerDeliveryCounts.get(record.success.key.ownerId) ?? 0;
 
@@ -994,6 +1110,8 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
                 deliveryIndex,
                 deliveryKeys: insertKey(current.deliveryKeys, key),
                 ownerDeliveryCounts,
+                ...registrationExpiriesAfter(current, record.success, consumed),
+                liveDeliveryCount: current.liveDeliveryCount + 1,
                 registrations,
                 registrationIndex,
                 recoveryCounts: recoveryCountsAfter(current, registrationIndex, [consumedKey]),
@@ -1106,10 +1224,11 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
   );
 
   const changeDelivery: SubscriptionStore["Service"]["changeDelivery"] = Effect.fnUntraced(
-    function* (inputKey, inputDeliveryId, inputChange) {
+    function* (inputKey, inputDeliveryId, inputChange, inputLimits = defaultSubscriptionLimits) {
       const key = yield* validate(SubscriptionDeliveryKey, inputKey, "change-delivery-key");
       const deliveryId = yield* validate(Digest, inputDeliveryId, "change-delivery-id");
       const change = yield* validate(DeliveryChange, inputChange, "change-delivery-change");
+      const limits = yield* validate(SubscriptionLimits, inputLimits, "change-delivery-limits");
 
       yield* requirePartition(key.subscription, "change-delivery-partition");
       yield* failpoint.hit(`subscription:delivery-${change._tag.toLowerCase()}:before`);
@@ -1162,6 +1281,20 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
             if (transition.success === decoded.success)
               return [Result.succeed(decoded.success), current];
             const updated = transition.success;
+
+            const capacityDelta =
+              Number(subscriptionDeliveryUsesCapacity(updated)) -
+              Number(subscriptionDeliveryUsesCapacity(decoded.success));
+
+            const ownerId = key.subscription.ownerId;
+            const ownerCount = current.ownerDeliveryCounts.get(ownerId) ?? 0;
+
+            if (capacityDelta > 0) {
+              if (current.liveDeliveryCount >= limits.maxDeliveries)
+                return [Result.fail(error("capacity", "deliveries")), current];
+              if (ownerCount >= limits.maxDeliveriesPerOwner)
+                return [Result.fail(error("capacity", "owner-deliveries")), current];
+            }
             const encoded = encode(SubscriptionDelivery, updated, "change-delivery-encode");
 
             if (Result.isFailure(encoded)) return [Result.fail(encoded.failure), current];
@@ -1180,8 +1313,21 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
               observeSettlement: updated.observeSettlement ?? false,
               nextAttemptAtMillis: updated.retry.nextAttemptAtMillis,
             });
+            const ownerDeliveryCounts = new Map(current.ownerDeliveryCounts);
 
-            return [Result.succeed(updated), { ...current, deliveries, deliveryIndex }];
+            if (ownerCount + capacityDelta === 0) ownerDeliveryCounts.delete(ownerId);
+            else ownerDeliveryCounts.set(ownerId, ownerCount + capacityDelta);
+
+            return [
+              Result.succeed(updated),
+              {
+                ...current,
+                deliveries,
+                deliveryIndex,
+                ownerDeliveryCounts,
+                liveDeliveryCount: current.liveDeliveryCount + capacityDelta,
+              },
+            ];
           },
         ),
       ).pipe(Effect.flatMap(Effect.fromResult));
@@ -1350,6 +1496,7 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
             const deliveryIndex = new Map(current.deliveryIndex);
             const eventDeliveryCounts = new Map(current.eventDeliveryCounts);
             const ownerDeliveryCounts = new Map(current.ownerDeliveryCounts);
+            let liveDeliveryCount = current.liveDeliveryCount;
 
             // Page indexes before decoding. Each pass reads at most 2 * limit event values and
             // limit delivery values; relationship checks use maintained reference counts.
@@ -1432,9 +1579,14 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
                 event.eventId,
                 (eventDeliveryCounts.get(event.eventId) ?? 1) - 1,
               );
-              const owner = delivery.key.subscription.ownerId;
+              if (subscriptionDeliveryUsesCapacity(delivery)) {
+                liveDeliveryCount--;
+                const owner = delivery.key.subscription.ownerId;
+                const count = (ownerDeliveryCounts.get(owner) ?? 1) - 1;
 
-              ownerDeliveryCounts.set(owner, (ownerDeliveryCounts.get(owner) ?? 1) - 1);
+                if (count === 0) ownerDeliveryCounts.delete(owner);
+                else ownerDeliveryCounts.set(owner, count);
+              }
             }
             let tombstones = current.tombstoneCount;
 
@@ -1497,6 +1649,7 @@ const makeMemorySubscriptionStore = Effect.fnUntraced(function* (ownedPartition:
                 deliveryIndex,
                 eventDeliveryCounts,
                 ownerDeliveryCounts,
+                liveDeliveryCount,
                 eventKeys: removeKeys(current.eventKeys, removedEvents),
                 deliveryKeys: removeKeys(current.deliveryKeys, removedDeliveries),
                 tombstoneCount: tombstones,

@@ -3,6 +3,7 @@ import { RunId, SubmissionId, ThreadId } from "@yielded/agent/identifiers";
 import {
   MessageDeliveryRecord,
   messageDeliveryDeadline,
+  peerMessageRetentionDeadline,
   defaultMessageDeliveryStoreLimits,
   type MessageDeliveryStoreLimits,
 } from "@yielded/agent/message-delivery";
@@ -1431,8 +1432,8 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                   delivery.envelope.agentId,
                 ]);
                 yield* checkValues([text]);
-                yield* query(sql`INSERT INTO ${table("effect_agent_message_deliveries")} (owner_thread_id, message_id, version, state, deadline_at_millis, record_json ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata` })})
-          VALUES (${threadId}, ${delivery.key.messageId}, ${delivery.version}, ${delivery.status}, ${messageDeliveryDeadline(delivery)}, ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, ${messageDeliveryMetadata(delivery)}::jsonb` })})`);
+                yield* query(sql`INSERT INTO ${table("effect_agent_message_deliveries")} (owner_thread_id, message_id, version, state, deadline_at_millis, peer_retained_until_millis, record_json ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata` })})
+          VALUES (${threadId}, ${delivery.key.messageId}, ${delivery.version}, ${delivery.status}, ${messageDeliveryDeadline(delivery)}, ${peerMessageRetentionDeadline(delivery)}, ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, ${messageDeliveryMetadata(delivery)}::jsonb` })})`);
                 yield* work.transferDelivery(threadId, delivery.key.messageId);
               }
               if (options.afterPage !== undefined)

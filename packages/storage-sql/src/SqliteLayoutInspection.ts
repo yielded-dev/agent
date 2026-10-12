@@ -42,6 +42,10 @@ const normalize = (statement: string) =>
         : "",
   );
 
+/** Compare declared SQLite DDL without weakening constraints, expressions or predicates. */
+export const sameSqliteLayoutStatement = (left: string, right: string): boolean =>
+  normalize(left) === normalize(right);
+
 /**
  * Inspect an adapter's current SQLite layout. The adapter owns version discovery,
  * empty-store detection, the surrounding snapshot/transaction, and every layout statement.

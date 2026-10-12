@@ -327,7 +327,11 @@ export const makeMessagingRuntime = Effect.fnUntraced(function* (options: Messag
             return yield* failure(operation, "unavailable");
           if (
             (yield* deps.store
-              .countPeerMessages({ threadId, limit: maxMessages })
+              .countPeerMessages({
+                threadId,
+                nowMillis: yield* Clock.currentTimeMillis,
+                limit: maxMessages,
+              })
               .pipe(Effect.mapError(mapStore(operation)))) >= maxMessages
           )
             return yield* failure(operation, "capacity");

@@ -41,6 +41,21 @@ export const subscriptionMatchesEvent = (
   subscription.configuration.source.version === event.source.version &&
   subscription.configuration.matchingKey === event.matchingKey;
 
+/** Paused registrations reserve capacity; terminal and expired replay evidence does not. */
+export const subscriptionUsesCapacity = (
+  subscription: SubscriptionRecord,
+  nowMillis: number,
+): boolean =>
+  (subscription.state === "active" || subscription.state === "paused") &&
+  (subscription.configuration.expiresAtMillis === null ||
+    subscription.configuration.expiresAtMillis > nowMillis);
+
+/** Parked work still owns a slot. A receipt releases it unless settlement is being observed. */
+export const subscriptionDeliveryUsesCapacity = (delivery: SubscriptionDeliveryType): boolean =>
+  delivery.state === "selected" ||
+  delivery.state === "prepared" ||
+  (delivery.state === "delivered" && delivery.observeSettlement === true);
+
 export const subscriptionCanSelect = (
   subscription: SubscriptionRecord,
   event: AcceptedEvent,

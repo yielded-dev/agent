@@ -96,7 +96,7 @@ export const initializePostgresStorage = Effect.fn("PostgresStorage.initializeLa
 
   yield* write(
     Effect.gen(function* () {
-      const header = yield* inspectPostgresStorage(schema);
+      const header = yield* inspectPostgresStorage(schema, true);
 
       if (header === undefined) yield* ensurePostgresSchema(schema);
       yield* applyPostgresLayout(schema, header);

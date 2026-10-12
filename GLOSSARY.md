@@ -51,6 +51,8 @@ An identified, ordered conversation shared across Runs, independent of storage o
 durability. `Thread` belongs to the main package. Its baseline store retains native messages
 for the application Scope. Persistent history stores completed conversations; durable execution
 adds an append-only journal from which the canonical transcript is projected.
+A Thread's lifetime is unbounded; execution slices, live work, and host storage capacity have
+separate bounds.
 
 **Submission**  
 An immutable input accepted for durable processing in one Thread lane. Acknowledged

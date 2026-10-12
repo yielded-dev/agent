@@ -41,12 +41,11 @@ can recover after process loss.
 | Built-in conversation limit      | Maximum |
 | -------------------------------- | ------- |
 | Threads per store                | 256     |
-| Messages per Thread              | 1,024   |
-| Encoded content per Thread       | 4 MiB   |
+| Encoded content per message      | 4 MiB   |
 | Encoded content across the store | 64 MiB  |
 
-These are storage bounds, separate from an agent's token and tool budgets. Exceeding
-one fails with `ThreadLimitExceeded`.
+These bounds protect individual messages and host memory; a Thread has no quota on message count
+or total content. Exceeding one fails with `ThreadLimitExceeded`.
 
 ## Canonical stores for custom assemblies
 

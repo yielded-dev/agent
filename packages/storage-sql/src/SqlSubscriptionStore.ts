@@ -2,6 +2,7 @@ import { Digest } from "@yielded/agent/records";
 import {
   AcceptedEvent,
   DeliveryChange,
+  defaultSubscriptionLimits,
   SubscriptionChange,
   SubscriptionRetentionPolicy,
   type SourcePartition,
@@ -26,6 +27,8 @@ import {
   sameSourcePartition,
   subscriptionCanSelect,
   subscriptionDeliveryCanSelect,
+  subscriptionUsesCapacity,
+  subscriptionDeliveryUsesCapacity,
 } from "@yielded/agent/subscription-transition";
 import { Clock, Effect, Result, Schema } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
@@ -55,6 +58,66 @@ const error = (reason: SubscriptionError["reason"], code: string) =>
 
 const unavailable = (operation: string) => error("storage", operation);
 const corrupt = (operation: string) => error("corrupt", operation);
+
+/** Rebuild only the observation derivative inside the adapter's atomic layout upgrade. */
+export const backfillSubscriptionSettlementObservation = Effect.fnUntraced(function* () {
+  const sql = (yield* SqlClientService.SqlClient).withoutTransforms();
+
+  const LegacyRow = Schema.Struct({
+    tenant_id: Schema.String,
+    source_address: Schema.String,
+    owner_id: Schema.String,
+    subscription_id: Schema.String,
+    event_id: Schema.String,
+    delivery_key: Schema.String,
+    state: SubscriptionDelivery.fields.state,
+    next_attempt_at_millis: SqlNumber,
+    record_json: Schema.fromJsonString(SubscriptionDelivery),
+  });
+
+  const decode = Schema.decodeUnknownEffect(Schema.Array(LegacyRow));
+
+  let cursor:
+    | { readonly tenant: string; readonly source: string; readonly delivery: string }
+    | undefined;
+
+  while (true) {
+    const rows = yield* sql`
+      SELECT tenant_id, source_address, owner_id, subscription_id, event_id,
+        delivery_key, state, next_attempt_at_millis, record_json
+      FROM effect_agent_subscription_deliveries
+      ${cursor === undefined ? sql`` : sql`WHERE (tenant_id, source_address, delivery_key) > (${cursor.tenant}, ${cursor.source}, ${cursor.delivery})`}
+      ORDER BY tenant_id, source_address, delivery_key LIMIT 1
+    `;
+
+    const [row] = yield* decode(rows).pipe(
+      Effect.mapError(() => corrupt("upgrade subscription delivery")),
+    );
+
+    if (row === undefined) return;
+    const delivery = row.record_json;
+    const key = delivery.key.subscription;
+
+    if (
+      key.partition.tenantId !== row.tenant_id ||
+      key.partition.address !== row.source_address ||
+      key.ownerId !== row.owner_id ||
+      key.subscriptionId !== row.subscription_id ||
+      delivery.key.eventId !== row.event_id ||
+      subscriptionDeliveryKeyString(delivery.key) !== row.delivery_key ||
+      delivery.state !== row.state ||
+      delivery.retry.nextAttemptAtMillis !== row.next_attempt_at_millis
+    )
+      return yield* corrupt("upgrade subscription delivery metadata");
+
+    yield* sql`UPDATE effect_agent_subscription_deliveries
+      SET observe_settlement = ${delivery.observeSettlement === true ? 1 : 0}
+      WHERE tenant_id = ${row.tenant_id} AND source_address = ${row.source_address}
+        AND delivery_key = ${row.delivery_key}`;
+    cursor = { tenant: row.tenant_id, source: row.source_address, delivery: row.delivery_key };
+  }
+});
+
 const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
 
 const validate = <A, I>(schema: Schema.Codec<A, I>, value: unknown, code: string) =>
@@ -159,6 +222,10 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
     event_id: Schema.String,
     delivery_key: Schema.String,
     state: SubscriptionDelivery.fields.state,
+    observe_settlement: Schema.Union([
+      Schema.Boolean,
+      SqlInteger.pipe(Schema.decodeTo(Schema.Literals([0, 1]))),
+    ]),
     next_attempt_at_millis: SqlNumber,
     record_json: StoredJson,
   });
@@ -349,7 +416,7 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
   const readDelivery = Effect.fnUntraced(function* (key: SubscriptionDeliveryKey, code: string) {
     const rows = yield* query(
       sql<Record<string, unknown>>`
-      SELECT owner_id, subscription_id, event_id, delivery_key, state, next_attempt_at_millis, record_json
+      SELECT owner_id, subscription_id, event_id, delivery_key, state, observe_settlement, next_attempt_at_millis, record_json
       FROM ${relation("effect_agent_subscription_deliveries")}
       WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}
         AND owner_id=${key.subscription.ownerId} AND subscription_id=${key.subscription.subscriptionId}
@@ -373,6 +440,8 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
       delivery.key.eventId !== row.event_id ||
       subscriptionDeliveryKeyString(delivery.key) !== row.delivery_key ||
       delivery.state !== row.state ||
+      (delivery.observeSettlement === true) !==
+        (row.observe_settlement === true || row.observe_settlement === 1) ||
       delivery.retry.nextAttemptAtMillis !== row.next_attempt_at_millis
     )
       return yield* corrupt(`${code}-projection`);
@@ -391,6 +460,41 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
 
     return decoded[0].count;
   });
+
+  const countRegistrations = (nowMillis: number, ownerId?: string) => {
+    const owner = ownerId === undefined ? sql`` : sql`AND owner_id=${ownerId}`;
+
+    return count(
+      sql<Record<string, unknown>>`SELECT
+      (SELECT COUNT(*) FROM ${relation("effect_agent_subscriptions")}
+        WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}
+          ${owner} AND state IN ('active', 'paused') AND expires_at_millis IS NULL)
+      + (SELECT COUNT(*) FROM ${relation("effect_agent_subscriptions")}
+        WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}
+          ${owner} AND state IN ('active', 'paused') AND expires_at_millis>${nowMillis}) AS count`,
+      "count live registrations",
+    );
+  };
+
+  const observesSettlement = sql.onDialectOrElse({
+    orElse: () => sql`observe_settlement=1`,
+    pg: () => sql`observe_settlement`,
+  });
+
+  const countDeliveries = (ownerId?: string) => {
+    const owner = ownerId === undefined ? sql`` : sql`AND owner_id=${ownerId}`;
+
+    return count(
+      sql<Record<string, unknown>>`SELECT
+      (SELECT COUNT(*) FROM ${relation("effect_agent_subscription_deliveries")}
+        WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}
+          ${owner} AND state IN ('selected', 'prepared'))
+      + (SELECT COUNT(*) FROM ${relation("effect_agent_subscription_deliveries")}
+        WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}
+          ${owner} AND state='delivered' AND ${observesSettlement}) AS count`,
+      "count live deliveries",
+    );
+  };
 
   const nextSequence = Effect.fnUntraced(function* () {
     const rows = yield* query(
@@ -447,8 +551,9 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
     yield* query(
       sql<Record<string, unknown>>`
       UPDATE ${relation("effect_agent_subscription_deliveries")} SET state=${delivery.state},
-        next_attempt_at_millis=${delivery.retry.nextAttemptAtMillis}, record_json=${json}
-        ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, retry_parked=${delivery.retry.parked === true}, observe_settlement=${delivery.observeSettlement === true}` })}
+        next_attempt_at_millis=${delivery.retry.nextAttemptAtMillis}, record_json=${json},
+        observe_settlement=${sql.onDialectOrElse({ orElse: () => Number(delivery.observeSettlement === true), pg: () => delivery.observeSettlement === true })}
+        ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, retry_parked=${delivery.retry.parked === true}` })}
       WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}
         AND owner_id=${delivery.key.subscription.ownerId} AND subscription_id=${delivery.key.subscription.subscriptionId}
         AND event_id=${delivery.key.eventId}
@@ -483,24 +588,17 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
             record.configuration.expiresAtMillis - record.createdAtMillis > limits.maxLifetimeMillis
           )
             return yield* error("capacity", "lifetime");
-          if (
-            (yield* count(
-              sql<
-                Record<string, unknown>
-              >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscriptions")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
-              "count registrations",
-            )) >= limits.maxRegistrations
-          )
-            return yield* error("capacity", "registrations");
-          if (
-            (yield* count(
-              sql<
-                Record<string, unknown>
-              >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscriptions")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND owner_id=${record.key.ownerId}`,
-              "count owner registrations",
-            )) >= limits.maxRegistrationsPerOwner
-          )
-            return yield* error("capacity", "owner-registrations");
+          const nowMillis = yield* Clock.currentTimeMillis;
+
+          if (subscriptionUsesCapacity(record, nowMillis)) {
+            if ((yield* countRegistrations(nowMillis)) >= limits.maxRegistrations)
+              return yield* error("capacity", "registrations");
+            if (
+              (yield* countRegistrations(nowMillis, record.key.ownerId)) >=
+              limits.maxRegistrationsPerOwner
+            )
+              return yield* error("capacity", "owner-registrations");
+          }
           const assigned = { ...record, ordinal: yield* nextSequence() };
           const json = yield* encode(SubscriptionRecord, assigned, "encode registration");
 
@@ -559,37 +657,55 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
     },
   );
 
-  const change: SubscriptionStore["Service"]["change"] = Effect.fnUntraced(
-    function* (input, expectedRevision, inputChange) {
-      const key = yield* requireKey(input, "change-key");
-      const change = yield* validate(SubscriptionChange, inputChange, "change");
+  const change: SubscriptionStore["Service"]["change"] = Effect.fnUntraced(function* (
+    input,
+    expectedRevision,
+    inputChange,
+    inputLimits = defaultSubscriptionLimits,
+  ) {
+    const key = yield* requireKey(input, "change-key");
+    const change = yield* validate(SubscriptionChange, inputChange, "change");
+    const limits = yield* validate(SubscriptionLimits, inputLimits, "change-limits");
 
-      yield* validate(Schema.Int.check(Schema.isGreaterThan(0)), expectedRevision, "revision");
+    yield* validate(Schema.Int.check(Schema.isGreaterThan(0)), expectedRevision, "revision");
 
-      const updated = yield* transaction(
-        Effect.gen(function* () {
-          const existing = yield* readRegistration(key, "change-registration");
+    const updated = yield* transaction(
+      Effect.gen(function* () {
+        const existing = yield* readRegistration(key, "change-registration");
 
-          if (existing === null) return yield* error("not-found", "subscription");
-          yield* failpoint.hit("subscription:change:before");
+        if (existing === null) return yield* error("not-found", "subscription");
+        yield* failpoint.hit("subscription:change:before");
 
-          const revised = yield* Effect.fromResult(
-            applySubscriptionChange(existing, expectedRevision, change),
-          );
+        const revised = yield* Effect.fromResult(
+          applySubscriptionChange(existing, expectedRevision, change),
+        );
 
-          const updated = { ...revised, ordinal: yield* nextSequence() };
+        const nowMillis = yield* Clock.currentTimeMillis;
 
-          yield* writeRegistration(updated);
+        if (
+          !subscriptionUsesCapacity(existing, nowMillis) &&
+          subscriptionUsesCapacity(revised, nowMillis)
+        ) {
+          if ((yield* countRegistrations(nowMillis)) >= limits.maxRegistrations)
+            return yield* error("capacity", "registrations");
+          if (
+            (yield* countRegistrations(nowMillis, key.ownerId)) >= limits.maxRegistrationsPerOwner
+          )
+            return yield* error("capacity", "owner-registrations");
+        }
 
-          return updated;
-        }),
-      );
+        const updated = { ...revised, ordinal: yield* nextSequence() };
 
-      yield* failpoint.hit("subscription:change:after");
+        yield* writeRegistration(updated);
 
-      return updated;
-    },
-  );
+        return updated;
+      }),
+    );
+
+    yield* failpoint.hit("subscription:change:after");
+
+    return updated;
+  });
 
   const cancel: SubscriptionStore["Service"]["cancel"] = Effect.fnUntraced(
     function* (input, expectedRevision) {
@@ -703,7 +819,7 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
             (yield* count(
               sql<
                 Record<string, unknown>
-              >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscription_events")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND tombstone=0`,
+              >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscription_events")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND routing_complete=0`,
               "count events",
             )) >= limits.maxEvents
           )
@@ -806,11 +922,12 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
     yield* query(
       sql<Record<string, unknown>>`
       INSERT INTO ${relation("effect_agent_subscription_deliveries")} (tenant_id, source_address, owner_id, subscription_id, event_id,
-        delivery_key, state, next_attempt_at_millis, record_json
-        ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, retry_parked, observe_settlement` })})
+        delivery_key, state, next_attempt_at_millis, record_json, observe_settlement
+        ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, retry_parked` })})
       VALUES (${partition.tenantId}, ${partition.address}, ${delivery.key.subscription.ownerId}, ${delivery.key.subscription.subscriptionId},
-        ${delivery.key.eventId}, ${subscriptionDeliveryKeyString(delivery.key)}, ${delivery.state}, ${delivery.retry.nextAttemptAtMillis}, ${json}
-        ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, ${delivery.retry.parked === true}, ${delivery.observeSettlement === true}` })})
+        ${delivery.key.eventId}, ${subscriptionDeliveryKeyString(delivery.key)}, ${delivery.state}, ${delivery.retry.nextAttemptAtMillis}, ${json},
+        ${sql.onDialectOrElse({ orElse: () => Number(delivery.observeSettlement === true), pg: () => delivery.observeSettlement === true })}
+        ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, ${delivery.retry.parked === true}` })})
     `,
       "insert delivery",
     );
@@ -826,6 +943,11 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
         "select-deliveries",
       );
 
+      if (
+        new Set(deliveries.map((delivery) => subscriptionDeliveryKeyString(delivery.key))).size !==
+        deliveries.length
+      )
+        return yield* error("validation", "duplicate-delivery");
       const limits = yield* validate(SubscriptionLimits, inputLimits, "select-limits");
 
       yield* requirePartition(supplied.partition, "select-partition");
@@ -875,22 +997,12 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
             additions.push({ delivery, record });
           }
 
-          const total = yield* count(
-            sql<
-              Record<string, unknown>
-            >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
-            "count deliveries",
-          );
+          const total = yield* countDeliveries();
 
           if (total + additions.length > limits.maxDeliveries)
             return yield* error("capacity", "deliveries");
           for (const ownerId of new Set(additions.map(({ record }) => record.key.ownerId))) {
-            const existing = yield* count(
-              sql<
-                Record<string, unknown>
-              >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND owner_id=${ownerId}`,
-              "count owner deliveries",
-            );
+            const existing = yield* countDeliveries(ownerId);
 
             if (
               existing + additions.filter(({ record }) => record.key.ownerId === ownerId).length >
@@ -960,23 +1072,9 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
 
           if (!subscriptionCanSelect(record, accepted, effectiveNowMillis, true))
             return yield* error("conflict", "catch-up-eligibility");
-          if (
-            (yield* count(
-              sql<
-                Record<string, unknown>
-              >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address}`,
-              "count deliveries",
-            )) >= limits.maxDeliveries
-          )
+          if ((yield* countDeliveries()) >= limits.maxDeliveries)
             return yield* error("capacity", "deliveries");
-          if (
-            (yield* count(
-              sql<
-                Record<string, unknown>
-              >`SELECT COUNT(*) AS count FROM ${relation("effect_agent_subscription_deliveries")} WHERE tenant_id=${partition.tenantId} AND source_address=${partition.address} AND owner_id=${record.key.ownerId}`,
-              "count owner deliveries",
-            )) >= limits.maxDeliveriesPerOwner
-          )
+          if ((yield* countDeliveries(record.key.ownerId)) >= limits.maxDeliveriesPerOwner)
             return yield* error("capacity", "owner-deliveries");
           yield* insertDelivery(delivery);
           yield* writeRegistration({ ...record, state: "consumed", recovery: null });
@@ -1068,10 +1166,11 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
   );
 
   const changeDelivery: SubscriptionStore["Service"]["changeDelivery"] = Effect.fnUntraced(
-    function* (inputKey, inputDeliveryId, inputChange) {
+    function* (inputKey, inputDeliveryId, inputChange, inputLimits = defaultSubscriptionLimits) {
       const key = yield* validate(SubscriptionDeliveryKey, inputKey, "change-delivery-key");
       const deliveryId = yield* validate(Digest, inputDeliveryId, "change-delivery-id");
       const change = yield* validate(DeliveryChange, inputChange, "change-delivery-change");
+      const limits = yield* validate(SubscriptionLimits, inputLimits, "change-delivery-limits");
 
       yield* requirePartition(key.subscription.partition, "change-delivery-partition");
 
@@ -1098,6 +1197,15 @@ export const makeSqlSubscriptionStore = Effect.fnUntraced(function* (
 
           if (Result.isFailure(transition)) return yield* transition.failure;
           if (transition.success === existing) return { value: existing, changed: false } as const;
+          if (
+            !subscriptionDeliveryUsesCapacity(existing) &&
+            subscriptionDeliveryUsesCapacity(transition.success)
+          ) {
+            if ((yield* countDeliveries()) >= limits.maxDeliveries)
+              return yield* error("capacity", "deliveries");
+            if ((yield* countDeliveries(key.subscription.ownerId)) >= limits.maxDeliveriesPerOwner)
+              return yield* error("capacity", "owner-deliveries");
+          }
           yield* writeDelivery(transition.success);
 
           return { value: transition.success, changed: true } as const;

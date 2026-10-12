@@ -98,13 +98,20 @@ export const PeerRoutes = Context.Reference<{
   }),
 });
 
-/** Retry windows are finite; exhaustion parks the retained envelope for explicit authorized retry. */
+/**
+ * Finite delivery and retained-send window in milliseconds (default one day, maximum seven days).
+ * Exhaustion parks outstanding work; terminal sends stop consuming capacity at this deadline.
+ */
 export const PeerDeliveryLifetime = Context.Reference<number>(
   "@effect-agent/thread/PeerDeliveryLifetime",
   { defaultValue: () => 86_400_000 },
 );
 
-/** Bound canonical send intents across all peers and principals in one source Thread. */
+/**
+ * Bound outstanding sends plus terminal sends still inside their delivery window, across all peers
+ * and principals in one source Thread (default 256, maximum 1,000). Canonical history and exact
+ * idempotent receipts remain retained after expiry without consuming this capacity.
+ */
 export const PeerMessageCapacity = Context.Reference<number>(
   "@effect-agent/thread/PeerMessageCapacity",
   { defaultValue: () => 256 },

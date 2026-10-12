@@ -50,9 +50,10 @@ bounded retry allowance without changing its frozen destination, principal, or i
 rewind processed or conclusively refused work.
 
 The default delivery policy permits eight attempts with a 30-second attempt timeout and a
-24-hour peer deadline. Source Threads also have a finite canonical-send capacity; completed
-sends do not automatically free it. Choose capacity and retention deliberately for long-lived
-messaging workloads.
+24-hour peer deadline. `PeerMessageCapacity` defaults to 256 per source Thread (maximum 1,000),
+counting outstanding sends, including parked work, and settled sends until their last delivery
+deadline. Settled sends stop counting after that deadline; exact receipts and append-only history
+remain available.
 
 ## Reply with current authority
 

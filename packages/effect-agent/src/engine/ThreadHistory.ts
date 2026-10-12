@@ -127,7 +127,7 @@ export class ThreadHistory extends Context.Service<
     }),
   );
 
-  /** Retain bounded history for the application Scope. Separate Layer builds own separate stores. */
+  /** Retain history for the application Scope, within message and host capacity. Separate Layer builds own separate stores. */
   static readonly layer = ThreadHistory.layerFromStore.pipe(Layer.provideMerge(layerMemory));
 }
 

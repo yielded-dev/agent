@@ -38,8 +38,8 @@ show the imported definition and services.
 
 <a id="in-memory-conversations"></a>
 
-In-memory storage has explicit capacity: 256 Threads, 1,024 messages and 4 MiB per Thread,
-and 64 MiB overall. Exceeding a bound fails; it does not silently evict conversations.
+In-memory [storage bounds](/storage/memory/) apply to individual messages and the whole host.
+Capacity errors leave existing conversations intact.
 Finishing a Run does not release its history. Use `InMemory.scoped` for disposable workflows
 and consume streams or handles before that scope closes.
 
@@ -60,7 +60,8 @@ See [durability](/concepts/durability/) and [storage choices](/storage/).
 The model reads a selected context window. Recovery reads active Run state and necessary
 evidence. A history UI reads ordered ranges. Compaction can shorten model context without
 erasing conversation history; archival can relocate old records without resolving open work.
-The durable log has no lifetime record cap, while payloads and Runs have [limits](/concepts/budgets/).
+A Thread's lifetime is unbounded: history, sends and child invocations have no cumulative
+per-Thread quota. Payloads, individual Runs, live work and host storage have [limits](/concepts/budgets/).
 
 `Thread.Store.snapshot` inspects an in-memory conversation; `Thread.toPrompt` turns it into
 an Effect AI Prompt. Durable `ThreadStore` and `ThreadReader` expose journal reads instead.

@@ -44,9 +44,9 @@ failures with the declaration's `containedFailure` Schema.
 | `descendantInvocations`           | Zero when omitted                                                                         |
 | Token and cost caps               | Optional; missing usage never creates budget credit                                       |
 
-The delegation pool is separate from the parent's own counters. Durable accounting conservatively
-charges reservations when usage is unavailable. Increasing an allowance requires a fresh delegation,
-not a top-up of an active child. See [budgets](/concepts/budgets/).
+Each parent Run has its own delegation pool, separate from its execution counters. Durable
+accounting conservatively charges reservations when usage is unavailable. Increasing an allowance
+requires a fresh delegation, not a top-up of an active child. See [budgets](/concepts/budgets/).
 
 <a id="limit-authority"></a>
 

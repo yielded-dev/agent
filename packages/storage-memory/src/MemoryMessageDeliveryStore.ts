@@ -13,6 +13,7 @@ import {
   messageDeliveryDeadline,
   messageDeliveryKeyString,
   messageDeliveryUsesCapacity,
+  peerMessageRetentionDeadline,
   isWorkerUpdateDelivery,
   messageDeliveryCapacity,
   sameMessageDeliveryIdentity,
@@ -86,11 +87,27 @@ const removeKey = (keys: Array<string>, key: string) => {
   if (keys[at] === key) keys.splice(at, 1);
 };
 
+/** First deadline after the request time; retained evidence also supports clock rollback. */
+const deadlinePosition = (deadlines: ReadonlyArray<number>, nowMillis: number) => {
+  let low = 0;
+  let high = deadlines.length;
+
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+
+    if (deadlines[mid] <= nowMillis) low = mid + 1;
+    else high = mid;
+  }
+
+  return low;
+};
+
 const backend = () => ({
   records: new Map<string, string>(),
   work: new Map<string, ThreadWorkEntry>(),
   ordered: new Map<string, Array<string>>(),
   pending: new Map<ThreadId, Set<MessageDeliveryKey["messageId"]>>(),
+  retainedPeers: new Map<ThreadId, Array<number>>(),
   counts: new Map<ThreadId, { retained: number; ordinary: number; update: number; peer: number }>(),
   metadata: new Map<
     string,
@@ -98,6 +115,7 @@ const backend = () => ({
       update: boolean;
       pending: boolean;
       peer: boolean;
+      peerRetentionDeadline: number | null;
       deadlineKey?: string;
       importVisit?: "visiting" | "verified";
     }
@@ -234,6 +252,19 @@ export const memoryMessageDeliveryStoreLayer = (
           else counts.ordinary++;
           if (peer) counts.peer++;
         }
+        const retentionDeadline = peerMessageRetentionDeadline(record);
+        const previousDeadline = old?.peerRetentionDeadline ?? null;
+
+        if (previousDeadline !== retentionDeadline) {
+          let retained = current.retainedPeers.get(owner);
+
+          if (retained === undefined) current.retainedPeers.set(owner, (retained = []));
+          if (previousDeadline !== null)
+            retained.splice(deadlinePosition(retained, previousDeadline) - 1, 1);
+          if (retentionDeadline !== null)
+            retained.splice(deadlinePosition(retained, retentionDeadline), 0, retentionDeadline);
+          if (retained.length === 0) current.retainedPeers.delete(owner);
+        }
         let owned = current.pending.get(owner);
 
         if (owned === undefined) current.pending.set(owner, (owned = new Set()));
@@ -283,6 +314,7 @@ export const memoryMessageDeliveryStoreLayer = (
           update,
           pending,
           peer,
+          peerRetentionDeadline: retentionDeadline,
           ...(deadlineKey === undefined ? {} : { deadlineKey }),
         });
         if (pending)
@@ -494,8 +526,17 @@ export const memoryMessageDeliveryStoreLayer = (
             deliveries: counts?.retained ?? 0,
           };
         },
-        pendingPeerCount: (threadId, limit) =>
-          Math.min(MutableRef.get(state.ref).counts.get(threadId)?.peer ?? 0, limit),
+        peerCount: (threadId, nowMillis, limit) => {
+          const current = MutableRef.get(state.ref);
+          const retained = current.retainedPeers.get(threadId) ?? [];
+
+          return Math.min(
+            (current.counts.get(threadId)?.peer ?? 0) +
+              retained.length -
+              deadlinePosition(retained, nowMillis),
+            limit,
+          );
+        },
         facts: Effect.fnUntraced(function* (threadId, after) {
           const current = MutableRef.get(state.ref);
           const keys = current.ordered.get(ownerKey(threadId)) ?? [];

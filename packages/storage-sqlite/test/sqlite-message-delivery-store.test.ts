@@ -11,11 +11,17 @@ import {
   LifecyclePublicationHandler,
   type LifecyclePublicationStorage,
 } from "@yielded/agent/lifecycle-publication";
-import { MessageDeliveryStore, readPending } from "@yielded/agent/message-delivery";
+import {
+  MessageDeliveryStore,
+  prepareMessageDelivery,
+  readPending,
+} from "@yielded/agent/message-delivery";
 import {
   makeMessageDeliveryFixture,
+  makeWorkerUpdateDeliveryFixture,
   messageDeliveryStoreConformanceCases,
 } from "@yielded/agent/testing/message-delivery-store-conformance";
+import { ThreadMaterialization, ThreadStore } from "@yielded/agent/thread-store";
 import { DateTime, Effect, FileSystem, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 
@@ -32,6 +38,99 @@ const storeLayer = (filename: string) =>
       SqliteStorageFailpoint.layer,
     ]),
   );
+
+// #785: the public messaging regression uses memory; this exercises the SQL retention
+// index across reopen, where a lifetime scan or lost terminal expiry could return unnoticed.
+it.effect("releases settled peer capacity after its retention window across reopen", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "peer-retention-" });
+    const filename = `${directory}/messages.sqlite`;
+    const base = yield* makeMessageDeliveryFixture();
+
+    const peer = yield* prepareMessageDelivery({
+      key: base.key,
+      createdAtMillis: base.createdAtMillis,
+      deadlineAtMillis: base.deadlineAtMillis,
+      envelope: {
+        ...base.envelope,
+        messageAdmission: {
+          schemaVersion: 1,
+          message: base.key,
+          peerName: "colleague",
+          sender: { threadId: base.key.ownerThreadId, agentId: base.envelope.agentId },
+          returnAddress: { threadId: base.key.ownerThreadId, agentId: base.envelope.agentId },
+        },
+      },
+    });
+
+    const layer = Layer.mergeAll(messageDeliveryStoreLayer(), threadStoreLayer).pipe(
+      Layer.provide([
+        SqliteClient.layer({ filename }),
+        storageConfigLayer({ filename }),
+        SqliteStorageFailpoint.layer,
+      ]),
+    );
+
+    const terminal = yield* Effect.gen(function* () {
+      const deliveries = yield* MessageDeliveryStore;
+      const threads = yield* ThreadStore;
+
+      yield* threads.materialize(
+        ThreadMaterialization.make({
+          threadId: peer.key.ownerThreadId,
+        }),
+      );
+      yield* deliveries.insert(peer);
+
+      const claimed = yield* deliveries.change(peer.key, {
+        _tag: "Claim",
+        expectedVersion: 1,
+        nowMillis: 0,
+      });
+
+      const refused = yield* deliveries.change(peer.key, {
+        _tag: "Refuse",
+        expectedVersion: claimed.version,
+        nowMillis: 0,
+        code: "denied",
+      });
+
+      expect(
+        yield* threads.countPeerMessages!({
+          threadId: peer.key.ownerThreadId,
+          limit: 10,
+          nowMillis: 999,
+        }),
+      ).toBe(1);
+
+      return refused;
+    }).pipe(Effect.provide(layer));
+
+    yield* Effect.gen(function* () {
+      const deliveries = yield* MessageDeliveryStore;
+      const threads = yield* ThreadStore;
+
+      expect(
+        yield* threads.countPeerMessages!({
+          threadId: peer.key.ownerThreadId,
+          limit: 10,
+          nowMillis: 1_000,
+        }),
+      ).toBe(0);
+      expect(yield* deliveries.insert(peer)).toEqual(terminal);
+      expect(yield* deliveries.get(peer.key)).toEqual(terminal);
+      yield* deliveries.insert(yield* makeWorkerUpdateDeliveryFixture("framework-update"));
+      expect(
+        yield* threads.countPeerMessages!({
+          threadId: peer.key.ownerThreadId,
+          limit: 10,
+          nowMillis: 1_000,
+        }),
+      ).toBe(0);
+    }).pipe(Effect.provide(layer));
+  }).pipe(Effect.scoped, Effect.provide([NodeFileSystem.layer, NodeCrypto.layer])),
+);
 
 // A native admission may survive its caller. A public record must be retried
 // from that exact retained envelope after a lost publication acknowledgement.
