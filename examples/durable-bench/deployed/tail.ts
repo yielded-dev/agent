@@ -9,6 +9,7 @@ const Marker = Schema.Struct({
   object: Schema.NonEmptyString,
   sample: Schema.NonEmptyString,
   invocation: Schema.NonEmptyString,
+  dispatchSource: Schema.optionalKey(Schema.NonEmptyString),
 });
 
 const Stored = Schema.Struct({
@@ -61,7 +62,24 @@ export default {
             kind: valid ? first.kind : "ambiguous",
             kinds: markers.map((marker) => marker.kind),
             invocationIds: markers.map((marker) => marker.invocation),
-            invocationType: event.event && "rpcMethod" in event.event ? "jsrpc" : first.kind,
+            invocationType:
+              event.event === null
+                ? "unknown"
+                : "rpcMethod" in event.event
+                  ? "jsrpc"
+                  : "request" in event.event
+                    ? "fetch"
+                    : "scheduledTime" in event.event && !("cron" in event.event)
+                      ? "alarm"
+                      : "other",
+            ...(event.event && "rpcMethod" in event.event
+              ? { invocationMethod: event.event.rpcMethod }
+              : event.event && "request" in event.event
+                ? { invocationMethod: new URL(event.event.request.url).pathname }
+                : {}),
+            dispatchSources: markers.flatMap((marker) =>
+              marker.dispatchSource === undefined ? [] : [marker.dispatchSource],
+            ),
             outcome: event.outcome,
             cpuMs:
               valid && Number.isFinite(event.cpuTime) && event.cpuTime >= 0 ? event.cpuTime : null,

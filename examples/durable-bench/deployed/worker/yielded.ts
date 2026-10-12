@@ -87,7 +87,10 @@ type InvocationServices = Effect.Services<
 export class YieldedDO extends YieldedDOBase {
   private readonly host: Host;
   private readonly activeDispatches = new Set<Promise<unknown>>();
-  private readonly invocationQuery = new AsyncLocalStorage<{ readonly query: Query | undefined }>();
+  private readonly invocationQuery = new AsyncLocalStorage<{
+    readonly query: Query | undefined;
+    readonly source?: string;
+  }>();
   constructor(ctx: globalThis.DurableObjectState, env: Env) {
     const constructedMs = Date.now();
 
@@ -162,7 +165,10 @@ export class YieldedDO extends YieldedDOBase {
   ): Promise<A> {
     if (options.event === "rpc" || options.event === "fetch")
       return this.invocationQuery.run(
-        this.invocationQuery.getStore() ?? { query: this.host.meter.query },
+        {
+          ...(this.invocationQuery.getStore() ?? { query: this.host.meter.query }),
+          source: options.rpc?.method ?? options.event,
+        },
         () => super[DurableObject.RunSymbol](effect, options),
       );
     if (options.event !== "alarm") return super[DurableObject.RunSymbol](effect, options);
@@ -172,7 +178,7 @@ export class YieldedDO extends YieldedDOBase {
     const invocation = this.invocationQuery.getStore();
     const query = invocation === undefined ? this.host.meter.query : invocation.query;
 
-    if (query) this.host.meter.marker("dispatch", query);
+    if (query) this.host.meter.marker("dispatch", query, invocation?.source ?? "alarm");
     const running = super[DurableObject.RunSymbol](effect, options);
 
     this.activeDispatches.add(running);
@@ -184,7 +190,9 @@ export class YieldedDO extends YieldedDOBase {
   override alarm(...args: Parameters<ThreadObject.Instance["alarm"]>): Promise<void> | void {
     this.host.meter.alarm();
 
-    return super.alarm(...args);
+    return this.invocationQuery.run({ query: this.host.meter.query, source: "alarm" }, () =>
+      super.alarm(...args),
+    );
   }
   override fetch(request: Request): Promise<Response> {
     return this.host.fetch(request, {

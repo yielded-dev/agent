@@ -64,6 +64,8 @@ export const Invocation = Schema.Struct({
   kinds: Schema.optionalKey(Schema.Array(Schema.String)),
   kind: Schema.String,
   invocationType: Schema.optionalKey(Schema.String),
+  invocationMethod: Schema.optionalKey(Schema.String),
+  dispatchSources: Schema.optionalKey(Schema.Array(Schema.String)),
   outcome: Schema.String,
   cpuMs: Schema.NullOr(Schema.Number),
   wallMs: Schema.NullOr(Schema.Number),
