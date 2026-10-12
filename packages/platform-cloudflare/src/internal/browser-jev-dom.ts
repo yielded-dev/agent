@@ -154,9 +154,18 @@ export const inspectJevDom = pageFunction(
         node.readOnly) ||
       node.getAttribute("aria-readonly") === "true";
 
-    const candidates = document.querySelectorAll(
-      'a[href],button,input,textarea,select,summary,[contenteditable="true"],' +
-        roles.map((role) => `[role="${role}"]`).join(","),
+    const closedRoots: ReadonlyMap<Element, ShadowRoot> | undefined = Reflect.get(
+      globalThis,
+      "@effect-agent/native-browser-closed-roots",
+    );
+
+    const candidates = [document, ...(closedRoots?.values() ?? [])].flatMap((root) =>
+      Array.from(
+        root.querySelectorAll(
+          'a[href],button,input,textarea,select,summary,[contenteditable="true"],' +
+            roles.map((role) => `[role="${role}"]`).join(","),
+        ),
+      ),
     );
 
     const controls: Array<typeof Control.Type> = [];

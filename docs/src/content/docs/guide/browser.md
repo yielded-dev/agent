@@ -167,11 +167,13 @@ The [standalone journey host](https://github.com/danieljvdm/effect-agent/tree/ma
 shows the complete composition.
 
 By default, an observation contains live values, options, disabled/checked state, frame and tab
-references, and visible controls outside the viewport, including open shadow roots.
+references, and visible controls outside the viewport, including open and closed shadow roots.
 It marks truncation explicitly. Inspection expires previous control references; narrow
 by selector or an observed frame when necessary. Hidden content is excluded from bounded
 inspection and text waits. Selector inspection starts at matching roots so unrelated visible content cannot consume
-its scan budget. Open-shadow discovery remains bounded and marks truncation explicitly.
+its scan budget. Closed-root discovery reads the inspected frame's DOM through CDP;
+observation output limits do not bound that transfer.
+Inspect again if a new closed root is attached after a condition wait starts.
 Default inspection reads the main frame;
 other frames are listed with `inspected: false` for explicit lookup. After input, observation
 follows the target frame, falling back to the main frame if it detached. Use `optionFilter`
@@ -186,8 +188,8 @@ through input preparation. Both modes retain the same native authorization and i
 
 Native fill supports writable inputs, textareas, and contenteditable controls. It verifies native selection
 of existing content before replacing it with native text input; unsupported selection returns
-`not-dispatched`. Closed shadow roots
-and transformed iframe coordinate spaces are unsupported. Switching tabs expires the previous page's
+`not-dispatched`. Closed-root controls and frames use the same native refs and input guards;
+transformed iframe coordinate spaces are unsupported. Switching tabs expires the previous page's
 references; tab selection stays inside the attachment's browser context.
 Frame and tab URL summaries omit `data:` document payloads. Host authorization always
 receives the complete native URL.
