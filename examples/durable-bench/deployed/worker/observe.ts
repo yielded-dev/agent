@@ -109,6 +109,9 @@ export class Observation {
       throw new Error("Benchmark Object build mismatch; input was not admitted");
   }
   begin(query: Query) {
+    for (const sample of this.cpuInvocations?.keys() ?? []) {
+      if (sample !== query.sample) this.cpuInvocations?.delete(sample);
+    }
     this.assertBuild(query);
     this.entryMs = Date.now();
     this.entry = this.identity();
@@ -123,13 +126,23 @@ export class Observation {
   alarm() {
     this.alarms++;
   }
-  marker(kind: string) {
+  cpuInvocations: Map<string, string[]> | undefined;
+  marker(kind: string, query = this.query) {
     if (this.env.CPU !== true && this.env.CPU !== "true") return;
+    if (!query) return;
+    const invocation = crypto.randomUUID();
+
+    this.cpuInvocations ??= new Map();
+    this.cpuInvocations.set(query.sample, [
+      ...(this.cpuInvocations.get(query.sample) ?? []),
+      invocation,
+    ]);
     console.log({
-      target: this.query?.target,
-      object: this.query?.object,
-      sample: this.query?.sample,
+      target: query.target,
+      object: query.object,
+      sample: query.sample,
       kind,
+      invocation,
     });
   }
   readonly fetch: typeof globalThis.fetch = async (input, init) => {

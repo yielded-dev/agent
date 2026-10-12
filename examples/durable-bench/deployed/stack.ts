@@ -78,6 +78,7 @@ export default Alchemy.Stack(
       const provider = yield* Cloudflare.Worker("durable-bench-provider", {
         ...options,
         name: prefix + "-provider",
+        observability: { enabled: false },
         main: bundle + "/provider.mjs",
         env,
       });
@@ -85,6 +86,7 @@ export default Alchemy.Stack(
       const driver = yield* Cloudflare.Worker("durable-bench-driver", {
         ...options,
         name: prefix + "-driver",
+        observability: { enabled: false },
         main: bundle + "/driver.mjs",
         placement: { region: "aws:us-west-1" },
         env: {
@@ -94,7 +96,22 @@ export default Alchemy.Stack(
         },
       });
 
-      return { driver: driver.url, provider: provider.url };
+      if (cpu !== "true") return { driver: driver.url, provider: provider.url };
+
+      const records = yield* Cloudflare.R2.Bucket("durable-bench-cpu-records", {
+        name: prefix + "-cpu",
+        forceDestroy: true,
+      });
+
+      const tail = yield* Cloudflare.Worker("durable-bench-cpu", {
+        ...options,
+        name: prefix + "-cpu",
+        main: bundle + "/tail.mjs",
+        observability: { enabled: false },
+        env: { ...env, RECORDS: records },
+      });
+
+      return { driver: driver.url, provider: provider.url, tail: tail.url };
     }
 
     const names = yield* Config.schema(
@@ -107,6 +124,7 @@ export default Alchemy.Stack(
     ).pipe(Config.withDefault([name]));
 
     const provider = yield* Config.NonEmptyString("DURABLE_BENCH_PROVIDER");
+    const infrastructurePrefix = yield* Config.NonEmptyString("DURABLE_BENCH_INFRA_PREFIX");
 
     const workerBuilds: Readonly<Record<string, WorkerBuild>> = yield* Config.schema(
       Schema.fromJsonString(Schema.Record(Schema.String, WorkerBuild)),
@@ -117,14 +135,19 @@ export default Alchemy.Stack(
       names,
       Effect.fnUntraced(function* (workerName) {
         const target = yield* Schema.decodeUnknownEffect(
-          Schema.Literals(["yielded", "pi", "tardie"]),
-        )(workerName.split("-").at(-1)).pipe(Effect.orDie);
+          Schema.Literals(["yielded", "pi", "tardie", "effect-ai-floor"]),
+        )(
+          workerName.endsWith("-effect-ai-floor")
+            ? "effect-ai-floor"
+            : workerName.split("-").at(-1),
+        ).pipe(Effect.orDie);
 
         const worker = yield* Cloudflare.Worker(
           workerName === name ? "durable-bench-target" : `durable-bench-target-${workerName}`,
           {
             ...options,
             name: workerName,
+            ...(cpu === "true" ? { tailConsumers: [infrastructurePrefix + "-cpu"] } : {}),
             main: workerBuilds[workerName]?.bundle ?? bundle,
             placement: { region: "aws:us-west-1" },
             env: {
@@ -132,6 +155,13 @@ export default Alchemy.Stack(
               BUILD: workerBuilds[workerName]?.build ?? build,
               CPU: cpu,
               PROVIDER_URL: provider,
+              ...(target === "effect-ai-floor"
+                ? {
+                    FLOOR: Cloudflare.DurableObject("durable-bench-floor", {
+                      className: "EffectAiFloorDO",
+                    }),
+                  }
+                : {}),
               ...(target === "yielded"
                 ? {
                     YIELDED: Cloudflare.DurableObject("durable-bench-yielded", {

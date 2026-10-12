@@ -1,4 +1,4 @@
-import { Cause, Clock, Deferred, Effect, Schema, Stream } from "effect";
+import { Cause, Clock, Deferred, Effect, Option, Schema, Stream } from "effect";
 import { Ndjson } from "effect/encoding";
 
 import {
@@ -12,6 +12,7 @@ import {
 import {
   AwaitResult,
   ColdResult,
+  Failure,
   MetricsResult,
   measurementPaths,
   errorText,
@@ -22,6 +23,7 @@ import {
   SettledTextResult,
   SubmitResult,
   TextObservation,
+  TransientObjectTransport,
 } from "./worker/protocol.ts";
 
 class ObservationError extends Schema.TaggedError<ObservationError>()("ObservationError", {
@@ -31,7 +33,10 @@ class ObservationError extends Schema.TaggedError<ObservationError>()("Observati
 const attempt = <A>(body: () => Promise<A>) =>
   Effect.tryPromise({
     try: body,
-    catch: (cause) => new ObservationError({ message: errorText(cause) }),
+    catch: (cause) =>
+      Schema.is(TransientObjectTransport)(cause)
+        ? cause
+        : new ObservationError({ message: errorText(cause) }),
   });
 
 interface Env {
@@ -47,6 +52,8 @@ export default {
       return new Response("unauthorized", { status: 401 });
     if (new URL(request.url).pathname === "/health")
       return Response.json({ ok: true, build: env.BUILD });
+    let sample: string | null = null;
+
     try {
       const address = new URL(request.url);
 
@@ -81,6 +88,8 @@ export default {
           headers: { authorization: `Bearer ${env.BENCH_TOKEN}`, "cache-control": "no-store" },
         });
       const { query } = Schema.decodeUnknownSync(DriverRequest)(input);
+
+      sample = query.sample;
 
       if (readiness) {
         const routes = await Effect.runPromise(
@@ -142,10 +151,21 @@ export default {
           signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), cancellation.signal]),
         });
 
-        if (!response.ok)
+        if (!response.ok) {
+          const text = await response.text();
+          const failure = Schema.decodeUnknownOption(Schema.fromJsonString(Failure))(text);
+
+          if (
+            Option.isSome(failure) &&
+            failure.value.sample === query.sample &&
+            failure.value.transport !== undefined
+          )
+            throw failure.value.transport;
+
           throw new Error(
-            `Target ${path} returned HTTP ${response.status}: ${await response.text()}; input will not be retried.`,
+            `Target ${path} returned HTTP ${response.status}: ${text}; input will not be retried.`,
           );
+        }
 
         return response;
       };
@@ -258,7 +278,11 @@ export default {
 
       if (expectedDriverBuild !== env.BUILD)
         return Response.json(
-          { ok: false, error: "Driver build mismatch; request was not dispatched" },
+          Schema.encodeSync(Failure)({
+            ok: false,
+            error: "Driver build mismatch; request was not dispatched",
+            sample,
+          }),
           { status: 503 },
         );
 
@@ -290,11 +314,12 @@ export default {
             type Visible = { atMs: number; text: string; source: FirstTextSource };
             const first = yield* Deferred.make<Visible, ObservationError>();
             const visible = new Map<string, Visible>();
-            let input: string | undefined = query.target === "pi" ? query.sample : undefined;
+            let input: string | undefined = query.target !== "yielded" ? query.sample : undefined;
             let observationMs: number | null = null;
+            let observerOpenedMs: number | undefined;
 
             if (observeText && query.target !== "tardie") {
-              const opening = yield* Clock.currentTimeMillis;
+              observerOpenedMs = yield* Clock.currentTimeMillis;
               const response = yield* attempt(() => invoke("/text"));
               const body = response.body;
 
@@ -325,7 +350,12 @@ export default {
                     const seen: Visible = visible.get(frame.input) ?? {
                       atMs: yield* Clock.currentTimeMillis,
                       text: frame.text,
-                      source: query.target === "yielded" ? "watchText" : "watchEvents",
+                      source:
+                        query.target === "yielded"
+                          ? "watchText"
+                          : query.target === "effect-ai-floor"
+                            ? "nativeStream"
+                            : "watchEvents",
                     };
 
                     visible.set(frame.input, seen);
@@ -345,13 +375,14 @@ export default {
                 Effect.forkScoped,
               );
               yield* Deferred.await(ready);
-              observationMs = (yield* Clock.currentTimeMillis) - opening;
+              observationMs = (yield* Clock.currentTimeMillis) - observerOpenedMs;
             }
 
             const startedMs = yield* Clock.currentTimeMillis;
             const metricStartMs = startedMs - constructorAndProbeMs;
             let admissionMs: number | undefined;
             let receipt: SubmitResult["receipt"] | undefined;
+            let settlementRecordRead = false;
 
             if (query.target === "yielded") {
               const admission = yield* attempt(async () =>
@@ -386,6 +417,9 @@ export default {
 
             // Overflow can replace an instant reply with an empty draft snapshot after settlement.
             if (observeText && receipt !== undefined && !(yield* Deferred.isDone(first))) {
+              // Text may arrive during this read; its source cannot prove the RPC was skipped.
+              settlementRecordRead = true;
+
               const result = yield* attempt(async () =>
                 Schema.decodeUnknownSync(SettledTextResult)(
                   await (await invoke("/result", receipt)).json(),
@@ -431,6 +465,15 @@ export default {
               firstTextMs: text === undefined ? null : text.atMs - metricStartMs,
               ...(text === undefined ? {} : { firstText: text.text, firstTextSource: text.source }),
               observationMs,
+              settlementRecordRead,
+              ...(observerOpenedMs === undefined
+                ? {}
+                : {
+                    observerToCompletionMs: observedMs - observerOpenedMs,
+                    ...(text === undefined
+                      ? {}
+                      : { observerToFirstTextMs: text.atMs - observerOpenedMs }),
+                  }),
               constructorAndProbeMs,
               primeMs,
               ...(primed === undefined ? {} : { primed: primed.identity }),
@@ -440,11 +483,15 @@ export default {
         ),
       );
     } catch (cause) {
+      const transport = Schema.is(TransientObjectTransport)(cause) ? cause : undefined;
+
       return Response.json(
-        {
+        Schema.encodeSync(Failure)({
           ok: false,
           error: errorText(cause),
-        },
+          sample,
+          ...(transport === undefined ? {} : { transport }),
+        }),
         { status: 502 },
       );
     }

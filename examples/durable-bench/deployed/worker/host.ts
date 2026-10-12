@@ -6,10 +6,14 @@ import { tables } from "../../src/serve.ts";
 import { attach, type Observation } from "./observe.ts";
 import {
   errorText,
+  Failure,
   readQuery,
+  ProfileTarget,
   SeedBatch,
   SeedProgress,
   SeedResult,
+  TransientObjectTransport,
+  transientObjectTransport,
   type Env,
   type Query,
   type Target,
@@ -57,6 +61,25 @@ export class Host {
 
     if (query.target !== this.target) throw new Error("Target mismatch");
     if (url.pathname === "/identity") return Response.json(this.meter.identity());
+    if (url.pathname === "/profile-target") {
+      this.meter.assertBuild(query);
+
+      return Response.json(
+        Schema.decodeUnknownSync(ProfileTarget)({
+          actorId: this.ctx.id.toString(),
+          binding:
+            this.target === "yielded"
+              ? "YIELDED"
+              : this.target === "pi"
+                ? "PI"
+                : this.target === "effect-ai-floor"
+                  ? "FLOOR"
+                  : "THREADS",
+          versionId: this.env.VERSION?.id,
+          build: this.env.BUILD,
+        }),
+      );
+    }
     if (url.pathname === "/cold") {
       await handlers.close?.();
       await this.ctx.storage.sync();
@@ -199,7 +222,9 @@ export class Host {
         if (!handlers.run) throw new Error("Yielded uses submit and await");
         this.meter.begin(query);
         this.meter.marker("run");
-        await handlers.run(turn(query.sample, MEASURED_TOOLS), query);
+        await handlers.run(turn(query.sample, MEASURED_TOOLS), query).catch((cause: unknown) => {
+          throw transientObjectTransport(cause) ?? cause;
+        });
         this.meter.settled();
 
         return Response.json({ ok: true, outcome: "completed", identity: this.meter.entry });
@@ -230,6 +255,7 @@ export class Host {
             : { directoryUsed: handlers.directoryUsed }),
           calls: this.meter.calls,
           phases: this.meter.phases(),
+          cpuInvocationIds: this.meter.cpuInvocations?.get(query.sample),
           tables: tables(this.ctx.storage.sql),
           bytes: this.ctx.storage.sql.databaseSize,
         });
@@ -237,8 +263,15 @@ export class Host {
 
       return new Response("not found", { status: 404 });
     } catch (cause) {
+      const transport = Schema.is(TransientObjectTransport)(cause) ? cause : undefined;
+
       return Response.json(
-        { ok: false, error: errorText(cause), sample: query.sample },
+        Schema.encodeSync(Failure)({
+          ok: false,
+          error: errorText(cause),
+          sample: query.sample,
+          ...(transport === undefined ? {} : { transport }),
+        }),
         { status: 500 },
       );
     }

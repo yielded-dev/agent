@@ -1,13 +1,29 @@
-import { Config, Context, Effect, Layer, Redacted, Schema, Stream, type Duration } from "effect";
+import {
+  Config,
+  Context,
+  Effect,
+  Layer,
+  Option,
+  Redacted,
+  Schema,
+  Stream,
+  type Duration,
+} from "effect";
 import { Ndjson } from "effect/encoding";
 
+import { DriverRequest } from "./model.ts";
 import { BenchError, redact } from "./platform.ts";
+import { Failure } from "./worker/protocol.ts";
 
 const Workers = Schema.Array(Schema.Struct({ id: Schema.String }));
 
 const Namespaces = Schema.Array(
   Schema.Struct({ name: Schema.String, script: Schema.optionalKey(Schema.String) }),
 );
+
+const BucketPage = Schema.Struct({
+  buckets: Schema.Array(Schema.Struct({ name: Schema.NonEmptyString })),
+});
 
 const connect = Effect.gen(function* () {
   const prefix = yield* Config.schema(
@@ -93,20 +109,24 @@ const connect = Effect.gen(function* () {
   const namespaceHeadroom = Effect.fnUntraced(function* (workers: readonly string[]) {
     const namespaces = yield* listNamespaces;
 
-    if (workers.some((worker) => !/-(yielded|pi|tardie)$/.test(worker)))
+    if (workers.some((worker) => !/-(yielded|pi|tardie|effect-ai-floor)$/.test(worker)))
       return yield* new BenchError({ message: "Unknown benchmark Worker target" });
 
     const required = workers.flatMap((worker) => {
-      const target = worker.split("-").at(-1);
+      const target = worker.endsWith("-effect-ai-floor")
+        ? "effect-ai-floor"
+        : worker.split("-").at(-1);
 
       const classes =
-        target === "yielded"
-          ? ["YieldedDO"]
-          : target === "pi"
-            ? ["PiDO"]
-            : target === "tardie"
-              ? ["ActorDO", "ThreadDO"]
-              : [];
+        target === "effect-ai-floor"
+          ? ["EffectAiFloorDO"]
+          : target === "yielded"
+            ? ["YieldedDO"]
+            : target === "pi"
+              ? ["PiDO"]
+              : target === "tardie"
+                ? ["ActorDO", "ThreadDO"]
+                : [];
 
       return classes.map((name) => `${worker}_${name}`);
     });
@@ -123,10 +143,10 @@ const connect = Effect.gen(function* () {
     return { existing: namespaces.length, additional, free };
   });
 
-  const resources = Effect.fnUntraced(function* (workerName?: string) {
+  const resources = Effect.fnUntraced(function* (workerName?: string, cpu = false) {
     // Prefixes may contain hyphens, so match the complete names emitted by run/deploy.
     const generatedName = new RegExp(
-      `^${prefix}-(?:shared-[a-f0-9]{8}-(?:driver|provider)|[a-z0-9]+-[a-f0-9]{8}(?:-[a-z0-9-]+)?)$`,
+      `^${prefix}-(?:shared-[a-f0-9]{8}-(?:driver|provider|cpu)|[a-z0-9]+-[a-f0-9]{8}(?:-[a-z0-9-]+)?)$`,
     );
 
     const matches = (name: string) =>
@@ -142,7 +162,35 @@ const connect = Effect.gen(function* () {
       .filter((n) => matches(n.name.split("_", 1)[0] ?? "") || matches(n.script ?? ""))
       .map((n) => `${n.script ?? ""}/${n.name}`);
 
-    return { verified: workers.length === 0 && namespaces.length === 0, workers, namespaces };
+    const buckets: string[] = [];
+
+    if (cpu && workerName === undefined) {
+      let startAfter = "";
+
+      for (;;) {
+        const page = yield* api(
+          `r2/buckets?per_page=1000&start_after=${encodeURIComponent(startAfter)}`,
+          BucketPage,
+        );
+
+        buckets.push(...page.buckets.map((bucket) => bucket.name).filter(matches));
+        if (page.buckets.length < 1000) break;
+        const next = page.buckets.at(-1)!.name;
+
+        if (next <= startAfter)
+          return yield* new BenchError({
+            message: "Cloudflare bucket pagination did not advance.",
+          });
+        startAfter = next;
+      }
+    }
+
+    return {
+      verified: workers.length === 0 && namespaces.length === 0 && buckets.length === 0,
+      workers,
+      namespaces,
+      buckets,
+    };
   });
 
   return {
@@ -195,6 +243,19 @@ const fetchResponse = (
         try: () => response.text(),
         catch: () => new BenchError({ message: "Cannot read Worker failure." }),
       });
+
+      if (new URL(url).pathname === "/measure") {
+        const sent = Schema.decodeUnknownOption(DriverRequest)(body);
+        const failure = Schema.decodeUnknownOption(Schema.fromJsonString(Failure))(text);
+
+        if (
+          Option.isSome(sent) &&
+          Option.isSome(failure) &&
+          failure.value.sample === sent.value.query.sample &&
+          failure.value.transport !== undefined
+        )
+          return yield* failure.value.transport;
+      }
 
       return yield* new BenchError({
         message: `Worker ${new URL(url).pathname} returned HTTP ${response.status}; the input will not be retried. ${redact(text, [token]).slice(0, 1200)}`,

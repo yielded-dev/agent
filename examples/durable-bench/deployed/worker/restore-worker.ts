@@ -3,7 +3,12 @@ import { DurableObject } from "cloudflare:workers";
 import { Host } from "./host.ts";
 import { type Env, type Target } from "./protocol.ts";
 
-export { default, ActorDO, ThreadDO } from "../../third-party/src/deployed/index.ts";
+export {
+  default,
+  ActorDO,
+  ThreadDO,
+  EffectAiFloorDO,
+} from "../../third-party/src/deployed/index.ts";
 
 /** No production constructor or alarm may mutate an unfinished SQLite restore. */
 class RestoreDO extends DurableObject<Env> {

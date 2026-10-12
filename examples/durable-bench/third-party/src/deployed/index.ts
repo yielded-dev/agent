@@ -1,32 +1,35 @@
 import { BrowserCrypto } from "../../../node_modules/@effect/platform-browser/dist/index.js";
 import { ThreadObjectNamespace } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
-import { CloudflareThreadClient } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
+import { CloudflareThreadClient, ThreadClientError } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import { digestDefinitions } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { IdempotencyKey, Principal, Receipt } from "@yielded/agent/receipt";
 import { Settlement } from "@yielded/agent/submission-ledger";
-// The router uses the checkout's Effect; Tardie's adapter uses its isolated SDK version.
+// The build resolver selects the ref's Effect; Tardie's adapter stays isolated.
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "../../../node_modules/effect/dist/index.js";
 
 import { MEASURED_TOOLS, turn } from "../../../src/plan.ts";
 import { COLD_ABORT } from "../../../deployed/worker/host.ts";
+import { EffectAiFloorDO } from "../../../deployed/worker/effect-ai-floor.ts";
 import { PiDO } from "./pi.ts";
-import { BulkFixture, Identity, ObjectIdentity, MetricsResult, measurementPaths, ProfileTarget, SeedBatch, TextObservation, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
+import { BulkFixture, Failure, Identity, ObjectIdentity, MetricsResult, measurementPaths, SeedBatch, TextObservation, TransientObjectTransport, errorText, readQuery, transientObjectTransport, type Env, type Query } from "../../../deployed/worker/protocol.ts";
 import { ActorDO, ThreadDO, cloudflareThreadName, coordinate } from "./tardie.ts";
 import { agent, definitions, YieldedDO } from "../../../deployed/worker/yielded.ts";
 
-export { YieldedDO, PiDO, ActorDO, ThreadDO };
+export { YieldedDO, PiDO, ActorDO, ThreadDO, EffectAiFloorDO };
 type Bindings = Env & {
   YIELDED: DurableObjectNamespace<YieldedDO>;
   PI: DurableObjectNamespace<PiDO>;
   ACTORS: DurableObjectNamespace<ActorDO>;
   THREADS: DurableObjectNamespace<ThreadDO>;
+  FLOOR: DurableObjectNamespace<EffectAiFloorDO>;
 };
 
 const clients = new WeakMap<Bindings, ReturnType<typeof makeClient>>();
 
 const makeClient = (env: Bindings) => {
   const queries = new Map<string, Query>();
+  const observations = env.CPU === true || env.CPU === "true" ? new Map<string, Query>() : undefined;
 
   const namespace = Layer.succeed(ThreadObjectNamespace, {
     get: (threadId) => {
@@ -41,6 +44,14 @@ const makeClient = (env: Bindings) => {
               if (!query) throw new Error("Missing submission query");
 
               return target.benchSubmit(encoded, query);
+            };
+          if (method === "watchTextEncoded" && observations !== undefined)
+            return (encoded: unknown) => {
+              const query = observations.get(threadId);
+
+              if (!query) throw new Error("Missing observation query");
+
+              return target.benchWatchText(encoded, query);
             };
           const value = Reflect.get(target, method, target);
 
@@ -69,7 +80,7 @@ const makeClient = (env: Bindings) => {
     }),
   );
 
-  return { runtime, queries, ready };
+  return { runtime, queries, observations, ready };
 };
 
 const getClient = (env: Bindings) => {
@@ -124,15 +135,10 @@ export default {
       const mutating = url.pathname.startsWith("/restore/") || ["/prime", "/seed", "/cold", "/submit", "/await", "/result", "/run"].includes(url.pathname);
 
       if (url.pathname === "/profile-target") {
-        const namespace = query.target === "yielded" ? env.YIELDED : query.target === "pi" ? env.PI : env.THREADS;
+        const namespace = query.target === "effect-ai-floor" ? env.FLOOR : query.target === "yielded" ? env.YIELDED : query.target === "pi" ? env.PI : env.THREADS;
         const name = query.target === "tardie" ? cloudflareThreadName(coordinate((query.storageObject ?? query.object))) : (query.storageObject ?? query.object);
 
-        return Response.json(Schema.decodeUnknownSync(ProfileTarget)({
-          actorId: namespace.idFromName(name).toString(),
-          binding: query.target === "yielded" ? "YIELDED" : query.target === "pi" ? "PI" : "THREADS",
-          versionId: env.VERSION?.id,
-          build: env.BUILD,
-        }));
+        return namespace.getByName(name, { locationHint: "wnam" }).fetch(request);
       }
 
       if (mutating && request.method !== "POST")
@@ -146,7 +152,9 @@ export default {
           : undefined;
 
       const stub =
-        query.target === "yielded"
+        query.target === "effect-ai-floor"
+          ? env.FLOOR.getByName((query.storageObject ?? query.object), { locationHint: "wnam" })
+          : query.target === "yielded"
           ? env.YIELDED.getByName((query.storageObject ?? query.object), { locationHint: "wnam" })
           : query.target === "pi"
             ? env.PI.getByName((query.storageObject ?? query.object), { locationHint: "wnam" })
@@ -154,11 +162,19 @@ export default {
                 locationHint: "wnam",
               });
 
+      const fetchObject = async (request: Request): Promise<Response> => {
+        try {
+          return await stub.fetch(request);
+        } catch (cause) {
+          throw transientObjectTransport(cause) ?? cause;
+        }
+      };
+
       if (url.pathname === "/text" && query.target === "yielded") {
         const cached = getClient(env);
+        cached.observations?.set(query.storageObject ?? query.object, query);
         const { client } = await cached.ready;
         const encoder = new TextEncoder();
-        const encode = Schema.encodeSync(Schema.fromJsonString(TextObservation));
         const body = await cached.runtime.runPromise(client.watchText(ThreadId.make((query.storageObject ?? query.object))).pipe(
           Stream.map((frame): readonly TextObservation[] => {
             if (frame._tag === "Reset") return [{ _tag: "Ready" }];
@@ -169,7 +185,7 @@ export default {
               : [];
           }),
           Stream.flatMap(Stream.fromArray),
-          Stream.map((frame) => encoder.encode(encode(frame) + "\n")),
+          Stream.map((frame) => encoder.encode(JSON.stringify(frame) + "\n")),
           Stream.toReadableStreamEffect,
         ));
 
@@ -179,7 +195,7 @@ export default {
       }
 
       if (url.pathname === "/identity") {
-        const response = await stub.fetch(new Request(url, { headers: request.headers }));
+        const response = await fetchObject(new Request(url, { headers: request.headers }));
 
         if (!response.ok) throw new Error("Object identity probe failed");
 
@@ -193,13 +209,13 @@ export default {
         const identityUrl = new URL(url);
 
         identityUrl.pathname = "/identity";
-        const response = await stub.fetch(new Request(identityUrl, { headers: request.headers }));
+        const response = await fetchObject(new Request(identityUrl, { headers: request.headers }));
 
         if (!response.ok) throw new Error("Pre-cold identity failed");
         const before = Schema.decodeUnknownSync(Identity)(await response.json());
         const directoryBefore = actor === undefined ? undefined : await actor.identity();
 
-        const threadAborted = await expectedAbort(() => stub.fetch(request));
+        const threadAborted = await expectedAbort(() => fetchObject(request));
         const directoryAborted =
           actor === undefined ? undefined : await expectedAbort(() => actor.abortCold());
 
@@ -256,7 +272,13 @@ export default {
               const settlement = yield* client.awaitSettlement(receipt);
 
               return { ok: true, settlement: yield* Schema.encodeEffect(Settlement)(settlement) };
-            }),
+            }).pipe(
+              Effect.mapError((error) =>
+                Schema.is(ThreadClientError)(error)
+                  ? transientObjectTransport(error.cause) ?? error
+                  : error,
+              ),
+            ),
           );
 
           return Response.json(result);
@@ -282,7 +304,7 @@ export default {
           throw new Error("Invalid history batch");
         if (batch.from === 0) await actor.prepareSeed(query);
       }
-      const response = await stub.fetch(request);
+      const response = await fetchObject(request);
 
       if (url.pathname === "/restore/start" && directoryTables && response.ok)
         return Response.json({
@@ -299,20 +321,32 @@ export default {
 
         if (!metrics.ok) return Response.json(metrics);
         const directoryUsed = Schema.decodeUnknownSync(Schema.Boolean)(metrics.directoryUsed);
-        const directoryBytes = await actor.bytes();
+
+        const directoryBytes = await actor.bytes().catch((cause: unknown) => {
+          throw transientObjectTransport(cause) ?? cause;
+        });
 
         return Response.json({
           ...metrics,
           bytes: metrics.bytes + directoryBytes,
           directoryBytes,
-          directory: await actor.end(directoryUsed),
+          directory: await actor.end(directoryUsed).catch((cause: unknown) => {
+            throw transientObjectTransport(cause) ?? cause;
+          }),
         });
       }
 
       return response;
     } catch (cause) {
+      const transport = Schema.is(TransientObjectTransport)(cause) ? cause : undefined;
+
       return Response.json(
-        { ok: false, error: errorText(cause), sample: url.searchParams.get("sample") },
+        Schema.encodeSync(Failure)({
+          ok: false,
+          error: errorText(cause),
+          sample: url.searchParams.get("sample"),
+          ...(transport === undefined ? {} : { transport }),
+        }),
         { status: 500 },
       );
     }

@@ -59,7 +59,7 @@ export const profileBatches = Effect.fnUntraced(function* (size: number) {
     );
 });
 
-/** Resolve identity before warmup; capturing never invokes or wakes an Object. */
+/** Resolve the warmed Object's own version immediately before requesting its capture. */
 export const prepareProfile = Effect.fnUntraced(function* (options: {
   readonly worker: string;
   readonly endpoint: URL;
@@ -70,20 +70,21 @@ export const prepareProfile = Effect.fnUntraced(function* (options: {
 }) {
   const cloud = yield* Cloudflare;
   const fs = yield* FileSystem.FileSystem;
-  const target = (yield* request(options.endpoint, options.token, ProfileTarget)).value;
-  const worker = encodeURIComponent(options.worker);
-  const settings = yield* cloud.api(`workers/scripts/${worker}/settings`, Settings);
-
-  const namespace = settings.bindings.find(
-    (binding) => binding.type === "durable_object_namespace" && binding.name === target.binding,
-  )?.namespace_id;
-
-  if (!namespace || target.build !== options.query.expectedBuild)
-    return yield* new BenchError({
-      message: "Cannot resolve the profiling Object's namespace/build.",
-    });
 
   return Effect.fnUntraced(function* (type: typeof ProfileType.Type, durationMs: number) {
+    const target = (yield* request(options.endpoint, options.token, ProfileTarget)).value;
+    const worker = encodeURIComponent(options.worker);
+    const settings = yield* cloud.api(`workers/scripts/${worker}/settings`, Settings);
+
+    const namespace = settings.bindings.find(
+      (binding) => binding.type === "durable_object_namespace" && binding.name === target.binding,
+    )?.namespace_id;
+
+    if (!namespace || target.build !== options.query.expectedBuild)
+      return yield* new BenchError({
+        message: "Cannot resolve the profiling Object's namespace/build.",
+      });
+
     const body = yield* Schema.encodeEffect(Schema.fromJsonString(Capture))({
       duration_ms: durationMs,
       profile_type: type === "memory" ? "heap" : "cpu",

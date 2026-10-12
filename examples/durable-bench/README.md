@@ -8,9 +8,9 @@ scripted OpenAI-compatible provider. No model API key or paid model is involved.
 
 Install workspace dependencies with `vp install`. The command uses this checkout's
 `direnv exec .` credentials (`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`); use the
-personal benchmark account. Its name appears only in local terminal output. The token
-needs Workers/SQLite Durable Object deployment and account-read access, plus Workers
-Observability read access if `--cpu` is selected. Dependencies for pi and tardie are installed
+configured benchmark account. The token needs Workers/SQLite Durable Object deployment
+and account-read access, plus R2 bucket read/write access if `--cpu` is selected.
+Dependencies for pi and tardie are installed
 in the isolated `third-party` workspace automatically on first use. Repository checks do not
 require that optional install.
 
@@ -47,8 +47,8 @@ activation is not used. Full, profiling and tardie runs use fresh Workers. Remov
 DURABLE_BENCH_PREFIX=bench-change vp run -F @yielded/agent-example-durable-bench deployed -- --teardown
 ```
 
-Use `--preset full` (or `--rigorous`) for 30 Objects, six warm repeats, invocation CPU
-and the balanced ABBA/BAAB sequence. Both presets preserve the driver timer, cold
+Use `--preset full` (or `--rigorous`) for 30 Objects, six warm repeats
+and the balanced ABBA/BAAB sequence. Add `--cpu` for invocation CPU in either preset. Both presets preserve the driver timer, cold
 restart acknowledgement, warm residency and transcript checks. Each cohort has a
 separate Worker; isolate sharing rejects its measurements. Independent cells run
 concurrently, with `--concurrency` limiting measured Objects and `--build-concurrency`
@@ -60,11 +60,14 @@ vp run deployed -- --preset full --baseline origin/main --candidate HEAD
 vp run deployed -- --sizes 1000,10000 --ttft 0,400
 vp run deployed -- --targets yielded,pi --text-streaming --ttft 400
 vp run deployed -- --profile cpu
+vp run deployed -- --targets yielded,effect-ai-floor --text-streaming --cpu
 ```
 
 The output has one table per cell: **first text (final answer)** in default mode or
-**first text** with `--text-streaming`, beside turn completion. Both use median [Q1–Q3]
-of **Object medians**, with Yielded ÷ pi for both. It also shows
+**first text** with `--text-streaming`, beside turn completion. The main table uses
+**submit → first text/completion**, after observer acknowledgement. A separate cold table
+uses **observer-open → first text/completion**, including attachment and runtime opening.
+Both use median [Q1–Q3] of **Object medians**, with Yielded ÷ pi for both. It also shows
 Object entry to the first outgoing model request, the completion medians' range and each Object's
 completion repeat range (median / maximum).
 The ratio includes the observed min(Yielded)/max(pi)–max(Yielded)/min(pi) range of
@@ -194,7 +197,7 @@ vp run deployed -- --teardown
 ```
 
 This destroys retained target stacks and the shared infrastructure, verifies that no
-`durable-bench` Workers or namespaces remain in the same account, writes `results/cleanup.json`,
+`durable-bench` Workers, namespaces or Tail CPU buckets remain in the same account, writes `results/cleanup.json`,
 and removes private state. After an interrupted cleanup, rerun `--teardown`.
 Shared code changes redeploy the infrastructure on the next run; otherwise only the target
 Workers are deployed. Account IDs, API tokens, namespace IDs and Alchemy output are not results.
@@ -202,7 +205,8 @@ Workers are deployed. Account IDs, API tokens, namespace IDs and Alchemy output 
 ## Workload and measurement
 
 Historical turns repeat a one-tool, one-tool, zero-tool cycle. Each measured turn makes
-eight sequential readonly `lookup` calls, hence nine model requests. Tool results are
+eight sequential pure `lookup` calls, hence nine model requests. Yielded classifies the
+tool as `readonly`; pi registers it as replay-safe. Tool results are
 256 bytes, except every 97th result is 8 KiB. Compaction is disabled for every target.
 The standard 400 ms provider also spaces SSE chunks by 10 ms, matching the deployed rebench harness.
 `--text-streaming` retains the eight lookups and nine model requests, but starts the first
@@ -214,6 +218,14 @@ delays. Every target receives the same preamble and reply, and subsequent reques
 checked against the extended reference transcript. Before forwarding streaming requests, the
 provider Worker splits mixed assistant text/tool messages to match the pinned Effect provider's layout.
 The flag keeps the original completion workload available; compare tables with the same workload label.
+The reference fingerprint compares normalized user, assistant and tool messages. It
+excludes system/developer instructions, offered tool schemas, IDs and provider wire layout;
+it does not prove byte-identical requests. Pi and the Effect AI floor receive the same
+ordinary-text output directive that Yielded appends, and pi's parameter uses the same safe
+integer bounds as Yielded's `Schema.Int`. Pi's replay-safe lookup still records native tool
+intents; Yielded's readonly policy and pi's recovery contract remain different. Each target
+uses its production API and provider encoding, so those costs remain in the comparison.
+
 All Objects request `locationHint: "wnam"`; the driver and target Workers request
 `aws:us-west-1` placement. Placement is a hint, not a guarantee.
 
@@ -226,7 +238,11 @@ laptop time and its `CF-Ray` colo are secondary fields, not the headline latency
 
 Before submitting, the driver attaches to Yielded's public `watchText(threadId)` or
 pi-durable's public `watchEvents` inside its Object, forwarded over HTTP as text frames.
-It waits for the subscription acknowledgement, then starts both timers at submit. First text
+The **submit → X** boundary starts after subscription acknowledgement. The independent
+**observer-open → X** boundary starts before the `/text` request, capturing attachment and
+any runtime opening it triggers. Both stop at the same driver-observed endpoint; the cold
+tables label them separately. JSON records `observerToFirstTextMs` and
+`observerToCompletionMs` alongside `firstTextMs` and `driverMs`. First text
 ends when nonempty assistant text reaches the driver; it includes framework publication and
 transport, rather than the provider's first byte. Yielded drafts are matched to the new
 Receipt. Instant-provider Yielded uses the settled-record fallback when drafts are too short-lived to observe.
@@ -245,15 +261,18 @@ that Object; short intervals may resolve to zero. Object/driver clock offsets ar
 tardie's Actor directory and Thread are both restarted. It verifies a new instance, no
 earlier alarm entry, and a first request. This is a cold Object over retained storage,
 not a cold isolate, cold disk, or newly seeded conversation. Warm samples require the
-same live instance throughout the Object's sequential repeat batch.
+same live instance as the preceding verified turn.
 The driver collects metrics after its timer endpoints, before closing the text observer.
-A confirmed lost incarnation invalidates the Object's entire pass; the result retains those
-records. Snapshot-backed passes restore and verify the same Object, repeat preparation,
-and remeasure once with fresh input IDs. A second loss, sample-key mismatch, wrong build,
-or ambiguous turn failure stops the run. Real-history builds and passes that carry history
-into or out of another pass cannot recover this way. `--verify-incarnation-recovery` exercises this path by
-aborting one settled Object per target before metrics; its interrupted passes are classified
-and excluded, so use this diagnostic separately from a latency comparison.
+A confirmed lost incarnation or a classified native Object storage reset/connection loss
+can replace the affected sample once. After the other Objects finish the pass, the controller
+restores and verifies the fixture, rebuilds the acknowledged prefix with fresh input IDs,
+then measures the replacement and continues. Prefix turns reestablish the cold/warm boundary
+and are excluded from timing and CPU comparisons. Original failures and replacement IDs
+remain in JSON; earlier valid measurements are retained. A second failure at the same sample,
+a failed prefix rebuild, sample-key mismatch, wrong build, or unclassified failure stops the run.
+Real-history builds and passes carrying history into or out of another pass cannot recover
+this way. `--verify-incarnation-recovery` aborts one settled Object per target before metrics
+to exercise recovery; use this diagnostic separately from a latency comparison.
 Tardie's native reference can skip the Actor directory. `directoryUsed` records whether
 the Thread has called it since reset; an unused directory's identity observes residency only.
 
@@ -291,17 +310,41 @@ SSE and receipts only when post-turn metrics are collected. Every provider finge
 must still match the independent expected transcript.
 Deployment uploads contain executable modules; profiling artifacts retain the source maps locally.
 
-Object-clock markers record provider first token received, first text forwarded and
-settlement relative to entry; receipt latency remains the driver-clock `admissionMs`.
-Raw provider calls and these markers are included in result JSON and the quick table.
+Object-clock markers record provider first token received and settlement relative to entry;
+receipt latency remains the driver-clock `admissionMs`. A forwarding timestamp is available
+where the adapter already handles decoded text (pi and the floor). Yielded's native frames
+pass unchanged to the public client; the benchmark does not decode them again inside the
+Object. First-visible text is measured at the driver for every streaming target.
+Raw provider calls and available markers are included in result JSON and the quick table.
 
 The gap is measured between outgoing model requests and consumed responses on one Object
 clock. Last-response-to-client crosses Object/driver clocks and is approximate; it is
-not an exact settlement-notification decomposition. CPU is opt-in. Invocation markers join
-Cloudflare invocation events; missing/sampled rows stay missing, never zero. All observed
-outcomes, including `exceededCpu`, `exceededMemory` and intentional cold-abort exceptions,
-are retained. Unmarked invocations retain their owning target/Object and raw invocation type;
-they have no sample assignment. CPU tables describe observed invocations, not billing totals.
+not an exact settlement-notification decomposition. CPU is opt-in. `--cpu` attaches a Tail
+Worker that stores marked native Object invocations in a temporary R2 bucket. It sums each
+invocation's CPU once per turn, including marked submission, settlement wait, alarm, text
+observation and fallback record reads; driver, provider, metrics collection and deployment CPU are outside that
+total. Multiple markers in one native invocation do not multiply its CPU. After the final
+quiescent metrics, the harness closes each Object so native text observers finish before
+Tail collection. This happens outside the timers. Coverage requires the controller-planned
+Yielded submit/await/alarm or native run roles, a text invocation for every target with an
+observer, and any fallback record read issued by the driver. The requirements do not depend
+on emitted markers or which text source wins a race; an unknown read plan is incomplete.
+Every acknowledged marker must also be present.
+Text-stream cancellation or disconnection counts only when the measured turn succeeded
+and the invocation has finite CPU.
+Missing, truncated or ambiguous records invalidate the Object pair; missing CPU is never
+zero. The paired report compares whole-Object medians with Object-level bootstrap 95% CIs.
+These are observed invocation totals, not billing totals or sampled CPU profiles (`--profile cpu`).
+
+`effect-ai-floor` is an opt-in warm comparison using native Effect AI streaming, tools and
+an in-memory Prompt. It synthesizes the same historical transcript and verifies every model
+request against the shared reference. It has no durable receipts, storage or recovery and
+is not a drop-in durable engine. Each pass starts from the original history. It runs the
+same preceding turns as Yielded, but excludes the cold slots from its results and stays
+resident; Yielded and pi retain their normal cold measurements. Only compare their warm
+cells. The floor requires `--restore-each-pass` (the default through 1,000 turns), rejects
+history-build/recovery diagnostics, and uses the shared bundle, so it does not measure
+isolated Effect startup or an additive cost of durability.
 
 ## Fixtures
 
@@ -316,7 +359,9 @@ text preamble or delay, matching deployed history construction; `--text-streamin
 measured turns. Larger capacity fixtures retain their original workload and identities.
 Missing natural fixtures are generated with their build revision and copied into the cache (clone-copy on macOS); saved histories are
 never deleted or overwritten. Miniflare is used for deterministic fixture generation,
-never performance evidence.
+never performance evidence. Cached idle histories may retain earlier definition entries; the
+excluded preparation turn installs the current instructions and tool declarations before
+measurement. Historical storage still reflects the original fixture.
 
 Every ordinary cell restores the original idle SQLite snapshot, including historical
 attempt rows, indexes and triggers. Cohorts use separate namespaces so each can retain
@@ -339,7 +384,7 @@ drift before claiming a small optimization.
 vp run deployed -- --rigorous --baseline origin/main --candidate HEAD
 ```
 
-Rigorous mode enables cold turns, CPU and six warm repeats per pass. It randomly chooses
+Rigorous mode enables cold turns and six warm repeats per pass; CPU requires `--cpu`. It randomly chooses
 ABBA or BAAB, redeploying the **same Worker and namespaces** with the two Yielded builds.
 Each pass restarts the same physical Objects. Different storage-format keys automatically
 restore each revision's own fixture before every pass. Matching formats also restore by
@@ -349,7 +394,9 @@ original SQLite rows and table counts, then run an excluded preparation turn.
 Repeated baselines reveal deployment/time/history drift. The output includes paired differences and confidence intervals. Do not claim gains smaller than
 the control or within-Object repeat spread; inspect all Objects, not just the median.
 
-Refs supply `packages/` sources; both builds use this harness and the checkout's installed
-catalog dependencies. Each revision must support its selected fixture. Import, recovery,
+Refs supply `packages/` sources and their own `bun.lock` dependencies. Different lockfiles
+receive isolated frozen installations; identical locks reuse an installation. Both builds
+use this harness, while pi and tardie retain their isolated vendor dependencies. Each
+revision must support its selected fixture. Import, recovery,
 transcript, build or residency failures invalidate the affected Object; the command never
 bypasses durability checks to force a comparison.

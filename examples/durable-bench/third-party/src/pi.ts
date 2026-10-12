@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers"
+import { TEXT_OUTPUT_INSTRUCTIONS } from "../../deployed/text.ts"
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context"
 import { Type } from "@earendil-works/pi-ai"
 import { createModels } from "@earendil-works/pi-ai/models"
@@ -7,8 +8,6 @@ import { createRegistry, defineExtension, defineTool, Harness, section, type Con
 import { openDurableObjectSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/cloudflare"
 import { fingerprint, next, payload, type Message, type Turn } from "../../src/plan.ts"
 import { serve, tables, type Bench } from "../../src/serve.ts"
-
-const SYSTEM = "You are a benchmark agent. Call lookup as instructed, then answer briefly."
 
 const faux = fauxProvider({ models: [{ id: "scripted-1", contextWindow: 1e9 }], tokenSize: { min: 1e9, max: 1e9 } })
 const models = createModels()
@@ -35,12 +34,18 @@ faux.setResponses([respond])
 const lookup = defineTool({
   name: "lookup",
   description: "Look up record number n",
-  parameters: Type.Object({ n: Type.Number() }),
+  parameters: Type.Object({
+    n: Type.Integer({
+      minimum: Number.MIN_SAFE_INTEGER,
+      maximum: Number.MAX_SAFE_INTEGER,
+    }),
+  }),
+  replay: "safe",
   execute: async ({ n }) => ({ content: [{ type: "text", text: payload(n) }] }),
 })
 
 const registry = createRegistry()
-registry.install(defineExtension({ name: "bench", tools: [lookup], sections: [section("preamble", () => SYSTEM, { tag: false })] }))
+registry.install(defineExtension({ name: "bench", tools: [lookup], sections: [section("preamble", () => TEXT_OUTPUT_INSTRUCTIONS, { tag: false })] }))
 
 export class PiDO extends DurableObject implements Bench {
   private root?: Conversation
