@@ -25,7 +25,7 @@ export const cloudflareCryptoLayer: Layer.Layer<Crypto.Crypto> = Layer.effect(
           return base.digest(algorithm, data);
 
         return Effect.try({
-          try: () => Uint8Array.from(createHash("sha256").update(new Uint8Array(data)).digest()),
+          try: () => Uint8Array.from(createHash("sha256").update(data).digest()),
           catch: (cause) =>
             PlatformError.systemError({
               module: "Crypto",
