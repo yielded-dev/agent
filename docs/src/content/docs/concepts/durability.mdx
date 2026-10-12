@@ -1,0 +1,99 @@
+---
+title: Persistence and durability
+description: What durable receipts, recovery, and Unknown outcomes mean for your application.
+---
+
+import { Trace } from "@yielded/starlight-theme/components";
+
+Persistent history preserves a conversation. Durable execution also preserves the obligation
+to finish accepted work. Your host keeps one owner per Thread; Yielded Agent records progress
+and resumes it when that owner can run again.
+
+## Choose the guarantee
+
+| Assembly           | Retains history                              | Recovers interrupted work              |
+| ------------------ | -------------------------------------------- | -------------------------------------- |
+| In-memory          | Until its Scope closes or the process exits  | No                                     |
+| Persistent history | Successful Runs in your database             | No                                     |
+| Durable host       | Committed history and unfinished obligations | Yes, within the tool recovery contract |
+
+A durable **Receipt** means admission is retained. The accepted submission is owed one terminal
+**Settlement**: completed, failed, or aborted. Waiting for approval or reconciling an unknown
+effect can leave it pending. Host availability and a usable current agent binding are still
+required to make progress.
+
+## Recover recorded progress
+
+<Trace
+  lanes={[
+    { id: "app", label: "Host" },
+    { id: "library", label: "Yielded Agent" },
+    { id: "storage", label: "Storage" },
+  ]}
+  steps={[
+    { lane: "app", title: "Reopen the Thread under one owner" },
+    { lane: "storage", title: "Load current Run state and referenced evidence" },
+    {
+      lane: "library",
+      title: "Restore input, accounting, and recorded results",
+      detail: "Missing or invalid evidence leaves the accepted work owed with a typed failure.",
+    },
+    { lane: "library", title: "Resume only work the recovery contract permits" },
+    {
+      lane: "storage",
+      title: "Retain the terminal settlement",
+      detail: "Delivery and acknowledgement may still need their own recovery.",
+    },
+  ]}
+/>
+
+The current Run checkpoint preserves original input and context, progress, and cumulative
+turn, tool, token, and cost accounting. Replacement Attempts do not receive fresh counters.
+Recorded results are reused. An incomplete model response may require another model call,
+so provider charges can repeat.
+
+<a id="run-continuations"></a>
+
+The checkpoint is mutable and deleted at settlement. It is not a historical proof of every
+execution transition. The journal retains committed conversation and outcomes; it provides
+no tamper evidence. Verification checks retained schemas, identities, ordering, references,
+and an active Run's original prompt digest. It cannot attest discarded checkpoint revisions.
+
+## An uncertain booking stays uncertain
+
+Suppose a booking tool sends a reservation, then the process dies before recording the reply.
+The external booking may exist. Retrying blindly could book twice.
+
+| Tool boundary                                        | Recovery behavior                                                      |
+| ---------------------------------------------------- | ---------------------------------------------------------------------- |
+| Recorded result                                      | Reuse it                                                               |
+| Ordinary mutating call with an uncertain outcome     | Retain an Unknown outcome; reconcile before proceeding                 |
+| Durable Step with a recorded result                  | Reuse the Step result                                                  |
+| Durable Step interrupted before recording its result | May execute again; the application needs idempotency or reconciliation |
+| Initial approval wait before dispatch                | Preserve the wait; no handler has started                              |
+
+Unfinished readonly and declared-idempotent operations can resume under compatible recorded
+replay semantics. An explicit Unknown outcome still requires resolution.
+
+**Exactly-once recording is not exactly-once external execution.** Tool annotations must
+accurately describe the effect. An abort stops future work; it cannot undo an external effect
+or erase uncertainty. Unknown work can remain owed while later input runs in the Thread.
+See [operations](/guide/operations/) for resolution and authorization.
+
+## Keep state and deployment together
+
+Register a current binding for each stable Agent ID. Pending operations retain their original
+contracts; incompatible or missing bindings can leave receipts waiting for repair. Keep completion
+projectors pure because recovery may reevaluate them from recorded tool results.
+
+Back up active storage with its operational state. Streamed Thread export is for idle,
+quiescent Threads with no unfinished Runs, approvals, unknown effects, or deliveries. Import
+into an empty destination. It transfers retained history and receipts, not active work.
+See [storage](/storage/) and [backup and restore](/guide/operations/).
+
+<a id="attached-subagents"></a>
+
+An attached child owns its own Thread. The parent waits for that same child across recovery;
+losing an acknowledgement does not authorize starting a replacement. Background workers and
+messages have independent delivery lifetimes. See [subagents](/guide/subagents/),
+[messaging](/guide/messaging/), and the [runnable durable hosts](/platforms/).

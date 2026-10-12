@@ -1,0 +1,88 @@
+---
+title: Storage
+description: Separate conversation retention, unfinished work, and live execution ownership.
+---
+
+import { FlowMap } from "@yielded/starlight-theme/components";
+
+<a id="storage"></a>
+
+Storage answers what survives a restart. A host answers who can execute now.
+Keeping conversation history and recovering unfinished work are separate choices;
+a database alone does not start workers or drive recovery.
+
+<FlowMap
+  title="Persistence and execution ownership"
+  description="A durable host owns execution and uses storage to retain canonical history and the current state of unfinished Runs."
+  columns={2}
+  nodes={[
+    {
+      id: "host",
+      at: [1, 1],
+      owner: "library",
+      title: "Durable host",
+      note: "Live ownership and execution",
+    },
+    {
+      id: "store",
+      at: [2, 1],
+      owner: "library",
+      title: "Storage adapter",
+      note: "Atomic persistence",
+    },
+    {
+      id: "history",
+      at: [3, 1],
+      owner: "external",
+      title: "Thread history",
+      note: "Append-only facts",
+    },
+    {
+      id: "work",
+      at: [2, 2],
+      owner: "external",
+      title: "Unfinished work",
+      note: "Current checkpoints and obligations",
+    },
+  ]}
+  edges={[
+    { from: "host", to: "store" },
+    { from: "store", to: "history" },
+    { from: "store", to: "work" },
+  ]}
+/>
+
+## Connect storage to execution
+
+| Need                                       | Assembly                                                                                      |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Conversation within one application Scope  | [InMemory.layer](/storage/memory/)                                                            |
+| Successful Runs retained across restarts   | `PersistentHistory.layer` with [SQLite](/storage/sqlite/) or [PostgreSQL](/storage/postgres/) |
+| Accepted work recovered after interruption | [Node](/platforms/node/) or [Cloudflare](/platforms/cloudflare/) durable host                 |
+
+For example, a chat that only needs yesterday's completed conversation can use
+persistent history. An accepted research job that must continue after process loss
+needs durable execution. Both reuse a Thread ID for follow-ups.
+
+Durable storage retains canonical history, current execution checkpoints, admissions,
+and unresolved operations. Settlement deletes the finished Run's checkpoint.
+Projections are disposable. Every backend requires one live owner per Thread;
+PostgreSQL does not add distributed ownership.
+
+## Back up or change record formats
+
+Export an idle Thread with `streamExport`, keep the source quiescent until all pages
+are saved, then import the completed archive into an empty destination Thread.
+Pending work, approvals, unknown outcomes, or deliveries can prevent export.
+See [operations](/guide/operations/) for the procedure.
+
+SQL adapters initialize fresh stores or open the supported layout: **25**, with
+record format **`effect-agent/thread@6`**. Unsupported layouts and formats are rejected;
+there is no predecessor-layout upgrade. Preserve the original store on refusal.
+
+## Build another adapter
+
+`@yielded/agent-storage-sql` provides shared SQL implementations. Durable adapters
+must co-own the Thread log, Submission ledger, and atomic settlement publisher.
+Start with the [package map](/reference/packages/#effect-agent-storage-sql) and
+[adapter verification](/guide/testing/).

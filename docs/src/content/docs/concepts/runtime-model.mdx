@@ -1,0 +1,134 @@
+---
+title: The runtime model
+description: One Thread owner advances Runs through model turns, tool calls, and durable settlement.
+---
+
+import { FlowMap, Trace } from "@yielded/starlight-theme/components";
+
+An Agent Definition describes behavior. A **Thread** owns the conversation. A durable host
+accepts input and advances it under one process owner; your application supplies authority,
+model services, and tool handlers.
+
+## Four execution boundaries
+
+| Boundary | Meaning                                                               |
+| -------- | --------------------------------------------------------------------- |
+| Thread   | An identified conversation shared across requests                     |
+| Run      | One logical execution against that Thread                             |
+| Attempt  | One scoped period trying to advance a durable Run                     |
+| Turn     | One model request and response, followed by its tool batch if present |
+
+Additional submissions can join an active Run and settle with it. A process restart ends an Attempt. It need not end the Run or create a new Thread.
+The application routes each Thread to one owner on every backend. A shared database does
+not provide distributed takeover; stale results from a closed Attempt cannot commit.
+
+## One request through the runtime
+
+Consider a travel assistant that searches, waits for booking approval, then answers.
+The receipt identifies accepted work; it does not mean the booking or Run has finished.
+
+<Trace
+  lanes={[
+    { id: "app", label: "Your application" },
+    { id: "library", label: "Yielded Agent" },
+    { id: "external", label: "Model and tools" },
+  ]}
+  steps={[
+    {
+      lane: "app",
+      title: "Authorize and submit input",
+      detail: "Keep caller identity and Thread access under host control.",
+    },
+    {
+      lane: "library",
+      title: "Retain admission and return a receipt",
+      detail: "Accepted work remains owed until terminal settlement.",
+    },
+    {
+      lane: "external",
+      title: "Produce a complete model response",
+      detail: "Application tools start after the response finishes.",
+    },
+    {
+      lane: "library",
+      title: "Validate calls and obtain approvals",
+      detail: "A wait can close this Attempt; a later Attempt resumes the same Run.",
+    },
+    { lane: "external", title: "Run authorized tools with bounded concurrency" },
+    {
+      lane: "library",
+      title: "Commit results, then continue or settle",
+      detail:
+        "Results enter the conversation in declaration order. The next Turn sees the complete batch.",
+    },
+    { lane: "app", title: "Observe the outcome and publish your reply" },
+  ]}
+/>
+
+[Steering](/guide/run-agents/) enters between complete turns; follow-up input enters when
+the Run would otherwise stop. Neither rewrites a tool already executing. Opt-in model-call
+restart can consume joined input earlier only while the call remains disposable.
+
+## Separate owners for separate lifetimes
+
+<FlowMap
+  title="History, recovery, and model context"
+  description="The durable host uses current Run state to recover work. The append-only log supplies history, while context management selects a bounded view for the model."
+  columns={2}
+  nodes={[
+    {
+      id: "log",
+      at: [1, 1],
+      owner: "library",
+      title: "Thread log",
+      note: "Conversation and committed outcomes",
+    },
+    {
+      id: "run",
+      at: [1, 2],
+      owner: "library",
+      title: "Current Run state",
+      note: "Progress and cumulative accounting",
+    },
+    {
+      id: "context",
+      at: [2, 1],
+      owner: "library",
+      title: "Model context",
+      note: "Selected history and compaction",
+    },
+    {
+      id: "attempt",
+      at: [2, 2],
+      owner: "library",
+      title: "Next Attempt",
+      note: "Resume selected work",
+    },
+
+]}
+edges={[
+{ from: "log", to: "context" },
+{ from: "run", to: "attempt" },
+]}
+/>
+
+The log is append-only. The active Run checkpoint is authoritative operational state,
+updated with new facts and removed at settlement. Open tool outcomes and delivery obligations
+can outlive that Run and retain their own state. Conversation projections and lookup indexes
+are rebuildable views.
+
+Compaction changes what the model sees. Archiving changes where old records live. Neither
+resolves uncertain effects or gives a Run fresh budget. There is no lifetime record cap on the
+durable log; individual Runs, payloads, and live work remain bounded. Without compaction,
+loading and sending the model's conversation still grows with its size.
+
+## The host keeps work moving
+
+Node hosts own scoped workers and recovery scans. Cloudflare Thread Objects use requests
+and alarms to resume eligible work; idle Objects need no alarm. Applications own reply delivery,
+query views, and optional memory processing. These have distinct obligations from running the
+model. Required custom publication can delay native execution; choose it deliberately.
+
+Use [durability](/concepts/durability/) for recovery guarantees, [budgets](/concepts/budgets/)
+for limits, and the [Node](/platforms/node/) or [Cloudflare](/platforms/cloudflare/)
+guide for runnable host composition.

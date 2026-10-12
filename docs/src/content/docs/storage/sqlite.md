@@ -1,15 +1,17 @@
 ---
 title: SQLite
-description: Retain completed agent runs in a Node.js SQLite database.
+description: Retain completed conversations in a local SQLite file, or use the Node host for recovery.
 ---
 
 <a id="sqlite"></a>
 
-Provide `PersistentHistory.layer` with a SQLite store to retain completed runs across Node.js restarts:
+SQLite is the local persistence option for Node applications. `SqliteThreadStore`
+owns a scoped database connection; `PersistentHistory` connects it to ordinary agent
+Runs. Use the [Node host](/platforms/node/) when unfinished work must recover too.
 
 ```ts twoslash
-import { AgentRuntime, PersistentHistory } from "@yielded/agent";
 // ---cut---
+import { AgentRuntime, PersistentHistory } from "@yielded/agent";
 import { SqliteThreadStore } from "@yielded/agent-storage-sqlite";
 import { Effect, Layer } from "effect";
 
@@ -19,59 +21,37 @@ const History = PersistentHistory.layer.pipe(
   Layer.provide(SqliteThreadStore.layer({ filename: "./history.sqlite" })),
 );
 
-const conversation = Effect.gen(function* () {
-  const first = yield* AgentRuntime.run(planner, "Plan a trip to Lisbon");
-  return yield* AgentRuntime.run(planner, "Make it cheaper", {
-    threadId: first.threadId,
-  });
-}).pipe(Effect.provide(History));
+const program = AgentRuntime.run(planner, "Plan a trip to Lisbon").pipe(Effect.provide(History));
 ```
 
-Add the adapter to your existing Yielded Agent application:
+Install `@yielded/agent-storage-sqlite@beta` alongside your application packages.
+Supply the agent's model and tool Layers; the store supplies its SQL client and
+Crypto. The [runnable planner](https://github.com/yielded-dev/agent/tree/main/docs/snippets/travel-planner)
+contains the agent and provider setup used here.
 
-```sh
-bun add @yielded/agent-storage-sqlite@beta effect
-```
-
-Here, `planner` is an [agent definition](/guide/agents/). Supply its model and tool
-services around the program. The storage Layer opens a scoped Node SQLite client
-and supplies Crypto. Keep framework packages at one release and use compatible
-[Effect packages](/guide/getting-started/#installation-and-compatibility).
-
-Keep the database file on persistent storage. Save the returned `threadId` and pass
-it to later runs to continue the conversation, including after a process restart.
-Provide the history Layer around the complete program or application runtime.
-One process owns each Thread at a time. Share one storage Layer within that process and stop
-its owner before opening a replacement. The managed Node host enforces one live owner per file.
-
-`SqliteThreadStore.layer({ filename, synchronous: "NORMAL" })` opts this store's connection
-into WAL `NORMAL` synchronization; the default is `FULL`. Choose the mode when constructing
-the store, and use the same choice for storage Layers sharing one SQL client.
-WAL `NORMAL` survives process crashes, but power loss or an OS crash can lose acknowledged
-commits and cause external effects to repeat during durable recovery.
+Save the returned `threadId` and pass it to later Runs, including after restart.
+Acquire `History` once around the application so calls share its store. Keep the
+file on persistent local storage with working SQLite locks. The convenience Layer
+holds an exclusive connection lock; independent readers must wait until it closes.
 
 ## What is retained
 
-`PersistentHistory.layer` commits each successful run's input and native messages
-as one atomic batch before publishing `RunCompleted`. A failure or interruption
-before commit leaves none of that run in history. A storage error after commit can
-leave the whole run recorded, so inspect history before retrying.
+Each successful Run commits as one atomic batch. Failure or interruption before
+commit leaves that Run out of history. A storage error after commit can leave the
+whole Run recorded: inspect history before retrying external work.
 
-The database retains conversation history across restarts. An interrupted run has
-no automatic recovery. See [retained history](/guide/threads/#retain-completed-runs)
-for the commit policy, concurrency, and history inspection.
+| Option         | Default   | Meaning                        |
+| -------------- | --------- | ------------------------------ |
+| `filename`     | Required  | Persistent database path       |
+| `synchronous`  | `"FULL"`  | WAL synchronization            |
+| `busyTimeout`  | `5000` ms | Write-lock retry window        |
+| `verifyOnOpen` | `false`   | Full stored-data audit on open |
+
+`"NORMAL"` synchronization can lose acknowledged commits after power loss or an OS
+crash. Existing databases must use the [supported layout and format](/storage/).
 
 ## Recover unfinished work
 
-Use [`@yielded/agent-platform-node`](/platforms/node/) when accepted work must
-survive a restart. It assembles SQLite storage, agent registrations, admission,
-recovery, and a worker pool. Run one live host per SQLite file.
-
-Custom durable assemblies must share the same scoped storage owner for the Thread log and
-accepted-work ledger. Separately opened writable runtimes do not coordinate through leases.
-
-SQLite tracks layout separately from record meaning. This unreleased protocol opens only fresh
-layout-25 stores with `effect-agent/thread@6` records. Predecessor or ambiguous stores are rejected
-before mutation. Same-format export/import installs into an empty destination Thread; no older
-layout upgrade or archive converter is provided. See the
-[operator procedure](/guide/operations/#adopting-these-contracts).
+Storage-backed history does not resume interrupted execution. The Node host adds
+admission, registrations, recovery, and workers. One process owns a Thread at a
+time; separately opened runtimes do not coordinate through distributed leases.

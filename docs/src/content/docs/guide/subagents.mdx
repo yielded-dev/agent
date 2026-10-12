@@ -1,0 +1,90 @@
+---
+title: Subagents
+description: Delegate a focused task to a child with its own context, tools, and execution lifetime.
+---
+
+import { FlowMap } from "@yielded/starlight-theme/components";
+
+<a id="subagents"></a>
+
+A subagent gives a specialist its own instructions, model, tools, and conversation. The parent
+passes a task and receives a bounded result; the child's intermediate history stays out of the
+parent's context. Use delegation when that separation helps the task, such as researching several
+travel options before a coordinator chooses an itinerary.
+
+## Define a delegation
+
+```ts twoslash title="subagent-basics.ts" src="snippets/travel-planner/subagent-basics.ts"
+
+```
+
+`Summarize.tool` is an ordinary model-facing tool on the parent. Provide its handlers with
+`Subagent.layer(Summarize)` and supply the child's model and services through Layers. The default
+result is `{ output, budgetExhausted }`, so the parent can recognize a partial answer.
+
+## Choose a setup
+
+| Lifetime           | Parent behavior                              | Choose it when                                           |
+| ------------------ | -------------------------------------------- | -------------------------------------------------------- |
+| In-memory attached | Waits for the child in the same process      | Restarting after process loss is acceptable              |
+| Durable attached   | Suspends until the child's canonical outcome | The answer is required and progress must survive restart |
+| Durable background | Continues while the worker runs              | The user should keep chatting during longer work         |
+
+<FlowMap
+  title="Two delegation lifetimes"
+  description="An attached child returns a tool result to its waiting parent. A background worker delivers a message to a continuing parent Thread."
+  columns={2}
+  nodes={[
+    { id: "waiting", at: [1, 1], owner: "library", title: "Waiting parent Run" },
+    { id: "attached", at: [1, 2], owner: "library", title: "Attached child" },
+    { id: "thread", at: [2, 1], owner: "library", title: "Parent Thread" },
+    { id: "background", at: [2, 2], owner: "library", title: "Background worker" },
+  ]}
+  edges={[
+    { from: "attached", to: "waiting", label: "tool result" },
+    { from: "background", to: "thread", label: "message" },
+  ]}
+/>
+
+## Keep children attached
+
+Both attached forms use the same declaration. In-memory execution shares the parent's Scope;
+durable execution registers both Definitions with the host. A durable parent releases its
+execution slot while waiting and recovers the same child after restart. Parent abort propagates
+to attached children. Sibling calls may run concurrently, but the parent model receives the
+complete batch before continuing.
+
+Run the [in-memory example](https://github.com/yielded-dev/agent/blob/main/docs/snippets/travel-planner/delegation-main.ts),
+or use the [durable host assembly](https://github.com/yielded-dev/agent/blob/main/docs/snippets/travel-planner/durable-delegation-host.ts)
+with the [Node host](/platforms/node/).
+
+## Continue work in the background
+
+`Subagent.background(child, { start: true, followUp: true, reportToParent: true })` derives a
+toolkit and handler Layer. Install only the management operations the parent needs. A start
+returns a worker identity and retained delivery status; inspect that delivery until it has a
+receipt rather than starting the task again.
+
+Follow-ups address the same child Thread. Background workers outlive completion or abort of the
+launching Run. The host must authorize starting, sending, inspecting, and controlling them;
+a worker reference grants none of those permissions.
+
+With `reportToParent`, completed Runs send framework messages to the parent. Declare `updates`
+on the child for structured intermediate findings. Reporting and destination processing can
+fail independently of the child outcome. Reports are untrusted model context, not instructions.
+The [background example](https://github.com/yielded-dev/agent/blob/main/docs/snippets/travel-planner/background-main.ts)
+includes declarations, access policy, and host wiring.
+
+## Lifecycle and limits
+
+A worker normally accepts later tasks. For a single retained assignment, opt into
+`runDisposition.workerLifecycle: "assignment"` and use `Worker.AssignmentDisposition` to select
+`waiting` or `completed` from typed output. Completion seals the worker only after its latest
+accepted input is applied. Stopping a worker prevents future input; cancelling one receipt has
+a narrower scope.
+
+Parent tools are never inherited automatically. Grants, depth, and reserved budgets constrain
+children, and approval to start one does not authorize its actions. An uncertain external tool
+still needs reconciliation after a crash. See the [subagent reference](/reference/subagents/)
+for defaults, failure handling, and nested work, or [messaging](/guide/messaging/) for communication
+between independent Threads.

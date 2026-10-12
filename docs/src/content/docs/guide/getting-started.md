@@ -1,33 +1,31 @@
 ---
 title: Getting started
-description: Install Yielded Agent and run your first agent.
+description: Run a schema-defined agent with a model and in-memory history.
 ---
 
-<a id="getting-started"></a>
-
-Build an agent that classifies a bug report and returns a typed result.
-
-<a id="installation-and-compatibility"></a>
+Start with one agent that classifies a bug report. Your application supplies a model and
+history Layer; the definition owns the input, output, and execution limits. This example
+runs in memory. Choose a [durable host](/platforms/) when accepted work must survive restart.
 
 ## Install
 
-In a TypeScript project with [Bun](https://bun.sh):
+In a TypeScript project with Bun:
 
 ```sh
-bun add @yielded/agent@beta effect
+bun add @yielded/agent@beta effect @effect/ai-openai @effect/platform-bun
 ```
 
-Use an Effect AI provider for model access. See the [package map](/reference/packages/)
-for compatibility.
+The package manifests declare peer compatibility. [Other providers](/reference/packages/)
+use native Effect AI model Layers too.
 
-## Create an agent
+## Define and run
 
-Save as `agent.ts`:
+Save as `agent.ts`. Supply `OPENAI_API_KEY` through your environment or secret manager.
 
-```ts
+```ts twoslash title="agent.ts"
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import { BunRuntime } from "@effect/platform-bun";
-import { InMemory, Agent, AgentRuntime } from "@yielded/agent";
+import { Agent, AgentRuntime, InMemory } from "@yielded/agent";
 import { Config, Console, Effect, Schema } from "effect";
 import { Toolkit } from "effect/ai";
 import { FetchHttpClient } from "effect/http";
@@ -38,16 +36,12 @@ const triage = Agent.make("triage", {
     severity: Schema.Literals(["low", "medium", "high", "critical"]),
     explanation: Schema.String,
   }),
-  instructions: "Classify the bug report by severity. Explain your reasoning in one sentence.",
+  instructions: "Classify the bug report and explain the severity in one sentence.",
   toolkit: Toolkit.empty,
-  policy: {
-    maxTurns: 2,
-    maxToolCalls: 1,
-    maxDuration: "30 seconds",
-  },
+  policy: { maxTurns: 2, maxToolCalls: 1, maxDuration: "30 seconds" },
 });
 
-const program = AgentRuntime.run(triage, "All users get a 500 error when signing in.").pipe(
+const program = AgentRuntime.run(triage, "Users cannot sign in.").pipe(
   Effect.tap((result) => Console.log(result.output)),
   Effect.provide(OpenAiLanguageModel.model("gpt-6-luna")),
   Effect.provide(OpenAiClient.layerConfig({ apiKey: Config.Redacted("OPENAI_API_KEY") })),
@@ -58,23 +52,24 @@ const program = AgentRuntime.run(triage, "All users get a 500 error when signing
 BunRuntime.runMain(program);
 ```
 
-The output schema validates the model's answer. The policy limits the run. `InMemory.layer` keeps
-conversation history in memory for the application Scope. To continue a conversation, share that
-Layer and reuse the returned Thread ID; see [in-memory conversations](/guide/threads/#in-memory-conversations).
-
-## Run it
-
 ```sh
-export OPENAI_API_KEY="your-api-key"
 bun agent.ts
 ```
 
-Example output:
+The result contains schema-validated output, a Thread ID, and execution metadata. A possible
+output is:
 
 ```json
-{ "severity": "critical", "explanation": "All users are blocked from signing in." }
+{ "severity": "high", "explanation": "Users are blocked from accessing the application." }
 ```
 
-## Next
+## Continue the conversation
 
-[Add tools](/guide/tools/), [stream responses](/guide/run-agents/), or [save thread history](/guide/threads/).
+Share the same `InMemory.layer` across Runs and pass the returned `threadId` for follow-up
+input. Providing a fresh Layer around each call creates a separate store. History lasts
+until its owner Scope closes; active execution has no process-loss recovery.
+
+The repository has [complete runnable snippets](https://github.com/yielded-dev/agent/tree/main/docs/snippets/travel-planner)
+and a [Cloudflare travel planner](https://github.com/yielded-dev/agent/tree/main/examples/travel-planner).
+Next, [add tools](/guide/tools/), [stream progress](/guide/run-agents/), or choose
+[what the Thread retains](/guide/threads/).

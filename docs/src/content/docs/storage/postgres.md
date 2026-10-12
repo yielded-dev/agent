@@ -1,24 +1,20 @@
 ---
 title: PostgreSQL
-description: Persist thread history and accepted work with an application-owned PostgreSQL client.
+description: Use an application-owned SQL pool while retaining one live process owner per Thread.
 ---
 
 <a id="postgresql"></a>
 
-Connect PostgreSQL storage to your agent using your application's native Effect SQL client:
+PostgreSQL stores history and accepted work using your application's Effect SQL
+client. Your host must route each Thread to one live process. The adapter does not
+provide distributed ownership, lease-based takeover, or a worker service.
 
 ```ts twoslash
-import { Identifiers } from "@yielded/agent";
-
-import { planner as agent } from "./node-agent.ts";
-declare const input: string;
-declare const threadId: Identifiers.ThreadId;
 import { NodeCrypto } from "@effect/platform-node";
 import { PgClient } from "@effect/sql-pg";
-import { AgentRuntime, PersistentHistory } from "@yielded/agent";
-// ---cut---
+import { PersistentHistory } from "@yielded/agent";
 import { PostgresStorage } from "@yielded/agent-storage-postgres";
-import { Config, Effect, Layer } from "effect";
+import { Config, Layer } from "effect";
 
 const Database = PgClient.layerConfig({
   url: Config.Redacted("DATABASE_URL"),
@@ -30,53 +26,41 @@ const Persistence = PostgresStorage.layer.pipe(
 );
 
 const History = PersistentHistory.layer.pipe(Layer.provideMerge(Persistence));
-
-const program = AgentRuntime.run(agent, input, { threadId }).pipe(Effect.provide(History));
 ```
 
-## Install and connect
-
-```sh
-bun add @yielded/agent-storage-postgres@beta effect
-```
-
-Requires PostgreSQL 16 or newer. Create the database and set `DATABASE_URL` to its connection URL.
-Keep framework packages at one release and use compatible
-[Effect and model provider packages](/guide/getting-started/#installation-and-compatibility).
-
-Here, `agent`, `input`, and `threadId` come from your application.
-`PostgresStorage.layer` provides `ThreadStore` and `SubmissionLedger`;
-`PersistentHistory.layer` connects the thread store to ordinary `AgentRuntime` calls.
-`History` also exposes the same native SQL client for application queries.
-Supply the agent's model and tool Layers at your application boundary. For a server, provide
-`History` once around the application or build one `ManagedRuntime` so requests share the pool.
-Reuse the same thread ID to continue a conversation, including after a process restart.
+Install `@yielded/agent-storage-postgres@beta` and `@effect/sql-pg` alongside your
+Effect and platform packages. Create the database and set `DATABASE_URL` in the
+host environment. Provide `History` around `AgentRuntime.run`, plus model and tool
+services, as in the [planner example](https://github.com/yielded-dev/agent/tree/main/docs/snippets/travel-planner).
+Reuse the returned Thread ID for follow-ups.
 
 ## What is retained
 
-This setup commits each successful Run as one atomic batch. It does not recover interrupted
-execution. See [retained history](/guide/threads/#retain-completed-runs) for commit and
-concurrency behavior, and [persistence and durability](/concepts/durability/) for recovery.
+This history assembly retains each successful Run atomically across restarts; it
+does not recover interrupted execution. `PostgresStorage.layer` also supplies the
+Submission ledger and settlement publisher for a
+[custom durable runtime](/guide/run-agents/#assemble-a-custom-durable-runtime).
+Your application must drive recovery and pending work. The supplied Node host uses SQLite.
 
 ## Database ownership
 
-Route each Thread to one live process and reuse one storage Layer within that process.
-PostgreSQL is a compatibility backend under the same single-owner contract as SQLite and
-Cloudflare. Horizontal multi-worker execution of one Thread and lease-based takeover are not
-supported. Stop the old owner before routing its Threads to a replacement; the application owns
-that routing boundary.
+Share one pool and storage Layer within the owning process. Stop that owner before
+routing its Threads to a replacement. Database persistence does not transfer live
+execution authority.
 
-The adapter initializes its tables when the Layer opens. Credentials need permission to use
-and initialize the selected schema. Tables default to `public`; use
-`PostgresStorage.layerWith({ schema: "agent" })` for another namespace. An existing schema avoids
-the need for database-wide `CREATE` permission. Storage qualifies its tables without changing
-the client's search path, codecs, or application query transformations.
+Use `PostgresStorage.layerWith(options)` to configure storage:
 
-Call storage writes and snapshot reads outside `sql.withTransaction`: the adapter owns
-its transactions and rejects nesting. It also rejects incompatible stored versions.
+| Option                    | Default    |
+| ------------------------- | ---------- |
+| `schema`                  | `"public"` |
+| `observationPollInterval` | `25` ms    |
+| `lockTimeout`             | `5000` ms  |
+| `verifyOnOpen`            | `false`    |
 
-For individual stores, configuration, and error details, see the
-[PostgreSQL package reference](/reference/packages/#effect-agent-storage-postgres).
-For durable execution with PostgreSQL, supply these stores to a
-[custom durable runtime](/guide/run-agents/#assemble-a-custom-durable-runtime) and provide its
-recovery driver. The existing Node.js host owns SQLite storage.
+The Layer initializes tables on acquisition. Pre-provisioning the schema avoids
+requiring database-wide schema creation permission. Storage leaves the client's
+search path and application query transforms unchanged.
+
+Call storage writes and snapshot reads outside `sql.withTransaction`; the adapter
+owns its transactions. It rejects unsupported [layouts and formats](/storage/).
+Keep original stores intact when an open fails.

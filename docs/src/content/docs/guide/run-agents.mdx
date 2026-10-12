@@ -1,0 +1,85 @@
+---
+title: Run & stream
+description: Execute an agent, observe progress, and deliver input at safe turn boundaries.
+---
+
+import { Trace } from "@yielded/starlight-theme/components";
+
+Choose the execution lifetime first. `AgentRuntime` runs inside your process; a durable host
+accepts work that can outlive the request and resume after restart. Both use the same agent loop.
+
+## Await one result
+
+```ts twoslash
+import { AgentRuntime } from "@yielded/agent";
+import { Effect } from "effect";
+import { TravelPlanner as planner } from "./planner.ts";
+// ---cut---
+const program = Effect.gen(function* () {
+  const result = yield* AgentRuntime.run(planner, { city: "Lisbon", days: 2 });
+  yield* Effect.log(result.output);
+});
+```
+
+Provide the model, toolkit handlers, and runtime services around `program`. The
+[travel-planner example](https://github.com/yielded-dev/agent/tree/main/docs/snippets/travel-planner)
+contains the complete setup. `output` has passed the Agent's output Schema; `finishReason`
+distinguishes ordinary completion from a budget-exhausted answer.
+
+## Observe semantic events
+
+Use `AgentRuntime.stream` to consume a `Stream` of `RunEvent` values: text, tool activity,
+updates, and lifecycle events. Text deltas are provisional. For structured output, wait for
+Schema-validated completion before presenting a final answer.
+
+A slow consumer backpressures the bounded event queue. Interrupting an ephemeral stream closes
+its execution Scope and interrupts the Run. To observe the same local Run more than once, use
+`AgentRuntime.start` inside `Effect.scoped`; its handle exposes `await`, `observe`, `events`, and
+`usageReport`. Slow detached observers can fail with a lag error without blocking execution.
+
+<a id="turn-boundaries"></a>
+
+## Understand turn boundaries
+
+<Trace
+  lanes={[
+    { id: "model", label: "Model" },
+    { id: "library", label: "Runtime" },
+    { id: "app", label: "Your tools" },
+  ]}
+  steps={[
+    { lane: "library", title: "Prepare context" },
+    { lane: "model", title: "Return a response and proposed calls" },
+    { lane: "library", title: "Validate the complete batch and apply policy" },
+    { lane: "app", title: "Execute bounded tool calls" },
+    { lane: "library", title: "Commit results, then consume steering" },
+    { lane: "library", title: "Consume follow-up if otherwise finished" },
+  ]}
+/>
+
+Steering enters before the next model request; follow-up enters when the Agent would otherwise
+stop. Neither rewrites an active tool call. With `restartOnJoinedInput`, eligible new input can
+cancel a disposable model request and replace it. Clients must clear the affected draft on
+`ModelRestarted`.
+
+<a id="interruption-is-ownership"></a>
+
+## Scope run resources
+
+`run` finishes run-local cleanup before returning. `stream` owns cleanup through consumption;
+`start` belongs to its caller's Scope. Enclosing application Layers can serve many Runs.
+
+For durable work, disconnecting an observer or interrupting a waiter only detaches that caller.
+Use an authorized, persisted `abort` command to cancel accepted work. A replacement Attempt
+receives a fresh duration allowance; cumulative call and usage limits remain separate.
+
+Choose a [Node](/platforms/node/) or [Cloudflare](/platforms/cloudflare/) host for durable execution.
+See [operations](/guide/operations/) for receipts, observation, and cancellation, and
+[budgets](/concepts/budgets/) for limits and usage accounting.
+
+## Assemble a custom durable runtime
+
+`DurableAgentRuntime.layer` composes registrations with a `SubmissionLedger`, `ThreadStore`,
+`WakeScheduler`, and host authorization. Capture model and tool services when building the Layer.
+Your host must route each Thread to one process owner and drive recovery after lost wake hints.
+Prefer a platform host unless you need to own that scheduling and resource lifetime yourself.

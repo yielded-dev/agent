@@ -1,233 +1,67 @@
 ---
 title: Threads
-description: Keep thread history across agent runs.
+description: Choose what a conversation retains and whether active work survives process loss.
 ---
 
-<a id="threads"></a>
+A Thread is an identified conversation shared across Runs. Its lifetime belongs to the
+application's history or durable host. Reusing a Thread ID continues that conversation;
+it does not by itself make execution durable or authorize access.
 
-A Thread is an identified, ordered conversation shared across Runs. It exists whether messages
-are held in memory or persisted. Durable execution adds a journal and recovery protocol around
-that conversation.
+## Reuse a conversation
 
-## In-memory conversations
-
-`InMemory.layer` is the default setup. It keeps conversation history in memory for the lifetime
-of its application Scope. Runs with the same Thread ID load that conversation automatically:
-
-```ts
+```ts twoslash
 import { AgentRuntime, InMemory } from "@yielded/agent";
 import { Effect } from "effect";
 
+import { planner, ModelLive, OpenAiLive } from "./node-agent.ts";
+// ---cut---
 const conversation = Effect.gen(function* () {
-  const first = yield* AgentRuntime.run(agent, "Plan a trip to Lisbon");
-  return yield* AgentRuntime.run(agent, "Make it cheaper", { threadId: first.threadId });
-}).pipe(Effect.provide(InMemory.layer));
+  const first = yield* AgentRuntime.run(planner, "Plan a weekend in Lisbon.");
+  return yield* AgentRuntime.run(planner, "Make it cheaper.", {
+    threadId: first.threadId,
+  });
+}).pipe(Effect.provide(ModelLive), Effect.provide(OpenAiLive), Effect.provide(InMemory.layer));
 ```
 
-Supply the model and tool handlers around this program. Provide the application Layer once
-around all conversation Runs, or build one `ManagedRuntime` for a long-lived application.
-Providing a fresh Layer separately to each Run creates separate stores. Omitting `threadId`
-creates a new conversation; reuse the returned ID for follow-ups.
+One Layer surrounds both Runs. In a server, keep the application Layer in one
+`ManagedRuntime`. The [runnable Node snippets](https://github.com/yielded-dev/agent/tree/main/docs/snippets/travel-planner)
+show the imported definition and services.
 
-Conversations may span many Runs for as long as the application Scope stays open, within the
-store's capacity limits. In-memory describes storage, not a short lifetime. Execution is
-[ephemeral](/concepts/durability/): active work cannot recover after process loss.
+## Choose the lifetime
 
-The layer shares one bounded `Thread.Store` and the subagent reservation ledger.
-`ThreadHistory.layer` supplies just the in-memory history services when assembling your own setup.
-History retains complete native messages and Tool batches as execution advances. Recorded updates
-remain after a later failure, defect, timeout, or interruption; incomplete streamed responses and
-unfinished Tool batches are not recorded. Nothing automatically replays failed work. Scope closure
-releases the store, and process loss loses both its history and any active execution.
+| Assembly                               | What it retains                                                                  | Who ends it                                 |
+| -------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------- |
+| `InMemory.layer`                       | Incremental complete messages and tool batches, including before a later failure | Application Scope or process loss           |
+| `InMemory.scoped` inside that Layer    | Conversations created by one owned workflow, including attached children         | Workflow success, failure, or interruption  |
+| `PersistentHistory.layer` with storage | Each successful Run as one atomic history commit                                 | Application retention policy                |
+| Durable host                           | Committed conversation plus accepted-work and recovery state                     | Explicit lifecycle and retention operations |
 
-The store permits 256 Threads, 1,024 messages and 4 MiB of encoded content per Thread, and 64 MiB
-of encoded content overall. Exceeding a bound fails with `ThreadHistoryError` and reason `"limit"`;
-it never silently evicts earlier conversations. Concurrent updates must extend the same recorded
-prefix, or fail with reason `"conflict"` without overwriting history. Authorize thread access and
-serialize same-thread Runs when concurrent external work is unacceptable.
+<a id="in-memory-conversations"></a>
 
-## Release disposable conversations
+In-memory storage has explicit capacity: 256 Threads, 1,024 messages and 4 MiB per Thread,
+and 64 MiB overall. Exceeding a bound fails; it does not silently evict conversations.
+Finishing a Run does not release its history. Use `InMemory.scoped` for disposable workflows
+and consume streams or handles before that scope closes.
 
-Wrap each independent request in `InMemory.scoped` inside the shared application runtime:
+## Persistent history versus durable work
 
-```ts
-const request = Effect.gen(function* () {
-  const first = yield* AgentRuntime.run(agent, "Plan a trip to Lisbon");
-  return yield* AgentRuntime.run(agent, "Make it cheaper", { threadId: first.threadId });
-}).pipe(InMemory.scoped);
+Persistent history retains successful Runs but cannot resume interrupted execution. A storage
+error can occur after commit; inspect the retained history before retrying. Serialize callers
+when repeating external work would be unsafe: a conflicting history append can reject a stale
+writer after its tools have already run.
 
-// Reuse one ManagedRuntime built with InMemory.layer and your model/tool services.
-const result = await runtime.runPromise(request);
-```
+The durable host admits a submission, returns a receipt, and owns its execution history and
+settlement. Keep ordinary persistent-history Threads and durable-admission Threads on separate
+IDs. Use its API for durable work instead of layering ordinary history hooks around it.
+See [durability](/concepts/durability/) and [storage choices](/storage/).
 
-The workflow owns its newly created Threads, including attached children. History remains
-available for follow-ups inside the workflow and is released on success, failure, or interruption.
-All owners and retained conversations share the same count and byte limits; an active owner does
-not receive another store budget. An owner cannot claim an existing conversation from another
-owner or the application. Such access fails with reason `"conflict"`; a closed owner fails with
-reason `"fenced"`.
+## Three views of one Thread
 
-Consume streams and await `start` handles inside the wrapper. Inspect or export history there
-if it must outlive the workflow, and construct `toRunThreadOptions` there so its hooks capture
-the owned store. Returned outputs and snapshots remain ordinary values, but returned Thread IDs
-no longer carry continuation history after the workflow closes. Keep the default application
-owner for conversations that must continue across requests, or use persistent history.
+The model reads a selected context window. Recovery reads active Run state and necessary
+evidence. A history UI reads ordered ranges. Compaction can shorten model context without
+erasing conversation history; archival can relocate old records without resolving open work.
+The durable log has no lifetime record cap, while payloads and Runs have [limits](/concepts/budgets/).
 
-`InMemory.scoped` requires the matching in-memory store and history adapter. Persistent history
-and custom adapters without this capability fail with `InMemoryScopeError`. Durable hosts keep
-their journal retention; use this wrapper for ordinary Runs.
-
-This is an explicit lifetime choice: a shared default `InMemory.layer` still retains completed
-conversations and rejects a 257th distinct Thread. Merely finishing a Run does not release it;
-unbounded retention, finite memory, and unlimited fresh conversations cannot coexist.
-
-## Inspect a conversation
-
-```ts
-import { Thread } from "@yielded/agent";
-
-const inspect = Effect.gen(function* () {
-  const threads = yield* Thread.Store;
-  const conversation = yield* threads.snapshot(threadId);
-  return Thread.toPrompt(conversation);
-});
-```
-
-Run this inside the same application Layer as the agent. `Thread.Thread` is the snapshot Schema;
-its messages include native text, tool results, reasoning, and files. `Thread.layerMemory` provides
-just the memory store; `InMemory.layer` also connects it to agent history and subagent reservations.
-`Thread.Store` snapshots and the durable `ThreadStore` journal contract serve different purposes:
-the latter also stores execution records needed for persistence and recovery.
-
-## Retain completed runs
-
-`PersistentHistory.layer` connects a `ThreadStore` to ordinary agent Runs and commits each
-successful Run as a whole. The [SQLite](/storage/sqlite/) and [PostgreSQL](/storage/postgres/)
-guides show how to build its `History` Layer. With that Layer, one agent can serve many thread IDs:
-
-```ts
-import { AgentRuntime, ThreadHistory } from "@yielded/agent";
-import { Effect } from "effect";
-
-const program = Effect.gen(function* () {
-  const first = yield* AgentRuntime.run(agent, firstInput, { threadId });
-  const second = yield* AgentRuntime.run(agent, secondInput, { threadId });
-  const history = yield* ThreadHistory.ThreadHistory;
-  const prompt = yield* history.load(threadId);
-  return { first, second, prompt };
-}).pipe(Effect.provide(History));
-```
-
-Provide the history layer around the complete program, including any `start` handle. Also provide
-the agent's model and tool services at the application boundary. Runtime IDs have an overridable
-default and need no Layer.
-
-Each successful execution appends its input and native messages as one atomic batch. The runtime
-first closes run-owned resources, validates the result, and commits history. Only then does it
-publish `RunCompleted`. Services from an enclosing application layer stay open for that layer's
-lifetime.
-
-Retained history includes evaluated instructions, assistant messages, reasoning, provider options,
-and settled tool results. Context preparation and compaction change the current model view while
-the source history stays intact. Committed summaries describe their captured prefix. Later tool
-results keep their exact original declaration and enter the active view without expanding retired
-history. Cleared results and rollover boundaries continue to govern that view.
-
-A failure, defect, timeout, or interruption before commit retains none of the current run. A
-storage error after commit can leave the whole run recorded, so inspect history before retrying.
-The runtime never retries execution or resumes an interrupted run.
-
-Each encoded input, output, Run message contribution, and retained model-context snapshot has a
-1 MiB limit. Configure context compaction below that bound, leaving room for the next input and
-response. Each successful Run retains its new source messages and its current compacted context
-separately. The next Run loads that context directly; older source messages remain available for
-recall. Thread age does not impose a canonical record limit. Storage and live-work capacity remain
-host-owned. See [archive and transfer bounds](/guide/operations/#adopting-these-contracts).
-
-<a id="history-policy-and-append-ownership"></a>
-
-### Choose one history owner
-
-The default in-memory layer records incremental history and supports input queues and history
-observers. `PersistentHistory.layer` owns an atomic successful-Run commit and rejects explicit `history`, `onHistory`, `input`, `durability`,
-`subagent`, `resume`, and `resumeUsage` options before model or tool execution.
-
-Persistent writers compare the loaded tail before appending. Concurrent callers may both execute,
-but the stale writer fails with `ThreadHistoryError` and reason `"conflict"`. Serialize
-calls when duplicate external work is unacceptable. Provide IDs that remain unique across
-restarts.
-
-Other reasons include `"fenced"`, `"incompatible"`, `"not-found"`, `"limit"`, `"encoding"`, and
-`"storage"`. The adapter error remains available as the diagnostic cause.
-
-Use separate thread IDs for retained interaction and durable admission. Database-backed history
-survives restart, but it does not provide receipts, attempt ownership, recovery, or settlement.
-Authorize tenant and thread access before execution.
-
-<a id="advanced-history-integrations"></a>
-
-## Use process-local history hooks
-
-Ordinary interactive Runs use the same in-memory layer. Steering and follow-up queues do not
-need a separate history adapter:
-
-```ts
-const program = AgentRuntime.run(agent, input, {
-  threadId,
-  input: toRunInputHook(commands),
-}).pipe(Effect.provide(InMemory.layer));
-```
-
-The advanced hooks have these ownership rules:
-
-| Integration            | Behavior                                                                                        |
-| ---------------------- | ----------------------------------------------------------------------------------------------- |
-| `RunOptions.history`   | Seeds a new in-memory Thread or extends its current history; a divergent prefix is rejected.    |
-| `RunOptions.onHistory` | Observes incremental Prompt updates after in-memory retention. Its own writes are caller-owned. |
-| `toRunThreadOptions`   | Adapts an existing `Thread.Store` snapshot when explicit history hooks are needed.              |
-| Durable runtime hooks  | Own history through the journal and commit each turn for recovery.                              |
-
-Use `InMemory.layer` or `ThreadHistory.layer` as the shared store for `toRunThreadOptions`.
-The helper captures that store while constructing its hooks. Durable hosts supply their own
-journal-based history; their execution does not also append to the in-memory store.
-
-Snapshot updates append only their new suffix. A stale or rewritten prefix fails with
-`ThreadHistoryDiverged`. A limit error records none of that update, while earlier updates
-remain. Custom `onHistory` callbacks own their write guarantees.
-
-Steering enters after a complete model response and tool batch. Follow-up enters only when the
-agent would otherwise stop. Neither changes work already in progress.
-
-<a id="canonical-history"></a>
-
-## Read canonical history
-
-The durable modules in `@yielded/agent` define versioned record schemas and a pure reducer. The thread log
-is append-only. It records user input, completed model output, settled tool calls, compaction, run
-completion or failure, and repairs. Partial tool argument deltas and live queue state are absent.
-
-`PersistentHistory.layer` appends `UserInputRecorded`, `ModelCompleted`, and `RunCompleted` together.
-It opens the latest bounded model-context snapshot; each Run also records its own message
-contribution. Durable execution records each turn and tool result separately and resumes from an
-[active Run checkpoint](/concepts/durability/#run-continuations), its original saved context,
-and bounded exact evidence.
-
-`ThreadStore.read` returns at most 1,024 records per request, and each atomic `CanonicalBatch`
-contains at most 256 records. `streamExport` captures an idle, quiescent Thread as bounded pages.
-Import consumes a completed archive; pending work cannot be transferred. Archive ranges preserve
-record identities and sequence addresses. See the
-[archive and transfer bounds](/guide/operations/#adopting-these-contracts).
-
-<a id="store-contract"></a>
-
-<a id="storage-layers"></a>
-
-## Choose storage
-
-The [Storage guides](/storage/) compare backends and show how to connect each one.
-SQLite, PostgreSQL, and Cloudflare accept fresh layout-25 stores and the current record format.
-Other layouts fail before mutation. See
-[adopting these contracts](/guide/operations/#adopting-these-contracts) for same-format transfer,
-and [Persistence & durability](/concepts/durability/) for execution recovery guarantees.
-
-For a custom adapter, follow the [store contract and certification guide](/guide/certify-adapters/#store-contract).
+`Thread.Store.snapshot` inspects an in-memory conversation; `Thread.toPrompt` turns it into
+an Effect AI Prompt. Durable `ThreadStore` and `ThreadReader` expose journal reads instead.
+Authorize tenant and Thread access at the host boundary for both.

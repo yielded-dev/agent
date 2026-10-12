@@ -13,7 +13,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "Yielded Agent",
-      description: "An agent harness toolkit for TypeScript, built on Effect and Effect AI.",
+      description: "Durable agent Threads for TypeScript, built on Effect and Effect AI.",
       favicon: "/mark.svg",
       lastUpdated: true,
       plugins: [yieldedTheme({ library: "agent" }), starlightLinksValidator()],
@@ -40,91 +40,60 @@ export default defineConfig({
       ],
       sidebar: [
         {
-          label: "Guide",
+          label: "Understand Yielded Agent",
           items: [
-            {
-              label: "Start",
-              items: [
-                { label: "Overview", link: "/guide/" },
-                { label: "Getting started", link: "/guide/getting-started/" },
-                { label: "Migrate from Effect Agent", link: "/guide/migration/" },
-                { label: "What is Yielded Agent?", link: "/guide/introduction/" },
-              ],
-            },
-            {
-              label: "Build agents",
-              items: [
-                { label: "Agent definitions", link: "/guide/agents/" },
-                { label: "Tools & layers", link: "/guide/tools/" },
-                { label: "Run & stream", link: "/guide/run-agents/" },
-                { label: "Threads", link: "/guide/threads/" },
-                { label: "Context management", link: "/guide/context-management/" },
-              ],
-            },
-            {
-              label: "Extensions",
-              items: [
-                {
-                  label: "Subagents",
-                  collapsed: false,
-                  items: [
-                    { label: "Overview", link: "/guide/subagents/" },
-                    { label: "In-memory attached", link: "/guide/subagents/in-memory-attached/" },
-                    { label: "Durable attached", link: "/guide/subagents/durable-attached/" },
-                    { label: "Durable background", link: "/guide/subagents/background/" },
-                  ],
-                },
-                { label: "Agent messaging", link: "/guide/messaging/" },
-                { label: "Effect Workflows", link: "/guide/workflows/" },
-                { label: "Sandbox execution", link: "/guide/sandbox/" },
-                { label: "Code Mode", link: "/guide/code-mode/" },
-                { label: "Browser tools", link: "/guide/browser/" },
-              ],
-            },
-            {
-              label: "Test & operate",
-              items: [
-                { label: "Deterministic testing", link: "/guide/testing/" },
-                { label: "Operations", link: "/guide/operations/" },
-                { label: "Certify storage adapters", link: "/guide/certify-adapters/" },
-              ],
-            },
+            { label: "Overview", link: "/" },
+            { label: "How it works", link: "/concepts/runtime-model/" },
+            { label: "Durability guarantees", link: "/concepts/durability/" },
+            { label: "Where it runs", link: "/platforms/" },
+            { label: "Getting started", link: "/guide/getting-started/" },
           ],
         },
         {
-          label: "Platforms",
+          label: "Build an agent",
           items: [
-            { label: "Overview", link: "/platforms/" },
+            { label: "Guide map", link: "/guide/" },
+            { label: "Agent definitions", link: "/guide/agents/" },
+            { label: "Tools", link: "/guide/tools/" },
+            { label: "Run and stream", link: "/guide/run-agents/" },
+            { label: "Threads", link: "/guide/threads/" },
+            { label: "Context management", link: "/guide/context-management/" },
+            { label: "Budgets and limits", link: "/concepts/budgets/" },
+          ],
+        },
+        {
+          label: "Add capabilities",
+          items: [
+            { label: "Subagents", link: "/guide/subagents/" },
+            { label: "Messaging", link: "/guide/messaging/" },
+            { label: "Effect Workflows", link: "/guide/workflows/" },
+            { label: "Sandbox", link: "/guide/sandbox/" },
+            { label: "Code Mode", link: "/guide/code-mode/" },
+            { label: "Browser tools", link: "/guide/browser/" },
+          ],
+        },
+        {
+          label: "Deploy and operate",
+          items: [
             { label: "Node.js", link: "/platforms/node/" },
             { label: "Cloudflare", link: "/platforms/cloudflare/" },
-          ],
-        },
-        {
-          label: "Storage",
-          items: [
-            { label: "Overview", link: "/storage/" },
+            { label: "Choose storage", link: "/storage/" },
             { label: "In-memory", link: "/storage/memory/" },
             { label: "SQLite", link: "/storage/sqlite/" },
             { label: "PostgreSQL", link: "/storage/postgres/" },
-            { label: "Cloudflare", link: "/storage/cloudflare/" },
-          ],
-        },
-        {
-          label: "Architecture",
-          items: [
-            { label: "Overview", link: "/concepts/" },
-            { label: "The runtime model", link: "/concepts/runtime-model/" },
-            { label: "Budgets & bounded autonomy", link: "/concepts/budgets/" },
-            { label: "Persistence & durability", link: "/concepts/durability/" },
+            { label: "Cloudflare storage", link: "/storage/cloudflare/" },
+            { label: "Testing", link: "/guide/testing/" },
+            { label: "Operations", link: "/guide/operations/" },
           ],
         },
         {
           label: "Reference",
           items: [
-            { label: "Overview", link: "/reference/" },
+            { label: "Reference map", link: "/reference/" },
             { label: "Package map", link: "/reference/packages/" },
             { label: "Decision models", link: "/reference/decision-models/" },
-            { label: "Subagent policies & recovery", link: "/reference/subagents/" },
+            { label: "Subagent options", link: "/reference/subagents/" },
+            { label: "Architecture map", link: "/concepts/" },
           ],
         },
       ],

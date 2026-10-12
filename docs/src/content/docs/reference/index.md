@@ -1,28 +1,19 @@
 ---
 title: Reference
-description: Look up public imports, decision model APIs, and subagent configuration.
+description: Find package ownership, public options, defaults, and deployment limits.
 ---
 
 <a id="reference"></a>
 
-Look up package ownership and detailed configuration after following the
-[guides](/guide/).
+Use these pages when you know which capability you need and want its imports,
+configuration, or limits. Start with the [guides](/guide/) for the learning path,
+and the [runtime model](/concepts/runtime-model/) for Thread and Run ownership.
 
-## Packages and public imports
-
-The [package map](/reference/packages/) covers public imports, available capabilities, dependencies,
-and the responsibilities of each framework package.
-
-## Decision models
-
-The [decision model reference](/reference/decision-models/) covers query options, typed results,
-Jev configuration, probability validation, and errors. Start with the
-[decision guide](/guide/tools/#decision-transitions) to define and evaluate a set of questions.
-
-## Subagent policies and recovery
-
-The [subagent reference](/reference/subagents/) covers input and result mappings, failure handling,
-budgets, permission grants, nested delegation, and background delivery guarantees.
-
-To choose a subagent lifecycle and build your first delegation, start with the
-[subagent overview](/guide/subagents/).
+| Question                                       | Reference                                                        |
+| ---------------------------------------------- | ---------------------------------------------------------------- |
+| Which package owns this capability?            | [Packages and public imports](/reference/packages/)              |
+| How do typed decisions select a model?         | [Decision models](/reference/decision-models/)                   |
+| What authority and budget can a child receive? | [Subagent policies](/reference/subagents/)                       |
+| What limits a Run?                             | [Budgets](/concepts/budgets/)                                    |
+| What does my deployment assemble?              | [Node](/platforms/node/) or [Cloudflare](/platforms/cloudflare/) |
+| What does the database retain?                 | [Storage](/storage/)                                             |

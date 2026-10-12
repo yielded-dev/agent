@@ -1,174 +1,89 @@
 ---
 title: Node.js
-description: Run durable agents on Node.js with SQLite.
+description: Operate a durable agent host with a scoped worker pool and SQLite.
 ---
 
 <a id="node-js"></a>
 
-`@yielded/agent-platform-node` stores thread history and pending work in SQLite.
-A bounded worker pool executes registered agents and recovers work after a restart.
-
-## Install
+The Node host owns a SQLite file and a bounded worker pool for its application
+Scope. It recovers retained work before opening admission, then advances registered
+agents as input arrives. Your process owns the server, credentials, and shutdown.
 
 ```sh
 bun add @yielded/agent-platform-node@beta effect
 ```
 
-Keep framework packages at one release and use compatible [Effect and provider packages](/guide/getting-started/#installation-and-compatibility).
-
 ## Create an agent
 
-Save this as `node-agent.ts`. The model's client reads `OPENAI_API_KEY` from the environment.
-The version declarations identify the agent, model, and tools used by accepted work.
+Define the agent, choose its native Effect model, and supply provider and tool
+Layers. A durable registration also carries explicit agent, model, and tool version
+declarations. Update those declarations when behavior changes.
 
-```ts twoslash title="node-agent.ts" src="snippets/travel-planner/node-agent.ts"
-
-```
+The [runnable Node example](https://github.com/yielded-dev/agent/tree/main/docs/snippets/travel-planner)
+includes `node-agent.ts`, provider configuration, and the process entry point.
+Its provider reads `OPENAI_API_KEY` from the environment.
 
 ## Start the host
 
-Use a persistent database path with one live host per SQLite file. Give each replacement host
-incarnation a distinct `producerId`.
-The automatic host holds SQLite's exclusive connection lock for its entire Scope. Another host
-fails startup, and independent readers cannot access the database while that connection is alive.
-Use a local filesystem with working SQLite locks; do not replace or unlink a live database file.
-New files are initialized in WAL mode; existing files must already use WAL mode.
-The host option `synchronous: "NORMAL"` opts its connection into WAL `NORMAL`; the default
-is `FULL`. `NORMAL` survives process crashes, but power loss or an OS crash can lose
-acknowledged commits and cause external effects to repeat during recovery.
-Thread storage tables allow only the adapter's declared SQLite triggers.
-`workerConcurrency` limits concurrently processed threads and defaults to one.
-The managed host dispatches wake hints through one bounded queue, coalescing repeated hints
-for pending or active threads. A shared periodic ledger scan recovers missed hints.
-The scan stops when the last subscriber leaves and restarts when another subscribes.
-`NodeDurableHost.layer` checks storage, recovers pending work, and starts the worker pool when
-the Layer is acquired. Save this as `node-host.ts`, replacing `producerId` for each process start:
+This example imports that agent setup and acquires one shared host:
 
 ```ts twoslash title="node-host.ts" src="snippets/travel-planner/node-host.ts"
 
 ```
 
-TypeScript infers the registration's model, tool, instruction, and schema service requirements.
-Provide those services to the Layer, as `OpenAiLive` does here. Node supplies Crypto.
+Give each process start a distinct `producerId`. Run `NodeDurableHost.run` with
+`HostLive` provided; the example's `node-main.ts` does this through
+`NodeRuntime.runMain`. `run` observes the existing pool and propagates worker
+failure. When also serving HTTP, supervise the server and `run` together with
+`Effect.raceFirst` so either failure closes the shared Scope.
 
-Save this as `node-main.ts` and run it with Node's TypeScript transform support:
-
-```ts twoslash title="node-main.ts" src="snippets/travel-planner/node-main.ts"
-
-```
-
-```sh
-node --experimental-transform-types node-main.ts
-```
-
-`NodeDurableHost.run` observes the existing pool; calling it again does not start more workers.
-If a worker fails, admission closes and `run` fails with the original typed error or defect.
-`NodeRuntime.runMain` then closes the host. Use `run` rather than `Layer.launch(HostLive)`,
-which does not observe background worker failures. Interrupting only an observer leaves the
-pool running; closing the host's Scope closes admission, stops and joins workers, releases
-ownership, and closes storage and application services.
-
-If the process also serves requests, race the server Effect with `NodeDurableHost.run` using
-`Effect.raceFirst`, and provide the shared `HostLive` to that combined Effect. A worker failure
-then stops the server too. Creating two separate host Layers for the same SQLite file is unsupported.
-
-<a id="workflow"></a>
-
-## Use an Effect Workflow engine
-
-To drive the durable runtime through an injected `WorkflowEngine`, follow the
-[Effect Workflows guide](/guide/workflows/). Its [Node.js setup](/guide/workflows/#node)
-uses SQLite and a single-process Cluster runner.
-
-## Custom runtime composition
-
-Use `NodeDurableAgentRuntime.layerRegistered` when you own execution, as in the
-[Workflow assembly](/guide/workflows/#node). It captures registrations and acquires storage without starting workers.
-`layerWithBindings` accepts precompiled `ResolvedBinding` values whose application Scope you own;
-`layer` constructs an unregistered runtime for explicit admission and execution.
-
-The service class's existing `NodeDurableHost.layerRegistered`, `layerStack`, and `layer`
-constructors remain available for manually managed hosts. Import the class from
-`@yielded/agent-platform-node/node-durable-host` when using these APIs; their workers start only
-when you run `host.runResolvedWorkers`. The module-level `NodeDurableHost.layer` shown above
-owns worker startup and is the default for an application.
-
-Manual assemblies use the same scoped local ownership and exclusive SQLite storage. Share one
-SQL client across their storage Layers; the application owns worker startup, Thread routing and
-owner lifetime. Stop the old runtime before opening a replacement. Ownership has no durable
-claims, leases or distributed takeover.
-
-Registrations carry application version declarations. Update them when behavior changes,
-including tool implementations that JSON cannot represent. Register one current binding per
-stable `agentId`; queued and resumed work uses that binding without requiring historical agent
-or toolbox versions. Accepted inputs and prepared deliveries retain their original identities
-and payloads. `digestDefinitions` computes the digests for explicit submissions;
-`DurableWorkerBinding.make(agent, digests)` accepts precomputed digests.
-
-An unresolved tool effect remains a parked Unknown Outcome with its settlement obligation intact.
-Later input in the same Thread can run without replaying that effect. Approval waits and joined
-input still preserve their ordering barriers, and live ownership prevents another claim. Inspect
-the parked operation through `explainThread`, then use authorized resolution or abort when needed.
+The host holds an exclusive SQLite connection lock, including against independent
+readers. Keep the file on persistent local storage with working SQLite locks.
+Stop the host before opening it with the standalone admin CLI or another connection.
+Existing files must already use WAL mode; fresh files are initialized for you.
 
 ## Configure runtime services
 
-Pass service layers in the options to `NodeDurableHost.layer` or `NodeDurableAgentRuntime.layer`:
+| Option              | Default        | Purpose                               |
+| ------------------- | -------------- | ------------------------------------- |
+| `workerConcurrency` | `1`            | Concurrent workers; accepts 1–64      |
+| `wakeScanInterval`  | `1000` ms      | Fallback scan for missed wake hints   |
+| `synchronous`       | `"FULL"`       | SQLite durability setting             |
+| `runContext`        | Pass-through   | Application prompt preparation        |
+| `toolAuthorization` | Allow all      | Action-time tool policy               |
+| `toolReconciler`    | Keep uncertain | Resolve unconfirmed external outcomes |
 
-| Option              | Service                 | Default                                            |
-| ------------------- | ----------------------- | -------------------------------------------------- |
-| `runContext`        | `RunContextPreparation` | No prompt transform or transient reference context |
-| `toolAuthorization` | `RunToolAuthorization`  | Allow all tool calls                               |
-| `toolReconciler`    | `ToolReconciler`        | Keep unconfirmed tool outcomes unknown             |
+`"NORMAL"` synchronization can lose acknowledged commits after power loss or an OS
+crash, potentially repeating external effects during recovery. Choose it only with
+that tradeoff understood.
 
-Add these options to the host assembly above. Use
-`{ runContext: RunContextLive }` for [prompt preparation](/guide/context-management/),
-or `{ toolAuthorization: SearchOnlyLive }` for a [tool policy](/guide/tools/#authorize-tool-calls).
-Use `{ toolReconciler: SupplierReconcilerLive }` for supplier-backed recovery of unconfirmed tool
-outcomes. Configure these services independently or together.
-
-Select [native compaction](/guide/context-management/#replacing-compaction) by providing its Layer
-directly to the host, for example `HostLive.pipe(Layer.provide(ContextCompactor.layerRollover))`.
-Without an injected `ContextCompactor`, the host uses the default pruning and summarization strategy.
-
-The assembled layer retains each extension's construction errors and application dependencies
-in its error and requirement types. The host supplies `Crypto.Crypto`. Provide the remaining
-dependencies through ordinary `Layer.provide` composition before running the application.
-
-Let `layer` or `layerStack` infer the types from your options. When annotating reusable options,
-`NodeDurableAgentRuntimeOptions<ContextError, ContextRequirements, AuthorizationError, AuthorizationRequirements, ReconcilerError, ReconcilerRequirements>`
-preserves all three layers' construction contracts.
-
-The runtime captures services when the host layer is acquired. Keep their resources alive for
-its Scope. Providing replacements around a later worker call does not change the captured services.
-`toolFailureObserver` configures [recovered tool failure reporting](/guide/run-agents/#observe-recovered-tool-failures).
+Services are captured when the host Layer is acquired. Provide context, tool
+policy, or compactor Layers at that boundary and keep their resources alive for
+its Scope. Authentication and authorization of incoming requests remain yours.
 
 ## Submit and follow work
 
-1. Authenticate the caller and call `host.submit(agent, input, options)`.
-   Supply the thread ID, principal, idempotency key, and definition digests.
-2. Return the receipt after admission.
-3. Await completion with `host.awaitSettlement(receipt)`, or stream records with `host.observe(receipt)`.
+Call `host.submit(agent, input, options)` from an authenticated handler, supplying
+Thread identity, principal, definition digests, and an idempotency key. Return the
+receipt after admission. Retry the same request with the same key; changed input
+under that key conflicts.
 
-Reuse the idempotency key when retrying the same request. Different input under that key fails
-with an admission conflict.
+Use `host.awaitSettlement(receipt)` for the outcome or `host.observe(receipt)` for
+canonical records. An explicit Unknown outcome stays parked for
+[authorized resolution](/guide/operations/); a restart does not authorize replay.
 
 ## Shutdown and recovery
 
-Closing the host's Scope stops admission, joins workers, closes local owner generations, and
-closes SQLite. After abrupt process death, including `SIGKILL`, the operating system releases
-the exclusive connection lock. The replacement acquires that lock, checks storage compatibility,
-and recovers retained work with fresh local generations. Startup, history validation, and provider
-work still take time. The fallback wake scan defaults to once per second.
-Unconfirmed external tool outcomes require reconciliation or authorized resolution before replay.
-Startup recovery must succeed for every Thread before admission or workers open. A retained-history
-fault or recovery timeout fails host construction with `RecoveryBlocked`; accepted work stays pending.
+Closing the Scope stops admission, joins workers, releases live ownership, and
+closes storage. A replacement host opens the file and recovers retained work with
+fresh local owner generations. There are no distributed leases or takeover protocol.
+Use `host.explain`, `host.verify`, and `host.scanObligations` for inspection.
 
-Inspect `host.startupRecovery`, `host.explain`, `host.verify`, and `host.scanObligations`
-for recovery status while the host is running. The managed host exposes `ThreadReader` for
-canonical reads and `MessageDeliveryStore` for independent delivery obligations. Its SQLite
-client, canonical writes, and submission ownership ports are private. Each active Attempt
-owns a scoped storage session, so administrative writes and execution share one authority.
-Application SQL clients and instrumentation stay outside that private storage context.
-Use a manual runtime assembly when composing additional SQL adapters. Stop a managed host before
-using the standalone `admin:durable` CLI or another database reader. See [operations](/guide/operations/)
-for approvals, schedules, and backups.
+<a id="workflow"></a>
+
+## Custom runtime composition
+
+`NodeDurableAgentRuntime.layerRegistered` acquires a registered runtime without
+starting workers. Use it when your application supplies dispatch, including the
+[Effect Workflow assembly](/guide/workflows/#node). For PostgreSQL, compose a
+[custom durable host](/storage/postgres/) around its storage ports.
