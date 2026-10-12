@@ -157,9 +157,17 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
   });
 
   const repairRun = Effect.fnUntraced(function* (threadId: ThreadId, submissionId: SubmissionId) {
-    const history = yield* readRun(threadId, submissionId);
+    const tail = yield* store
+      .inspectTail(ThreadTailRequest.make({ threadId }))
+      .pipe(Effect.mapError(storage));
 
-    for (const { record } of history.records) {
+    const records = yield* readRunEvidenceSnapshot(threadId, submissionId, tail.tailSequence).pipe(
+      Effect.provideService(ThreadReader, reader),
+      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.mapError(storage),
+    );
+
+    for (const { record } of records) {
       if (record.payload._tag === "AgentUpdateEmitted" && record.payload.delivery !== undefined)
         yield* insert(record.payload);
     }
