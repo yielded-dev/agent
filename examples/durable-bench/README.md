@@ -327,6 +327,8 @@ Yielded submit/await/alarm or native run roles, a text invocation for every targ
 observer, and any fallback record read issued by the driver. The requirements do not depend
 on emitted markers or which text source wins a race; an unknown read plan is incomplete.
 Every acknowledged marker must also be present.
+Text-stream cancellation or disconnection counts only when the measured turn succeeded
+and the invocation has finite CPU.
 Missing, truncated or ambiguous records invalidate the Object pair; missing CPU is never
 zero. The paired report compares whole-Object medians with Object-level bootstrap 95% CIs.
 These are observed invocation totals, not billing totals or sampled CPU profiles (`--profile cpu`).

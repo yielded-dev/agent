@@ -285,7 +285,8 @@ export const sampleCpu = (result: Result) => {
           Number.isFinite(row.cpuMs) &&
           row.cpuMs >= 0 &&
           (row.outcome === "ok" ||
-            (row.kind === "text" && ["canceled", "aborted"].includes(row.outcome))),
+            (row.kind === "text" &&
+              ["canceled", "aborted", "responseStreamDisconnected"].includes(row.outcome))),
       );
 
     return {

@@ -2,7 +2,7 @@ import { builtinModules } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Effect, FileSystem, Schema, Semaphore } from "effect";
+import { Effect, FileSystem, Schedule, Schema, Semaphore } from "effect";
 import { ChildProcess } from "effect/process";
 import { build as bundle, type Plugin } from "esbuild";
 
@@ -12,6 +12,7 @@ import {
   execute,
   git,
   hash,
+  prefixLock,
   read,
   redact,
   repository,
@@ -44,31 +45,46 @@ const dependenciesFor = Effect.fnUntraced(function* (revision: string) {
     return yield* new BenchError({ message: "Ref has no Effect catalog version." });
   if (lock === harnessLock) return { root: repository, expectedEffect };
 
+  const lockHash = hash(lock);
+
   const root = join(
     tmpdir(),
     "durable-bench-dependencies",
     hash(repository).slice(0, 12),
-    hash(lock),
+    lockHash,
   );
+
+  const lockName = "durable-bench-dependencies-" + hash(root);
 
   yield* dependencyLock.withPermit(
     Effect.gen(function* () {
+      // Controllers with different deployment prefixes can share this cache.
+      yield* prefixLock(lockName);
       if (!(yield* fs.exists(join(root, ".git")))) {
         yield* fs.makeDirectory(join(root, ".."), { recursive: true });
         yield* git(["worktree", "add", "--detach", root, revision]);
       }
       const receipt = join(root, "node_modules", ".bench-frozen-install");
 
-      if (!(yield* fs.exists(receipt))) {
+      if (!(yield* fs.exists(receipt)) || (yield* fs.readFileString(receipt)) !== lockHash) {
         const installed = yield* execute(["install", "--frozen-lockfile"], root);
 
         if (installed.code !== 0)
           return yield* new BenchError({
             message: `Dependency install failed: ${redact(installed.output).slice(-3000)}`,
           });
-        yield* fs.writeFileString(receipt, hash(lock));
+        yield* fs.writeFileString(receipt + ".tmp", lockHash, { mode: 0o600 });
+        yield* fs.rename(receipt + ".tmp", receipt);
       }
-    }),
+    }).pipe(
+      Effect.scoped,
+      Effect.retry({
+        schedule: Schedule.spaced("1 second").pipe(Schedule.jittered),
+        while: (error) =>
+          error._tag === "BenchError" &&
+          error.message === `Another controller owns the ${lockName} prefix.`,
+      }),
+    ),
   );
 
   return { root, expectedEffect };
