@@ -1,5 +1,12 @@
 # @yielded/agent-testing
 
+## 0.1.0-beta.169
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @yielded/agent@0.1.0-beta.169
+
 ## 0.1.0-beta.168
 
 ### Minor Changes

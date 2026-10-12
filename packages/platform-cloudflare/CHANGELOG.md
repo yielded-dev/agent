@@ -1,5 +1,15 @@
 # @yielded/agent-platform-cloudflare
 
+## 0.1.0-beta.169
+
+### Patch Changes
+
+- [#870](https://github.com/yielded-dev/agent/pull/870) [`34ecb24`](https://github.com/yielded-dev/agent/commit/34ecb2498bcaee926ec3d6a44d3f210cb21888a8) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Observe and operate closed shadow-root controls and nested frames through the native browser's existing guarded references.
+- Updated dependencies []:
+  - @yielded/agent@0.1.0-beta.169
+  - @yielded/agent-storage-cloudflare@0.1.0-beta.169
+  - @yielded/agent-storage-sql@0.1.0-beta.169
+
 ## 0.1.0-beta.168
 
 ### Minor Changes
