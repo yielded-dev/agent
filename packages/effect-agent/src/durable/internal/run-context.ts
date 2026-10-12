@@ -27,9 +27,10 @@ const decodePromptRecord = Schema.decodeUnknownEffect(PromptRecord);
 const promptTags = new Set<string>(PROMPT_EVIDENCE_TAGS);
 
 const projectHistoryRecord = (
-  entry: CanonicalRecordEnvelope,
+  entry: JournalRecordEnvelope,
   ownerRunId: RunContextRecorded["runId"],
 ): Effect.Effect<JournalRecordEnvelope> => {
+  if (!("batchId" in entry)) return Effect.succeed(entry);
   const payload = entry.record.payload;
 
   if (("runId" in payload && payload.runId === ownerRunId) || !promptTags.has(payload._tag))
@@ -81,7 +82,7 @@ type ProjectedRunHistory = Pick<
   "prompt" | "historyFrom" | "contextWindowId" | "boundaries"
 >;
 
-/** Keep full canonical facts within projection so history hashing retains only its result. */
+/** Reconstruct the exact saved range using the owner's history validation boundary. */
 const readProjectedHistory = Effect.fnUntraced(function* (
   context: RunContextRecorded,
   original: CanonicalRecordEnvelope,
@@ -113,8 +114,9 @@ const readProjectedHistory = Effect.fnUntraced(function* (
     const page = yield* reader
       .read({
         threadId: original.threadId,
-        selection: { _tag: "PromptEvidence", throughSequence: context.historyThrough },
-        page: { afterSequence: after, limit: 8 },
+        throughSequence: context.historyThrough,
+        afterSequence: after,
+        limit: 8,
       })
       .pipe(Stream.take(9), Stream.runCollect);
 
@@ -167,7 +169,7 @@ const readProjectedHistory = Effect.fnUntraced(function* (
   };
 });
 
-/** Cold recovery and explicit verify use full reads; fresh admission uses the narrow history port. */
+/** Both readers preserve the exact saved context and historyDigest. */
 export const readRunContext = Effect.fnUntraced(function* (
   context: RunContextRecorded,
   original: CanonicalRecordEnvelope,
