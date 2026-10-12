@@ -2,7 +2,7 @@ import { Receipt } from "@yielded/agent/receipt";
 import { Settlement } from "@yielded/agent/submission-ledger";
 import { Schema } from "effect";
 
-export const TARGETS = ["yielded", "pi", "tardie"] as const;
+export const TARGETS = ["yielded", "pi", "tardie", "effect-ai-floor"] as const;
 export const Target = Schema.Literals(TARGETS);
 export type Target = typeof Target.Type;
 export const History = Schema.Int.check(Schema.isGreaterThan(0));
@@ -25,7 +25,7 @@ export type Query = typeof Query.Type;
 export const measurementPaths = (target: Target): ReadonlyArray<string> =>
   target === "yielded"
     ? ["/text", "/submit", "/await", "/result", "/prime", "/metrics"]
-    : target === "pi"
+    : target !== "tardie"
       ? ["/text", "/run", "/prime", "/metrics"]
       : ["/run", "/prime", "/metrics"];
 
@@ -43,7 +43,7 @@ export const RouteReadiness = Schema.Struct({
 
 export const ProfileTarget = Schema.Struct({
   actorId: Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/)),
-  binding: Schema.Literals(["YIELDED", "PI", "THREADS"]),
+  binding: Schema.Literals(["YIELDED", "PI", "THREADS", "FLOOR"]),
   versionId: Schema.NonEmptyString,
   build: Schema.NonEmptyString,
 });
@@ -70,7 +70,7 @@ export const readQuery = (url: URL): Query =>
 export const TextObservation = Schema.Union([
   Schema.TaggedStruct("Ready", {}),
   Schema.TaggedStruct("Text", {
-    // Yielded's Receipt submissionId, or the pi sample on its exclusively observed idle conversation.
+    // Yielded's Receipt submissionId, or the sample on an exclusively observed idle conversation.
     input: Schema.NonEmptyString,
     text: Schema.NonEmptyString,
   }),
@@ -271,6 +271,7 @@ export const Metrics = Schema.Struct({
   directoryUsed: Schema.optionalKey(Schema.Boolean),
   calls: Schema.Array(ProviderCall),
   phases: Schema.optionalKey(ObjectPhases),
+  cpuInvocationIds: Schema.optionalKey(Schema.Array(Schema.String)),
   tables: Counts,
   bytes: Schema.Natural,
   directoryBytes: Schema.optionalKey(Schema.Natural),

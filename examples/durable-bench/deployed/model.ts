@@ -59,6 +59,9 @@ export const Options = Schema.Struct({
 export type Options = typeof Options.Type;
 
 export const Invocation = Schema.Struct({
+  invocationId: Schema.optionalKey(Schema.String),
+  invocationIds: Schema.optionalKey(Schema.Array(Schema.String)),
+  kinds: Schema.optionalKey(Schema.Array(Schema.String)),
   kind: Schema.String,
   invocationType: Schema.optionalKey(Schema.String),
   outcome: Schema.String,
@@ -71,7 +74,13 @@ export const Invocation = Schema.Struct({
 
 export type Invocation = typeof Invocation.Type;
 
-export const FirstTextSource = Schema.Literals(["watchText", "watchEvents", "settlementRecord"]);
+export const FirstTextSource = Schema.Literals([
+  "watchText",
+  "watchEvents",
+  "nativeStream",
+  "settlementRecord",
+]);
+
 export type FirstTextSource = typeof FirstTextSource.Type;
 
 export const WorkerBuild = Schema.Struct({ bundle: Schema.String, build: Schema.String });
@@ -88,8 +97,11 @@ export const Sample = Schema.Struct({
   status: Schema.Literals(["running", "ok", "failed", "invalidated"]),
   driverMs: Schema.optionalKey(Schema.Number),
   firstTextMs: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+  observerToCompletionMs: Schema.optionalKey(Schema.Number),
+  observerToFirstTextMs: Schema.optionalKey(Schema.Number),
   firstText: Schema.optionalKey(Schema.String),
   firstTextSource: Schema.optionalKey(FirstTextSource),
+  settlementRecordRead: Schema.optionalKey(Schema.Boolean),
   observationMs: Schema.optionalKey(Schema.NullOr(Schema.Number)),
   constructorAndProbeMs: Schema.optionalKey(Schema.Number),
   primeMs: Schema.optionalKey(Schema.Number),
@@ -98,6 +110,7 @@ export const Sample = Schema.Struct({
   objectToFirstModelMs: Schema.optionalKey(Schema.Number),
   providerCalls: Schema.optionalKey(Schema.Array(ProviderCall)),
   objectPhases: Schema.optionalKey(ObjectPhases),
+  cpuInvocationIds: Schema.optionalKey(Schema.Array(Schema.String)),
   providerFirstTokenMs: Schema.optionalKey(Schema.Number),
   firstTextForwardedMs: Schema.optionalKey(Schema.Number),
   settlementMs: Schema.optionalKey(Schema.Number),
@@ -126,6 +139,7 @@ export const Cleanup = Schema.Struct({
   verified: Schema.Boolean,
   workers: Schema.Array(Schema.String),
   namespaces: Schema.Array(Schema.String),
+  buckets: Schema.Array(Schema.String),
 });
 
 export type Cleanup = typeof Cleanup.Type;
@@ -229,7 +243,6 @@ export const Result = Schema.Struct({
   failures: Schema.Array(Schema.String),
   profiles: Schema.Array(Profile),
   cpu: Schema.optionalKey(Schema.Array(Invocation)),
-  unmatchedCpuMarkers: Schema.optionalKey(Schema.Natural),
   cleanup: Schema.optionalKey(Cleanup),
   kept: Schema.Boolean,
   workerPool: Schema.optionalKey(Schema.String),
@@ -266,8 +279,11 @@ export const MeasureResponse = Schema.Struct({
   driverMs: Schema.Number,
   observedMs: Schema.Number,
   firstTextMs: Schema.NullOr(Schema.Number),
+  observerToCompletionMs: Schema.optionalKey(Schema.Number),
+  observerToFirstTextMs: Schema.optionalKey(Schema.Number),
   firstText: Schema.optionalKey(Schema.String),
   firstTextSource: Schema.optionalKey(FirstTextSource),
+  settlementRecordRead: Schema.Boolean,
   observationMs: Schema.NullOr(Schema.Number),
   constructorAndProbeMs: Schema.Number,
   primeMs: Schema.Number,

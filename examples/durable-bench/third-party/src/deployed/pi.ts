@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { TEXT_OUTPUT_INSTRUCTIONS } from "../../../deployed/text.ts";
 
 import { payload, type Turn } from "../../../src/plan.ts";
 import { BACKGROUND_CONTEXT as context, withCancel } from "../../node_modules/@earendil-works/chord/dist/context/index.js";
@@ -26,8 +27,6 @@ import { openDurableObjectSqliteStorage } from "../../node_modules/@earendil-wor
 import { Host } from "../../../deployed/worker/host.ts";
 import { type Observation } from "../../../deployed/worker/observe.ts";
 import { readQuery, type Env, type Query, type TextObservation } from "../../../deployed/worker/protocol.ts";
-
-const SYSTEM = "You are a benchmark agent. Call lookup as instructed, then answer briefly.";
 
 const messageText = (message: Message | undefined): string =>
   message?.role === "assistant"
@@ -109,7 +108,13 @@ function modelCollection(env: Env, meter: Observation) {
 const lookup = defineTool({
   name: "lookup",
   description: "Look up record number n",
-  parameters: Type.Object({ n: Type.Number() }),
+  parameters: Type.Object({
+    n: Type.Integer({
+      minimum: Number.MIN_SAFE_INTEGER,
+      maximum: Number.MAX_SAFE_INTEGER,
+    }),
+  }),
+  replay: "safe",
   execute: async ({ n }) => ({ content: [{ type: "text", text: payload(n) }] }),
 });
 
@@ -132,7 +137,7 @@ export class PiDO extends DurableObject<Env> {
       defineExtension({
         name: "bench",
         tools: [lookup],
-        sections: [section("preamble", () => SYSTEM, { tag: false })],
+        sections: [section("preamble", () => TEXT_OUTPUT_INSTRUCTIONS, { tag: false })],
       }),
     );
 
@@ -164,6 +169,7 @@ export class PiDO extends DurableObject<Env> {
     const query = readQuery(new URL(request.url));
 
     this.host.meter.assertBuild(query);
+    this.host.meter.marker("text", query);
     const { harness, root } = await this.open();
     const observer = withCancel(context);
     const watch = await watchEvents(harness, root.id, observer.context);

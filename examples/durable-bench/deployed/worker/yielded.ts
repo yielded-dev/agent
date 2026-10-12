@@ -3,7 +3,6 @@ import { BrowserCrypto } from "@effect/platform-browser";
 import { ThreadObject } from "@yielded/agent-platform-cloudflare";
 import {
   HostResponse,
-  LiveTextFrame,
   SubmitRequest,
 } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import * as Agent from "@yielded/agent/agent";
@@ -18,11 +17,12 @@ import { Model, Tool, Toolkit } from "effect/ai";
 import { FetchHttpClient } from "effect/http";
 
 import { payload, type Turn } from "../../src/plan.ts";
+import { INSTRUCTIONS } from "../text.ts";
 import { Host } from "./host.ts";
 import { observation } from "./observe.ts";
 import { type Env, type Query } from "./protocol.ts";
 
-const tools = Toolkit.make(
+export const tools = Toolkit.make(
   Tool.make("lookup", {
     description: "Look up record number n",
     parameters: Schema.Struct({ n: Schema.Int }),
@@ -34,7 +34,7 @@ const definition = Agent.make("bench", {
   input: Schema.String,
   inputPrompt: (input) => input,
   output: text(Schema.String),
-  instructions: "You are a benchmark agent. Call lookup as instructed, then answer briefly.",
+  instructions: INSTRUCTIONS,
   toolkit: tools,
   policy: { maxTurns: 40, maxToolCalls: 32, maxDuration: "2 minutes", toolConcurrency: 1 },
 });
@@ -133,37 +133,18 @@ export class YieldedDO extends ThreadObject.make(application, {
 
     return response;
   }
-  override async watchTextEncoded(encoded: unknown, ...trace: [] | [unknown]): Promise<unknown> {
-    const stream = await super.watchTextEncoded(encoded, ...trace);
+  override awaitSettlementRecordEncoded(
+    encoded: unknown,
+    ...trace: [] | [unknown]
+  ): Promise<unknown> {
+    this.host.meter.marker("result");
 
-    if (!(stream instanceof ReadableStream)) return stream;
-    const meter = this.host.meter;
-    const decoder = new TextDecoder();
-    let pending = "";
+    return super.awaitSettlementRecordEncoded(encoded, ...trace);
+  }
+  async benchWatchText(encoded: unknown, query: Query): Promise<unknown> {
+    this.host.meter.marker("text", query);
 
-    return stream.pipeThrough(
-      new TransformStream<Uint8Array, Uint8Array>({
-        transform(bytes, controller) {
-          pending += decoder.decode(bytes, { stream: true });
-          const lines = pending.split("\n");
-
-          pending = lines.pop() ?? "";
-          for (const line of lines) {
-            if (!line) continue;
-            const frame = Schema.decodeUnknownSync(Schema.fromJsonString(LiveTextFrame))(line);
-
-            if (
-              frame._tag === "Event" &&
-              frame.event._tag === "Text" &&
-              frame.event.part.type === "text-delta" &&
-              frame.event.part.delta.trim()
-            )
-              meter.forwardText(frame.event.submissionId);
-          }
-          controller.enqueue(bytes);
-        },
-      }),
-    );
+    return this.watchTextEncoded(encoded);
   }
   override async alarm(...args: Parameters<ThreadObject.Instance["alarm"]>): Promise<void> {
     this.host.meter.alarm();

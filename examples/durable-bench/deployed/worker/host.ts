@@ -7,6 +7,7 @@ import { attach, type Observation } from "./observe.ts";
 import {
   errorText,
   readQuery,
+  ProfileTarget,
   SeedBatch,
   SeedProgress,
   SeedResult,
@@ -57,6 +58,25 @@ export class Host {
 
     if (query.target !== this.target) throw new Error("Target mismatch");
     if (url.pathname === "/identity") return Response.json(this.meter.identity());
+    if (url.pathname === "/profile-target") {
+      this.meter.assertBuild(query);
+
+      return Response.json(
+        Schema.decodeUnknownSync(ProfileTarget)({
+          actorId: this.ctx.id.toString(),
+          binding:
+            this.target === "yielded"
+              ? "YIELDED"
+              : this.target === "pi"
+                ? "PI"
+                : this.target === "effect-ai-floor"
+                  ? "FLOOR"
+                  : "THREADS",
+          versionId: this.env.VERSION?.id,
+          build: this.env.BUILD,
+        }),
+      );
+    }
     if (url.pathname === "/cold") {
       await handlers.close?.();
       await this.ctx.storage.sync();
@@ -230,6 +250,7 @@ export class Host {
             : { directoryUsed: handlers.directoryUsed }),
           calls: this.meter.calls,
           phases: this.meter.phases(),
+          cpuInvocationIds: this.meter.cpuInvocations?.get(query.sample),
           tables: tables(this.ctx.storage.sql),
           bytes: this.ctx.storage.sql.databaseSize,
         });

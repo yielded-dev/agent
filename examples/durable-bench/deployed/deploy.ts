@@ -99,7 +99,7 @@ export const deployments = Effect.gen(function* () {
 
   const alchemy = Effect.fnUntraced(
     function* (stack: Stack, action: "deploy" | "destroy", force = false) {
-      if (action === "deploy" && stack.kind === "target") {
+      if (action === "deploy") {
         // Coordinate headroom checks and allocation across this machine's bench prefixes.
         yield* prefixLock("durable-bench-account-" + hash(cloud.accountId).slice(0, 16)).pipe(
           Effect.tapError((error) =>
@@ -110,7 +110,10 @@ export const deployments = Effect.gen(function* () {
               : Effect.void,
           ),
         );
-        const headroom = yield* cloud.namespaceHeadroom(stack.workers ?? [stack.name]);
+
+        const headroom = yield* cloud.namespaceHeadroom(
+          stack.kind === "target" ? (stack.workers ?? [stack.name]) : [],
+        );
 
         yield* Console.error(
           `Namespace headroom: ${headroom.existing} existing, ${headroom.additional} additional, ${headroom.free} free after deployment.`,
@@ -223,6 +226,9 @@ export const deployments = Effect.gen(function* () {
       [
         ready(driver, revision, false, "driver"),
         ready(url(state.infrastructurePrefix + "-provider"), revision, true, "provider"),
+        ...(state.infrastructure?.cpu
+          ? [ready(url(state.infrastructurePrefix + "-cpu"), revision, false, "CPU collector")]
+          : []),
       ],
       { concurrency: 2, discard: true },
     );
@@ -256,14 +262,16 @@ export const deployments = Effect.gen(function* () {
     return state.infrastructure.build;
   });
 
-  const infrastructure = Effect.gen(function* () {
+  const infrastructure = Effect.fnUntraced(function* (cpu: boolean) {
     const output = join(privateDirectory, "infrastructure");
     const driverBuild = yield* build(output, "driver");
     const providerBuild = yield* build(output, "provider");
+    const tailBuild = cpu ? yield* build(output, "tail") : undefined;
 
     const revision = hash(
       driverBuild.sha256 +
         providerBuild.sha256 +
+        (tailBuild?.sha256 ?? "") +
         hash(yield* fs.readFile(join(directory, "stack.ts"))),
     );
 
@@ -274,7 +282,7 @@ export const deployments = Effect.gen(function* () {
       kind: "infrastructure",
       bundle: output,
       build: revision,
-      cpu: false,
+      cpu,
     };
 
     if (!reused) {
@@ -456,7 +464,7 @@ export const deployments = Effect.gen(function* () {
 
   const verifyCleanup = Effect.fnUntraced(function* (name?: string) {
     for (let attempt = 0; attempt < 30; attempt++) {
-      const remaining = yield* cloud.resources(name);
+      const remaining = yield* cloud.resources(name, state.infrastructure?.cpu ?? false);
 
       if (remaining.verified || attempt === 29) return remaining;
       yield* Effect.sleep("2 seconds");
@@ -504,6 +512,7 @@ export const deployments = Effect.gen(function* () {
   return {
     token: state.token,
     driver,
+    tail: url(state.infrastructurePrefix + "-cpu"),
     infrastructure,
     infrastructureBuild,
     target,

@@ -112,7 +112,9 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
   const fixtures: BulkFixture[] = [];
   const chunks = new Map<string, string[]>();
 
-  for (const target of options.targets ?? ["yielded"]) {
+  for (const target of (options.targets ?? ["yielded"]).filter(
+    (target) => target !== "effect-ai-floor",
+  )) {
     for (const history of options.sizes) {
       const name: string = `${target}-${history}`;
       const natural = options.directory === undefined && history === 1000 && target !== "tardie";
@@ -362,6 +364,25 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
       chunks.set(name, paths);
     }
   }
+
+  if (options.targets?.includes("effect-ai-floor"))
+    for (const history of options.sizes) {
+      const reference = fixtures.find(
+        (fixture) => fixture.target === "yielded" && fixture.history === history,
+      );
+
+      if (!reference)
+        return yield* new FixtureError({
+          message: "The floor comparison needs a Yielded reference fixture",
+        });
+      fixtures.push({
+        ...reference,
+        target: "effect-ai-floor",
+        tables: {},
+        thread: { tables: [], indexes: [] },
+      });
+      chunks.set(`effect-ai-floor-${history}`, []);
+    }
 
   return { fixtures, chunks, formatKey };
 });

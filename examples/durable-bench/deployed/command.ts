@@ -46,7 +46,9 @@ export const command = Command.make(
     ),
     targets: Flag.String("targets").pipe(
       Flag.optional,
-      Flag.withDescription("Comma-separated targets (quick/full: yielded; build-history: all)"),
+      Flag.withDescription(
+        "Targets: yielded, pi, tardie; opt into effect-ai-floor for a warm native AI comparison",
+      ),
     ),
     sizes: Flag.String("sizes").pipe(
       Flag.optional,
@@ -86,7 +88,9 @@ export const command = Command.make(
     ),
     cpu: Flag.Boolean("cpu").pipe(
       Flag.withDefault(false),
-      Flag.withDescription("Enable invocation logs and query Cloudflare CPU telemetry"),
+      Flag.withDescription(
+        "Collect per-turn Object CPU through a Tail Worker and temporary R2 bucket",
+      ),
     ),
     profile: Flag.String("profile").pipe(
       Flag.mapTryCatch(
@@ -110,7 +114,7 @@ export const command = Command.make(
     ),
     rigorous: Flag.Boolean("rigorous").pipe(
       Flag.withDefault(false),
-      Flag.withDescription("Alias for --preset full: cold + CPU + same-Object balanced A/B"),
+      Flag.withDescription("Alias for --preset full: cold + same-Object balanced A/B"),
     ),
     baseline: Flag.String("baseline").pipe(Flag.optional),
     candidate: Flag.String("candidate").pipe(Flag.optional),
@@ -162,6 +166,17 @@ export const command = Command.make(
 
     if (!flags.buildHistory && !targets.includes("yielded"))
       return yield* new BenchError({ message: "Paired A/B requires the yielded target." });
+
+    if (
+      targets.includes("effect-ai-floor") &&
+      (flags.buildHistory ||
+        flags.verifyIncarnationRecovery ||
+        !Option.getOrElse(flags.restoreEachPass, () => sizes.every((size) => size <= 1000)))
+    )
+      return yield* new BenchError({
+        message:
+          "effect-ai-floor requires snapshot comparison with --restore-each-pass and cannot build or recover durable history.",
+      });
 
     if (
       flags.verifyIncarnationRecovery &&
@@ -234,7 +249,7 @@ export const command = Command.make(
       concurrency,
       buildConcurrency,
       cold: true,
-      cpu: flags.cpu || rigorous,
+      cpu: flags.cpu,
       profiles,
       ...(profileAfter === undefined ? {} : { profileAfter }),
       keep: flags.keep,

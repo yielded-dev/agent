@@ -290,11 +290,12 @@ export default {
             type Visible = { atMs: number; text: string; source: FirstTextSource };
             const first = yield* Deferred.make<Visible, ObservationError>();
             const visible = new Map<string, Visible>();
-            let input: string | undefined = query.target === "pi" ? query.sample : undefined;
+            let input: string | undefined = query.target !== "yielded" ? query.sample : undefined;
             let observationMs: number | null = null;
+            let observerOpenedMs: number | undefined;
 
             if (observeText && query.target !== "tardie") {
-              const opening = yield* Clock.currentTimeMillis;
+              observerOpenedMs = yield* Clock.currentTimeMillis;
               const response = yield* attempt(() => invoke("/text"));
               const body = response.body;
 
@@ -325,7 +326,12 @@ export default {
                     const seen: Visible = visible.get(frame.input) ?? {
                       atMs: yield* Clock.currentTimeMillis,
                       text: frame.text,
-                      source: query.target === "yielded" ? "watchText" : "watchEvents",
+                      source:
+                        query.target === "yielded"
+                          ? "watchText"
+                          : query.target === "effect-ai-floor"
+                            ? "nativeStream"
+                            : "watchEvents",
                     };
 
                     visible.set(frame.input, seen);
@@ -345,13 +351,14 @@ export default {
                 Effect.forkScoped,
               );
               yield* Deferred.await(ready);
-              observationMs = (yield* Clock.currentTimeMillis) - opening;
+              observationMs = (yield* Clock.currentTimeMillis) - observerOpenedMs;
             }
 
             const startedMs = yield* Clock.currentTimeMillis;
             const metricStartMs = startedMs - constructorAndProbeMs;
             let admissionMs: number | undefined;
             let receipt: SubmitResult["receipt"] | undefined;
+            let settlementRecordRead = false;
 
             if (query.target === "yielded") {
               const admission = yield* attempt(async () =>
@@ -386,6 +393,9 @@ export default {
 
             // Overflow can replace an instant reply with an empty draft snapshot after settlement.
             if (observeText && receipt !== undefined && !(yield* Deferred.isDone(first))) {
+              // Text may arrive during this read; its source cannot prove the RPC was skipped.
+              settlementRecordRead = true;
+
               const result = yield* attempt(async () =>
                 Schema.decodeUnknownSync(SettledTextResult)(
                   await (await invoke("/result", receipt)).json(),
@@ -431,6 +441,15 @@ export default {
               firstTextMs: text === undefined ? null : text.atMs - metricStartMs,
               ...(text === undefined ? {} : { firstText: text.text, firstTextSource: text.source }),
               observationMs,
+              settlementRecordRead,
+              ...(observerOpenedMs === undefined
+                ? {}
+                : {
+                    observerToCompletionMs: observedMs - observerOpenedMs,
+                    ...(text === undefined
+                      ? {}
+                      : { observerToFirstTextMs: text.atMs - observerOpenedMs }),
+                  }),
               constructorAndProbeMs,
               primeMs,
               ...(primed === undefined ? {} : { primed: primed.identity }),

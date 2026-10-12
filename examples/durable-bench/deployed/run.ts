@@ -26,7 +26,6 @@ import {
 } from "../src/plan.ts";
 import { build, ensureVendor } from "./build.ts";
 import { Cloudflare, request, requestEvents } from "./cloudflare.ts";
-import { cpu } from "./cpu.ts";
 import { deployments } from "./deploy.ts";
 import { fixtureFormat, prepareFixtures } from "./fixtures.ts";
 import {
@@ -50,7 +49,8 @@ import {
   workspace,
 } from "./platform.ts";
 import { prepareProfile, profileBatches } from "./profile.ts";
-import { median, table } from "./report.ts";
+import { median, sampleCpu, table } from "./report.ts";
+import { tailCpu } from "./tail-cpu.ts";
 import { PREAMBLE, responseText } from "./text.ts";
 import {
   ColdResult,
@@ -200,13 +200,11 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     phaseName = next;
   });
 
-  let targetStarted = false;
   let targetWorkers: readonly string[] = [runName];
   const targetOwners = new Map<string, Pick<Query, "target" | "object">>();
-  let telemetryFrom = started;
 
   yield* Console.error(
-    `Account: ${cloud.accountName}. Preparing ${options.buildHistory ? "deployed history builds" : "fixtures"}…`,
+    `Preparing ${options.buildHistory ? "deployed history builds" : "fixtures"}…`,
   );
   yield* update((value) => value);
 
@@ -240,33 +238,63 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           ),
         };
       }
-      if (options.cpu && targetStarted) {
+      if (
+        options.cpu &&
+        result.samples.some(
+          (sample) =>
+            sample.status === "ok" && (sample.state === "cold" || sample.state === "warm"),
+        )
+      ) {
         yield* Console.error("Collecting optional invocation CPU…");
         yield* Effect.sleep("15 seconds");
-        const upper = yield* Clock.currentTimeMillis;
 
-        yield* Effect.forEach(
-          targetWorkers,
-          (worker) => cpu(worker, telemetryFrom, upper, targetOwners.get(worker)),
-          {
-            concurrency: 3,
-          },
-        ).pipe(
-          Effect.matchCauseEffect({
-            onFailure: (cause) =>
-              Effect.sync(() => {
-                result = { ...result, failures: [...result.failures, message(cause)] };
-              }),
-            onSuccess: (data) =>
-              Effect.sync(() => {
-                result = {
-                  ...result,
-                  cpu: data.flatMap((item) => item.invocations),
-                  unmatchedCpuMarkers: data.reduce((sum, item) => sum + item.unmatchedMarkers, 0),
-                };
-              }),
-          }),
-        );
+        let completeCpu = false;
+
+        for (let attempt = 0; attempt < 6; attempt++) {
+          yield* Effect.forEach(
+            targetWorkers,
+            (worker) => {
+              const owner = targetOwners.get(worker);
+
+              return owner === undefined
+                ? Effect.fail(new BenchError({ message: "CPU worker has no Object owner" }))
+                : tailCpu(deploy.tail, deploy.token, owner.object, owner.target);
+            },
+            {
+              concurrency: 3,
+            },
+          ).pipe(
+            Effect.matchCauseEffect({
+              onFailure: (cause) =>
+                Effect.sync(() => {
+                  result = { ...result, failures: [...result.failures, message(cause)] };
+                }),
+              onSuccess: (data) =>
+                Effect.sync(() => {
+                  result = {
+                    ...result,
+                    cpu: data.flat(),
+                  };
+                }),
+            }),
+          );
+          const samples = sampleCpu(result);
+
+          completeCpu = samples.length > 0 && samples.every((sample) => sample.cpuMs !== undefined);
+          if (completeCpu) break;
+          if (attempt < 5) {
+            yield* Console.error("Waiting for complete Tail invocation CPU…");
+            yield* Effect.sleep("15 seconds");
+          }
+        }
+        if (!completeCpu)
+          result = {
+            ...result,
+            failures: [
+              ...result.failures,
+              "Tail CPU attribution is incomplete; refusing partial pairs",
+            ],
+          };
       }
       yield* phase("teardown");
       if (!options.keep && !preserved && !persistent) {
@@ -438,7 +466,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     }));
     yield* phase("infrastructure");
     if (!resumed) {
-      const reused = yield* deploy.infrastructure;
+      const reused = yield* deploy.infrastructure(options.cpu);
       const infrastructureBuild = yield* deploy.infrastructureBuild();
 
       yield* update((value) => ({ ...value, infrastructureReused: reused, infrastructureBuild }));
@@ -680,9 +708,6 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           ),
         );
       };
-
-      telemetryFrom = Math.min(telemetryFrom, yield* Clock.currentTimeMillis);
-      targetStarted = true;
 
       yield* phase("deploy");
 
@@ -1434,7 +1459,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             for (let index = 0; index < turnsPerEpoch; index++) {
               const firstAfterReset =
                 index === 0 ||
-                (!options.buildHistory && (index === 1 || index === turnsPerEpoch - 1));
+                (!options.buildHistory &&
+                  cohort.target !== "effect-ai-floor" &&
+                  (index === 1 || index === turnsPerEpoch - 1));
 
               if (profiling && index === turnsPerEpoch - 1) {
                 warmWorkEnded = true;
@@ -1452,9 +1479,12 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
               const state =
                 !options.buildHistory && index === 0
                   ? "preparation"
-                  : firstAfterReset
-                    ? "cold"
-                    : "warm";
+                  : cohort.target === "effect-ai-floor" &&
+                      (index === 1 || index === turnsPerEpoch - 1)
+                    ? "warmup"
+                    : firstAfterReset
+                      ? "cold"
+                      : "warm";
 
               const sample: Sample = {
                 ...query,
@@ -1651,6 +1681,13 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                             ? {}
                             : { firstTextSource: measured.value.firstTextSource }),
                           observationMs: measured.value.observationMs,
+                          settlementRecordRead: measured.value.settlementRecordRead,
+                          ...(measured.value.observerToCompletionMs === undefined
+                            ? {}
+                            : { observerToCompletionMs: measured.value.observerToCompletionMs }),
+                          ...(measured.value.observerToFirstTextMs === undefined
+                            ? {}
+                            : { observerToFirstTextMs: measured.value.observerToFirstTextMs }),
                           constructorAndProbeMs: measured.value.constructorAndProbeMs,
                           primeMs: measured.value.primeMs,
                           bytes: metrics.bytes,
@@ -1684,6 +1721,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                             ? {}
                             : { directoryUsed: metrics.directoryUsed }),
                           providerCalls: metrics.calls,
+                          ...(metrics.cpuInvocationIds === undefined
+                            ? {}
+                            : { cpuInvocationIds: metrics.cpuInvocationIds }),
                           ...(metrics.phases === undefined ? {} : { objectPhases: metrics.phases }),
                           ...(metrics.calls[0]?.firstTokenMs === undefined
                             ? {}
@@ -1723,6 +1763,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             }
             // Joining and writing profiles are outside the driver's per-turn timer.
             if (profiling) yield* Fiber.join(profiling);
+            // The final metrics are quiescent. Retire native observers that outlive
+            // remote stream cancellation before collecting their completed Tail events.
+            if (options.cpu) yield* resetForBuild(cohort);
           }).pipe(
             Effect.scoped,
             (batch) => (profiled ? withProfileBatch(batch) : batch),
@@ -1820,6 +1863,6 @@ export const teardown = Effect.gen(function* () {
 
   yield* save(join(workspace, "results", "cleanup.json"), result);
   yield* Console.log(
-    `Cleanup verified in ${cloud.accountName}: no ${cloud.prefix} Workers or Durable Object namespaces remain.`,
+    `Cleanup verified: no ${cloud.prefix} Workers, Durable Object namespaces or CPU buckets remain.`,
   );
 }).pipe(Effect.scoped);

@@ -1,7 +1,8 @@
 import { builtinModules } from "node:module";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Effect, FileSystem, Schema } from "effect";
+import { Effect, FileSystem, Schema, Semaphore } from "effect";
 import { ChildProcess } from "effect/process";
 import { build as bundle, type Plugin } from "esbuild";
 
@@ -14,19 +15,74 @@ import {
   read,
   redact,
   repository,
+  save,
   workspace,
 } from "./platform.ts";
 
 const Package = Schema.Struct({ name: Schema.String });
+const Catalog = Schema.Struct({ catalog: Schema.Record(Schema.String, Schema.String) });
+
+const SourceMap = Schema.Struct({
+  sources: Schema.Array(Schema.String),
+});
+
+const dependencyLock = Semaphore.makeUnsafe(1);
+
+// Reuse an installation only when the ref's complete lockfile matches.
+const dependenciesFor = Effect.fnUntraced(function* (revision: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const lock = yield* git(["show", `${revision}:bun.lock`]);
+  const harnessLock = (yield* fs.readFileString(join(repository, "bun.lock"))).trim();
+
+  const catalog = yield* Schema.decodeEffect(Schema.fromJsonString(Catalog))(
+    yield* git(["show", `${revision}:package.json`]),
+  );
+
+  const expectedEffect = catalog.catalog.effect;
+
+  if (!expectedEffect)
+    return yield* new BenchError({ message: "Ref has no Effect catalog version." });
+  if (lock === harnessLock) return { root: repository, expectedEffect };
+
+  const root = join(
+    tmpdir(),
+    "durable-bench-dependencies",
+    hash(repository).slice(0, 12),
+    hash(lock),
+  );
+
+  yield* dependencyLock.withPermit(
+    Effect.gen(function* () {
+      if (!(yield* fs.exists(join(root, ".git")))) {
+        yield* fs.makeDirectory(join(root, ".."), { recursive: true });
+        yield* git(["worktree", "add", "--detach", root, revision]);
+      }
+      const receipt = join(root, "node_modules", ".bench-frozen-install");
+
+      if (!(yield* fs.exists(receipt))) {
+        const installed = yield* execute(["install", "--frozen-lockfile"], root);
+
+        if (installed.code !== 0)
+          return yield* new BenchError({
+            message: `Dependency install failed: ${redact(installed.output).slice(-3000)}`,
+          });
+        yield* fs.writeFileString(receipt, hash(lock));
+      }
+    }),
+  );
+
+  return { root, expectedEffect };
+});
 
 const entries = {
   driver: "driver.ts",
   provider: "provider.ts",
+  tail: "tail.ts",
   target: "../third-party/src/deployed/index.ts",
   restore: "worker/restore-worker.ts",
 };
 
-/** A ref supplies framework sources; both builds use this checkout's harness and pinned dependencies. */
+/** A ref supplies framework sources and, when its lock differs, its frozen dependencies. */
 export const build = Effect.fnUntraced(function* (
   output: string,
   entry: keyof typeof entries,
@@ -35,11 +91,17 @@ export const build = Effect.fnUntraced(function* (
   const fs = yield* FileSystem.FileSystem;
   let revision = yield* git(["rev-parse", "HEAD"]);
   let sourceRoot: string | undefined;
+  let dependencyRoot = repository;
+  let expectedEffect: string | undefined;
   const packages = new Set<string>();
 
   yield* fs.makeDirectory(output, { recursive: true, mode: 0o700 });
   if (ref) {
     revision = yield* git(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`]);
+    const dependencies = yield* dependenciesFor(revision);
+
+    dependencyRoot = dependencies.root;
+    expectedEffect = dependencies.expectedEffect;
     sourceRoot = join(output, "source");
     yield* fs.makeDirectory(sourceRoot, { recursive: true, mode: 0o700 });
 
@@ -55,8 +117,8 @@ export const build = Effect.fnUntraced(function* (
       return yield* new BenchError({
         message: "Could not unpack the requested framework revision.",
       });
-    // Framework links override workspace links; all third-party packages retain the installed catalog versions.
-    yield* fs.symlink(join(repository, "node_modules"), join(output, "node_modules"));
+    // Framework links override workspace links; dependencies come from this revision's lockfile.
+    yield* fs.symlink(join(dependencyRoot, "node_modules"), join(output, "node_modules"));
     for (const name of yield* fs.readDirectory(join(sourceRoot, "packages"))) {
       const packageRoot = join(sourceRoot, "packages", name);
 
@@ -66,7 +128,7 @@ export const build = Effect.fnUntraced(function* (
 
       yield* fs.makeDirectory(join(link, ".."), { recursive: true });
       yield* fs.symlink(packageRoot, link);
-      const dependencies = join(repository, "packages", name, "node_modules");
+      const dependencies = join(dependencyRoot, "packages", name, "node_modules");
 
       if (yield* fs.exists(dependencies))
         yield* fs.symlink(dependencies, join(packageRoot, "node_modules"));
@@ -78,18 +140,54 @@ export const build = Effect.fnUntraced(function* (
   const resolver: Plugin = {
     name: "durable-bench-dependencies",
     setup(bundler) {
-      bundler.onResolve({ filter: /^[^./]/ }, (args) => {
+      bundler.onResolve({ filter: /.*/ }, async (args) => {
+        // Tardie has an intentionally isolated pre-release Effect graph. Do not upgrade it.
+        if (
+          args.importer.startsWith(join(workspace, "third-party/node_modules")) ||
+          args.importer === join(workspace, "third-party/src/deployed/tardie.ts")
+        )
+          return;
+
+        const relativeShared =
+          /(?:^|\/)node_modules\/(effect|@effect\/[^/]+)\/dist\/(.+)\.js$/.exec(args.path);
+
+        const specifier = relativeShared
+          ? relativeShared[1] + (relativeShared[2] === "index" ? "" : "/" + relativeShared[2])
+          : args.path;
+
         const localPackage = [...packages].some(
-          (name) => args.path === name || args.path.startsWith(name + "/"),
+          (name) => specifier === name || specifier.startsWith(name + "/"),
         );
 
-        if (args.pluginData?.resolved || !refRoot || !localPackage) return;
+        const sharedEffect =
+          specifier === "effect" ||
+          specifier.startsWith("effect/") ||
+          specifier.startsWith("@effect/") ||
+          specifier === "effect-cf" ||
+          specifier.startsWith("effect-cf/");
 
-        return bundler.resolve(args.path, {
-          resolveDir: refRoot,
-          kind: args.kind,
-          pluginData: { resolved: true },
-        });
+        if (args.pluginData?.resolved || !refRoot || (!localPackage && !sharedEffect)) return;
+
+        const roots = localPackage
+          ? [refRoot]
+          : [
+              join(dependencyRoot, "examples/durable-bench"),
+              join(dependencyRoot, "packages/platform-cloudflare"),
+              join(dependencyRoot, "packages/effect-agent"),
+              dependencyRoot,
+            ];
+
+        for (const resolveDir of roots) {
+          const result = await bundler.resolve(specifier, {
+            resolveDir,
+            kind: args.kind,
+            pluginData: { resolved: true },
+          });
+
+          if (result.errors.length === 0) return result;
+        }
+
+        return { errors: [{ text: `Cannot resolve ${args.path} in revision dependencies` }] };
       });
     },
   };
@@ -120,6 +218,50 @@ export const build = Effect.fnUntraced(function* (
         message: `Cannot build ${entry}${ref ? " at the requested ref" : ""}: ${redact(cause instanceof Error ? cause.message : "Unknown build error").slice(0, 2000)}`,
       }),
   });
+
+  if (expectedEffect !== undefined && (entry === "target" || entry === "restore")) {
+    const map = yield* read(outfile + ".map", SourceMap);
+
+    const versions = [
+      ...new Set(
+        map.sources.flatMap((source) => {
+          const match = /\/effect@([^/]+)\/node_modules\/effect\//.exec(source);
+
+          return match ? [match[1]] : [];
+        }),
+      ),
+    ];
+
+    const frameworkRoots = [
+      ...new Set(
+        map.sources
+          .filter((source) => /\/effect@[^/]+\/node_modules\/effect\//.test(source))
+          .map((source) => source.split("/node_modules/effect/")[0]),
+      ),
+    ];
+
+    const isolatedVendorEffect = map.sources.some((source) =>
+      source.includes("/third-party/node_modules/effect/"),
+    )
+      ? (yield* read(
+          join(workspace, "third-party/node_modules/effect/package.json"),
+          Schema.Struct({ version: Schema.String }),
+        )).version
+      : undefined;
+
+    if (frameworkRoots.length !== 1 || versions.length !== 1 || versions[0] !== expectedEffect)
+      return yield* new BenchError({
+        message: `Effect bundle mismatch: expected ${expectedEffect}, found ${versions.join(",")}.`,
+      });
+    yield* save(outfile + ".dependencies.json", {
+      revision,
+      expectedEffect,
+      versions,
+      frameworkRoots,
+      isolatedVendorEffect,
+      dependencyRoot,
+    });
+  }
 
   return { file: outfile, revision, sha256: hash(yield* fs.readFile(outfile)) };
 }, Effect.scoped);
