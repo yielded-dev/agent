@@ -196,27 +196,22 @@ const makeWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
           Effect.gen(function* () {
             yield* checkActive;
             for (let retries = 0; ; retries++) {
-              const result = yield* store
-                .append(
-                  AppendRequest.make({
-                    ...captured,
-                    expectedTailSequence: tail.sequence,
-                  }),
-                )
-                .pipe(
-                  Effect.catchTag("AppendConflict", (conflict) => {
-                    if (
-                      conflict.reason !== "tail" ||
-                      conflict.actualTailSequence === undefined ||
-                      retries >= 8
-                    )
-                      return Effect.fail(conflict);
-                    tail = { sequence: conflict.actualTailSequence };
-                    if (captured.executions !== undefined) return Effect.fail(conflict);
+              const request = yield* PreparedAppend.withExpectedTail(captured, tail.sequence);
 
-                    return Effect.succeed(undefined);
-                  }),
-                );
+              const result = yield* store.append(request).pipe(
+                Effect.catchTag("AppendConflict", (conflict) => {
+                  if (
+                    conflict.reason !== "tail" ||
+                    conflict.actualTailSequence === undefined ||
+                    retries >= 8
+                  )
+                    return Effect.fail(conflict);
+                  tail = { sequence: conflict.actualTailSequence };
+                  if (captured.executions !== undefined) return Effect.fail(conflict);
+
+                  return Effect.succeed(undefined);
+                }),
+              );
 
               if (result === undefined) continue;
               // A historical replay returns its original coordinates, not today's canonical tail.
@@ -398,10 +393,10 @@ export const make = Effect.gen(function* () {
                               SettlementPublication.make({
                                 submissionId: claimed.submissionId,
                                 authority: { _tag: "Owned" },
-                                append: AppendRequest.make({
-                                  ...captured,
-                                  expectedTailSequence: (yield* writer.tail).sequence,
-                                }),
+                                append: yield* PreparedAppend.withExpectedTail(
+                                  captured,
+                                  (yield* writer.tail).sequence,
+                                ),
                               }),
                             )
                             .pipe(

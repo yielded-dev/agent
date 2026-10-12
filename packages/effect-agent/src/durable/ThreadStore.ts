@@ -553,6 +553,37 @@ export const PreparedAppend = {
               }),
       });
     }),
+  /**
+   * Retain an owned append body while checking a newly observed CAS tail. Ordinary
+   * requests are captured first; only this module's identity-proven capture is reused.
+   * Neither capture nor changing the tail grants mutation or execution authority.
+   */
+  withExpectedTail: Effect.fnUntraced(function* (
+    input: AppendRequest,
+    expectedTailSequence: CanonicalSequence,
+  ): Effect.fn.Return<PreparedAppend, ThreadStoreError> {
+    const captured = yield* PreparedAppend.capture(input);
+
+    if (captured.expectedTailSequence === expectedTailSequence) return captured;
+
+    const request = AppendRequest.make({ ...captured, expectedTailSequence });
+
+    if (request.executions !== undefined) Object.freeze(request.executions);
+
+    const reheadered = Object.freeze(
+      Object.assign(request, {
+        batchJson: captured.batchJson,
+        batchBytes: captured.batchBytes,
+        records: captured.records,
+        progress: captured.progress,
+        executionWrites: captured.executionWrites,
+      }),
+    );
+
+    capturedAppends.set(reheadered, reheadered);
+
+    return reheadered;
+  }),
 };
 
 export class AppendResult extends Schema.Class<AppendResult>("@effect-agent/thread/AppendResult")({
