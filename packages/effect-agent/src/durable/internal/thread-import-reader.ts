@@ -46,7 +46,22 @@ export class ThreadImportReader extends Context.Service<
   /** Bind context reconstruction to this same captured transaction. */
   static layer(reader: ThreadImportReader["Service"]) {
     return Layer.succeedContext(
-      Context.make(ThreadImportReader, reader).pipe(Context.add(RunContextReader, reader)),
+      Context.make(ThreadImportReader, reader).pipe(
+        Context.add(RunContextReader, {
+          record: reader.record,
+          read: (request) =>
+            reader.read({
+              threadId: request.threadId,
+              selection: { _tag: "PromptEvidence", throughSequence: request.throughSequence },
+              page: {
+                limit: request.limit,
+                ...(request.afterSequence === undefined
+                  ? {}
+                  : { afterSequence: request.afterSequence }),
+              },
+            }),
+        }),
+      ),
     );
   }
 }

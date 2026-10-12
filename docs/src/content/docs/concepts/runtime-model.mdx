@@ -117,6 +117,10 @@ updated with new facts and removed at settlement. Open tool outcomes and deliver
 can outlive that Run and retain their own state. Conversation projections and lookup indexes
 are rebuildable views.
 
+Recovery reconstructs saved model context from prompt-relevant history, checking its
+`historyDigest` and validating current Run evidence in full. Explicit verification also
+validates historical fields omitted from the prompt view.
+
 Compaction changes what the model sees. Archiving changes where old records live. Neither
 resolves uncertain effects or gives a Run fresh budget. There is no lifetime record cap on the
 durable log; individual Runs, payloads, and live work remain bounded. Without compaction,
