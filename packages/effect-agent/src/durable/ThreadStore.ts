@@ -474,7 +474,7 @@ export const PreparedAppend = {
 
           const batchBytes = encodings.reduce(
             (total, record) => total + record.bytes,
-            utf8ByteLength(prefix) + encodings.length + 1,
+            utf8ByteLength(prefix) + (encodings.length === 0 ? 2 : encodings.length + 1),
           );
 
           if (batchBytes > MAX_CANONICAL_BATCH_BYTES)
