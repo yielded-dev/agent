@@ -1,6 +1,6 @@
 import { type ThreadId } from "@yielded/agent/identifiers";
 import { Publisher, type Event } from "@yielded/agent/provisional-text";
-import { Cause, Context, Effect, Exit, Layer, Queue, Schema, Scope, Stream } from "effect";
+import { Cause, Context, Effect, Exit, Fiber, Layer, Queue, Schema, Scope, Stream } from "effect";
 import * as Response from "effect/ai/Response";
 
 import { HostProtocolError } from "../CloudflareThreadClient.ts";
@@ -235,17 +235,39 @@ export class LiveTextHub extends Context.Service<
           return bytes;
         });
 
-        const frames = Stream.fromEffectRepeat(Queue.take(queue)).pipe(
-          Stream.flatMap((event) =>
-            observer.snapshot || event === undefined
-              ? Stream.fromIterable(snapshot(), { chunkSize: 1 }).pipe(
-                  Stream.takeWhile(() => !observer.snapshot),
-                )
-              : Stream.succeed(frame(event)),
-          ),
-          Stream.mapEffect(toBytes),
-          Stream.ensuring(close),
-        );
+        const frames = Stream.fromPull(
+          Effect.withFiber((fiber) => {
+            // The native ReadableStream bridge can wait on consumer demand outside
+            // the queue. Its fiber belongs to the owner, not the child it closes.
+            Fiber.runIn(fiber, owner);
+            let pending: Generator<Frame> | undefined;
+            const take = Queue.take(queue);
+
+            return Effect.succeed(
+              Effect.gen(function* () {
+                for (;;) {
+                  if (pending !== undefined) {
+                    const next = pending.next();
+
+                    if (!next.done && !observer.snapshot) return [yield* toBytes(next.value)];
+                    pending = undefined;
+                  }
+
+                  // Keep one frame per pull: the ReadableStream bridge prefetches chunks,
+                  // so batching here would delay overflow resets behind buffered frames.
+                  const event = yield* take;
+
+                  if (observer.snapshot || event === undefined) {
+                    pending = snapshot();
+                    continue;
+                  }
+
+                  return [yield* toBytes(frame(event))];
+                }
+              }),
+            );
+          }),
+        ).pipe(Stream.ensuring(close));
 
         return yield* Stream.toReadableStreamEffect(frames);
       });
