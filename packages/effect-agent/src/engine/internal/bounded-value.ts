@@ -139,6 +139,10 @@ const isCanonicalArrayIndex = (key: string): boolean => {
  * This memory-retention guard does not replace Schema validation or ownership capture. Callers
  * also use it before copying provider values. Reflection can trigger Proxy traps because
  * JavaScript offers no portable, trap-free Proxy test.
+ * Native ArrayBuffer and URL storage is measured only for their exact built-in prototypes.
+ * Plain and caller-approved prototypes promise own-property state; native objects deliberately
+ * disguised with those prototypes are outside this guard's contract. Parsed model JSON cannot
+ * construct such values; application and provider code must preserve native prototypes.
  * Object and property overheads deliberately make the estimate larger than the visible primitive
  * payload for ordinary response values.
  */
@@ -214,25 +218,17 @@ export const boundedValueFootprint = (
           skipIndexedProperties = true;
           supportedSpecialObject = true;
         }
-        // A changed prototype does not remove intrinsic storage. Probe the brand before
-        // allowing plain-object traversal, or hidden backing bytes could bypass the limit.
-        if (!supportedSpecialObject) {
+        if (prototype === ArrayBuffer.prototype) {
           const bufferByteLength = intrinsicArrayBufferByteLength(value);
 
-          if (bufferByteLength !== undefined) {
-            if (prototype !== ArrayBuffer.prototype) return false;
-            if (!add(bufferByteLength)) return false;
-            supportedSpecialObject = true;
-          }
+          if (bufferByteLength === undefined || !add(bufferByteLength)) return false;
+          supportedSpecialObject = true;
         }
-        if (!supportedSpecialObject) {
+        if (urlPrototype !== undefined && prototype === urlPrototype) {
           const urlByteLength = intrinsicUrlByteLength(value);
 
-          if (urlByteLength !== undefined) {
-            if (prototype !== urlPrototype) return false;
-            if (!add(urlByteLength)) return false;
-            supportedSpecialObject = true;
-          }
+          if (urlByteLength === undefined || !add(urlByteLength)) return false;
+          supportedSpecialObject = true;
         }
         let redactedValue: unknown;
         let isRedacted = false;
