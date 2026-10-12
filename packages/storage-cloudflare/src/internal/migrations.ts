@@ -1,5 +1,8 @@
 import { backfillPeerMessageRetention } from "@yielded/agent-storage-sql/sql-message-delivery-store";
-import { SQL_PROMPT_PREDICATE } from "@yielded/agent-storage-sql/sql-thread-native-reads";
+import {
+  SQL_PROMPT_PREDICATE,
+  upgradeExecutionCheckpoints,
+} from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
@@ -13,7 +16,7 @@ import {
   DoStorageError,
 } from "../DoStorageError.ts";
 
-export const CurrentDoStorageVersion = 26;
+export const CurrentDoStorageVersion = 27;
 
 /** Fresh layout only. Unsupported stores are rejected before these statements execute. */
 const layoutStatements = [
@@ -134,7 +137,7 @@ const inspection = (version: number, statements: ReadonlyArray<string>) =>
       }),
   });
 
-// Only the released predecessor is eligible; its record format and canonical tables are unchanged.
+// Released predecessors retain the same record format and canonical tables.
 const addedIndexes = new Set(["effect_agent_message_deliveries_peer_retained"]);
 
 const layout25Statements = layoutObjects(layoutStatements)
@@ -149,7 +152,8 @@ const layout25Statements = layoutObjects(layoutStatements)
   );
 
 const { decode, readObjects, readHeader } = inspection(CurrentDoStorageVersion, layoutStatements);
-const predecessor = inspection(25, layout25Statements);
+const layout25 = inspection(25, layout25Statements);
+const layout26 = inspection(26, layoutStatements);
 
 const inspectStorage = Effect.fnUntraced(function* (
   allowUpgrade = false,
@@ -180,9 +184,10 @@ const inspectStorage = Effect.fnUntraced(function* (
 
   const version = legacy.value;
 
-  if (allowUpgrade && version === 25) {
-    if (objects.some(({ name }) => addedIndexes.has(name)))
+  if (allowUpgrade && (version === 25 || version === 26)) {
+    if (version === 25 && objects.some(({ name }) => addedIndexes.has(name)))
       return yield* incompatible(version, "Mixed layout 25 and 26 objects.");
+    const predecessor = version === 25 ? layout25 : layout26;
     const header = yield* predecessor.readHeader(objects, version);
 
     yield* predecessor.readManagedTriggers(true);
@@ -203,7 +208,7 @@ export const readDoStorageHeader = Effect.fnUntraced(function* () {
   return header;
 });
 
-/** Initialize fresh storage or atomically upgrade the exact released layout 25. */
+/** Initialize fresh storage or atomically upgrade the exact released layouts 25 and 26. */
 export const ensureDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
@@ -227,6 +232,17 @@ export const ensureDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(fun
           for (const [, name, index] of layoutObjects(layoutStatements))
             if (addedIndexes.has(name) || name === "effect_agent_message_deliveries_peer")
               yield* sql.unsafe(layoutStatements[index]).withoutTransform;
+        }
+        if (header?.layoutVersion === 25 || header?.layoutVersion === 26) {
+          yield* upgradeExecutionCheckpoints(undefined).pipe(
+            Effect.catchTag("ThreadStoreError", (cause) =>
+              DoStorageCorruptionError.make({
+                table: "effect_agent_executions",
+                rowKey: "upgrade",
+                message: `Invalid retained execution; upgrade rolled back: ${cause.message}`,
+              }),
+            ),
+          );
           yield* sql`UPDATE effect_agent_schema SET layout_version=${CurrentDoStorageVersion} WHERE singleton=1`;
           yield* sql`UPDATE effect_agent_meta SET value=${String(CurrentDoStorageVersion)} WHERE key='storage_version'`;
 

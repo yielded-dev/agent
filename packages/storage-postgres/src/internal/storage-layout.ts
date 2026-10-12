@@ -1,7 +1,10 @@
 import { RECORD_TAGS } from "@yielded/agent-storage-sql/sql-canonical-storage";
 import { backfillPeerMessageRetention } from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import { makeSqlQuery, SqlInteger } from "@yielded/agent-storage-sql/sql-storage";
-import { SQL_PROMPT_PREDICATE } from "@yielded/agent-storage-sql/sql-thread-native-reads";
+import {
+  SQL_PROMPT_PREDICATE,
+  upgradeExecutionCheckpoints,
+} from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { CURRENT_RECORD_FORMAT, PROMPT_EVIDENCE_TAGS } from "@yielded/agent/records";
 import { Effect, Schema } from "effect";
@@ -14,7 +17,7 @@ import {
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 26;
+export const CurrentPostgresStorageVersion = 27;
 
 /** The released layout 25 already has observe_settlement; only these indexes are new. */
 const layout26IndexStatements = {
@@ -64,7 +67,7 @@ const liveChildTriggers = [
   },
 ] as const;
 
-/** Fresh layout. The sole supported predecessor takes the additive step below. */
+/** Fresh layout. Released predecessors take the ordered steps below. */
 const layoutStatements = [
   'CREATE TABLE __NAMESPACE__."effect_agent_storage_version" ( id BOOLEAN PRIMARY KEY NOT NULL, version BIGINT NOT NULL, CONSTRAINT effect_agent_storage_version_single_row CHECK (id) )',
   'CREATE TABLE __NAMESPACE__."effect_agent_threads" ( thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, created_at TEXT COLLATE "C", tail_sequence BIGINT NOT NULL, work_version BIGINT NOT NULL DEFAULT 3, work_state TEXT COLLATE "C" NOT NULL DEFAULT \'ready\', work_through_sequence BIGINT NOT NULL DEFAULT 0, work_reporting BIGINT NOT NULL DEFAULT 0, work_entry_count BIGINT NOT NULL DEFAULT 0, worker_input_sequence BIGINT, worker_settlement_sequence BIGINT )',
@@ -1110,7 +1113,7 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (
 
   if (
     legacy.version !== CurrentPostgresStorageVersion &&
-    !(allowReleasedUpgrade && legacy.version === 25)
+    !(allowReleasedUpgrade && (legacy.version === 25 || legacy.version === 26))
   )
     return yield* incompatible(legacy.version, `Unsupported storage version ${legacy.version}.`);
   if (schemaTable?.kind !== "r")
@@ -1372,7 +1375,7 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (
     JOIN pg_proc p ON p.oid=t.tgfoid JOIN pg_namespace pn ON pn.oid=p.pronamespace
     WHERE n.nspname=${namespace} AND (
       starts_with(t.tgname, 'effect_agent_live_child_') OR (
-        ${legacy.version === 25} AND NOT t.tgisinternal
+        ${legacy.version === 25 || legacy.version === 26} AND NOT t.tgisinternal
         AND c.relname IN ${sql.in(Object.keys(expectedShape))}
       )
     )`),
@@ -1424,23 +1427,34 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
 
   if (header !== undefined) {
     if (header.layoutVersion === CurrentPostgresStorageVersion) return header;
-    if (header.layoutVersion !== 25)
+    if (header.layoutVersion !== 25 && header.layoutVersion !== 26)
       return yield* incompatible(header.layoutVersion, "Unsupported layout upgrade.");
 
-    yield* execute(
-      sql`ALTER TABLE ${table("effect_agent_message_deliveries")} ADD COLUMN peer_retained_until_millis BIGINT`,
-    );
-    yield* backfillPeerMessageRetention(namespace).pipe(
-      Effect.catchTag("MessageDeliveryError", (cause) =>
+    if (header.layoutVersion === 25) {
+      yield* execute(
+        sql`ALTER TABLE ${table("effect_agent_message_deliveries")} ADD COLUMN peer_retained_until_millis BIGINT`,
+      );
+      yield* backfillPeerMessageRetention(namespace).pipe(
+        Effect.catchTag("MessageDeliveryError", (cause) =>
+          PostgresStorageCorruptionError.make({
+            table: "effect_agent_message_deliveries",
+            rowKey: "layout-25-upgrade",
+            message: `Invalid retained delivery during layout upgrade: ${cause.operation}.`,
+          }),
+        ),
+      );
+      for (const statement of Object.values(layout26IndexStatements))
+        yield* sql.unsafe(qualify(statement, namespace)).withoutTransform;
+    }
+    yield* upgradeExecutionCheckpoints(namespace).pipe(
+      Effect.catchTag("ThreadStoreError", (cause) =>
         PostgresStorageCorruptionError.make({
-          table: "effect_agent_message_deliveries",
-          rowKey: "layout-25-upgrade",
-          message: `Invalid retained delivery during layout upgrade: ${cause.operation}.`,
+          table: "effect_agent_executions",
+          rowKey: "upgrade",
+          message: `Invalid retained execution; upgrade rolled back: ${cause.message}`,
         }),
       ),
     );
-    for (const statement of Object.values(layout26IndexStatements))
-      yield* sql.unsafe(qualify(statement, namespace)).withoutTransform;
     yield* execute(
       sql`UPDATE ${table("effect_agent_storage_version")} SET version=${CurrentPostgresStorageVersion} WHERE id=TRUE`,
     );

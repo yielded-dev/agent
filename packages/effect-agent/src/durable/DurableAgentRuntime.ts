@@ -167,8 +167,10 @@ import { makeMessagingRuntime } from "./internal/messaging-host.ts";
 import {
   digestPromptHistory,
   makePromptHistoryCache,
+  makeCommittedPromptSuffix,
   preparePromptHistory,
   type CachedPromptHistory,
+  type CommittedPromptSuffix,
   type PromptHistory,
 } from "./internal/prompt-history-cache.ts";
 import { RunContextReader } from "./internal/run-context-reader.ts";
@@ -8164,7 +8166,54 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           Effect.provideService(Crypto.Crypto, crypto),
         );
 
-      session = yield* withProgressSession(session);
+      // withProgressSession exposes only progress.commit/publish. Their prepare step owns and
+      // freezes each canonical fact before reaching this raw writer. Snapshot the private array
+      // before suspension; only acknowledged ranges enter this Attempt's disposable suffix.
+      let committedPromptSuffix: CommittedPromptSuffix | undefined;
+      const storageSession = session;
+
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          committedPromptSuffix?.discard();
+          committedPromptSuffix = undefined;
+        }),
+      );
+      session = yield* withProgressSession({
+        ...storageSession,
+        append: (batch, executions) => {
+          const suffix = committedPromptSuffix;
+          const append = storageSession.append(batch, executions);
+
+          if (suffix === undefined) return append;
+          const facts = batch.records.slice();
+
+          return append.pipe(
+            Effect.tap((result) => Effect.sync(() => suffix.append(facts, result))),
+            Effect.tapCause(() => Effect.sync(() => suffix.discard())),
+          );
+        },
+        publishSettlement: (batch, executions) => {
+          const suffix = committedPromptSuffix;
+          const publish = storageSession.publishSettlement(batch, executions);
+
+          if (suffix === undefined) return publish;
+
+          return publish.pipe(
+            Effect.tap((result) =>
+              Effect.sync(() =>
+                // Publication returns the winning fact after progress amended historyRecordCount.
+                // Any extra retained facts or a replay fail the collector's consecutive range check.
+                suffix.append([result.record], {
+                  firstSequence: result.tailSequence,
+                  lastSequence: result.tailSequence,
+                  replayed: result.replayed,
+                }),
+              ),
+            ),
+            Effect.tapCause(() => Effect.sync(() => suffix.discard())),
+          );
+        },
+      });
       const { claim, threadId } = session;
       const submissionId = claim.submissionId;
 
@@ -8635,6 +8684,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           );
         }
 
+        committedPromptSuffix?.discard();
+        committedPromptSuffix = initialJournal?.cacheable
+          ? makeCommittedPromptSuffix(initialJournal.original)
+          : undefined;
+
         const outcome = yield* runModel(
           agent,
           ctx,
@@ -8818,6 +8872,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               { threadId: session.threadId },
               initialJournal.original,
               initialJournal.history,
+              committedPromptSuffix,
             )
             .pipe(
               Effect.provideService(CurrentRunWriter, session),

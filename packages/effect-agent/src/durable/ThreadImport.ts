@@ -18,7 +18,6 @@ import {
   CURRENT_RECORD_FORMAT,
   RecordEnvelope,
   RecordJson,
-  RunContinuation,
   SubtreeBudgetReserved,
 } from "./Records.ts";
 import {
@@ -325,8 +324,6 @@ export const validateImportedExecution = Effect.fnUntraced(function* (
     admission === undefined ||
     admission.threadId !== threadId ||
     runIdForSubmission(admission.submissionId) !== progress.runId ||
-    checkpoint.progressRecord.payload._tag !== "RunContinuation" ||
-    !Schema.toEquivalence(RunContinuation)(checkpoint.progressRecord.payload, progress) ||
     checkpoint.progressRecord.recordId !==
       JSON.stringify(["continuation@1", progress.runId, checkpoint.batchId]) ||
     checkpoint.throughSequence > tailSequence ||

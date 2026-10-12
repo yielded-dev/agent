@@ -29,7 +29,7 @@ import {
   ProducerId,
   RecordId,
   RecordEnvelope,
-  RunContinuation,
+  type RunContinuation,
 } from "./Records.ts";
 import { subagentLineageRecordId, workerOriginRecordId } from "./RunJournal.ts";
 import { ScheduleInstant } from "./Schedule.ts";
@@ -278,14 +278,22 @@ export class ThreadMaterialization extends Schema.Class<ThreadMaterialization>(
   threadId: ThreadId,
 }) {}
 
-/** Current interpreter state, not an append-only history record or a disposable projection. */
+const isExecutionProgressRecord = (
+  record: RecordEnvelope,
+): record is RecordEnvelope & { readonly payload: RunContinuation } =>
+  record.payload._tag === "RunContinuation";
+
+const ExecutionProgressRecord = RecordEnvelope.pipe(
+  Schema.refine(isExecutionProgressRecord, { message: "Expected a Run continuation record" }),
+);
+
+/** Current interpreter state. Wire version 2 retains one copy of its continuation. */
 export class ExecutionCheckpoint extends Schema.Class<ExecutionCheckpoint>(
   "@effect-agent/thread/ExecutionCheckpoint",
 )({
-  version: Schema.Literal(1),
-  progress: RunContinuation,
+  version: Schema.Literal(2),
   /** Logical progress encoding is charged while active; previous revisions are discarded. */
-  progressRecord: RecordEnvelope,
+  progressRecord: ExecutionProgressRecord,
   /** Original start, evaluated context and validated completion intent while the Run is active. */
   operational: Schema.Array(RecordEnvelope).check(Schema.isMaxLength(8)),
   canonicalRecords: Schema.Natural,
@@ -293,7 +301,12 @@ export class ExecutionCheckpoint extends Schema.Class<ExecutionCheckpoint>(
   originalSequence: CanonicalSequence.check(Schema.isGreaterThan(0)),
   throughSequence: CanonicalSequence,
   batchId: BatchId,
-}) {}
+}) {
+  /** View of the retained payload, not a second encoded field. */
+  get progress(): RunContinuation {
+    return this.progressRecord.payload;
+  }
+}
 
 /** A revision-checked transition committed by the same owner as the retained history facts. */
 export class ExecutionUpdate extends Schema.Class<ExecutionUpdate>(

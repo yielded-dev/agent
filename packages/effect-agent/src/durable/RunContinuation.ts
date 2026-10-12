@@ -113,6 +113,11 @@ const failure = (message: string, cause?: unknown) =>
 const capacityFailure = (message: string) =>
   failure(message, AgentPersistenceCapacityError.make({ message }));
 
+const isExecutionProgressRecord = (
+  record: RecordEnvelope,
+): record is RecordEnvelope & { readonly payload: RunContinuation } =>
+  record.payload._tag === "RunContinuation";
+
 const decodeResponsePrompt = Schema.decodeUnknownEffect(Prompt.Prompt);
 
 const validateBatchHeader = Schema.decodeSync(
@@ -193,8 +198,6 @@ export const readContinuation = Effect.fnUntraced(function* (
 
   if (
     value.progress.runId !== runId ||
-    value.progressRecord.payload._tag !== "RunContinuation" ||
-    !Schema.toEquivalence(RunContinuation)(value.progressRecord.payload, value.progress) ||
     value.throughSequence > throughSequence ||
     canonicalRecordBytes(value.progressRecord) > MAX_RUN_CONTINUATION_BYTES ||
     value.operational.some(
@@ -204,7 +207,15 @@ export const readContinuation = Effect.fnUntraced(function* (
   )
     return yield* failure("Invalid active Run checkpoint");
 
-  return Option.some({ ...value, record: value.progressRecord, continuation: value.progress });
+  return Option.some({
+    ...value,
+    checkpoint: value,
+    get progress() {
+      return value.progress;
+    },
+    record: value.progressRecord,
+    continuation: value.progress,
+  });
 });
 
 /** Resolve an active-only fact without presenting it as a canonical envelope or sequence. */
@@ -353,7 +364,10 @@ export const readRunEvidenceSnapshot = Effect.fnUntraced(function* (
     !validateSuffix(own, checkpoint.throughSequence)
   )
     return yield* failure("Selected execution history is incomplete or exceeds its suffix bound");
-  const resolve = (ref: EvidenceReference) => resolveExecutionEvidence(threadId, checkpoint, ref);
+
+  const resolve = (ref: EvidenceReference) =>
+    resolveExecutionEvidence(threadId, checkpoint.checkpoint, ref);
+
   const input = yield* resolve(cursor.originalInput);
 
   if (
@@ -436,7 +450,6 @@ export const validateProgressAppend = Effect.fnUntraced(function* (
 
     if (
       update === undefined ||
-      !Schema.toEquivalence(RunContinuation)(next, update.checkpoint.progress) ||
       update.previousRevision + 1 !== next.revision ||
       update.facts.some((fact) => !isOperationalRecord(fact)) ||
       (update.retire && (next.position !== "settled" || next.terminal === undefined))
@@ -1058,7 +1071,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     }
     if (continuation.position === "settling" && continuation.terminal !== undefined) {
       const terminal = yield* provide(
-        resolveExecutionEvidence(threadId, loaded.value, continuation.terminal),
+        resolveExecutionEvidence(threadId, loaded.value.checkpoint, continuation.terminal),
       );
 
       const payload = terminal.payload;
@@ -1074,7 +1087,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     return {
       continuation,
       record: loaded.value.record,
-      checkpoint: loaded.value,
+      checkpoint: loaded.value.checkpoint,
       ...(response === undefined ? {} : { response }),
       results,
       childResults,
@@ -1447,6 +1460,8 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         new RecordEnvelope({ ...header, payload: continuation }, { disableChecks: true }),
       ).canonical;
 
+      if (!isExecutionProgressRecord(record))
+        return yield* failure("Captured execution has no Run continuation");
       if (canonicalRecordBytes(record) !== turnBytes - turnBase)
         return yield* failure("Continuation byte accounting differs from its Schema encoding");
       if (canonicalRecordBytes(record) > MAX_RUN_CONTINUATION_BYTES)
@@ -1469,8 +1484,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
       }
 
       const checkpoint = yield* ExecutionCheckpoint.makeEffect({
-        version: 1,
-        progress: continuation,
+        version: 2,
         progressRecord: record,
         operational: [...operational.values()],
         canonicalRecords,
