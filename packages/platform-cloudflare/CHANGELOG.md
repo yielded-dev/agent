@@ -1,5 +1,15 @@
 # @yielded/agent-platform-cloudflare
 
+## 0.1.0-beta.172
+
+### Patch Changes
+
+- [#878](https://github.com/yielded-dev/agent/pull/878) [`26b59eb`](https://github.com/yielded-dev/agent/commit/26b59ebc1b87868996154b0d469a61d72947b184) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Cancel remote settlement observations when their client Effect is interrupted, using the same bounded best-effort cleanup as progress observations. Keep the admitted Run active so another observer can await its completion.
+- Updated dependencies [[`23a7565`](https://github.com/yielded-dev/agent/commit/23a7565a8e59d517a0ee274454d71a552aa88abd), [`55f2b7d`](https://github.com/yielded-dev/agent/commit/55f2b7d9859f6688dd5f37bd49c9ce5205274569), [`559de65`](https://github.com/yielded-dev/agent/commit/559de65edbd78f58d991f63a14da2f3c55e4ee6f), [`ffb7e63`](https://github.com/yielded-dev/agent/commit/ffb7e63d1358bc245eb3173700cf879d96a49bec)]:
+  - @yielded/agent@0.1.0-beta.172
+  - @yielded/agent-storage-cloudflare@0.1.0-beta.172
+  - @yielded/agent-storage-sql@0.1.0-beta.172
+
 ## 0.1.0-beta.171
 
 ### Patch Changes

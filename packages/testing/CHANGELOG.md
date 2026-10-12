@@ -1,5 +1,12 @@
 # @yielded/agent-testing
 
+## 0.1.0-beta.172
+
+### Patch Changes
+
+- Updated dependencies [[`23a7565`](https://github.com/yielded-dev/agent/commit/23a7565a8e59d517a0ee274454d71a552aa88abd), [`55f2b7d`](https://github.com/yielded-dev/agent/commit/55f2b7d9859f6688dd5f37bd49c9ce5205274569), [`559de65`](https://github.com/yielded-dev/agent/commit/559de65edbd78f58d991f63a14da2f3c55e4ee6f), [`ffb7e63`](https://github.com/yielded-dev/agent/commit/ffb7e63d1358bc245eb3173700cf879d96a49bec)]:
+  - @yielded/agent@0.1.0-beta.172
+
 ## 0.1.0-beta.171
 
 ### Patch Changes

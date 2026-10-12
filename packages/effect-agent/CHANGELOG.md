@@ -1,5 +1,17 @@
 # @yielded/agent
 
+## 0.1.0-beta.172
+
+### Patch Changes
+
+- [#890](https://github.com/yielded-dev/agent/pull/890) [`23a7565`](https://github.com/yielded-dev/agent/commit/23a7565a8e59d517a0ee274454d71a552aa88abd) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Count both closing bytes when checking the size of a progress-only commit.
+
+- [#876](https://github.com/yielded-dev/agent/pull/876) [`55f2b7d`](https://github.com/yielded-dev/agent/commit/55f2b7d9859f6688dd5f37bd49c9ce5205274569) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce redundant record decoding and encoding in storage reads, SQL maintenance, and thread export while preserving complete wire values and schema validation.
+
+- [#879](https://github.com/yielded-dev/agent/pull/879) [`559de65`](https://github.com/yielded-dev/agent/commit/559de65edbd78f58d991f63a14da2f3c55e4ee6f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Skip redundant parent lookups and wake notifications while a Run still awaits other attached children.
+
+- [#885](https://github.com/yielded-dev/agent/pull/885) [`ffb7e63`](https://github.com/yielded-dev/agent/commit/ffb7e63d1358bc245eb3173700cf879d96a49bec) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Avoid redundant reads while repairing worker update deliveries.
+
 ## 0.1.0-beta.171
 
 ### Patch Changes
