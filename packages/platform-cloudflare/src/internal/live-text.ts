@@ -1,6 +1,6 @@
 import { type ThreadId } from "@yielded/agent/identifiers";
 import { Publisher, type Event } from "@yielded/agent/provisional-text";
-import { Cause, Context, Effect, Exit, Layer, Queue, Schema, Scope, Stream } from "effect";
+import { Cause, Context, Effect, Exit, Fiber, Layer, Queue, Schema, Scope, Stream } from "effect";
 import * as Response from "effect/ai/Response";
 
 import { HostProtocolError } from "../CloudflareThreadClient.ts";
@@ -236,31 +236,36 @@ export class LiveTextHub extends Context.Service<
         });
 
         const frames = Stream.fromPull(
-          Effect.sync(() => {
+          Effect.withFiber((fiber) => {
+            // The native ReadableStream bridge can wait on consumer demand outside
+            // the queue. Its fiber belongs to the owner, not the child it closes.
+            Fiber.runIn(fiber, owner);
             let pending: Generator<Frame> | undefined;
             const take = Queue.take(queue);
 
-            return Effect.gen(function* () {
-              for (;;) {
-                if (pending !== undefined) {
-                  const next = pending.next();
+            return Effect.succeed(
+              Effect.gen(function* () {
+                for (;;) {
+                  if (pending !== undefined) {
+                    const next = pending.next();
 
-                  if (!next.done && !observer.snapshot) return [yield* toBytes(next.value)];
-                  pending = undefined;
+                    if (!next.done && !observer.snapshot) return [yield* toBytes(next.value)];
+                    pending = undefined;
+                  }
+
+                  // Keep one frame per pull: the ReadableStream bridge prefetches chunks,
+                  // so batching here would delay overflow resets behind buffered frames.
+                  const event = yield* take;
+
+                  if (observer.snapshot || event === undefined) {
+                    pending = snapshot();
+                    continue;
+                  }
+
+                  return [yield* toBytes(frame(event))];
                 }
-
-                // Keep one frame per pull: the ReadableStream bridge prefetches chunks,
-                // so batching here would delay overflow resets behind buffered frames.
-                const event = yield* take;
-
-                if (observer.snapshot || event === undefined) {
-                  pending = snapshot();
-                  continue;
-                }
-
-                return [yield* toBytes(frame(event))];
-              }
-            });
+              }),
+            );
           }),
         ).pipe(Stream.ensuring(close));
 
