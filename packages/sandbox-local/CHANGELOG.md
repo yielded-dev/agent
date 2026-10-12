@@ -1,5 +1,12 @@
 # @yielded/agent-sandbox-local
 
+## 0.1.0-beta.170
+
+### Patch Changes
+
+- Updated dependencies [[`7dbe5be`](https://github.com/yielded-dev/agent/commit/7dbe5bec64097562991d8f4126797d4590a03084), [`8554d50`](https://github.com/yielded-dev/agent/commit/8554d509163e4ff8380d04a1478da67ff99a87a6), [`63bb8b5`](https://github.com/yielded-dev/agent/commit/63bb8b5bbbc18abec209ca173661ee35f6d27a9b)]:
+  - @yielded/agent@0.1.0-beta.170
+
 ## 0.1.0-beta.169
 
 ### Patch Changes
