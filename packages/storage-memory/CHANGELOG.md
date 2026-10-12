@@ -1,5 +1,12 @@
 # @yielded/agent-storage-memory
 
+## 0.1.0-beta.173
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @yielded/agent@0.1.0-beta.173
+
 ## 0.1.0-beta.172
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @yielded/agent-storage-sql
 
+## 0.1.0-beta.173
+
+### Patch Changes
+
+- [#882](https://github.com/yielded-dev/agent/pull/882) [`8bdd737`](https://github.com/yielded-dev/agent/commit/8bdd73764fc3964303ef1015e7d24eb6a0757a56) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Load operation-evidence payloads only after selecting the bounded page.
+- Updated dependencies []:
+  - @yielded/agent@0.1.0-beta.173
+
 ## 0.1.0-beta.172
 
 ### Patch Changes

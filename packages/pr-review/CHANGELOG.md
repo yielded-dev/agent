@@ -1,5 +1,13 @@
 # @yielded/agent-pr-review
 
+## 0.1.0-beta.173
+
+### Patch Changes
+
+- [#893](https://github.com/yielded-dev/agent/pull/893) [`f320c87`](https://github.com/yielded-dev/agent/commit/f320c870b98a3117f5e702daee924fc939b80de4) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Preserve safe host accounting diagnostics in incomplete review summaries so callers can identify why a review stopped.
+- Updated dependencies []:
+  - @yielded/agent@0.1.0-beta.173
+
 ## 0.1.0-beta.172
 
 ### Patch Changes
