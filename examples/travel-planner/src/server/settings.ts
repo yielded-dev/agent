@@ -28,7 +28,7 @@ export class PlannerSettingsStore extends Context.Service<
 >()("travel-planner/PlannerSettingsStore") {}
 
 const storageError = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "storage",
     message:
       "Model preferences are unavailable or contain unsupported data. Refresh before retrying.",
@@ -64,8 +64,8 @@ export const PlannerSettingsStoreLive = Layer.effect(
 
     const save = Effect.fn("PlannerSettingsStore.save")(function* (candidate: PlannerSettings) {
       const settings = yield* Schema.decodeEffect(PlannerSettings)(candidate).pipe(
-        Effect.mapError(
-          () => new PlannerError({ code: "invalid", message: "Invalid model preferences." }),
+        Effect.mapError(() =>
+          PlannerError.make({ code: "invalid", message: "Invalid model preferences." }),
         ),
       );
 

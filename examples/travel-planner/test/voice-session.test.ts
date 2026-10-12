@@ -19,7 +19,7 @@ const envelope = {
   settings: defaultPlannerSettings,
 };
 
-const unavailable = new PlannerError({ code: "unavailable", message: "Lost response" });
+const unavailable = PlannerError.make({ code: "unavailable", message: "Lost response" });
 const request = { ...envelope, message: "Plan Lisbon", requestId: "request-original" };
 
 const observation = (
@@ -285,7 +285,7 @@ it.effect("storage failures before and after admission preserve the frozen retry
 
       test.backend.persist = (requests) =>
         !afterAdmission || test.admitted.length > 0
-          ? Effect.fail(new VoiceError({ message: "Storage unavailable" }))
+          ? Effect.fail(VoiceError.make({ message: "Storage unavailable" }))
           : persist(requests);
       const fiber = yield* test.run.pipe(Effect.exit, Effect.forkChild);
 

@@ -105,7 +105,7 @@ it.effect("preserves usable recall when an unchanged-source refresh fails or is 
     const providerFailure = AiError.make({
       module: "refresh-fixture",
       method: "embedMany",
-      reason: new AiError.InvalidOutputError({ description: "provider unavailable" }),
+      reason: AiError.InvalidOutputError.make({ description: "provider unavailable" }),
     });
 
     for (const mode of ["failure", "interrupt"] as const) {

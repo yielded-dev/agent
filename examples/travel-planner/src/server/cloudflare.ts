@@ -84,12 +84,11 @@ declare global {
 /** The HTTP edge bounds defect diagnostics; engine defects retain their canonical meaning. */
 const safeRpc = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   effect.pipe(
-    Effect.catchDefect(
-      () =>
-        new PlannerError({
-          code: "unavailable",
-          message: "The request failed unexpectedly. Refresh before retrying.",
-        }),
+    Effect.catchDefect(() =>
+      PlannerError.make({
+        code: "unavailable",
+        message: "The request failed unexpectedly. Refresh before retrying.",
+      }),
     ),
   );
 
@@ -138,7 +137,7 @@ export const plannerHandlers = PlannerRpcs.toLayer({
         const identity = yield* ThreadObjectIdentity;
 
         if (identity.threadId !== ownerOfThread(identity.threadId))
-          return yield* new PlannerError({
+          return yield* PlannerError.make({
             code: "invalid",
             message: "Model preferences belong to the signed-in account.",
           });
@@ -152,7 +151,7 @@ export const plannerHandlers = PlannerRpcs.toLayer({
         const identity = yield* ThreadObjectIdentity;
 
         if (identity.threadId !== ownerOfThread(identity.threadId))
-          return yield* new PlannerError({
+          return yield* PlannerError.make({
             code: "invalid",
             message: "Model preferences belong to the signed-in account.",
           });
@@ -170,25 +169,24 @@ export const plannerHandlers = PlannerRpcs.toLayer({
         const request = yield* Schema.encodeEffect(Schema.fromJsonString(WorkerLocator))(
           locator,
         ).pipe(
-          Effect.mapError(() => new PlannerError({ code: "invalid", message: "Invalid worker." })),
+          Effect.mapError(() => PlannerError.make({ code: "invalid", message: "Invalid worker." })),
         );
 
         const reply = yield* Effect.tryPromise({
           try: () => env.PLANNER_THREADS_V3.getByName(privateId).plannerWorker(request),
           catch: () =>
-            new PlannerError({
+            PlannerError.make({
               code: "unavailable",
               message: "Worker updates are temporarily unavailable.",
             }),
         });
 
         return yield* Schema.decodeEffect(Schema.fromJsonString(PlannerWorkerDetail))(reply).pipe(
-          Effect.mapError(
-            () =>
-              new PlannerError({
-                code: "unavailable",
-                message: "Worker updates could not be read.",
-              }),
+          Effect.mapError(() =>
+            PlannerError.make({
+              code: "unavailable",
+              message: "Worker updates could not be read.",
+            }),
           ),
         );
       }),
@@ -206,7 +204,7 @@ export const plannerHandlers = PlannerRpcs.toLayer({
         const reply = yield* Effect.tryPromise({
           try: () => env.PLANNER_THREADS_V3.getByName(privateId).plannerState(),
           catch: () =>
-            new PlannerError({
+            PlannerError.make({
               code: "unavailable",
               message: "This conversation is temporarily unavailable.",
             }),
@@ -215,12 +213,11 @@ export const plannerHandlers = PlannerRpcs.toLayer({
         const snapshot = yield* Schema.decodeEffect(Schema.fromJsonString(PlannerSnapshot))(
           reply,
         ).pipe(
-          Effect.mapError(
-            () =>
-              new PlannerError({
-                code: "unavailable",
-                message: "The conversation response could not be read.",
-              }),
+          Effect.mapError(() =>
+            PlannerError.make({
+              code: "unavailable",
+              message: "The conversation response could not be read.",
+            }),
           ),
         );
 
@@ -240,8 +237,8 @@ export const plannerHandlers = PlannerRpcs.toLayer({
         return yield* voiceWork({ ...request, conversationId });
       }),
     ),
-  SendMessage: (request) =>
-    Effect.gen(function* () {
+  SendMessage: Effect.fnUntraced(
+    function* (request) {
       const identity = yield* ThreadObjectIdentity;
       const conversationId = yield* privateConversation(identity.threadId, request.conversationId);
       const maintenance = yield* ThreadMaintenance;
@@ -251,16 +248,18 @@ export const plannerHandlers = PlannerRpcs.toLayer({
         (yield* Effect.flatMap(PlannerSettingsStore, (preferences) => preferences.get));
 
       return yield* maintenance.withMutation(sendMessage({ ...request, settings, conversationId }));
-    }).pipe(
-      Effect.mapError(
-        () =>
-          new PlannerError({
+    },
+    (effect) =>
+      effect.pipe(
+        Effect.mapError(() =>
+          PlannerError.make({
             code: "unavailable",
             message: "The request could not be accepted. Refresh before retrying.",
           }),
+        ),
+        safeRpc,
       ),
-      safeRpc,
-    ),
+  ),
   SaveTrip: ({ conversationId, ...request }) =>
     safeRpc(
       Effect.gen(function* () {
@@ -305,7 +304,7 @@ export const plannerApplication = <E, R>(
             const progress = yield* ProgressStore;
 
             const unavailable = () =>
-              new PlannerError({
+              PlannerError.make({
                 code: "unavailable",
                 message: "The admitted model settings could not be read.",
               });
@@ -437,7 +436,7 @@ const PlannerLive = Layer.unwrap(
     const env = yield* WorkerEnvironment;
 
     if (env.BROWSER === undefined)
-      return yield* new PlannerError({
+      return yield* PlannerError.make({
         code: "unavailable",
         message: "The planner requires a Browser Run binding.",
       });

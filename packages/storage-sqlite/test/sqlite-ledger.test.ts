@@ -235,33 +235,32 @@ it.effect("reprepares native settlement progress after an administrative append"
             threadId: session.threadId,
             tail: session.tail,
             withProgress: session.withProgress,
-            publishSettlement: (prepared, executions) =>
-              Effect.gen(function* () {
-                if (!injected) {
-                  injected = true;
+            publishSettlement: Effect.fnUntraced(function* (prepared, executions) {
+              if (!injected) {
+                injected = true;
 
-                  const abort = record(
-                    submissionAbortRecordId(admitted.submissionId),
-                    AbortRequested.make({
-                      submissionId: admitted.submissionId,
-                      author: "operator",
-                      reason: "Abort raced settlement preparation",
+                const abort = record(
+                  submissionAbortRecordId(admitted.submissionId),
+                  AbortRequested.make({
+                    submissionId: admitted.submissionId,
+                    author: "operator",
+                    reason: "Abort raced settlement preparation",
+                  }),
+                );
+
+                yield* repair
+                  .commit(
+                    CanonicalBatch.make({
+                      batchId: submissionAbortBatchId(admitted.submissionId),
+                      producerId: OTHER_PRODUCER,
+                      records: [abort],
                     }),
-                  );
+                  )
+                  .pipe(Effect.provideService(CurrentRunWriter, administrative));
+              }
 
-                  yield* repair
-                    .commit(
-                      CanonicalBatch.make({
-                        batchId: submissionAbortBatchId(admitted.submissionId),
-                        producerId: OTHER_PRODUCER,
-                        records: [abort],
-                      }),
-                    )
-                    .pipe(Effect.provideService(CurrentRunWriter, administrative));
-                }
-
-                return yield* session.publishSettlement(prepared, executions);
-              }),
+              return yield* session.publishSettlement(prepared, executions);
+            }),
           }),
         );
 
@@ -444,33 +443,32 @@ describe("SqliteSubmissionLedger", () => {
           let unavailable = false;
 
           const fence = Layer.succeed(SubmissionAdmissionFence)({
-            check: (request) =>
-              Effect.gen(function* () {
-                if (unavailable)
-                  return yield* AdmissionPolicyError.make({
-                    reason: "unavailable",
-                    code: "host-policy",
-                  });
-                yield* sql`UPDATE host_admission_policy SET observations=observations+1`.pipe(
-                  Effect.mapError(() =>
-                    AdmissionPolicyError.make({ reason: "unavailable", code: "host-policy" }),
-                  ),
-                );
+            check: Effect.fnUntraced(function* (request) {
+              if (unavailable)
+                return yield* AdmissionPolicyError.make({
+                  reason: "unavailable",
+                  code: "host-policy",
+                });
+              yield* sql`UPDATE host_admission_policy SET observations=observations+1`.pipe(
+                Effect.mapError(() =>
+                  AdmissionPolicyError.make({ reason: "unavailable", code: "host-policy" }),
+                ),
+              );
 
-                const rows = yield* sql<{
-                  revision: string;
-                }>`SELECT revision FROM host_admission_policy`.pipe(
-                  Effect.mapError(() =>
-                    AdmissionPolicyError.make({ reason: "unavailable", code: "host-policy" }),
-                  ),
-                );
+              const rows = yield* sql<{
+                revision: string;
+              }>`SELECT revision FROM host_admission_policy`.pipe(
+                Effect.mapError(() =>
+                  AdmissionPolicyError.make({ reason: "unavailable", code: "host-policy" }),
+                ),
+              );
 
-                if (request.admissionFence?.revision !== rows[0]?.revision)
-                  return yield* AdmissionPolicyError.make({
-                    reason: "refused",
-                    code: "stale-revision",
-                  });
-              }),
+              if (request.admissionFence?.revision !== rows[0]?.revision)
+                return yield* AdmissionPolicyError.make({
+                  reason: "refused",
+                  code: "stale-revision",
+                });
+            }),
           });
 
           yield* Effect.gen(function* () {

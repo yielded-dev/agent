@@ -189,10 +189,10 @@ const selectedRecords = Effect.fnUntraced(function* (
       )
         return yield* incomplete("read selection identity");
       afterSequence = entry.sequence;
-      bytes += yield* Effect.try({
-        try: () => recordEncoding(entry.record).bytes,
-        catch: () => incomplete("read selection bytes"),
-      });
+      bytes += yield* Effect.fromResult(recordEncoding(entry.record)).pipe(
+        Effect.map((record) => record.bytes),
+        Effect.mapError(() => incomplete("read selection bytes")),
+      );
       if (bytes > MAX_THREAD_EXPORT_PAGE_BYTES)
         return yield* incomplete("read selection byte limit");
       records.push(entry);
@@ -384,30 +384,43 @@ const captureExecution = (input: ExecutionUpdate) => {
   const factsLength = validateExecutionRecordCount(factsInput).length;
 
   const progress = captureRecord(input.checkpoint.progressRecord);
-  const progressRecord = progress.canonical;
+
+  if (Result.isFailure(progress)) return Result.fail(progress.failure);
+  const progressRecord = progress.success.canonical;
 
   if (!isExecutionProgressRecord(progressRecord))
-    throw ThreadStoreError.make({
-      operation: "prepare durable commit",
-      message: "Expected a Run continuation record",
-    });
+    return Result.fail(
+      ThreadStoreError.make({
+        operation: "prepare durable commit",
+        message: "Expected a Run continuation record",
+      }),
+    );
 
   // Use the Schema-validated indexed lengths, never a caller's iterator. Sparse slots
   // still visit the record boundary, where undefined is refused.
-  const operational = Array.from({ length: operationalLength }, (_, index) =>
-    captureRecord(operationalInput[index]!),
-  );
+  const operational = [];
 
-  const facts = Array.from({ length: factsLength }, (_, index) =>
-    captureRecord(factsInput[index]!),
-  );
+  for (let index = 0; index < operationalLength; index++) {
+    const record = captureRecord(operationalInput[index]!);
+
+    if (Result.isFailure(record)) return Result.fail(record.failure);
+    operational.push(record.success);
+  }
+  const facts = [];
+
+  for (let index = 0; index < factsLength; index++) {
+    const record = captureRecord(factsInput[index]!);
+
+    if (Result.isFailure(record)) return Result.fail(record.failure);
+    facts.push(record.success);
+  }
 
   // Keep the actual owned arrays within the persisted bounds as well.
   validateExecutionRecordCount(operational);
   validateExecutionRecordCount(facts);
 
   const checkpoint = Object.freeze(
-    new ExecutionCheckpoint(
+    ExecutionCheckpoint.make(
       {
         ...header.checkpoint,
         progressRecord,
@@ -418,7 +431,7 @@ const captureExecution = (input: ExecutionUpdate) => {
   );
 
   const update = Object.freeze(
-    new ExecutionUpdate(
+    ExecutionUpdate.make(
       {
         previousRevision: header.previousRevision,
         retire: header.retire,
@@ -429,10 +442,12 @@ const captureExecution = (input: ExecutionUpdate) => {
     ),
   );
 
-  const checkpointJson = `{"version":${checkpoint.version},"progressRecord":${progress.json},"operational":[${operational.map(({ json }) => json).join(",")}],"canonicalRecords":${checkpoint.canonicalRecords},"originalSequence":${checkpoint.originalSequence},"throughSequence":${checkpoint.throughSequence},"batchId":${JSON.stringify(checkpoint.batchId)}}`;
+  const checkpointJson = `{"version":${checkpoint.version},"progressRecord":${progress.success.json},"operational":[${operational.map(({ json }) => json).join(",")}],"canonicalRecords":${checkpoint.canonicalRecords},"originalSequence":${checkpoint.originalSequence},"throughSequence":${checkpoint.throughSequence},"batchId":${JSON.stringify(checkpoint.batchId)}}`;
   const json = `{"previousRevision":${update.previousRevision},"checkpoint":${checkpointJson},"facts":[${facts.map(({ json }) => json).join(",")}],"retire":${update.retire}}`;
 
-  return Object.freeze({ update, json, checkpointJson, bytes: utf8ByteLength(json) });
+  return Result.succeed(
+    Object.freeze({ update, json, checkpointJson, bytes: utf8ByteLength(json) }),
+  );
 };
 
 const capturedAppends = new WeakMap<AppendRequest, CapturedAppend>();
@@ -509,102 +524,109 @@ export const PreparedAppend = {
       if (existing !== undefined) return Effect.succeed(existing);
 
       return Effect.try({
-        try: () => {
-          const header = validateHeader({
-            ...input,
-            batchId: input.batch.batchId,
-            producerId: input.batch.producerId,
-          });
-
-          validateRecordCount(input.batch.records);
-          const executions = input.executions ?? [];
-          const executionLength = validateRecordCount(executions).length;
-
-          const executionWrites = Object.freeze(
-            Array.from({ length: executionLength }, (_, index) =>
-              captureExecution(executions[index]!),
-            ),
-          );
-
-          validateRecordCount(executionWrites);
-
-          if (input.batch.records.length === 0 && executionWrites.length === 0)
-            throw ThreadStoreError.make({
-              operation: "prepare durable commit",
-              message: "A commit must contain history facts or an active execution transition",
-            });
-          if (executionWrites.some(({ bytes }) => !transferPageFits(header.threadId, bytes)))
-            throw ThreadStoreError.make({
-              operation: "prepare durable commit",
-              message: "Active state exceeds its bounded transfer representation",
-            });
-          // Visit sparse slots too: capture owns each record's validation boundary.
-          const encodings = Array.from(input.batch.records, captureRecord);
-          const prefix = `{"batchId":${JSON.stringify(header.batchId)},"producerId":${JSON.stringify(header.producerId)},"records":[`;
-          const batchJson = `${prefix}${encodings.map(({ json }) => json).join(",")}]}`;
-
-          const batchBytes = encodings.reduce(
-            (total, record) => total + record.bytes,
-            utf8ByteLength(prefix) + (encodings.length === 0 ? 2 : encodings.length + 1),
-          );
-
-          if (batchBytes > MAX_CANONICAL_BATCH_BYTES)
-            throw ThreadStoreError.make({
-              operation: "prepare canonical append",
-              message: `Canonical batch exceeds ${MAX_CANONICAL_BATCH_BYTES} bytes`,
+        try: () =>
+          Result.gen(function* () {
+            const header = validateHeader({
+              ...input,
+              batchId: input.batch.batchId,
+              producerId: input.batch.producerId,
             });
 
-          const batch = Object.freeze(
-            new CommitBatch(
+            validateRecordCount(input.batch.records);
+            const executions = input.executions ?? [];
+            const executionLength = validateRecordCount(executions).length;
+
+            const executionWrites: Array<PreparedAppend["executionWrites"][number]> = [];
+
+            for (let index = 0; index < executionLength; index++)
+              executionWrites.push(yield* captureExecution(executions[index]!));
+            Object.freeze(executionWrites);
+
+            validateRecordCount(executionWrites);
+
+            if (input.batch.records.length === 0 && executionWrites.length === 0)
+              return yield* Result.fail(
+                ThreadStoreError.make({
+                  operation: "prepare durable commit",
+                  message: "A commit must contain history facts or an active execution transition",
+                }),
+              );
+            if (executionWrites.some(({ bytes }) => !transferPageFits(header.threadId, bytes)))
+              return yield* Result.fail(
+                ThreadStoreError.make({
+                  operation: "prepare durable commit",
+                  message: "Active state exceeds its bounded transfer representation",
+                }),
+              );
+            // Visit sparse slots too: capture owns each record's validation boundary.
+            const encodings = yield* Result.all(Array.from(input.batch.records, captureRecord));
+            const prefix = `{"batchId":${JSON.stringify(header.batchId)},"producerId":${JSON.stringify(header.producerId)},"records":[`;
+            const batchJson = `${prefix}${encodings.map(({ json }) => json).join(",")}]}`;
+
+            const batchBytes = encodings.reduce(
+              (total, record) => total + record.bytes,
+              utf8ByteLength(prefix) + (encodings.length === 0 ? 2 : encodings.length + 1),
+            );
+
+            if (batchBytes > MAX_CANONICAL_BATCH_BYTES)
+              return yield* Result.fail(
+                ThreadStoreError.make({
+                  operation: "prepare canonical append",
+                  message: `Canonical batch exceeds ${MAX_CANONICAL_BATCH_BYTES} bytes`,
+                }),
+              );
+
+            const batch = Object.freeze(
+              CommitBatch.make(
+                {
+                  batchId: header.batchId,
+                  producerId: header.producerId,
+                  records: Object.freeze(encodings.map(({ canonical }) => canonical)),
+                },
+                { disableChecks: true },
+              ),
+            );
+
+            const request = AppendRequest.make(
               {
-                batchId: header.batchId,
-                producerId: header.producerId,
-                records: Object.freeze(encodings.map(({ canonical }) => canonical)),
+                threadId: header.threadId,
+                expectedTailSequence: header.expectedTailSequence,
+                batch,
+                ...(executionWrites.length === 0
+                  ? {}
+                  : { executions: Object.freeze(executionWrites.map(({ update }) => update)) }),
               },
               { disableChecks: true },
-            ),
-          );
+            );
 
-          const request = new AppendRequest(
-            {
-              threadId: header.threadId,
-              expectedTailSequence: header.expectedTailSequence,
-              batch,
-              ...(executionWrites.length === 0
-                ? {}
-                : { executions: Object.freeze(executionWrites.map(({ update }) => update)) }),
-            },
-            { disableChecks: true },
-          );
+            const records = Object.freeze(
+              encodings.map(({ canonical, json, wire, bytes }) =>
+                Object.freeze({
+                  recordId: canonical.recordId,
+                  recordJson: json,
+                  recordBytes: bytes,
+                  wire,
+                  canonical,
+                }),
+              ),
+            );
 
-          const records = Object.freeze(
-            encodings.map(({ canonical, json, wire, bytes }) =>
-              Object.freeze({
-                recordId: canonical.recordId,
-                recordJson: json,
-                recordBytes: bytes,
-                wire,
-                canonical,
+            const progress = Object.freeze(encodings.map(({ progress }) => progress));
+
+            const captured = Object.freeze(
+              Object.assign(request, {
+                batchJson,
+                batchBytes,
+                records,
+                progress,
+                executionWrites,
               }),
-            ),
-          );
+            );
 
-          const progress = Object.freeze(encodings.map(({ progress }) => progress));
+            capturedAppends.set(captured, captured);
 
-          const captured = Object.freeze(
-            Object.assign(request, {
-              batchJson,
-              batchBytes,
-              records,
-              progress,
-              executionWrites,
-            }),
-          );
-
-          capturedAppends.set(captured, captured);
-
-          return captured;
-        },
+            return captured;
+          }),
         catch: (cause) =>
           Schema.is(ThreadStoreError)(cause)
             ? cause
@@ -615,7 +637,18 @@ export const PreparedAppend = {
                   : "Canonical append capture failed",
                 cause,
               }),
-      });
+      }).pipe(
+        Effect.flatMap(Effect.fromResult),
+        Effect.mapError((cause) =>
+          Schema.is(ThreadStoreError)(cause)
+            ? cause
+            : ThreadStoreError.make({
+                operation: "prepare canonical append",
+                message: cause.message,
+                cause,
+              }),
+        ),
+      );
     }),
 };
 

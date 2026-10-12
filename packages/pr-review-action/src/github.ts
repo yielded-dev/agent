@@ -1178,7 +1178,7 @@ export const makeGitHubClient = Effect.fnUntraced(function* (options: {
     );
   });
 
-  const publishReview = (input: {
+  const publishReview = Effect.fnUntraced(function* (input: {
     readonly commitId: string;
     readonly event: "COMMENT" | "REQUEST_CHANGES";
     readonly body: string;
@@ -1187,39 +1187,38 @@ export const makeGitHubClient = Effect.fnUntraced(function* (options: {
       readonly line: number;
       readonly body: string;
     }>;
-  }) =>
-    Effect.gen(function* () {
-      const current = yield* getPullRequest;
+  }) {
+    const current = yield* getPullRequest;
 
-      if (current.headRevision !== input.commitId) {
-        return yield* StaleReviewHead.make({
-          inspectedHead: input.commitId,
-          currentHead: current.headRevision,
-        });
-      }
+    if (current.headRevision !== input.commitId) {
+      return yield* StaleReviewHead.make({
+        inspectedHead: input.commitId,
+        currentHead: current.headRevision,
+      });
+    }
 
-      const body = yield* Schema.encodeEffect(PublishReviewWire)({
-        commit_id: input.commitId,
-        event: input.event,
-        body: input.body,
-        comments: input.comments.map((comment) => ({
-          path: comment.path,
-          line: comment.line,
-          side: "RIGHT" as const,
-          body: comment.body,
-        })),
-      }).pipe(Effect.mapError((cause) => failure("encode pull request review", cause)));
+    const body = yield* Schema.encodeEffect(PublishReviewWire)({
+      commit_id: input.commitId,
+      event: input.event,
+      body: input.body,
+      comments: input.comments.map((comment) => ({
+        path: comment.path,
+        line: comment.line,
+        side: "RIGHT" as const,
+        body: comment.body,
+      })),
+    }).pipe(Effect.mapError((cause) => failure("encode pull request review", cause)));
 
-      const request = yield* HttpClientRequest.post(`${pullUrl}/reviews`).pipe(
-        HttpClientRequest.bodyJson(body),
-        Effect.mapError((cause) => failure("encode pull request review", cause)),
-      );
+    const request = yield* HttpClientRequest.post(`${pullUrl}/reviews`).pipe(
+      HttpClientRequest.bodyJson(body),
+      Effect.mapError((cause) => failure("encode pull request review", cause)),
+    );
 
-      return yield* execute("publish pull request review", request).pipe(
-        Effect.flatMap(decode(PublishedReviewWire, "publish pull request review")),
-        Effect.map((wire) => wire.html_url),
-      );
-    });
+    return yield* execute("publish pull request review", request).pipe(
+      Effect.flatMap(decode(PublishedReviewWire, "publish pull request review")),
+      Effect.map((wire) => wire.html_url),
+    );
+  });
 
   /** Record a host-authored incomplete attempt on the inspected commit, even after a push. */
   const publishAttemptMarker = Effect.fnUntraced(function* (input: {

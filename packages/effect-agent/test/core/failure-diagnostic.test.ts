@@ -17,7 +17,7 @@ describe("causal failure diagnostics", () => {
   it("preserves the original local Cause and structured fields through a JSON boundary", () => {
     const transport = new Error("connection closed");
 
-    const dependency = new DependencyFailure({
+    const dependency = DependencyFailure.make({
       message: "Pending delivery lookup failed",
       reason: "storage",
       code: "SQLITE_BUSY",
@@ -32,7 +32,7 @@ describe("causal failure diagnostics", () => {
       ...Cause.interrupt(42).reasons,
     ]);
 
-    const error = new AgentToolAuthorizationCheckError({
+    const error = AgentToolAuthorizationCheckError.make({
       toolCallId: Schema.decodeSync(ToolCallId)("call-tool-1"),
       toolName: "phone_call",
       check: "pending-operations",

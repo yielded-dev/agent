@@ -274,29 +274,27 @@ export const makeWikipedia = Effect.fnUntraced(function* (
         }, target),
       )
       .pipe(
-        Effect.mapError(
-          () =>
-            new LabError({
-              code: "browser",
-              message:
-                "Wikipedia destination lookup could not complete. The starting page is not ready; no race actions have run.",
-            }),
+        Effect.mapError(() =>
+          LabError.make({
+            code: "browser",
+            message:
+              "Wikipedia destination lookup could not complete. The starting page is not ready; no race actions have run.",
+          }),
         ),
         Effect.flatMap(({ status, body }) =>
           status !== 200
             ? Effect.fail(
-                new LabError({
+                LabError.make({
                   code: "browser",
                   message: `Wikipedia destination lookup returned HTTP ${status}.`,
                 }),
               )
             : Schema.decodeUnknownEffect(TargetResponse)(body).pipe(
-                Effect.mapError(
-                  () =>
-                    new LabError({
-                      code: "browser",
-                      message: "Wikipedia returned an unreadable destination lookup response.",
-                    }),
+                Effect.mapError(() =>
+                  LabError.make({
+                    code: "browser",
+                    message: "Wikipedia returned an unreadable destination lookup response.",
+                  }),
                 ),
               ),
         ),
@@ -312,7 +310,7 @@ export const makeWikipedia = Effect.fnUntraced(function* (
     destination.ns !== 0 ||
     !articleTitle(articleUrl(destination.title))
   )
-    return yield* new LabError({
+    return yield* LabError.make({
       code: "invalid",
       message: "The target must be an ordinary Wikipedia article.",
     });
@@ -324,7 +322,7 @@ export const makeWikipedia = Effect.fnUntraced(function* (
     query?: string,
   ) {
     if (uncertain)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "browser",
         message: "Navigation outcome is unresolved. End this race; no clicks will be replayed.",
       });
@@ -379,15 +377,14 @@ export const makeWikipedia = Effect.fnUntraced(function* (
         )
         .pipe(
           Effect.flatMap(Schema.decodeUnknownEffect(PageData)),
-          Effect.mapError(
-            (error) =>
-              new LabError({
-                code: "browser",
-                message:
-                  error._tag === "LabError"
-                    ? `Could not read the Wikipedia article: ${error.message}`
-                    : "Wikipedia returned an invalid article observation.",
-              }),
+          Effect.mapError((error) =>
+            LabError.make({
+              code: "browser",
+              message:
+                error._tag === "LabError"
+                  ? `Could not read the Wikipedia article: ${error.message}`
+                  : "Wikipedia returned an invalid article observation.",
+            }),
           ),
         ),
     );
@@ -395,19 +392,19 @@ export const makeWikipedia = Effect.fnUntraced(function* (
     const title = articleTitle(data.url);
 
     if (data.linkCount > 10_000)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message:
           "This article exceeds the 10,000-anchor observation limit. The race stopped rather than dropping links.",
       });
 
     if (!data.article || !title || articleTitle(data.canonical) !== title || !data.title)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "browser",
         message: "The browser did not reach a valid Wikipedia article.",
       });
     if (path.length && !via && (data.url !== currentUrl || data.documentOrigin !== currentDocument))
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "browser",
         message: "The page changed without an observed link click.",
       });
@@ -433,7 +430,7 @@ export const makeWikipedia = Effect.fnUntraced(function* (
         candidates.set(linkedTitle, { ...link, title: linkedTitle });
     }
     if (fullLinks && candidates.size > 5_000)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message:
           "This article exceeds the 5,000 eligible-link routing limit. No links were silently dropped.",
@@ -447,7 +444,7 @@ export const makeWikipedia = Effect.fnUntraced(function* (
     );
 
     if (offset !== 0 && offset >= links.length)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message: `Link offset exceeds ${links.length} available links.`,
       });
@@ -511,13 +508,13 @@ export const makeWikipedia = Effect.fnUntraced(function* (
     const link = observed.get(ref);
 
     if (uncertain || !link)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message:
           "Link is stale or was not in the latest observation. Read the current links before choosing.",
       });
     if (path.length - 1 >= maxHops)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message: "The 20-hop limit was reached. End the race.",
       });
@@ -528,7 +525,7 @@ export const makeWikipedia = Effect.fnUntraced(function* (
     const revisit = articleTitle(link.url);
 
     if (revisit !== undefined && path.some((hop) => articleTitle(hop.url) === revisit))
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message: `${revisit} is already in the route. No click was dispatched; choose an article you have not visited.`,
       });
@@ -537,7 +534,7 @@ export const makeWikipedia = Effect.fnUntraced(function* (
       .inspect({
         selector: `${selector}[href=${JSON.stringify(link.href)}]:not(.new):not([download]):is(:not([target]),[target=""],[target="_self"])`,
       })
-      .pipe(Effect.mapError((error) => new LabError({ code: "browser", message: error.message })));
+      .pipe(Effect.mapError((error) => LabError.make({ code: "browser", message: error.message })));
 
     const label = normalizeTitle(link.label);
 
@@ -553,7 +550,7 @@ export const makeWikipedia = Effect.fnUntraced(function* (
     });
 
     if (current.tabs?.find((tab) => tab.active)?.url !== currentUrl || control === undefined)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message:
           "The observed article or link changed. No click was dispatched. Read the page again.",
@@ -567,7 +564,7 @@ export const makeWikipedia = Effect.fnUntraced(function* (
 
     if (result.dispatch === "not-dispatched") uncertain = false;
     if (result.completed !== 1 || result.dispatch !== "acknowledged")
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "browser",
         message: result.error ?? "The link click was not acknowledged. No click will be replayed.",
       });
@@ -610,7 +607,7 @@ export const makeWikipedia = Effect.fnUntraced(function* (
   const initial = yield* read();
 
   if (articleTitle(currentUrl) === target)
-    return yield* new LabError({
+    return yield* LabError.make({
       code: "invalid",
       message: "Start and destination resolve to the same article. Choose different pages.",
     });
@@ -629,7 +626,7 @@ export const makeWikipedia = Effect.fnUntraced(function* (
       routePage && fullLinks
         ? Effect.succeed(routePage)
         : Effect.fail(
-            new LabError({
+            LabError.make({
               code: "invalid",
               message: "All-link routing requires a fresh full-page observation.",
             }),
@@ -656,7 +653,7 @@ export const runJevWikipedia = Effect.gen(function* () {
       .reduce((sum, span) => sum + (span.inputTokens ?? 0) + (span.outputTokens ?? 0), 0);
 
     if (used >= 300_000)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message: "Jev routing reached its 300,000 reported-token budget.",
       });
@@ -667,7 +664,7 @@ export const runJevWikipedia = Effect.gen(function* () {
     if (next.reached) return;
   }
 
-  return yield* new LabError({
+  return yield* LabError.make({
     code: "invalid",
     message: "Jev routing reached the 20-hop limit without arriving.",
   });
@@ -676,7 +673,7 @@ export const runJevWikipedia = Effect.gen(function* () {
     duration: "3 minutes",
     orElse: () =>
       Effect.fail(
-        new LabError({
+        LabError.make({
           code: "browser",
           message: "Jev routing reached its three-minute deadline.",
         }),

@@ -42,7 +42,7 @@ export const UpdatingResearchScout = Subagent.make("research_scout", {
     const identity = yield* ThreadObjectIdentity;
 
     if (identity.threadId !== context.parent.threadId)
-      return yield* new PlannerError({
+      return yield* PlannerError.make({
         code: "invalid",
         message: "The research source conversation could not be verified.",
       });

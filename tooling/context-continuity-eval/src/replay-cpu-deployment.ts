@@ -185,13 +185,13 @@ export const openReplayCpuDeployment = Effect.fn("ReplayCpu.openDeployment")(fun
       yield* requireReplayCpu(result.success, "Namespace listing failed");
       for (const item of result.result.filter((item) => item.script === workerName(target))) {
         if (typeof item.id !== "string")
-          return yield* new ReplayCpuError({ message: "Owned namespace has no identity" });
+          return yield* ReplayCpuError.make({ message: "Owned namespace has no identity" });
         matching.push(item.id);
       }
       if (result.result.length < 100) return matching;
     }
 
-    return yield* new ReplayCpuError({ message: "Namespace listing exceeded its bound" });
+    return yield* ReplayCpuError.make({ message: "Namespace listing exceeded its bound" });
   });
 
   const alchemy = Effect.fn("ReplayCpu.alchemy")(function* (

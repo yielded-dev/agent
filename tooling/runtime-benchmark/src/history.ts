@@ -11,6 +11,7 @@ const selectHistory = (module: {
 }) => {
   const layer = module.layer ?? module.ThreadHistory.layer ?? module.ThreadHistory.layerTransient;
 
+  // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Synchronous module initialization rejects an unsupported historical release before benchmark execution.
   if (layer === undefined) throw new Error("Compared release has no supported history Layer");
 
   return {

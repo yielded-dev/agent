@@ -189,10 +189,10 @@ it.effect(
             decide: () =>
               outcome === "failure"
                 ? Effect.fail(
-                    new AiError.AiError({
+                    AiError.AiError.make({
                       module: "test",
                       method: "decide",
-                      reason: new AiError.InvalidOutputError({ description: "Invalid route" }),
+                      reason: AiError.InvalidOutputError.make({ description: "Invalid route" }),
                     }),
                   )
                 : outcome === "defect"

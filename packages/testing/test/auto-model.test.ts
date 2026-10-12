@@ -199,10 +199,10 @@ it.effect(
       let selections = 0;
       let generations = 0;
 
-      const failure = new AiError.AiError({
+      const failure = AiError.AiError.make({
         module: "fixture",
         method: "streamText",
-        reason: new AiError.InvalidRequestError({ description: "generation failed" }),
+        reason: AiError.InvalidRequestError.make({ description: "generation failed" }),
       });
 
       const small = Model.make(

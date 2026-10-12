@@ -92,7 +92,7 @@ const nativeOperation = <A, E, R>(operation: string, effect: Effect.Effect<A, E,
   effect.pipe(
     Effect.catchDefect((cause) =>
       Effect.fail(
-        new WorkflowDispatchError({
+        WorkflowDispatchError.make({
           operation,
           message: "Workflow engine operation failed",
           cause,
@@ -109,7 +109,7 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
     executionConcurrency: options.executionConcurrency ?? 1,
     repairBatchSize: options.repairBatchSize ?? 32,
     dispatchTimeoutMillis: options.dispatchTimeoutMillis ?? 10_000,
-  }).pipe(Effect.mapError((error) => new WorkflowHostConfigError({ message: error.message })));
+  }).pipe(Effect.mapError((error) => WorkflowHostConfigError.make({ message: error.message })));
 
   const runtime = yield* DurableAgentRuntime;
   const crypto = yield* Crypto.Crypto;
@@ -121,7 +121,7 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
   const failpoint = yield* WorkflowDispatchFailpoint;
 
   if (runtimeConfig.deploymentId !== config.deploymentId) {
-    return yield* new WorkflowHostConfigError({
+    return yield* WorkflowHostConfigError.make({
       message: "Workflow and durable runtime deploymentId must match",
     });
   }
@@ -190,7 +190,7 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
       const initial = yield* runtime.inspectSubmissionStatus(payload.receipt).pipe(Effect.orDie);
 
       if (initial._tag === "settled") {
-        return new WorkflowSettlementReference({
+        return WorkflowSettlementReference.make({
           version: 1,
           submissionId: initial.settlement.submissionId,
           threadId: payload.receipt.threadId,
@@ -223,7 +223,7 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
       ).pipe(Effect.orDie);
 
       if (status._tag === "settled") {
-        return new WorkflowSettlementReference({
+        return WorkflowSettlementReference.make({
           version: 1,
           submissionId: status.settlement.submissionId,
           threadId: payload.receipt.threadId,
@@ -239,7 +239,7 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
   );
 
   const intentFor = Effect.fnUntraced(function* (receipt: Receipt) {
-    const payload = new WorkflowSubmission({
+    const payload = WorkflowSubmission.make({
       version: 1,
       deploymentId: config.deploymentId,
       receipt,
@@ -247,7 +247,7 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
 
     const executionId = yield* workflow.executionId(payload);
 
-    return new WorkflowDispatchIntent({
+    return WorkflowDispatchIntent.make({
       ...payload,
       workflowName: nativeName,
       executionId,
@@ -266,7 +266,7 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
         intent.deploymentId !== expected.deploymentId ||
         intent.workflowName !== expected.workflowName
       ) {
-        return yield* new WorkflowDispatchError({
+        return yield* WorkflowDispatchError.make({
           operation: "dispatch",
           message: "Dispatch identity does not match the configured Workflow",
         });
@@ -283,7 +283,7 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
         engine
           .execute(workflow, {
             executionId: intent.executionId,
-            payload: new WorkflowSubmission(intent),
+            payload: WorkflowSubmission.make(intent),
             discard: true,
           })
           .pipe(
@@ -301,7 +301,7 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
       yield* failpoint.hit("completion:after-observe", intent);
       if (Option.isNone(result) || result.value._tag !== "Complete") return false;
       if (Exit.isFailure(result.value.exit)) {
-        return yield* new WorkflowDispatchError({
+        return yield* WorkflowDispatchError.make({
           operation: "completion",
           message: "Native Workflow completed without a Settlement reference; intent retained",
           cause: result.value.exit.cause,
@@ -317,7 +317,7 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
         reference.threadId !== intent.receipt.threadId ||
         reference.settlementId !== status.settlement.settlementId
       ) {
-        return yield* new WorkflowDispatchError({
+        return yield* WorkflowDispatchError.make({
           operation: "completion",
           message: "Native completion disagrees with canonical Settlement; intent retained",
         });
@@ -367,13 +367,13 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
       }
 
       const discovered = yield* Effect.forEach(submissions, (row) =>
-        Effect.flatMap(intentFor(new Receipt(row)), dispatchIntent).pipe(Effect.result),
+        Effect.flatMap(intentFor(Receipt.make(row)), dispatchIntent).pipe(Effect.result),
       );
 
       const outstanding = yield* bounded(
         "scanIntents",
         dispatch.scan(
-          new WorkflowDispatchScan({
+          WorkflowDispatchScan.make({
             deploymentId: config.deploymentId,
             workflowName: nativeName,
             ...(intentCursor === undefined ? {} : { after: intentCursor }),
@@ -402,7 +402,7 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
 
       if (failure !== undefined) return yield* Effect.fail(failure.failure);
 
-      return new WorkflowRepairReport({
+      return WorkflowRepairReport.make({
         discovered: submissions.length,
         inspected: intents.length,
         completed: results.filter((result) => Result.isSuccess(result) && result.success).length,
@@ -432,7 +432,7 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
     InputSchema["EncodingServices"]
   > {
     if (!(yield* Ref.get(admission))) {
-      return yield* new WorkflowAdmissionClosed({ message: "The Workflow host is shutting down" });
+      return yield* WorkflowAdmissionClosed.make({ message: "The Workflow host is shutting down" });
     }
     const receipt = yield* runtime.submit(agent, input, options);
 
@@ -449,19 +449,18 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
     const parentEngine = yield* WorkflowEngine.WorkflowEngine;
 
     if (parentEngine !== engine) {
-      return yield* new WorkflowExecutionFailure({
+      return yield* WorkflowExecutionFailure.make({
         reason: "engine-mismatch",
         message: "Agent host and parent workflow must share one WorkflowEngine Layer",
       });
     }
 
     const name = yield* Schema.decodeEffect(Schema.NonEmptyString)(options.name).pipe(
-      Effect.mapError(
-        () =>
-          new WorkflowExecutionFailure({
-            reason: "invalid-name",
-            message: "Workflow agent steps need a nonempty stable name",
-          }),
+      Effect.mapError(() =>
+        WorkflowExecutionFailure.make({
+          reason: "invalid-name",
+          message: "Workflow agent steps need a nonempty stable name",
+        }),
       ),
     );
 
@@ -477,7 +476,7 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
     ]).pipe(Effect.provideService(Crypto.Crypto, crypto));
 
     if (!(yield* Ref.get(admission))) {
-      return yield* new WorkflowAdmissionClosed({ message: "The Workflow host is shutting down" });
+      return yield* WorkflowAdmissionClosed.make({ message: "The Workflow host is shutting down" });
     }
 
     const receipt = yield* runtime.submitRegistered({ definition: agent }, input, {
@@ -492,7 +491,7 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
     });
     yield* runtime.submissionStatus(receipt);
     yield* dispatchIntent(
-      new WorkflowDispatchIntent({ ...(yield* intentFor(receipt)), completionToken }),
+      WorkflowDispatchIntent.make({ ...(yield* intentFor(receipt)), completionToken }),
     );
 
     // The deferred stores only a reference. Always reauthorize and read canonical data,
@@ -506,13 +505,13 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
       reference.threadId !== receipt.threadId ||
       reference.settlementId !== record.settlementId
     ) {
-      return yield* new WorkflowDispatchError({
+      return yield* WorkflowDispatchError.make({
         operation: "result",
         message: "Workflow completion disagrees with canonical Settlement",
       });
     }
     if (record.outcome === "failed") {
-      return yield* new WorkflowExecutionFailure({
+      return yield* WorkflowExecutionFailure.make({
         reason: "failed",
         message: "Agent submission failed",
         receipt,
@@ -520,14 +519,14 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
       });
     }
     if (record.outcome === "aborted") {
-      return yield* new WorkflowExecutionFailure({
+      return yield* WorkflowExecutionFailure.make({
         reason: "aborted",
         message: "Agent submission was aborted",
         receipt,
       });
     }
     if (record.result === undefined) {
-      return yield* new WorkflowExecutionFailure({
+      return yield* WorkflowExecutionFailure.make({
         reason: "missing-output",
         message: "Completed submission has no independent output",
         receipt,
@@ -535,11 +534,10 @@ const makeHost = Effect.fnUntraced(function* (options: WorkflowAgentHostOptions)
     }
 
     return yield* Schema.decodeEffect(agent.output)(record.result).pipe(
-      Effect.mapError(
-        (cause) =>
-          new AgentOutputError({
-            message: `Cannot decode canonical agent output: ${cause.message}`,
-          }),
+      Effect.mapError((cause) =>
+        AgentOutputError.make({
+          message: `Cannot decode canonical agent output: ${cause.message}`,
+        }),
       ),
     );
   });

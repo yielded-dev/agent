@@ -29,7 +29,7 @@ export const profileBatches = Effect.fnUntraced(function* (size: number) {
   const lock = yield* Semaphore.make(1);
 
   if (size > 1)
-    return yield* new BenchError({
+    return yield* BenchError.make({
       message:
         "Select one profile type per run; captures must be spaced at least five minutes apart.",
     });
@@ -81,7 +81,7 @@ export const prepareProfile = Effect.fnUntraced(function* (options: {
     )?.namespace_id;
 
     if (!namespace || target.build !== options.query.expectedBuild)
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message: "Cannot resolve the profiling Object's namespace/build.",
       });
 
@@ -92,39 +92,55 @@ export const prepareProfile = Effect.fnUntraced(function* (options: {
       actor_id: target.actorId,
     });
 
-    const bytes = yield* Effect.tryPromise({
-      try: async (signal) => {
-        const response = await fetch(
-          `https://api.cloudflare.com/client/v4/accounts/${cloud.accountId}/workers/workers/${worker}/versions/${encodeURIComponent(target.versionId)}/profile`,
-          {
-            method: "POST",
-            signal,
-            headers: {
-              authorization: `Bearer ${cloud.apiToken}`,
-              "content-type": "application/json",
-            },
-            body,
-          },
-        );
+    const transportError = (cause: unknown) =>
+      BenchError.make({ message: `Cloudflare ${type} profile request failed.`, cause });
 
-        if (!response.ok) {
-          const retryAfter = response.headers.get("retry-after");
-
-          throw new BenchError({
-            message: `Cloudflare ${type} profile returned HTTP ${response.status}${retryAfter ? ` (Retry-After: ${retryAfter})` : ""}: ${redact(await response.text(), [cloud.apiToken, cloud.accountId, cloud.accountName]).slice(0, 1000)}`,
+    const bytes = yield* Effect.acquireUseRelease(
+      Effect.sync(() => new AbortController()),
+      (controller) =>
+        Effect.gen(function* () {
+          const response = yield* Effect.tryPromise({
+            try: () =>
+              fetch(
+                `https://api.cloudflare.com/client/v4/accounts/${cloud.accountId}/workers/workers/${worker}/versions/${encodeURIComponent(target.versionId)}/profile`,
+                {
+                  method: "POST",
+                  signal: controller.signal,
+                  headers: {
+                    authorization: `Bearer ${cloud.apiToken}`,
+                    "content-type": "application/json",
+                  },
+                  body,
+                },
+              ),
+            catch: transportError,
           });
-        }
 
-        return new Uint8Array(await response.arrayBuffer());
-      },
-      catch: (cause) =>
-        cause instanceof BenchError
-          ? cause
-          : new BenchError({ message: `Cloudflare ${type} profile request failed.` }),
-    }).pipe(Effect.timeout("65 seconds"));
+          if (!response.ok) {
+            const retryAfter = response.headers.get("retry-after");
+
+            const text = yield* Effect.tryPromise({
+              try: () => response.text(),
+              catch: transportError,
+            });
+
+            return yield* BenchError.make({
+              message: `Cloudflare ${type} profile returned HTTP ${response.status}${retryAfter ? ` (Retry-After: ${retryAfter})` : ""}: ${redact(text, [cloud.apiToken, cloud.accountId, cloud.accountName]).slice(0, 1000)}`,
+            });
+          }
+
+          return new Uint8Array(
+            yield* Effect.tryPromise({
+              try: () => response.arrayBuffer(),
+              catch: transportError,
+            }),
+          );
+        }),
+      (controller) => Effect.sync(() => controller.abort()),
+    ).pipe(Effect.timeout("65 seconds"));
 
     if (bytes.length === 0)
-      return yield* new BenchError({ message: `Cloudflare returned an empty ${type} profile.` });
+      return yield* BenchError.make({ message: `Cloudflare returned an empty ${type} profile.` });
     const query = options.query;
 
     const file = join(

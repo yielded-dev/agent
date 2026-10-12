@@ -31,7 +31,7 @@ const response = <A, I>(schema: Schema.Codec<A, I>) =>
   ]);
 
 const unavailable = () =>
-  new PlannerError({ code: "storage", message: "Trip storage is unavailable. Please retry." });
+  PlannerError.make({ code: "storage", message: "Trip storage is unavailable. Please retry." });
 
 /** Private native RPC preserves the owner catalogue while each conversation gets its own DO. */
 export const serveTripRepository = Effect.fn("serveTripRepository")(function* (encoded: string) {
@@ -86,7 +86,10 @@ export const OwnerTripRepositoryLive: Layer.Layer<
     // Worker objects acquire parent repositories only inside their authorized attempt.
     if (identity.threadId.startsWith("worker:")) {
       const denied = Effect.fail(
-        new PlannerError({ code: "invalid", message: "An authorized parent account is required." }),
+        PlannerError.make({
+          code: "invalid",
+          message: "An authorized parent account is required.",
+        }),
       );
 
       return Layer.succeed(TripRepository, {
@@ -113,8 +116,8 @@ export const tripRepositoryForOwner = (
   env: Cloudflare.Env,
   storageOwner: string,
 ): TripRepository["Service"] => {
-  const call = <A, I>(schema: Schema.Codec<A, I>, request: typeof Request.Type) =>
-    Effect.gen(function* () {
+  const call = Effect.fnUntraced(
+    function* <A, I>(schema: Schema.Codec<A, I>, request: typeof Request.Type) {
       const encoded = yield* Schema.encodeEffect(Schema.fromJsonString(Request))(request);
 
       const reply = yield* Effect.tryPromise({
@@ -127,7 +130,9 @@ export const tripRepositoryForOwner = (
       if (result._tag === "Failure") return yield* result.error;
 
       return result.value;
-    }).pipe(Effect.catchTag("SchemaError", unavailable));
+    },
+    (effect) => effect.pipe(Effect.catchTag("SchemaError", unavailable)),
+  );
 
   return {
     list: call(Schema.Array(Trip), { _tag: "List" }),

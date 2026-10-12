@@ -39,7 +39,7 @@ export const checkDeployment = Effect.gen(function* () {
     const exitCode = yield* child.exitCode;
 
     if (exitCode !== 0) {
-      return yield* new DeploymentCheckError({ command: ["vp", ...args].join(" "), exitCode });
+      return yield* DeploymentCheckError.make({ command: ["vp", ...args].join(" "), exitCode });
     }
   }
 });

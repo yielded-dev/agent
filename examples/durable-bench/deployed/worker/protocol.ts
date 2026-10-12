@@ -306,7 +306,7 @@ export const transientObjectTransport = (cause: unknown): TransientObjectTranspo
       cause.message,
     )
   )
-    return new TransientObjectTransport({
+    return TransientObjectTransport.make({
       reason: "storage-reset",
       message: "Internal error in Durable Object storage caused object to be reset",
     });
@@ -314,7 +314,7 @@ export const transientObjectTransport = (cause: unknown): TransientObjectTranspo
     cause.message ===
     "Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request."
   )
-    return new TransientObjectTransport({
+    return TransientObjectTransport.make({
       reason: "object-connection-lost",
       message: cause.message,
     });

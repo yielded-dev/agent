@@ -111,7 +111,7 @@ const verifyCallerScopeRequirements = () => {
   const projectionRun = AgentRuntime.run(projectionAgent, "question");
 
   const options: RunOptions<HookFailure, CallerService | Scope.Scope> = {
-    onHistory: () => scopedText.pipe(Effect.andThen(Effect.fail(new HookFailure()))),
+    onHistory: () => scopedText.pipe(Effect.andThen(Effect.fail(HookFailure.make()))),
   };
 
   const hookRun = AgentRuntime.run(plain, "question", options);

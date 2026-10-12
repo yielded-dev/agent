@@ -119,8 +119,8 @@ export const makeEventSource = Effect.fnUntraced(function* <
       Effect.provideContext(services),
     );
 
-  const parameters: EventSource["parameters"] = (value) =>
-    Effect.gen(function* () {
+  const parameters: EventSource["parameters"] = Effect.fnUntraced(
+    function* (value) {
       yield* Schema.decodeUnknownEffect(PersistedJson)(value).pipe(Effect.mapError(invalid));
 
       const decoded = yield* Schema.decodeUnknownEffect(options.parameters)(value).pipe(
@@ -131,10 +131,12 @@ export const makeEventSource = Effect.fnUntraced(function* <
         parameters: yield* encode(options.parameters, decoded),
         matchingKey: options.parameterKey(decoded),
       };
-    }).pipe(Effect.scoped, Effect.provideContext(services));
+    },
+    (effect) => effect.pipe(Effect.scoped, Effect.provideContext(services)),
+  );
 
-  const matches: EventSource["matches"] = (event, subscription) =>
-    Effect.gen(function* () {
+  const matches: EventSource["matches"] = Effect.fnUntraced(
+    function* (event, subscription) {
       const e = yield* Schema.decodeEffect(options.event)(event.payload).pipe(
         Effect.mapError(invalid),
       );
@@ -144,7 +146,9 @@ export const makeEventSource = Effect.fnUntraced(function* <
       ).pipe(Effect.mapError(invalid));
 
       return options.matches(e, p);
-    }).pipe(Effect.scoped, Effect.provideContext(services));
+    },
+    (effect) => effect.pipe(Effect.scoped, Effect.provideContext(services)),
+  );
 
   const reconcile = options.reconcile;
 
@@ -157,8 +161,8 @@ export const makeEventSource = Effect.fnUntraced(function* <
     ...(reconcile === undefined
       ? {}
       : {
-          reconcile: (subscription: SubscriptionRecord) =>
-            Effect.gen(function* () {
+          reconcile: Effect.fnUntraced(
+            function* (subscription: SubscriptionRecord) {
               const p = yield* Schema.decodeEffect(options.parameters)(
                 subscription.configuration.parameters,
               ).pipe(Effect.mapError(invalid));
@@ -166,7 +170,9 @@ export const makeEventSource = Effect.fnUntraced(function* <
               const event = yield* reconcile(p);
 
               return event === null ? null : yield* normalized(event);
-            }).pipe(Effect.scoped, Effect.provideContext(services)),
+            },
+            (effect) => effect.pipe(Effect.scoped, Effect.provideContext(services)),
+          ),
         }),
   };
 });

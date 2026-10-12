@@ -134,8 +134,8 @@ export const makeSubscriptionPartitionAlarmHandler = Effect.fnUntraced(function*
 
   return {
     tag: options.tag,
-    handle: (event) =>
-      Effect.gen(function* () {
+    handle: Effect.fnUntraced(
+      function* (event) {
         if (event.tag !== options.tag)
           return yield* SubscriptionAlarmProtocolError.make({
             message: "Ancillary alarm tag mismatch",
@@ -148,14 +148,17 @@ export const makeSubscriptionPartitionAlarmHandler = Effect.fnUntraced(function*
         );
 
         yield* options.handle({ ...event, payload });
-      }).pipe(
-        Effect.scoped,
-        Effect.timeoutOrElse({
-          duration: options.timeoutMillis,
-          orElse: () => SubscriptionAlarmExtensionError.make({ code: "timeout" }),
-        }),
-        Effect.provideContext(services),
-      ),
+      },
+      (effect) =>
+        effect.pipe(
+          Effect.scoped,
+          Effect.timeoutOrElse({
+            duration: options.timeoutMillis,
+            orElse: () => SubscriptionAlarmExtensionError.make({ code: "timeout" }),
+          }),
+          Effect.provideContext(services),
+        ),
+    ),
   };
 });
 
@@ -429,183 +432,174 @@ export class CloudflareSubscriptionsClient {
         const subscriptions = Subscriptions.of({
           recoverSubscription: (scope, key, revision) =>
             changeState(scope, key, revision, "RecoverSubscription"),
-          getSubscription: (scope, key) =>
-            Effect.gen(function* () {
-              const response = yield* call(scope.partition, {
-                _tag: "GetSubscription",
-                schemaVersion: 1,
-                scope,
-                key,
-              });
+          getSubscription: Effect.fnUntraced(function* (scope, key) {
+            const response = yield* call(scope.partition, {
+              _tag: "GetSubscription",
+              schemaVersion: 1,
+              scope,
+              key,
+            });
 
-              if (response._tag === "Snapshot") return response.value;
-              const failure = failed(response);
+            if (response._tag === "Snapshot") return response.value;
+            const failure = failed(response);
 
-              return yield* failure._tag === "SubscriptionError" ? failure : asProtocolError();
-            }),
-          recoverDelivery: (scope, key, expectedGeneration) =>
-            Effect.gen(function* () {
-              const response = yield* call(scope.partition, {
-                _tag: "RecoverDelivery",
-                expectedGeneration,
-                schemaVersion: 1,
-                scope,
-                key,
-              });
+            return yield* failure._tag === "SubscriptionError" ? failure : asProtocolError();
+          }),
+          recoverDelivery: Effect.fnUntraced(function* (scope, key, expectedGeneration) {
+            const response = yield* call(scope.partition, {
+              _tag: "RecoverDelivery",
+              expectedGeneration,
+              schemaVersion: 1,
+              scope,
+              key,
+            });
 
-              if (response._tag === "DeliverySnapshot") return response.value;
-              const failure = failed(response);
+            if (response._tag === "DeliverySnapshot") return response.value;
+            const failure = failed(response);
 
-              return yield* failure._tag === "SubscriptionError" ||
-              failure._tag === "SubscriptionFailpointError"
-                ? failure
-                : asProtocolError();
-            }),
-          updateSubscription: (scope, key, expectedRevision, options) =>
-            Effect.gen(function* () {
-              const response = yield* call(scope.partition, {
-                _tag: "UpdateSubscription",
-                schemaVersion: 1,
-                scope,
-                key,
-                expectedRevision,
-                options,
-              });
+            return yield* failure._tag === "SubscriptionError" ||
+            failure._tag === "SubscriptionFailpointError"
+              ? failure
+              : asProtocolError();
+          }),
+          updateSubscription: Effect.fnUntraced(function* (scope, key, expectedRevision, options) {
+            const response = yield* call(scope.partition, {
+              _tag: "UpdateSubscription",
+              schemaVersion: 1,
+              scope,
+              key,
+              expectedRevision,
+              options,
+            });
 
-              if (response._tag === "Snapshot") return response.value;
-              const failure = failed(response);
+            if (response._tag === "Snapshot") return response.value;
+            const failure = failed(response);
 
-              return yield* failure._tag === "SubscriptionError" ||
-              failure._tag === "SubscriptionFailpointError" ||
-              failure._tag === "SubscriptionSourceError"
-                ? failure
-                : asProtocolError();
-            }),
+            return yield* failure._tag === "SubscriptionError" ||
+            failure._tag === "SubscriptionFailpointError" ||
+            failure._tag === "SubscriptionSourceError"
+              ? failure
+              : asProtocolError();
+          }),
           pauseSubscription: (scope, key, revision) =>
             changeState(scope, key, revision, "PauseSubscription"),
           resumeSubscription: (scope, key, revision) =>
             changeState(scope, key, revision, "ResumeSubscription"),
-          subscribe: (scope, options) =>
-            Effect.gen(function* () {
-              const response = yield* call(scope.partition, {
-                _tag: "Subscribe",
-                schemaVersion: 1,
-                scope,
-                options,
-              });
+          subscribe: Effect.fnUntraced(function* (scope, options) {
+            const response = yield* call(scope.partition, {
+              _tag: "Subscribe",
+              schemaVersion: 1,
+              scope,
+              options,
+            });
 
-              if (response._tag === "Snapshot") return response.value;
-              const failure = failed(response);
+            if (response._tag === "Snapshot") return response.value;
+            const failure = failed(response);
 
-              if (
-                failure._tag === "SubscriptionError" ||
-                failure._tag === "SubscriptionSourceError" ||
-                failure._tag === "SubscriptionFailpointError"
-              )
-                return yield* failure;
+            if (
+              failure._tag === "SubscriptionError" ||
+              failure._tag === "SubscriptionSourceError" ||
+              failure._tag === "SubscriptionFailpointError"
+            )
+              return yield* failure;
 
-              return yield* asProtocolError();
-            }),
-          listSubscriptions: (scope, after, limit) =>
-            Effect.gen(function* () {
-              const response = yield* call(scope.partition, {
-                _tag: "ListSubscriptions",
-                schemaVersion: 1,
-                scope,
-                ...(after === undefined ? {} : { after }),
-                ...(limit === undefined ? {} : { limit }),
-              });
+            return yield* asProtocolError();
+          }),
+          listSubscriptions: Effect.fnUntraced(function* (scope, after, limit) {
+            const response = yield* call(scope.partition, {
+              _tag: "ListSubscriptions",
+              schemaVersion: 1,
+              scope,
+              ...(after === undefined ? {} : { after }),
+              ...(limit === undefined ? {} : { limit }),
+            });
 
-              if (response._tag === "SubscriptionPage") return response.value;
-              const failure = failed(response);
+            if (response._tag === "SubscriptionPage") return response.value;
+            const failure = failed(response);
 
-              return yield* failure._tag === "SubscriptionError" ? failure : asProtocolError();
-            }),
-          cancelSubscription: (scope, key, expectedRevision) =>
-            Effect.gen(function* () {
-              const response = yield* call(scope.partition, {
-                _tag: "CancelSubscription",
-                ...(expectedRevision === undefined ? {} : { expectedRevision }),
-                schemaVersion: 1,
-                scope,
-                key,
-              });
+            return yield* failure._tag === "SubscriptionError" ? failure : asProtocolError();
+          }),
+          cancelSubscription: Effect.fnUntraced(function* (scope, key, expectedRevision) {
+            const response = yield* call(scope.partition, {
+              _tag: "CancelSubscription",
+              ...(expectedRevision === undefined ? {} : { expectedRevision }),
+              schemaVersion: 1,
+              scope,
+              key,
+            });
 
-              if (response._tag === "Snapshot") return response.value;
-              const failure = failed(response);
+            if (response._tag === "Snapshot") return response.value;
+            const failure = failed(response);
 
-              if (
-                failure._tag === "SubscriptionError" ||
-                failure._tag === "SubscriptionFailpointError"
-              )
-                return yield* failure;
+            if (
+              failure._tag === "SubscriptionError" ||
+              failure._tag === "SubscriptionFailpointError"
+            )
+              return yield* failure;
 
-              return yield* asProtocolError();
-            }),
-          listDeliveries: (scope, key, after, limit) =>
-            Effect.gen(function* () {
-              const response = yield* call(scope.partition, {
-                _tag: "ListDeliveries",
-                schemaVersion: 1,
-                scope,
-                key,
-                ...(after === undefined ? {} : { after }),
-                ...(limit === undefined ? {} : { limit }),
-              });
+            return yield* asProtocolError();
+          }),
+          listDeliveries: Effect.fnUntraced(function* (scope, key, after, limit) {
+            const response = yield* call(scope.partition, {
+              _tag: "ListDeliveries",
+              schemaVersion: 1,
+              scope,
+              key,
+              ...(after === undefined ? {} : { after }),
+              ...(limit === undefined ? {} : { limit }),
+            });
 
-              if (response._tag === "DeliveryPage") return response.value;
-              const failure = failed(response);
+            if (response._tag === "DeliveryPage") return response.value;
+            const failure = failed(response);
 
-              return yield* failure._tag === "SubscriptionError" ? failure : asProtocolError();
-            }),
+            return yield* failure._tag === "SubscriptionError" ? failure : asProtocolError();
+          }),
         });
 
         const intake = SubscriptionIntake.of({
-          accept: (principal, source, payload) =>
-            Effect.gen(function* () {
-              const request = yield* Schema.decodeUnknownEffect(AcceptRequest)({
-                _tag: "Accept",
-                schemaVersion: 1,
-                partition,
-                principal,
-                source,
-                payload,
-              }).pipe(
-                Effect.mapError(() =>
-                  SubscriptionError.make({ reason: "validation", code: "event-payload" }),
-                ),
-              );
+          accept: Effect.fnUntraced(function* (principal, source, payload) {
+            const request = yield* Schema.decodeUnknownEffect(AcceptRequest)({
+              _tag: "Accept",
+              schemaVersion: 1,
+              partition,
+              principal,
+              source,
+              payload,
+            }).pipe(
+              Effect.mapError(() =>
+                SubscriptionError.make({ reason: "validation", code: "event-payload" }),
+              ),
+            );
 
-              const response = yield* call(request.partition, request);
+            const response = yield* call(request.partition, request);
 
-              if (response._tag === "Acknowledgement") return response.value;
-              const failure = failed(response);
+            if (response._tag === "Acknowledgement") return response.value;
+            const failure = failed(response);
 
-              if (
-                failure._tag === "SubscriptionError" ||
-                failure._tag === "SubscriptionSourceError" ||
-                failure._tag === "SubscriptionFailpointError"
-              )
-                return yield* failure;
+            if (
+              failure._tag === "SubscriptionError" ||
+              failure._tag === "SubscriptionSourceError" ||
+              failure._tag === "SubscriptionFailpointError"
+            )
+              return yield* failure;
 
-              return yield* asProtocolError();
-            }),
-          status: (principal, source, eventId) =>
-            Effect.gen(function* () {
-              const response = yield* call(partition, {
-                _tag: "Status",
-                schemaVersion: 1,
-                partition,
-                principal,
-                source,
-                eventId,
-              });
+            return yield* asProtocolError();
+          }),
+          status: Effect.fnUntraced(function* (principal, source, eventId) {
+            const response = yield* call(partition, {
+              _tag: "Status",
+              schemaVersion: 1,
+              partition,
+              principal,
+              source,
+              eventId,
+            });
 
-              if (response._tag === "Status") return response.value;
-              const failure = failed(response);
+            if (response._tag === "Status") return response.value;
+            const failure = failed(response);
 
-              return yield* failure._tag === "SubscriptionError" ? failure : asProtocolError();
-            }),
+            return yield* failure._tag === "SubscriptionError" ? failure : asProtocolError();
+          }),
         });
 
         return Context.make(Subscriptions, subscriptions).pipe(
@@ -799,40 +793,39 @@ const transactionLayer: Layer.Layer<
     const alarms = yield* DurableObjectAlarm.DurableObjectAlarm;
 
     return DoSubscriptionTransaction.of({
-      run: (body) =>
-        Effect.gen(function* () {
-          const nowMillis = yield* Clock.currentTimeMillis;
+      run: Effect.fnUntraced(function* (body) {
+        const nowMillis = yield* Clock.currentTimeMillis;
 
-          return yield* alarms
-            .transaction((transaction) =>
-              body((replacement) =>
-                replacement.deadlineAtMillis === null
-                  ? transaction
-                      .cancelAlarm({ id: SUBSCRIPTION_ALARM_ID, tag: SUBSCRIPTION_ALARM_TAG })
-                      .pipe(Effect.mapError(alarmStorageError("cancel-subscription-alarm")))
-                  : Effect.fromOption(
-                      DateTime.make(Math.max(replacement.deadlineAtMillis, nowMillis + 1)),
-                    ).pipe(
-                      Effect.mapError(() => corruptFailure("subscription-alarm-deadline")),
-                      Effect.flatMap((runAt) =>
-                        transaction
-                          .scheduleAlarm({
-                            id: SUBSCRIPTION_ALARM_ID,
-                            tag: SUBSCRIPTION_ALARM_TAG,
-                            runAt,
-                            payload: { schemaVersion: 1, generation: replacement.generation },
-                          })
-                          .pipe(Effect.mapError(alarmStorageError("schedule-subscription-alarm"))),
-                      ),
+        return yield* alarms
+          .transaction((transaction) =>
+            body((replacement) =>
+              replacement.deadlineAtMillis === null
+                ? transaction
+                    .cancelAlarm({ id: SUBSCRIPTION_ALARM_ID, tag: SUBSCRIPTION_ALARM_TAG })
+                    .pipe(Effect.mapError(alarmStorageError("cancel-subscription-alarm")))
+                : Effect.fromOption(
+                    DateTime.make(Math.max(replacement.deadlineAtMillis, nowMillis + 1)),
+                  ).pipe(
+                    Effect.mapError(() => corruptFailure("subscription-alarm-deadline")),
+                    Effect.flatMap((runAt) =>
+                      transaction
+                        .scheduleAlarm({
+                          id: SUBSCRIPTION_ALARM_ID,
+                          tag: SUBSCRIPTION_ALARM_TAG,
+                          runAt,
+                          payload: { schemaVersion: 1, generation: replacement.generation },
+                        })
+                        .pipe(Effect.mapError(alarmStorageError("schedule-subscription-alarm"))),
                     ),
-              ),
-            )
-            .pipe(
-              Effect.catchTag("StorageOperationError", () =>
-                storageFailure("commit-subscription-transaction"),
-              ),
-            );
-        }),
+                  ),
+            ),
+          )
+          .pipe(
+            Effect.catchTag("StorageOperationError", () =>
+              storageFailure("commit-subscription-transaction"),
+            ),
+          );
+      }),
     });
   }),
 );

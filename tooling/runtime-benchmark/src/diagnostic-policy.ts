@@ -132,8 +132,8 @@ export const runPolicyCase = Effect.fn("diagnostic.policy")(function* (workload:
           _tag: "Stream",
           parts: parts(turn),
           termination: { _tag: "Complete" },
-          assertRequest: (request) =>
-            Effect.gen(function* () {
+          assertRequest: Effect.fnUntraced(
+            function* (request) {
               const at = yield* stamp(`provider:${turn + 1}`);
 
               if (providers === 0) firstProviderMs = at;
@@ -156,16 +156,19 @@ export const runPolicyCase = Effect.fn("diagnostic.policy")(function* (workload:
                   ),
                 "Provider lost, reordered, or duplicated successful tool results",
               );
-            }).pipe(
-              Effect.provideService(DiagnosticProgress, evidence),
-              Effect.mapError((cause) =>
-                AiError.AiError.make({
-                  module: "runtime-diagnostics",
-                  method: "policy.assertRequest",
-                  reason: AiError.UnknownError.make({ description: cause.message }),
-                }),
+            },
+            (effect) =>
+              effect.pipe(
+                Effect.provideService(DiagnosticProgress, evidence),
+                Effect.mapError((cause) =>
+                  AiError.AiError.make({
+                    module: "runtime-diagnostics",
+                    method: "policy.assertRequest",
+                    reason: AiError.UnknownError.make({ description: cause.message }),
+                  }),
+                ),
               ),
-            ),
+          ),
           onStreamFinalize: Effect.sync(() => {
             streamsClosed++;
           }),
@@ -228,8 +231,8 @@ export const runPolicyCase = Effect.fn("diagnostic.policy")(function* (workload:
 
       const preparation = RunContextPreparation.of({
         hook: {
-          prepare: (request) =>
-            Effect.gen(function* () {
+          prepare: Effect.fnUntraced(
+            function* (request) {
               const before = yield* stamp(`prepare:start:${request.turn}`);
 
               yield* check(
@@ -265,7 +268,10 @@ export const runPolicyCase = Effect.fn("diagnostic.policy")(function* (workload:
                 prompt: request.source,
                 modelCall: { model: Layer.merge(captured, acquisition), context },
               };
-            }).pipe(Effect.provideService(DiagnosticProgress, evidence), Effect.orDie),
+            },
+            (effect) =>
+              effect.pipe(Effect.provideService(DiagnosticProgress, evidence), Effect.orDie),
+          ),
         },
       });
 

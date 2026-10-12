@@ -45,35 +45,34 @@ const options: MemoryNotes.Options = {
 
 /** Local step journal for replaying this one Tool Call through its public DurableStep seam. */
 const steps = (saved = new Map<string, unknown>()): DurableStep["Service"] => ({
-  do: (name, output, execute) =>
-    Effect.gen(function* () {
-      if (saved.has(name)) {
-        return yield* Schema.decodeUnknownEffect(output)(saved.get(name)).pipe(
-          Effect.mapError(() =>
-            DurableStepError.make({
-              stepName: name,
-              reason: "recorded-result-invalid",
-              message: "Invalid saved step",
-            }),
-          ),
-        );
-      }
-      const result = yield* execute;
-
-      const encoded = yield* Schema.encodeEffect(output)(result).pipe(
+  do: Effect.fnUntraced(function* (name, output, execute) {
+    if (saved.has(name)) {
+      return yield* Schema.decodeUnknownEffect(output)(saved.get(name)).pipe(
         Effect.mapError(() =>
           DurableStepError.make({
             stepName: name,
-            reason: "output-encoding-failed",
-            message: "Could not encode step",
+            reason: "recorded-result-invalid",
+            message: "Invalid saved step",
           }),
         ),
       );
+    }
+    const result = yield* execute;
 
-      saved.set(name, encoded);
+    const encoded = yield* Schema.encodeEffect(output)(result).pipe(
+      Effect.mapError(() =>
+        DurableStepError.make({
+          stepName: name,
+          reason: "output-encoding-failed",
+          message: "Could not encode step",
+        }),
+      ),
+    );
 
-      return result;
-    }),
+    saved.set(name, encoded);
+
+    return result;
+  }),
 });
 
 /** The scenario uses the core transition and receipt-first reconciliation, then loses one ack. */

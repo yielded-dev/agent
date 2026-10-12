@@ -14,6 +14,7 @@ function setFileSelection(element: object, encoded: string, name: string, type: 
     Reflect.get(element, "disabled") ||
     Reflect.get(element, "webkitdirectory")
   ) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Runs in Chromium; a native exception is the CDP evaluation failure protocol.
     throw new Error("The target is not an enabled file input");
   }
   const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
@@ -30,6 +31,7 @@ function setFileSelection(element: object, encoded: string, name: string, type: 
     selected[0]?.name !== name ||
     selected[0]?.type !== type
   ) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Runs in Chromium; a native exception is the CDP evaluation failure protocol.
     throw new Error("The input did not retain the selected file");
   }
   const dispatch = Reflect.get(element, "dispatchEvent");
@@ -48,7 +50,9 @@ export const makeFileSelection =
         await session.send("Page.enable");
         await session.send("Page.setInterceptFileChooserDialog", { enabled: true });
       } catch (cause) {
-        await session.detach();
+        // Initialization remains the primary failure if best-effort cleanup also rejects.
+        await session.detach().catch(() => {});
+        // oxlint-disable-next-line effect/no-untyped-throw -- Preserve the original CDP initialization failure after detaching its session.
         throw cause;
       }
     }
@@ -68,11 +72,14 @@ export const makeFileSelection =
       const opened = new Promise<number>((resolve, reject) => {
         onOpened = (event) =>
           event.backendNodeId === undefined
-            ? reject(new Error("The chooser has no file input"))
+            ? // oxlint-disable-next-line effect/no-native-error -- Native CDP file-chooser port rejects through its Promise; its Effect caller owns typed error mapping.
+              reject(new Error("The chooser has no file input"))
             : resolve(event.backendNodeId);
+        // oxlint-disable-next-line effect/no-native-error -- Native CDP file-chooser port rejects through its Promise; its Effect caller owns typed error mapping.
         onAbort = () => reject(new Error("File selection interrupted"));
         session.on("Page.fileChooserOpened", onOpened);
         signal.addEventListener("abort", onAbort, { once: true });
+        // oxlint-disable-next-line effect/no-native-error -- Native CDP file-chooser port rejects through its Promise; its Effect caller owns typed error mapping.
         timer = setTimeout(() => reject(new Error("No file chooser opened")), 5_000);
         if (signal.aborted) onAbort();
       });
@@ -80,12 +87,15 @@ export const makeFileSelection =
       try {
         const [backendNodeId] = await Promise.all([opened, element.click()]);
 
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Native CDP file-chooser port rejects through its Promise; its Effect caller owns typed error mapping.
         if (signal.aborted) throw new Error("File selection interrupted");
         const resolved = await session.send("DOM.resolveNode", { backendNodeId });
 
         const objectId = resolved.object.objectId;
 
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Native CDP file-chooser port rejects through its Promise; its Effect caller owns typed error mapping.
         if (objectId === undefined) throw new Error("The chooser has no file input");
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Native CDP file-chooser port rejects through its Promise; its Effect caller owns typed error mapping.
         if (signal.aborted) throw new Error("File selection interrupted");
 
         const result = await session.send("Runtime.callFunctionOn", {
@@ -100,6 +110,7 @@ export const makeFileSelection =
         });
 
         if (result.exceptionDetails !== undefined)
+          // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Native CDP file-chooser port rejects through its Promise; its Effect caller owns typed error mapping.
           throw new Error("The chooser did not select the file");
       } finally {
         clearTimeout(timer);

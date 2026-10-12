@@ -146,22 +146,21 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer))("native Tool exposure", 
 
           const discovery = ToolDiscovery.make({
             maxResultBytes,
-            search: (_request, catalogue) =>
-              Effect.gen(function* () {
-                expect(catalogue.map((entry) => entry.name)).toEqual([
-                  "discover_tools",
-                  "read",
-                  "status",
-                  "write",
-                ]);
-                yield* Effect.addFinalizer(() =>
-                  Effect.sync(() => {
-                    finalized++;
-                  }),
-                );
+            search: Effect.fnUntraced(function* (_request, catalogue) {
+              expect(catalogue.map((entry) => entry.name)).toEqual([
+                "discover_tools",
+                "read",
+                "status",
+                "write",
+              ]);
+              yield* Effect.addFinalizer(() =>
+                Effect.sync(() => {
+                  finalized++;
+                }),
+              );
 
-                return ["native:read", "native:write"];
-              }),
+              return ["native:read", "native:write"];
+            }),
           });
 
           const actions = Toolkit.make(

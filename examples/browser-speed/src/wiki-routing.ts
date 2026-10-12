@@ -38,7 +38,7 @@ export const chooseRoute = Effect.fnUntraced(function* (page: RoutePage) {
   const trace = yield* Trace;
 
   if (!page.links.length || page.links.length > 5_000)
-    return yield* new LabError({
+    return yield* LabError.make({
       code: "invalid",
       message:
         "Jev routing requires 1–5,000 eligible article links; no links were silently dropped.",
@@ -83,7 +83,7 @@ export const chooseRoute = Effect.fnUntraced(function* (page: RoutePage) {
           duration: "15 seconds",
           orElse: () =>
             Effect.fail(
-              new LabError({
+              LabError.make({
                 code: "browser",
                 message: "Jev route decision timed out. No click was dispatched.",
               }),
@@ -92,7 +92,7 @@ export const chooseRoute = Effect.fnUntraced(function* (page: RoutePage) {
         Effect.mapError((error) =>
           error._tag === "LabError"
             ? error
-            : new LabError({
+            : LabError.make({
                 code: "browser",
                 message: `Jev route decision failed (${error.reason._tag}): ${"description" in error.reason ? (error.reason.description?.slice(0, 1000) ?? "No provider detail.") : "No provider detail."} No click was dispatched.`,
               }),
@@ -128,7 +128,7 @@ export const chooseRoute = Effect.fnUntraced(function* (page: RoutePage) {
       const link = links.find((link) => link.ref === answer?.label);
 
       if (!link)
-        return yield* new LabError({
+        return yield* LabError.make({
           code: "invalid",
           message: "Jev selected an unavailable route. No click was dispatched.",
         });
@@ -159,7 +159,7 @@ export const chooseRoute = Effect.fnUntraced(function* (page: RoutePage) {
   const selected = finalists[0];
 
   if (!selected)
-    return yield* new LabError({
+    return yield* LabError.make({
       code: "invalid",
       message: "Jev returned no next hop. The race ended without a click.",
     });

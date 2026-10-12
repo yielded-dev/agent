@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "astro dev",
     "preview": "astro preview",
-    "check": "tsc --noEmit -p tsconfig.json"
+    "check": "vp run -w check:docs"
   },
   "dependencies": {
     "@astrojs/starlight": "catalog:",

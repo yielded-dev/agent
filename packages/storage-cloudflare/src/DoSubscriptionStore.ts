@@ -89,6 +89,7 @@ const layoutStatements = [
 const layoutObjects = layoutStatements.map((statement, index) => {
   const name = /^CREATE (TABLE|INDEX) ([a-z_][a-z_0-9]*)/.exec(statement);
 
+  // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Module initialization validates developer-authored SQL constants before any storage workflow starts.
   if (name === null) throw new Error("Invalid subscription layout statement");
 
   return [name[1].toLowerCase(), name[2], index] as const;

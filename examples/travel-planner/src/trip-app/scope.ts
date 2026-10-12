@@ -15,7 +15,7 @@ export const requireAppTrip = Effect.fn("requireAppTrip")(function* (tripId: str
     identity.threadId !== ownerOfThread(identity.threadId) &&
     (yield* trips.conversationId(tripId)) !== identity.threadId
   )
-    return yield* new PlannerError({
+    return yield* PlannerError.make({
       code: "invalid",
       message: "Open this trip's conversation to change its app.",
     });

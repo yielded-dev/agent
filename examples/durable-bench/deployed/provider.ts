@@ -12,6 +12,10 @@ import {
 
 const encoder = new TextEncoder();
 const sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
+
+const invalidRequest = () =>
+  Response.json({ error: "Invalid benchmark model request." }, { status: 400 });
+
 const Header = Schema.Struct({ model: Schema.String, stream: Schema.Literal(true) });
 
 export default {
@@ -36,7 +40,7 @@ export default {
         url.searchParams.get("objectBuild"),
       );
 
-      if (objectBuild !== query.expectedBuild) throw new Error("Object build mismatch");
+      if (objectBuild !== query.expectedBuild) return invalidRequest();
       const raw = await request.text();
       const json: unknown = JSON.parse(raw);
       const { model } = Schema.decodeUnknownSync(Header)(json);
@@ -56,14 +60,13 @@ export default {
           query.chunkDelayMs !== 0 ||
           query.textStreaming)
       )
-        throw new Error("Seed replay requires a historical turn and the instant provider.");
+        return invalidRequest();
 
       const expected = seed
         ? history(seedIndex, seedIndex + 1)[0]?.text
         : turn(query.sample, MEASURED_TOOLS).text;
 
-      if (messages.findLast((m) => m.role === "user")?.text !== expected)
-        throw new Error("Unexpected benchmark workload.");
+      if (messages.findLast((m) => m.role === "user")?.text !== expected) return invalidRequest();
       const step = next(messages);
 
       const text =
@@ -200,7 +203,7 @@ export default {
         },
       });
     } catch {
-      return Response.json({ error: "Invalid benchmark model request." }, { status: 400 });
+      return invalidRequest();
     }
   },
 };

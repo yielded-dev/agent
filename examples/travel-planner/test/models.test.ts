@@ -391,30 +391,29 @@ it.effect(
         crypto.subtle.importKey("raw", encryption, "AES-GCM", false, ["encrypt"]),
       );
 
-      const seal = (owner: string, secret: string) =>
-        Effect.gen(function* () {
-          const iv = crypto.getRandomValues(new Uint8Array(12));
+      const seal = Effect.fnUntraced(function* (owner: string, secret: string) {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
 
-          const encrypted = yield* Effect.promise(() =>
-            crypto.subtle.encrypt(
-              {
-                name: "AES-GCM",
-                iv,
-                additionalData: new TextEncoder().encode(`travel-planner:openai:v1:${owner}`),
-              },
-              key,
-              new TextEncoder().encode(secret),
-            ),
-          );
+        const encrypted = yield* Effect.promise(() =>
+          crypto.subtle.encrypt(
+            {
+              name: "AES-GCM",
+              iv,
+              additionalData: new TextEncoder().encode(`travel-planner:openai:v1:${owner}`),
+            },
+            key,
+            new TextEncoder().encode(secret),
+          ),
+        );
 
-          return JSON.stringify({
-            version: 1,
-            iv: btoa(String.fromCharCode(...iv)),
-            ciphertext: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
-            lastFour: secret.slice(-4),
-            updatedAt: "2026-09-10T00:00:00Z",
-          });
+        return JSON.stringify({
+          version: 1,
+          iv: btoa(String.fromCharCode(...iv)),
+          ciphertext: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
+          lastFour: secret.slice(-4),
+          updatedAt: "2026-09-10T00:00:00Z",
         });
+      });
 
       const alice = "alice-account";
       const bob = "bob-account";

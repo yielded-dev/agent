@@ -164,14 +164,13 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
     );
 
     const handlers = tools.toLayer({
-      work: ({ name }) =>
-        Effect.gen(function* () {
-          executions.push(name);
-          yield* Deferred.succeed(toolStarted, undefined);
-          yield* Deferred.await(releaseTool);
+      work: Effect.fnUntraced(function* ({ name }) {
+        executions.push(name);
+        yield* Deferred.succeed(toolStarted, undefined);
+        yield* Deferred.await(releaseTool);
 
-          return name;
-        }),
+        return name;
+      }),
     });
 
     const observedLedger = Layer.effect(
@@ -199,15 +198,14 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
               Effect.map(
                 Option.map((session) => ({
                   ...session,
-                  claimJoining: (maxCount) =>
-                    Effect.gen(function* () {
-                      const gate = joinBatches[prompts.length - 1];
+                  claimJoining: Effect.fnUntraced(function* (maxCount) {
+                    const gate = joinBatches[prompts.length - 1];
 
-                      if (scenario === "backlog" && !recovering && gate !== undefined)
-                        yield* Deferred.await(gate);
+                    if (scenario === "backlog" && !recovering && gate !== undefined)
+                      yield* Deferred.await(gate);
 
-                      return yield* session.claimJoining(maxCount);
-                    }),
+                    return yield* session.claimJoining(maxCount);
+                  }),
                 })),
               ),
             ),
@@ -234,8 +232,8 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
                   Layer.effect(
                     DurableRuntimeFailpoint,
                     Effect.map(ThreadStore, (store) => ({
-                      hit: (location) =>
-                        Effect.gen(function* () {
+                      hit: Effect.fnUntraced(
+                        function* (location) {
                           if (
                             location !== "terminalize:before-publication" ||
                             completing.length > 0
@@ -254,7 +252,9 @@ it.each(["reply", "tools", "eviction", "backlog", "rejected"] as const)(
                               }),
                             ),
                           );
-                        }).pipe(Effect.orDie),
+                        },
+                        (effect) => effect.pipe(Effect.orDie),
+                      ),
                     })),
                   ),
                 ),

@@ -49,7 +49,7 @@ export class BrowserRunSessionLifecycle extends Context.Service<
           !Schema.is(Account)(options.accountId) ||
           Redacted.value(options.apiToken).length === 0
         ) {
-          return yield* new BrowserRunCleanupError({ reason: "configuration" });
+          return yield* BrowserRunCleanupError.make({ reason: "configuration" });
         }
         const client = yield* HttpClient.HttpClient;
 
@@ -65,39 +65,38 @@ export class BrowserRunSessionLifecycle extends Context.Service<
             .pipe(
               // workerd supports manual/follow, not error. Reject every redirect below.
               Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
-              Effect.mapError(
-                (cause) =>
-                  new BrowserRunCleanupError({
-                    reason: "provider",
-                    cause: browserFailure("browser.close.request", cause),
-                  }),
+              Effect.mapError((cause) =>
+                BrowserRunCleanupError.make({
+                  reason: "provider",
+                  cause: browserFailure("browser.close.request", cause),
+                }),
               ),
             );
 
           if (response.status === 401 || response.status === 403)
-            return yield* new BrowserRunCleanupError({
+            return yield* BrowserRunCleanupError.make({
               reason: "authorization",
               status: response.status,
             });
           if (response.status === 429)
-            return yield* new BrowserRunCleanupError({
+            return yield* BrowserRunCleanupError.make({
               reason: "rate-limited",
               status: response.status,
             });
           if (response.status !== 200 && response.status !== 404)
-            return yield* new BrowserRunCleanupError({
+            return yield* BrowserRunCleanupError.make({
               reason: "provider",
               status: response.status,
             });
           if (response.headers["content-type"]?.split(";", 1)[0]?.trim() !== "application/json")
-            return yield* new BrowserRunCleanupError({ reason: "malformed" });
+            return yield* BrowserRunCleanupError.make({ reason: "malformed" });
 
           const bytes = yield* Stream.runFoldEffect(
             response.stream,
             () => new Uint8Array(),
             (body, chunk) => {
               if (body.byteLength + chunk.byteLength > 16_384)
-                return Effect.fail(new BrowserRunCleanupError({ reason: "malformed" }));
+                return Effect.fail(BrowserRunCleanupError.make({ reason: "malformed" }));
               const combined = new Uint8Array(body.byteLength + chunk.byteLength);
 
               combined.set(body);
@@ -106,19 +105,18 @@ export class BrowserRunSessionLifecycle extends Context.Service<
               return Effect.succeed(combined);
             },
           ).pipe(
-            Effect.mapError(
-              (cause) =>
-                new BrowserRunCleanupError({
-                  reason: "malformed",
-                  cause: browserFailure("browser.close.response", cause),
-                }),
+            Effect.mapError((cause) =>
+              BrowserRunCleanupError.make({
+                reason: "malformed",
+                cause: browserFailure("browser.close.response", cause),
+              }),
             ),
           );
 
           const body = yield* Effect.try({
             try: () => new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes),
             catch: (cause) =>
-              new BrowserRunCleanupError({
+              BrowserRunCleanupError.make({
                 reason: "malformed",
                 cause: browserFailure("browser.close.decode", cause),
               }),
@@ -131,16 +129,15 @@ export class BrowserRunSessionLifecycle extends Context.Service<
 
             if (Option.isSome(absent)) return true;
 
-            return yield* new BrowserRunCleanupError({ reason: "malformed" });
+            return yield* BrowserRunCleanupError.make({ reason: "malformed" });
           }
           if (method === "DELETE") {
             const result = yield* Schema.decodeEffect(Schema.fromJsonString(Closed))(body).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new BrowserRunCleanupError({
-                    reason: "malformed",
-                    cause: browserFailure("browser.close.response", cause),
-                  }),
+              Effect.mapError((cause) =>
+                BrowserRunCleanupError.make({
+                  reason: "malformed",
+                  cause: browserFailure("browser.close.response", cause),
+                }),
               ),
             );
 
@@ -148,17 +145,16 @@ export class BrowserRunSessionLifecycle extends Context.Service<
           }
 
           const result = yield* Schema.decodeEffect(Schema.fromJsonString(Metadata))(body).pipe(
-            Effect.mapError(
-              (cause) =>
-                new BrowserRunCleanupError({
-                  reason: "malformed",
-                  cause: browserFailure("browser.close.response", cause),
-                }),
+            Effect.mapError((cause) =>
+              BrowserRunCleanupError.make({
+                reason: "malformed",
+                cause: browserFailure("browser.close.response", cause),
+              }),
             ),
           );
 
           if (result.sessionId !== sessionId)
-            return yield* new BrowserRunCleanupError({ reason: "malformed" });
+            return yield* BrowserRunCleanupError.make({ reason: "malformed" });
 
           return result.endTime !== undefined && result.endTime > 0;
         });
@@ -166,7 +162,7 @@ export class BrowserRunSessionLifecycle extends Context.Service<
         const close = Effect.fnUntraced(
           function* (sessionId: Redacted.Redacted<string>) {
             const id = yield* Schema.decodeEffect(Identity)(Redacted.value(sessionId)).pipe(
-              Effect.mapError(() => new BrowserRunCleanupError({ reason: "configuration" })),
+              Effect.mapError(() => BrowserRunCleanupError.make({ reason: "configuration" })),
             );
 
             if (yield* request("DELETE", id)) return;
@@ -174,11 +170,11 @@ export class BrowserRunSessionLifecycle extends Context.Service<
               if (yield* request("GET", id)) return;
             }
 
-            return yield* new BrowserRunCleanupError({ reason: "pending" });
+            return yield* BrowserRunCleanupError.make({ reason: "pending" });
           },
           Effect.timeoutOrElse({
             duration: "10 seconds",
-            orElse: () => Effect.fail(new BrowserRunCleanupError({ reason: "timeout" })),
+            orElse: () => Effect.fail(BrowserRunCleanupError.make({ reason: "timeout" })),
           }),
           Effect.withTracerEnabled(false),
         );

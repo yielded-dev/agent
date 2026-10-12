@@ -22,7 +22,7 @@ const encodeIntent = Schema.encodeEffect(IntentJson);
 const dispatchError = (operation: string) => (cause: unknown) =>
   Schema.is(WorkflowDispatchError)(cause)
     ? cause
-    : new WorkflowDispatchError({
+    : WorkflowDispatchError.make({
         operation,
         message: "Workflow dispatch storage failed or contains incompatible data",
         cause,
@@ -37,7 +37,7 @@ const decodeRow = Effect.fnUntraced(function* (value: unknown) {
     row.workflow_name !== intent.workflowName ||
     row.execution_id !== intent.executionId
   ) {
-    return yield* new WorkflowDispatchError({
+    return yield* WorkflowDispatchError.make({
       operation: "decode",
       message: "Stored Workflow dispatch identity disagrees with its intent",
     });
@@ -96,7 +96,7 @@ export class SqlWorkflowDispatchStore {
 
           const existing = yield* decodeRow(rows[0]);
 
-          const merged = new WorkflowDispatchIntent({
+          const merged = WorkflowDispatchIntent.make({
             ...intent,
             ...(existing.completionToken === undefined
               ? {}
@@ -105,7 +105,7 @@ export class SqlWorkflowDispatchStore {
 
           if (
             (yield* encodeIntent(
-              new WorkflowDispatchIntent({
+              WorkflowDispatchIntent.make({
                 ...existing,
                 ...(merged.completionToken === undefined
                   ? {}
@@ -116,7 +116,7 @@ export class SqlWorkflowDispatchStore {
               existing.completionToken !== undefined &&
               intent.completionToken !== existing.completionToken)
           ) {
-            return yield* new WorkflowDispatchError({
+            return yield* WorkflowDispatchError.make({
               operation: "put",
               message: "Workflow dispatch identity already belongs to a different immutable intent",
             });
@@ -133,7 +133,7 @@ export class SqlWorkflowDispatchStore {
             `;
 
             if (updated.length !== 1) {
-              return yield* new WorkflowDispatchError({
+              return yield* WorkflowDispatchError.make({
                 operation: "put",
                 message: "Dispatch intent changed while attaching its completion token",
               });
@@ -179,7 +179,7 @@ export class SqlWorkflowDispatchStore {
           const existing = yield* decodeRow(rows[0]);
 
           if ((yield* encodeIntent(existing)) !== (yield* encodeIntent(intent))) {
-            return yield* new WorkflowDispatchError({
+            return yield* WorkflowDispatchError.make({
               operation: "remove",
               message: "Cannot remove a different immutable Workflow dispatch intent",
             });
@@ -193,7 +193,7 @@ export class SqlWorkflowDispatchStore {
           `;
 
           if (removed.length !== 1) {
-            return yield* new WorkflowDispatchError({
+            return yield* WorkflowDispatchError.make({
               operation: "remove",
               message: "Dispatch intent changed before cleanup",
             });
@@ -227,7 +227,7 @@ export class NodeWorkflowRepairTrigger {
           !Duration.isFinite(interval.value) ||
           !Duration.isPositive(interval.value)
         ) {
-          return yield* new NodeWorkflowRepairConfigError({
+          return yield* NodeWorkflowRepairConfigError.make({
             message: "Workflow repair interval must be finite and greater than zero",
           });
         }

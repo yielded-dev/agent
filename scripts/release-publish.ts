@@ -143,210 +143,202 @@ export const hasUnpublishedRelease = Effect.fn("releasePublish.hasUnpublishedRel
 });
 
 /** Changesets invokes its publish hook even when nothing remains to publish. */
-export const withUnpublishedRelease = <E, R>(
+export const withUnpublishedRelease = Effect.fnUntraced(function* <E, R>(
   packages: ReadonlyArray<typeof PublishManifest.Type>,
   release: Effect.Effect<void, E, R>,
-) =>
-  Effect.gen(function* () {
-    if (!(yield* hasUnpublishedRelease(packages))) {
-      yield* Console.log(
-        "All public versions are already published; skipping the live gates and publication.",
-      );
+) {
+  if (!(yield* hasUnpublishedRelease(packages))) {
+    yield* Console.log(
+      "All public versions are already published; skipping the live gates and publication.",
+    );
 
-      return;
-    }
-    yield* release;
-  });
+    return;
+  }
+  yield* release;
+});
 
-export const withTemporaryManifest = <A, E, R>(
+export const withTemporaryManifest = Effect.fnUntraced(function* <A, E, R>(
   manifestPath: string,
   originalBytes: string,
   publishBytes: string,
   use: Effect.Effect<A, E, R>,
-) =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
+) {
+  const fs = yield* FileSystem.FileSystem;
 
-    const manifestError = (operation: ReleaseManifestSwapError["operation"]) => (cause: unknown) =>
-      ReleaseManifestSwapError.make({
-        cause,
-        manifestPath,
-        message: `Could not ${operation} temporary publish manifest ${manifestPath}: ${String(cause)}`,
-        operation,
-      });
+  const manifestError = (operation: ReleaseManifestSwapError["operation"]) => (cause: unknown) =>
+    ReleaseManifestSwapError.make({
+      cause,
+      manifestPath,
+      message: `Could not ${operation} temporary publish manifest ${manifestPath}: ${String(cause)}`,
+      operation,
+    });
 
-    return yield* Effect.uninterruptibleMask((restore) =>
-      Effect.gen(function* () {
-        const installExit = yield* fs
-          .writeFileString(manifestPath, publishBytes)
-          .pipe(Effect.mapError(manifestError("install")), Effect.exit);
+  return yield* Effect.uninterruptibleMask((restore) =>
+    Effect.gen(function* () {
+      const installExit = yield* fs
+        .writeFileString(manifestPath, publishBytes)
+        .pipe(Effect.mapError(manifestError("install")), Effect.exit);
 
-        if (Exit.isFailure(installExit)) {
-          const restoreExit = yield* fs
-            .writeFileString(manifestPath, originalBytes)
-            .pipe(Effect.mapError(manifestError("restore")), Effect.exit);
-
-          return yield* Effect.failCause(
-            Exit.isFailure(restoreExit)
-              ? Cause.combine(installExit.cause, restoreExit.cause)
-              : installExit.cause,
-          );
-        }
-        const useExit = yield* restore(use).pipe(Effect.exit);
-
+      if (Exit.isFailure(installExit)) {
         const restoreExit = yield* fs
           .writeFileString(manifestPath, originalBytes)
           .pipe(Effect.mapError(manifestError("restore")), Effect.exit);
 
-        if (Exit.isFailure(useExit)) {
-          return yield* Effect.failCause(
-            Exit.isFailure(restoreExit)
-              ? Cause.combine(useExit.cause, restoreExit.cause)
-              : useExit.cause,
-          );
-        }
-        if (Exit.isFailure(restoreExit)) return yield* Effect.failCause(restoreExit.cause);
+        return yield* Effect.failCause(
+          Exit.isFailure(restoreExit)
+            ? Cause.combine(installExit.cause, restoreExit.cause)
+            : installExit.cause,
+        );
+      }
+      const useExit = yield* restore(use).pipe(Effect.exit);
 
-        return useExit.value;
-      }),
-    );
-  });
+      const restoreExit = yield* fs
+        .writeFileString(manifestPath, originalBytes)
+        .pipe(Effect.mapError(manifestError("restore")), Effect.exit);
+
+      if (Exit.isFailure(useExit)) {
+        return yield* Effect.failCause(
+          Exit.isFailure(restoreExit)
+            ? Cause.combine(useExit.cause, restoreExit.cause)
+            : useExit.cause,
+        );
+      }
+      if (Exit.isFailure(restoreExit)) return yield* Effect.failCause(restoreExit.cause);
+
+      return useExit.value;
+    }),
+  );
+});
 
 /** Install npm-ready manifests only while publishing; restore every source file on all exits. */
-export const withPublishManifests = <A, E, R>(
+export const withPublishManifests = Effect.fnUntraced(function* <A, E, R>(
   root: string,
   use: (directories: ReadonlyArray<string>) => Effect.Effect<A, E, R>,
-) =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
 
-    const rootManifest = yield* Schema.decodeEffect(Schema.fromJsonString(RootManifest))(
-      yield* fs.readFileString(path.join(root, "package.json")),
-    );
+  const rootManifest = yield* Schema.decodeEffect(Schema.fromJsonString(RootManifest))(
+    yield* fs.readFileString(path.join(root, "package.json")),
+  );
 
-    const packages = yield* readWorkspacePackages(root);
+  const packages = yield* readWorkspacePackages(root);
 
-    const versions = new Map(packages.map(({ manifest }) => [manifest.name, manifest.version]));
-    const publicPackages = packages.filter(({ manifest }) => manifest.private !== true);
+  const versions = new Map(packages.map(({ manifest }) => [manifest.name, manifest.version]));
+  const publicPackages = packages.filter(({ manifest }) => manifest.private !== true);
 
-    // Validate every package before any manifest is replaced or any publish starts.
-    const prepared = yield* Effect.forEach(
-      publicPackages,
-      Effect.fn(function* (pkg) {
-        const mutable = { ...pkg.manifest };
+  // Validate every package before any manifest is replaced or any publish starts.
+  const prepared = yield* Effect.forEach(
+    publicPackages,
+    Effect.fn(function* (pkg) {
+      const mutable = { ...pkg.manifest };
 
-        for (const section of [
-          "dependencies",
-          "devDependencies",
-          "optionalDependencies",
-          "peerDependencies",
-        ] as const) {
-          const dependencies = mutable[section];
+      for (const section of [
+        "dependencies",
+        "devDependencies",
+        "optionalDependencies",
+        "peerDependencies",
+      ] as const) {
+        const dependencies = mutable[section];
 
-          if (dependencies === undefined) continue;
-          const resolved = { ...dependencies };
+        if (dependencies === undefined) continue;
+        const resolved = { ...dependencies };
 
-          for (const [name, range] of Object.entries(dependencies)) {
-            if (range === "workspace:*") {
-              const version = versions.get(name);
+        for (const [name, range] of Object.entries(dependencies)) {
+          if (range === "workspace:*") {
+            const version = versions.get(name);
 
-              if (version === undefined) {
-                return yield* ReleaseError.make({
-                  package: pkg.manifest.name,
-                  reason: "Unknown workspace dependency: " + name,
-                });
-              }
-              resolved[name] = version;
-            } else if (range === "catalog:") {
-              const version = rootManifest.catalog[name];
-
-              if (version === undefined) {
-                return yield* ReleaseError.make({
-                  package: pkg.manifest.name,
-                  reason: "Unknown catalog dependency: " + name,
-                });
-              }
-              resolved[name] = version;
-            } else if (range.startsWith("workspace:") || range.startsWith("catalog:")) {
+            if (version === undefined) {
               return yield* ReleaseError.make({
                 package: pkg.manifest.name,
-                reason: "Unsupported dependency range: " + name + "@" + range,
+                reason: "Unknown workspace dependency: " + name,
               });
             }
-          }
-          mutable[section] = resolved;
-        }
-        const exports: Record<string, { types: string; default: string }> = {};
+            resolved[name] = version;
+          } else if (range === "catalog:") {
+            const version = rootManifest.catalog[name];
 
-        for (const [key, source] of Object.entries(pkg.manifest.exports ?? {})) {
-          const match = /^\.\/src\/((?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+)\.ts$/.exec(source);
-
-          if (match === null) {
+            if (version === undefined) {
+              return yield* ReleaseError.make({
+                package: pkg.manifest.name,
+                reason: "Unknown catalog dependency: " + name,
+              });
+            }
+            resolved[name] = version;
+          } else if (range.startsWith("workspace:") || range.startsWith("catalog:")) {
             return yield* ReleaseError.make({
               package: pkg.manifest.name,
-              reason: "Unsupported source export: " + source,
+              reason: "Unsupported dependency range: " + name + "@" + range,
             });
           }
+        }
+        mutable[section] = resolved;
+      }
+      const exports: Record<string, { types: string; default: string }> = {};
 
-          const entry = {
-            types: "./dist/" + match[1] + ".d.mts",
-            default: "./dist/" + match[1] + ".mjs",
-          };
+      for (const [key, source] of Object.entries(pkg.manifest.exports ?? {})) {
+        const match = /^\.\/src\/((?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+)\.ts$/.exec(source);
 
-          for (const artifact of [entry.types, entry.default]) {
-            if (!(yield* fs.exists(path.join(pkg.directory, artifact)))) {
-              return yield* ReleaseError.make({
-                package: pkg.manifest.name,
-                reason: "Missing built artifact: " + artifact,
-              });
-            }
-          }
-          exports[key] = entry;
+        if (match === null) {
+          return yield* ReleaseError.make({
+            package: pkg.manifest.name,
+            reason: "Unsupported source export: " + source,
+          });
         }
 
-        const publishBytes = yield* Schema.encodeEffect(Schema.fromJsonString(PackedManifest))({
-          ...mutable,
-          exports,
-        });
+        const entry = {
+          types: "./dist/" + match[1] + ".d.mts",
+          default: "./dist/" + match[1] + ".mjs",
+        };
 
-        return { ...pkg, publishBytes };
-      }),
-    );
+        for (const artifact of [entry.types, entry.default]) {
+          if (!(yield* fs.exists(path.join(pkg.directory, artifact)))) {
+            return yield* ReleaseError.make({
+              package: pkg.manifest.name,
+              reason: "Missing built artifact: " + artifact,
+            });
+          }
+        }
+        exports[key] = entry;
+      }
 
-    let publish: Effect.Effect<A, E | ReleaseManifestSwapError, R | FileSystem.FileSystem> = use(
-      publicPackages.map(({ directory }) => directory),
-    );
-
-    // Changesets disallows --tag in pre mode and otherwise sends beta-only packages
-    // to latest. Disable its prerelease tag selection only during publication;
-    // versions and the repository's prerelease state remain unchanged afterward.
-    const prePath = path.join(root, ".changeset", "pre.json");
-
-    if (yield* fs.exists(prePath)) {
-      const original = yield* fs.readFileString(prePath);
-
-      const state = yield* Schema.decodeEffect(Schema.fromJsonString(PrereleaseState))(original);
-
-      const temporary = yield* Schema.encodeEffect(Schema.fromJsonString(PrereleaseState))({
-        ...state,
-        mode: "exit",
+      const publishBytes = yield* Schema.encodeEffect(Schema.fromJsonString(PackedManifest))({
+        ...mutable,
+        exports,
       });
 
-      publish = withTemporaryManifest(prePath, original, temporary, publish);
-    }
+      return { ...pkg, publishBytes };
+    }),
+  );
 
-    for (const pkg of prepared.toReversed()) {
-      publish = withTemporaryManifest(
-        pkg.manifestPath,
-        pkg.originalBytes,
-        pkg.publishBytes,
-        publish,
-      );
-    }
+  let publish: Effect.Effect<A, E | ReleaseManifestSwapError, R | FileSystem.FileSystem> = use(
+    publicPackages.map(({ directory }) => directory),
+  );
 
-    return yield* publish;
-  });
+  // Changesets disallows --tag in pre mode and otherwise sends beta-only packages
+  // to latest. Disable its prerelease tag selection only during publication;
+  // versions and the repository's prerelease state remain unchanged afterward.
+  const prePath = path.join(root, ".changeset", "pre.json");
+
+  if (yield* fs.exists(prePath)) {
+    const original = yield* fs.readFileString(prePath);
+
+    const state = yield* Schema.decodeEffect(Schema.fromJsonString(PrereleaseState))(original);
+
+    const temporary = yield* Schema.encodeEffect(Schema.fromJsonString(PrereleaseState))({
+      ...state,
+      mode: "exit",
+    });
+
+    publish = withTemporaryManifest(prePath, original, temporary, publish);
+  }
+
+  for (const pkg of prepared.toReversed()) {
+    publish = withTemporaryManifest(pkg.manifestPath, pkg.originalBytes, pkg.publishBytes, publish);
+  }
+
+  return yield* publish;
+});
 
 const runCommand = Effect.fn("releasePublish.runCommand")(function* (
   cwd: string,

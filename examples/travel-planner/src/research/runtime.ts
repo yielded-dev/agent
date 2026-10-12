@@ -24,7 +24,7 @@ import { researchCoordinatorId, ScoutInput } from "./contracts.ts";
 import { UpdatingResearchScout, updatingResearchScout } from "./scout.ts";
 
 const unavailable = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "unavailable",
     message: "The admitted research task could not be verified.",
   });

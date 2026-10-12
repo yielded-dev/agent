@@ -638,6 +638,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
           const owner = yield* SqlStorageOwner;
           const mutations = yield* ThreadMutationGate;
 
+          // oxlint-disable-next-line effect/no-native-error -- Missing host SQL ownership is an assembly defect, not a recoverable workflow failure.
           if (owner === undefined) return yield* Effect.die(new Error("SQL owner unavailable"));
 
           return {
@@ -889,61 +890,60 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                 return Context.make(ThreadStore, observedStore).pipe(
                   Context.add(StorageOwner, storageOwner),
                   Context.add(SettlementPublisher, {
-                    publish: (input) =>
-                      Effect.gen(function* () {
-                        const { request } = yield* validatePublication(input);
+                    publish: Effect.fnUntraced(function* (input) {
+                      const { request } = yield* validatePublication(input);
 
-                        return yield* mutations
-                          .withMutation(
-                            sourceCommits
-                              .withPermit(
-                                settlementPublisher.publish(request).pipe(
-                                  Effect.tap((result) =>
-                                    result.replayed
-                                      ? Effect.void
-                                      : index
-                                          .applyCommitted(
-                                            request.append,
-                                            AppendResult.make({
-                                              firstSequence: result.tailSequence,
-                                              lastSequence: result.tailSequence,
+                      return yield* mutations
+                        .withMutation(
+                          sourceCommits
+                            .withPermit(
+                              settlementPublisher.publish(request).pipe(
+                                Effect.tap((result) =>
+                                  result.replayed
+                                    ? Effect.void
+                                    : index
+                                        .applyCommitted(
+                                          request.append,
+                                          AppendResult.make({
+                                            firstSequence: result.tailSequence,
+                                            lastSequence: result.tailSequence,
 
-                                              replayed: false,
-                                            }),
-                                          )
-                                          .pipe(
-                                            Effect.catchCause((cause) =>
-                                              Cause.hasInterrupts(cause)
-                                                ? Effect.interrupt
-                                                : Effect.logError(
-                                                    "Thread projection deferred after settlement publication",
-                                                    cause,
-                                                  ),
-                                            ),
+                                            replayed: false,
+                                          }),
+                                        )
+                                        .pipe(
+                                          Effect.catchCause((cause) =>
+                                            Cause.hasInterrupts(cause)
+                                              ? Effect.interrupt
+                                              : Effect.logError(
+                                                  "Thread projection deferred after settlement publication",
+                                                  cause,
+                                                ),
                                           ),
-                                  ),
+                                        ),
                                 ),
-                              )
-                              .pipe(Effect.tap(() => afterCommit)),
-                            {
-                              lanes: [
-                                ...(options.projection === undefined ? [] : [DueQueue.Projection]),
-                                ...(options.lifecyclePublication === undefined
-                                  ? []
-                                  : [DueQueue.Lifecycle]),
-                              ],
-                            },
-                          )
-                          .pipe(
-                            Effect.catchTag("DurableAlarmError", (cause) =>
-                              ThreadStoreError.make({
-                                operation: "prearm settlement publication",
-                                message: cause.message,
-                                cause,
-                              }),
-                            ),
-                          );
-                      }),
+                              ),
+                            )
+                            .pipe(Effect.tap(() => afterCommit)),
+                          {
+                            lanes: [
+                              ...(options.projection === undefined ? [] : [DueQueue.Projection]),
+                              ...(options.lifecyclePublication === undefined
+                                ? []
+                                : [DueQueue.Lifecycle]),
+                            ],
+                          },
+                        )
+                        .pipe(
+                          Effect.catchTag("DurableAlarmError", (cause) =>
+                            ThreadStoreError.make({
+                              operation: "prearm settlement publication",
+                              message: cause.message,
+                              cause,
+                            }),
+                          ),
+                        );
+                    }),
                   }),
                   Context.add(SubmissionLedger, {
                     ...ledger,

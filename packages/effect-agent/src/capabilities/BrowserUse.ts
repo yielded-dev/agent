@@ -644,7 +644,7 @@ type ActionSpace = ReturnType<typeof actionSpace>;
 const toSpace = (observation: typeof Observation.Type) =>
   observation.page === undefined
     ? Effect.fail(
-        new JevStuck({
+        JevStuck.make({
           stop: "observation-failed",
           message:
             "Jev needs page metrics in every observation. Use the adapter's Jev observations.",
@@ -679,8 +679,8 @@ export const runJev = Effect.fn("BrowserUse.runJev")(function* (
     observation,
     maxSteps = 60,
   } = yield* Schema.decodeEffect(JevOptions)(options).pipe(
-    Effect.mapError(
-      () => new BrowserUseError({ code: "invalid", message: "Invalid Jev browser options." }),
+    Effect.mapError(() =>
+      BrowserUseError.make({ code: "invalid", message: "Invalid Jev browser options." }),
     ),
   );
 
@@ -696,8 +696,8 @@ export const runJev = Effect.fn("BrowserUse.runJev")(function* (
   const arrivals = new Map<string, number>();
 
   const observe = browser.observe.pipe(
-    Effect.mapError(
-      (error) => new JevStuck({ stop: "observation-failed", message: error.message }),
+    Effect.mapError((error) =>
+      JevStuck.make({ stop: "observation-failed", message: error.message }),
     ),
     Effect.flatMap(toSpace),
   );
@@ -750,21 +750,19 @@ export const runJev = Effect.fn("BrowserUse.runJev")(function* (
       },
     }).pipe(
       Effect.timeout("15 seconds"),
-      Effect.mapError(
-        (error) =>
-          new JevStuck({ stop: "decision-failed", message: `Jev request failed: ${error._tag}` }),
+      Effect.mapError((error) =>
+        JevStuck.make({ stop: "decision-failed", message: `Jev request failed: ${error._tag}` }),
       ),
     );
 
     const operation = yield* Schema.decodeUnknownEffect(JevOperation)(
       result.answers.operation?.label,
     ).pipe(
-      Effect.mapError(
-        () =>
-          new JevStuck({
-            stop: "decision-failed",
-            message: "Jev did not choose an offered operation.",
-          }),
+      Effect.mapError(() =>
+        JevStuck.make({
+          stop: "decision-failed",
+          message: "Jev did not choose an offered operation.",
+        }),
       ),
     );
 
@@ -813,12 +811,11 @@ export const runJev = Effect.fn("BrowserUse.runJev")(function* (
       Effect.timeout("5 seconds"),
       // Generated text has no side effects; retry the identical request once after a timeout.
       Effect.retry({ times: 1, while: (error) => error._tag === "TimeoutError" }),
-      Effect.mapError(
-        (error) =>
-          new JevStuck({
-            stop: "text-failed",
-            message: `Field text request failed: ${error._tag}`,
-          }),
+      Effect.mapError((error) =>
+        JevStuck.make({
+          stop: "text-failed",
+          message: `Field text request failed: ${error._tag}`,
+        }),
       ),
     );
 
@@ -833,7 +830,7 @@ export const runJev = Effect.fn("BrowserUse.runJev")(function* (
     targetIndex: string | undefined,
   ) {
     if (operation === "BLOCKED")
-      return yield* new JevStuck({ stop: "blocked", message: "Jev chose BLOCKED." });
+      return yield* JevStuck.make({ stop: "blocked", message: "Jev chose BLOCKED." });
     if (operation !== "WAIT") waitingSince = undefined;
 
     const target =
@@ -846,7 +843,7 @@ export const runJev = Effect.fn("BrowserUse.runJev")(function* (
 
     if (operation === "WAIT" || target === undefined) {
       if (operation !== "WAIT")
-        return yield* new JevStuck({
+        return yield* JevStuck.make({
           stop: "decision-failed",
           message: "Jev chose a target that was not offered. No input dispatched.",
         });
@@ -866,12 +863,11 @@ export const runJev = Effect.fn("BrowserUse.runJev")(function* (
             ])
           : control.scroll(action)
       ).pipe(
-        Effect.mapError(
-          (error) =>
-            new JevStuck({
-              stop: "input-unresolved",
-              message: `Browser action failed without a receipt; no further input is authorized. ${error.message}`,
-            }),
+        Effect.mapError((error) =>
+          JevStuck.make({
+            stop: "input-unresolved",
+            message: `Browser action failed without a receipt; no further input is authorized. ${error.message}`,
+          }),
         ),
       );
 
@@ -883,13 +879,13 @@ export const runJev = Effect.fn("BrowserUse.runJev")(function* (
       // Keep the receipt before any later read. Never retry uncertain input.
       steps.push({ operation, target: target.label, text, dispatch, pageChanged: false });
       if (dispatch === "unknown" || receipt.pendingInput !== undefined)
-        return yield* new JevStuck({
+        return yield* JevStuck.make({
           stop: "input-unresolved",
           message:
             receipt.error ?? "Native input outcome is unresolved; no input will be replayed.",
         });
       if (receipt.observation === null)
-        return yield* new JevStuck({
+        return yield* JevStuck.make({
           stop: "observation-failed",
           message: receipt.error ?? "Input receipt retained; the next observation failed.",
         });
@@ -916,17 +912,17 @@ export const runJev = Effect.fn("BrowserUse.runJev")(function* (
       pendingText = undefined;
     }
     if (receipt !== null && receipt.error !== null && receipt.dispatch !== "not-dispatched")
-      return yield* new JevStuck({ stop: "input-unresolved", message: receipt.error });
+      return yield* JevStuck.make({ stop: "input-unresolved", message: receipt.error });
     if (
       waitingSince !== undefined &&
       clock.monotonicTimeNanosUnsafe() - waitingSince >= 10_000_000_000n
     )
-      return yield* new JevStuck({
+      return yield* JevStuck.make({
         stop: "wait-cap",
         message: "Consecutive WAITs reached ten seconds.",
       });
     if (unchanged >= 3)
-      return yield* new JevStuck({
+      return yield* JevStuck.make({
         stop: "unchanged",
         message: "Three consecutive actions left the page unchanged.",
       });
@@ -936,7 +932,7 @@ export const runJev = Effect.fn("BrowserUse.runJev")(function* (
 
       arrivals.set(page, count);
       if (count >= 3)
-        return yield* new JevStuck({
+        return yield* JevStuck.make({
           stop: "looping",
           message: "Actions returned to the same page three times.",
         });

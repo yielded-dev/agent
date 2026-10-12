@@ -120,11 +120,13 @@ it("isolates sample mutations from the closed seed and subsequent copies", async
           const seedFs = yield* FileSystem.FileSystem;
 
           return SeedInitializer.of({
-            initialize: ({ filename }) =>
-              Effect.gen(function* () {
+            initialize: Effect.fnUntraced(
+              function* ({ filename }) {
                 template = filename;
                 yield* seedFs.writeFileString(filename, "seed");
-              }).pipe(Effect.orDie),
+              },
+              (effect) => effect.pipe(Effect.orDie),
+            ),
           });
         }),
       );
@@ -158,24 +160,23 @@ it("persists completed samples and the failure when the worker is interrupted", 
         output: `${directory}/worker.json`,
       };
 
-      const runner: typeof runSample = (workload, ordinal, warmup) =>
-        Effect.gen(function* () {
-          if (ordinal === 0) return sample(ordinal);
-          const progress = yield* BenchmarkProgress;
+      const runner: typeof runSample = Effect.fnUntraced(function* (workload, ordinal, warmup) {
+        if (ordinal === 0) return sample(ordinal);
+        const progress = yield* BenchmarkProgress;
 
-          yield* progress
-            .record({
-              case: workload.name,
-              ordinal,
-              warmup,
-              phase: "operation",
-              elapsedMs: 7,
-            })
-            .pipe(Effect.orDie);
-          yield* Deferred.succeed(entered, undefined);
+        yield* progress
+          .record({
+            case: workload.name,
+            ordinal,
+            warmup,
+            phase: "operation",
+            elapsedMs: 7,
+          })
+          .pipe(Effect.orDie);
+        yield* Deferred.succeed(entered, undefined);
 
-          return yield* Effect.never;
-        });
+        return yield* Effect.never;
+      });
 
       const fiber = yield* Effect.forkChild(
         runWorker(options).pipe(Effect.provideService(BenchmarkRunner, { run: runner })),

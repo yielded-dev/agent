@@ -89,6 +89,7 @@ const privateResponseCause = (
   const token = Redacted.value(apiToken);
   const diagnostic = boundedDiagnostic(bodyText);
 
+  // oxlint-disable-next-line effect/no-native-error -- Bounded, redacted foreign response diagnostic retained as cause, never as the Effect failure.
   return new Error(token.length === 0 ? diagnostic : diagnostic.replaceAll(token, "[REDACTED]"));
 };
 

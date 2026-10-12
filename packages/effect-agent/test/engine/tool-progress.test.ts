@@ -103,13 +103,12 @@ layer(testLayer)("Tool progress ownership and byte limits", (it) => {
       const detached = yield* AgentRuntime.start(makeAgent(), "go").pipe(
         Effect.provide(
           toolkit.toLayer({
-            report_progress: (_, context) =>
-              Effect.gen(function* () {
-                yield* context.preliminary(retained);
-                yield* Deferred.await(release);
+            report_progress: Effect.fnUntraced(function* (_, context) {
+              yield* context.preliminary(retained);
+              yield* Deferred.await(release);
 
-                return "terminal result";
-              }),
+              return "terminal result";
+            }),
           }),
         ),
       );

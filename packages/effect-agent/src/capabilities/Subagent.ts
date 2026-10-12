@@ -1544,6 +1544,7 @@ export function layer<
         };
 
   if (childBinding.definition !== delegation.target) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Subagent.layer synchronously requires the exact declared target before constructing its Layer.
     throw new Error("Subagent.layer requires the delegation's exact target Definition");
   }
 
@@ -2304,41 +2305,27 @@ export function layer<
     ): SubagentToolFailure<Failure>["Type"] =>
       failure instanceof GenuineEngineSignal ? failure.signal : failure;
 
-    const handlerImpl = (
+    const handlerImpl = Effect.fnUntraced(function* (
       parameters: Parameters["Type"],
       handlerContext: Toolkit.HandlerContext<
         SubagentTool<Name, Parameters, Success, Failure, Mode>
       >,
-    ) =>
-      Effect.gen(function* () {
-        // Resolve the engine-provided per-call services before providing the
-        // captured construction context and re-provide them innermost: if the
-        // Layer was constructed inside another Run's Tool batch, the captured
-        // context would otherwise shadow this Run's `AgentSpawner` (and its
-        // delegation depth), this batch's live `RunEventSink`, and this
-        // batch's live `SubagentDurability` mode.
-        const spawner = yield* AgentSpawner;
-        const sink = yield* RunEventSink;
-        const durability = yield* SubagentDurability;
+    ) {
+      // Resolve the engine-provided per-call services before providing the
+      // captured construction context and re-provide them innermost: if the
+      // Layer was constructed inside another Run's Tool batch, the captured
+      // context would otherwise shadow this Run's `AgentSpawner` (and its
+      // delegation depth), this batch's live `RunEventSink`, and this
+      // batch's live `SubagentDurability` mode.
+      const spawner = yield* AgentSpawner;
+      const sink = yield* RunEventSink;
+      const durability = yield* SubagentDurability;
 
-        // Service-mode dispatch (S2 plan §2): the engine states ephemeral
-        // mode explicitly when no durable coordinator supplied the hook, so
-        // absence keeps the S1 in-process spawn semantics honestly.
-        if (durability.mode === "durable") {
-          const durable = invokeDurable(parameters, handlerContext, durability).pipe(
-            Effect.scoped,
-            Effect.provideService(AgentSpawner, spawner),
-            Effect.provideService(RunEventSink, sink),
-            Effect.provideService(SubagentDurability, durability),
-            Effect.provide(captured),
-          );
-
-          return yield* contained
-            ? durable.pipe(Effect.catch(containSignals))
-            : durable.pipe(Effect.mapError(unwrapSignals));
-        }
-
-        const ephemeral = invoke(parameters, handlerContext).pipe(
+      // Service-mode dispatch (S2 plan §2): the engine states ephemeral
+      // mode explicitly when no durable coordinator supplied the hook, so
+      // absence keeps the S1 in-process spawn semantics honestly.
+      if (durability.mode === "durable") {
+        const durable = invokeDurable(parameters, handlerContext, durability).pipe(
           Effect.scoped,
           Effect.provideService(AgentSpawner, spawner),
           Effect.provideService(RunEventSink, sink),
@@ -2347,9 +2334,22 @@ export function layer<
         );
 
         return yield* contained
-          ? ephemeral.pipe(Effect.catch(containSignals))
-          : ephemeral.pipe(Effect.mapError(unwrapSignals));
-      });
+          ? durable.pipe(Effect.catch(containSignals))
+          : durable.pipe(Effect.mapError(unwrapSignals));
+      }
+
+      const ephemeral = invoke(parameters, handlerContext).pipe(
+        Effect.scoped,
+        Effect.provideService(AgentSpawner, spawner),
+        Effect.provideService(RunEventSink, sink),
+        Effect.provideService(SubagentDurability, durability),
+        Effect.provide(captured),
+      );
+
+      return yield* contained
+        ? ephemeral.pipe(Effect.catch(containSignals))
+        : ephemeral.pipe(Effect.mapError(unwrapSignals));
+    });
 
     // `handlerImpl`'s channels are the UNION of both modes because
     // `contained` is a runtime branch TypeScript cannot relate to the

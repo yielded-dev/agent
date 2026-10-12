@@ -32,7 +32,7 @@ class BundleSmokeError extends Schema.TaggedError<BundleSmokeError>()("BundleSmo
 
 const check = Effect.fn("bundleSmoke.check")(function* (condition: boolean, message: string) {
   if (!condition) {
-    return yield* new BundleSmokeError({ message });
+    return yield* BundleSmokeError.make({ message });
   }
 });
 

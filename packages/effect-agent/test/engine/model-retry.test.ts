@@ -42,64 +42,63 @@ const HostedCode = Tool.providerDefined({
   providerName: "code_interpreter",
 })(undefined);
 
-const runScripted = (
+const runScripted = Effect.fnUntraced(function* (
   attempts: ReadonlyArray<Attempt>,
   modelRetries?: number,
   hostedTool?: ReturnType<typeof HostedCode.annotate>,
-) =>
-  Effect.gen(function* () {
-    const callTimes: Array<number> = [];
+) {
+  const callTimes: Array<number> = [];
 
-    const model = Model.make(
-      "scripted",
-      "model-retry",
-      Layer.effect(
-        LanguageModel.LanguageModel,
-        LanguageModel.make({
-          generateText: () => Effect.succeed([]),
-          streamText: () =>
-            Stream.unwrap(
-              Effect.gen(function* () {
-                const attempt = attempts[Math.min(callTimes.length, attempts.length - 1)]!;
+  const model = Model.make(
+    "scripted",
+    "model-retry",
+    Layer.effect(
+      LanguageModel.LanguageModel,
+      LanguageModel.make({
+        generateText: () => Effect.succeed([]),
+        streamText: () =>
+          Stream.unwrap(
+            Effect.gen(function* () {
+              const attempt = attempts[Math.min(callTimes.length, attempts.length - 1)]!;
 
-                callTimes.push(yield* Clock.currentTimeMillis);
+              callTimes.push(yield* Clock.currentTimeMillis);
 
-                return AiError.isAiError(attempt)
-                  ? Stream.fail(attempt)
-                  : Stream.fromIterable(attempt);
-              }),
-            ),
-        }),
-      ),
-    );
-
-    const agent = Agent.withModel(
-      Agent.make("model-retry", {
-        input: Schema.String,
-        output: Schema.String,
-        instructions: "Answer.",
-        toolkit: hostedTool === undefined ? Toolkit.empty : Toolkit.make(hostedTool),
-        policy: AgentPolicy.make({
-          maxTurns: 2,
-          maxToolCalls: 1,
-          maxDuration: "10 minutes",
-          toolConcurrency: 1,
-          ...(modelRetries === undefined ? {} : { modelRetries }),
-        }),
+              return AiError.isAiError(attempt)
+                ? Stream.fail(attempt)
+                : Stream.fromIterable(attempt);
+            }),
+          ),
       }),
-      model,
-    );
+    ),
+  );
 
-    const fiber = yield* Effect.forkChild(Stream.runDrain(AgentRuntime.stream(agent, "begin")));
+  const agent = Agent.withModel(
+    Agent.make("model-retry", {
+      input: Schema.String,
+      output: Schema.String,
+      instructions: "Answer.",
+      toolkit: hostedTool === undefined ? Toolkit.empty : Toolkit.make(hostedTool),
+      policy: AgentPolicy.make({
+        maxTurns: 2,
+        maxToolCalls: 1,
+        maxDuration: "10 minutes",
+        toolConcurrency: 1,
+        ...(modelRetries === undefined ? {} : { modelRetries }),
+      }),
+    }),
+    model,
+  );
 
-    // Backoff sleeps start at different points in the run; advance until it settles.
-    yield* TestClock.adjust("1 second").pipe(
-      Effect.repeat({ until: () => fiber.pollUnsafe() !== undefined }),
-    );
-    const exit = yield* Fiber.await(fiber);
+  const fiber = yield* Effect.forkChild(Stream.runDrain(AgentRuntime.stream(agent, "begin")));
 
-    return { exit, calls: callTimes.length, callTimes };
-  });
+  // Backoff sleeps start at different points in the run; advance until it settles.
+  yield* TestClock.adjust("1 second").pipe(
+    Effect.repeat({ until: () => fiber.pollUnsafe() !== undefined }),
+  );
+  const exit = yield* Fiber.await(fiber);
+
+  return { exit, calls: callTimes.length, callTimes };
+});
 
 const failureTag = (exit: Exit.Exit<unknown, unknown>) =>
   Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined;
@@ -124,7 +123,7 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer))("model call retries", (i
       const rateLimited = AiError.make({
         module: "scripted",
         method: "streamText",
-        reason: new AiError.RateLimitError({}),
+        reason: AiError.RateLimitError.make({}),
       });
 
       const { exit, calls } = yield* runScripted([rateLimited, rateLimited, answer], 2);
@@ -143,7 +142,7 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer))("model call retries", (i
         const transportError = AiError.make({
           module: "scripted",
           method: "streamText",
-          reason: new AiError.NetworkError({
+          reason: AiError.NetworkError.make({
             reason: "TransportError",
             request: {
               method: "POST",
@@ -172,7 +171,7 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer))("model call retries", (i
       const rateLimited = AiError.make({
         module: "scripted",
         method: "streamText",
-        reason: new AiError.RateLimitError({ retryAfter: Duration.minutes(2) }),
+        reason: AiError.RateLimitError.make({ retryAfter: Duration.minutes(2) }),
       });
 
       const { exit, callTimes } = yield* runScripted([rateLimited, answer], 1);

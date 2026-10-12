@@ -204,38 +204,37 @@ const expectInjectedFailure = <A>(
   }
 };
 
-const makeFailpointHarness = (url: string) =>
-  Effect.gen(function* () {
-    const active = yield* Ref.make<PostgresStorageFailpointLocation | undefined>(undefined);
+const makeFailpointHarness = Effect.fnUntraced(function* (url: string) {
+  const active = yield* Ref.make<PostgresStorageFailpointLocation | undefined>(undefined);
 
-    const select = (location: PostgresStorageFailpointLocation | undefined) =>
-      Ref.set(active, location);
+  const select = (location: PostgresStorageFailpointLocation | undefined) =>
+    Ref.set(active, location);
 
-    const storage = makeStorage(url, {
-      failpoint: (location) =>
-        Ref.get(active).pipe(
-          Effect.flatMap((selected) =>
-            selected === location
-              ? Effect.fail(PostgresStorageFailpointError.make({ location }))
-              : Effect.void,
-          ),
+  const storage = makeStorage(url, {
+    failpoint: (location) =>
+      Ref.get(active).pipe(
+        Effect.flatMap((selected) =>
+          selected === location
+            ? Effect.fail(PostgresStorageFailpointError.make({ location }))
+            : Effect.void,
         ),
-    });
-
-    const failingLedger = <A, E>(
-      effect: Effect.Effect<
-        A,
-        E,
-        SubmissionLedger | SettlementPublisher | ThreadStore | StorageOwner | Crypto.Crypto
-      >,
-    ) =>
-      Effect.provide(effect, [
-        Layer.merge(storage.threadStore, storage.submissionLedger),
-        NodeCrypto.layer,
-      ]);
-
-    return { select, failingLedger } as const;
+      ),
   });
+
+  const failingLedger = <A, E>(
+    effect: Effect.Effect<
+      A,
+      E,
+      SubmissionLedger | SettlementPublisher | ThreadStore | StorageOwner | Crypto.Crypto
+    >,
+  ) =>
+    Effect.provide(effect, [
+      Layer.merge(storage.threadStore, storage.submissionLedger),
+      NodeCrypto.layer,
+    ]);
+
+  return { select, failingLedger } as const;
+});
 
 describe("PostgresSubmissionLedger faults", () => {
   it.effect("classifies a native table lock timeout as retryable typed contention", () =>

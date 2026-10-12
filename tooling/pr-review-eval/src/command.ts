@@ -134,27 +134,26 @@ const runCommand = Command.make(
 
     const guidanceText = yield* Option.match(options.guidance, {
       onNone: () => Effect.succeed(undefined),
-      onSome: (path) =>
-        Effect.gen(function* () {
-          const text = yield* fs.readFileString(path).pipe(
-            Effect.mapError((cause) =>
-              EvalDataError.make({
-                operation: "read guidance",
-                path,
-                message: `Could not read repository guidance at ${path}`,
-                cause,
-              }),
-            ),
-          );
+      onSome: Effect.fnUntraced(function* (path) {
+        const text = yield* fs.readFileString(path).pipe(
+          Effect.mapError((cause) =>
+            EvalDataError.make({
+              operation: "read guidance",
+              path,
+              message: `Could not read repository guidance at ${path}`,
+              cause,
+            }),
+          ),
+        );
 
-          if (text.length > 20_000) {
-            return yield* EvalConfigurationError.make({
-              message: "Repository guidance exceeds the 20,000 character limit",
-            });
-          }
+        if (text.length > 20_000) {
+          return yield* EvalConfigurationError.make({
+            message: "Repository guidance exceeds the 20,000 character limit",
+          });
+        }
 
-          return text;
-        }),
+        return text;
+      }),
     });
 
     const variant = yield* makeCurrentOpenAiVariant({

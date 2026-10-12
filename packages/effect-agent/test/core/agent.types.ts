@@ -74,18 +74,17 @@ const model = Model.make(
 const definition = Agent.make("type-proof", {
   input: Schema.Struct({ destination: Schema.String }),
   output: Schema.Struct({ summary: Schema.String }),
-  instructions: ({ destination }) =>
-    Effect.gen(function* () {
-      const context = yield* InstructionContext;
+  instructions: Effect.fnUntraced(function* ({ destination }) {
+    const context = yield* InstructionContext;
 
-      if (context.locale.length === 0) {
-        return yield* InstructionFailure.make({
-          message: "locale is required",
-        });
-      }
+    if (context.locale.length === 0) {
+      return yield* InstructionFailure.make({
+        message: "locale is required",
+      });
+    }
 
-      return `Search ${destination} using ${context.locale}.`;
-    }),
+    return `Search ${destination} using ${context.locale}.`;
+  }),
   toolkit: TravelTools,
   policy: AgentPolicy.make({
     maxTurns: 2,

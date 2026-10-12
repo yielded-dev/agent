@@ -66,7 +66,7 @@ export const AppEditor = Subagent.make("app_editor", {
     const identity = yield* ThreadObjectIdentity;
 
     if (identity.threadId !== context.parent.threadId)
-      return yield* new PlannerError({
+      return yield* PlannerError.make({
         code: "invalid",
         message: "The editor source conversation could not be verified.",
       });

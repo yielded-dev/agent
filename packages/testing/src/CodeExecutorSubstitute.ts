@@ -114,6 +114,7 @@ const makeConsole = (capture: LogCapture, limits: CodeExecutionLimits) => {
     const bytes = utf8ByteLength(line);
 
     if (capture.lines.length >= MAX_LOG_LINES || capture.bytes + bytes > limits.maxLogBytes) {
+      // oxlint-disable-next-line effect/no-untyped-throw -- The untrusted program invokes this native console callback; its failure is classified at the evaluator boundary.
       throw new LogLimitSignal(capture.bytes + bytes);
     }
     capture.lines.push(line);
@@ -288,6 +289,7 @@ const serveHostCalls = (
       const argument = safeDecodeJson(pending.argument);
 
       if (Option.isNone(argument)) {
+        // oxlint-disable-next-line effect/no-native-error -- Native untrusted-program callback rejects invalid JSON; the evaluator maps its failure to CodeExecutionError.
         pending.reject(new TypeError("host call arguments must be JSON values"));
         continue;
       }
@@ -421,6 +423,7 @@ const executeInProcess: CodeExecutorExecute = Effect.fnUntraced(function* (reque
     buildNamespaceObject(namespace, (pending) => {
       issuedHostCalls += 1;
       if (issuedHostCalls > request.limits.maxHostCalls + 1) {
+        // oxlint-disable-next-line effect/no-native-error -- Reject the untrusted program’s native Promise; the host maps its outcome to CodeExecutionError.
         pending.reject(new Error(`host-call limit of ${request.limits.maxHostCalls} exceeded`));
 
         return;
@@ -438,33 +441,32 @@ const executeInProcess: CodeExecutorExecute = Effect.fnUntraced(function* (reque
     { concurrency, discard: true },
   ).pipe(Effect.andThen(Effect.never), Effect.forkScoped);
 
-  const program = Effect.tryPromise({
-    try: async () => {
-      let candidate: unknown;
+  const program = Effect.gen(function* () {
+    const candidate: unknown = yield* Effect.try({
+      try: () =>
+        factory(...shadowedGlobals.map(() => undefined), harnessConsole, ...namespaceObjects),
+      catch: (cause) => classifyProgramFailure(new EvaluationThrew(cause), request.limits, capture),
+    });
 
-      try {
-        candidate = factory(
-          ...shadowedGlobals.map(() => undefined),
-          harnessConsole,
-          ...namespaceObjects,
-        );
-      } catch (cause) {
-        throw new EvaluationThrew(cause);
-      }
-      if (typeof candidate !== "function") {
-        throw new EvaluationThrew(new NotAFunction(typeof candidate));
-      }
-      let outcome: unknown;
+    if (typeof candidate !== "function") {
+      return yield* Effect.fail(
+        classifyProgramFailure(
+          new EvaluationThrew(new NotAFunction(typeof candidate)),
+          request.limits,
+          capture,
+        ),
+      );
+    }
 
-      try {
-        outcome = candidate();
-      } catch (cause) {
-        throw new EvaluationThrew(cause);
-      }
+    const outcome: unknown = yield* Effect.try({
+      try: () => candidate(),
+      catch: (cause) => classifyProgramFailure(new EvaluationThrew(cause), request.limits, capture),
+    });
 
-      return await Promise.resolve(outcome);
-    },
-    catch: (thrown) => classifyProgramFailure(thrown, request.limits, capture),
+    return yield* Effect.tryPromise({
+      try: () => Promise.resolve(outcome),
+      catch: (thrown) => classifyProgramFailure(thrown, request.limits, capture),
+    });
   });
 
   const startedAt = yield* Clock.currentTimeMillis;

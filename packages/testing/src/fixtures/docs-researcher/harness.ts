@@ -138,38 +138,37 @@ const summaryParts = (documentId: string): ReadonlyArray<Response.StreamPartEnco
  * Attempt may resume on a fresh Layer build, so responses derive from the
  * committed history in the prompt — never from an in-Layer turn counter.
  */
-const makeCountingModel = (
+const makeCountingModel = Effect.fnUntraced(function* (
   name: string,
   decide: (promptJson: string) => Effect.Effect<ReadonlyArray<Response.StreamPartEncoded>>,
-) =>
-  Effect.gen(function* () {
-    const calls = yield* Ref.make(0);
-    const prompts = yield* Ref.make<ReadonlyArray<string>>([]);
+) {
+  const calls = yield* Ref.make(0);
+  const prompts = yield* Ref.make<ReadonlyArray<string>>([]);
 
-    const model = Model.make(
-      "scripted",
-      name,
-      Layer.effect(
-        LanguageModel.LanguageModel,
-        LanguageModel.make({
-          generateText: () => Effect.succeed([]),
-          streamText: (request) =>
-            Stream.unwrap(
-              Effect.gen(function* () {
-                yield* Ref.update(calls, (value) => value + 1);
-                const promptJson = JSON.stringify(request.prompt);
+  const model = Model.make(
+    "scripted",
+    name,
+    Layer.effect(
+      LanguageModel.LanguageModel,
+      LanguageModel.make({
+        generateText: () => Effect.succeed([]),
+        streamText: (request) =>
+          Stream.unwrap(
+            Effect.gen(function* () {
+              yield* Ref.update(calls, (value) => value + 1);
+              const promptJson = JSON.stringify(request.prompt);
 
-                yield* Ref.update(prompts, (previous) => [...previous, promptJson]);
+              yield* Ref.update(prompts, (previous) => [...previous, promptJson]);
 
-                return Stream.fromIterable(yield* decide(promptJson));
-              }),
-            ),
-        }),
-      ),
-    );
+              return Stream.fromIterable(yield* decide(promptJson));
+            }),
+          ),
+      }),
+    ),
+  );
 
-    return { model, calls: Ref.get(calls), prompts: Ref.get(prompts) };
-  });
+  return { model, calls: Ref.get(calls), prompts: Ref.get(prompts) };
+});
 
 /** Optional overrides for one docs-researcher harness. */
 export interface DocsResearcherHarnessOptions {
@@ -204,98 +203,100 @@ export interface DocsResearcherHarness {
  * at assembly, not assumed. Content-tool execution then flows through the
  * counting `DocumentLibrary` — the scripted MCP server's content store.
  */
-export const makeDocsResearcherHarness = (options?: DocsResearcherHarnessOptions) =>
-  Effect.gen(function* () {
-    const documentIds = options?.documentIds ?? researchCorpusDocumentIds;
+export const makeDocsResearcherHarness = Effect.fnUntraced(function* (
+  options?: DocsResearcherHarnessOptions,
+) {
+  const documentIds = options?.documentIds ?? researchCorpusDocumentIds;
 
-    // MCP discovery gate (CAP-009): bounded, digest-verified, fail-closed.
-    const discovery = yield* Effect.scoped(
-      Effect.gen(function* () {
-        const connection = yield* connectMcp(docsMcpRequest);
+  // MCP discovery gate (CAP-009): bounded, digest-verified, fail-closed.
+  const discovery = yield* Effect.scoped(
+    Effect.gen(function* () {
+      const connection = yield* connectMcp(docsMcpRequest);
 
-        yield* assertDiscoveryMatchesAuthoredToolkit(connection);
+      yield* assertDiscoveryMatchesAuthoredToolkit(connection);
 
-        return connection.discovery;
-      }),
-    ).pipe(Effect.provide(docsMcpConnectorLayer));
+      return connection.discovery;
+    }),
+  ).pipe(Effect.provide(docsMcpConnectorLayer));
 
-    const fetchCounts = yield* Ref.make<ReadonlyMap<string, number>>(new Map());
+  const fetchCounts = yield* Ref.make<ReadonlyMap<string, number>>(new Map());
 
-    const libraryLayer = Layer.succeed(
-      DocumentLibrary,
-      DocumentLibrary.of({
-        fetch: (query) =>
-          Ref.update(fetchCounts, (current) =>
-            new Map(current).set(query.documentId, (current.get(query.documentId) ?? 0) + 1),
-          ).pipe(Effect.andThen(researchDocumentLookup(query))),
-      }),
-    );
+  const libraryLayer = Layer.succeed(
+    DocumentLibrary,
+    DocumentLibrary.of({
+      fetch: (query) =>
+        Ref.update(fetchCounts, (current) =>
+          new Map(current).set(query.documentId, (current.get(query.documentId) ?? 0) + 1),
+        ).pipe(Effect.andThen(researchDocumentLookup(query))),
+    }),
+  );
 
-    const childToolkitLayer = docContentToolkitLayer.pipe(Layer.provideMerge(libraryLayer));
+  const childToolkitLayer = docContentToolkitLayer.pipe(Layer.provideMerge(libraryLayer));
 
-    const childModel = yield* makeCountingModel("doc-summarizer-p7", (promptJson) =>
-      Effect.suspend(() => {
-        const documentId = documentIds.find((candidate) => promptJson.includes(candidate));
+  const childModel = yield* makeCountingModel("doc-summarizer-p7", (promptJson) =>
+    Effect.suspend(() => {
+      const documentId = documentIds.find((candidate) => promptJson.includes(candidate));
 
-        if (documentId === undefined) {
-          return Effect.die(new Error("The summarizer prompt names no corpus document"));
-        }
+      if (documentId === undefined) {
+        // oxlint-disable-next-line effect/no-native-error -- Deterministic model fixture assertion remains a native defect.
+        return Effect.die(new Error("The summarizer prompt names no corpus document"));
+      }
 
-        return Effect.succeed(
-          promptJson.includes(fetchCallId(documentId))
-            ? summaryParts(documentId)
-            : fetchParts(documentId),
-        );
-      }),
-    );
+      return Effect.succeed(
+        promptJson.includes(fetchCallId(documentId))
+          ? summaryParts(documentId)
+          : fetchParts(documentId),
+      );
+    }),
+  );
 
-    const childBinding = Agent.withModel(DocSummarizer, childModel.model);
+  const childBinding = Agent.withModel(DocSummarizer, childModel.model);
 
-    const firstCallId = summarizeCallId(documentIds[0] ?? "durability-notes");
+  const firstCallId = summarizeCallId(documentIds[0] ?? "durability-notes");
 
-    const parentModel = yield* makeCountingModel("docs-researcher-p7", (promptJson) =>
-      Effect.succeed(
-        promptJson.includes(firstCallId)
-          ? digestParts(documentIds)
-          : summaryDelegationParts(documentIds),
+  const parentModel = yield* makeCountingModel("docs-researcher-p7", (promptJson) =>
+    Effect.succeed(
+      promptJson.includes(firstCallId)
+        ? digestParts(documentIds)
+        : summaryDelegationParts(documentIds),
+    ),
+  );
+
+  const parentBinding = Agent.withModel(DocsResearcher, parentModel.model);
+
+  const delegationLayer = docsSummaryHandlersLayer(childBinding).pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        childToolkitLayer,
+        SubagentReservationsMemoryLive,
+        DeterministicIdGeneratorLayer,
       ),
-    );
+    ),
+  );
 
-    const parentBinding = Agent.withModel(DocsResearcher, parentModel.model);
+  const parentResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
+    parentBinding,
+    docsCoordinatorDigests,
+  ).pipe(Effect.provide(delegationLayer));
 
-    const delegationLayer = docsSummaryHandlersLayer(childBinding).pipe(
-      Layer.provide(
-        Layer.mergeAll(
-          childToolkitLayer,
-          SubagentReservationsMemoryLive,
-          DeterministicIdGeneratorLayer,
-        ),
-      ),
-    );
+  const childResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
+    childBinding,
+    docsSummarizerDigests,
+  ).pipe(Effect.provide(childToolkitLayer));
 
-    const parentResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
-      parentBinding,
-      docsCoordinatorDigests,
-    ).pipe(Effect.provide(delegationLayer));
+  const harness: DocsResearcherHarness = {
+    bindings: [parentResolved, childResolved],
+    discovery,
+    parentModelCalls: parentModel.calls,
+    parentPrompts: parentModel.prompts,
+    childModelCalls: childModel.calls,
+    childPrompts: childModel.prompts,
+    fetchInvocations: (documentId) =>
+      Ref.get(fetchCounts).pipe(Effect.map((current) => current.get(documentId) ?? 0)),
+  };
 
-    const childResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
-      childBinding,
-      docsSummarizerDigests,
-    ).pipe(Effect.provide(childToolkitLayer));
-
-    const harness: DocsResearcherHarness = {
-      bindings: [parentResolved, childResolved],
-      discovery,
-      parentModelCalls: parentModel.calls,
-      parentPrompts: parentModel.prompts,
-      childModelCalls: childModel.calls,
-      childPrompts: childModel.prompts,
-      fetchInvocations: (documentId) =>
-        Ref.get(fetchCounts).pipe(Effect.map((current) => current.get(documentId) ?? 0)),
-    };
-
-    return harness;
-  });
+  return harness;
+});
 
 const encodeResearchDocument = Schema.encodeEffect(ResearchDocument);
 

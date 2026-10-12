@@ -18,6 +18,7 @@
     "plugins": [
       {
         "name": "@effect/language-service",
+        "effectFn": ["span", "untraced"],
         "allowedUnstableApis": [
           "@effect/ai-anthropic",
           "@effect/ai-openai",
@@ -56,24 +57,29 @@
         ],
         "diagnosticSeverity": {
           "unknownRuleName": "error",
+          "effectFnOpportunity": "warning",
           "catchIfTagToCatchTag": "warning",
           "catchRefailToTapError": "warning",
           "flatMapIgnoredParamToAndThen": "warning",
           "allOfMapToForEach": "warning",
-          "anyUnknownInErrorContext": "suggestion",
+          "anyUnknownInErrorContext": "warning",
           "catchAllTagDispatchToCatchTag": "warning",
           "catchConditionalRefailToCatchIf": "warning",
           "flatMapConditionalToFilterOrFail": "warning",
           "instanceOfSchema": "suggestion",
           "nestedEffectGenYield": "suggestion",
-          "newSchemaClass": "suggestion",
+          "newSchemaClass": "error",
           "optionMatchToFromOption": "warning",
           "preferSchemaTypeProperty": "suggestion",
           "preferTypedSchemaDecoder": "warning",
           "provideLayerSucceedToProvideService": "warning",
           "runOfExitToRunExit": "warning",
           "timeoutCatchTagToTimeoutOrElse": "warning",
-          "unsafeEffectTypeAssertion": "suggestion"
+          "unsafeEffectTypeAssertion": "warning",
+          "floatingEffect": "error",
+          "globalErrorInEffectCatch": "error",
+          "globalErrorInEffectFailure": "error",
+          "extendsNativeError": "error"
         },
         "overrides": [
           {

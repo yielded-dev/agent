@@ -8,6 +8,7 @@ import * as ErrorReporter from "effect/ErrorReporter";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Tracer from "effect/Tracer";
 
@@ -112,12 +113,12 @@ export const restoreToolSpanFailureCause = <E, Original>(
 const MAX_REPORTED_SPAN_LIFECYCLE_DEFECTS = 16;
 
 /** Content-free marker used only to close a delegate that cannot be wrapped safely. */
-class ToolSpanLifecycleFailure extends Error {
+class ToolSpanLifecycleFailure extends Schema.TaggedError<ToolSpanLifecycleFailure>()(
+  "ToolSpanLifecycleFailure",
+  {},
+) {
   override readonly name = "ToolSpanLifecycleFailure";
-
-  constructor() {
-    super("Tool span lifecycle failed");
-  }
+  override readonly message = "Tool span lifecycle failed";
 }
 
 /**
@@ -173,7 +174,7 @@ class IsolatedToolSpan implements Tracer.Span {
     // attempt even if downstream cancellation or telemetry interruption determines the channel Exit.
     const exportedExit =
       this.#terminalOutcome === "failure"
-        ? Exit.fail(this.#terminalFailure ?? new ToolSpanLifecycleFailure())
+        ? Exit.fail(this.#terminalFailure ?? ToolSpanLifecycleFailure.make({}))
         : this.#terminalOutcome === "success"
           ? Exit.succeed(undefined)
           : exit;
@@ -302,6 +303,7 @@ export const makeIsolatedToolTracer = (delegate: Tracer.Tracer): IsolatedToolTra
               case "Succeeded":
                 return evaluation.value;
               case "Failed":
+                // oxlint-disable-next-line effect/no-untyped-throw -- The synchronous foreign tracer hook must rethrow the original primitive failure for the Effect evaluator.
                 throw evaluation.error;
               case "Pending": {
                 try {
@@ -312,6 +314,7 @@ export const makeIsolatedToolTracer = (delegate: Tracer.Tracer): IsolatedToolTra
                   return value;
                 } catch (error) {
                   evaluation = { _tag: "Failed", error };
+                  // oxlint-disable-next-line effect/no-untyped-throw -- The synchronous foreign tracer hook must rethrow the original primitive failure for the Effect evaluator.
                   throw error;
                 }
               }
@@ -329,6 +332,7 @@ export const makeIsolatedToolTracer = (delegate: Tracer.Tracer): IsolatedToolTra
 
             switch (observed._tag) {
               case "Failed":
+                // oxlint-disable-next-line effect/no-untyped-throw -- The synchronous foreign tracer hook must rethrow the original primitive failure for the Effect evaluator.
                 throw observed.error;
               case "Succeeded":
                 recordDefect(defect);
@@ -344,6 +348,7 @@ export const makeIsolatedToolTracer = (delegate: Tracer.Tracer): IsolatedToolTra
 
           switch (observed._tag) {
             case "Failed":
+              // oxlint-disable-next-line effect/no-untyped-throw -- The synchronous foreign tracer hook must rethrow the original primitive failure for the Effect evaluator.
               throw observed.error;
             case "Succeeded":
               return observed.value;
@@ -373,7 +378,7 @@ export const makeIsolatedToolTracer = (delegate: Tracer.Tracer): IsolatedToolTra
         try {
           // Allocation succeeded, so best-effort close the host span without attaching the raw
           // wrapper defect. The start time gives this abandoned measurement a bounded duration.
-          delegateSpan.end(options.startTime, Exit.fail(new ToolSpanLifecycleFailure()));
+          delegateSpan.end(options.startTime, Exit.fail(ToolSpanLifecycleFailure.make({})));
         } catch (closeDefect) {
           recordDefect(closeDefect);
         }

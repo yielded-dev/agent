@@ -797,12 +797,14 @@ describe("SQLite memory store", () => {
           yield* writer.change(put("seed", null, "seed"));
         }).pipe(Effect.provide(storeLayer(filename)));
 
-        const edit = (command: MemoryWrite) =>
-          Effect.gen(function* () {
+        const edit = Effect.fnUntraced(
+          function* (command: MemoryWrite) {
             const writer = yield* MemoryWriter;
 
             return yield* writer.change(command);
-          }).pipe(Effect.provide(storeLayer(filename)), Effect.result);
+          },
+          (effect) => effect.pipe(Effect.provide(storeLayer(filename)), Effect.result),
+        );
 
         const outcomes = yield* Effect.forEach(
           [put("race-a", "1", "edit a"), put("race-b", "1", "edit b")],
@@ -1160,12 +1162,14 @@ describe("SQLite memory store", () => {
           yield* writer.change(withdrawn);
         }).pipe(Effect.provide(storeLayer(filename)));
 
-        const replayFailure = (command: MemoryWrite) =>
-          Effect.gen(function* () {
+        const replayFailure = Effect.fnUntraced(
+          function* (command: MemoryWrite) {
             const writer = yield* MemoryWriter;
 
             return yield* writer.change(command);
-          }).pipe(Effect.provide(storeLayer(filename)), Effect.flip);
+          },
+          (effect) => effect.pipe(Effect.provide(storeLayer(filename)), Effect.flip),
+        );
 
         const receiptResults = yield* runRaw(
           filename,

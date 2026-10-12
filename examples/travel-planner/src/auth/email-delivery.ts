@@ -49,10 +49,10 @@ export const emailDeliveryLayer = (binding: SendEmail, from: string) =>
             text: Redacted.value(message.text),
             ...(message.html === undefined ? {} : { html: Redacted.value(message.html) }),
           }),
-        catch: () => new EmailAcceptanceUnknown(),
+        catch: () => EmailAcceptanceUnknown.make(),
       }).pipe(
         Effect.timeout("10 seconds"),
-        Effect.mapError(() => new EmailAcceptanceUnknown()),
+        Effect.mapError(() => EmailAcceptanceUnknown.make()),
       );
     }),
   });

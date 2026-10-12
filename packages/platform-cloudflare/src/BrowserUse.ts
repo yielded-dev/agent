@@ -87,7 +87,7 @@ const Limits = Schema.Struct({
 });
 
 const invalid = (message: string) =>
-  new BrowserUseError({ code: "invalid", message, dispatch: "not-dispatched" });
+  BrowserUseError.make({ code: "invalid", message, dispatch: "not-dispatched" });
 
 // URL evidence identifies pages; opaque document payloads are not page observations.
 // Authorization and navigation fencing always use the complete native SDK URL.
@@ -136,6 +136,7 @@ const discoverClosedRoots = async (frame: Frame): Promise<boolean> => {
 
     await realm.evaluate((node) => {
       if (!(node instanceof ShadowRoot) || node.mode !== "closed")
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Runs in Chromium’s isolated realm; native exceptions are the CDP evaluation failure protocol.
         throw new Error("Closed shadow root is unavailable");
       Reflect.get(globalThis, "@effect-agent/native-browser-closed-roots").set(node.host, node);
     }, root);
@@ -340,13 +341,12 @@ export const make = Effect.fnUntraced(function* <R>(
                     }),
               });
             }).pipe(
-              Effect.mapError(
-                (error) =>
-                  new BrowserUseError({
-                    code: error.code,
-                    message: error.message,
-                    dispatch: "not-dispatched",
-                  }),
+              Effect.mapError((error) =>
+                BrowserUseError.make({
+                  code: error.code,
+                  message: error.message,
+                  dispatch: "not-dispatched",
+                }),
               ),
             ),
             async (page) => {
@@ -356,9 +356,11 @@ export const make = Effect.fnUntraced(function* <R>(
               lastNativePage = page;
 
               if (selected.isClosed() || selected.browserContext() !== page.browserContext())
+                // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- BrowserSession.run requires a fenced native Promise callback; its boundary maps validation rejection to BrowserSessionError while retaining session fencing.
                 throw new Error("Observed tab is unavailable");
               if (authorizedUrl !== undefined && selected.url() !== authorizedUrl) {
                 authorizationChanged = true;
+                // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- BrowserSession.run requires a fenced native Promise callback; its boundary maps validation rejection to BrowserSessionError while retaining session fencing.
                 throw new Error("Page changed during authorization");
               }
               if (
@@ -366,12 +368,14 @@ export const make = Effect.fnUntraced(function* <R>(
                 resolveFrame(selected, authorizedFrame.ref)?.url() !== authorizedFrame.url
               ) {
                 authorizationChanged = true;
+                // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- BrowserSession.run requires a fenced native Promise callback; its boundary maps validation rejection to BrowserSessionError while retaining session fencing.
                 throw new Error("Frame changed during authorization");
               }
               if (
                 command.kind === "select-tab" &&
                 tabs.get(command.request.ref)?.url() !== authorizedTabUrl
               )
+                // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- BrowserSession.run requires a fenced native Promise callback; its boundary maps validation rejection to BrowserSessionError while retaining session fencing.
                 throw new Error("Tab changed during authorization");
               attach(selected);
 
@@ -395,6 +399,7 @@ export const make = Effect.fnUntraced(function* <R>(
                     (authorizedUrl !== undefined && selected.url() !== authorizedUrl))
                 )
                   authorizationChanged = true;
+                // oxlint-disable-next-line effect/no-untyped-throw -- BrowserSession.run owns this fenced native Promise callback and maps its rejection to BrowserSessionError; preserve the provider failure identity.
                 throw error;
               }
             },
@@ -422,7 +427,7 @@ export const make = Effect.fnUntraced(function* <R>(
         if (error._tag === "BrowserUseError") return error;
         const read = ["observe", "inspect", "wait", "screenshot"].includes(command.kind);
 
-        return new BrowserUseError({
+        return BrowserUseError.make({
           code: "browser",
           message: read
             ? `Browser ${command.kind} failed (${error.reason}); cleanup ${error.cleanup}. No new input was dispatched.`
@@ -433,17 +438,16 @@ export const make = Effect.fnUntraced(function* <R>(
       Effect.withSpan(`BrowserUse.${command.kind}${phase === undefined ? "" : `.${phase}`}`),
     );
 
-  const bounded = <A>(value: A) =>
-    Effect.gen(function* () {
-      const bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  const bounded = Effect.fnUntraced(function* <A>(value: A) {
+    const bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength;
 
-      if (bytes > limits.maxReturnedBytes)
-        return yield* invalid(
-          "Browser result exceeds the host byte budget. Narrow inspection before acting.",
-        );
+    if (bytes > limits.maxReturnedBytes)
+      return yield* invalid(
+        "Browser result exceeds the host byte budget. Narrow inspection before acting.",
+      );
 
-      return value;
-    });
+    return value;
+  });
 
   const inspect = Effect.fnUntraced(function* (
     request: typeof InspectRequest.Type,
@@ -526,6 +530,7 @@ export const make = Effect.fnUntraced(function* <R>(
         command.kind !== "observe" &&
         !currentFrames.some((frame) => frameId(frame) === selectedFrame)
       )
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- BrowserSession.run requires a fenced native Promise callback; its boundary maps validation rejection to BrowserSessionError while retaining session fencing.
         throw new Error("Observed frame is detached");
       frames.clear();
       currentFrames.slice(0, 32).forEach((frame) => frames.add(frameId(frame)));
@@ -593,6 +598,7 @@ export const make = Effect.fnUntraced(function* <R>(
             })
             .catch((error: unknown) => {
               if (error instanceof TimeoutError) return undefined;
+              // oxlint-disable-next-line effect/no-untyped-throw -- BrowserSession.run owns this fenced native Promise callback and maps its rejection to BrowserSessionError; preserve the provider failure identity.
               throw error;
             });
 
@@ -809,13 +815,12 @@ export const make = Effect.fnUntraced(function* <R>(
       inFrame ? 8_000 : 2_000,
       "prepare",
     ).pipe(
-      Effect.mapError(
-        (error) =>
-          new BrowserUseError({
-            code: error.code,
-            message: error.message,
-            dispatch: "not-dispatched",
-          }),
+      Effect.mapError((error) =>
+        BrowserUseError.make({
+          code: error.code,
+          message: error.message,
+          dispatch: "not-dispatched",
+        }),
       ),
     );
 
@@ -1152,8 +1157,8 @@ export const make = Effect.fnUntraced(function* <R>(
       undefined,
       "input",
     ).pipe(
-      Effect.mapError(
-        (error) => new BrowserUseError({ code: error.code, message: error.message, dispatch }),
+      Effect.mapError((error) =>
+        BrowserUseError.make({ code: error.code, message: error.message, dispatch }),
       ),
     );
 
@@ -1192,13 +1197,12 @@ export const make = Effect.fnUntraced(function* <R>(
       yield* settle(
         value.kind === "fill" ? { frame: target.frame, ref: value.ref } : undefined,
       ).pipe(
-        Effect.mapError(
-          (failure) =>
-            new BrowserUseError({
-              code: failure.code,
-              message: failure.message,
-              dispatch: "acknowledged",
-            }),
+        Effect.mapError((failure) =>
+          BrowserUseError.make({
+            code: failure.code,
+            message: failure.message,
+            dispatch: "acknowledged",
+          }),
         ),
       );
 
@@ -1348,6 +1352,7 @@ export const make = Effect.fnUntraced(function* <R>(
     yield* native({ kind: "wait", request }, async (page) => {
       const frame = frameRef === undefined ? page.mainFrame() : resolveFrame(page, frameRef);
 
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- BrowserSession.run requires a fenced native Promise callback; its boundary maps validation rejection to BrowserSessionError while retaining session fencing.
       if (frame === undefined) throw new Error("Frame detached");
       await discoverClosedRoots(frame);
 
@@ -1370,6 +1375,7 @@ export const make = Effect.fnUntraced(function* <R>(
           !(error instanceof Error) ||
           error.name !== "TimeoutError"
         )
+          // oxlint-disable-next-line effect/no-untyped-throw -- BrowserSession.run owns this fenced native Promise callback and maps its rejection to BrowserSessionError; preserve the provider failure identity.
           throw error;
       }
     });
@@ -1417,6 +1423,7 @@ export const make = Effect.fnUntraced(function* <R>(
       return yield* invalid("Tab was not observed. Inspect before selecting it.");
     yield* native({ kind: "select-tab", request }, async (page) => {
       if (tab.isClosed() || tab.browserContext() !== page.browserContext())
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- BrowserSession.run requires a fenced native Promise callback; its boundary maps validation rejection to BrowserSessionError while retaining session fencing.
         throw new Error("Observed tab is unavailable");
       await tab.bringToFront();
       activePage = tab;
@@ -1480,7 +1487,7 @@ export const make = Effect.fnUntraced(function* <R>(
                   try: () =>
                     request.accept ? pending.dialog.accept(request.text) : pending.dialog.dismiss(),
                   catch: () =>
-                    new BrowserUseError({
+                    BrowserUseError.make({
                       code: "browser",
                       message: "Native dialog response failed. Do not replay it.",
                       dispatch: "unknown",

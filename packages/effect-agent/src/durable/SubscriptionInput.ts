@@ -122,8 +122,8 @@ export const makeSubscriptionInputBinding = Effect.fnUntraced(function* <
         Effect.scoped,
         Effect.provideContext(services),
       ),
-    prepare: (event, subscription) =>
-      Effect.gen(function* () {
+    prepare: Effect.fnUntraced(
+      function* (event, subscription) {
         const e = yield* Schema.decodeEffect(options.event)(event.payload).pipe(
           Effect.mapError(invalid),
         );
@@ -137,6 +137,8 @@ export const makeSubscriptionInputBinding = Effect.fnUntraced(function* <
         ).pipe(Effect.mapError(invalid));
 
         return yield* encode(options.input, yield* options.prepare(e, p, c));
-      }).pipe(Effect.scoped, Effect.provideContext(services)),
+      },
+      (effect) => effect.pipe(Effect.scoped, Effect.provideContext(services)),
+    ),
   };
 });

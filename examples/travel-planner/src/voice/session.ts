@@ -133,7 +133,7 @@ export const runVoiceSession = Effect.fn("runVoiceSession")(function* (
       );
 
       if (discard < 0)
-        return yield* new VoiceError({
+        return yield* VoiceError.make({
           message: "Too many voice requests need reconciliation. Reconnect before adding more.",
         });
       retained.splice(discard, 1);
@@ -178,7 +178,7 @@ export const runVoiceSession = Effect.fn("runVoiceSession")(function* (
           if (event.offset_ms <= lastDelegatedOffset) return;
           if (!knownDelegations.has(event.delegation.id)) {
             if (knownDelegations.size >= 64)
-              return yield* new VoiceError({
+              return yield* VoiceError.make({
                 message: "This call reached its task limit. End voice and reconnect.",
               });
             knownDelegations.add(event.delegation.id);
@@ -192,7 +192,7 @@ export const runVoiceSession = Effect.fn("runVoiceSession")(function* (
           }
         } else if (event.type === "error") {
           // Never display arbitrary provider bodies or label rejected output as spoken.
-          return yield* new VoiceError({
+          return yield* VoiceError.make({
             message: "The voice provider rejected an update. Reconnect to check existing work.",
           });
         } else if (event.client_event_id === append?.id) {
@@ -240,7 +240,7 @@ export const runVoiceSession = Effect.fn("runVoiceSession")(function* (
       yield* replace(latest);
     }
     if (append && now - append.at > 15_000)
-      return yield* new VoiceError({
+      return yield* VoiceError.make({
         message: "Voice did not acknowledge an update. Reconnect to check existing work.",
       });
     if (pauseForTyped && !append) {
@@ -267,11 +267,10 @@ export const runVoiceSession = Effect.fn("runVoiceSession")(function* (
           voice: { input: true, messages: backend.speech() },
           requestId: crypto.randomUUID(),
         }).pipe(
-          Effect.mapError(
-            () =>
-              new VoiceError({
-                message: "The spoken request is too long. Please send a shorter request.",
-              }),
+          Effect.mapError(() =>
+            VoiceError.make({
+              message: "The spoken request is too long. Please send a shorter request.",
+            }),
           ),
         );
 
@@ -494,12 +493,11 @@ export const runVoiceSession = Effect.fn("runVoiceSession")(function* (
     Effect.raceFirst(ending),
     Effect.raceFirst(Deferred.await(closed)),
     Effect.timeout("15 minutes"),
-    Effect.mapError(
-      () =>
-        new VoiceError({
-          message:
-            "Voice disconnected. Your trip is still being worked on. You can reconnect or keep typing.",
-        }),
+    Effect.mapError(() =>
+      VoiceError.make({
+        message:
+          "Voice disconnected. Your trip is still being worked on. You can reconnect or keep typing.",
+      }),
     ),
   );
 });

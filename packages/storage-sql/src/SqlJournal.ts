@@ -184,7 +184,7 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
         checkpoint: {
           originalSequence,
           operational: operational.map(({ recordId }) => ({ recordId })),
-          progress: new RunContinuation(
+          progress: RunContinuation.make(
             {
               ...progress,
               accounting: { ...progress.accounting },

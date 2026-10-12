@@ -64,14 +64,14 @@ export const deployments = Effect.gen(function* () {
   if (yield* fs.exists(stateFile)) {
     state = yield* read(stateFile, State);
     if (state.accountId !== cloud.accountId)
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message: "Credentials select a different account from the private deployment state.",
       });
   } else {
     const existing = yield* cloud.resources();
 
     if (!existing.verified)
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message: `${cloud.prefix} resources exist without local ownership state. Restore the private state before deploying or tearing down.`,
       });
     state = {
@@ -163,7 +163,7 @@ export const deployments = Effect.gen(function* () {
         `BENCH_DEPLOY ${JSON.stringify({ kind: stack.kind, action, retry: force, elapsedMs: (yield* Clock.currentTimeMillis) - startedMs })}`,
       );
       if (result.code !== 0)
-        return yield* new BenchError({
+        return yield* BenchError.make({
           message: `Alchemy ${action} failed (${result.code}): ${redact(result.output, secrets).slice(-3000)}`,
         });
     },
@@ -216,7 +216,7 @@ export const deployments = Effect.gen(function* () {
       `BENCH_READY ${JSON.stringify({ role, fromDriver, incomplete: true, elapsedMs: (yield* Clock.currentTimeMillis) - startedMs })}`,
     );
 
-    return yield* new BenchError({
+    return yield* BenchError.make({
       message: `${role} Worker health did not propagate${fromDriver ? " through the driver" : ""}. No benchmark input was sent.`,
     });
   });
@@ -257,7 +257,7 @@ export const deployments = Effect.gen(function* () {
 
   const infrastructureBuild = Effect.fnUntraced(function* () {
     if (state.infrastructure?.kind !== "infrastructure" || !state.infrastructureDeployed)
-      return yield* new BenchError({ message: "Shared infrastructure is not deployed." });
+      return yield* BenchError.make({ message: "Shared infrastructure is not deployed." });
 
     return state.infrastructure.build;
   });
@@ -325,12 +325,12 @@ export const deployments = Effect.gen(function* () {
     persistent = false,
     workerBuilds: Readonly<Record<string, WorkerBuild>> = {},
   ) {
-    yield* Schema.decodeUnknownEffect(Name)(name);
+    yield* Schema.decodeEffect(Name)(name);
     const names = yield* Schema.decodeUnknownEffect(ownedWorkers(name))(workers);
 
-    yield* Schema.decodeUnknownEffect(Schema.Record(Name, WorkerBuild))(workerBuilds);
+    yield* Schema.decodeEffect(Schema.Record(Name, WorkerBuild))(workerBuilds);
     if (Object.keys(workerBuilds).some((worker) => !names.includes(worker)))
-      return yield* new BenchError({ message: "Worker build assignment is outside its pool." });
+      return yield* BenchError.make({ message: "Worker build assignment is outside its pool." });
 
     // One retained pool per prefix. Retire legacy four-binding pools before allocating replacements.
     for (const old of Object.values(state.targets))
@@ -422,7 +422,7 @@ export const deployments = Effect.gen(function* () {
     expectedTargetBuild: string,
     expectedInfrastructureBuild: string,
   ) {
-    yield* Schema.decodeUnknownEffect(Name)(name);
+    yield* Schema.decodeEffect(Name)(name);
     const stack = state.targets[name];
     const targetHash = expectedTargetBuild.slice(0, 64);
 
@@ -434,19 +434,19 @@ export const deployments = Effect.gen(function* () {
       !/^[a-f0-9]{64}$/.test(targetHash) ||
       expectedTargetBuild !== `${targetHash}-${name}-e0`
     )
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message: "Resume target does not match the owned deployment.",
       });
 
     if (hash(yield* fs.readFile(stack.bundle)) !== targetHash)
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message: "Retained target bundle differs from the resume build.",
       });
 
     const revision = yield* infrastructureBuild();
 
     if (revision !== expectedInfrastructureBuild)
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message: "Shared infrastructure differs from the resume build.",
       });
 
@@ -470,7 +470,7 @@ export const deployments = Effect.gen(function* () {
       yield* Effect.sleep("2 seconds");
     }
 
-    return yield* new BenchError({ message: "Cleanup verification did not complete" });
+    return yield* BenchError.make({ message: "Cleanup verification did not complete" });
   });
 
   const destroy = Effect.fnUntraced(function* (name: string) {
@@ -481,7 +481,7 @@ export const deployments = Effect.gen(function* () {
     const remaining = yield* verifyCleanup(name);
 
     if (!remaining.verified)
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message: "Target cleanup could not be verified. Keep private state and run --teardown.",
       });
     const targets = { ...state.targets };
@@ -501,7 +501,7 @@ export const deployments = Effect.gen(function* () {
     const remaining = yield* verifyCleanup();
 
     if (!remaining.verified)
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message: `${cloud.prefix} resources remain in this account; cleanup is not verified.`,
       });
     yield* fs.remove(privateDirectory, { recursive: true });

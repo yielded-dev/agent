@@ -69,10 +69,12 @@ export class BrowserRunBinding extends Context.Service<
         } catch {
           // Preserve the provider refusal when local response release also fails.
         }
+        // oxlint-disable-next-line effect/no-untyped-throw -- Native BrowserRun acquisition Promise preserves the provider refusal after body cleanup.
         throw failure;
       }
       const socket = response.webSocket;
 
+      // oxlint-disable-next-line effect/no-untyped-throw -- Native BrowserRun upgrade Promise must reject a malformed WebSocket response.
       if (socket === null) throw new BrowserRunFailure({ operation, reason: "malformed" });
 
       return socket;
@@ -98,6 +100,7 @@ export class BrowserRunBinding extends Context.Service<
           } catch {
             // Body cancellation cannot replace the acquisition refusal.
           }
+          // oxlint-disable-next-line effect/no-untyped-throw -- Native BrowserRun acquisition Promise preserves the provider refusal after body cleanup.
           throw failure;
         }
 
@@ -115,6 +118,7 @@ export class BrowserRunBinding extends Context.Service<
         const transport: ConnectionTransport = {
           send: (message) => {
             if (retired || socket === undefined)
+              // oxlint-disable-next-line effect/no-untyped-throw -- Native Puppeteer transport rejects fenced dispatch or initialization; its Effect owner maps the failure.
               throw new BrowserRunFailure({ operation, reason: "provider" });
             socket.send(message);
           },
@@ -153,6 +157,7 @@ export class BrowserRunBinding extends Context.Service<
           } catch (cause) {
             retirementFailure ??= browserFailure(disconnectOperation, cause);
           }
+          // oxlint-disable-next-line effect/no-untyped-throw -- Native transport close callback preserves the first retirement failure for its Effect owner.
           if (retirementFailure !== undefined) throw retirementFailure;
         };
 
@@ -177,6 +182,7 @@ export class BrowserRunBinding extends Context.Service<
               // failure independently of the cancellation already returned to the owner.
               retireNow();
               signal?.throwIfAborted();
+              // oxlint-disable-next-line effect/no-untyped-throw -- Native Puppeteer transport rejects fenced dispatch or initialization; its Effect owner maps the failure.
               throw new BrowserRunFailure({ operation, reason: "provider" });
             }
             socket.addEventListener("message", onMessage);
@@ -207,6 +213,7 @@ export class BrowserRunBinding extends Context.Service<
               signal?.aborted === true &&
               (cause === signal.reason || (closedByAbort && cause.name === "TargetCloseError"));
 
+            // oxlint-disable-next-line effect/no-untyped-throw -- Native SDK initialization Promise preserves cancellation provenance after transport retirement.
             throw localCancellation ? reportedBrowserError(failure) : failure;
           } finally {
             signal?.removeEventListener("abort", abort);
@@ -257,6 +264,7 @@ export class BrowserRunBinding extends Context.Service<
                 if (acquired !== undefined) await runReport(release(acquired));
                 if (signal.aborted && cause !== signal.reason)
                   await runReport(reportBrowserCause(operation, Cause.fail(cause)));
+                // oxlint-disable-next-line effect/no-untyped-throw -- Rethrow the foreign upgrade failure after late-acquisition cleanup, preserving abort identity.
                 throw cause;
               }
             },

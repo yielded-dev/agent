@@ -629,14 +629,11 @@ describe("NodeDurableAgentRuntime", () => {
 
         const initialAgent = Agent.withModel(original, blockedModel);
 
-        const readRecords = (threadId: ThreadId) =>
-          Effect.gen(function* () {
-            const store = yield* ThreadStore;
+        const readRecords = Effect.fnUntraced(function* (threadId: ThreadId) {
+          const store = yield* ThreadStore;
 
-            return yield* Stream.runCollect(
-              store.read(ThreadRead.make({ threadId, limit: 1_024 })),
-            );
-          });
+          return yield* Stream.runCollect(store.read(ThreadRead.make({ threadId, limit: 1_024 })));
+        });
 
         const accepted = yield* Effect.gen(function* () {
           const runtime = yield* DurableAgentRuntime;

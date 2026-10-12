@@ -30,7 +30,7 @@ export const workerHistory = Effect.fn("workerHistory")(
           entry.threadId !== threadId || entry.sequence !== afterSequence + index + 1,
       )
     )
-      return yield* new PlannerError({
+      return yield* PlannerError.make({
         code: "unavailable",
         message: "Worker history could not be read.",
       });

@@ -42,7 +42,7 @@ const dependenciesFor = Effect.fnUntraced(function* (revision: string) {
   const expectedEffect = catalog.catalog.effect;
 
   if (!expectedEffect)
-    return yield* new BenchError({ message: "Ref has no Effect catalog version." });
+    return yield* BenchError.make({ message: "Ref has no Effect catalog version." });
   if (lock === harnessLock) return { root: repository, expectedEffect };
 
   const lockHash = hash(lock);
@@ -70,7 +70,7 @@ const dependenciesFor = Effect.fnUntraced(function* (revision: string) {
         const installed = yield* execute(["install", "--frozen-lockfile"], root);
 
         if (installed.code !== 0)
-          return yield* new BenchError({
+          return yield* BenchError.make({
             message: `Dependency install failed: ${redact(installed.output).slice(-3000)}`,
           });
         yield* fs.writeFileString(receipt + ".tmp", lockHash, { mode: 0o600 });
@@ -130,7 +130,7 @@ export const build = Effect.fnUntraced(function* (
     const exitCode = yield* child.exitCode;
 
     if (exitCode !== 0)
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message: "Could not unpack the requested framework revision.",
       });
     // Framework links override workspace links; dependencies come from this revision's lockfile.
@@ -230,7 +230,7 @@ export const build = Effect.fnUntraced(function* (
         plugins: [resolver],
       }),
     catch: (cause) =>
-      new BenchError({
+      BenchError.make({
         message: `Cannot build ${entry}${ref ? " at the requested ref" : ""}: ${redact(cause instanceof Error ? cause.message : "Unknown build error").slice(0, 2000)}`,
       }),
   });
@@ -266,7 +266,7 @@ export const build = Effect.fnUntraced(function* (
       : undefined;
 
     if (frameworkRoots.length !== 1 || versions.length !== 1 || versions[0] !== expectedEffect)
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message: `Effect bundle mismatch: expected ${expectedEffect}, found ${versions.join(",")}.`,
       });
     yield* save(outfile + ".dependencies.json", {
@@ -306,7 +306,7 @@ export const ensureVendor = Effect.gen(function* () {
     const install = yield* execute(["run", "-F", "@yielded/agent-example-durable-bench", "vendor"]);
 
     if (install.code !== 0 || !(yield* installed))
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message: "Install the durable-bench vendor dependencies first.",
       });
   }

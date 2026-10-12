@@ -83,39 +83,38 @@ const expectInjectedFailure = <A>(
   }
 };
 
-const makeFailpointHarness = (storage: DurableObjectStorage) =>
-  Effect.gen(function* () {
-    const active = yield* Ref.make<DoStorageFailpointLocation | undefined>(undefined);
-    const select = (location: DoStorageFailpointLocation | undefined) => Ref.set(active, location);
+const makeFailpointHarness = Effect.fnUntraced(function* (storage: DurableObjectStorage) {
+  const active = yield* Ref.make<DoStorageFailpointLocation | undefined>(undefined);
+  const select = (location: DoStorageFailpointLocation | undefined) => Ref.set(active, location);
 
-    const failingLedger = <A, E>(
-      effect: Effect.Effect<
-        A,
-        E,
-        SubmissionLedger | SettlementPublisher | ThreadStore | StorageOwner | Crypto.Crypto
-      >,
-    ) =>
-      Effect.provide(effect, [
-        ledgerLayer({
-          storage,
-          failpoint: (location) =>
-            Ref.get(active).pipe(
-              Effect.flatMap((selected) =>
-                selected === location
-                  ? Effect.fail(DoStorageFailpointError.make({ location }))
-                  : Effect.void,
-              ),
+  const failingLedger = <A, E>(
+    effect: Effect.Effect<
+      A,
+      E,
+      SubmissionLedger | SettlementPublisher | ThreadStore | StorageOwner | Crypto.Crypto
+    >,
+  ) =>
+    Effect.provide(effect, [
+      ledgerLayer({
+        storage,
+        failpoint: (location) =>
+          Ref.get(active).pipe(
+            Effect.flatMap((selected) =>
+              selected === location
+                ? Effect.fail(DoStorageFailpointError.make({ location }))
+                : Effect.void,
             ),
-        }),
-        storeLayer({ storage }),
-        BrowserCrypto.layer,
-      ]);
+          ),
+      }),
+      storeLayer({ storage }),
+      BrowserCrypto.layer,
+    ]);
 
-    const withSql = <A, E>(effect: Effect.Effect<A, E, SqlClientService.SqlClient>) =>
-      Effect.provide(effect, SqliteClient.layer({ storage }));
+  const withSql = <A, E>(effect: Effect.Effect<A, E, SqlClientService.SqlClient>) =>
+    Effect.provide(effect, SqliteClient.layer({ storage }));
 
-    return { select, failingLedger, withSql } as const;
-  });
+  return { select, failingLedger, withSql } as const;
+});
 
 describe("DoSubmissionLedger failpoints", () => {
   it("recovers ledger identity and input progress after lost acknowledgements", () =>

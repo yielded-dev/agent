@@ -860,21 +860,20 @@ const lifetimeCapacity = conformanceCase(
         );
       }
 
-      const assertHostGuard = <A>(
+      const assertHostGuard = Effect.fnUntraced(function* <A>(
         effect: Effect.Effect<A, SubscriptionStoreFailure>,
         code: string,
-      ) =>
-        Effect.gen(function* () {
-          const result = yield* Effect.result(effect);
+      ) {
+        const result = yield* Effect.result(effect);
 
-          yield* ensure(
-            Result.isFailure(result) &&
-              result.failure._tag === "SubscriptionError" &&
-              result.failure.reason === "capacity" &&
-              result.failure.code === code,
-            `host ${code} guard ignored live work`,
-          );
-        });
+        yield* ensure(
+          Result.isFailure(result) &&
+            result.failure._tag === "SubscriptionError" &&
+            result.failure.reason === "capacity" &&
+            result.failure.code === code,
+          `host ${code} guard ignored live work`,
+        );
+      });
 
       const active = yield* store.register(record("host-active"), limits);
       const activeEvent = yield* store.accept(event("host-active"), limits);
@@ -934,17 +933,18 @@ const capacityReactivation = conformanceCase(
         maxDeliveriesPerOwner: 1,
       };
 
-      const expectCapacity = <A>(effect: Effect.Effect<A, SubscriptionStoreFailure>) =>
-        Effect.gen(function* () {
-          const result = yield* Effect.result(effect);
+      const expectCapacity = Effect.fnUntraced(function* <A>(
+        effect: Effect.Effect<A, SubscriptionStoreFailure>,
+      ) {
+        const result = yield* Effect.result(effect);
 
-          yield* ensure(
-            Result.isFailure(result) &&
-              result.failure._tag === "SubscriptionError" &&
-              result.failure.reason === "capacity",
-            "live work did not reserve capacity",
-          );
-        });
+        yield* ensure(
+          Result.isFailure(result) &&
+            result.failure._tag === "SubscriptionError" &&
+            result.failure.reason === "capacity",
+          "live work did not reserve capacity",
+        );
+      });
 
       const expiring = record("expiring");
 

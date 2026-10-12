@@ -14,14 +14,13 @@ class SearchIndex extends Context.Service<SearchIndex, string>()(
 
 const typed = ToolDiscovery.make({
   failure: SearchError,
-  search: (_request, catalogue) =>
-    Effect.gen(function* () {
-      yield* SearchIndex;
-      yield* Effect.addFinalizer(() => Effect.void);
-      if (catalogue.length === 0) return yield* SearchError.make({ reason: "empty" });
+  search: Effect.fnUntraced(function* (_request, catalogue) {
+    yield* SearchIndex;
+    yield* Effect.addFinalizer(() => Effect.void);
+    if (catalogue.length === 0) return yield* SearchError.make({ reason: "empty" });
 
-      return catalogue.map((entry) => entry.id);
-    }),
+    return catalogue.map((entry) => entry.id);
+  }),
 });
 
 export const verifyRetainsSearchErrorsAndLayerRequirementsWithoutCapturingTheEngineCatalogue =

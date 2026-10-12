@@ -104,25 +104,24 @@ layer(Layer.mergeAll(identifiers, ThreadHistory.layer))("Turn lifetime", (it) =>
 
         const run = AgentRuntime.stream(agent, "begin", {
           context: {
-            prepare: ({ source, turn }) =>
-              Effect.gen(function* () {
-                activeBeforePreparation.push(active.size);
-                yield* Effect.acquireRelease(
-                  Effect.sync(() => active.add(turn)),
-                  () =>
-                    Effect.sync(() => {
-                      active.delete(turn);
-                      finalized.push(turn);
-                    }),
-                );
-                if (turn === 3) {
-                  yield* Deferred.succeed(thirdTurnEntered, undefined);
+            prepare: Effect.fnUntraced(function* ({ source, turn }) {
+              activeBeforePreparation.push(active.size);
+              yield* Effect.acquireRelease(
+                Effect.sync(() => active.add(turn)),
+                () =>
+                  Effect.sync(() => {
+                    active.delete(turn);
+                    finalized.push(turn);
+                  }),
+              );
+              if (turn === 3) {
+                yield* Deferred.succeed(thirdTurnEntered, undefined);
 
-                  return yield* Effect.never;
-                }
+                return yield* Effect.never;
+              }
 
-                return { prompt: source };
-              }),
+              return { prompt: source };
+            }),
           },
         }).pipe(
           Stream.runDrain,

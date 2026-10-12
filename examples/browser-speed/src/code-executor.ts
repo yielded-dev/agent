@@ -18,7 +18,7 @@ const implementation = SandboxImplementation.make({
 });
 
 const protocol = (stage: string) =>
-  new CodeExecutionProtocolError({
+  CodeExecutionProtocolError.make({
     implementation,
     message: `Acceptance executor ${stage} transport failed.`,
   });
@@ -109,42 +109,41 @@ export const workerExecutor = Layer.effect(
     );
 
     return CodeExecutor.of({
-      execute: (request) =>
-        Effect.gen(function* () {
-          const host = yield* CodeExecutionHost;
-          const scope = yield* Effect.scope;
-          const span = yield* Effect.currentSpan.pipe(Effect.orDie);
-          const id = crypto.randomUUID();
+      execute: Effect.fnUntraced(function* (request) {
+        const host = yield* CodeExecutionHost;
+        const scope = yield* Effect.scope;
+        const span = yield* Effect.currentSpan.pipe(Effect.orDie);
+        const id = crypto.randomUUID();
 
-          const body = Schema.encodeSync(Wire.Request)({
-            id,
-            request,
-            traceId: span.traceId,
-            spanId: span.spanId,
-          });
+        const body = Schema.encodeSync(Wire.Request)({
+          id,
+          request,
+          traceId: span.traceId,
+          spanId: span.spanId,
+        });
 
-          passes.set(id, { host, scope, span });
-          yield* Effect.addFinalizer(() => Effect.sync(() => passes.delete(id)));
+        passes.set(id, { host, scope, span });
+        yield* Effect.addFinalizer(() => Effect.sync(() => passes.delete(id)));
 
-          const response = yield* Effect.tryPromise({
-            try: (signal) =>
-              runtime.dispatchFetch("https://executor.invalid/", { method: "POST", body, signal }),
-            catch: () => protocol("request"),
-          });
+        const response = yield* Effect.tryPromise({
+          try: (signal) =>
+            runtime.dispatchFetch("https://executor.invalid/", { method: "POST", body, signal }),
+          catch: () => protocol("request"),
+        });
 
-          if (!response.ok) return yield* protocol(`response-${response.status}`);
+        if (!response.ok) return yield* protocol(`response-${response.status}`);
 
-          const text = yield* Effect.tryPromise({
-            try: () => response.text(),
-            catch: () => protocol("response-body"),
-          });
+        const text = yield* Effect.tryPromise({
+          try: () => response.text(),
+          catch: () => protocol("response-body"),
+        });
 
-          const result = yield* Schema.decodeEffect(Wire.Outcome)(text).pipe(
-            Effect.mapError(() => protocol("decode")),
-          );
+        const result = yield* Schema.decodeEffect(Wire.Outcome)(text).pipe(
+          Effect.mapError(() => protocol("decode")),
+        );
 
-          return "success" in result ? result.success : yield* result.failure;
-        }),
+        return "success" in result ? result.success : yield* result.failure;
+      }),
     });
   }),
 );

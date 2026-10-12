@@ -32,27 +32,26 @@ export const runNodeWorkerDispatch = (
 
       yield* Effect.addFinalizer(() => Queue.shutdown(pending));
 
-      const enqueue = (threadId: ThreadId) =>
-        Effect.gen(function* () {
-          const offer = yield* Effect.sync(() => {
-            const state = states.get(threadId);
+      const enqueue = Effect.fnUntraced(function* (threadId: ThreadId) {
+        const offer = yield* Effect.sync(() => {
+          const state = states.get(threadId);
 
-            if (state === "pending" || state === "dirty") return false;
-            if (state === "active") {
-              states.set(threadId, "dirty");
+          if (state === "pending" || state === "dirty") return false;
+          if (state === "active") {
+            states.set(threadId, "dirty");
 
-              return false;
-            }
+            return false;
+          }
 
-            states.set(threadId, "pending");
+          states.set(threadId, "pending");
 
-            return true;
-          });
-
-          // The single ingress can reserve at most one entry beyond queue capacity.
-          // Backpressure retains scan tails instead of repeatedly dropping later lanes.
-          if (offer) yield* Queue.offer(pending, threadId);
+          return true;
         });
+
+        // The single ingress can reserve at most one entry beyond queue capacity.
+        // Backpressure retains scan tails instead of repeatedly dropping later lanes.
+        if (offer) yield* Queue.offer(pending, threadId);
+      });
 
       const initial = Stream.paginate(undefined, (afterThreadId: ThreadId | undefined) =>
         runtime

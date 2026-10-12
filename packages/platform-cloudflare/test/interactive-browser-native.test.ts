@@ -51,7 +51,7 @@ class NativeProbeError extends Schema.TaggedError<NativeProbeError>()("NativePro
 }) {}
 
 const sdkCall = <A>(run: () => Promise<A>) =>
-  Effect.tryPromise({ try: run, catch: (cause) => new NativeProbeError({ cause }) });
+  Effect.tryPromise({ try: run, catch: (cause) => NativeProbeError.make({ cause }) });
 
 // Opt-in local transport proof. No Cloudflare credentials or deployment. The
 // Puppeteer version and every adapter callback are the production ones.

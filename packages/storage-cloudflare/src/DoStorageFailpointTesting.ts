@@ -27,15 +27,17 @@ export const evictionFailpointHandler =
       Effect.flatMap((armed) =>
         armed
           ? // `ctx.abort()` throws while destroying the instance; that throw surfaces as a
-            // defect in the (already dying) incarnation. The defensive throw below keeps the
+            // defect in the (already dying) incarnation. The defensive defect below keeps the
             // guarantee — nothing after an armed hit may observe in-memory state — even if a
             // harness supplies an evict thunk that returns.
-            Effect.sync((): never => {
-              options.evict(location);
-              throw new Error(
-                `Durable Object eviction did not interrupt execution at ${location}.`,
-              );
-            })
+            Effect.sync(() => options.evict(location)).pipe(
+              Effect.andThen(
+                Effect.die(
+                  // oxlint-disable-next-line effect/no-native-error -- A returning native eviction callback violates the host contract and must remain a defect.
+                  new Error(`Durable Object eviction did not interrupt execution at ${location}.`),
+                ),
+              ),
+            )
           : Effect.void,
       ),
     );

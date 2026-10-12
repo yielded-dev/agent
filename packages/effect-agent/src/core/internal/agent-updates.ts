@@ -29,6 +29,7 @@ export const withUpdateTool = (
 ): Toolkit.Any => {
   if (schema === undefined) return toolkit;
   if (Object.hasOwn(toolkit.tools, "emit_update"))
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Agent.make synchronously rejects a toolkit that occupies the reserved update Tool name.
     throw new TypeError("emit_update is reserved for Agent updates");
 
   return Toolkit.make(...Object.values(toolkit.tools), updateTool(schema));

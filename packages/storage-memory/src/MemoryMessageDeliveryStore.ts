@@ -189,36 +189,35 @@ export const memoryMessageDeliveryStoreLayer = (
               };
             }),
           ),
-        page: (threadId, after, limit) =>
-          Effect.gen(function* () {
-            const current = yield* Ref.get(state);
+        page: Effect.fnUntraced(function* (threadId, after, limit) {
+          const current = yield* Ref.get(state);
 
-            const candidates = boundedWorkSelection<MessageDeliveryKey["messageId"]>(
-              limit + 1,
-              (id) => id,
-              after,
-            );
+          const candidates = boundedWorkSelection<MessageDeliveryKey["messageId"]>(
+            limit + 1,
+            (id) => id,
+            after,
+          );
 
-            for (const id of current.pending.get(threadId) ?? []) candidates.add(id);
-            const ids = candidates.values;
+          for (const id of current.pending.get(threadId) ?? []) candidates.add(id);
+          const ids = candidates.values;
 
-            const entries: Array<ThreadWorkEntry> = [];
+          const entries: Array<ThreadWorkEntry> = [];
 
-            for (const messageId of ids.slice(0, limit)) {
-              const key = messageDeliveryKeyString({ ownerThreadId: threadId, messageId });
-              const entry = current.work.get(key);
+          for (const messageId of ids.slice(0, limit)) {
+            const key = messageDeliveryKeyString({ ownerThreadId: threadId, messageId });
+            const entry = current.work.get(key);
 
-              if (entry === undefined || !current.records.has(key))
-                return yield* ThreadStoreError.make({
-                  operation: "delivery work",
-                  message: "Pending delivery index is incomplete or corrupt",
-                });
-              entries.push(entry);
-            }
-            const next = ids.length > limit ? ids[limit - 1] : undefined;
+            if (entry === undefined || !current.records.has(key))
+              return yield* ThreadStoreError.make({
+                operation: "delivery work",
+                message: "Pending delivery index is incomplete or corrupt",
+              });
+            entries.push(entry);
+          }
+          const next = ids.length > limit ? ids[limit - 1] : undefined;
 
-            return { entries, ...(next === undefined ? {} : { after: next }) };
-          }),
+          return { entries, ...(next === undefined ? {} : { after: next }) };
+        }),
       });
 
       const commitInto = (

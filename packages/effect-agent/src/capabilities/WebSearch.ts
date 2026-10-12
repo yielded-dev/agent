@@ -89,6 +89,7 @@ export const native = <T extends Tool.AnyProviderDefined>(options: Pick<Options<
     options.tool.requiresHandler ||
     !["web_search", "web_search_preview"].includes(options.tool.providerName)
   ) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- WebSearch.native synchronously requires a provider-executed search Tool.
     throw new Error("WebSearch.native requires a provider-executed web_search tool");
   }
 
@@ -97,6 +98,7 @@ export const native = <T extends Tool.AnyProviderDefined>(options: Pick<Options<
 
 const boundedInteger = (name: string, value: number, maximum: number): number => {
   if (!Number.isSafeInteger(value) || value < 1 || value > maximum) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- WebSearch.layer synchronously validates request and response bounds before creating its Layer.
     throw new Error(`WebSearch ${name} must be an integer between 1 and ${maximum}`);
   }
 
@@ -117,6 +119,7 @@ export const layer = <T extends Tool.AnyProviderDefined>(options: Options<T>) =>
     !Tool.isProviderDefined(options.tool) ||
     !["web_search", "web_search_preview"].includes(options.tool.providerName)
   ) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- WebSearch.layer synchronously requires a provider-defined search Tool.
     throw new Error("WebSearch requires a native provider-defined web_search tool");
   }
   const searchTool = options.tool;
@@ -150,14 +153,14 @@ export const layer = <T extends Tool.AnyProviderDefined>(options: Options<T>) =>
       return {
         WebSearch: Effect.fnUntraced(function* (input) {
           const { query } = yield* Schema.decodeEffect(Parameters)(input).pipe(
-            Effect.mapError(() => new Failure({ reason: "invalid-query" })),
+            Effect.mapError(() => Failure.make({ reason: "invalid-query" })),
           );
 
           const response = yield* generateWithContext(query).pipe(
-            Effect.mapError(() => new Failure({ reason: "provider" })),
+            Effect.mapError(() => Failure.make({ reason: "provider" })),
             Effect.timeoutOrElse({
               duration: timeoutMillis,
-              orElse: () => Effect.fail(new Failure({ reason: "timeout" })),
+              orElse: () => Effect.fail(Failure.make({ reason: "timeout" })),
             }),
           );
 
@@ -170,10 +173,10 @@ export const layer = <T extends Tool.AnyProviderDefined>(options: Options<T>) =>
               );
             })
           ) {
-            return yield* new Failure({ reason: "provider" });
+            return yield* Failure.make({ reason: "provider" });
           }
           if (!response.toolResults.some((result) => result.name === searchTool.name)) {
-            return yield* new Failure({ reason: "search-not-executed" });
+            return yield* Failure.make({ reason: "search-not-executed" });
           }
 
           const sources = response.content.flatMap((part) =>
@@ -192,11 +195,11 @@ export const layer = <T extends Tool.AnyProviderDefined>(options: Options<T>) =>
           };
 
           if (utf8ByteLength(JSON.stringify(result)) > maxOutputBytes) {
-            return yield* new Failure({ reason: "output-limit" });
+            return yield* Failure.make({ reason: "output-limit" });
           }
 
           return yield* Schema.decodeEffect(Result)(result).pipe(
-            Effect.mapError(() => new Failure({ reason: "invalid-response" })),
+            Effect.mapError(() => Failure.make({ reason: "invalid-response" })),
           );
         }),
       };

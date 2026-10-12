@@ -184,14 +184,13 @@ const command = Command.make(
       },
     };
 
-    const save = () =>
-      Effect.gen(function* () {
-        report = { ...report, elapsedMillis: (yield* Clock.currentTimeMillis) - start };
-        yield* fs.writeFileString(
-          path.join(directory, "report.json"),
-          Schema.encodeSync(Schema.fromJsonString(Report))(report),
-        );
-      });
+    const save = Effect.fnUntraced(function* () {
+      report = { ...report, elapsedMillis: (yield* Clock.currentTimeMillis) - start };
+      yield* fs.writeFileString(
+        path.join(directory, "report.json"),
+        Schema.encodeSync(Schema.fromJsonString(Report))(report),
+      );
+    });
 
     yield* save();
 
@@ -259,8 +258,8 @@ const command = Command.make(
         targets,
       };
 
-      const saveTarget = (target: typeof PerformanceTarget.Type) =>
-        Effect.gen(function* () {
+      const saveTarget = Effect.fnUntraced(
+        function* (target: typeof PerformanceTarget.Type) {
           resources = {
             ...resources,
             targets: resources.targets.map((current) =>
@@ -271,14 +270,17 @@ const command = Command.make(
             resourcesPath,
             Schema.encodeSync(Schema.fromJsonString(PerformanceResources))(resources),
           );
-        }).pipe(
-          Effect.mapError(() =>
-            EvaluationError.make({
-              stage: "evidence",
-              message: "Cannot persist deployment ownership",
-            }),
+        },
+        (effect) =>
+          effect.pipe(
+            Effect.mapError(() =>
+              EvaluationError.make({
+                stage: "evidence",
+                message: "Cannot persist deployment ownership",
+              }),
+            ),
           ),
-        );
+      );
 
       yield* fs.writeFileString(
         resourcesPath,

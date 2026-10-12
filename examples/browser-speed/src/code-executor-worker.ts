@@ -18,6 +18,14 @@ interface Env {
   readonly HOSTCALL: Fetcher;
 }
 
+class BrokerTransportError extends Schema.TaggedError<BrokerTransportError>()(
+  "BrokerTransportError",
+  {
+    message: Schema.String,
+    cause: Schema.optionalKey(Schema.Defect()),
+  },
+) {}
+
 const telemetry = OtlpTracer.layer({
   url: "http://127.0.0.1:4318/v1/traces",
   resource: { serviceName: "effect-agent-browser-code-executor" },
@@ -38,18 +46,54 @@ export default {
     }).pipe(
       Effect.provideService(CodeExecutionHost, {
         call: (call) =>
-          Effect.promise(async () => {
-            const response = await env.HOSTCALL.fetch(`https://broker.invalid/${input.id}`, {
-              method: "POST",
-              body: Schema.encodeSync(Schema.fromJsonString(CodeHostCall))(call),
-            });
+          Effect.acquireUseRelease(
+            Effect.sync(() => new AbortController()),
+            (controller) =>
+              Effect.gen(function* () {
+                const body = yield* Schema.encodeEffect(Schema.fromJsonString(CodeHostCall))(
+                  call,
+                ).pipe(
+                  Effect.mapError((cause) =>
+                    BrokerTransportError.make({ message: "Invalid broker call", cause }),
+                  ),
+                );
 
-            if (!response.ok) throw new Error("Acceptance broker transport refused the call");
+                const response = yield* Effect.tryPromise({
+                  try: () =>
+                    env.HOSTCALL.fetch(`https://broker.invalid/${input.id}`, {
+                      method: "POST",
+                      body,
+                      signal: controller.signal,
+                    }),
+                  catch: (cause) =>
+                    BrokerTransportError.make({ message: "Broker transport failed", cause }),
+                });
 
-            return Schema.decodeSync(Schema.fromJsonString(CodeHostCallResult))(
-              await response.text(),
-            );
-          }),
+                if (!response.ok)
+                  return yield* BrokerTransportError.make({
+                    message: `Acceptance broker transport refused the call (${response.status})`,
+                  });
+
+                const text = yield* Effect.tryPromise({
+                  try: () => response.text(),
+                  catch: (cause) =>
+                    BrokerTransportError.make({ message: "Broker response failed", cause }),
+                });
+
+                return yield* Schema.decodeEffect(Schema.fromJsonString(CodeHostCallResult))(
+                  text,
+                ).pipe(
+                  Effect.mapError((cause) =>
+                    BrokerTransportError.make({ message: "Invalid broker response", cause }),
+                  ),
+                );
+              }),
+            (controller) => Effect.sync(() => controller.abort()),
+          ).pipe(
+            // CodeExecutionHost reserves typed tool failures for result data; transport faults
+            // are defects at this host boundary, retaining their cause and interruption.
+            Effect.orDie,
+          ),
       }),
       Effect.provide(dynamicWorkerCodeExecutorLayer({ loader: env.LOADER })),
       Effect.withParentSpan(Tracer.externalSpan({ traceId: input.traceId, spanId: input.spanId })),
@@ -58,11 +102,11 @@ export default {
     );
 
     try {
-      return new Response(await Effect.runPromise(execute));
+      return new Response(await Effect.runPromise(execute, { signal: request.signal }));
     } catch {
       return new Response(
         Schema.encodeSync(Wire.Outcome)({
-          failure: new CodeExecutionProtocolError({
+          failure: CodeExecutionProtocolError.make({
             implementation: SandboxImplementation.make({
               isolation: "isolated",
               identity: "cloudflare-dynamic-worker",

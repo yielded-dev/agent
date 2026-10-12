@@ -45,7 +45,7 @@ export const makeBrowser = Effect.fnUntraced(function* (
   const checkout = makeCheckoutPolicy();
 
   const asLabError = (error: { readonly message: string }) =>
-    new LabError({ code: "browser", message: error.message });
+    LabError.make({ code: "browser", message: error.message });
 
   const makeController = (profile: BrowserProfile) => {
     const waits = profile === "frontier" || profile === "store" || profile === "shop";
@@ -71,12 +71,11 @@ export const makeBrowser = Effect.fnUntraced(function* (
 
   const native = <A>(action: (page: Page) => Promise<A>) =>
     session.run(Effect.void, action).pipe(
-      Effect.mapError(
-        (error) =>
-          new LabError({
-            code: "browser",
-            message: `Browser ${error.reason}; dispatch ${error.dispatch}. Observe before attempting another action.`,
-          }),
+      Effect.mapError((error) =>
+        LabError.make({
+          code: "browser",
+          message: `Browser ${error.reason}; dispatch ${error.dispatch}. Observe before attempting another action.`,
+        }),
       ),
     );
 
@@ -125,9 +124,8 @@ export const makeBrowser = Effect.fnUntraced(function* (
         observe: trace.measure("observation", "Read current controls", controller.actions.observe),
         act: (values) =>
           act(values).pipe(
-            Effect.mapError(
-              (error) =>
-                new BrowserUse.BrowserUseError({ code: "browser", message: error.message }),
+            Effect.mapError((error) =>
+              BrowserUse.BrowserUseError.make({ code: "browser", message: error.message }),
             ),
           ),
       }),
@@ -164,7 +162,7 @@ export const makeBrowser = Effect.fnUntraced(function* (
           supported
             ? Effect.void
             : Effect.fail(
-                new LabError({
+                LabError.make({
                   code: "configuration",
                   message: "The task board requires native HTML dialog support.",
                 }),
@@ -183,8 +181,8 @@ export const makeBrowser = Effect.fnUntraced(function* (
       )
       .pipe(
         Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Board))),
-        Effect.mapError(
-          () => new LabError({ code: "browser", message: "Could not validate the task ledger." }),
+        Effect.mapError(() =>
+          LabError.make({ code: "browser", message: "Could not validate the task ledger." }),
         ),
       ),
     actionsLayer,
@@ -213,16 +211,16 @@ export const scripted = Effect.fnUntraced(function* (
     const control = observed.controls.find((control) => control.attributes?.id === action.ref);
 
     if (control === undefined)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "browser",
         message: `Missing diagnostic control ${action.ref}`,
       });
     const result = yield* browser.act([{ ...action, ref: control.ref }]);
 
     if (result.error !== null)
-      return yield* new LabError({ code: "browser", message: result.error });
+      return yield* LabError.make({ code: "browser", message: result.error });
     if (result.observation === null)
-      return yield* new LabError({ code: "browser", message: "Missing post-action observation." });
+      return yield* LabError.make({ code: "browser", message: "Missing post-action observation." });
     observed = result.observation;
   });
 
@@ -251,7 +249,7 @@ export const scripted = Effect.fnUntraced(function* (
     yield* step({ kind: "select", ref: "status", value: "Done" });
     yield* step({ kind: "click", ref: "save" });
   } else
-    return yield* new LabError({
+    return yield* LabError.make({
       code: "invalid",
       message: "Scripted mode requires a preset task.",
     });

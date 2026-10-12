@@ -69,24 +69,23 @@ it.effect(
           {
             model: "unused",
             apiKey: "",
-            kitesurf: (retainClose) =>
-              Effect.gen(function* () {
-                opened++;
-                retainClose(
-                  Effect.sync(() => {
-                    closed++;
-                  }),
-                );
-                yield* Deferred.succeed(started, undefined);
-                if (outcome === "failure")
-                  return yield* new LabError({
-                    code: "browser",
-                    message: "Fixture connection failure",
-                  });
-                if (outcome === "defect") return yield* Effect.die("Fixture defect");
+            kitesurf: Effect.fnUntraced(function* (retainClose) {
+              opened++;
+              retainClose(
+                Effect.sync(() => {
+                  closed++;
+                }),
+              );
+              yield* Deferred.succeed(started, undefined);
+              if (outcome === "failure")
+                return yield* LabError.make({
+                  code: "browser",
+                  message: "Fixture connection failure",
+                });
+              if (outcome === "defect") return yield* Effect.die("Fixture defect");
 
-                return yield* Effect.never;
-              }),
+              return yield* Effect.never;
+            }),
           },
         );
 
@@ -154,7 +153,7 @@ it.effect(
           allocations++;
 
           return Effect.fail(
-            new BrowserSessionError({
+            BrowserSessionError.make({
               reason: "provider",
               dispatch: "not-dispatched",
               cleanup: "not-requested",
@@ -219,7 +218,7 @@ it.effect(
               Effect.andThen(
                 outcome === "failure"
                   ? Effect.fail(
-                      new BrowserSessionError({
+                      BrowserSessionError.make({
                         reason: "provider",
                         dispatch: "not-dispatched",
                         cleanup: "not-requested",
@@ -311,7 +310,7 @@ it.effect(
             Effect.suspend(() =>
               ++attempts === 1
                 ? Effect.fail(
-                    new BrowserSessionError({
+                    BrowserSessionError.make({
                       reason: "cleanup",
                       dispatch: "not-dispatched",
                       cleanup: "unconfirmed",
@@ -421,20 +420,19 @@ it.effect(
 
           const services = BrowserSessions.of({
             createAttached: () => Effect.die("The lab creates and attaches separately"),
-            create: (_, retain) =>
-              Effect.gen(function* () {
-                acquisitions++;
-                alive = true;
-                const exit = yield* Effect.exit(retain(reference));
+            create: Effect.fnUntraced(function* (_, retain) {
+              acquisitions++;
+              alive = true;
+              const exit = yield* Effect.exit(retain(reference));
 
-                if (Exit.isFailure(exit)) alive = false;
-                yield* exit;
+              if (Exit.isFailure(exit)) alive = false;
+              yield* exit;
 
-                return reference;
-              }),
+              return reference;
+            }),
             attach: () =>
               Effect.fail(
-                new BrowserSessionError({
+                BrowserSessionError.make({
                   reason: "provider",
                   dispatch: "not-dispatched",
                   cleanup: "not-requested",

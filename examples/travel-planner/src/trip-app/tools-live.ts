@@ -23,12 +23,11 @@ export const AppToolsLive = Layer.unwrap(
           "Building your trip app",
           createTripApp(tripId).pipe(Effect.provideService(WorkerEnvironment, env)),
         ),
-      get_trip_app: ({ tripId }) =>
-        Effect.gen(function* () {
-          yield* requireAppTrip(tripId);
+      get_trip_app: Effect.fnUntraced(function* ({ tripId }) {
+        yield* requireAppTrip(tripId);
 
-          return yield* Effect.flatMap(AppRepository, (apps) => apps.get(tripId));
-        }),
+        return yield* Effect.flatMap(AppRepository, (apps) => apps.get(tripId));
+      }),
       read_trip_app_files: ({ tripId, paths }) => readTripAppFiles(tripId, paths),
       edit_trip_app: (input, context) =>
         trackTool(

@@ -31,14 +31,13 @@ export const CheckedFinishResearch = Tool.make("finish_research", {
 export const CheckedFinishResearchLive = Toolkit.make(CheckedFinishResearch).toLayer({
   finish_research: (draft) =>
     Schema.decodeEffect(ScoutFindings)(draft).pipe(
-      Effect.mapError(
-        () =>
-          new PlannerError({
-            code: "invalid",
-            message:
-              `Findings were not accepted. This draft has ${draft.summary.length} summary characters, ${draft.sources.length} sources, and ${new TextEncoder().encode(JSON.stringify(draft)).byteLength} JSON bytes. ` +
-              "Correct the draft and call finish_research again: summary <= 4000 characters; <= 6 sources; source titles and photo captions must be 1-240 characters; notes <= 1200 characters; <= 4 photos per source; URLs must be public HTTPS and <= 2048 characters; complete JSON <= 8192 bytes. Preserve key findings and uncertainty; omit redundant detail and photos before removing useful evidence. Do not redo searches.",
-          }),
+      Effect.mapError(() =>
+        PlannerError.make({
+          code: "invalid",
+          message:
+            `Findings were not accepted. This draft has ${draft.summary.length} summary characters, ${draft.sources.length} sources, and ${new TextEncoder().encode(JSON.stringify(draft)).byteLength} JSON bytes. ` +
+            "Correct the draft and call finish_research again: summary <= 4000 characters; <= 6 sources; source titles and photo captions must be 1-240 characters; notes <= 1200 characters; <= 4 photos per source; URLs must be public HTTPS and <= 2048 characters; complete JSON <= 8192 bytes. Preserve key findings and uncertainty; omit redundant detail and photos before removing useful evidence. Do not redo searches.",
+        }),
       ),
     ),
 });

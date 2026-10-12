@@ -102,41 +102,40 @@ const toolCall = (id: string, name: string, params: unknown): Response.StreamPar
  * Scripted model whose call counter and captured request prompts live OUTSIDE the Model Layer,
  * so they survive Layer rebuilds across Attempts (each Attempt provides the Model afresh).
  */
-const makeScriptedModel = (
+const makeScriptedModel = Effect.fnUntraced(function* (
   script: (call: number) => ReadonlyArray<Response.StreamPartEncoded>,
   onRelease?: Effect.Effect<void>,
-) =>
-  Effect.gen(function* () {
-    const calls = yield* Ref.make(0);
-    const prompts: Array<Prompt.Prompt> = [];
+) {
+  const calls = yield* Ref.make(0);
+  const prompts: Array<Prompt.Prompt> = [];
 
-    const model = Model.make(
-      "scripted",
-      "durable-approval-test",
-      Layer.effect(
-        LanguageModel.LanguageModel,
-        Effect.gen(function* () {
-          if (onRelease !== undefined) yield* Effect.addFinalizer(() => onRelease);
+  const model = Model.make(
+    "scripted",
+    "durable-approval-test",
+    Layer.effect(
+      LanguageModel.LanguageModel,
+      Effect.gen(function* () {
+        if (onRelease !== undefined) yield* Effect.addFinalizer(() => onRelease);
 
-          return yield* LanguageModel.make({
-            generateText: () => Effect.succeed([]),
-            streamText: (request) =>
-              Stream.unwrap(
-                Ref.getAndUpdate(calls, (call) => call + 1).pipe(
-                  Effect.map((call) => {
-                    prompts.push(request.prompt);
+        return yield* LanguageModel.make({
+          generateText: () => Effect.succeed([]),
+          streamText: (request) =>
+            Stream.unwrap(
+              Ref.getAndUpdate(calls, (call) => call + 1).pipe(
+                Effect.map((call) => {
+                  prompts.push(request.prompt);
 
-                    return Stream.fromIterable(script(call));
-                  }),
-                ),
+                  return Stream.fromIterable(script(call));
+                }),
               ),
-          });
-        }),
-      ),
-    );
+            ),
+        });
+      }),
+    ),
+  );
 
-    return { model, prompts };
-  });
+  return { model, prompts };
+});
 
 const policy = AgentPolicy.make({
   maxTurns: 3,
@@ -200,19 +199,18 @@ const testLayer = DurableAgentRuntime.layer
   .pipe(Layer.provide(runStorageLayer()))
   .pipe(Layer.provideMerge(baseLayer));
 
-const readLog = (threadId: string) =>
-  Effect.gen(function* () {
-    const store = yield* ThreadStore;
+const readLog = Effect.fnUntraced(function* (threadId: string) {
+  const store = yield* ThreadStore;
 
-    return yield* Stream.runCollect(
-      store.read(
-        ThreadRead.make({
-          threadId: decodeThreadId(threadId),
-          limit: 1_024,
-        }),
-      ),
-    );
-  });
+  return yield* Stream.runCollect(
+    store.read(
+      ThreadRead.make({
+        threadId: decodeThreadId(threadId),
+        limit: 1_024,
+      }),
+    ),
+  );
+});
 
 const logTags = (records: ReadonlyArray<CanonicalRecordEnvelope>): ReadonlyArray<string> =>
   records.map((envelope) => envelope.record.payload._tag);
@@ -220,16 +218,15 @@ const logTags = (records: ReadonlyArray<CanonicalRecordEnvelope>): ReadonlyArray
 const recordsById = (records: ReadonlyArray<CanonicalRecordEnvelope>) =>
   new Map(records.map((envelope) => [envelope.record.recordId as string, envelope]));
 
-const lookupState = (submissionId: SubmissionId) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
-    const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
+const lookupState = Effect.fnUntraced(function* (submissionId: SubmissionId) {
+  const ledger = yield* SubmissionLedger;
+  const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
 
-    expect(Option.isSome(snapshot)).toBe(true);
-    if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
+  expect(Option.isSome(snapshot)).toBe(true);
+  if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
 
-    return snapshot.value.state;
-  });
+  return snapshot.value.state;
+});
 
 const approveCommand = (
   submissionId: SubmissionId,
@@ -245,7 +242,7 @@ const approveCommand = (
   });
 
 /** A retained external resource with a new, scoped attachment for each actual Attempt. */
-const makeRetentionCase = (
+const makeRetentionCase = Effect.fnUntraced(function* (
   name: string,
   options: {
     readonly beforeRetain?: (
@@ -254,166 +251,164 @@ const makeRetentionCase = (
     readonly beforeOrdinaryResult?: Effect.Effect<void>;
     readonly modelFinalizer?: Effect.Effect<void>;
   } = {},
-) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
-    const store = yield* ThreadStore;
-    const entered = yield* Deferred.make<void>();
-    const resource = { open: true };
-    const attachments: Array<{ attemptId: string; active: boolean; retained: boolean }> = [];
-    const uses: Array<{ tool: string; attemptId: string; resource: typeof resource }> = [];
-    const lifecycle: Array<string> = [];
+) {
+  const ledger = yield* SubmissionLedger;
+  const store = yield* ThreadStore;
+  const entered = yield* Deferred.make<void>();
+  const resource = { open: true };
+  const attachments: Array<{ attemptId: string; active: boolean; retained: boolean }> = [];
+  const uses: Array<{ tool: string; attemptId: string; resource: typeof resource }> = [];
+  const lifecycle: Array<string> = [];
 
-    const toolkit = Toolkit.make(
-      Tool.make("use_resource", { parameters: Schema.Struct({}), success: Schema.String }),
-      BookApproval,
-    );
+  const toolkit = Toolkit.make(
+    Tool.make("use_resource", { parameters: Schema.Struct({}), success: Schema.String }),
+    BookApproval,
+  );
 
-    const definition = Agent.make(`retained-approval-${name}`, {
-      input: Schema.Struct({ question: Schema.String }),
-      output: Schema.Struct({ answer: Schema.String }),
-      instructions: "Use the resource, then book after approval.",
-      toolkit,
-      policy,
-    });
+  const definition = Agent.make(`retained-approval-${name}`, {
+    input: Schema.Struct({ question: Schema.String }),
+    output: Schema.Struct({ answer: Schema.String }),
+    instructions: "Use the resource, then book after approval.",
+    toolkit,
+    policy,
+  });
 
-    const scripted = yield* makeScriptedModel(
-      (call) =>
-        call === 0
-          ? toolTurn(toolCall("use-1", "use_resource", {}))
-          : call === 1
-            ? toolTurn(toolCall("book-1", "book", { ref: "retained" }))
-            : finalParts('{"answer":"booked"}'),
-      options.modelFinalizer,
-    );
+  const scripted = yield* makeScriptedModel(
+    (call) =>
+      call === 0
+        ? toolTurn(toolCall("use-1", "use_resource", {}))
+        : call === 1
+          ? toolTurn(toolCall("book-1", "book", { ref: "retained" }))
+          : finalParts('{"answer":"booked"}'),
+    options.modelFinalizer,
+  );
 
-    const thread = `thread-retained-approval-${name}`;
+  const thread = `thread-retained-approval-${name}`;
 
-    const attemptLayer = ({ attemptId, submissionId }: AgentAttemptContext) =>
-      Layer.unwrap(
-        Effect.gen(function* () {
-          const attachment = yield* Effect.acquireRelease(
+  const attemptLayer = ({ attemptId, submissionId }: AgentAttemptContext) =>
+    Layer.unwrap(
+      Effect.gen(function* () {
+        const attachment = yield* Effect.acquireRelease(
+          Effect.sync(() => {
+            expect(attachments.every((previous) => !previous.active)).toBe(true);
+            const current = { attemptId, active: true, retained: false };
+
+            attachments.push(current);
+            lifecycle.push("acquire");
+
+            return current;
+          }),
+          (current) =>
             Effect.sync(() => {
-              expect(attachments.every((previous) => !previous.active)).toBe(true);
-              const current = { attemptId, active: true, retained: false };
-
-              attachments.push(current);
-              lifecycle.push("acquire");
-
-              return current;
+              current.active = false;
+              if (!current.retained) resource.open = false;
+              lifecycle.push("release");
             }),
-            (current) =>
-              Effect.sync(() => {
-                current.active = false;
-                if (!current.retained) resource.open = false;
-                lifecycle.push("release");
-              }),
-          );
+        );
 
-          const recordUse = (tool: string) =>
-            Effect.sync(() => {
-              expect(resource.open && attachment.active && !attachment.retained).toBe(true);
-              uses.push({ tool, attemptId, resource });
-            });
-
-          const retain = Effect.gen(function* () {
+        const recordUse = (tool: string) =>
+          Effect.sync(() => {
             expect(resource.open && attachment.active && !attachment.retained).toBe(true);
-
-            const snapshot = yield* ledger
-              .loadRecoverySnapshot(RecoverySnapshotRequest.make({ submissionId }))
-              .pipe(Effect.orDie);
-
-            expect(snapshot.hasOwner).toBe(true);
-
-            const records = yield* readLog(thread).pipe(
-              Effect.provideService(ThreadStore, store),
-              Effect.orDie,
-            );
-
-            expect(
-              records.filter(({ record }) => record.payload._tag === "ToolApprovalRequested"),
-            ).toHaveLength(1);
-            expect(
-              records.some(
-                ({ record }) =>
-                  record.payload._tag === "ToolCallSettled" &&
-                  record.payload.toolCallId === "use-1",
-              ),
-            ).toBe(true);
-            expect(uses.map(({ tool }) => tool)).toEqual(["use_resource"]);
-            yield* Deferred.succeed(entered, undefined);
-            if (options.beforeRetain !== undefined) yield* options.beforeRetain(submissionId);
-            attachment.retained = true;
-            lifecycle.push("retain");
+            uses.push({ tool, attemptId, resource });
           });
 
-          return Layer.merge(
-            Layer.succeed(DurableApprovalSuspension)(retain),
-            toolkit.toLayer({
-              use_resource: () =>
-                recordUse("use_resource").pipe(
-                  Effect.andThen(options.beforeOrdinaryResult ?? Effect.void),
-                  Effect.as("ready"),
-                ),
-              book: () => recordUse("book").pipe(Effect.as({ confirmation: "retained-resource" })),
-            }),
+        const retain = Effect.gen(function* () {
+          expect(resource.open && attachment.active && !attachment.retained).toBe(true);
+
+          const snapshot = yield* ledger
+            .loadRecoverySnapshot(RecoverySnapshotRequest.make({ submissionId }))
+            .pipe(Effect.orDie);
+
+          expect(snapshot.hasOwner).toBe(true);
+
+          const records = yield* readLog(thread).pipe(
+            Effect.provideService(ThreadStore, store),
+            Effect.orDie,
           );
-        }),
-      );
 
-    const bindings = yield* compileRegistrations([
-      {
-        agent: Agent.withModel(definition, scripted.model),
-        definitions: DefinitionDigestInput.make({
-          agent: "retain-1",
-          model: "retain-1",
-          tools: ["retain-1"],
-        }),
-        attemptLayer,
-      },
-    ]);
+          expect(
+            records.filter(({ record }) => record.payload._tag === "ToolApprovalRequested"),
+          ).toHaveLength(1);
+          expect(
+            records.some(
+              ({ record }) =>
+                record.payload._tag === "ToolCallSettled" && record.payload.toolCallId === "use-1",
+            ),
+          ).toBe(true);
+          expect(uses.map(({ tool }) => tool)).toEqual(["use_resource"]);
+          yield* Deferred.succeed(entered, undefined);
+          if (options.beforeRetain !== undefined) yield* options.beforeRetain(submissionId);
+          attachment.retained = true;
+          lifecycle.push("retain");
+        });
 
-    const runtime = yield* DurableAgentRuntime.pipe(
-      Effect.provide(
-        DurableAgentRuntime.layerWithBindings(bindings)
-          .pipe(Layer.provide(runStorageLayer()))
-          .pipe(Layer.provide(RunToolAuthorization.allowAll)),
+        return Layer.merge(
+          Layer.succeed(DurableApprovalSuspension)(retain),
+          toolkit.toLayer({
+            use_resource: () =>
+              recordUse("use_resource").pipe(
+                Effect.andThen(options.beforeOrdinaryResult ?? Effect.void),
+                Effect.as("ready"),
+              ),
+            book: () => recordUse("book").pipe(Effect.as({ confirmation: "retained-resource" })),
+          }),
+        );
+      }),
+    );
+
+  const bindings = yield* compileRegistrations([
+    {
+      agent: Agent.withModel(definition, scripted.model),
+      definitions: DefinitionDigestInput.make({
+        agent: "retain-1",
+        model: "retain-1",
+        tools: ["retain-1"],
+      }),
+      attemptLayer,
+    },
+  ]);
+
+  const runtime = yield* DurableAgentRuntime.pipe(
+    Effect.provide(
+      DurableAgentRuntime.layerWithBindings(bindings)
+        .pipe(Layer.provide(runStorageLayer()))
+        .pipe(Layer.provide(RunToolAuthorization.allowAll)),
+    ),
+  );
+
+  const receipt = yield* runtime.submit(
+    { definition },
+    { question: "book it" },
+    { ...submitOptions(thread, name), definitions: bindings[0]!.digests },
+  );
+
+  const process = runtime.processThreadResolved(receipt.threadId);
+
+  const snapshot = ledger.loadRecoverySnapshot(
+    RecoverySnapshotRequest.make({ submissionId: receipt.submissionId }),
+  );
+
+  const waitForRetention = <A, E>(worker: Fiber.Fiber<A, E>) =>
+    Effect.raceFirst(
+      Deferred.await(entered),
+      Fiber.join(worker).pipe(
+        Effect.andThen(Effect.die(new Error("Attempt ended before retaining its live resource"))),
       ),
     );
 
-    const receipt = yield* runtime.submit(
-      { definition },
-      { question: "book it" },
-      { ...submitOptions(thread, name), definitions: bindings[0]!.digests },
-    );
-
-    const process = runtime.processThreadResolved(receipt.threadId);
-
-    const snapshot = ledger.loadRecoverySnapshot(
-      RecoverySnapshotRequest.make({ submissionId: receipt.submissionId }),
-    );
-
-    const waitForRetention = <A, E>(worker: Fiber.Fiber<A, E>) =>
-      Effect.raceFirst(
-        Deferred.await(entered),
-        Fiber.join(worker).pipe(
-          Effect.andThen(Effect.die(new Error("Attempt ended before retaining its live resource"))),
-        ),
-      );
-
-    return {
-      runtime,
-      receipt,
-      process,
-      snapshot,
-      waitForRetention,
-      resource,
-      attachments,
-      uses,
-      lifecycle,
-      scripted,
-    };
-  });
+  return {
+    runtime,
+    receipt,
+    process,
+    snapshot,
+    waitForRetention,
+    resource,
+    attachments,
+    uses,
+    lifecycle,
+    scripted,
+  };
+});
 
 layer(baseLayer)("approval suspension with attempt resources", (it) => {
   it.effect("a raced approval retires the retained attachment and claim before continuing", () =>

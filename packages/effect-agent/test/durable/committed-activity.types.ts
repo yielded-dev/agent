@@ -53,14 +53,12 @@ const pass = processCommittedActivity({
     pageSize: 1,
     timeoutMillis: 100,
   }),
-  extract: () =>
-    Effect.gen(function* () {
-      return yield* (yield* Extractor).read;
-    }),
-  apply: (work) =>
-    Effect.gen(function* () {
-      yield* (yield* Destination).apply(work);
-    }),
+  extract: Effect.fnUntraced(function* () {
+    return yield* (yield* Extractor).read;
+  }),
+  apply: Effect.fnUntraced(function* (work) {
+    yield* (yield* Destination).apply(work);
+  }),
 });
 
 type Errors = Assert<

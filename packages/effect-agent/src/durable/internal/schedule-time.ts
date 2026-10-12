@@ -156,14 +156,14 @@ export const scheduleNextAfter = (
           while (next <= afterMillis) {
             const following = Cron.next(cron.success, next).getTime();
 
-            if (following <= next) throw new Error("Cron did not advance");
+            if (following <= next) return invalid("Cron has no supported next firing");
             next = following;
           }
 
-          return next;
+          return checkedInstant(next, "Next cron occurrence");
         },
         catch: () => ScheduleValidationError.make({ message: "Cron has no supported next firing" }),
-      }).pipe(Result.flatMap((next) => checkedInstant(next, "Next cron occurrence")));
+      }).pipe(Result.flatMap((result) => result));
     }
   }
 };
@@ -250,15 +250,15 @@ export const scheduleDueOccurrence = (
         let next = Cron.next(cron.success, intended).getTime();
 
         while (next <= nowMillis) {
-          if (next <= intended) throw new Error("Cron did not advance");
+          if (next <= intended) return invalid("Cron has no supported due firing");
           intended = next;
           next = Cron.next(cron.success, intended).getTime();
         }
 
-        return { intended, next };
+        return Result.succeed({ intended, next });
       },
       catch: () => ScheduleValidationError.make({ message: "Cron has no supported due firing" }),
-    });
+    }).pipe(Result.flatMap((result) => result));
 
     if (Result.isFailure(due)) return Result.fail(due.failure);
     const next = checkedInstant(due.success.next, "Next cron occurrence");

@@ -527,6 +527,8 @@ const makeProductionCdpSession = (session: CDPSession): BrowserRunInteractiveCdp
   detach: () => session.detach(),
 });
 
+// Native Puppeteer adapter control signal; never enters the Effect failure channel.
+// @effect-diagnostics-next-line extendsNativeError:off
 class BrowserRunActionUndispatched extends Error {
   readonly matchCount: number;
 
@@ -549,8 +551,10 @@ const readActionTarget = (page: Page, selector: string): Promise<unknown> =>
       if (cause instanceof Error && cause.name === "SyntaxError") {
         return { matchCount: 0, invalidSelector: true };
       }
+      // oxlint-disable-next-line effect/no-untyped-throw -- Preserve the original Chromium/Puppeteer exception at this native SDK callback boundary.
       throw cause;
     }
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Runs in Chromium through page.evaluate; Effect is unavailable in that realm.
     if (typeof matches !== "object" || matches === null) throw new Error("Invalid query result");
     const matchCount = Math.min(10_000, Reflect.get(matches, "length"));
     const element = Reflect.get(matches, 0);
@@ -726,6 +730,7 @@ const makeActionRequestTracker = (page: Page, signal: AbortSignal) => {
     if (signal.aborted) close();
   } catch (cause) {
     close();
+    // oxlint-disable-next-line effect/no-untyped-throw -- Preserve the original Chromium/Puppeteer exception at this native SDK callback boundary.
     throw cause;
   }
 
@@ -1151,6 +1156,7 @@ const runObservedPageAction = async (
   validate?: (element: NonNullable<Awaited<ReturnType<Page["$"]>>>) => Promise<boolean>,
   onComplete?: () => void,
 ): Promise<unknown> => {
+  // oxlint-disable-next-line effect/no-untyped-throw -- Native Puppeteer input port reports non-dispatch before the Effect owner classifies the result.
   if (signal.aborted) throw new BrowserRunActionUndispatched(0);
 
   const before = Schema.decodeUnknownSync(ActionTargetState)(
@@ -1158,6 +1164,7 @@ const runObservedPageAction = async (
   );
 
   if (before.matchCount !== 1 || before.invalidSelector === true) {
+    // oxlint-disable-next-line effect/no-untyped-throw -- Native Puppeteer input port reports non-dispatch before the Effect owner classifies the result.
     throw new BrowserRunActionUndispatched(before.matchCount);
   }
   // Resolve one CSS match inside this action's native adapter boundary. The
@@ -1173,6 +1180,7 @@ const runObservedPageAction = async (
         requestedSelector,
       ]);
 
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Runs in Chromium through page.evaluate; Effect is unavailable in that realm.
       if (typeof matches !== "object" || matches === null) throw new Error("Invalid query result");
       const count = Reflect.get(matches, "length");
 
@@ -1183,6 +1191,7 @@ const runObservedPageAction = async (
 
   try {
     if (!(target instanceof ElementHandle)) {
+      // oxlint-disable-next-line effect/no-untyped-throw -- Native Puppeteer input port reports non-dispatch before the Effect owner classifies the result.
       throw new BrowserRunActionUndispatched(
         Schema.decodeUnknownSync(Schema.Natural)(await target.jsonValue()),
       );
@@ -1195,6 +1204,7 @@ const runObservedPageAction = async (
   }
   if (signal.aborted) {
     await disposeActionHandles([element]);
+    // oxlint-disable-next-line effect/no-untyped-throw -- Native Puppeteer input port reports non-dispatch before the Effect owner classifies the result.
     throw new BrowserRunActionUndispatched(1);
   }
 
@@ -1209,10 +1219,12 @@ const runObservedPageAction = async (
   signal.addEventListener("abort", onAbort, { once: true });
   try {
     if (validate !== undefined && !(await validate(element)))
+      // oxlint-disable-next-line effect/no-untyped-throw -- Native Puppeteer input port reports non-dispatch before the Effect owner classifies the result.
       throw new BrowserRunActionUndispatched(1);
     tracker = makeActionRequestTracker(page, signal);
     // No await between the final cancellation fence and SDK dispatch. Once
     // dispatched, interruption is uncertain, even if the SDK later resolves.
+    // oxlint-disable-next-line effect/no-untyped-throw -- Native Puppeteer input port reports non-dispatch before the Effect owner classifies the result.
     if (signal.aborted) throw new BrowserRunActionUndispatched(1);
     onDispatch();
     const inputStarted = performance.now();
@@ -1254,6 +1266,7 @@ const guardedPageInput = async (
     }),
   );
 
+  // oxlint-disable-next-line effect/no-untyped-throw -- Native Puppeteer input port reports non-dispatch before the Effect owner classifies the result.
   if (observed._tag !== "Text") throw new BrowserRunActionUndispatched(1);
 };
 
@@ -1281,6 +1294,7 @@ const makeProductionPage = (page: Page): BrowserRunInteractivePage => {
       try {
         await page.close();
       } catch (cause) {
+        // oxlint-disable-next-line effect/no-untyped-throw -- Preserve the original Chromium/Puppeteer exception at this native SDK callback boundary.
         if (!isRemoteClosure(cause)) throw cause;
       }
     },
@@ -1338,6 +1352,7 @@ const makeProductionPage = (page: Page): BrowserRunInteractivePage => {
                   prototype = Reflect.getPrototypeOf(prototype);
                 }
                 if (setValue === undefined) {
+                  // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Runs inside the Chromium evaluate callback, whose failures cross CDP as native exceptions.
                   throw new Error("The selector did not resolve to a fillable field");
                 }
                 const focus = Reflect.get(element, "focus");
@@ -1418,6 +1433,7 @@ const makeProductionContext = (
     try {
       await context.close();
     } catch (cause) {
+      // oxlint-disable-next-line effect/no-untyped-throw -- Preserve the original Chromium/Puppeteer exception at this native SDK callback boundary.
       if (!isRemoteClosure(cause)) throw cause;
     }
   },
@@ -1437,6 +1453,7 @@ const makeProductionBrowser = (
     if (context === undefined) return undefined;
     const pages = await context.pages();
 
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Native browser reattachment port rejects an oversized SDK inventory; the Effect caller maps the failure.
     if (pages.length > 64) throw new Error("The browser target inventory exceeds its bound");
     for (const candidate of pages) {
       const page = makeProductionPage(candidate);
@@ -1455,6 +1472,7 @@ const makeProductionBrowser = (
     try {
       await browser.close();
     } catch (cause) {
+      // oxlint-disable-next-line effect/no-untyped-throw -- Preserve the original Chromium/Puppeteer exception at this native SDK callback boundary.
       if (!isRemoteClosure(cause)) throw cause;
     }
   },
@@ -1605,6 +1623,8 @@ const hostAllowed = (policy: InteractiveBrowserPolicySnapshot, value: string): b
 const keepAliveMillis = (policy: InteractiveBrowserPolicySnapshot): number =>
   Math.max(MIN_KEEP_ALIVE_MILLIS, Math.min(MAX_KEEP_ALIVE_MILLIS, policy.maxElapsedMillis));
 
+// Native acquisition cancellation signal, intercepted before mapping to an Effect failure.
+// @effect-diagnostics-next-line extendsNativeError:off
 class LateBrowserAcquisition extends Error {}
 
 const closeLateAcquisition = async <A>(
@@ -1623,6 +1643,7 @@ const closeLateAcquisition = async <A>(
   } catch {
     // The captured runtime reports cleanup failures before this callback absorbs rejection.
   }
+  // oxlint-disable-next-line effect/no-untyped-throw -- Reject a late native SDK acquisition after cleanup; the interrupted Effect no longer owns it.
   throw new LateBrowserAcquisition("The interrupted browser acquisition completed late");
 };
 
@@ -2806,15 +2827,19 @@ const makeHostService = (
           resume === undefined
             ? undefined
             : yield* withinDeadline(
-                Effect.tryPromise({
-                  try: async () => {
-                    if (browser.reattach === undefined || browser.detach === undefined)
-                      throw new Error("The browser binding does not support exact reattachment");
+                Effect.gen(function* () {
+                  if (browser.reattach === undefined || browser.detach === undefined)
+                    return yield* protocolError(
+                      "The browser binding does not support exact reattachment",
+                    );
 
-                    return await browser.reattach(resume.page);
-                  },
-                  catch: (cause) =>
-                    protocolError("Reattaching the exact browser page failed", cause),
+                  const reattach = browser.reattach.bind(browser);
+
+                  return yield* Effect.tryPromise({
+                    try: () => reattach(resume.page),
+                    catch: (cause) =>
+                      protocolError("Reattaching the exact browser page failed", cause),
+                  });
                 }).pipe(
                   Effect.timeoutOrElse({
                     duration: "10 seconds",
@@ -3032,15 +3057,16 @@ const makeHostService = (
         );
 
         const pageIdentity = yield* Effect.cached(
-          Effect.tryPromise({
-            try: async () => {
-              if (page.identity === undefined)
-                throw new Error("The browser binding does not expose page identity");
+          Effect.gen(function* () {
+            if (page.identity === undefined)
+              return yield* protocolError("The browser binding does not expose page identity");
+            const identity = page.identity.bind(page);
 
-              return await page.identity();
-            },
-            catch: (cause) =>
-              protocolError("Reading the exact browser page identity failed", cause),
+            return yield* Effect.tryPromise({
+              try: () => identity(),
+              catch: (cause) =>
+                protocolError("Reading the exact browser page identity failed", cause),
+            });
           }).pipe(
             Effect.catchTag("InteractiveBrowserProtocolError", (error) =>
               failReportedProtocol("interactive.checkpoint", error),

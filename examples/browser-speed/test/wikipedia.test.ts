@@ -183,7 +183,7 @@ it.live(
               Effect.tryPromise({
                 try: () => action(page),
                 catch: () =>
-                  new BrowserSessionError({
+                  BrowserSessionError.make({
                     reason: "provider",
                     dispatch: "possibly-dispatched",
                     cleanup: "not-requested",
@@ -301,7 +301,7 @@ it.live(
             ++setupCalls === 1
               ? session.run(authorize, action)
               : Effect.fail(
-                  new BrowserSessionError({
+                  BrowserSessionError.make({
                     reason: "provider",
                     dispatch: "not-dispatched",
                     cleanup: "not-requested",
@@ -584,7 +584,7 @@ it.live(
         const work = Effect.gen(function* () {
           yield* makeWikipedia(defaultChallenge);
           if (exit === "failure")
-            return yield* new LabError({ code: "browser", message: "Expected failure" });
+            return yield* LabError.make({ code: "browser", message: "Expected failure" });
           if (exit === "defect") return yield* Effect.die("Expected defect");
 
           return yield* Effect.never;

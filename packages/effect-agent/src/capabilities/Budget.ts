@@ -262,6 +262,11 @@ const pruneRetiredHierarchy = (
   return nodes;
 };
 
+/** Internal lifetime misuse remains a defect, with an Error message and stack. */
+class RetiredBudgetHandle extends Schema.TaggedError<RetiredBudgetHandle>()("RetiredBudgetHandle", {
+  message: Schema.String,
+}) {}
+
 const makeNode = (
   ledger: Ref.Ref<BudgetLedger>,
   key: string,
@@ -273,7 +278,9 @@ const makeNode = (
 
   const retiredDefect = () =>
     Effect.die(
-      new Error(`Usage budget handle ${config.level}:${config.id} was used after retirement`),
+      RetiredBudgetHandle.make({
+        message: `Usage budget handle ${config.level}:${config.id} was used after retirement`,
+      }),
     );
 
   const liveHierarchy = (state: BudgetLedger): ReadonlyArray<LedgerNode> | undefined => {

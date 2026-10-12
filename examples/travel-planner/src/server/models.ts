@@ -140,7 +140,7 @@ const unavailableModel = (error: PlannerError) => {
   const failure = AiError.make({
     module: "TravelPlanner",
     method: "selectModel",
-    reason: new AiError.InvalidRequestError({ description: error.message }),
+    reason: AiError.InvalidRequestError.make({ description: error.message }),
   });
 
   return Model.make(

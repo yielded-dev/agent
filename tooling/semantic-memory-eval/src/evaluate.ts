@@ -482,18 +482,17 @@ const providerCohort = Effect.fn("SemanticMemoryEvaluation.providerCohort")(func
   let nativeCallStarted = false;
 
   const wrapper = yield* EmbeddingModel.make({
-    embedMany: ({ inputs }) =>
-      Effect.gen(function* () {
-        if ((provider.delayMillis ?? 0) > 0) yield* Effect.sleep(provider.delayMillis!);
-        if (provider.fail === true) return yield* injectedAiError("injected failure");
-        nativeCallStarted = true;
-        const response = yield* base.embedMany(inputs);
+    embedMany: Effect.fnUntraced(function* ({ inputs }) {
+      if ((provider.delayMillis ?? 0) > 0) yield* Effect.sleep(provider.delayMillis!);
+      if (provider.fail === true) return yield* injectedAiError("injected failure");
+      nativeCallStarted = true;
+      const response = yield* base.embedMany(inputs);
 
-        return {
-          results: response.embeddings.map(({ vector }) => [...vector]),
-          usage: { inputTokens: response.usage.inputTokens },
-        };
-      }),
+      return {
+        results: response.embeddings.map(({ vector }) => [...vector]),
+        usage: { inputTokens: response.usage.inputTokens },
+      };
+    }),
   });
 
   const started = yield* Clock.monotonicTimeNanos;

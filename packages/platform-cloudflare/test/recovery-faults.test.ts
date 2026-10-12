@@ -748,15 +748,14 @@ describe("recovery faults independent of execution history", () => {
         let rejectDelivery = false;
 
         const options = {
-          publish: (event: ThreadRecoveryFaultEvent) =>
-            Effect.gen(function* () {
-              events.push(event);
-              if (rejectDelivery)
-                return yield* DurableAlarmError.make({
-                  operation: "fixture delivery",
-                  message: "Host acknowledgement unavailable",
-                });
-            }),
+          publish: Effect.fnUntraced(function* (event: ThreadRecoveryFaultEvent) {
+            events.push(event);
+            if (rejectDelivery)
+              return yield* DurableAlarmError.make({
+                operation: "fixture delivery",
+                message: "Host acknowledgement unavailable",
+              });
+          }),
           notify: (id: string) =>
             Effect.sync(() => {
               notifications.push(id);

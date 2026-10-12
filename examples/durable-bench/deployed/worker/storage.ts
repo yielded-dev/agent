@@ -27,19 +27,21 @@ export class FixtureError extends Schema.TaggedError<FixtureError>()("FixtureErr
   cause: Schema.optionalKey(Schema.Defect()),
 }) {}
 
-const fail = (message: string) => new FixtureError({ message });
+const fail = (message: string) => FixtureError.make({ message });
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
 export const importRows = (storage: DurableObjectStorage, dump: SqlDump): void => {
   storage.transactionSync(() => {
     for (const table of dump.tables) {
       if (table.name.startsWith("_cf_") || table.name.startsWith("sqlite_"))
-        throw fail("Platform tables cannot be imported");
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Rejecting this native transactionSync callback rolls back any tables imported earlier in the same transaction.
+        throw new Error("Platform tables cannot be imported");
       storage.sql.exec(table.sql.replace(/^CREATE TABLE /i, "CREATE TABLE IF NOT EXISTS "));
       if (
         storage.sql.exec<{ n: number }>(`SELECT COUNT(*) n FROM ${quote(table.name)}`).one().n !== 0
       )
-        throw fail(`Import destination table ${table.name} is not empty`);
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- This mutation-dependent guard must reject transactionSync to undo preceding imported tables.
+        throw new Error(`Import destination table ${table.name} is not empty`);
       for (const row of table.rows) {
         const values = row.map((value) =>
           typeof value === "object" && value !== null
@@ -136,7 +138,7 @@ const appendYielded = (result: Message[], record: typeof RecordEnvelope.Type) =>
 const compactTranscript = Effect.fnUntraced(function* (fixture: BulkFixture) {
   const exporter = yield* FixtureExport;
 
-  const request = yield* Schema.decodeUnknownEffect(ThreadExportRequest)({
+  const request = yield* Schema.decodeEffect(ThreadExportRequest)({
     threadId: fixture.threadId,
   });
 
@@ -156,67 +158,79 @@ const compactTranscript = Effect.fnUntraced(function* (fixture: BulkFixture) {
 });
 
 /** Reconstruct the last seeded model request; the seed digest excludes its final answer. */
-export const transcript = (sql: SqlStorage, target: Target): readonly Message[] => {
-  const result: Message[] = [];
+export const transcript = Effect.fnUntraced(function* (sql: SqlStorage, target: Target) {
+  const result = yield* Effect.try({
+    try: () => {
+      const result: Message[] = [];
 
-  if (target === "tardie") {
-    for (const row of sql
-      .exec<{ event: string }>("SELECT event FROM experimental_events ORDER BY seq")
-      .toArray()) {
-      const wire: unknown = JSON.parse(row.event);
-      const { event } = tardieEvent(wire);
+      if (target === "tardie") {
+        for (const row of sql
+          .exec<{ event: string }>("SELECT event FROM experimental_events ORDER BY seq")
+          .toArray()) {
+          const wire: unknown = JSON.parse(row.event);
+          const { event } = tardieEvent(wire);
 
-      if (event.type === "MessageReceived")
-        result.push({ role: "user", text: tardieUser(wire).event.body.text });
-      if (event.type === "ModelReturned") {
-        const model = tardieModel(wire).event;
-        const calls = model.toolCalls.map((call) => args(call.input).n);
+          if (event.type === "MessageReceived")
+            result.push({ role: "user", text: tardieUser(wire).event.body.text });
+          if (event.type === "ModelReturned") {
+            const model = tardieModel(wire).event;
+            const calls = model.toolCalls.map((call) => args(call.input).n);
 
-        result.push({ role: "assistant", text: model.text, ...(calls.length ? { calls } : {}) });
+            result.push({
+              role: "assistant",
+              text: model.text,
+              ...(calls.length ? { calls } : {}),
+            });
+          }
+          if (event.type === "ToolReturned")
+            result.push({ role: "tool", text: string(JSON.parse(tardieTool(wire).event.output)) });
+        }
+      } else if (target === "pi") {
+        for (const row of sql
+          .exec<{ record: string }>("SELECT record FROM entries ORDER BY commit_seq")
+          .toArray()) {
+          for (const message of piEntry(JSON.parse(row.record)).model) {
+            if (
+              message.role !== "user" &&
+              message.role !== "assistant" &&
+              message.role !== "toolResult"
+            )
+              continue;
+
+            const calls =
+              typeof message.content === "string"
+                ? []
+                : message.content.flatMap((part) =>
+                    part.type === "toolCall" ? [args(part.arguments).n] : [],
+                  );
+
+            result.push({
+              role: message.role === "toolResult" ? "tool" : message.role,
+              text: contentText(message.content),
+              ...(calls.length ? { calls } : {}),
+            });
+          }
+        }
+      } else {
+        for (const row of sql.exec<{ record_json: string }>(
+          "SELECT record_json FROM effect_agent_canonical_records ORDER BY sequence",
+        )) {
+          const record = Schema.decodeUnknownSync(RecordEnvelope)(JSON.parse(row.record_json));
+
+          appendYielded(result, record);
+        }
       }
-      if (event.type === "ToolReturned")
-        result.push({ role: "tool", text: string(JSON.parse(tardieTool(wire).event.output)) });
-    }
-  } else if (target === "pi") {
-    for (const row of sql
-      .exec<{ record: string }>("SELECT record FROM entries ORDER BY commit_seq")
-      .toArray()) {
-      for (const message of piEntry(JSON.parse(row.record)).model) {
-        if (
-          message.role !== "user" &&
-          message.role !== "assistant" &&
-          message.role !== "toolResult"
-        )
-          continue;
 
-        const calls =
-          typeof message.content === "string"
-            ? []
-            : message.content.flatMap((part) =>
-                part.type === "toolCall" ? [args(part.arguments).n] : [],
-              );
+      return result;
+    },
+    catch: (cause) => FixtureError.make({ message: "Read fixture transcript", cause }),
+  });
 
-        result.push({
-          role: message.role === "toolResult" ? "tool" : message.role,
-          text: contentText(message.content),
-          ...(calls.length ? { calls } : {}),
-        });
-      }
-    }
-  } else {
-    for (const row of sql.exec<{ record_json: string }>(
-      "SELECT record_json FROM effect_agent_canonical_records ORDER BY sequence",
-    )) {
-      const record = Schema.decodeUnknownSync(RecordEnvelope)(JSON.parse(row.record_json));
-
-      appendYielded(result, record);
-    }
-  }
   if (result.at(-1)?.role !== "assistant" || result.at(-1)?.calls?.length)
-    throw fail("Fixture is not settled");
+    return yield* fail("Fixture is not settled");
 
   return result.slice(0, -1);
-};
+});
 
 export const verifyFixture = Effect.fnUntraced(function* (fixture: BulkFixture) {
   const storage = yield* RestoreStorage;
@@ -237,7 +251,7 @@ export const verifyFixture = Effect.fnUntraced(function* (fixture: BulkFixture) 
             .one(),
         ),
       catch: (cause) =>
-        new FixtureError({ message: "Fixture storage format differs from this revision", cause }),
+        FixtureError.make({ message: "Fixture storage format differs from this revision", cause }),
     });
   }
 
@@ -249,11 +263,11 @@ export const verifyFixture = Effect.fnUntraced(function* (fixture: BulkFixture) 
 
   const messages = compact
     ? yield* compactTranscript(fixture)
-    : transcript(storage.sql, fixture.target);
+    : yield* transcript(storage.sql, fixture.target);
 
   const digest = yield* Effect.tryPromise({
     try: () => fingerprint(messages),
-    catch: (cause) => new FixtureError({ message: "Read fixture transcript", cause }),
+    catch: (cause) => FixtureError.make({ message: "Read fixture transcript", cause }),
   });
 
   if (

@@ -961,24 +961,20 @@ const schemaClassToolPartPreflight = <Tools extends Record<string, Tool.Any>>(
   try {
     if (part === null || typeof part !== "object") return undefined;
 
-    const read = (key: string): unknown => {
+    const read = (key: string): PropertyDescriptor | undefined => {
       const descriptor = Object.getOwnPropertyDescriptor(part, key);
 
-      if (descriptor === undefined || !("value" in descriptor)) {
-        throw new TypeError(`response part ${key} must be an own data property`);
-      }
-
-      return descriptor.value;
+      return descriptor !== undefined && "value" in descriptor ? descriptor : undefined;
     };
 
-    const type = read("type");
+    const type = read("type")?.value;
 
     if (type !== "tool-call" && type !== "tool-result") return undefined;
-    const name = read("name");
+    const name = read("name")?.value;
 
     if (typeof name !== "string" || !hasTool(toolkit.tools, name)) return undefined;
     const tool = toolkit.tools[name];
-    const payload = read(type === "tool-call" ? "params" : "result");
+    const payload: unknown = read(type === "tool-call" ? "params" : "result")?.value;
 
     if (payload === null || typeof payload !== "object") return undefined;
     const payloadPrototype = Object.getPrototypeOf(payload);
@@ -1007,7 +1003,10 @@ const schemaClassToolPartPreflight = <Tools extends Record<string, Tool.Any>>(
           ];
 
     for (const key of retainedKeys) {
-      preflight[key] = read(key);
+      const descriptor = read(key);
+
+      if (descriptor === undefined) return undefined;
+      preflight[key] = descriptor.value;
     }
 
     return preflight;
@@ -1170,11 +1169,14 @@ const captureModelResponsePartGeneral = Effect.fnUntraced(function* <
 
   const retainedBytes = yield* inspectModelResponsePartCapacity(usage, encoded, limits);
 
+  if (typeof structuredCloneFunction !== "function") {
+    return yield* ModelProtocolError.make({
+      message: "Model response part could not be converted into engine-owned data",
+    });
+  }
+
   const ownedEncoded = yield* Effect.try({
     try: () => {
-      if (typeof structuredCloneFunction !== "function") {
-        throw new TypeError("structuredClone is unavailable");
-      }
       const cloned: unknown = Reflect.apply(structuredCloneFunction, globalThis, [encoded]);
 
       return cloned;
@@ -1471,46 +1473,55 @@ const effectiveRunBounds = (
   maxToolCalls: boundedAllowance(policy.maxToolCalls, options.toolCallAllowance),
 });
 
-const decodeResumedSettledCall = Effect.fnUntraced(function* (input: unknown) {
-  const raw = yield* Effect.try({
-    try: () => {
-      if (input === null || typeof input !== "object") {
-        throw new TypeError("settled Tool Call must be an object");
-      }
-
-      const readOwnDataProperty = (key: "id" | "result" | "isFailure"): unknown => {
-        const descriptor = Object.getOwnPropertyDescriptor(input, key);
-
-        if (descriptor === undefined || !("value" in descriptor)) {
-          throw new TypeError(`settled Tool Call ${key} must be an own data property`);
-        }
-
-        return descriptor.value;
-      };
-
-      const selection = Object.getOwnPropertyDescriptor(input, "toolSelection");
-
-      if (selection !== undefined && !("value" in selection))
-        throw new TypeError("settled Tool selection must be an own data property");
-      const rejected = Object.getOwnPropertyDescriptor(input, "budgetRejected");
-
-      if (rejected !== undefined && !("value" in rejected)) {
-        throw new TypeError("settled Tool Call budgetRejected must be an own data property");
-      }
-
-      return {
-        id: readOwnDataProperty("id"),
-        result: readOwnDataProperty("result"),
-        isFailure: readOwnDataProperty("isFailure"),
-        ...(rejected === undefined ? {} : { budgetRejected: rejected.value }),
-        ...(selection === undefined ? {} : { toolSelection: selection.value }),
-      };
-    },
-    catch: () =>
-      ModelProtocolError.make({
-        message: "Turn resume contains an invalid settled Tool Call",
-      }),
+const readSnapshotProperty = Effect.fnUntraced(function* (
+  input: object,
+  key: string,
+  invalid: () => ModelProtocolError,
+  optional = false,
+): Effect.fn.Return<unknown, ModelProtocolError> {
+  const descriptor = yield* Effect.try({
+    try: () => Object.getOwnPropertyDescriptor(input, key),
+    catch: invalid,
   });
+
+  if (descriptor === undefined && optional) return undefined;
+  if (descriptor === undefined || !("value" in descriptor)) return yield* invalid();
+
+  return descriptor.value;
+});
+
+const decodeResumedSettledCall = Effect.fnUntraced(function* (input: unknown) {
+  const invalid = () =>
+    ModelProtocolError.make({
+      message: "Turn resume contains an invalid settled Tool Call",
+    });
+
+  if (input === null || typeof input !== "object") return yield* invalid();
+  const id = yield* readSnapshotProperty(input, "id", invalid);
+  const resultValue = yield* readSnapshotProperty(input, "result", invalid);
+  const isFailure = yield* readSnapshotProperty(input, "isFailure", invalid);
+
+  const { selection, rejected } = yield* Effect.try({
+    try: () => ({
+      selection: Object.getOwnPropertyDescriptor(input, "toolSelection"),
+      rejected: Object.getOwnPropertyDescriptor(input, "budgetRejected"),
+    }),
+    catch: invalid,
+  });
+
+  if (
+    (selection !== undefined && !("value" in selection)) ||
+    (rejected !== undefined && !("value" in rejected))
+  )
+    return yield* invalid();
+
+  const raw = {
+    id,
+    result: resultValue,
+    isFailure,
+    ...(rejected === undefined ? {} : { budgetRejected: rejected.value }),
+    ...(selection === undefined ? {} : { toolSelection: selection.value }),
+  };
 
   const result = boundedCanonicalJsonSnapshot(raw.result, MAX_RESUMED_RESULT_BYTES);
 
@@ -1532,106 +1543,73 @@ const decodeResumedSettledCall = Effect.fnUntraced(function* (input: unknown) {
   );
 });
 
-const snapshotResumedSettledCalls = (resume: unknown, maximum: number) =>
-  Effect.try({
-    try: () => {
-      if (resume === null || typeof resume !== "object") {
-        throw new TypeError("Turn resume must be an object");
-      }
-      const settledDescriptor = Object.getOwnPropertyDescriptor(resume, "settled");
+const snapshotResumedSettledCalls = Effect.fnUntraced(function* (resume: unknown, maximum: number) {
+  const invalid = () =>
+    ModelProtocolError.make({
+      message: "Turn resume contains an invalid settled Tool Call collection",
+    });
 
-      if (settledDescriptor === undefined || !("value" in settledDescriptor)) {
-        throw new TypeError("Turn resume settled must be an own data property");
-      }
-      const settled = settledDescriptor.value;
+  if (resume === null || typeof resume !== "object") return yield* invalid();
+  const settled = yield* readSnapshotProperty(resume, "settled", invalid);
+  const isArray = yield* Effect.try({ try: () => Array.isArray(settled), catch: invalid });
 
-      if (!Array.isArray(settled)) {
-        throw new TypeError("Turn resume settled must be an array");
-      }
-      const lengthDescriptor = Object.getOwnPropertyDescriptor(settled, "length");
+  if (!isArray || settled === null || typeof settled !== "object") return yield* invalid();
+  const length = yield* readSnapshotProperty(settled, "length", invalid);
 
-      if (
-        lengthDescriptor === undefined ||
-        !("value" in lengthDescriptor) ||
-        !Number.isSafeInteger(lengthDescriptor.value) ||
-        lengthDescriptor.value < 0 ||
-        lengthDescriptor.value > maximum
-      ) {
-        throw new TypeError("Turn resume settled has an invalid length");
-      }
-      const snapshot: Array<unknown> = [];
+  if (
+    typeof length !== "number" ||
+    !Number.isSafeInteger(length) ||
+    length < 0 ||
+    length > maximum
+  ) {
+    return yield* invalid();
+  }
+  const snapshot: Array<unknown> = [];
 
-      for (let index = 0; index < lengthDescriptor.value; index += 1) {
-        const entryDescriptor = Object.getOwnPropertyDescriptor(settled, String(index));
+  for (let index = 0; index < length; index += 1) {
+    snapshot.push(yield* readSnapshotProperty(settled, String(index), invalid));
+  }
 
-        if (entryDescriptor === undefined || !("value" in entryDescriptor)) {
-          throw new TypeError("Turn resume settled entries must be own data properties");
-        }
-        snapshot.push(entryDescriptor.value);
-      }
-
-      return snapshot;
-    },
-    catch: () =>
-      ModelProtocolError.make({
-        message: "Turn resume contains an invalid settled Tool Call collection",
-      }),
-  });
+  return snapshot;
+});
 
 const decodeResumeUsage = Effect.fnUntraced(function* (input: unknown) {
-  const snapshot = yield* Effect.try({
-    try: () => {
-      if (input === null || typeof input !== "object") {
-        throw new TypeError("Run resume usage must be an object");
-      }
+  const invalid = () =>
+    ModelProtocolError.make({
+      message:
+        "Run resume usage requires own data properties with non-negative safe-integer totals and last-call tokens no greater than their cumulative totals",
+    });
 
-      const read = (key: keyof RunResumeUsage, optional = false): unknown => {
-        const descriptor = Object.getOwnPropertyDescriptor(input, key);
+  if (input === null || typeof input !== "object") return yield* invalid();
+  const snapshot: Record<string, unknown> = {};
 
-        if (descriptor === undefined && optional) return undefined;
-        if (descriptor === undefined || !("value" in descriptor)) {
-          throw new TypeError(`Run resume usage ${key} must be an own data property`);
-        }
+  for (const key of [
+    "usageStatus",
+    "pricingStatus",
+    "unobservedModelCalls",
+    "children",
+    "modelRestarts",
+    "webSearchCalls",
+  ] satisfies ReadonlyArray<keyof RunResumeUsage>) {
+    const value = yield* readSnapshotProperty(input, key, invalid, true);
 
-        return descriptor.value;
-      };
-
-      const optional = Object.fromEntries(
-        (
-          [
-            "usageStatus",
-            "pricingStatus",
-            "unobservedModelCalls",
-            "children",
-            "modelRestarts",
-            "webSearchCalls",
-          ] as const
-        )
-          .map((key) => [key, read(key, true)])
-          .filter(([, value]) => value !== undefined),
-      );
-
-      return {
-        ...optional,
-        modelCalls: read("modelCalls"),
-        inputTokens: read("inputTokens"),
-        outputTokens: read("outputTokens"),
-        lastInputTokens: read("lastInputTokens"),
-        lastOutputTokens: read("lastOutputTokens"),
-        costMicrousd: read("costMicrousd"),
-        committedTurns: read("committedTurns"),
-        toolCalls: read("toolCalls"),
-        programmaticToolCalls: read("programmaticToolCalls"),
-        consecutiveToolFailures: read("consecutiveToolFailures"),
-        finalizationUsed: read("finalizationUsed"),
-      };
-    },
-    catch: () =>
-      ModelProtocolError.make({
-        message:
-          "Run resume usage requires own data properties with non-negative safe-integer totals and last-call tokens no greater than their cumulative totals",
-      }),
-  });
+    if (value !== undefined) snapshot[key] = value;
+  }
+  for (const key of [
+    "modelCalls",
+    "inputTokens",
+    "outputTokens",
+    "lastInputTokens",
+    "lastOutputTokens",
+    "costMicrousd",
+    "committedTurns",
+    "toolCalls",
+    "programmaticToolCalls",
+    "consecutiveToolFailures",
+    "finalizationUsed",
+  ] satisfies ReadonlyArray<keyof RunResumeUsage>) {
+    snapshot[key] = yield* readSnapshotProperty(input, key, invalid);
+  }
 
   return yield* Schema.decodeUnknownEffect(RunResumeUsageSchema)(snapshot).pipe(
     Effect.mapError(() =>
@@ -2411,22 +2389,21 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
     if (result.isFailure) return yield* failureMarker();
   });
 
-  const failTerminalResult = (cause: Cause.Cause<ToolExecutionError>) =>
-    Effect.gen(function* () {
-      terminal = true;
-      terminalResult = undefined;
-      propagatedFailure = cause;
-      // The raw failure has no canonical success/result, matching the prior propagated path.
-      yield* decodeToolCallId(call.id);
-      trace.finalToolResultIds.add(call.id);
-      terminalResultCommitted = true;
-      yield* terminalTelemetry("failure", "propagated");
-      yield* publishEvent(context, () =>
-        makeToolFailedEvent(context, turnId, call, Cause.squash(cause), "propagated"),
-      );
+  const failTerminalResult = Effect.fnUntraced(function* (cause: Cause.Cause<ToolExecutionError>) {
+    terminal = true;
+    terminalResult = undefined;
+    propagatedFailure = cause;
+    // The raw failure has no canonical success/result, matching the prior propagated path.
+    yield* decodeToolCallId(call.id);
+    trace.finalToolResultIds.add(call.id);
+    terminalResultCommitted = true;
+    yield* terminalTelemetry("failure", "propagated");
+    yield* publishEvent(context, () =>
+      makeToolFailedEvent(context, turnId, call, Cause.squash(cause), "propagated"),
+    );
 
-      return yield* failureMarker();
-    });
+    return yield* failureMarker();
+  });
 
   const measured = started.pipe(
     Effect.andThen(results),
@@ -2728,7 +2705,7 @@ const executeToolBatch = Effect.fnUntraced(function* <
         "SubagentInterrupted",
         "SubagentJoined",
       ].includes(payload._tag)
-        ? Effect.fail(new RunEventSinkClosedError({ message: "Unsupported Tool event payload" }))
+        ? Effect.fail(RunEventSinkClosedError.make({ message: "Unsupported Tool event payload" }))
         : emitPayload(payload),
   };
 
@@ -2738,28 +2715,28 @@ const executeToolBatch = Effect.fnUntraced(function* <
     emit: (request) =>
       context.updatePermits.withPermit(
         Effect.gen(function* () {
-          if (!updatesOpen) return yield* new UpdateError({ reason: "unavailable" });
+          if (!updatesOpen) return yield* UpdateError.make({ reason: "unavailable" });
           if (
             request.target.id !== context.agentId ||
             request.target.updates !== context.definition.updates ||
             context.definition.updates === undefined
           )
-            return yield* new UpdateError({ reason: "identity" });
+            return yield* UpdateError.make({ reason: "identity" });
 
           const updateId = yield* Schema.decodeEffect(IdempotencyKey)(request.updateId).pipe(
-            Effect.mapError(() => new UpdateError({ reason: "validation" })),
+            Effect.mapError(() => UpdateError.make({ reason: "validation" })),
           );
 
           const value = yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Json))(
             JSON.stringify(request.value),
-          ).pipe(Effect.mapError(() => new UpdateError({ reason: "validation" })));
+          ).pipe(Effect.mapError(() => UpdateError.make({ reason: "validation" })));
 
           yield* context.validateUpdate(value);
           const existing = context.updates.get(updateId);
 
           if (existing !== undefined) {
             if (!Schema.toEquivalence(Schema.Json)(existing.value, value))
-              return yield* new UpdateError({ reason: "conflict" });
+              return yield* UpdateError.make({ reason: "conflict" });
 
             return existing;
           }
@@ -2775,11 +2752,11 @@ const executeToolBatch = Effect.fnUntraced(function* <
             context.updates.size >= maxCount ||
             context.updateBytes + bytes > maxBytes
           )
-            return yield* new UpdateError({ reason: "capacity" });
+            return yield* UpdateError.make({ reason: "capacity" });
 
           const snapshot = boundedCanonicalJsonSnapshot(value, bytes);
 
-          if (snapshot === undefined) return yield* new UpdateError({ reason: "validation" });
+          if (snapshot === undefined) return yield* UpdateError.make({ reason: "validation" });
 
           const accepted = yield* updateAcceptance.accept(
             Object.freeze(
@@ -2796,7 +2773,7 @@ const executeToolBatch = Effect.fnUntraced(function* <
           );
 
           const validated = yield* Schema.decodeEffect(Update)(accepted).pipe(
-            Effect.mapError(() => new UpdateError({ reason: "validation" })),
+            Effect.mapError(() => UpdateError.make({ reason: "validation" })),
           );
 
           if (
@@ -2806,7 +2783,7 @@ const executeToolBatch = Effect.fnUntraced(function* <
             validated.updateId !== request.updateId ||
             !Schema.toEquivalence(Schema.Json)(validated.value, value)
           )
-            return yield* new UpdateError({ reason: "identity" });
+            return yield* UpdateError.make({ reason: "identity" });
 
           // Keep acknowledgements, replay, and retries on the same owned value even when
           // the accepting host retains its own mutable Update instance.
@@ -2816,7 +2793,7 @@ const executeToolBatch = Effect.fnUntraced(function* <
           context.updateBytes += bytes;
 
           yield* emitPayload({ _tag: "AgentUpdateEmitted", update }).pipe(
-            Effect.mapError(() => new UpdateError({ reason: "unavailable" })),
+            Effect.mapError(() => UpdateError.make({ reason: "unavailable" })),
           );
 
           return update;
@@ -4176,76 +4153,75 @@ const compactContext = <AgentValue extends Agent.Any, HookError, HookRequirement
         const textParts = new Map<string, PartLifecycle>();
         const reasoningParts = new Map<string, PartLifecycle>();
 
-        const consumeSummaryPart = (owned: OwnedModelResponsePart) =>
-          Effect.gen(function* () {
-            responseUsage.responsePartCount++;
-            responseUsage.responsePartBytes += owned.retainedBytes;
-            const ownedPart = owned.ownedPart;
+        const consumeSummaryPart = Effect.fnUntraced(function* (owned: OwnedModelResponsePart) {
+          responseUsage.responsePartCount++;
+          responseUsage.responsePartBytes += owned.retainedBytes;
+          const ownedPart = owned.ownedPart;
 
-            if (ownedPart.type === "text-delta") {
-              pieces.push(ownedPart.delta);
-            } else if (ownedPart.type === "finish") {
-              if (summaryUsage === undefined) {
-                summaryUsage = ownedPart.usage;
-                summaryFinishMetadata = ownedPart.metadata;
-              }
-            } else if (ownedPart.type === "response-metadata") {
-              summaryResponse = yield* responseIdentity(ownedPart, summaryResponse);
+          if (ownedPart.type === "text-delta") {
+            pieces.push(ownedPart.delta);
+          } else if (ownedPart.type === "finish") {
+            if (summaryUsage === undefined) {
+              summaryUsage = ownedPart.usage;
+              summaryFinishMetadata = ownedPart.metadata;
             }
-            // Drain malformed responses within the buffer bounds so reported usage is charged.
-            yield* Effect.gen(function* () {
-              switch (ownedPart.type) {
-                case "text-start":
-                  return yield* startPart(textParts, ownedPart.id, "compaction text");
-                case "text-delta":
-                  return yield* continuePart(textParts, ownedPart.id, "compaction text delta");
-                case "text-end":
-                  return yield* endPart(textParts, ownedPart.id, "compaction text");
-                case "reasoning-start":
-                  return yield* startPart(reasoningParts, ownedPart.id, "compaction reasoning");
-                case "reasoning-delta":
-                  return yield* continuePart(
-                    reasoningParts,
-                    ownedPart.id,
-                    "compaction reasoning delta",
-                  );
-                case "reasoning-end":
-                  return yield* endPart(reasoningParts, ownedPart.id, "compaction reasoning");
-                case "finish": {
-                  summaryFinished = true;
-                  if (
-                    ownedPart.reason !== "stop" ||
-                    [...textParts.values(), ...reasoningParts.values()].includes("open")
-                  ) {
-                    return yield* ModelProtocolError.make({
-                      message:
-                        "Compaction response did not finish with complete text and a stop reason",
-                    });
-                  }
-
-                  return;
-                }
-                case "tool-params-start":
-                case "tool-params-delta":
-                case "tool-params-end":
-                case "tool-approval-request":
-                case "error":
+          } else if (ownedPart.type === "response-metadata") {
+            summaryResponse = yield* responseIdentity(ownedPart, summaryResponse);
+          }
+          // Drain malformed responses within the buffer bounds so reported usage is charged.
+          yield* Effect.gen(function* () {
+            switch (ownedPart.type) {
+              case "text-start":
+                return yield* startPart(textParts, ownedPart.id, "compaction text");
+              case "text-delta":
+                return yield* continuePart(textParts, ownedPart.id, "compaction text delta");
+              case "text-end":
+                return yield* endPart(textParts, ownedPart.id, "compaction text");
+              case "reasoning-start":
+                return yield* startPart(reasoningParts, ownedPart.id, "compaction reasoning");
+              case "reasoning-delta":
+                return yield* continuePart(
+                  reasoningParts,
+                  ownedPart.id,
+                  "compaction reasoning delta",
+                );
+              case "reasoning-end":
+                return yield* endPart(reasoningParts, ownedPart.id, "compaction reasoning");
+              case "finish": {
+                summaryFinished = true;
+                if (
+                  ownedPart.reason !== "stop" ||
+                  [...textParts.values(), ...reasoningParts.values()].includes("open")
+                ) {
                   return yield* ModelProtocolError.make({
-                    message: `Compaction response contained an unusable ${ownedPart.type} part`,
+                    message:
+                      "Compaction response did not finish with complete text and a stop reason",
                   });
-                case "file":
-                case "response-metadata":
-                case "source":
-                  return;
+                }
+
+                return;
               }
-            }).pipe(
-              Effect.catch((error) =>
-                Effect.sync(() => {
-                  summaryFailure ??= error;
-                }),
-              ),
-            );
-          });
+              case "tool-params-start":
+              case "tool-params-delta":
+              case "tool-params-end":
+              case "tool-approval-request":
+              case "error":
+                return yield* ModelProtocolError.make({
+                  message: `Compaction response contained an unusable ${ownedPart.type} part`,
+                });
+              case "file":
+              case "response-metadata":
+              case "source":
+                return;
+            }
+          }).pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                summaryFailure ??= error;
+              }),
+            ),
+          );
+        });
 
         const summaryExit = yield* enforceDurationDeadline(
           guardBudgetStream(LanguageModel.streamText({ prompt: summarizerPrompt }), options.budget),
@@ -4498,7 +4474,7 @@ const decodeInput = <AgentValue extends Agent.Any>(
   AgentInputDecodeError,
   AgentValue["definition"]["input"]["DecodingServices"]
 > =>
-  Schema.decodeUnknownEffect(agent.definition.input)(input).pipe(
+  Schema.decodeUnknownEffect<AgentValue["definition"]["input"]>(agent.definition.input)(input).pipe(
     Effect.mapError((cause) =>
       AgentInputDecodeError.make({
         message: cause.message,
@@ -4524,7 +4500,7 @@ const encodeInput = <AgentValue extends Agent.Any>(
   AgentInputError,
   AgentValue["definition"]["input"]["EncodingServices"]
 > =>
-  Schema.encodeEffect(agent.definition.input)(input).pipe(
+  Schema.encodeEffect<AgentValue["definition"]["input"]>(agent.definition.input)(input).pipe(
     Effect.mapError((cause) =>
       AgentInputError.make({
         message: `Unable to encode Agent input: ${cause.message}`,
@@ -4538,20 +4514,21 @@ const renderInputPromptEffect = <Input, Error, Services>(
   encodedInput: unknown,
 ): Effect.Effect<Prompt.RawInput, Error | AgentInputError, Services> =>
   inputPrompt === undefined
-    ? Effect.try({
-        try: () => {
-          const encoded = JSON.stringify(encodedInput);
+    ? Effect.gen(function* () {
+        const encoded = yield* Effect.try({
+          try: () => JSON.stringify(encodedInput),
+          catch: (cause) =>
+            AgentInputError.make({
+              message: `Unable to materialize Agent input: ${errorMessage(cause)}`,
+            }),
+        });
 
-          if (encoded === undefined) {
-            throw new Error("Agent input cannot be represented as JSON");
-          }
+        if (encoded === undefined)
+          return yield* AgentInputError.make({
+            message: "Unable to materialize Agent input: Agent input cannot be represented as JSON",
+          });
 
-          return encoded;
-        },
-        catch: (cause) =>
-          AgentInputError.make({
-            message: `Unable to materialize Agent input: ${errorMessage(cause)}`,
-          }),
+        return encoded;
       })
     : Effect.suspend(() => {
         const result = inputPrompt(decodedInput);
@@ -4573,11 +4550,11 @@ export function renderInputPrompt<
   InputPromptRequirementsOf<InputPromptValue, Input>
 >;
 
-export function renderInputPrompt<Input>(
-  inputPrompt: InputPromptSource<Input, unknown, unknown> | undefined,
+export function renderInputPrompt<Input, Error, Requirements>(
+  inputPrompt: InputPromptSource<Input, Error, Requirements> | undefined,
   decodedInput: Input,
   encodedInput: unknown,
-): Effect.Effect<Prompt.RawInput, unknown, unknown> {
+): Effect.Effect<Prompt.RawInput, Error | AgentInputError, Requirements> {
   return renderInputPromptEffect(inputPrompt, decodedInput, encodedInput);
 }
 
@@ -4957,7 +4934,7 @@ const processModelPart = Effect.fnUntraced(function* <Tools extends Record<strin
         const error = AiError.make({
           module: "Toolkit",
           method: `${part.name}.handle`,
-          reason: new AiError.ToolParameterValidationError({
+          reason: AiError.ToolParameterValidationError.make({
             toolName: part.name,
             description: decoded.failure.message,
           }),
@@ -5191,7 +5168,9 @@ const decodeFinalOutput = Effect.fnUntraced(function* <AgentValue extends Agent.
 
   const candidateOutput: unknown = eventJson;
 
-  const decoded = yield* Schema.decodeUnknownEffect(agent.definition.output)(candidateOutput).pipe(
+  const decoded = yield* Schema.decodeUnknownEffect<AgentValue["definition"]["output"]>(
+    agent.definition.output,
+  )(candidateOutput).pipe(
     Effect.mapError((cause) =>
       AgentOutputError.make({
         message: cause.message,
@@ -5206,7 +5185,9 @@ const encodeOutputCandidate = Effect.fnUntraced(function* <AgentValue extends Ag
   agent: AgentValue,
   candidate: unknown,
 ) {
-  const encoded = yield* Schema.encodeUnknownEffect(agent.definition.output)(candidate).pipe(
+  const encoded = yield* Schema.encodeUnknownEffect<AgentValue["definition"]["output"]>(
+    agent.definition.output,
+  )(candidate).pipe(
     Effect.mapError((cause) =>
       AgentOutputError.make({
         message: `Completion Tool output failed Schema encoding: ${cause.message}`,
@@ -5214,7 +5195,9 @@ const encodeOutputCandidate = Effect.fnUntraced(function* <AgentValue extends Ag
     ),
   );
 
-  const decoded = yield* Schema.decodeUnknownEffect(agent.definition.output)(encoded).pipe(
+  const decoded = yield* Schema.decodeUnknownEffect<AgentValue["definition"]["output"]>(
+    agent.definition.output,
+  )(encoded).pipe(
     Effect.mapError((cause) =>
       AgentOutputError.make({
         message: `Completion Tool output failed canonical decoding: ${cause.message}`,
@@ -5243,7 +5226,8 @@ const projectToolResult = Effect.fnUntraced(function* <AgentValue extends Agent.
   AgentOutputError | ModelProtocolError,
   AgentCompletionProjectionRequirements<AgentValue>
 > {
-  const tool = agent.definition.toolkit.tools[declaration.tool];
+  const tools: AgentValue["definition"]["toolkit"]["tools"] = agent.definition.toolkit.tools;
+  const tool = tools[declaration.tool];
 
   if (tool === undefined) {
     return yield* ModelProtocolError.make({
@@ -5251,9 +5235,9 @@ const projectToolResult = Effect.fnUntraced(function* <AgentValue extends Agent.
     });
   }
 
-  const decodedParameters = yield* Schema.decodeUnknownEffect(tool.parametersSchema)(
-    parameters,
-  ).pipe(
+  const decodedParameters = yield* Schema.decodeUnknownEffect<
+    AgentValue["definition"]["toolkit"]["tools"][string]["parametersSchema"]
+  >(tool.parametersSchema)(parameters).pipe(
     Effect.mapError((cause) =>
       AgentOutputError.make({
         message: `Completion Tool parameters failed canonical decoding: ${cause.message}`,
@@ -5261,7 +5245,9 @@ const projectToolResult = Effect.fnUntraced(function* <AgentValue extends Agent.
     ),
   );
 
-  const decodedResult = yield* Schema.decodeUnknownEffect(tool.successSchema)(result).pipe(
+  const decodedResult = yield* Schema.decodeUnknownEffect<
+    AgentValue["definition"]["toolkit"]["tools"][string]["successSchema"]
+  >(tool.successSchema)(result).pipe(
     Effect.mapError((cause) =>
       AgentOutputError.make({
         message: `Completion Tool result failed canonical decoding: ${cause.message}`,
@@ -5561,10 +5547,10 @@ const makeTurn = <
           : yield* prepareWithinDeadline(context, options.context.prepare(contextRequest));
 
       if (context.resolvedModel && modelContext.modelCall !== undefined) {
-        return yield* new AiError.AiError({
+        return yield* AiError.AiError.make({
           module: "AgentRuntime",
           method: "resolveModel",
-          reason: new AiError.InvalidRequestError({
+          reason: AiError.InvalidRequestError.make({
             description: "Context preparation cannot replace a thread-resolved model",
           }),
         });
@@ -6386,7 +6372,14 @@ const makeTurn = <
         if (Exit.isFailure(exit)) failedUsageCause = exit.cause;
       });
 
-      const attempt = (basis: Prompt.Prompt) =>
+      const attempt = (
+        basis: Prompt.Prompt,
+      ): Effect.Effect<
+        void,
+        AgentRuntimeFailure<typeof agent, HookError, InstructionError>,
+        | InterpreterRequirements<typeof agent, HookRequirements, InstructionRequirements>
+        | Scope.Scope
+      > =>
         Effect.flatten(
           outgoingModelPrompt(
             policy,
@@ -6479,6 +6472,8 @@ const makeTurn = <
 
                 return yield* trackContext.pipe(
                   Effect.as(
+                    // Transport-only tools retain existential schema services; the enclosing attempt keeps the Agent's declared requirements.
+                    // @effect-diagnostics-next-line anyUnknownInErrorContext:off
                     guardBudgetStream(
                       LanguageModel.streamText({
                         // Every attempt, including an overflow retry, places the
@@ -6560,7 +6555,9 @@ const makeTurn = <
                           if (events !== undefined) yield* publishEvents(context, events);
                         }),
                       ),
-                      (effect) => prepareWithinDeadline(context, effect),
+                      <Value, Error, Requirements>(
+                        effect: Effect.Effect<Value, Error, Requirements>,
+                      ) => prepareWithinDeadline(context, effect),
                       Effect.onExit((exit) => {
                         if (Exit.isSuccess(exit)) return Effect.void;
                         provisionalText?.discard();
@@ -6583,18 +6580,23 @@ const makeTurn = <
             Schedule.upTo({ times: policy.modelRetries ?? 0 }),
             Schedule.while(({ input: error }) => {
               const lastPart = trace.parts.at(-1);
+              const providerError: unknown = error;
 
               return (
                 canRepeatModelCall &&
                 !hasStreamedContent(trace) &&
                 ((lastPart?.type === "error" && isTransientErrorPayload(lastPart.error)) ||
-                  (AiError.isAiError(error) && error.isRetryable))
+                  (AiError.isAiError(providerError) && providerError.isRetryable))
               );
             }),
             Schedule.modifyDelay(({ input: error, duration }) =>
               Effect.gen(function* () {
                 const backoff = Duration.min(duration, MODEL_RETRY_MAX_DELAY);
-                const retryAfter = AiError.isAiError(error) ? error.retryAfter : undefined;
+                const providerError: unknown = error;
+
+                const retryAfter = AiError.isAiError(providerError)
+                  ? providerError.retryAfter
+                  : undefined;
 
                 const requested =
                   retryAfter === undefined ? backoff : Duration.max(backoff, retryAfter);
@@ -7080,16 +7082,15 @@ const makeTurn = <
            * steering at the safe seam, and start the next Turn. The `maxTurns`
            * guard already ran for these Tool Call sites.
            */
-          const continueTurn = (history: Prompt.Prompt) =>
-            Effect.gen(function* () {
-              trace.historyAccepted = true;
-              yield* advanceHistory(context, history, options);
-              yield* settleTurn(context, trace, turn, turnId, options);
-              const steering = yield* drainInputs(context, options);
-              const nextPrompt = yield* appendInputs(context, history, steering, options);
+          const continueTurn = Effect.fnUntraced(function* (history: Prompt.Prompt) {
+            trace.historyAccepted = true;
+            yield* advanceHistory(context, history, options);
+            yield* settleTurn(context, trace, turn, turnId, options);
+            const steering = yield* drainInputs(context, options);
+            const nextPrompt = yield* appendInputs(context, history, steering, options);
 
-              return nextTurn(nextPrompt, turn + 1, toolCalls);
-            });
+            return nextTurn(nextPrompt, turn + 1, toolCalls);
+          });
 
           /**
            * The otherwise-stop seam: advance official history, drain steering,
@@ -7097,86 +7098,81 @@ const makeTurn = <
            * under the `maxTurns` and repeated-failure Stop Policy bounds or
            * complete the Run with the Turn's decoded final output.
            */
-          const settleOrFollowUp = (history: Prompt.Prompt) =>
-            Effect.gen(function* () {
-              trace.historyAccepted = true;
-              yield* advanceHistory(context, history, options);
+          const settleOrFollowUp = Effect.fnUntraced(function* (history: Prompt.Prompt) {
+            trace.historyAccepted = true;
+            yield* advanceHistory(context, history, options);
 
-              // Do not consume durable receipts that this completed Turn cannot cover.
-              // Final-answer mode permits one grace Turn, but never a second finalization.
-              const turnsBlocked =
-                policy.onExhaustion === "fail" ? turn >= bounds.maxTurns : turn > bounds.maxTurns;
+            // Do not consume durable receipts that this completed Turn cannot cover.
+            // Final-answer mode permits one grace Turn, but never a second finalization.
+            const turnsBlocked =
+              policy.onExhaustion === "fail" ? turn >= bounds.maxTurns : turn > bounds.maxTurns;
 
-              const steering =
-                turnsBlocked || context.finalizationUsed
-                  ? []
-                  : yield* drainInputs(context, options);
+            const steering =
+              turnsBlocked || context.finalizationUsed ? [] : yield* drainInputs(context, options);
 
-              const queued =
-                steering.length > 0
-                  ? steering
-                  : takeFollowUps(context, options.commandDrainPolicy ?? "one");
+            const queued =
+              steering.length > 0
+                ? steering
+                : takeFollowUps(context, options.commandDrainPolicy ?? "one");
 
-              if (queued.length > 0) {
-                // Final-answer mode admits exactly one grace Turn past
-                // `maxTurns` (RUN-019): `turn > maxTurns` can only be
-                // `maxTurns + 1`, so a second grace is structurally
-                // impossible.
-                if (turnsBlocked) {
-                  return failExecution(
-                    AgentPolicyError.make({
-                      limit: "turns",
-                      message: `Agent exceeded its ${bounds.maxTurns} Turn limit`,
-                    }),
-                  );
-                }
-                yield* applyRepeatedFailurePolicy(
-                  context,
-                  trace,
-                  agent.definition.policy.repeatedFailureLimit,
+            if (queued.length > 0) {
+              // Final-answer mode admits exactly one grace Turn past
+              // `maxTurns` (RUN-019): `turn > maxTurns` can only be
+              // `maxTurns + 1`, so a second grace is structurally
+              // impossible.
+              if (turnsBlocked) {
+                return failExecution(
+                  AgentPolicyError.make({
+                    limit: "turns",
+                    message: `Agent exceeded its ${bounds.maxTurns} Turn limit`,
+                  }),
                 );
-                yield* settleTurn(context, trace, turn, turnId, options);
-                const nextPrompt = yield* appendInputs(context, history, queued, options);
-
-                return nextTurn(nextPrompt, turn + 1, toolCalls);
               }
-
-              const output = yield* prepareWithinDeadline(
+              yield* applyRepeatedFailurePolicy(
                 context,
-                decodeFinalOutput(agent, trace.text.join("")),
+                trace,
+                agent.definition.policy.repeatedFailureLimit,
               );
+              yield* settleTurn(context, trace, turn, turnId, options);
+              const nextPrompt = yield* appendInputs(context, history, queued, options);
 
-              const declaration = agent.definition.runDisposition;
+              return nextTurn(nextPrompt, turn + 1, toolCalls);
+            }
 
-              const runDisposition =
-                finalAnswerOnly || declaration === undefined
-                  ? undefined
-                  : yield* prepareWithinDeadline(
-                      context,
-                      encodeRunDisposition(agent, output.decoded),
-                    );
+            const output = yield* prepareWithinDeadline(
+              context,
+              decodeFinalOutput(agent, trace.text.join("")),
+            );
 
-              const completionUsage = yield* usageReportOf(context);
+            const declaration = agent.definition.runDisposition;
 
-              return Effect.map(eventBase(context), (base) =>
-                RunCompleted.make({
-                  ...base,
-                  output: output.encoded,
-                  ...(runDisposition === undefined ? {} : { runDisposition }),
-                  turns: turn,
-                  // A Run settled under the final-answer constraint reports
-                  // the exhaustion honestly (RUN-011), never a plain model
-                  // stop, and carries the dimension that bound.
-                  finishReason: finalAnswerOnly ? "budget-exhausted" : "model-stop",
-                  ...(finalAnswerOnly && context.exhaustedDimension !== undefined
-                    ? { exhausted: context.exhaustedDimension }
-                    : {}),
-                  ...completionUsage,
-                }),
-              ).pipe(
-                Effect.tap((event) => settleTurn(context, trace, turn, turnId, options, event)),
-              );
-            });
+            const runDisposition =
+              finalAnswerOnly || declaration === undefined
+                ? undefined
+                : yield* prepareWithinDeadline(
+                    context,
+                    encodeRunDisposition(agent, output.decoded),
+                  );
+
+            const completionUsage = yield* usageReportOf(context);
+
+            return Effect.map(eventBase(context), (base) =>
+              RunCompleted.make({
+                ...base,
+                output: output.encoded,
+                ...(runDisposition === undefined ? {} : { runDisposition }),
+                turns: turn,
+                // A Run settled under the final-answer constraint reports
+                // the exhaustion honestly (RUN-011), never a plain model
+                // stop, and carries the dimension that bound.
+                finishReason: finalAnswerOnly ? "budget-exhausted" : "model-stop",
+                ...(finalAnswerOnly && context.exhaustedDimension !== undefined
+                  ? { exhausted: context.exhaustedDimension }
+                  : {}),
+                ...completionUsage,
+              }),
+            ).pipe(Effect.tap((event) => settleTurn(context, trace, turn, turnId, options, event)));
+          });
 
           if (providerOnly && trace.finishReason === "stop") {
             if (agent.definition.completion?.required === true) {
@@ -8650,12 +8646,12 @@ function executeWithCompletion<
 
           const validateUpdate =
             updateSchema === undefined
-              ? () => Effect.fail(new UpdateError({ reason: "unavailable" }))
+              ? () => Effect.fail(UpdateError.make({ reason: "unavailable" }))
               : (value: Schema.Json) =>
                   Schema.decodeEffect(updateSchema)(value).pipe(
                     Effect.provide(updateContext),
                     Effect.asVoid,
-                    Effect.mapError(() => new UpdateError({ reason: "validation" })),
+                    Effect.mapError(() => UpdateError.make({ reason: "validation" })),
                   );
 
           const languageModel = yield* LanguageModel.LanguageModel;
@@ -9032,15 +9028,14 @@ function executeWithCompletion<
               const selectionPrompt = yield* Schema.encodeEffect(
                 Schema.fromJsonString(Prompt.Prompt),
               )(pending.prompt).pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new AiError.AiError({
-                      module: "AgentRuntime",
-                      method: "resolveModel",
-                      reason: new AiError.InvalidRequestError({
-                        description: `Cannot encode model selection context: ${cause.message}`,
-                      }),
+                Effect.mapError((cause) =>
+                  AiError.AiError.make({
+                    module: "AgentRuntime",
+                    method: "resolveModel",
+                    reason: AiError.InvalidRequestError.make({
+                      description: `Cannot encode model selection context: ${cause.message}`,
                     }),
+                  }),
                 ),
               );
 
@@ -9079,34 +9074,36 @@ function executeWithCompletion<
             agent.definition.updates === undefined || nativeUpdateTool === undefined
               ? Context.empty()
               : yield* Toolkit.make(nativeUpdateTool).toHandlers({
-                  emit_update: (parameters: unknown, call: Toolkit.HandlerContext<Tool.Any>) =>
-                    Effect.gen(function* () {
-                      if (call.toolCallId === undefined)
-                        return yield* new UpdateError({ reason: "unavailable" });
+                  emit_update: Effect.fnUntraced(function* (
+                    parameters: unknown,
+                    call: Toolkit.HandlerContext<Tool.Any>,
+                  ) {
+                    if (call.toolCallId === undefined)
+                      return yield* UpdateError.make({ reason: "unavailable" });
 
-                      const decoded = yield* Schema.decodeUnknownEffect(
-                        Schema.Struct({ value: Schema.Unknown }),
-                      )(parameters).pipe(
-                        Effect.mapError(() => new UpdateError({ reason: "validation" })),
-                      );
+                    const decoded = yield* Schema.decodeUnknownEffect(
+                      Schema.Struct({ value: Schema.Unknown }),
+                    )(parameters).pipe(
+                      Effect.mapError(() => UpdateError.make({ reason: "validation" })),
+                    );
 
-                      const value = yield* Schema.encodeUnknownEffect(agent.definition.updates!)(
-                        decoded.value,
-                      ).pipe(
-                        Effect.flatMap(Schema.decodeUnknownEffect(Schema.Json)),
-                        Effect.mapError(() => new UpdateError({ reason: "validation" })),
-                      );
+                    const value = yield* Schema.encodeUnknownEffect(agent.definition.updates!)(
+                      decoded.value,
+                    ).pipe(
+                      Effect.flatMap(Schema.decodeUnknownEffect(Schema.Json)),
+                      Effect.mapError(() => UpdateError.make({ reason: "validation" })),
+                    );
 
-                      const updateId = yield* Schema.decodeEffect(IdempotencyKey)(
-                        `tool:${context.runId}:${call.toolCallId}`,
-                      ).pipe(Effect.mapError(() => new UpdateError({ reason: "validation" })));
+                    const updateId = yield* Schema.decodeEffect(IdempotencyKey)(
+                      `tool:${context.runId}:${call.toolCallId}`,
+                    ).pipe(Effect.mapError(() => UpdateError.make({ reason: "validation" })));
 
-                      const emitter = yield* Emitter;
+                    const emitter = yield* Emitter;
 
-                      yield* emitter.emit({ target: agent.definition, updateId, value });
+                    yield* emitter.emit({ target: agent.definition, updateId, value });
 
-                      return { emitted: true };
-                    }),
+                    return { emitted: true };
+                  }),
                 });
 
           const engineToolServices = Context.make(
@@ -9163,7 +9160,7 @@ function executeWithCompletion<
             }),
             Context.merge(updateHandlers),
             Context.add(Emitter, {
-              emit: () => Effect.fail(new UpdateError({ reason: "unavailable" })),
+              emit: () => Effect.fail(UpdateError.make({ reason: "unavailable" })),
             }),
             Context.add(CurrentToolCatalog, { entries: [] }),
             Context.add(RunToolVisibility, visibility),
@@ -9379,9 +9376,9 @@ const completeRun = <AgentValue extends Agent.Any, Error, Requirements>(
       Effect.gen(function* () {
         const candidateOutput: unknown = completed.output;
 
-        const output = yield* Schema.decodeUnknownEffect(agent.definition.output)(
-          candidateOutput,
-        ).pipe(
+        const output = yield* Schema.decodeUnknownEffect<AgentValue["definition"]["output"]>(
+          agent.definition.output,
+        )(candidateOutput).pipe(
           Effect.mapError((cause) =>
             AgentOutputError.make({
               message: cause.message,
@@ -9626,9 +9623,11 @@ function runUnknown<H = never, R = never>(
   input: unknown,
   options: RunOptions<H, R> = {},
 ) {
-  const program = "definition" in agent ? agent : { definition: agent };
+  const program = { definition: "definition" in agent ? agent.definition : agent };
 
   return runProgram(program, (onCompleted) =>
+    // The overload retains each Agent's R; this implementation executes an existential model binding without narrowing its services.
+    // @effect-diagnostics-next-line anyUnknownInErrorContext:off
     executeWithCompletion(agent, input, options, onCompleted).pipe(
       Effect.provide(
         Layer.mergeAll(ModelUsageAccounting.layerEphemeral, AgentUpdateAcceptance.layerEphemeral),
@@ -9663,11 +9662,13 @@ function startUnknown<H = never, R = never>(
   input: unknown,
   options: RunOptions<H, R> = {},
 ) {
-  const program = "definition" in agent ? agent : { definition: agent };
+  const program = { definition: "definition" in agent ? agent.definition : agent };
 
   return startProgram(
     program,
     (executionOptions, onCompleted, onUsage, publish) =>
+      // The overload retains each Agent's R; detached execution captures the same existential binding inside the caller's Scope.
+      // @effect-diagnostics-next-line anyUnknownInErrorContext:off
       executeWithCompletion(agent, input, executionOptions, onCompleted, onUsage, publish).pipe(
         Effect.provide(
           Layer.mergeAll(ModelUsageAccounting.layerEphemeral, AgentUpdateAcceptance.layerEphemeral),
@@ -9937,588 +9938,588 @@ const makeToolBrokerService = Effect.fnUntraced(function* <HookError, HookRequir
     observer === undefined ? undefined : { observer, permits: Semaphore.makeUnsafe(1) };
 
   const service: ToolBrokerService = {
-    openPass: (toolkit, passOptions) =>
-      Effect.gen(function* () {
-        const inheritedAuthority = yield* CurrentSubagentAuthority;
+    openPass: Effect.fnUntraced(function* <Tools extends Record<string, Tool.Any>>(
+      toolkit: Toolkit.WithHandler<Tools>,
+      passOptions: Parameters<ToolBrokerService["openPass"]>[1],
+    ) {
+      const inheritedAuthority = yield* CurrentSubagentAuthority;
 
-        if (lifecycle.closed) {
-          return yield* ToolBrokerUnavailableError.make({
-            message: "The outer Tool Call for this broker has already settled",
-          });
-        }
-        // A malformed result bound would fail open (`NaN` defeats every
-        // comparison), so it is rejected typed before the pass opens.
-        if (
-          passOptions === undefined ||
-          !Number.isSafeInteger(passOptions.maxResultBytes) ||
-          passOptions.maxResultBytes <= 0
-        ) {
-          return yield* ToolBrokerConfigurationError.make({
-            message: `maxResultBytes must be a positive safe integer; received ${String(passOptions?.maxResultBytes)}`,
-          });
-        }
-        // Capture the handler services present at the pass edge once; nothing
-        // inside business execution can substitute them per invocation. The
-        // same private-assertion contract as `provideHookServices` applies.
-        const handlerServices = (yield* Effect.context<never>()) as Context.Context<unknown>;
-        const concurrency = passOptions.concurrency ?? 4;
+      if (lifecycle.closed) {
+        return yield* ToolBrokerUnavailableError.make({
+          message: "The outer Tool Call for this broker has already settled",
+        });
+      }
+      // A malformed result bound would fail open (`NaN` defeats every
+      // comparison), so it is rejected typed before the pass opens.
+      if (
+        passOptions === undefined ||
+        !Number.isSafeInteger(passOptions.maxResultBytes) ||
+        passOptions.maxResultBytes <= 0
+      ) {
+        return yield* ToolBrokerConfigurationError.make({
+          message: `maxResultBytes must be a positive safe integer; received ${String(passOptions?.maxResultBytes)}`,
+        });
+      }
+      // Capture the declared handler services at the pass boundary once.
+      const handlerServices = yield* Effect.context<Tool.HandlerServices<Tools[keyof Tools]>>();
 
-        if (!Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 64) {
-          return yield* ToolBrokerConfigurationError.make({
-            message: "concurrency must be an integer between 1 and 64",
-          });
-        }
-        const permits = yield* Semaphore.make(concurrency);
-        const records: Array<ProgrammaticCallRecord> = [];
+      // Toolkit.handle decodes unknown parameters itself. Widen only that input boundary;
+      // retain its declared schema failures and handler services for this exact Toolkit.
+      const handle = toolkit.handle as (
+        name: keyof Tools,
+        parameters: unknown,
+        id: string,
+      ) => ReturnType<Toolkit.WithHandler<Tools>["handle"]>;
 
-        const preflightFailure = (
-          input: ProgrammaticToolInput,
-          kind: "infrastructure" | "protocol",
-          tag: string,
-          message: string,
-          cause?: Cause.Cause<unknown>,
-        ): Effect.Effect<ProgrammaticCallOutcome> => {
-          const outcome = programmaticOutcomeError(undefined, tag, message);
+      const concurrency = passOptions.concurrency ?? 4;
 
-          if (preflightObserver === undefined) return Effect.succeed(outcome);
+      if (!Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 64) {
+        return yield* ToolBrokerConfigurationError.make({
+          message: "concurrency must be an integer between 1 and 64",
+        });
+      }
+      const permits = yield* Semaphore.make(concurrency);
+      const records: Array<ProgrammaticCallRecord> = [];
 
-          return deliverToolFailure(preflightObserver.observer, {
-            _tag: "ProgrammaticPreflightFailure",
-            agentId: binding.context.agentId,
-            threadId: binding.context.threadId,
-            runId: binding.context.runId,
-            turnId: binding.turnId,
-            parentToolCallId: binding.outerToolCallId,
-            toolName: input.toolName,
-            ...(hasTool(toolkit.tools, input.toolName)
-              ? { executionClass: getToolExecutionClass(toolkit.tools[input.toolName]) }
-              : {}),
-            kind,
-            tag,
-            message: toolFailureMessage(message),
-            ...(cause === undefined ? {} : { cause }),
-          }).pipe(preflightObserver.permits.withPermits(1), Effect.as(outcome));
-        };
+      const preflightFailure = (
+        input: ProgrammaticToolInput,
+        kind: "infrastructure" | "protocol",
+        tag: string,
+        message: string,
+        cause?: Cause.Cause<unknown>,
+      ): Effect.Effect<ProgrammaticCallOutcome> => {
+        const outcome = programmaticOutcomeError(undefined, tag, message);
 
-        const body = (
-          input: ProgrammaticToolInput,
-          sequenceIndex: number,
-        ): Effect.Effect<ProgrammaticCallOutcome> =>
-          Effect.gen(function* () {
-            if (!hasTool(toolkit.tools, input.toolName)) {
-              return yield* preflightFailure(
-                input,
-                "infrastructure",
-                "ProgrammaticToolUnknownError",
-                `Tool ${input.toolName} is not part of this pass's allowlisted Toolkit`,
-              );
-            }
-            const tool = toolkit.tools[input.toolName] as Tool.Any;
+        if (preflightObserver === undefined) return Effect.succeed(outcome);
 
-            const advertised = Object.values(binding.context.definition.toolkit.tools).some(
-              (outer) =>
-                Context.get(outer.annotations, AdditionalToolCatalog).some(
-                  (entry) => entry.tool.name === input.toolName,
-                ),
+        return deliverToolFailure(preflightObserver.observer, {
+          _tag: "ProgrammaticPreflightFailure",
+          agentId: binding.context.agentId,
+          threadId: binding.context.threadId,
+          runId: binding.context.runId,
+          turnId: binding.turnId,
+          parentToolCallId: binding.outerToolCallId,
+          toolName: input.toolName,
+          ...(hasTool(toolkit.tools, input.toolName)
+            ? { executionClass: getToolExecutionClass(toolkit.tools[input.toolName]) }
+            : {}),
+          kind,
+          tag,
+          message: toolFailureMessage(message),
+          ...(cause === undefined ? {} : { cause }),
+        }).pipe(preflightObserver.permits.withPermits(1), Effect.as(outcome));
+      };
+
+      const body = (
+        input: ProgrammaticToolInput,
+        sequenceIndex: number,
+      ): Effect.Effect<ProgrammaticCallOutcome> =>
+        Effect.gen(function* () {
+          if (!hasTool(toolkit.tools, input.toolName)) {
+            return yield* preflightFailure(
+              input,
+              "infrastructure",
+              "ProgrammaticToolUnknownError",
+              `Tool ${input.toolName} is not part of this pass's allowlisted Toolkit`,
+            );
+          }
+          const tool = toolkit.tools[input.toolName];
+
+          const advertised = Object.values(binding.context.definition.toolkit.tools).some((outer) =>
+            Context.get(outer.annotations, AdditionalToolCatalog).some(
+              (entry) => entry.tool.name === input.toolName,
+            ),
+          );
+
+          if (
+            advertised &&
+            !binding.context.toolCatalog.some(
+              (entry) => entry.kind === "code-mode" && entry.tool.name === input.toolName,
+            )
+          )
+            return yield* preflightFailure(
+              input,
+              "infrastructure",
+              "ProgrammaticToolAuthorizationDenied",
+              "Tool is excluded by the current host visibility policy",
             );
 
-            if (
-              advertised &&
-              !binding.context.toolCatalog.some(
-                (entry) => entry.kind === "code-mode" && entry.tool.name === input.toolName,
-              )
+          if (
+            !isSubagentToolAllowed(
+              inheritedAuthority?.grant,
+              inheritedAuthority?.depth ?? 0,
+              input.toolName,
+              tool.annotations,
             )
-              return yield* preflightFailure(
+          ) {
+            return yield* preflightFailure(
+              input,
+              "infrastructure",
+              "ProgrammaticToolAuthorizationDenied",
+              "Tool exceeds the inherited subagent grant",
+            );
+          }
+
+          if (Context.get(tool.annotations, ContextRolloverTool)) {
+            return yield* preflightFailure(
+              input,
+              "infrastructure",
+              "ProgrammaticContextRolloverUnsupportedError",
+              "Context rollover requires a direct, singleton model Tool Call",
+            );
+          }
+          const approval = tool.needsApproval;
+
+          if (approval !== undefined && approval !== false) {
+            return yield* preflightFailure(
+              input,
+              "infrastructure",
+              "ProgrammaticApprovalUnsupportedError",
+              `Tool ${input.toolName} requires approval; approval-requiring Tools never start programmatically in the ephemeral slice`,
+            );
+          }
+
+          // Validate the encoded arguments against the owning parameter
+          // Schema before the handler can start; the pinned `Toolkit.handle`
+          // decodes internally, so the validated encoded form passes through
+          // (the same inversion as `prepareToolCall`).
+          const decodeParameters = Schema.decodeUnknownEffect(tool.parametersSchema) as (
+            value: unknown,
+          ) => Effect.Effect<unknown, Schema.SchemaError>;
+
+          const invalidParameters = yield* decodeParameters(input.encodedArguments).pipe(
+            Effect.map(() => undefined),
+            Effect.catchCauseFilter(Cause.findError, (error, cause) =>
+              preflightFailure(
                 input,
-                "infrastructure",
-                "ProgrammaticToolAuthorizationDenied",
-                "Tool is excluded by the current host visibility policy",
-              );
+                "protocol",
+                "ModelProtocolError",
+                `Invalid parameters for Tool ${input.toolName}: ${error.message}`,
+                cause,
+              ),
+            ),
+          );
 
-            if (
-              !isSubagentToolAllowed(
-                inheritedAuthority?.grant,
-                inheritedAuthority?.depth ?? 0,
-                input.toolName,
-                tool.annotations,
-              )
-            ) {
-              return yield* preflightFailure(
-                input,
-                "infrastructure",
-                "ProgrammaticToolAuthorizationDenied",
-                "Tool exceeds the inherited subagent grant",
-              );
-            }
+          if (invalidParameters !== undefined) {
+            return invalidParameters;
+          }
 
-            if (Context.get(tool.annotations, ContextRolloverTool)) {
-              return yield* preflightFailure(
-                input,
-                "infrastructure",
-                "ProgrammaticContextRolloverUnsupportedError",
-                "Context rollover requires a direct, singleton model Tool Call",
-              );
-            }
-            const approval = tool.needsApproval;
+          const handleId = ToolCallId.make(`${binding.outerToolCallId}#${sequenceIndex}`);
 
-            if (approval !== undefined && approval !== false) {
-              return yield* preflightFailure(
-                input,
-                "infrastructure",
-                "ProgrammaticApprovalUnsupportedError",
-                `Tool ${input.toolName} requires approval; approval-requiring Tools never start programmatically in the ephemeral slice`,
-              );
-            }
-
-            // Validate the encoded arguments against the owning parameter
-            // Schema before the handler can start; the pinned `Toolkit.handle`
-            // decodes internally, so the validated encoded form passes through
-            // (the same inversion as `prepareToolCall`).
-            const decodeParameters = Schema.decodeUnknownEffect(tool.parametersSchema) as (
-              value: unknown,
-            ) => Effect.Effect<unknown, Schema.SchemaError>;
-
-            const invalidParameters = yield* decodeParameters(input.encodedArguments).pipe(
-              Effect.map(() => undefined),
-              Effect.catchCauseFilter(Cause.findError, (error, cause) =>
+          const denied = yield* authorization
+            .authorize({
+              threadId: binding.context.threadId,
+              runId: binding.context.runId,
+              turnId: binding.turnId,
+              turn: binding.turn,
+              input: binding.context.input,
+              programmatic: { parentToolCallId: binding.outerToolCallId, sequenceIndex },
+              call: {
+                toolCallId: handleId,
+                toolName: input.toolName,
+                parameters: input.encodedArguments,
+                executionClass: getToolExecutionClass(tool),
+                executionKind: getToolExecutionKind(tool.annotations),
+              },
+            })
+            .pipe(
+              Effect.flatMap((decision) =>
+                decision._tag === "allowed"
+                  ? Effect.succeed(undefined)
+                  : preflightFailure(
+                      input,
+                      "infrastructure",
+                      "ProgrammaticToolAuthorizationDenied",
+                      decision.reason,
+                    ),
+              ),
+              Effect.catch((failure) =>
                 preflightFailure(
                   input,
-                  "protocol",
-                  "ModelProtocolError",
-                  `Invalid parameters for Tool ${input.toolName}: ${error.message}`,
-                  cause,
+                  "infrastructure",
+                  errorTag(failure.error),
+                  errorMessage(failure.error),
+                  failure.cause,
                 ),
               ),
             );
 
-            if (invalidParameters !== undefined) {
-              return invalidParameters;
-            }
+          if (denied !== undefined) return denied;
 
-            const handleId = ToolCallId.make(`${binding.outerToolCallId}#${sequenceIndex}`);
+          // Serialize admission and durable reservation across outer handlers.
+          // Once reserved, a slot is never refunded: ownership may be lost
+          // after the append but before the Handler starts.
+          const rejected = yield* binding.context.policyReservations.withPermit(
+            Effect.gen(function* () {
+              const used = binding.declaredToolCalls + binding.context.programmaticToolCalls;
 
-            const denied = yield* authorization
-              .authorize({
-                threadId: binding.context.threadId,
-                runId: binding.context.runId,
-                turnId: binding.turnId,
-                turn: binding.turn,
-                input: binding.context.input,
-                programmatic: { parentToolCallId: binding.outerToolCallId, sequenceIndex },
-                call: {
-                  toolCallId: handleId,
-                  toolName: input.toolName,
-                  parameters: input.encodedArguments,
-                  executionClass: getToolExecutionClass(tool),
-                  executionKind: getToolExecutionKind(tool.annotations),
-                },
-              })
-              .pipe(
-                Effect.flatMap((decision) =>
-                  decision._tag === "allowed"
-                    ? Effect.succeed(undefined)
-                    : preflightFailure(
-                        input,
-                        "infrastructure",
-                        "ProgrammaticToolAuthorizationDenied",
-                        decision.reason,
-                      ),
-                ),
-                Effect.catch((failure) =>
-                  preflightFailure(
-                    input,
-                    "infrastructure",
-                    errorTag(failure.error),
-                    errorMessage(failure.error),
-                    failure.cause,
+              if (used + 1 > binding.maxToolCalls) {
+                return yield* preflightFailure(
+                  input,
+                  "infrastructure",
+                  "AgentPolicyError",
+                  `Agent exceeded its ${binding.maxToolCalls} Tool Call limit`,
+                );
+              }
+              if (binding.budget !== undefined) {
+                const exhausted = yield* provideHookServices(
+                  binding.budget.consume({
+                    modelCalls: 0,
+                    inputTokens: 0,
+                    outputTokens: 0,
+                    totalTokens: 0,
+                    toolCalls: 1,
+                    costMicrousd: 0,
+                    usage: emptyProgrammaticUsage,
+                  }),
+                  binding.hookServices,
+                ).pipe(
+                  Effect.map(() => undefined),
+                  Effect.catchCauseFilter(Cause.findError, (error, cause) =>
+                    Effect.succeed({ error, cause }),
                   ),
-                ),
-              );
+                );
 
-            if (denied !== undefined) return denied;
-
-            // Serialize admission and durable reservation across outer handlers.
-            // Once reserved, a slot is never refunded: ownership may be lost
-            // after the append but before the Handler starts.
-            const rejected = yield* binding.context.policyReservations.withPermit(
-              Effect.gen(function* () {
-                const used = binding.declaredToolCalls + binding.context.programmaticToolCalls;
-
-                if (used + 1 > binding.maxToolCalls) {
+                if (exhausted !== undefined) {
                   return yield* preflightFailure(
                     input,
                     "infrastructure",
-                    "AgentPolicyError",
-                    `Agent exceeded its ${binding.maxToolCalls} Tool Call limit`,
+                    errorTag(exhausted.error),
+                    errorMessage(exhausted.error),
+                    exhausted.cause,
                   );
                 }
-                if (binding.budget !== undefined) {
-                  const exhausted = yield* provideHookServices(
-                    binding.budget.consume({
-                      modelCalls: 0,
-                      inputTokens: 0,
-                      outputTokens: 0,
-                      totalTokens: 0,
-                      toolCalls: 1,
-                      costMicrousd: 0,
-                      usage: emptyProgrammaticUsage,
-                    }),
-                    binding.hookServices,
-                  ).pipe(
-                    Effect.map(() => undefined),
-                    Effect.catchCauseFilter(Cause.findError, (error, cause) =>
-                      Effect.succeed({ error, cause }),
-                    ),
-                  );
-
-                  if (exhausted !== undefined) {
-                    return yield* preflightFailure(
+              }
+              binding.context.programmaticToolCalls += 1;
+              if (binding.reservePolicyUsage !== undefined) {
+                return yield* provideHookServices(
+                  binding.reservePolicyUsage({
+                    programmaticToolCalls: binding.context.programmaticToolCalls,
+                    finalizationUsed: binding.context.finalizationUsed,
+                  }),
+                  binding.hookServices,
+                ).pipe(
+                  Effect.as(undefined),
+                  Effect.catchCauseFilter(Cause.findError, (error, cause) =>
+                    preflightFailure(
                       input,
                       "infrastructure",
-                      errorTag(exhausted.error),
-                      errorMessage(exhausted.error),
-                      exhausted.cause,
-                    );
-                  }
-                }
-                binding.context.programmaticToolCalls += 1;
-                if (binding.reservePolicyUsage !== undefined) {
-                  return yield* provideHookServices(
-                    binding.reservePolicyUsage({
-                      programmaticToolCalls: binding.context.programmaticToolCalls,
-                      finalizationUsed: binding.context.finalizationUsed,
-                    }),
-                    binding.hookServices,
-                  ).pipe(
-                    Effect.as(undefined),
-                    Effect.catchCauseFilter(Cause.findError, (error, cause) =>
-                      preflightFailure(
-                        input,
-                        "infrastructure",
-                        errorTag(error),
-                        errorMessage(error),
-                        cause,
-                      ),
+                      errorTag(error),
+                      errorMessage(error),
+                      cause,
                     ),
-                  );
-                }
+                  ),
+                );
+              }
 
-                return undefined;
-              }),
-            );
+              return undefined;
+            }),
+          );
 
-            if (rejected !== undefined) return rejected;
+          if (rejected !== undefined) return rejected;
 
-            const index = sequenceIndex;
+          const index = sequenceIndex;
 
-            records[sequenceIndex] = {
-              sequenceIndex,
-              toolName: input.toolName,
-              status: "uncertain",
-            };
-            const executionClass = getToolExecutionClass(tool);
-            let failureObservation: ProgrammaticToolFailure | undefined;
+          records[sequenceIndex] = {
+            sequenceIndex,
+            toolName: input.toolName,
+            status: "uncertain",
+          };
+          const executionClass = getToolExecutionClass(tool);
+          let failureObservation: ProgrammaticToolFailure | undefined;
 
-            const startedFailure = (
-              kind: "infrastructure" | "protocol",
-              tag: string,
-              message: string,
-            ): Effect.Effect<ProgrammaticCallOutcome> => {
-              const outcome = programmaticOutcomeError(index, tag, message);
+          const startedFailure = (
+            kind: "infrastructure" | "protocol",
+            tag: string,
+            message: string,
+          ): Effect.Effect<ProgrammaticCallOutcome> => {
+            const outcome = programmaticOutcomeError(index, tag, message);
 
-              if (observer === undefined) return Effect.succeed(outcome);
-              failureObservation = {
-                _tag: "ProgrammaticToolFailure",
-                agentId: binding.context.agentId,
-                threadId: binding.context.threadId,
-                runId: binding.context.runId,
-                turnId: binding.turnId,
-                toolCallId: handleId,
-                parentToolCallId: binding.outerToolCallId,
-                sequenceIndex: index,
-                toolName: input.toolName,
-                executionClass,
-                kind,
-                tag,
-                message: toolFailureMessage(message),
-              };
-
-              return Effect.succeed(outcome);
-            };
-
-            const telemetryDescriptor: ToolTelemetryDescriptor = {
-              context: binding.context,
+            if (observer === undefined) return Effect.succeed(outcome);
+            failureObservation = {
+              _tag: "ProgrammaticToolFailure",
+              agentId: binding.context.agentId,
+              threadId: binding.context.threadId,
+              runId: binding.context.runId,
               turnId: binding.turnId,
               toolCallId: handleId,
-              toolName: input.toolName,
-              executionClass,
-              invocationKind: "programmatic",
-              failureMode: tool.failureMode,
               parentToolCallId: binding.outerToolCallId,
               sequenceIndex: index,
+              toolName: input.toolName,
+              executionClass,
+              kind,
+              tag,
+              message: toolFailureMessage(message),
             };
 
-            const execution = measureProgrammaticToolCall(
-              toolSpanTelemetry,
-              telemetryDescriptor,
-              Effect.gen(function* () {
-                yield* Effect.logDebug("agent programmatic tool handler started").pipe(
-                  Effect.annotateLogs({
+            return Effect.succeed(outcome);
+          };
+
+          const telemetryDescriptor: ToolTelemetryDescriptor = {
+            context: binding.context,
+            turnId: binding.turnId,
+            toolCallId: handleId,
+            toolName: input.toolName,
+            executionClass,
+            invocationKind: "programmatic",
+            failureMode: tool.failureMode,
+            parentToolCallId: binding.outerToolCallId,
+            sequenceIndex: index,
+          };
+
+          const execution = measureProgrammaticToolCall(
+            toolSpanTelemetry,
+            telemetryDescriptor,
+            Effect.gen(function* () {
+              yield* Effect.logDebug("agent programmatic tool handler started").pipe(
+                Effect.annotateLogs({
+                  agentId: binding.context.agentId,
+                  runId: binding.context.runId,
+                  turnId: binding.turnId,
+                  toolCallId: handleId,
+                  parentToolCallId: binding.outerToolCallId,
+                  toolName: input.toolName,
+                  sequenceIndex: index,
+                }),
+              );
+              yield* Metric.update(toolCounter, 1);
+
+              let terminal:
+                | {
+                    readonly encodedResult: unknown;
+                    readonly isFailure: boolean;
+                    readonly tag: string | undefined;
+                  }
+                | undefined;
+
+              let resultAfterTerminal = false;
+
+              const handlerFailed = yield* Stream.unwrap(
+                toolSpanTelemetry.isolateToolkitHandle(
+                  handle(input.toolName, input.encodedArguments, handleId),
+                ),
+              ).pipe(
+                Stream.runForEach((result) =>
+                  Effect.sync(() => {
+                    // The direct path rejects a second result after the terminal
+                    // one; the broker preserves that protocol violation instead
+                    // of silently keeping the last value.
+                    if (terminal !== undefined) {
+                      resultAfterTerminal = true;
+
+                      return;
+                    }
+                    if (!result.preliminary) {
+                      terminal = {
+                        encodedResult: toolResultForJson(tool, result),
+                        isFailure: result.isFailure,
+                        tag:
+                          observer === undefined || !result.isFailure
+                            ? undefined
+                            : errorTag(result.result),
+                      };
+                    }
+                  }),
+                ),
+                Effect.map(() => undefined),
+                Effect.catchCauseFilter(Cause.findError, (error, cause) =>
+                  Effect.succeed(new BrokerCallFailure(error, cause)),
+                ),
+              );
+
+              if (handlerFailed instanceof BrokerCallFailure) {
+                const tag = errorTag(handlerFailed.error);
+
+                if (observer !== undefined) {
+                  failureObservation = {
+                    _tag: "ProgrammaticToolFailure",
                     agentId: binding.context.agentId,
+                    threadId: binding.context.threadId,
                     runId: binding.context.runId,
                     turnId: binding.turnId,
                     toolCallId: handleId,
                     parentToolCallId: binding.outerToolCallId,
-                    toolName: input.toolName,
                     sequenceIndex: index,
-                  }),
+                    toolName: input.toolName,
+                    executionClass,
+                    kind: "handler-error",
+                    tag,
+                    cause: handlerFailed.cause,
+                  };
+                }
+
+                return programmaticOutcomeError(index, tag, errorMessage(handlerFailed.error));
+              }
+              if (resultAfterTerminal) {
+                return yield* startedFailure(
+                  "protocol",
+                  "ModelProtocolError",
+                  `Tool Call ${handleId} produced more than one terminal result`,
                 );
-                yield* Metric.update(toolCounter, 1);
-
-                let terminal:
-                  | {
-                      readonly encodedResult: unknown;
-                      readonly isFailure: boolean;
-                      readonly tag: string | undefined;
-                    }
-                  | undefined;
-
-                let resultAfterTerminal = false;
-
-                const handlerFailed = yield* Stream.unwrap(
-                  toolSpanTelemetry.isolateToolkitHandle(
-                    (
-                      toolkit.handle as (
-                        name: string,
-                        params: unknown,
-                        id: string,
-                      ) => Effect.Effect<
-                        Stream.Stream<Tool.HandlerResult<Tool.Any>, unknown, unknown>,
-                        unknown,
-                        unknown
-                      >
-                    )(input.toolName, input.encodedArguments, handleId),
-                  ),
-                ).pipe(
-                  Stream.runForEach((result) =>
-                    Effect.sync(() => {
-                      // The direct path rejects a second result after the terminal
-                      // one; the broker preserves that protocol violation instead
-                      // of silently keeping the last value.
-                      if (terminal !== undefined) {
-                        resultAfterTerminal = true;
-
-                        return;
-                      }
-                      if (!result.preliminary) {
-                        terminal = {
-                          encodedResult: toolResultForJson(tool, result),
-                          isFailure: result.isFailure,
-                          tag:
-                            observer === undefined || !result.isFailure
-                              ? undefined
-                              : errorTag(result.result),
-                        };
-                      }
-                    }),
-                  ),
-                  Effect.map(() => undefined),
-                  Effect.catchCauseFilter(Cause.findError, (error, cause) =>
-                    Effect.succeed(new BrokerCallFailure(error, cause)),
-                  ),
+              }
+              if (terminal === undefined) {
+                return yield* startedFailure(
+                  "protocol",
+                  "ModelProtocolError",
+                  `Tool Call ${handleId} completed without a terminal result`,
                 );
-
-                if (handlerFailed instanceof BrokerCallFailure) {
-                  const tag = errorTag(handlerFailed.error);
-
-                  if (observer !== undefined) {
-                    failureObservation = {
-                      _tag: "ProgrammaticToolFailure",
-                      agentId: binding.context.agentId,
-                      threadId: binding.context.threadId,
-                      runId: binding.context.runId,
-                      turnId: binding.turnId,
-                      toolCallId: handleId,
-                      parentToolCallId: binding.outerToolCallId,
-                      sequenceIndex: index,
-                      toolName: input.toolName,
-                      executionClass,
-                      kind: "handler-error",
-                      tag,
-                      cause: handlerFailed.cause,
-                    };
-                  }
-
-                  return programmaticOutcomeError(index, tag, errorMessage(handlerFailed.error));
-                }
-                if (resultAfterTerminal) {
-                  return yield* startedFailure(
-                    "protocol",
-                    "ModelProtocolError",
-                    `Tool Call ${handleId} produced more than one terminal result`,
-                  );
-                }
-                if (terminal === undefined) {
-                  return yield* startedFailure(
-                    "protocol",
-                    "ModelProtocolError",
-                    `Tool Call ${handleId} completed without a terminal result`,
-                  );
-                }
-                if (terminal.isFailure) {
-                  if (observer !== undefined) {
-                    failureObservation = {
-                      _tag: "ProgrammaticToolFailure",
-                      agentId: binding.context.agentId,
-                      threadId: binding.context.threadId,
-                      runId: binding.context.runId,
-                      turnId: binding.turnId,
-                      toolCallId: handleId,
-                      parentToolCallId: binding.outerToolCallId,
-                      sequenceIndex: index,
-                      toolName: input.toolName,
-                      executionClass,
-                      kind: "declared-failure",
-                      tag: terminal.tag ?? "UnknownError",
-                    };
-                  }
-
-                  return {
-                    _tag: "ProgrammaticCallFailure",
-                    index,
-                    encodedResult: terminal.encodedResult,
-                  } as const;
-                }
-                if (Option.isNone(brokerDecodeJson(terminal.encodedResult))) {
-                  return yield* startedFailure(
-                    "protocol",
-                    "ModelProtocolError",
-                    `Tool ${input.toolName} produced a success encoding outside JSON`,
-                  );
-                }
-                let encodedResult = terminal.encodedResult;
-
-                if (passOptions.redactResult !== undefined) {
-                  // A redactor is a substitution point: its replacement re-crosses
-                  // the JSON boundary or the call fails closed.
-                  const redacted = brokerDecodeJson(yield* passOptions.redactResult(encodedResult));
-
-                  if (Option.isNone(redacted)) {
-                    return yield* startedFailure(
-                      "protocol",
-                      "ModelProtocolError",
-                      `The redacted result for Tool ${input.toolName} is outside the JSON surface`,
-                    );
-                  }
-                  encodedResult = redacted.value;
-                }
-                const snapshot = brokerSerializeJson(encodedResult);
-
-                if (snapshot === undefined || snapshot.bytes > passOptions.maxResultBytes) {
-                  return yield* startedFailure(
-                    "infrastructure",
-                    "ProgrammaticResultLimitError",
-                    `Tool ${input.toolName} result of ${snapshot?.bytes ?? "unencodable"} bytes exceeds the ${passOptions.maxResultBytes}-byte broker bound`,
-                  );
-                }
-
-                // Retain the exact representation admitted above. Reusing the handler or redactor
-                // value would let later mutation or stateful getters escape the byte bound.
-                const owned = Schema.decodeOption(Schema.fromJsonString(Schema.Json))(
-                  snapshot.text,
-                );
-
-                if (Option.isNone(owned)) {
-                  return yield* startedFailure(
-                    "protocol",
-                    "ModelProtocolError",
-                    `Tool ${input.toolName} produced a success encoding outside JSON`,
-                  );
+              }
+              if (terminal.isFailure) {
+                if (observer !== undefined) {
+                  failureObservation = {
+                    _tag: "ProgrammaticToolFailure",
+                    agentId: binding.context.agentId,
+                    threadId: binding.context.threadId,
+                    runId: binding.context.runId,
+                    turnId: binding.turnId,
+                    toolCallId: handleId,
+                    parentToolCallId: binding.outerToolCallId,
+                    sequenceIndex: index,
+                    toolName: input.toolName,
+                    executionClass,
+                    kind: "declared-failure",
+                    tag: terminal.tag ?? "UnknownError",
+                  };
                 }
 
                 return {
-                  _tag: "ProgrammaticCallSuccess",
+                  _tag: "ProgrammaticCallFailure",
                   index,
-                  encodedResult: owned.value,
+                  encodedResult: terminal.encodedResult,
                 } as const;
-              }),
-            );
-
-            // Fix the broker outcome and terminal telemetry before delivery. Interruption of an
-            // observer cannot turn a settled inner failure into an interrupted Handler attempt.
-            // This still runs inline under the outer call's permit, before pass.invoke returns.
-            const recorded = execution.pipe(
-              Effect.tap((outcome) =>
-                Effect.sync(() => {
-                  records[sequenceIndex] = {
-                    sequenceIndex,
-                    toolName: input.toolName,
-                    status:
-                      outcome._tag === "ProgrammaticCallSuccess"
-                        ? "succeeded"
-                        : outcome._tag === "ProgrammaticCallFailure"
-                          ? "failed"
-                          : "uncertain",
-                    ...(outcome._tag === "ProgrammaticCallError"
-                      ? { errorTag: outcome.errorTag }
-                      : {}),
-                  };
-                }),
-              ),
-            );
-
-            return yield* observer === undefined
-              ? recorded
-              : recorded.pipe(
-                  Effect.tap(() =>
-                    failureObservation === undefined
-                      ? Effect.void
-                      : deliverToolFailure(observer, failureObservation),
-                  ),
+              }
+              if (Option.isNone(brokerDecodeJson(terminal.encodedResult))) {
+                return yield* startedFailure(
+                  "protocol",
+                  "ModelProtocolError",
+                  `Tool ${input.toolName} produced a success encoding outside JSON`,
                 );
-          }).pipe(Effect.provideContext(handlerServices)) as Effect.Effect<ProgrammaticCallOutcome>;
+              }
+              let encodedResult = terminal.encodedResult;
 
-        const pass: ToolBrokerPass = {
-          snapshot: Effect.sync(() => records.map((record) => ({ ...record }))),
-          invoke: (input) =>
-            Effect.suspend(() => {
-              const sequenceIndex = records.length;
+              if (passOptions.redactResult !== undefined) {
+                // A redactor is a substitution point: its replacement re-crosses
+                // the JSON boundary or the call fails closed.
+                const redacted = brokerDecodeJson(yield* passOptions.redactResult(encodedResult));
 
-              records.push({ sequenceIndex, toolName: input.toolName, status: "not-started" });
+                if (Option.isNone(redacted)) {
+                  return yield* startedFailure(
+                    "protocol",
+                    "ModelProtocolError",
+                    `The redacted result for Tool ${input.toolName} is outside the JSON surface`,
+                  );
+                }
+                encodedResult = redacted.value;
+              }
+              const snapshot = brokerSerializeJson(encodedResult);
 
-              // Check after acquiring the permit too: queued work cannot start after its owner exits.
-              return permits
-                .withPermit(
-                  Effect.suspend(() =>
-                    lifecycle.closed
-                      ? preflightFailure(
-                          input,
-                          "infrastructure",
-                          "ToolBrokerUnavailableError",
-                          "The outer Tool Call for this pass has already settled",
-                        )
-                      : body(input, sequenceIndex),
-                  ),
-                )
-                .pipe(
-                  Effect.tap((outcome) =>
-                    Effect.sync(() => {
-                      if (outcome._tag === "ProgrammaticCallError" && outcome.index === undefined) {
-                        records[sequenceIndex] = {
-                          sequenceIndex,
-                          toolName: input.toolName,
-                          status: "not-started",
-                          errorTag: outcome.errorTag,
-                        };
-                      }
-                    }),
-                  ),
+              if (snapshot === undefined || snapshot.bytes > passOptions.maxResultBytes) {
+                return yield* startedFailure(
+                  "infrastructure",
+                  "ProgrammaticResultLimitError",
+                  `Tool ${input.toolName} result of ${snapshot?.bytes ?? "unencodable"} bytes exceeds the ${passOptions.maxResultBytes}-byte broker bound`,
                 );
+              }
+
+              // Retain the exact representation admitted above. Reusing the handler or redactor
+              // value would let later mutation or stateful getters escape the byte bound.
+              const owned = Schema.decodeOption(Schema.fromJsonString(Schema.Json))(snapshot.text);
+
+              if (Option.isNone(owned)) {
+                return yield* startedFailure(
+                  "protocol",
+                  "ModelProtocolError",
+                  `Tool ${input.toolName} produced a success encoding outside JSON`,
+                );
+              }
+
+              return {
+                _tag: "ProgrammaticCallSuccess",
+                index,
+                encodedResult: owned.value,
+              } as const;
             }),
-        };
+          );
 
-        return pass;
-      }),
+          // Fix the broker outcome and terminal telemetry before delivery. Interruption of an
+          // observer cannot turn a settled inner failure into an interrupted Handler attempt.
+          // This still runs inline under the outer call's permit, before pass.invoke returns.
+          const recorded = execution.pipe(
+            Effect.tap((outcome) =>
+              Effect.sync(() => {
+                records[sequenceIndex] = {
+                  sequenceIndex,
+                  toolName: input.toolName,
+                  status:
+                    outcome._tag === "ProgrammaticCallSuccess"
+                      ? "succeeded"
+                      : outcome._tag === "ProgrammaticCallFailure"
+                        ? "failed"
+                        : "uncertain",
+                  ...(outcome._tag === "ProgrammaticCallError"
+                    ? { errorTag: outcome.errorTag }
+                    : {}),
+                };
+              }),
+            ),
+          );
+
+          return yield* observer === undefined
+            ? recorded
+            : recorded.pipe(
+                Effect.tap(() =>
+                  failureObservation === undefined
+                    ? Effect.void
+                    : deliverToolFailure(observer, failureObservation),
+                ),
+              );
+        }).pipe(
+          Effect.updateContext((current: Context.Context<never>) =>
+            Context.merge(current, handlerServices),
+          ),
+        );
+
+      const pass: ToolBrokerPass = {
+        snapshot: Effect.sync(() => records.map((record) => ({ ...record }))),
+        invoke: (input) =>
+          Effect.suspend(() => {
+            const sequenceIndex = records.length;
+
+            records.push({ sequenceIndex, toolName: input.toolName, status: "not-started" });
+
+            // Check after acquiring the permit too: queued work cannot start after its owner exits.
+            return permits
+              .withPermit(
+                Effect.suspend(() =>
+                  lifecycle.closed
+                    ? preflightFailure(
+                        input,
+                        "infrastructure",
+                        "ToolBrokerUnavailableError",
+                        "The outer Tool Call for this pass has already settled",
+                      )
+                    : body(input, sequenceIndex),
+                ),
+              )
+              .pipe(
+                Effect.tap((outcome) =>
+                  Effect.sync(() => {
+                    if (outcome._tag === "ProgrammaticCallError" && outcome.index === undefined) {
+                      records[sequenceIndex] = {
+                        sequenceIndex,
+                        toolName: input.toolName,
+                        status: "not-started",
+                        errorTag: outcome.errorTag,
+                      };
+                    }
+                  }),
+                ),
+              );
+          }),
+      };
+
+      return pass;
+    }),
   };
 
   return {
@@ -10602,98 +10603,97 @@ const makeDurableStepService = <HookError, HookRequirements>(
   const usedNames = new Set<string>();
 
   return {
-    do: <Output extends Schema.Top, BodyError, BodyServices>(
+    do: Effect.fnUntraced(function* <Output extends Schema.Top, BodyError, BodyServices>(
       name: string,
       output: Output,
       execute: Effect.Effect<Output["Type"], BodyError, BodyServices>,
-    ) =>
-      Effect.gen(function* () {
-        if (usedNames.has(name)) {
-          return yield* DurableStepError.make({
+    ) {
+      if (usedNames.has(name)) {
+        return yield* DurableStepError.make({
+          toolCallId,
+          stepName: name,
+          reason: "duplicate-step-name",
+          message: "Durable Step name was reused within one Tool Call",
+        });
+      }
+      usedNames.add(name);
+      const key: RunStepKey = { toolCallId, stepName: name };
+
+      const recorded = yield* provideHookServices(hook.lookup(key), hookServices).pipe(
+        Effect.mapError((cause) =>
+          DurableStepError.make({
             toolCallId,
             stepName: name,
-            reason: "duplicate-step-name",
-            message: "Durable Step name was reused within one Tool Call",
-          });
-        }
-        usedNames.add(name);
-        const key: RunStepKey = { toolCallId, stepName: name };
+            reason: "lookup-failed",
+            message: "Durable Step lookup failed",
+            cause,
+          }),
+        ),
+      );
 
-        const recorded = yield* provideHookServices(hook.lookup(key), hookServices).pipe(
+      if (Option.isSome(recorded)) {
+        return yield* Schema.decodeUnknownEffect(output)(recorded.value.encodedOutput).pipe(
+          Effect.mapError(() =>
+            DurableStepError.make({
+              toolCallId,
+              stepName: name,
+              reason: "recorded-result-invalid",
+              message: "Recorded Durable Step result failed the declared output Schema",
+            }),
+          ),
+        );
+      }
+
+      return yield* Effect.acquireUseRelease(
+        provideHookServices(hook.reserve(key), hookServices).pipe(
           Effect.mapError((cause) =>
             DurableStepError.make({
               toolCallId,
               stepName: name,
-              reason: "lookup-failed",
-              message: "Durable Step lookup failed",
+              reason:
+                cause instanceof AgentPersistenceCapacityError
+                  ? "capacity-exhausted"
+                  : "reservation-failed",
+              message:
+                cause instanceof AgentPersistenceCapacityError
+                  ? "Durable Step has no room for a valid saved result"
+                  : "Durable Step capacity reservation failed",
               cause,
             }),
           ),
-        );
+        ),
+        () =>
+          Effect.gen(function* () {
+            const value = yield* execute;
 
-        if (Option.isSome(recorded)) {
-          return yield* Schema.decodeUnknownEffect(output)(recorded.value.encodedOutput).pipe(
-            Effect.mapError(() =>
-              DurableStepError.make({
-                toolCallId,
-                stepName: name,
-                reason: "recorded-result-invalid",
-                message: "Recorded Durable Step result failed the declared output Schema",
-              }),
-            ),
-          );
-        }
+            const encodedOutput = yield* Schema.encodeEffect(output)(value).pipe(
+              Effect.mapError(() =>
+                DurableStepError.make({
+                  toolCallId,
+                  stepName: name,
+                  reason: "output-encoding-failed",
+                  message: "Durable Step output failed the declared output Schema",
+                }),
+              ),
+            );
 
-        return yield* Effect.acquireUseRelease(
-          provideHookServices(hook.reserve(key), hookServices).pipe(
-            Effect.mapError((cause) =>
-              DurableStepError.make({
-                toolCallId,
-                stepName: name,
-                reason:
-                  cause instanceof AgentPersistenceCapacityError
-                    ? "capacity-exhausted"
-                    : "reservation-failed",
-                message:
-                  cause instanceof AgentPersistenceCapacityError
-                    ? "Durable Step has no room for a valid saved result"
-                    : "Durable Step capacity reservation failed",
-                cause,
-              }),
-            ),
-          ),
-          () =>
-            Effect.gen(function* () {
-              const value = yield* execute;
+            yield* provideHookServices(hook.commit(key, encodedOutput), hookServices).pipe(
+              Effect.mapError((cause) =>
+                DurableStepError.make({
+                  toolCallId,
+                  stepName: name,
+                  reason: "commit-failed",
+                  message: "Durable Step commit failed",
+                  cause,
+                }),
+              ),
+            );
 
-              const encodedOutput = yield* Schema.encodeEffect(output)(value).pipe(
-                Effect.mapError(() =>
-                  DurableStepError.make({
-                    toolCallId,
-                    stepName: name,
-                    reason: "output-encoding-failed",
-                    message: "Durable Step output failed the declared output Schema",
-                  }),
-                ),
-              );
-
-              yield* provideHookServices(hook.commit(key, encodedOutput), hookServices).pipe(
-                Effect.mapError((cause) =>
-                  DurableStepError.make({
-                    toolCallId,
-                    stepName: name,
-                    reason: "commit-failed",
-                    message: "Durable Step commit failed",
-                    cause,
-                  }),
-                ),
-              );
-
-              return value;
-            }),
-          (release) => release,
-        );
-      }),
+            return value;
+          }),
+        (release) => release,
+      );
+    }),
   };
 };
 

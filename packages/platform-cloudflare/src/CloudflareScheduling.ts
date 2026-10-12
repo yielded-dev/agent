@@ -255,8 +255,8 @@ export class CloudflareSchedulingClient {
         );
       });
 
-      const create: Scheduling["Service"]["create"] = (agent, input, options) =>
-        Effect.gen(function* () {
+      const create: Scheduling["Service"]["create"] = Effect.fnUntraced(
+        function* (agent, input, options) {
           const payload = yield* encodeInput(agent, input);
 
           const response = yield* call(options.scope.owner, {
@@ -273,10 +273,11 @@ export class CloudflareSchedulingClient {
                 operation: "Schedule Owner protocol",
                 reason: "corrupt",
               });
-        });
+        },
+      );
 
-      const update: Scheduling["Service"]["update"] = (agent, input, options) =>
-        Effect.gen(function* () {
+      const update: Scheduling["Service"]["update"] = Effect.fnUntraced(
+        function* (agent, input, options) {
           const payload = yield* encodeInput(agent, input);
 
           const response = yield* call(options.scope.owner, {
@@ -293,66 +294,67 @@ export class CloudflareSchedulingClient {
                 operation: "Schedule Owner protocol",
                 reason: "corrupt",
               });
+        },
+      );
+
+      const get: Scheduling["Service"]["get"] = Effect.fnUntraced(function* (scope, scheduleId) {
+        const response = yield* call(scope.owner, {
+          _tag: "Get",
+          schemaVersion: 1,
+          scope,
+          scheduleId,
         });
 
-      const get: Scheduling["Service"]["get"] = (scope, scheduleId) =>
-        Effect.gen(function* () {
-          const response = yield* call(scope.owner, {
-            _tag: "Get",
-            schemaVersion: 1,
-            scope,
-            scheduleId,
-          });
+        return response._tag === "Snapshot"
+          ? response.value
+          : yield* ScheduleStorageError.make({
+              operation: "Schedule Owner protocol",
+              reason: "corrupt",
+            });
+      });
 
-          return response._tag === "Snapshot"
-            ? response.value
-            : yield* ScheduleStorageError.make({
-                operation: "Schedule Owner protocol",
-                reason: "corrupt",
-              });
+      const list: Scheduling["Service"]["list"] = Effect.fnUntraced(function* (
+        scope,
+        options = {},
+      ) {
+        const response = yield* call(scope.owner, {
+          _tag: "List",
+          schemaVersion: 1,
+          scope,
+          ...(options.after === undefined ? {} : { after: options.after }),
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
         });
 
-      const list: Scheduling["Service"]["list"] = (scope, options = {}) =>
-        Effect.gen(function* () {
-          const response = yield* call(scope.owner, {
-            _tag: "List",
-            schemaVersion: 1,
-            scope,
-            ...(options.after === undefined ? {} : { after: options.after }),
-            ...(options.limit === undefined ? {} : { limit: options.limit }),
-          });
+        return response._tag === "Page"
+          ? response.value
+          : yield* ScheduleStorageError.make({
+              operation: "Schedule Owner protocol",
+              reason: "corrupt",
+            });
+      });
 
-          return response._tag === "Page"
-            ? response.value
-            : yield* ScheduleStorageError.make({
-                operation: "Schedule Owner protocol",
-                reason: "corrupt",
-              });
-        });
-
-      const control = (
+      const control = Effect.fnUntraced(function* (
         operation: "pause" | "resume" | "cancel",
         scope: ScheduleScope,
         scheduleId: ScheduleId,
         expectedRevision: number,
-      ) =>
-        Effect.gen(function* () {
-          const response = yield* call(scope.owner, {
-            _tag: "Control",
-            schemaVersion: 1,
-            operation,
-            scope,
-            scheduleId,
-            expectedRevision,
-          });
-
-          return response._tag === "Snapshot"
-            ? response.value
-            : yield* ScheduleStorageError.make({
-                operation: "Schedule Owner protocol",
-                reason: "corrupt",
-              });
+      ) {
+        const response = yield* call(scope.owner, {
+          _tag: "Control",
+          schemaVersion: 1,
+          operation,
+          scope,
+          scheduleId,
+          expectedRevision,
         });
+
+        return response._tag === "Snapshot"
+          ? response.value
+          : yield* ScheduleStorageError.make({
+              operation: "Schedule Owner protocol",
+              reason: "corrupt",
+            });
+      });
 
       return Scheduling.of({
         create,
@@ -361,8 +363,8 @@ export class CloudflareSchedulingClient {
         list,
         pause: (scope, id, revision) => control("pause", scope, id, revision),
         resume: (scope, id, revision) => control("resume", scope, id, revision),
-        recover: (scope, scheduleId, expectedRevision, expectedGeneration) =>
-          Effect.gen(function* () {
+        recover: Effect.fnUntraced(
+          function* (scope, scheduleId, expectedRevision, expectedGeneration) {
             const response = yield* call(scope.owner, {
               _tag: "Recover",
               schemaVersion: 1,
@@ -378,7 +380,8 @@ export class CloudflareSchedulingClient {
                   operation: "Schedule Owner protocol",
                   reason: "corrupt",
                 });
-          }),
+          },
+        ),
         cancel: (scope, id, revision) => control("cancel", scope, id, revision),
       });
     }),
@@ -433,53 +436,50 @@ const transactionLayer: Layer.Layer<
     const alarms = yield* DurableObjectAlarm.DurableObjectAlarm;
 
     return DoScheduleTransaction.of({
-      run: (body) =>
-        Effect.gen(function* () {
-          const nowMillis = yield* Clock.currentTimeMillis;
+      run: Effect.fnUntraced(function* (body) {
+        const nowMillis = yield* Clock.currentTimeMillis;
 
-          return yield* alarms
-            .transaction((transaction) =>
-              body((replacement) =>
-                replacement.deadlineAtMillis === null
-                  ? transaction
-                      .cancelAlarm({ id: SCHEDULE_ALARM_ID, tag: SCHEDULE_ALARM_TAG })
-                      .pipe(Effect.mapError(alarmStorageError("cancel Schedule Owner alarm")))
-                  : Effect.fromOption(
-                      DateTime.make(Math.max(replacement.deadlineAtMillis, nowMillis + 1)),
-                    ).pipe(
-                      Effect.mapError(() =>
-                        ScheduleStorageError.make({
-                          operation: "validate Schedule Owner alarm deadline",
-                          reason: "corrupt",
-                        }),
-                      ),
-                      Effect.flatMap((runAt) =>
-                        transaction
-                          .scheduleAlarm({
-                            id: SCHEDULE_ALARM_ID,
-                            tag: SCHEDULE_ALARM_TAG,
-                            runAt,
-                            payload: {
-                              schemaVersion: 1,
-                              generation: replacement.generation,
-                            },
-                          })
-                          .pipe(
-                            Effect.mapError(alarmStorageError("schedule Schedule Owner alarm")),
-                          ),
-                      ),
+        return yield* alarms
+          .transaction((transaction) =>
+            body((replacement) =>
+              replacement.deadlineAtMillis === null
+                ? transaction
+                    .cancelAlarm({ id: SCHEDULE_ALARM_ID, tag: SCHEDULE_ALARM_TAG })
+                    .pipe(Effect.mapError(alarmStorageError("cancel Schedule Owner alarm")))
+                : Effect.fromOption(
+                    DateTime.make(Math.max(replacement.deadlineAtMillis, nowMillis + 1)),
+                  ).pipe(
+                    Effect.mapError(() =>
+                      ScheduleStorageError.make({
+                        operation: "validate Schedule Owner alarm deadline",
+                        reason: "corrupt",
+                      }),
                     ),
-              ),
-            )
-            .pipe(
-              Effect.catchTag("StorageOperationError", () =>
-                ScheduleStorageError.make({
-                  operation: "commit Schedule Owner transaction",
-                  reason: "unavailable",
-                }),
-              ),
-            );
-        }),
+                    Effect.flatMap((runAt) =>
+                      transaction
+                        .scheduleAlarm({
+                          id: SCHEDULE_ALARM_ID,
+                          tag: SCHEDULE_ALARM_TAG,
+                          runAt,
+                          payload: {
+                            schemaVersion: 1,
+                            generation: replacement.generation,
+                          },
+                        })
+                        .pipe(Effect.mapError(alarmStorageError("schedule Schedule Owner alarm"))),
+                    ),
+                  ),
+            ),
+          )
+          .pipe(
+            Effect.catchTag("StorageOperationError", () =>
+              ScheduleStorageError.make({
+                operation: "commit Schedule Owner transaction",
+                reason: "unavailable",
+              }),
+            ),
+          );
+      }),
     });
   }),
 );

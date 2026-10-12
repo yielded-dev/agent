@@ -308,20 +308,19 @@ describe("SqliteThreadStore", () => {
             yield* progress.commit(batch("crash-reopen", [input, start])).pipe(
               Effect.provideService(CurrentRunWriter, {
                 ...writer,
-                append: (compiled, executions) =>
-                  Effect.gen(function* () {
-                    const tail = yield* writer.tail;
+                append: Effect.fnUntraced(function* (compiled, executions) {
+                  const tail = yield* writer.tail;
 
-                    prepared = AppendRequest.make({
-                      threadId,
-                      expectedTailSequence: tail.sequence,
+                  prepared = AppendRequest.make({
+                    threadId,
+                    expectedTailSequence: tail.sequence,
 
-                      batch: compiled,
-                      ...(executions === undefined ? {} : { executions }),
-                    });
+                    batch: compiled,
+                    ...(executions === undefined ? {} : { executions }),
+                  });
 
-                    return yield* writer.append(compiled, executions);
-                  }),
+                  return yield* writer.append(compiled, executions);
+                }),
               }),
             );
           }).pipe(
@@ -1005,20 +1004,19 @@ describe("SqliteThreadStore", () => {
                     yield* progress.commit(batch("failpoint-append", [start])).pipe(
                       Effect.provideService(CurrentRunWriter, {
                         ...writer,
-                        append: (prepared, executions) =>
-                          Effect.gen(function* () {
-                            const tail = yield* writer.tail;
+                        append: Effect.fnUntraced(function* (prepared, executions) {
+                          const tail = yield* writer.tail;
 
-                            firstRequest = AppendRequest.make({
-                              threadId,
-                              expectedTailSequence: tail.sequence,
+                          firstRequest = AppendRequest.make({
+                            threadId,
+                            expectedTailSequence: tail.sequence,
 
-                              batch: prepared,
-                              ...(executions === undefined ? {} : { executions }),
-                            });
+                            batch: prepared,
+                            ...(executions === undefined ? {} : { executions }),
+                          });
 
-                            return yield* writer.append(prepared, executions);
-                          }),
+                          return yield* writer.append(prepared, executions);
+                        }),
                       }),
                     );
                   }),
