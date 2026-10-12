@@ -321,13 +321,18 @@ export default {
 
         if (!metrics.ok) return Response.json(metrics);
         const directoryUsed = Schema.decodeUnknownSync(Schema.Boolean)(metrics.directoryUsed);
-        const directoryBytes = await actor.bytes();
+
+        const directoryBytes = await actor.bytes().catch((cause: unknown) => {
+          throw transientObjectTransport(cause) ?? cause;
+        });
 
         return Response.json({
           ...metrics,
           bytes: metrics.bytes + directoryBytes,
           directoryBytes,
-          directory: await actor.end(directoryUsed),
+          directory: await actor.end(directoryUsed).catch((cause: unknown) => {
+            throw transientObjectTransport(cause) ?? cause;
+          }),
         });
       }
 
