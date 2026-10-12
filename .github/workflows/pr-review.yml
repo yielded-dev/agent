@@ -15,7 +15,6 @@ on:
 
 permissions:
   contents: read
-  checks: write
 
 jobs:
   review:
@@ -53,19 +52,20 @@ jobs:
         with:
           app-id: ${{ secrets.EFFECT_AGENT_APP_ID }}
           private-key: ${{ secrets.EFFECT_AGENT_APP_PRIVATE_KEY }}
+          permission-checks: write
           permission-contents: read
           permission-issues: write
           permission-pull-requests: write
 
       - name: Review the pull request
-        uses: yielded-dev/agent/action@9b953c3cd0a94c4e47ebb280501f26bfdecd22a6 # action-v1
+        uses: yielded-dev/agent/action@action-v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           github-token: ${{ steps.app-token.outputs.token }}
           pull-request: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pull-request }}
           review-author: effect-agent[bot]
           check-name: Effect Agent review
-          checks-token: ${{ github.token }}
+          checks-token: ${{ steps.app-token.outputs.token }}
           mode: ${{ github.event_name == 'pull_request_target' && 'auto' || github.event_name == 'workflow_dispatch' && 'full' || 'incremental' }}
           command: ${{ github.event_name == 'issue_comment' && github.event.comment.body || '' }}
           comment-id: ${{ github.event.comment.id || 0 }}

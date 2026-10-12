@@ -241,6 +241,8 @@ export class ReviewCostSnapshot extends Schema.Class<ReviewCostSnapshot>(
   stopped: Schema.Boolean,
   /** The host refused a counted input before paid inference. */
   inputLimitExceeded: Schema.optionalKey(Schema.Literal(true)),
+  /** Safe, host-authored diagnostic for publication; never raw provider errors or source text. */
+  stopReason: Schema.optionalKey(Schema.NonEmptyString.check(Schema.isMaxLength(2_000))),
   /** Admitted provider attempts, including failed or still-unmetered requests. */
   modelCalls: Schema.Natural,
   usage: ReviewUsage,
@@ -1111,6 +1113,16 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
 
       const blockedOn = Result.isSuccess(result) ? result.success.output.blockedOn : undefined;
 
+      const stopReason =
+        cost?.stopReason ??
+        (policyLimit === "duration"
+          ? "The review reached its five-minute deadline."
+          : failure?._tag === "ModelProtocolError"
+            ? "The review stopped after a model protocol error."
+            : failure?._tag === "AiError"
+              ? `The model request failed (${failure.reason._tag}). See the workflow logs for diagnostics.`
+              : "The investigation did not complete.");
+
       const resolutions =
         Result.isSuccess(result) &&
         !incomplete &&
@@ -1123,10 +1135,10 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
         findings,
         summary:
           exhausted !== undefined
-            ? `Review stopped at the ${exhausted} budget. These findings cover the investigation completed before finalization; the remaining change has not been verified.`
+            ? `${cost?.stopReason === undefined ? "" : `${cost.stopReason} `}Review stopped at the ${exhausted} budget. These findings cover the investigation completed before finalization; the remaining change has not been verified.`
             : incomplete
               ? blockedOn === undefined
-                ? `${policyLimit === "duration" ? "The review reached its five-minute deadline." : failure?._tag === "ModelProtocolError" ? "The review stopped after a model protocol error." : "The investigation did not complete."} Recorded findings are preserved; the remaining change has not been verified.`
+                ? `${stopReason} Recorded findings are preserved; the remaining change has not been verified.`
                 : `Review blocked on unavailable evidence: ${blockedOn}`
               : reviewSummary(request, findings),
       });

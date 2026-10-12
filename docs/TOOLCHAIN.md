@@ -629,22 +629,24 @@ draft. This includes forks and release metadata; drafts are skipped. The `pr-rev
 environment must have no required reviewers. Fork CI may still require GitHub workflow
 approval independently of review.
 
-Require both `ready` and `Effect Agent review` from GitHub Actions in the main branch
-ruleset. The review check reports progress on the inspected PR commit and passes only
-after complete review without unresolved blockers. Missing, failed, incomplete, or
+Require `ready` from GitHub Actions and `Effect Agent review` from the Effect Agent App
+in the main branch ruleset. The review check reports progress on the inspected PR commit
+and passes only after complete review without unresolved blockers. Missing, failed, incomplete, or
 paused reviews block merging. After five automatic attempts, an authorized
 `@effect-agent review full` comment or a manual workflow dispatch starts a full retry;
 `@effect-agent review` requests an incremental pass. Automatic and manual reviews use
-the same check name and workflow token; the GitHub App retains its review identity.
+the same check name and App token. Grant the App Checks write permission and request
+`permission-checks: write` when minting its token; the workflow token needs only Contents read.
 Maintainers and authorized coding agents can clear a fixed or refuted bot review by commenting
 `@effect-agent dismiss <review-id-or-url>` with evidence on subsequent lines. The command records
 the disposition and refreshes the check without inference; other blockers and incomplete coverage
 remain blocking. See [dismissal and CLI usage](../action/README.md#dismissing-a-review).
 See the [Action check configuration](../action/README.md#pr-check-status) for consumer setup.
 
-Reviews use a pinned Action and trusted default-branch guidance, reading PR source
-through GitHub's API. They never execute PR-head code or consume CI artifacts or
-caches. Stale event heads are skipped; a newer commit needs its own review.
+Reviews use the published Action channel, which advances only after successful main CI,
+and trusted default-branch guidance, reading PR source through GitHub's API. They never
+execute PR-head code or consume CI artifacts or caches. Stale event heads are skipped;
+a newer commit needs its own review.
 
 Each cacheable test-matrix job has its own task-cache key. Docs-only builds and candidate bundle
 builds reuse the build cache; base comparisons keep a separate cache. Dependency installation
