@@ -65,6 +65,9 @@ The receipt identifies accepted work; it does not mean the booking or Run has fi
   ]}
 />
 
+Approval and visibility callbacks run only when configured; built-in allow-all authorization
+needs no host callback.
+
 [Steering](/guide/run-agents/) enters between complete turns; follow-up input enters when
 the Run would otherwise stop. Neither rewrites a tool already executing. Opt-in model-call
 restart can consume joined input earlier only while the call remains disposable.
@@ -115,7 +118,8 @@ edges={[
 The log is append-only. The active Run checkpoint is authoritative operational state,
 updated with new facts and removed at settlement. Open tool outcomes and delivery obligations
 can outlive that Run and retain their own state. Conversation projections and lookup indexes
-are rebuildable views.
+are rebuildable views. The host reuses validated continuation state and rechecks live budgets
+and authority before new work.
 
 Recovery reconstructs saved model context from prompt-relevant history, checking its
 `historyDigest` and validating current Run evidence in full. Explicit verification also
