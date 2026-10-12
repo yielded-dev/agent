@@ -45,9 +45,18 @@ export const inspectJevDom = pageFunction(
     Reflect.set(globalThis, "@effect-agent/native-browser", registry);
     Reflect.set(globalThis, "@effect-agent/native-browser-name-checks", checks);
 
-    const visible = (node: Element) =>
-      node.closest('[aria-hidden="true"],[inert]') === null &&
-      node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+    const visible = (node: Element) => {
+      let ancestor: Element | null = node;
+
+      while (ancestor !== null) {
+        if (ancestor.matches('[aria-hidden="true"],[inert]')) return false;
+        const root = ancestor.getRootNode();
+
+        ancestor = ancestor.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
+      }
+
+      return node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+    };
 
     const inView = (node: Element) => {
       const rect = node.getBoundingClientRect();

@@ -560,7 +560,9 @@ export const make = Effect.fnUntraced(function* <R>(
         if (ref === undefined) continue;
 
         const read = async (): Promise<unknown> => {
-          truncated ||= await discoverClosedRoots(frame);
+          const rootsTruncated = await discoverClosedRoots(frame);
+
+          truncated ||= rootsTruncated;
 
           return limits.observationMode === "jev"
             ? frame
@@ -665,6 +667,7 @@ export const make = Effect.fnUntraced(function* <R>(
     let parent = current.parentFrame();
 
     while (parent !== null) {
+      await discoverClosedRoots(parent);
       const owner = await current.frameElement();
 
       if (owner === null) return false;

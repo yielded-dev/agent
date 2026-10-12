@@ -626,7 +626,6 @@ export const checkDom = pageFunction(
       kind !== expected.kind ||
       associated.matches(":disabled") ||
       associated.getAttribute("aria-disabled") === "true" ||
-      node.closest('[inert],[aria-hidden="true"]') !== null ||
       !node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
     )
       return false;
@@ -666,6 +665,8 @@ export const checkDom = pageFunction(
     let ancestor: Node | null = node;
 
     while (ancestor !== null) {
+      if (ancestor instanceof Element && ancestor.matches('[inert],[aria-hidden="true"]'))
+        return false;
       ancestors.add(ancestor);
       ancestor = ancestor instanceof ShadowRoot ? ancestor.host : ancestor.parentNode;
     }
@@ -710,7 +711,7 @@ export const checkDom = pageFunction(
 
     let hit = document.elementFromPoint(x, y);
 
-    while (hit !== null) {
+    while (hit !== null && hit !== node && !node.contains(hit)) {
       const shadow: ShadowRoot | undefined | null =
         hit.shadowRoot ??
         Reflect.get(globalThis, "@effect-agent/native-browser-closed-roots")?.get(hit);
@@ -746,7 +747,6 @@ export const checkFrameDom = pageFunction(
     if (
       !(node instanceof HTMLElement) ||
       !node.isConnected ||
-      node.closest('[inert],[aria-hidden="true"]') !== null ||
       !node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
     )
       return false;
@@ -770,6 +770,7 @@ export const checkFrameDom = pageFunction(
       );
 
       if (
+        ancestor.matches('[inert],[aria-hidden="true"]') ||
         !(
           matrix.m11 === 1 &&
           matrix.m12 === 0 &&
@@ -805,7 +806,7 @@ export const checkFrameDom = pageFunction(
     const y = rect.top + parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop) + point.y;
     let hit = document.elementFromPoint(x, y);
 
-    while (hit !== null) {
+    while (hit !== null && hit !== node && !node.contains(hit)) {
       const shadow: ShadowRoot | undefined | null =
         hit.shadowRoot ??
         Reflect.get(globalThis, "@effect-agent/native-browser-closed-roots")?.get(hit);

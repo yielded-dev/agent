@@ -353,25 +353,28 @@ it.live(
           }),
         );
 
-        const native = yield* makeNativeBrowser(
-          {
-            run: (authorize, action) =>
-              authorize.pipe(
-                Effect.andThen(
-                  Effect.tryPromise({
-                    try: () => action(page),
-                    catch: () =>
-                      BrowserSessionError.make({
-                        reason: "provider",
-                        dispatch: "possibly-dispatched",
-                        cleanup: "not-requested",
-                      }),
-                  }),
-                ),
+        const nativeSession: Parameters<typeof makeNativeBrowser>[0] = {
+          run: (authorize, action) =>
+            authorize.pipe(
+              Effect.andThen(
+                Effect.tryPromise({
+                  try: () => action(page),
+                  catch: () =>
+                    BrowserSessionError.make({
+                      reason: "provider",
+                      dispatch: "possibly-dispatched",
+                      cleanup: "not-requested",
+                    }),
+                }),
               ),
-          },
-          { authorize: () => Effect.void, maxActions: 10, maxReturnedBytes: 256 * 1024 },
-        );
+            ),
+        };
+
+        const native = yield* makeNativeBrowser(nativeSession, {
+          authorize: () => Effect.void,
+          maxActions: 10,
+          maxReturnedBytes: 256 * 1024,
+        });
 
         const closed = yield* native.actions.observe;
 
@@ -426,6 +429,203 @@ it.live(
         expect(yield* sdkCall(() => page.$eval("#clicks", (element) => element.textContent))).toBe(
           "2",
         );
+        // https://github.com/yielded-dev/agent/commit/7302375209568250e10875a68012609e90bbed1e
+        // A shadow host is actionable through its own content, but never through an external cover.
+        yield* sdkCall(() =>
+          page.evaluate(() => {
+            document.body.innerHTML =
+              '<div role="button" aria-label="Save" id="save" style="width:200px;height:60px"></div><output id="saved">0</output>';
+            const host = document.querySelector("#save");
+
+            if (host === null) throw new Error("Missing actionable host");
+            host.attachShadow({ mode: "closed" }).innerHTML =
+              '<span style="display:block;width:100%;height:100%">Save content</span>';
+            host.addEventListener("click", () => {
+              const output = document.querySelector("#saved");
+
+              if (output !== null) output.textContent = String(Number(output.textContent) + 1);
+            });
+          }),
+        );
+        const hostObservation = yield* native.actions.observe;
+        const hostControl = hostObservation.controls.find((control) => control.name === "Save");
+
+        expect.soft(hostControl, "actionable closed shadow host is observed").toBeDefined();
+        if (hostControl !== undefined) {
+          expect
+            .soft(
+              (yield* native.actions.act([{ kind: "click", ref: hostControl.ref }])).completed,
+              "click reaches actionable closed shadow host",
+            )
+            .toBe(1);
+          expect
+            .soft(yield* sdkCall(() => page.$eval("#saved", (element) => element.textContent)))
+            .toBe("1");
+
+          const freshHost = (yield* native.actions.observe).controls.find(
+            (control) => control.name === "Save",
+          );
+
+          if (freshHost === undefined) return yield* Effect.die("Missing refreshed host");
+          yield* sdkCall(() =>
+            page.evaluate(() => {
+              const cover = document.createElement("div");
+
+              cover.style.cssText = "position:fixed;inset:0;z-index:999;background:white";
+              document.body.appendChild(cover);
+            }),
+          );
+          expect
+            .soft((yield* native.actions.act([{ kind: "click", ref: freshHost.ref }])).dispatch)
+            .toBe("not-dispatched");
+          expect
+            .soft(yield* sdkCall(() => page.$eval("#saved", (element) => element.textContent)))
+            .toBe("1");
+        }
+
+        // Direct inspection of a grandchild does not first inspect its enclosing frame's realm.
+        yield* sdkCall(() =>
+          page.evaluate(() => {
+            document.body.innerHTML =
+              '<iframe name="uninspected-parent" style="width:500px;height:300px"></iframe><output id="nested-clicks">0</output>';
+            const parent = document.querySelector("iframe")?.contentDocument;
+
+            if (parent === null || parent === undefined) throw new Error("Missing parent frame");
+            const host = parent.createElement("div");
+
+            parent.body.appendChild(host);
+            const root = host.attachShadow({ mode: "closed" });
+
+            root.innerHTML =
+              '<iframe name="direct-grandchild" style="display:block;width:400px;height:200px"></iframe>';
+            const child = root.querySelector("iframe")?.contentDocument;
+
+            if (child === null || child === undefined) throw new Error("Missing grandchild frame");
+            child.body.innerHTML = "<button>Grandchild action</button>";
+            child.querySelector("button")?.addEventListener("click", () => {
+              const output = document.querySelector("#nested-clicks");
+
+              if (output !== null) output.textContent = String(Number(output.textContent) + 1);
+            });
+          }),
+        );
+        const ancestorObservation = yield* native.actions.observe;
+
+        const grandchild = ancestorObservation.frames?.find(
+          (frame) => frame.name === "direct-grandchild",
+        );
+
+        if (grandchild === undefined) return yield* Effect.die("Missing direct grandchild ref");
+
+        const grandchildControl = (yield* native.control.inspect({
+          frame: grandchild.ref,
+        })).controls.find((control) => control.name === "Grandchild action");
+
+        if (grandchildControl === undefined) return yield* Effect.die("Missing grandchild control");
+        expect
+          .soft(
+            (yield* native.actions.act([{ kind: "click", ref: grandchildControl.ref }])).completed,
+            "uninspected ancestor closed root permits exact native frame input",
+          )
+          .toBe(1);
+        expect
+          .soft(
+            yield* sdkCall(() => page.$eval("#nested-clicks", (element) => element.textContent)),
+          )
+          .toBe("1");
+
+        // Hidden ancestors cross the shadow boundary both at Jev observation and final dispatch.
+        yield* sdkCall(() =>
+          page.evaluate(() => {
+            document.body.innerHTML =
+              '<div aria-hidden="true"><div id="hidden-host"></div></div><div id="visible-container"><div id="visible-host"></div></div><output id="hidden-clicks">0</output>';
+            for (const [id, label] of [
+              ["hidden-host", "Hidden action"],
+              ["visible-host", "Initially visible action"],
+            ]) {
+              const host = document.getElementById(id);
+
+              if (host === null) throw new Error("Missing visibility host");
+              const root = host.attachShadow({ mode: "closed" });
+
+              root.innerHTML = `<button>${label}</button>`;
+              root.querySelector("button")?.addEventListener("click", () => {
+                const output = document.querySelector("#hidden-clicks");
+
+                if (output !== null) output.textContent = String(Number(output.textContent) + 1);
+              });
+            }
+          }),
+        );
+
+        const jev = yield* makeNativeBrowser(nativeSession, {
+          authorize: () => Effect.void,
+          observationMode: "jev",
+          maxActions: 10,
+          maxReturnedBytes: 256 * 1024,
+        });
+
+        const jevObservation = yield* jev.actions.observe;
+
+        expect
+          .soft(
+            jevObservation.controls.some((control) => control.name === "Hidden action"),
+            "Jev excludes closed controls under hidden hosts",
+          )
+          .toBe(false);
+
+        const visibleControl = jevObservation.controls.find(
+          (control) => control.name === "Initially visible action",
+        );
+
+        if (visibleControl === undefined)
+          return yield* Effect.die("Missing initially visible control");
+        yield* sdkCall(() =>
+          page.$eval("#visible-container", (element) =>
+            element.setAttribute("aria-hidden", "true"),
+          ),
+        );
+        expect
+          .soft(
+            (yield* jev.actions.act([{ kind: "click", ref: visibleControl.ref }])).dispatch,
+            "host hidden after observation refuses native input",
+          )
+          .toBe("not-dispatched");
+        expect
+          .soft(
+            yield* sdkCall(() => page.$eval("#hidden-clicks", (element) => element.textContent)),
+          )
+          .toBe("0");
+
+        // Truncated frame metadata does not suppress discovery in the inspected main frame.
+        yield* sdkCall(() =>
+          page.evaluate(() => {
+            document.body.innerHTML = '<div id="truncated-host"></div>';
+            const host = document.querySelector("#truncated-host");
+
+            if (host === null) throw new Error("Missing truncated observation host");
+            host.attachShadow({ mode: "closed" }).innerHTML =
+              "<button>Truncated page action</button>";
+            for (let index = 0; index < 32; index++) {
+              const frame = document.createElement("iframe");
+
+              frame.style.display = "none";
+              document.body.appendChild(frame);
+            }
+          }),
+        );
+        const truncatedObservation = yield* native.actions.observe;
+
+        expect.soft(truncatedObservation.truncated).toBe(true);
+        expect
+          .soft(
+            truncatedObservation.controls.some(
+              (control) => control.name === "Truncated page action",
+            ),
+            "frame metadata truncation keeps closed-root discovery active",
+          )
+          .toBe(true);
+
         yield* handle.close;
         expect(page.listenerCount("request")).toBe(0);
         expect(logs.every((entry) => entry.cause === undefined)).toBe(true);
