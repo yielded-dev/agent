@@ -7,4 +7,4 @@
 "@yielded/agent-storage-cloudflare": minor
 ---
 
-Remove per-Thread conversation quotas and reuse messaging and subscription capacity after work settles or its retention window expires, preserving exact receipts and host capacity bounds. **BEHAVIOR CHANGE:** use fresh layout-26 stores and version-4 standalone Cloudflare subscription stores with matching runtime and storage packages; custom Thread stores must count peer sends at the request's `nowMillis`.
+Remove per-Thread conversation quotas and reuse messaging and subscription capacity after work settles or its retention window expires, preserving exact receipts and host capacity bounds. Upgrade released layout-25 stores and standalone Cloudflare subscription stores v3 atomically on open; custom Thread stores must count peer sends at the request's `nowMillis`.

@@ -185,9 +185,60 @@ const corrupt = (operation: string, cause?: unknown) =>
   });
 
 /**
+ * Backfill the retention derivative under the adapter's layout-upgrade transaction.
+ * Read one bounded delivery at a time; preserve its JSON and all existing metadata.
+ */
+export const backfillPeerMessageRetention = Effect.fnUntraced(function* (namespace?: string) {
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
+  const { table } = yield* makeSqlQuery(namespace);
+
+  const LegacyRow = Schema.Struct({
+    owner_thread_id: Row.fields.owner_thread_id,
+    message_id: Row.fields.message_id,
+    version: Row.fields.version,
+    state: Row.fields.state,
+    deadline_at_millis: Row.fields.deadline_at_millis,
+    record_json: Schema.fromJsonString(MessageDeliveryRecord),
+  });
+
+  const decode = Schema.decodeUnknownEffect(Schema.Array(LegacyRow));
+  let cursor: { readonly owner: string; readonly message: string } | undefined;
+
+  while (true) {
+    const rows = yield* sql`
+      SELECT owner_thread_id, message_id, version, state, deadline_at_millis, record_json
+      FROM ${table("effect_agent_message_deliveries")}
+      ${cursor === undefined ? sql`` : sql`WHERE (owner_thread_id, message_id) > (${cursor.owner}, ${cursor.message})`}
+      ORDER BY owner_thread_id, message_id LIMIT 1
+    `;
+
+    const [row] = yield* decode(rows).pipe(
+      Effect.mapError(() => corrupt("upgrade delivery retention")),
+    );
+
+    if (row === undefined) return;
+    const record = row.record_json;
+
+    if (
+      record.key.ownerThreadId !== row.owner_thread_id ||
+      record.key.messageId !== row.message_id ||
+      record.version !== row.version ||
+      record.status !== row.state ||
+      messageDeliveryDeadline(record) !== row.deadline_at_millis
+    )
+      return yield* corrupt("upgrade delivery metadata");
+
+    yield* sql`UPDATE ${table("effect_agent_message_deliveries")}
+      SET peer_retained_until_millis = ${peerMessageRetentionDeadline(record)}
+      WHERE owner_thread_id = ${row.owner_thread_id} AND message_id = ${row.message_id}`;
+    cursor = { owner: row.owner_thread_id, message: row.message_id };
+  }
+});
+
+/**
  * Shared SQL implementation over the adapter-owned effect_agent_message_deliveries table.
  * Required columns: owner_thread_id, message_id (composite primary key), version, state,
- * deadline_at_millis (nullable effective wake deadline), record_json. Index non-null deadlines
+ * deadline_at_millis (nullable effective wake deadline), peer_retained_until_millis, record_json. Index non-null deadlines
  * by (deadline_at_millis, owner_thread_id, message_id). No source/receiver ledger joins.
  * Before failpoints precede the atomic transaction; after failpoints run after its commit.
  */

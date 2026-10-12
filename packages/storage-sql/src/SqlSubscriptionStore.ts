@@ -58,6 +58,66 @@ const error = (reason: SubscriptionError["reason"], code: string) =>
 
 const unavailable = (operation: string) => error("storage", operation);
 const corrupt = (operation: string) => error("corrupt", operation);
+
+/** Rebuild only the observation derivative inside the adapter's atomic layout upgrade. */
+export const backfillSubscriptionSettlementObservation = Effect.fnUntraced(function* () {
+  const sql = (yield* SqlClientService.SqlClient).withoutTransforms();
+
+  const LegacyRow = Schema.Struct({
+    tenant_id: Schema.String,
+    source_address: Schema.String,
+    owner_id: Schema.String,
+    subscription_id: Schema.String,
+    event_id: Schema.String,
+    delivery_key: Schema.String,
+    state: SubscriptionDelivery.fields.state,
+    next_attempt_at_millis: SqlNumber,
+    record_json: Schema.fromJsonString(SubscriptionDelivery),
+  });
+
+  const decode = Schema.decodeUnknownEffect(Schema.Array(LegacyRow));
+
+  let cursor:
+    | { readonly tenant: string; readonly source: string; readonly delivery: string }
+    | undefined;
+
+  while (true) {
+    const rows = yield* sql`
+      SELECT tenant_id, source_address, owner_id, subscription_id, event_id,
+        delivery_key, state, next_attempt_at_millis, record_json
+      FROM effect_agent_subscription_deliveries
+      ${cursor === undefined ? sql`` : sql`WHERE (tenant_id, source_address, delivery_key) > (${cursor.tenant}, ${cursor.source}, ${cursor.delivery})`}
+      ORDER BY tenant_id, source_address, delivery_key LIMIT 1
+    `;
+
+    const [row] = yield* decode(rows).pipe(
+      Effect.mapError(() => corrupt("upgrade subscription delivery")),
+    );
+
+    if (row === undefined) return;
+    const delivery = row.record_json;
+    const key = delivery.key.subscription;
+
+    if (
+      key.partition.tenantId !== row.tenant_id ||
+      key.partition.address !== row.source_address ||
+      key.ownerId !== row.owner_id ||
+      key.subscriptionId !== row.subscription_id ||
+      delivery.key.eventId !== row.event_id ||
+      subscriptionDeliveryKeyString(delivery.key) !== row.delivery_key ||
+      delivery.state !== row.state ||
+      delivery.retry.nextAttemptAtMillis !== row.next_attempt_at_millis
+    )
+      return yield* corrupt("upgrade subscription delivery metadata");
+
+    yield* sql`UPDATE effect_agent_subscription_deliveries
+      SET observe_settlement = ${delivery.observeSettlement === true ? 1 : 0}
+      WHERE tenant_id = ${row.tenant_id} AND source_address = ${row.source_address}
+        AND delivery_key = ${row.delivery_key}`;
+    cursor = { tenant: row.tenant_id, source: row.source_address, delivery: row.delivery_key };
+  }
+});
+
 const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
 
 const validate = <A, I>(schema: Schema.Codec<A, I>, value: unknown, code: string) =>

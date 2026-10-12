@@ -1,4 +1,8 @@
-import { makeSqlSubscriptionStore } from "@yielded/agent-storage-sql/sql-subscription-store";
+import {
+  backfillSubscriptionSettlementObservation,
+  makeSqlSubscriptionStore,
+} from "@yielded/agent-storage-sql/sql-subscription-store";
+import { sameSqliteLayoutStatement } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import {
   SourcePartition,
   SubscriptionError,
@@ -64,108 +68,133 @@ const validate = <A, I>(schema: Schema.Codec<A, I>, value: unknown, code: string
 const decodeRows = <A, I>(schema: Schema.Codec<A, I>, rows: unknown, code: string) =>
   Schema.decodeUnknownEffect(Schema.Array(schema))(rows).pipe(Effect.mapError(() => corrupt(code)));
 
+const layoutStatements = [
+  "CREATE TABLE effect_agent_subscription_store_state ( singleton INTEGER PRIMARY KEY NOT NULL CHECK(singleton=1), storage_version INTEGER NOT NULL, alarm_generation INTEGER NOT NULL )",
+  "CREATE TABLE effect_agent_subscription_sequences ( tenant_id TEXT NOT NULL, source_address TEXT NOT NULL, sequence INTEGER NOT NULL, event_scan_cursor TEXT NOT NULL, delivery_scan_cursor TEXT NOT NULL, recovery_scan_cursor INTEGER NOT NULL, PRIMARY KEY (tenant_id, source_address) )",
+  "CREATE TABLE effect_agent_subscriptions ( tenant_id TEXT NOT NULL, source_address TEXT NOT NULL, owner_id TEXT NOT NULL, subscription_id TEXT NOT NULL, ordinal INTEGER NOT NULL, source_name TEXT NOT NULL, source_version TEXT NOT NULL, matching_key TEXT NOT NULL, state TEXT NOT NULL, expires_at_millis INTEGER, recovery_at_millis INTEGER, recovery_present INTEGER NOT NULL DEFAULT 0, record_json TEXT NOT NULL, PRIMARY KEY (tenant_id, source_address, owner_id, subscription_id), UNIQUE (tenant_id, source_address, ordinal) )",
+  "CREATE INDEX effect_agent_subscriptions_owner ON effect_agent_subscriptions (tenant_id, source_address, owner_id, ordinal)",
+  "CREATE INDEX effect_agent_subscriptions_capacity ON effect_agent_subscriptions (tenant_id, source_address, expires_at_millis) WHERE state IN ('active', 'paused')",
+  "CREATE INDEX effect_agent_subscriptions_owner_capacity ON effect_agent_subscriptions (tenant_id, source_address, owner_id, expires_at_millis) WHERE state IN ('active', 'paused')",
+  "CREATE INDEX effect_agent_subscriptions_candidates ON effect_agent_subscriptions (tenant_id, source_address, source_name, source_version, matching_key, ordinal)",
+  "CREATE INDEX effect_agent_subscriptions_recovery ON effect_agent_subscriptions (tenant_id, source_address, recovery_at_millis, ordinal) WHERE recovery_at_millis IS NOT NULL",
+  "CREATE TABLE effect_agent_subscription_events ( tenant_id TEXT NOT NULL, source_address TEXT NOT NULL, event_id TEXT NOT NULL, source_name TEXT NOT NULL, source_version TEXT NOT NULL, matching_key TEXT NOT NULL, payload_digest TEXT NOT NULL, cutoff INTEGER NOT NULL, cursor INTEGER NOT NULL, routing_complete INTEGER NOT NULL, tombstone INTEGER NOT NULL DEFAULT 0, next_attempt_at_millis INTEGER NOT NULL, record_json TEXT NOT NULL, PRIMARY KEY (tenant_id, source_address, event_id) )",
+  "CREATE INDEX effect_agent_subscription_events_pending ON effect_agent_subscription_events (tenant_id, source_address, routing_complete, next_attempt_at_millis, event_id)",
+  "CREATE TABLE effect_agent_subscription_deliveries ( tenant_id TEXT NOT NULL, source_address TEXT NOT NULL, owner_id TEXT NOT NULL, subscription_id TEXT NOT NULL, event_id TEXT NOT NULL, delivery_key TEXT NOT NULL, state TEXT NOT NULL, next_attempt_at_millis INTEGER NOT NULL, record_json TEXT NOT NULL, observe_settlement INTEGER NOT NULL DEFAULT 0 CHECK (observe_settlement IN (0, 1)), PRIMARY KEY (tenant_id, source_address, owner_id, subscription_id, event_id), UNIQUE (tenant_id, source_address, delivery_key) )",
+  "CREATE INDEX effect_agent_subscription_deliveries_pending ON effect_agent_subscription_deliveries (tenant_id, source_address, state, next_attempt_at_millis, delivery_key)",
+  "CREATE INDEX effect_agent_subscription_deliveries_registration ON effect_agent_subscription_deliveries (tenant_id, source_address, owner_id, subscription_id, delivery_key)",
+  "CREATE INDEX effect_agent_subscription_deliveries_capacity ON effect_agent_subscription_deliveries (tenant_id, source_address, owner_id) WHERE state IN ('selected', 'prepared')",
+  "CREATE INDEX effect_agent_subscription_deliveries_observing ON effect_agent_subscription_deliveries (tenant_id, source_address, owner_id) WHERE state='delivered' AND observe_settlement=1",
+] as const;
+
+const layoutObjects = layoutStatements.map((statement, index) => {
+  const name = /^CREATE (TABLE|INDEX) ([a-z_][a-z_0-9]*)/.exec(statement);
+
+  if (name === null) throw new Error("Invalid subscription layout statement");
+
+  return [name[1].toLowerCase(), name[2], index] as const;
+});
+
+const addedIndexes = new Set([
+  "effect_agent_subscriptions_capacity",
+  "effect_agent_subscriptions_owner_capacity",
+  "effect_agent_subscription_deliveries_capacity",
+  "effect_agent_subscription_deliveries_observing",
+]);
+
+const LayoutObject = Schema.Struct({
+  name: Schema.String,
+  type: Schema.String,
+  sql: Schema.NullOr(Schema.String),
+});
+
+/** Only the released v3 layout may upgrade; schema, backfill and version publish commit together. */
 const initializeDoSubscriptionStore = Effect.fnUntraced(function* () {
-  const sql = yield* SqlClientService.SqlClient;
+  const sql = (yield* SqlClientService.SqlClient).withoutTransforms();
+  const tables = layoutObjects.filter(([type]) => type === "table").map(([, name]) => name);
 
-  const names = yield* sql<Record<string, unknown>>`
-    SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'effect_agent_subscription_%'
-  `.pipe(Effect.mapError(() => unavailable("inspect subscription storage")));
-
-  const decodedNames = yield* decodeRows(
-    Schema.Struct({ name: Schema.String }),
-    names,
-    "inspect subscription storage",
+  const readObjects = sql`SELECT name, type, sql FROM sqlite_master
+    WHERE name GLOB 'effect_agent_subscription*' OR (type='trigger' AND tbl_name IN ${sql.in(tables)})`.pipe(
+    Effect.flatMap((rows) => decodeRows(LayoutObject, rows, "subscription storage layout")),
   );
 
-  const expected = new Set([
-    "effect_agent_subscription_store_state",
-    "effect_agent_subscription_sequences",
-    "effect_agent_subscriptions",
-    "effect_agent_subscription_events",
-    "effect_agent_subscription_deliveries",
-  ]);
-
-  const hasState = decodedNames.some(
-    ({ name }) => name === "effect_agent_subscription_store_state",
-  );
-
-  if (!hasState && decodedNames.length > 0) return yield* corrupt("partial subscription storage");
-  if (!hasState) {
-    yield* sql
-      .withTransaction(
-        Effect.gen(function* () {
-          yield* sql`CREATE TABLE effect_agent_subscription_store_state (
-        singleton INTEGER PRIMARY KEY NOT NULL CHECK(singleton=1), storage_version INTEGER NOT NULL, alarm_generation INTEGER NOT NULL
-      )`.withoutTransform;
-          yield* sql`CREATE TABLE effect_agent_subscription_sequences (
-        tenant_id TEXT NOT NULL, source_address TEXT NOT NULL, sequence INTEGER NOT NULL,
-        event_scan_cursor TEXT NOT NULL, delivery_scan_cursor TEXT NOT NULL, recovery_scan_cursor INTEGER NOT NULL,
-        PRIMARY KEY (tenant_id, source_address)
-      )`.withoutTransform;
-          yield* sql`CREATE TABLE effect_agent_subscriptions (
-        tenant_id TEXT NOT NULL, source_address TEXT NOT NULL, owner_id TEXT NOT NULL, subscription_id TEXT NOT NULL,
-        ordinal INTEGER NOT NULL, source_name TEXT NOT NULL, source_version TEXT NOT NULL, matching_key TEXT NOT NULL,
-        state TEXT NOT NULL, expires_at_millis INTEGER, recovery_at_millis INTEGER, recovery_present INTEGER NOT NULL DEFAULT 0, record_json TEXT NOT NULL,
-        PRIMARY KEY (tenant_id, source_address, owner_id, subscription_id), UNIQUE (tenant_id, source_address, ordinal)
-      )`.withoutTransform;
-          yield* sql`CREATE INDEX effect_agent_subscriptions_owner ON effect_agent_subscriptions (tenant_id, source_address, owner_id, ordinal)`
-            .withoutTransform;
-          yield* sql`CREATE INDEX effect_agent_subscriptions_capacity ON effect_agent_subscriptions (tenant_id, source_address, expires_at_millis) WHERE state IN ('active', 'paused')`
-            .withoutTransform;
-          yield* sql`CREATE INDEX effect_agent_subscriptions_owner_capacity ON effect_agent_subscriptions (tenant_id, source_address, owner_id, expires_at_millis) WHERE state IN ('active', 'paused')`
-            .withoutTransform;
-          yield* sql`CREATE INDEX effect_agent_subscriptions_candidates ON effect_agent_subscriptions (tenant_id, source_address, source_name, source_version, matching_key, ordinal)`
-            .withoutTransform;
-          yield* sql`CREATE INDEX effect_agent_subscriptions_recovery ON effect_agent_subscriptions (tenant_id, source_address, recovery_at_millis, ordinal) WHERE recovery_at_millis IS NOT NULL`
-            .withoutTransform;
-          yield* sql`CREATE TABLE effect_agent_subscription_events (
-        tenant_id TEXT NOT NULL, source_address TEXT NOT NULL, event_id TEXT NOT NULL, source_name TEXT NOT NULL,
-        source_version TEXT NOT NULL, matching_key TEXT NOT NULL, payload_digest TEXT NOT NULL, cutoff INTEGER NOT NULL,
-        cursor INTEGER NOT NULL, routing_complete INTEGER NOT NULL, tombstone INTEGER NOT NULL DEFAULT 0, next_attempt_at_millis INTEGER NOT NULL, record_json TEXT NOT NULL,
-        PRIMARY KEY (tenant_id, source_address, event_id)
-      )`.withoutTransform;
-          yield* sql`CREATE INDEX effect_agent_subscription_events_pending ON effect_agent_subscription_events (tenant_id, source_address, routing_complete, next_attempt_at_millis, event_id)`
-            .withoutTransform;
-          yield* sql`CREATE TABLE effect_agent_subscription_deliveries (
-        tenant_id TEXT NOT NULL, source_address TEXT NOT NULL, owner_id TEXT NOT NULL, subscription_id TEXT NOT NULL,
-        event_id TEXT NOT NULL, delivery_key TEXT NOT NULL, state TEXT NOT NULL, next_attempt_at_millis INTEGER NOT NULL,
-        observe_settlement INTEGER NOT NULL DEFAULT 0 CHECK (observe_settlement IN (0, 1)),
-        record_json TEXT NOT NULL, PRIMARY KEY (tenant_id, source_address, owner_id, subscription_id, event_id),
-        UNIQUE (tenant_id, source_address, delivery_key)
-      )`.withoutTransform;
-          yield* sql`CREATE INDEX effect_agent_subscription_deliveries_pending ON effect_agent_subscription_deliveries (tenant_id, source_address, state, next_attempt_at_millis, delivery_key)`
-            .withoutTransform;
-          yield* sql`CREATE INDEX effect_agent_subscription_deliveries_registration ON effect_agent_subscription_deliveries (tenant_id, source_address, owner_id, subscription_id, delivery_key)`
-            .withoutTransform;
-          yield* sql`CREATE INDEX effect_agent_subscription_deliveries_capacity ON effect_agent_subscription_deliveries (tenant_id, source_address, owner_id) WHERE state IN ('selected', 'prepared')`
-            .withoutTransform;
-          yield* sql`CREATE INDEX effect_agent_subscription_deliveries_observing ON effect_agent_subscription_deliveries (tenant_id, source_address, owner_id) WHERE state='delivered' AND observe_settlement=1`
-            .withoutTransform;
-          yield* sql`INSERT INTO effect_agent_subscription_store_state (singleton, storage_version, alarm_generation)
-        VALUES (1, ${CURRENT_SUBSCRIPTION_STORE_VERSION}, 0)`.withoutTransform;
-        }),
+  const checkLayout = Effect.fnUntraced(function* (
+    objects: ReadonlyArray<typeof LayoutObject.Type>,
+    version: number,
+  ) {
+    if (
+      objects.some(
+        ({ name, type }) =>
+          (type === "table" && !tables.includes(name)) ||
+          type === "trigger" ||
+          (version === 3 && addedIndexes.has(name)),
       )
-      .pipe(Effect.mapError(() => unavailable("initialize subscription storage")));
+    )
+      return yield* corrupt("ambiguous subscription storage layout");
+    for (const [type, name, index] of layoutObjects) {
+      if (version === 3 && addedIndexes.has(name)) continue;
 
-    return;
-  }
-  if (decodedNames.length !== expected.size || decodedNames.some(({ name }) => !expected.has(name)))
-    return yield* corrupt("subscription storage tables");
+      const expected =
+        version === 3
+          ? layoutStatements[index].replace(
+              ", observe_settlement INTEGER NOT NULL DEFAULT 0 CHECK (observe_settlement IN (0, 1))",
+              "",
+            )
+          : layoutStatements[index];
 
-  const rows = yield* sql<
-    Record<string, unknown>
-  >`SELECT storage_version, alarm_generation FROM effect_agent_subscription_store_state WHERE singleton=1`.pipe(
-    Effect.mapError(() => unavailable("read subscription storage version")),
-  );
+      const actual = objects.find((row) => row.name === name);
 
-  const state = yield* decodeRows(StoreStateRow, rows, "read subscription storage version");
+      if (
+        actual?.type !== type ||
+        actual.sql === null ||
+        !sameSqliteLayoutStatement(actual.sql, expected)
+      )
+        return yield* corrupt("incompatible subscription storage layout " + name);
+    }
+  });
 
-  if (state.length !== 1 || state[0].storage_version !== CURRENT_SUBSCRIPTION_STORE_VERSION)
-    return yield* corrupt(
-      state.length === 1
-        ? `incompatible subscription storage version ${state[0].storage_version}; expected ${CURRENT_SUBSCRIPTION_STORE_VERSION}`
-        : "invalid subscription storage version row",
-    );
+  yield* sql
+    .withTransaction(
+      Effect.gen(function* () {
+        const objects = yield* readObjects;
+
+        const hasState = objects.some(
+          ({ name }) => name === "effect_agent_subscription_store_state",
+        );
+
+        if (!hasState) {
+          if (objects.length > 0) return yield* corrupt("partial subscription storage");
+          for (const statement of layoutStatements) yield* sql.unsafe(statement).withoutTransform;
+          yield* sql`INSERT INTO effect_agent_subscription_store_state (singleton, storage_version, alarm_generation)
+        VALUES (1, ${CURRENT_SUBSCRIPTION_STORE_VERSION}, 0)`;
+
+          return;
+        }
+
+        const state = yield* decodeRows(
+          StoreStateRow,
+          yield* sql`SELECT storage_version, alarm_generation FROM effect_agent_subscription_store_state`,
+          "read subscription storage version",
+        );
+
+        if (state.length !== 1) return yield* corrupt("invalid subscription storage version row");
+        const version = state[0].storage_version;
+
+        if (version !== 3 && version !== CURRENT_SUBSCRIPTION_STORE_VERSION)
+          return yield* corrupt(
+            `incompatible subscription storage version ${version}; expected ${CURRENT_SUBSCRIPTION_STORE_VERSION}`,
+          );
+        yield* checkLayout(objects, version);
+        if (version === CURRENT_SUBSCRIPTION_STORE_VERSION) return;
+
+        yield* sql`ALTER TABLE effect_agent_subscription_deliveries ADD COLUMN observe_settlement INTEGER NOT NULL DEFAULT 0 CHECK (observe_settlement IN (0, 1))`;
+        yield* backfillSubscriptionSettlementObservation();
+        for (const [, name, index] of layoutObjects)
+          if (addedIndexes.has(name)) yield* sql.unsafe(layoutStatements[index]).withoutTransform;
+        yield* sql`UPDATE effect_agent_subscription_store_state SET storage_version=${CURRENT_SUBSCRIPTION_STORE_VERSION} WHERE singleton=1`;
+        yield* checkLayout(yield* readObjects, CURRENT_SUBSCRIPTION_STORE_VERSION);
+      }),
+    )
+    .pipe(Effect.catchTag("SqlError", () => unavailable("initialize subscription storage")));
 });
 
 const makeSubscriptionStore = Effect.fnUntraced(function* (owned: SourcePartition) {

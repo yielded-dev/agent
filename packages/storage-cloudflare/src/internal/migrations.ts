@@ -1,3 +1,4 @@
+import { backfillPeerMessageRetention } from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import { SQL_PROMPT_PREDICATE } from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
@@ -44,7 +45,7 @@ const layoutStatements = [
   'CREATE INDEX effect_agent_records_subtree ON "effect_agent_canonical_records"(thread_id, source_submission_id, sequence) WHERE record_tag = 22',
   'CREATE INDEX effect_agent_records_worker_input ON "effect_agent_canonical_records"(thread_id, message_id) WHERE record_tag = 34',
   "CREATE INDEX effect_agent_submissions_nonterminal ON effect_agent_submissions (thread_id, queue_sequence) WHERE state <> 'settled'",
-  "CREATE TABLE effect_agent_message_deliveries ( owner_thread_id TEXT NOT NULL, message_id TEXT NOT NULL, version INTEGER NOT NULL, state TEXT NOT NULL, deadline_at_millis INTEGER, peer_retained_until_millis INTEGER, record_json TEXT NOT NULL, PRIMARY KEY (owner_thread_id, message_id) )",
+  "CREATE TABLE effect_agent_message_deliveries ( owner_thread_id TEXT NOT NULL, message_id TEXT NOT NULL, version INTEGER NOT NULL, state TEXT NOT NULL, deadline_at_millis INTEGER, record_json TEXT NOT NULL, peer_retained_until_millis INTEGER, PRIMARY KEY (owner_thread_id, message_id) )",
   "CREATE INDEX effect_agent_message_deliveries_due ON effect_agent_message_deliveries (deadline_at_millis, owner_thread_id, message_id) WHERE deadline_at_millis IS NOT NULL",
   "CREATE INDEX effect_agent_message_deliveries_pending ON \"effect_agent_message_deliveries\"(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused')",
   "CREATE TABLE effect_agent_worker_stops (thread_id TEXT PRIMARY KEY NOT NULL, terminal TEXT)",
@@ -83,13 +84,14 @@ const layoutStatements = [
 const headerStatement =
   "CREATE TABLE effect_agent_schema (singleton INTEGER PRIMARY KEY NOT NULL CHECK (singleton = 1), layout_version INTEGER NOT NULL CHECK (layout_version > 0), record_format TEXT NOT NULL CHECK (length(record_format) > 0))";
 
-const layoutObjects = layoutStatements.map((statement, index) => {
-  const name = /^CREATE (TABLE|(?:UNIQUE )?INDEX|TRIGGER) "?([a-z_][a-z_0-9]*)"?/.exec(statement);
+const layoutObjects = (statements: ReadonlyArray<string>) =>
+  statements.map((statement, index) => {
+    const name = /^CREATE (TABLE|(?:UNIQUE )?INDEX|TRIGGER) "?([a-z_][a-z_0-9]*)"?/.exec(statement);
 
-  if (name === null) throw new Error("Invalid fresh layout statement");
+    if (name === null) throw new Error("Invalid fresh layout statement");
 
-  return [name[1].replace("UNIQUE ", "").toLowerCase(), name[2], index] as const;
-});
+    return [name[1].replace("UNIQUE ", "").toLowerCase(), name[2], index] as const;
+  });
 
 const Legacy = Schema.Tuple([
   Schema.Struct({
@@ -116,22 +118,42 @@ const incompatible = (actualVersion: number, message: string) =>
 const storageError = (cause: SqlError) =>
   DoStorageError.make({ operation: "inspect storage layout", cause, message: cause.message });
 
-const { decode, readObjects, readHeader } = makeSqliteLayoutInspection({
-  version: CurrentDoStorageVersion,
-  statements: layoutStatements,
-  objects: layoutObjects,
-  headerStatement,
-  incompatible,
-  storageError,
-  corruption: (table) =>
-    DoStorageCorruptionError.make({
-      table,
-      rowKey: "schema",
-      message: "Malformed storage layout or version header.",
-    }),
-});
+const inspection = (version: number, statements: ReadonlyArray<string>) =>
+  makeSqliteLayoutInspection({
+    version,
+    statements,
+    objects: layoutObjects(statements),
+    headerStatement,
+    incompatible,
+    storageError,
+    corruption: (table) =>
+      DoStorageCorruptionError.make({
+        table,
+        rowKey: "schema",
+        message: "Malformed storage layout or version header.",
+      }),
+  });
 
-const inspectStorage = Effect.fnUntraced(function* (): Effect.fn.Return<
+// Only the released predecessor is eligible; its record format and canonical tables are unchanged.
+const addedIndexes = new Set(["effect_agent_message_deliveries_peer_retained"]);
+
+const layout25Statements = layoutObjects(layoutStatements)
+  .filter(([, name]) => !addedIndexes.has(name))
+  .map(([, , index]) =>
+    layoutStatements[index]
+      .replace(", peer_retained_until_millis INTEGER", "")
+      .replace(
+        "'$.envelope.messageAdmission.peerName') IS NOT NULL",
+        "'$.envelope.messageAdmission.schemaVersion') = 1",
+      ),
+  );
+
+const { decode, readObjects, readHeader } = inspection(CurrentDoStorageVersion, layoutStatements);
+const predecessor = inspection(25, layout25Statements);
+
+const inspectStorage = Effect.fnUntraced(function* (
+  allowUpgrade = false,
+): Effect.fn.Return<
   DoStorageHeader | undefined,
   DoStorageCompatibilityError | DoStorageCorruptionError | DoStorageError,
   SqlClient.SqlClient
@@ -158,6 +180,16 @@ const inspectStorage = Effect.fnUntraced(function* (): Effect.fn.Return<
 
   const version = legacy.value;
 
+  if (allowUpgrade && version === 25) {
+    if (objects.some(({ name }) => addedIndexes.has(name)))
+      return yield* incompatible(version, "Mixed layout 25 and 26 objects.");
+    const header = yield* predecessor.readHeader(objects, version);
+
+    yield* predecessor.readManagedTriggers(true);
+
+    return header;
+  }
+
   return yield* readHeader(objects, version);
 });
 
@@ -171,15 +203,35 @@ export const readDoStorageHeader = Effect.fnUntraced(function* () {
   return header;
 });
 
-/** Validate under the writer transaction before any DDL; initialize only a fresh store. */
+/** Initialize fresh storage or atomically upgrade the exact released layout 25. */
 export const ensureDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
   return yield* sql
     .withTransaction(
       Effect.gen(function* () {
-        const header = yield* inspectStorage();
+        const header = yield* inspectStorage(true);
 
+        if (header?.layoutVersion === 25) {
+          yield* sql`ALTER TABLE effect_agent_message_deliveries ADD COLUMN peer_retained_until_millis INTEGER`;
+          yield* backfillPeerMessageRetention().pipe(
+            Effect.catchTag("MessageDeliveryError", () =>
+              DoStorageCorruptionError.make({
+                table: "effect_agent_message_deliveries",
+                rowKey: "upgrade",
+                message: "Invalid layout-25 delivery evidence; upgrade rolled back.",
+              }),
+            ),
+          );
+          yield* sql`DROP INDEX effect_agent_message_deliveries_peer`;
+          for (const [, name, index] of layoutObjects(layoutStatements))
+            if (addedIndexes.has(name) || name === "effect_agent_message_deliveries_peer")
+              yield* sql.unsafe(layoutStatements[index]).withoutTransform;
+          yield* sql`UPDATE effect_agent_schema SET layout_version=${CurrentDoStorageVersion} WHERE singleton=1`;
+          yield* sql`UPDATE effect_agent_meta SET value=${String(CurrentDoStorageVersion)} WHERE key='storage_version'`;
+
+          return yield* readDoStorageHeader();
+        }
         if (header !== undefined) return header;
         for (const statement of layoutStatements) yield* sql.unsafe(statement).withoutTransform;
         yield* createSqlThreadWorkTables().pipe(

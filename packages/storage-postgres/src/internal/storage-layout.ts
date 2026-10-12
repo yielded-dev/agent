@@ -1,4 +1,5 @@
 import { RECORD_TAGS } from "@yielded/agent-storage-sql/sql-canonical-storage";
+import { backfillPeerMessageRetention } from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import { makeSqlQuery, SqlInteger } from "@yielded/agent-storage-sql/sql-storage";
 import { SQL_PROMPT_PREDICATE } from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
@@ -14,6 +15,20 @@ import {
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
 export const CurrentPostgresStorageVersion = 26;
+
+/** The released layout 25 already has observe_settlement; only these indexes are new. */
+const layout26IndexStatements = {
+  effect_agent_subscriptions_capacity:
+    "CREATE INDEX effect_agent_subscriptions_capacity ON __NAMESPACE__.effect_agent_subscriptions (tenant_id, source_address, expires_at_millis) WHERE state IN ('active', 'paused')",
+  effect_agent_subscriptions_owner_capacity:
+    "CREATE INDEX effect_agent_subscriptions_owner_capacity ON __NAMESPACE__.effect_agent_subscriptions (tenant_id, source_address, owner_id, expires_at_millis) WHERE state IN ('active', 'paused')",
+  effect_agent_subscription_deliveries_capacity:
+    "CREATE INDEX effect_agent_subscription_deliveries_capacity ON __NAMESPACE__.effect_agent_subscription_deliveries (tenant_id, source_address, owner_id) WHERE state IN ('selected', 'prepared')",
+  effect_agent_subscription_deliveries_observing:
+    "CREATE INDEX effect_agent_subscription_deliveries_observing ON __NAMESPACE__.effect_agent_subscription_deliveries (tenant_id, source_address, owner_id) WHERE state='delivered' AND observe_settlement",
+  effect_agent_message_deliveries_peer_retained:
+    "CREATE INDEX effect_agent_message_deliveries_peer_retained ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, peer_retained_until_millis, message_id) WHERE peer_retained_until_millis IS NOT NULL",
+};
 
 /** Only live child membership changes on reservation mutations. */
 const liveChildFunctionBody = `
@@ -49,7 +64,7 @@ const liveChildTriggers = [
   },
 ] as const;
 
-/** Fresh layout only; inspection rejects every predecessor before DDL. */
+/** Fresh layout. The sole supported predecessor takes the additive step below. */
 const layoutStatements = [
   'CREATE TABLE __NAMESPACE__."effect_agent_storage_version" ( id BOOLEAN PRIMARY KEY NOT NULL, version BIGINT NOT NULL, CONSTRAINT effect_agent_storage_version_single_row CHECK (id) )',
   'CREATE TABLE __NAMESPACE__."effect_agent_threads" ( thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, created_at TEXT COLLATE "C", tail_sequence BIGINT NOT NULL, work_version BIGINT NOT NULL DEFAULT 3, work_state TEXT COLLATE "C" NOT NULL DEFAULT \'ready\', work_through_sequence BIGINT NOT NULL DEFAULT 0, work_reporting BIGINT NOT NULL DEFAULT 0, work_entry_count BIGINT NOT NULL DEFAULT 0, worker_input_sequence BIGINT, worker_settlement_sequence BIGINT )',
@@ -80,8 +95,6 @@ const layoutStatements = [
   'CREATE TABLE __NAMESPACE__."effect_agent_subscription_sequences" ( tenant_id TEXT COLLATE "C" NOT NULL, source_address TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, event_scan_cursor TEXT COLLATE "C" NOT NULL, delivery_scan_cursor TEXT COLLATE "C" NOT NULL, recovery_scan_cursor BIGINT NOT NULL, PRIMARY KEY (tenant_id, source_address) )',
   'CREATE TABLE __NAMESPACE__."effect_agent_subscriptions" ( tenant_id TEXT COLLATE "C" NOT NULL, source_address TEXT COLLATE "C" NOT NULL, owner_id TEXT COLLATE "C" NOT NULL, subscription_id TEXT COLLATE "C" NOT NULL, ordinal BIGINT NOT NULL, source_name TEXT COLLATE "C" NOT NULL, source_version TEXT COLLATE "C" NOT NULL, matching_key TEXT COLLATE "C" NOT NULL, state TEXT COLLATE "C" NOT NULL, expires_at_millis BIGINT, recovery_at_millis BIGINT, recovery_present BIGINT NOT NULL DEFAULT 0, record_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (tenant_id, source_address, owner_id, subscription_id), UNIQUE (tenant_id, source_address, ordinal) )',
   'CREATE INDEX effect_agent_subscriptions_owner ON __NAMESPACE__."effect_agent_subscriptions" (tenant_id, source_address, owner_id, ordinal)',
-  "CREATE INDEX effect_agent_subscriptions_capacity ON __NAMESPACE__.\"effect_agent_subscriptions\" (tenant_id, source_address, expires_at_millis) WHERE state IN ('active', 'paused')",
-  "CREATE INDEX effect_agent_subscriptions_owner_capacity ON __NAMESPACE__.\"effect_agent_subscriptions\" (tenant_id, source_address, owner_id, expires_at_millis) WHERE state IN ('active', 'paused')",
   'CREATE INDEX effect_agent_subscriptions_candidates ON __NAMESPACE__."effect_agent_subscriptions" (tenant_id, source_address, source_name, source_version, matching_key, ordinal)',
   'CREATE INDEX effect_agent_subscriptions_recovery ON __NAMESPACE__."effect_agent_subscriptions" (tenant_id, source_address, recovery_at_millis, ordinal) WHERE recovery_at_millis IS NOT NULL',
   'CREATE TABLE __NAMESPACE__."effect_agent_subscription_events" ( tenant_id TEXT COLLATE "C" NOT NULL, source_address TEXT COLLATE "C" NOT NULL, event_id TEXT COLLATE "C" NOT NULL, source_name TEXT COLLATE "C" NOT NULL, source_version TEXT COLLATE "C" NOT NULL, matching_key TEXT COLLATE "C" NOT NULL, payload_digest TEXT COLLATE "C" NOT NULL, cutoff BIGINT NOT NULL, cursor BIGINT NOT NULL, routing_complete BIGINT NOT NULL, tombstone BIGINT NOT NULL DEFAULT 0, next_attempt_at_millis BIGINT NOT NULL, record_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (tenant_id, source_address, event_id) )',
@@ -89,8 +102,6 @@ const layoutStatements = [
   'CREATE TABLE __NAMESPACE__."effect_agent_subscription_deliveries" ( tenant_id TEXT COLLATE "C" NOT NULL, source_address TEXT COLLATE "C" NOT NULL, owner_id TEXT COLLATE "C" NOT NULL, subscription_id TEXT COLLATE "C" NOT NULL, event_id TEXT COLLATE "C" NOT NULL, delivery_key TEXT COLLATE "C" NOT NULL, state TEXT COLLATE "C" NOT NULL, next_attempt_at_millis BIGINT NOT NULL, record_json TEXT COLLATE "C" NOT NULL, retry_parked BOOLEAN NOT NULL, observe_settlement BOOLEAN NOT NULL, PRIMARY KEY (tenant_id, source_address, owner_id, subscription_id, event_id), UNIQUE (tenant_id, source_address, delivery_key) )',
   'CREATE INDEX effect_agent_subscription_deliveries_pending ON __NAMESPACE__."effect_agent_subscription_deliveries" (tenant_id, source_address, state, next_attempt_at_millis, delivery_key)',
   'CREATE INDEX effect_agent_subscription_deliveries_registration ON __NAMESPACE__."effect_agent_subscription_deliveries" (tenant_id, source_address, owner_id, subscription_id, delivery_key)',
-  "CREATE INDEX effect_agent_subscription_deliveries_capacity ON __NAMESPACE__.\"effect_agent_subscription_deliveries\" (tenant_id, source_address, owner_id) WHERE state IN ('selected', 'prepared')",
-  "CREATE INDEX effect_agent_subscription_deliveries_observing ON __NAMESPACE__.\"effect_agent_subscription_deliveries\" (tenant_id, source_address, owner_id) WHERE state='delivered' AND observe_settlement",
   'CREATE TABLE __NAMESPACE__."effect_agent_message_deliveries" ( owner_thread_id TEXT COLLATE "C" NOT NULL, message_id TEXT COLLATE "C" NOT NULL, version BIGINT NOT NULL, state TEXT COLLATE "C" NOT NULL, deadline_at_millis BIGINT, peer_retained_until_millis BIGINT, record_json TEXT COLLATE "C" NOT NULL, read_metadata JSONB NOT NULL, PRIMARY KEY (owner_thread_id, message_id) )',
   'CREATE INDEX effect_agent_message_deliveries_due ON __NAMESPACE__."effect_agent_message_deliveries" (deadline_at_millis, owner_thread_id, message_id) WHERE deadline_at_millis IS NOT NULL',
   "CREATE INDEX effect_agent_submissions_nonterminal ON __NAMESPACE__.\"effect_agent_submissions\" (thread_id, queue_sequence) WHERE state <> 'settled'",
@@ -111,7 +122,6 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_records_worker_completed ON __NAMESPACE__.effect_agent_canonical_records(thread_id, message_id, sequence) WHERE record_tag = 32",
   "CREATE INDEX effect_agent_records_worker_stop ON __NAMESPACE__.effect_agent_canonical_records(thread_id, worker_thread_id, sequence) WHERE record_tag = 38",
   "CREATE INDEX effect_agent_message_deliveries_identity ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, (read_metadata ->> 'messageId'))",
-  "CREATE INDEX effect_agent_message_deliveries_peer_retained ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, peer_retained_until_millis, message_id) WHERE peer_retained_until_millis IS NOT NULL",
   "CREATE INDEX effect_agent_message_deliveries_peer ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused') AND (read_metadata ->> 'peer') = 'true'",
   'CREATE TABLE __NAMESPACE__.effect_agent_journal_ranges (thread_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, record_count BIGINT NOT NULL, batch_count BIGINT NOT NULL, byte_count BIGINT NOT NULL, state TEXT COLLATE "C" NOT NULL, locator TEXT COLLATE "C", PRIMARY KEY (thread_id, first_sequence), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__.effect_agent_threads(thread_id) ON DELETE RESTRICT)',
   'CREATE TABLE __NAMESPACE__.effect_agent_archive_batches (thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, range_first_sequence BIGINT NOT NULL, batch_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id, batch_id) REFERENCES __NAMESPACE__.effect_agent_canonical_batches(thread_id, batch_id) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_batches_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES __NAMESPACE__.effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)',
@@ -131,6 +141,7 @@ const layoutStatements = [
     (trigger) =>
       `CREATE TRIGGER ${trigger.name} AFTER ${trigger.event} ON __NAMESPACE__.${trigger.table} FOR EACH ROW EXECUTE FUNCTION __NAMESPACE__.effect_agent_live_child_mutation()`,
   ),
+  ...Object.values(layout26IndexStatements),
 ] as const;
 
 type LayoutConstraint =
@@ -1056,7 +1067,10 @@ export interface PostgresStorageHeader {
 }
 
 /** No DDL or transaction acquisition. The caller owns the snapshot/writer lock across subsequent work. */
-export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: string) {
+export const inspectPostgresStorage = Effect.fnUntraced(function* (
+  namespace: string,
+  allowReleasedUpgrade = false,
+) {
   const sql = yield* SqlClient.SqlClient;
   const { table, execute } = yield* makeSqlQuery(namespace);
 
@@ -1094,7 +1108,10 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
     "effect_agent_storage_version",
   );
 
-  if (legacy.version !== CurrentPostgresStorageVersion)
+  if (
+    legacy.version !== CurrentPostgresStorageVersion &&
+    !(allowReleasedUpgrade && legacy.version === 25)
+  )
     return yield* incompatible(legacy.version, `Unsupported storage version ${legacy.version}.`);
   if (schemaTable?.kind !== "r")
     return yield* incompatible(legacy.version, "Missing or malformed singleton schema table.");
@@ -1105,11 +1122,7 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
     "effect_agent_schema",
   );
 
-  if (
-    row.singleton !== 1 ||
-    row.layout_version !== CurrentPostgresStorageVersion ||
-    row.layout_version !== legacy.version
-  )
+  if (row.singleton !== 1 || row.layout_version !== legacy.version)
     return yield* incompatible(row.layout_version, "Unsupported or conflicting layout headers.");
   const header = { layoutVersion: row.layout_version, recordFormat: row.record_format };
 
@@ -1118,6 +1131,12 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
       header.layoutVersion,
       `Unsupported record format ${header.recordFormat}.`,
     );
+
+  if (
+    legacy.version === 25 &&
+    names.some((row) => Object.hasOwn(layout26IndexStatements, row.name))
+  )
+    return yield* incompatible(25, "Layout 25 contains layout 26 indexes.");
 
   const columns = yield* decode(
     ColumnRows,
@@ -1232,11 +1251,17 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
     const tableColumns = columns.filter((row) => row.name === name);
     const actualConstraints = constraints.filter((row) => row.table_name === name);
 
+    const expectedColumns =
+      legacy.version === 25 && name === "effect_agent_message_deliveries"
+        ? expected.columns.filter((column) => column !== "peer_retained_until_millis:bigint:false")
+        : expected.columns;
+
     if (
       names.find((row) => row.name === name)?.kind !== "r" ||
       !sameStrings(
-        tableColumns.map((row) => `${row.column_name}:${row.type}:${row.not_null}`),
-        expected.columns,
+        // ADD COLUMN appends physically; named-column queries do not depend on that order.
+        tableColumns.map((row) => `${row.column_name}:${row.type}:${row.not_null}`).sort(),
+        [...expectedColumns].sort(),
       ) ||
       tableColumns.some(
         (row) =>
@@ -1289,6 +1314,7 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
     }
   }
   for (const [name, expected] of Object.entries(layoutIndexes)) {
+    if (legacy.version === 25 && Object.hasOwn(layout26IndexStatements, name)) continue;
     if (
       !matchesIndex(
         indexes.find((row) => row.name === name),
@@ -1344,7 +1370,12 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
         AND t.tgqual IS NULL AND t.tgnargs=0 AND t.tgattr=''::int2vector) AS safe
     FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
     JOIN pg_proc p ON p.oid=t.tgfoid JOIN pg_namespace pn ON pn.oid=p.pronamespace
-    WHERE n.nspname=${namespace} AND starts_with(t.tgname, 'effect_agent_live_child_')`),
+    WHERE n.nspname=${namespace} AND (
+      starts_with(t.tgname, 'effect_agent_live_child_') OR (
+        ${legacy.version === 25} AND NOT t.tgisinternal
+        AND c.relname IN ${sql.in(Object.keys(expectedShape))}
+      )
+    )`),
     "pg_trigger",
   );
 
@@ -1366,8 +1397,9 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (namespace: st
         `Missing or incompatible live child trigger ${expected.name}.`,
       );
   }
+  // Backfill must not execute undeclared triggers that could rewrite retained evidence.
   if (triggers.length !== liveChildTriggers.length)
-    return yield* incompatible(legacy.version, "Unexpected live child triggers.");
+    return yield* incompatible(legacy.version, "Unexpected Thread storage triggers.");
 
   return header;
 });
@@ -1382,14 +1414,43 @@ export const readPostgresStorageHeader = Effect.fnUntraced(function* (namespace:
   return header;
 });
 
-/** The caller owns one writer transaction encompassing inspection, fresh initialization, and final validation. */
+/** The caller owns one writer transaction encompassing inspection, DDL, backfill, and both headers. */
 export const applyPostgresLayout = Effect.fnUntraced(function* (
   namespace: string,
   header: PostgresStorageHeader | undefined,
 ) {
   const sql = yield* SqlClient.SqlClient;
+  const { table, execute } = yield* makeSqlQuery(namespace);
 
-  if (header !== undefined) return header;
+  if (header !== undefined) {
+    if (header.layoutVersion === CurrentPostgresStorageVersion) return header;
+    if (header.layoutVersion !== 25)
+      return yield* incompatible(header.layoutVersion, "Unsupported layout upgrade.");
+
+    yield* execute(
+      sql`ALTER TABLE ${table("effect_agent_message_deliveries")} ADD COLUMN peer_retained_until_millis BIGINT`,
+    );
+    yield* backfillPeerMessageRetention(namespace).pipe(
+      Effect.catchTag("MessageDeliveryError", (cause) =>
+        PostgresStorageCorruptionError.make({
+          table: "effect_agent_message_deliveries",
+          rowKey: "layout-25-upgrade",
+          message: `Invalid retained delivery during layout upgrade: ${cause.operation}.`,
+        }),
+      ),
+    );
+    for (const statement of Object.values(layout26IndexStatements))
+      yield* sql.unsafe(qualify(statement, namespace)).withoutTransform;
+    yield* execute(
+      sql`UPDATE ${table("effect_agent_storage_version")} SET version=${CurrentPostgresStorageVersion} WHERE id=TRUE`,
+    );
+    yield* execute(
+      sql`UPDATE ${table("effect_agent_schema")} SET layout_version=${CurrentPostgresStorageVersion} WHERE singleton=1`,
+    );
+
+    // The enclosing transaction also rolls back DDL and backfill if final validation fails.
+    return yield* readPostgresStorageHeader(namespace);
+  }
   for (const statement of layoutStatements)
     yield* sql.unsafe(qualify(statement, namespace)).withoutTransform;
   yield* createSqlThreadWorkTables(namespace).pipe(
@@ -1398,8 +1459,6 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
     ),
   );
   yield* sql.unsafe(qualify(headerStatement, namespace)).withoutTransform;
-  const { table, execute } = yield* makeSqlQuery(namespace);
-
   yield* execute(
     sql`INSERT INTO ${table("effect_agent_storage_version")} (id, version) VALUES (TRUE, ${CurrentPostgresStorageVersion})`,
   );
