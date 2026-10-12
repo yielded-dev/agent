@@ -7,7 +7,7 @@ import {
   defaultMessageDeliveryStoreLimits,
   type MessageDeliveryStoreLimits,
 } from "@yielded/agent/message-delivery";
-import { decodeExportRecord, ExportedRecord } from "@yielded/agent/record-format";
+import { decodeExportRecordJson, ExportedRecord } from "@yielded/agent/record-format";
 import type { RecordId } from "@yielded/agent/records";
 import {
   CURRENT_RECORD_FORMAT,
@@ -285,9 +285,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     ).pipe(Effect.flatMap((value) => decode(Schema.Array(Row), value)));
 
   const envelope = Effect.fnUntraced(function* (row: typeof Row.Type) {
-    const wire = yield* json(RecordJson, row.record_json);
-
-    const record = yield* decodeExportRecord(CURRENT_RECORD_FORMAT, wire).pipe(
+    const record = yield* decodeExportRecordJson(row.record_json).pipe(
       Effect.mapError((e) => failure("decode transfer record", e)),
     );
 
@@ -685,17 +683,20 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         const records: Array<typeof ThreadExportRecord.Type> = [];
 
         for (const [index, item] of selected.entries()) {
-          if (
-            item.batch_id !== batch.batchId ||
-            item.sequence !== fromSequence + index ||
-            canonicalJson(yield* json(RecordJson, item.record_json)) !==
-              canonicalJson(batch.records[index]!)
-          )
+          if (item.batch_id !== batch.batchId || item.sequence !== fromSequence + index)
             return yield* failure(
               "export batch",
               "Canonical batch differs from its indexed records",
             );
           const entry = yield* envelope(item);
+
+          if (!(entry.record instanceof ExportedRecord))
+            return yield* failure("export batch", "Canonical wire is missing");
+          if (canonicalJson(entry.record.wire) !== canonicalJson(batch.records[index]!))
+            return yield* failure(
+              "export batch",
+              "Canonical batch differs from its indexed records",
+            );
 
           // PersistentHistory retains RunCompleted as its canonical terminal fact.
           if (
@@ -703,8 +704,6 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             entry.record.payload._tag === "RunContinuation"
           )
             return yield* failure("export batch", "Execution state is not canonical history");
-          if (!(entry.record instanceof ExportedRecord))
-            return yield* failure("export batch", "Canonical wire is missing");
           records.push(ThreadExportRecord.make({ ...entry, record: entry.record }));
         }
 

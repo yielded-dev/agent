@@ -1,6 +1,6 @@
 import { ThreadId } from "@yielded/agent/identifiers";
 import { IdempotencyKey } from "@yielded/agent/receipt";
-import { ExportRecord } from "@yielded/agent/record-format";
+import { decodeExportRecordJson } from "@yielded/agent/record-format";
 import {
   BatchId,
   RecordId,
@@ -578,7 +578,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       if (new TextEncoder().encode(row.record_json).byteLength > MAX_WORK_REBUILD_BYTES)
         return yield* failure("verify oversized pointer target");
 
-      return yield* Schema.decodeEffect(Schema.fromJsonString(ExportRecord))(row.record_json).pipe(
+      return yield* decodeExportRecordJson(row.record_json).pipe(
         Effect.mapError((cause) => failure("verify pointer target", cause)),
       );
     });
@@ -903,18 +903,14 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
             if (new TextEncoder().encode(raw.record_json).byteLength !== row.record_bytes)
               return yield* failure("rebuild canonical bytes");
 
-            const record = yield* Schema.decodeEffect(Schema.fromJsonString(ExportRecord))(
-              raw.record_json,
-            ).pipe(Effect.mapError((cause) => failure("decode rebuild record", cause)));
+            const record = yield* decodeExportRecordJson(raw.record_json).pipe(
+              Effect.mapError((cause) => failure("decode rebuild record", cause)),
+            );
 
             if (record.recordId !== row.record_id)
               return yield* failure("rebuild canonical identity");
 
-            const wire = yield* Schema.encodeEffect(ExportRecord)(record).pipe(
-              Effect.mapError((cause) => failure("encode rebuild metadata", cause)),
-            );
-
-            const metadata = canonicalRecordMetadata({ canonical: record, wire });
+            const metadata = canonicalRecordMetadata({ canonical: record, wire: record.wire });
 
             yield* query(sql`UPDATE ${table("effect_agent_canonical_records")} SET ${sql.update({ ...metadata.columns, run_id: metadata.columns.run_id === null ? null : yield* physical.run(request.threadId, metadata.columns.run_id) })}
             WHERE thread_id=${request.threadId} AND sequence=${row.sequence}`);

@@ -1,13 +1,12 @@
 import { RunId, ThreadId } from "@yielded/agent/identifiers";
-import { decodeExportRecord } from "@yielded/agent/record-format";
+import { decodeExportRecordJson } from "@yielded/agent/record-format";
 import {
   type CanonicalRecord,
   RunContinuation,
-  CURRENT_RECORD_FORMAT,
   MAX_CANONICAL_RECORD_BYTES,
   MAX_RUN_RECOVERY_SUFFIX_RECORDS,
   MAX_RUN_RECOVERY_SUFFIX_BYTES,
-  RecordJson,
+  type RecordJson,
   ObservationOffset,
   CanonicalRecordEnvelope,
   CanonicalSequence,
@@ -186,7 +185,6 @@ const failure = (operation: string, cause?: unknown) =>
     ...(cause === undefined ? {} : { cause }),
   });
 
-const decodeRecordWire = Schema.decodeEffect(Schema.fromJsonString(RecordJson));
 const decodeIdentityRequest = Schema.decodeEffect(Schema.toType(ThreadIdentityRequest));
 
 const decodeAdmissionPresence = Schema.decodeUnknownEffect(
@@ -364,9 +362,7 @@ export const makeInitialProgressRead = Effect.fnUntraced(function* (namespace?: 
       const selected = yield* makeSelectedReads(
         (row) =>
           Effect.gen(function* () {
-            const wire = yield* decodeRecordWire(row.record_json);
-
-            const record = yield* decodeExportRecord(CURRENT_RECORD_FORMAT, wire);
+            const record = yield* decodeExportRecordJson(row.record_json);
 
             return new CanonicalRecordEnvelope(
               {

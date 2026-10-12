@@ -5,7 +5,7 @@ import {
   makeSelectedReads,
   SelectedReadOwner,
 } from "@yielded/agent-storage-sql/sql-thread-native-reads";
-import { ExportRecord } from "@yielded/agent/record-format";
+import { decodeExportRecordJson } from "@yielded/agent/record-format";
 import {
   CanonicalRecordEnvelope,
   CanonicalSequence,
@@ -101,9 +101,8 @@ const isDoAppendConflict = Schema.is(DoAppendConflict);
 const isDoCheckpointConflict = Schema.is(DoCheckpointConflict);
 // Reuse the same AST/parser across reads. Reconstructing a JSON codec per row
 // defeats Schema's parser cache and repeatedly walks the canonical union.
-const CanonicalRecordJson = Schema.fromJsonString(ExportRecord);
 const ThreadCheckpointJson = Schema.fromJsonString(ThreadCheckpoint);
-const decodeCanonicalRecord = Schema.decodeEffect(CanonicalRecordJson);
+const decodeCanonicalRecord = decodeExportRecordJson;
 
 const storeError = (
   operation: string,

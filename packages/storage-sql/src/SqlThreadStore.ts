@@ -1,6 +1,6 @@
 import { utf8ByteLength, digestCanonicalJson } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
-import { ExportRecord } from "@yielded/agent/record-format";
+import { decodeExportRecordJson } from "@yielded/agent/record-format";
 import {
   CanonicalRecordEnvelope,
   CanonicalSequence,
@@ -152,8 +152,6 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   const ZERO_CANONICAL_SEQUENCE = Schema.decodeSync(CanonicalSequence)(0);
   const isAppendConflict = Schema.is(AppendConflict);
   const isCheckpointRejected = Schema.is(CheckpointRejected);
-  const canonicalRecordJson = Schema.fromJsonString(ExportRecord);
-  const decodeRecordJson = Schema.decodeEffect(canonicalRecordJson);
 
   const decodeThreadId = Schema.decodeEffect(CanonicalRecordEnvelope.fields.threadId);
   const decodeBatchId = Schema.decodeEffect(CanonicalRecordEnvelope.fields.batchId);
@@ -227,7 +225,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     readonly record_json: string;
     readonly sequence: CanonicalSequence;
   }) {
-    const record = yield* decodeRecordJson(row.record_json).pipe(
+    const record = yield* decodeExportRecordJson(row.record_json).pipe(
       Effect.mapErrorEager((error) =>
         ThreadStoreError.make({
           operation: "decode canonical record",
