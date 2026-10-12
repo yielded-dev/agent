@@ -1135,7 +1135,7 @@ export const makeReviewer = <Provider, ModelProvides, ModelRequires>(
         findings,
         summary:
           exhausted !== undefined
-            ? `Review stopped at the ${exhausted} budget. These findings cover the investigation completed before finalization; the remaining change has not been verified.`
+            ? `${cost?.stopReason === undefined ? "" : `${cost.stopReason} `}Review stopped at the ${exhausted} budget. These findings cover the investigation completed before finalization; the remaining change has not been verified.`
             : incomplete
               ? blockedOn === undefined
                 ? `${stopReason} Recorded findings are preserved; the remaining change has not been verified.`

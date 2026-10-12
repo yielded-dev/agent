@@ -609,15 +609,16 @@ describe("review provider boundary", () => {
 
   // PR #862's completed Action hid its accounting refusal behind "Review incomplete".
   // Force that provider boundary here: a live model cannot reliably produce the violation.
-  it.effect.each(["complete", "cost-finding", "provider-accounting"] as const)(
+  it.effect.each(["complete", "cost-finding", "provider-accounting", "preflight-count"] as const)(
     "recovers an automatic review after a rebase with outcome %s under the same cap",
     (outcome) =>
       Effect.gen(function* () {
         const complete = outcome.startsWith("complete");
         const accountingFailure = outcome === "provider-accounting";
+        const countingFailure = outcome === "preflight-count";
         const inputTokens = 70_000;
         const hasFinding = outcome.endsWith("finding");
-        const checkEnabled = accountingFailure || outcome.startsWith("cost");
+        const checkEnabled = accountingFailure || countingFailure || outcome.startsWith("cost");
         const checkWrites: Array<Schema.Json> = [];
 
         const published: Array<{
@@ -668,10 +669,12 @@ describe("review provider boundary", () => {
               });
             }
             if (url.pathname === "/v1/responses/input_tokens")
-              return json(httpRequest, {
-                object: "response.input_tokens",
-                input_tokens: inputTokens,
-              });
+              return json(
+                httpRequest,
+                countingFailure
+                  ? {}
+                  : { object: "response.input_tokens", input_tokens: inputTokens },
+              );
             if (url.pathname === "/v1/responses") {
               modelCalls += 1;
               sent.push(decodeWire(httpRequest));
@@ -866,7 +869,7 @@ describe("review provider boundary", () => {
           Effect.exit,
         );
 
-        expect(Exit.isSuccess(exit)).toBe(complete || checkEnabled);
+        expect(Exit.isSuccess(exit)).toBe(!countingFailure && (complete || checkEnabled));
         if (checkEnabled)
           expect(checkWrites).toEqual([
             expect.objectContaining({ head_sha: "head", status: "in_progress" }),
@@ -877,21 +880,27 @@ describe("review provider boundary", () => {
           ]);
         if (Exit.isFailure(exit)) {
           expect(Option.getOrUndefined(Cause.findErrorOption(exit.cause))).toMatchObject({
-            _tag: hasFinding ? "BlockingFindings" : "ReviewAttemptIncomplete",
+            _tag: countingFailure
+              ? "AiError"
+              : hasFinding
+                ? "BlockingFindings"
+                : "ReviewAttemptIncomplete",
           });
         }
-        expect(modelCalls).toBe(1);
+        expect(modelCalls).toBe(countingFailure ? 0 : 1);
         const userInput = JSON.stringify(sent[0]?.input.filter((item) => item.role === "user"));
 
-        expect(userInput).toContain(rebuttal);
-        expect(userInput).toContain(reply);
-        expect(userInput).toContain(dismissal);
-        expect(userInput).toContain("maintainer");
-        expect(userInput).toContain(`${discussionUrl}#issuecomment-10`);
-        expect(userInput).not.toContain("Unrelated human-review dismissal sentinel");
-        expect(JSON.stringify(sent[0]?.input.filter((item) => item.role !== "user"))).not.toContain(
-          rebuttal,
-        );
+        if (!countingFailure) {
+          expect(userInput).toContain(rebuttal);
+          expect(userInput).toContain(reply);
+          expect(userInput).toContain(dismissal);
+          expect(userInput).toContain("maintainer");
+          expect(userInput).toContain(`${discussionUrl}#issuecomment-10`);
+          expect(userInput).not.toContain("Unrelated human-review dismissal sentinel");
+          expect(
+            JSON.stringify(sent[0]?.input.filter((item) => item.role !== "user")),
+          ).not.toContain(rebuttal);
+        }
         expect(published).toHaveLength(1);
         expect(published[0]).toMatchObject({
           commit_id: "head",
@@ -899,9 +908,14 @@ describe("review provider boundary", () => {
         });
         expect(published[0]?.comments).toHaveLength(hasFinding ? 1 : 0);
         expect(published[0]?.body).toContain(reviewMarker(true, complete));
-        if (accountingFailure) {
-          const reason =
-            "Provider input usage (272001 tokens) exceeded the reserved 272000-token pricing allowance.";
+        if (hasFinding)
+          expect(published[0]?.body).toContain(
+            "No paid request fits; deliver recorded findings without inference.",
+          );
+        if (accountingFailure || countingFailure) {
+          const reason = countingFailure
+            ? "Unable to count the review input before paid inference."
+            : "Provider input usage (272001 tokens) exceeded the reserved 272000-token pricing allowance.";
 
           expect(published[0]?.body).toContain(reason);
           expect(checkWrites.at(-1)).toMatchObject({
