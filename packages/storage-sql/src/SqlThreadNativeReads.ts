@@ -823,13 +823,13 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
               const candidates = boundedCandidates(
                 sql,
                 [
-                  sql`SELECT thread_id, sequence, record_id, ${recordBatchId(sql, namespace)} AS batch_id, ${recordJson} AS record_json
+                  sql`SELECT sequence
                   FROM ${relation("effect_agent_canonical_records")}
                   WHERE thread_id=${request.threadId} AND record_id=${JSON.stringify(selection.originRecordId)}
                     AND sequence>${after} AND sequence<=${selection.throughSequence}`,
                   ...tags.map(
                     (tag) => sql`SELECT * FROM (
-                  SELECT thread_id, sequence, record_id, ${recordBatchId(sql, namespace)} AS batch_id, ${recordJson} AS record_json
+                  SELECT sequence
                   FROM ${relation("effect_agent_canonical_records")} ${recoveryIndex(sql, "effect_agent_records_call")}
                   WHERE thread_id=${request.threadId} AND record_tag=${RECORD_TAGS[tag]}
                     AND run_id=${runKey(sql, sql`${request.threadId}`, sql`${canonicalIdentifier(selection.runId)}`, namespace)}
@@ -847,8 +847,15 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
                 true,
               );
 
-              rows = yield* sql`WITH approval_calls AS (${approvalCalls})
-                ${candidates} ORDER BY sequence LIMIT ${request.page.limit}`.pipe(execute);
+              rows =
+                yield* sql`WITH approval_calls AS (${approvalCalls}), evidence AS MATERIALIZED (
+                  ${candidates} ORDER BY sequence LIMIT ${request.page.limit}
+                )
+                SELECT canonical.thread_id, canonical.sequence, canonical.record_id, ${recordBatchId(sql, namespace, "canonical")} AS batch_id, ${membershipJson} AS record_json
+                FROM evidence
+                LEFT JOIN ${relation("effect_agent_canonical_records")} AS canonical
+                  ON canonical.thread_id=${request.threadId} AND canonical.sequence=evidence.sequence
+                ORDER BY evidence.sequence`.pipe(execute);
               break;
             }
             case "RecordId":
