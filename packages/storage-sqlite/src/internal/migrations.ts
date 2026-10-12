@@ -1,7 +1,10 @@
 import { backfillPeerMessageRetention } from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import { makeSqlTransaction } from "@yielded/agent-storage-sql/sql-storage";
 import { backfillSubscriptionSettlementObservation } from "@yielded/agent-storage-sql/sql-subscription-store";
-import { SQL_PROMPT_PREDICATE } from "@yielded/agent-storage-sql/sql-thread-native-reads";
+import {
+  SQL_PROMPT_PREDICATE,
+  upgradeExecutionCheckpoints,
+} from "@yielded/agent-storage-sql/sql-thread-native-reads";
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
@@ -15,7 +18,7 @@ import {
   SqliteStorageError,
 } from "../SqliteStorageError.ts";
 
-export const CurrentSqliteStorageVersion = 26;
+export const CurrentSqliteStorageVersion = 27;
 
 /** Fresh layout only. Unsupported stores are rejected before these statements execute. */
 const layoutStatements = [
@@ -143,7 +146,7 @@ const inspection = (version: number, statements: ReadonlyArray<string>) =>
       }),
   });
 
-// Only the released predecessor is eligible; its record format and canonical tables are unchanged.
+// Released predecessors retain the same record format and canonical tables.
 const addedIndexes = new Set([
   "effect_agent_message_deliveries_peer_retained",
   "effect_agent_subscriptions_capacity",
@@ -172,7 +175,8 @@ const { decode, readObjects, readHeader, readManagedTriggers } = inspection(
   layoutStatements,
 );
 
-const predecessor = inspection(25, layout25Statements);
+const layout25 = inspection(25, layout25Statements);
+const layout26 = inspection(26, layoutStatements);
 
 const inspectStorage = Effect.fnUntraced(function* (
   allowUpgrade = false,
@@ -195,9 +199,10 @@ const inspectStorage = Effect.fnUntraced(function* (
 
   if (version === 0 && objects.length === 0) return undefined;
 
-  if (allowUpgrade && version === 25) {
-    if (objects.some(({ name }) => addedIndexes.has(name)))
+  if (allowUpgrade && (version === 25 || version === 26)) {
+    if (version === 25 && objects.some(({ name }) => addedIndexes.has(name)))
       return yield* incompatible(version, "Mixed layout 25 and 26 objects.");
+    const predecessor = version === 25 ? layout25 : layout26;
     const header = yield* predecessor.readHeader(objects, version);
 
     yield* predecessor.readManagedTriggers(true);
@@ -225,7 +230,7 @@ export const readSqliteStorageHeader = Effect.fnUntraced(function* () {
   return header;
 });
 
-/** Initialize fresh storage or atomically upgrade the exact released layout 25. */
+/** Initialize fresh storage or atomically upgrade the exact released layouts 25 and 26. */
 export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayout")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
@@ -266,6 +271,17 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayo
         for (const [, name, index] of layoutObjects(layoutStatements))
           if (addedIndexes.has(name) || name === "effect_agent_message_deliveries_peer")
             yield* sql.unsafe(layoutStatements[index]).withoutTransform;
+      }
+      if (header?.layoutVersion === 25 || header?.layoutVersion === 26) {
+        yield* upgradeExecutionCheckpoints(undefined).pipe(
+          Effect.catchTag("ThreadStoreError", (cause) =>
+            SqliteStorageCorruptionError.make({
+              table: "effect_agent_executions",
+              rowKey: "upgrade",
+              message: `Invalid retained execution; upgrade rolled back: ${cause.message}`,
+            }),
+          ),
+        );
         yield* sql`UPDATE effect_agent_schema SET layout_version=${CurrentSqliteStorageVersion} WHERE singleton=1`;
         yield* sql.unsafe(`PRAGMA user_version = ${CurrentSqliteStorageVersion}`).withoutTransform;
 

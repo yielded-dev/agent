@@ -16,7 +16,6 @@ import {
 } from "@yielded/agent/thread-import";
 import {
   AppendConflict,
-  ExecutionCheckpoint,
   AppendResult,
   CheckpointRejected,
   ThreadCheckpoint,
@@ -70,8 +69,6 @@ export interface SqlThreadStoreOptions<
   readonly offsetPrefix: string;
 }
 
-const encodeExecutionCheckpoint = Schema.encodeSync(Schema.fromJsonString(ExecutionCheckpoint));
-
 const encodeOperationalFacts = Schema.encodeSync(
   Schema.fromJsonString(Schema.Array(RecordEnvelope)),
 );
@@ -121,12 +118,7 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
     ),
   );
 
-  const executionWrites = captured.executionWrites.map((write) =>
-    Object.freeze({
-      ...write,
-      checkpointJson: encodeExecutionCheckpoint(write.update.checkpoint),
-    }),
-  );
+  const executionWrites = captured.executionWrites;
 
   const commitDigest = yield* sqlCommitIntentDigest(
     captured.batchJson,

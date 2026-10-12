@@ -2,7 +2,7 @@ import { RunId, ThreadId } from "@yielded/agent/identifiers";
 import { decodeExportRecord } from "@yielded/agent/record-format";
 import {
   type CanonicalRecord,
-  type RunContinuation,
+  RunContinuation,
   CURRENT_RECORD_FORMAT,
   MAX_CANONICAL_RECORD_BYTES,
   MAX_RUN_RECOVERY_SUFFIX_RECORDS,
@@ -260,6 +260,69 @@ export const decodeStoredExecution = Effect.fnUntraced(function* (
 
   return checkpoint;
 });
+
+/**
+ * Convert released checkpoint v1 rows inside the adapter's layout transaction. Both progress
+ * copies must agree before one is discarded. History, accounting and retry intent stay intact.
+ */
+export const upgradeExecutionCheckpoints = Effect.fnUntraced(
+  function* (namespace: string | undefined) {
+    const sql = yield* SqlClient.SqlClient;
+    const { table, execute } = yield* makeSqlQuery(namespace);
+
+    const legacyCheckpoint = Schema.Struct({
+      ...ExecutionCheckpoint.fields,
+      version: Schema.Literal(1),
+      progress: RunContinuation,
+    });
+
+    const decodeCheckpoint = Schema.decodeEffect(Schema.fromJsonString(legacyCheckpoint), {
+      onExcessProperty: "error",
+    });
+
+    const encodeCheckpoint = Schema.encodeEffect(Schema.fromJsonString(ExecutionCheckpoint));
+    const equalProgress = Schema.toEquivalence(RunContinuation);
+
+    const decodeRows = Schema.decodeUnknownEffect(
+      Schema.Array(Schema.Struct({ ...StoredExecution.fields, stored_run_id: Schema.String })),
+    );
+
+    let after: { readonly thread_id: string; readonly stored_run_id: string } | undefined;
+
+    while (true) {
+      const rows = yield* decodeRows(
+        yield* execute(sql`SELECT thread_id, run_id, run_id AS stored_run_id, input_sequence,
+        revision, checkpoint_json, last_commit_id, last_commit_digest
+        FROM ${table("effect_agent_executions")}
+        WHERE ${after === undefined ? sql.literal("TRUE") : sql`(thread_id, run_id) > (${after.thread_id}, ${after.stored_run_id})`}
+        ORDER BY thread_id, run_id LIMIT 32`),
+      );
+
+      for (const row of rows) {
+        const legacy = yield* decodeCheckpoint(row.checkpoint_json);
+
+        if (!equalProgress(legacy.progress, legacy.progressRecord.payload))
+          return yield* failure("upgrade execution with conflicting progress copies");
+
+        const { progress: _progress, ...fields } = legacy;
+        const checkpoint = yield* ExecutionCheckpoint.makeEffect({ ...fields, version: 2 });
+        const json = yield* encodeCheckpoint(checkpoint);
+
+        yield* decodeStoredExecution({ ...row, checkpoint_json: json });
+
+        const changed = yield* execute(sql`UPDATE ${table("effect_agent_executions")}
+        SET checkpoint_json=${json}
+        WHERE thread_id=${row.thread_id} AND run_id=${row.stored_run_id}
+        RETURNING thread_id`);
+
+        if (changed.length !== 1) return yield* failure("upgrade execution identity changed");
+        after = row;
+      }
+      if (rows.length < 32) return;
+    }
+  },
+  Effect.mapError((cause) => failure("upgrade active execution", cause)),
+);
 
 /** This read never synthesizes canonical history. */
 export const makeExecutionRead = Effect.fnUntraced(function* (namespace?: string) {

@@ -198,10 +198,12 @@ const makeWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
             for (let retries = 0; ; retries++) {
               const result = yield* store
                 .append(
-                  AppendRequest.make({
-                    ...captured,
-                    expectedTailSequence: tail.sequence,
-                  }),
+                  captured.expectedTailSequence === tail.sequence
+                    ? captured
+                    : AppendRequest.make({
+                        ...captured,
+                        expectedTailSequence: tail.sequence,
+                      }),
                 )
                 .pipe(
                   Effect.catchTag("AppendConflict", (conflict) => {

@@ -7,8 +7,11 @@ import { canonicalJson, digestCanonicalJson, utf8ByteLength } from "../Digest.ts
 import {
   CanonicalSequence,
   CURRENT_RECORD_FORMAT,
+  PromptRecord,
   type CanonicalRecordEnvelope,
   type Digest,
+  type PromptRecordEnvelope,
+  type RecordEnvelope,
 } from "../Records.ts";
 import { CurrentRunWriter } from "../RunContinuation.ts";
 import { projectRunJournalStream, RunJournalError } from "../RunJournal.ts";
@@ -22,6 +25,7 @@ import {
 } from "../ThreadStore.ts";
 import type { JournalRecordEnvelope } from "./journal-metadata.ts";
 import { promptJsonFootprint } from "./prompt-footprint.ts";
+import { captureRecord } from "./record-encoding.ts";
 import { digestRunHistory } from "./run-context.ts";
 
 // One Scope-owned Thread, including native values and encoded text. Compaction reconstructs
@@ -35,6 +39,7 @@ const COLD_SUFFIX_PAGE_RECORDS = 8;
 const JSON_PREFIX = '{"content":[';
 const encodePrompt = Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt));
 const parseJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
+const decodeCommittedPromptRecord = Schema.decodeUnknownSync(PromptRecord);
 
 // Construct these only when a persisted checkpoint is read. The encoded-side schema
 // validates without running native defaults for every historical message and part.
@@ -222,6 +227,135 @@ export const digestPromptHistory = (prompt: Prompt.Prompt, history: PromptHistor
 /** Writer identity is data; effectful writer ports stay in Effect context. */
 type WriterIdentity = Pick<RunWriter, "threadId">;
 
+const suffixRecordFootprint = (entry: PromptRecordEnvelope, allowance: number) => {
+  const payload = entry.record.payload;
+
+  return boundedValueFootprint(
+    {
+      ...entry,
+      record: {
+        ...entry.record,
+        payload:
+          payload._tag === "ModelResponseRecorded"
+            ? { ...payload, messages: payload.messages.content }
+            : { ...payload },
+      },
+    },
+    Math.floor(allowance / 32),
+  );
+};
+
+/**
+ * Attempt-local prompt facts, seeded by the original committed input and extended only by
+ * acknowledged, consecutive appends. Never authority for writes or recovery; any uncertainty
+ * discards this derivative and completion rereads canonical history.
+ */
+export const makeCommittedPromptSuffix = (original: CanonicalRecordEnvelope) => {
+  const records: Array<PromptRecordEnvelope> = [];
+
+  const runId =
+    original.record.payload._tag === "UserInputRecorded"
+      ? original.record.payload.runId
+      : undefined;
+
+  let through = original.sequence - 1;
+  let remaining = MAX_BYTES;
+  let valid = runId !== undefined;
+
+  const discard = () => {
+    valid = false;
+    records.length = 0;
+  };
+
+  const append = (
+    facts: ReadonlyArray<RecordEnvelope>,
+    result: {
+      readonly firstSequence: CanonicalSequence;
+      readonly lastSequence: CanonicalSequence;
+      readonly replayed: boolean;
+    },
+  ) => {
+    if (!valid) return;
+    if (
+      result.replayed ||
+      result.firstSequence !== through + (facts.length === 0 ? 0 : 1) ||
+      result.lastSequence !== through + facts.length ||
+      records.length + facts.length > MAX_SUFFIX_RECORDS
+    ) {
+      discard();
+
+      return;
+    }
+    // Prepared append facts already have privately frozen encodings; the original input and
+    // winning settlement are captured here before retention. Decode the same prompt projection
+    // as readPrompt, never raw provider values. Failure invalidates this derivative, not the commit.
+    try {
+      for (const fact of facts) {
+        const owned = captureRecord(fact);
+        const payload = owned.canonical.payload;
+
+        if (
+          payload._tag !== "UserInputRecorded" &&
+          payload._tag !== "ModelResponseRecorded" &&
+          payload._tag !== "ToolCallSettled" &&
+          payload._tag !== "SubmissionSettled"
+        ) {
+          discard();
+
+          return;
+        }
+        if (
+          payload._tag === "UserInputRecorded" &&
+          (records.length !== 0 || payload.kind !== "user")
+        ) {
+          discard();
+
+          return;
+        }
+        if (payload.runId !== runId) {
+          discard();
+
+          return;
+        }
+
+        const entry: PromptRecordEnvelope = {
+          threadId: original.threadId,
+          sequence: CanonicalSequence.make(through + 1),
+          record: decodeCommittedPromptRecord(owned.wire),
+        };
+
+        const footprint = suffixRecordFootprint(entry, remaining);
+
+        if (footprint === undefined) {
+          discard();
+
+          return;
+        }
+        remaining -= 32 * footprint;
+        records.push(entry);
+        through++;
+      }
+    } catch {
+      discard();
+    }
+  };
+
+  append([original.record], {
+    firstSequence: original.sequence,
+    lastSequence: original.sequence,
+    replayed: false,
+  });
+
+  return {
+    append,
+    discard,
+    take: (sequence: CanonicalSequence): ReadonlyArray<PromptRecordEnvelope> | undefined =>
+      valid && sequence === through ? records : undefined,
+  };
+};
+
+export type CommittedPromptSuffix = ReturnType<typeof makeCommittedPromptSuffix>;
+
 /** Fold only complete, sequential Runs. Raw facts and encoded/native messages are bounded. */
 const readSuffix = Effect.fnUntraced(function* (
   writer: WriterIdentity,
@@ -231,6 +365,7 @@ const readSuffix = Effect.fnUntraced(function* (
   allowance: number,
   firstThrough: CanonicalSequence,
   pageRecords = 1,
+  committed?: ReadonlyArray<PromptRecordEnvelope>,
 ) {
   const store = yield* ThreadStore;
   const records: Array<JournalRecordEnvelope> = [];
@@ -240,18 +375,23 @@ const readSuffix = Effect.fnUntraced(function* (
   let runs = 0;
 
   while (after < through) {
-    const page = yield* store
-      .readPrompt(
-        ThreadPromptRead.make({
-          threadId: writer.threadId,
-          afterSequence: after,
-          throughSequence: through,
-          limit: pageRecords,
-        }),
-      )
-      .pipe(Stream.take(pageRecords + 1), Stream.runCollect);
+    const page =
+      committed ??
+      (yield* store
+        .readPrompt(
+          ThreadPromptRead.make({
+            threadId: writer.threadId,
+            afterSequence: after,
+            throughSequence: through,
+            limit: pageRecords,
+          }),
+        )
+        .pipe(Stream.take(pageRecords + 1), Stream.runCollect));
 
-    if (page.length > pageRecords || records.length + page.length > MAX_SUFFIX_RECORDS)
+    if (
+      (committed === undefined && page.length > pageRecords) ||
+      records.length + page.length > MAX_SUFFIX_RECORDS
+    )
       return undefined;
     for (const entry of page) {
       const payload = entry.record.payload;
@@ -286,19 +426,7 @@ const readSuffix = Effect.fnUntraced(function* (
 
       // This native-value guard only visits a bounded new suffix. Reserve encoding/escape
       // copies before collecting it; the full encoded prefix uses the JSON-specific counter.
-      const footprint = boundedValueFootprint(
-        {
-          ...entry,
-          record: {
-            ...entry.record,
-            payload:
-              payload._tag === "ModelResponseRecorded"
-                ? { ...payload, messages: payload.messages.content }
-                : { ...payload },
-          },
-        },
-        Math.floor(remaining / 32),
-      );
+      const footprint = suffixRecordFootprint(entry, remaining);
 
       if (footprint === undefined) return undefined;
       remaining -= 32 * footprint;
@@ -419,7 +547,12 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* () {
   );
 
   const complete = Effect.fnUntraced(
-    function* (writer: WriterIdentity, original: CanonicalRecordEnvelope, history: PromptHistory) {
+    function* (
+      writer: WriterIdentity,
+      original: CanonicalRecordEnvelope,
+      history: PromptHistory,
+      committed?: CommittedPromptSuffix,
+    ) {
       const { encoded, bytes, digest } = history;
       const input = original.record.payload;
 
@@ -442,6 +575,8 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* () {
         input.runId,
         MAX_BYTES - bytes,
         tail.sequence,
+        1,
+        committed?.take(tail.sequence),
       );
 
       if (

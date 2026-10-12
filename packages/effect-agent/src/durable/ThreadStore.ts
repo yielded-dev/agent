@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Option, Result, Schema, Stream, Struct } from "effect";
+import { Context, Effect, Layer, Option, Predicate, Result, Schema, Stream, Struct } from "effect";
 
 import { ReceiptId, RunId, SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
@@ -29,7 +29,7 @@ import {
   ProducerId,
   RecordId,
   RecordEnvelope,
-  RunContinuation,
+  type RunContinuation,
 } from "./Records.ts";
 import { subagentLineageRecordId, workerOriginRecordId } from "./RunJournal.ts";
 import { ScheduleInstant } from "./Schedule.ts";
@@ -278,14 +278,22 @@ export class ThreadMaterialization extends Schema.Class<ThreadMaterialization>(
   threadId: ThreadId,
 }) {}
 
-/** Current interpreter state, not an append-only history record or a disposable projection. */
+const isExecutionProgressRecord = (
+  record: RecordEnvelope,
+): record is RecordEnvelope & { readonly payload: RunContinuation } =>
+  record.payload._tag === "RunContinuation";
+
+const ExecutionProgressRecord = RecordEnvelope.pipe(
+  Schema.refine(isExecutionProgressRecord, { message: "Expected a Run continuation record" }),
+);
+
+/** Current interpreter state. Wire version 2 retains one copy of its continuation. */
 export class ExecutionCheckpoint extends Schema.Class<ExecutionCheckpoint>(
   "@effect-agent/thread/ExecutionCheckpoint",
 )({
-  version: Schema.Literal(1),
-  progress: RunContinuation,
+  version: Schema.Literal(2),
   /** Logical progress encoding is charged while active; previous revisions are discarded. */
-  progressRecord: RecordEnvelope,
+  progressRecord: ExecutionProgressRecord,
   /** Original start, evaluated context and validated completion intent while the Run is active. */
   operational: Schema.Array(RecordEnvelope).check(Schema.isMaxLength(8)),
   canonicalRecords: Schema.Natural,
@@ -293,7 +301,12 @@ export class ExecutionCheckpoint extends Schema.Class<ExecutionCheckpoint>(
   originalSequence: CanonicalSequence.check(Schema.isGreaterThan(0)),
   throughSequence: CanonicalSequence,
   batchId: BatchId,
-}) {}
+}) {
+  /** View of the retained payload, not a second encoded field. */
+  get progress(): RunContinuation {
+    return this.progressRecord.payload;
+  }
+}
 
 /** A revision-checked transition committed by the same owner as the retained history facts. */
 export class ExecutionUpdate extends Schema.Class<ExecutionUpdate>(
@@ -345,7 +358,7 @@ const validateRecordCount = Schema.decodeUnknownSync(
 
 const executionJson = Schema.fromJsonString(ExecutionUpdate);
 const encodeExecution = Schema.encodeSync(executionJson);
-const decodeExecution = Schema.decodeSync(executionJson);
+const decodeExecution = Schema.decodeUnknownSync(ExecutionUpdate);
 
 const capturedAppends = new WeakMap<AppendRequest, PreparedAppend>();
 
@@ -392,6 +405,8 @@ export interface PreparedAppend extends AppendRequest {
   readonly executionWrites: ReadonlyArray<{
     readonly update: ExecutionUpdate;
     readonly json: string;
+    /** Checkpoint wire from the same detached, validated execution capture. */
+    readonly checkpointJson: string;
     readonly bytes: number;
   }>;
   readonly records: ReadonlyArray<{
@@ -424,10 +439,19 @@ export const PreparedAppend = {
           const executionWrites = Object.freeze(
             (input.executions ?? []).map((update) => {
               const json = encodeExecution(update);
+              const wire: unknown = JSON.parse(json);
+              const decoded = decodeExecution(wire);
+
+              if (!Predicate.hasProperty(wire, "checkpoint"))
+                throw ThreadStoreError.make({
+                  operation: "prepare durable commit",
+                  message: "Captured execution has no checkpoint wire",
+                });
 
               return Object.freeze({
-                update: decodeExecution(json),
+                update: decoded,
                 json,
+                checkpointJson: JSON.stringify(wire.checkpoint),
                 bytes: utf8ByteLength(json),
               });
             }),
