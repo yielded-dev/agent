@@ -94,6 +94,7 @@ import {
   boundHostDiagnostic,
   decodeAbortCommand,
   decodeAwaitProgressRequest,
+  decodeAwaitSettlementRequest,
   decodeCancelProgressRequest,
   decodeApprovalDecisionCommand,
   decodeObservePageRequest,
@@ -558,7 +559,7 @@ const awaitSettlementEndpoint = (
   encoded: unknown,
   includeRecord = false,
 ): Effect.Effect<unknown, never, EndpointServices> =>
-  decodeReceipt(encoded).pipe(
+  decodeAwaitSettlementRequest(encoded).pipe(
     Effect.mapError(protocolFailure("The receipt could not be decoded")),
     Effect.flatMap((receipt) =>
       Effect.gen(function* () {
@@ -582,12 +583,30 @@ const awaitSettlementEndpoint = (
         yield* requireSubmissionThread(receipt.submissionId);
         const runtime = yield* DurableAgentRuntime;
 
-        if (includeRecord)
-          return SettlementRecordReached.make({
-            record: yield* runtime.awaitSettlementRecord(receipt),
-          });
+        const wait = Effect.gen(function* () {
+          if (includeRecord)
+            return SettlementRecordReached.make({
+              record: yield* runtime.awaitSettlementRecord(receipt),
+            });
 
-        return SettlementReached.make({ settlement: yield* runtime.awaitSettlement(receipt) });
+          return SettlementReached.make({ settlement: yield* runtime.awaitSettlement(receipt) });
+        });
+
+        if (receipt.waiterId === undefined) return yield* wait;
+        const registry = yield* ProgressWaitRegistry;
+
+        return yield* Effect.scoped(
+          Effect.gen(function* () {
+            const cancelled = yield* registry.subscribe(
+              JSON.stringify([receipt.threadId, receipt.waiterId]),
+            );
+
+            return yield* Effect.raceFirst(
+              wait,
+              cancelled.pipe(Effect.as(ProgressCancelled.make())),
+            );
+          }),
+        );
       }),
     ),
     respond,

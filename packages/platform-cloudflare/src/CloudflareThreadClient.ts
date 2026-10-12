@@ -144,6 +144,13 @@ export class ObservePageRequest extends Schema.Class<ObservePageRequest>(
   limit: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(1_024)),
 }) {}
 
+/** Receipt-shaped observation request; the optional identity owns only the remote wait. */
+export class AwaitSettlementRequest extends Receipt.extend<AwaitSettlementRequest>(
+  "@effect-agent/platform-cloudflare/AwaitSettlementRequest",
+)({
+  waiterId: Schema.optionalKey(Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(256))),
+}) {}
+
 /** One event-driven wait for canonical progress strictly after this sequence. */
 export class AwaitProgressRequest extends Schema.Class<AwaitProgressRequest>(
   "@effect-agent/platform-cloudflare/AwaitProgressRequest",
@@ -152,7 +159,7 @@ export class AwaitProgressRequest extends Schema.Class<AwaitProgressRequest>(
   waiterId: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(256)),
 }) {}
 
-/** Best-effort cancellation of one in-flight progress RPC. */
+/** Best-effort cancellation of one in-flight progress or settlement observation. */
 export class CancelProgressRequest extends Schema.Class<CancelProgressRequest>(
   "@effect-agent/platform-cloudflare/CancelProgressRequest",
 )({
@@ -280,6 +287,8 @@ export const decodeSubmitRequest = Schema.decodeUnknownEffect(SubmitRequest);
 export const encodeSubmitRequest = Schema.encodeEffect(SubmitRequest);
 export const decodeReceipt = Schema.decodeUnknownEffect(Receipt);
 export const encodeReceipt = Schema.encodeEffect(Receipt);
+export const decodeAwaitSettlementRequest = Schema.decodeUnknownEffect(AwaitSettlementRequest);
+export const encodeAwaitSettlementRequest = Schema.encodeEffect(AwaitSettlementRequest);
 export const decodeObservePageRequest = Schema.decodeUnknownEffect(ObservePageRequest);
 export const encodeObservePageRequest = Schema.encodeEffect(ObservePageRequest);
 export const decodeAwaitProgressRequest = Schema.decodeUnknownEffect(AwaitProgressRequest);
@@ -528,11 +537,16 @@ export class CloudflareThreadClient extends Context.Service<
     readonly submissionStatus: (
       receipt: Receipt,
     ) => Effect.Effect<SubmissionStatus, ClientAwaitFailure>;
+    /**
+     * Wait for settlement; interruption spends at most one second cancelling the remote
+     * observation best effort. Cancellation never aborts the admitted Run.
+     */
     readonly awaitSettlement: (receipt: Receipt) => Effect.Effect<Settlement, ClientAwaitFailure>;
     /**
      * Wait for finalization and return this Receipt's canonical terminal record in one RPC.
      * Requires both settlement and observation authority. Decode an ordinary completed
      * record's result through the Agent output Schema; joined completion may have no result.
+     * Interruption uses the same bounded observation cancellation as `awaitSettlement`.
      */
     readonly awaitSettlementRecord: (
       receipt: Receipt,
@@ -735,6 +749,35 @@ export class CloudflareThreadClient extends Context.Service<
           Effect.ignore,
         );
 
+      const awaitSettlementCall = Effect.fnUntraced(function* (
+        receipt: Receipt,
+        operation: "awaitSettlement" | "awaitSettlementRecord",
+      ): Effect.fn.Return<HostResponse, ClientAwaitFailure> {
+        const waiterId = yield* crypto.randomUUIDv4().pipe(
+          Effect.mapError((error) =>
+            HostProtocolError.make({
+              message: boundHostDiagnostic(
+                `${operation} cancellation identity generation failed: ${error.message}`,
+              ),
+            }),
+          ),
+        );
+
+        const encoded = yield* encodeAwaitSettlementRequest(
+          AwaitSettlementRequest.make({ ...receipt, waiterId }),
+        ).pipe(
+          Effect.mapError((error) =>
+            HostProtocolError.make({
+              message: boundHostDiagnostic(`${operation} request encode failed: ${error.message}`),
+            }),
+          ),
+        );
+
+        return yield* call(receipt.threadId, operation, encoded).pipe(
+          Effect.onInterrupt(() => cancelProgress(receipt.threadId, waiterId)),
+        );
+      });
+
       return CloudflareThreadClient.of({
         submit: <InputSchema extends Schema.Top>(
           agent: DurableSubmitAgent<InputSchema>,
@@ -819,15 +862,7 @@ export class CloudflareThreadClient extends Context.Service<
           }),
         awaitSettlement: (receipt) =>
           Effect.gen(function* () {
-            const encoded = yield* encodeReceipt(receipt).pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(`receipt encode failed: ${error.message}`),
-                }),
-              ),
-            );
-
-            const response = yield* call(receipt.threadId, "awaitSettlement", encoded);
+            const response = yield* awaitSettlementCall(receipt, "awaitSettlement");
 
             const settled = yield* expect(
               receipt.threadId,
@@ -841,15 +876,7 @@ export class CloudflareThreadClient extends Context.Service<
 
         awaitSettlementRecord: (receipt) =>
           Effect.gen(function* () {
-            const encoded = yield* encodeReceipt(receipt).pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(`receipt encode failed: ${error.message}`),
-                }),
-              ),
-            );
-
-            const response = yield* call(receipt.threadId, "awaitSettlementRecord", encoded);
+            const response = yield* awaitSettlementCall(receipt, "awaitSettlementRecord");
 
             const settled = yield* expect(
               receipt.threadId,
