@@ -1,5 +1,20 @@
 # @yielded/agent-platform-cloudflare
 
+## 0.1.0-beta.171
+
+### Patch Changes
+
+- [#888](https://github.com/yielded-dev/agent/pull/888) [`8785ce4`](https://github.com/yielded-dev/agent/commit/8785ce4c2ed59528e59152ad7e1746312eac0f33) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce memory allocation for SHA-256 hashing on Cloudflare.
+
+- [#884](https://github.com/yielded-dev/agent/pull/884) [`488a064`](https://github.com/yielded-dev/agent/commit/488a06415e8b87569e16995fe3d45ee3e1e44849) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce provisional text streaming overhead while preserving snapshot replacement and slow-observer buffering.
+  Stop idle text observers when their owning scope closes.
+
+- [#877](https://github.com/yielded-dev/agent/pull/877) [`97a82ad`](https://github.com/yielded-dev/agent/commit/97a82ad86c82af16118ff6467d2e34d59cd33618) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Enable post-response alarm dispatch by default for Thread Objects to start due work sooner. BEHAVIOR CHANGE: receipt delivery on cold Objects may take longer; provide `DurableObjectAlarm.ScheduleConfiguration` with `{ dispatchAfterEvent: false }` to opt out.
+- Updated dependencies [[`9c0a400`](https://github.com/yielded-dev/agent/commit/9c0a400c82b725514c7397485bac3bddeeb984f5), [`3c534a1`](https://github.com/yielded-dev/agent/commit/3c534a1b4c5e3f4c425447c5dd785c95c5857b92)]:
+  - @yielded/agent@0.1.0-beta.171
+  - @yielded/agent-storage-sql@0.1.0-beta.171
+  - @yielded/agent-storage-cloudflare@0.1.0-beta.171
+
 ## 0.1.0-beta.170
 
 ### Patch Changes

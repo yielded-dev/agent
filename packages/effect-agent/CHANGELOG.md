@@ -1,5 +1,13 @@
 # @yielded/agent
 
+## 0.1.0-beta.171
+
+### Patch Changes
+
+- [#881](https://github.com/yielded-dev/agent/pull/881) [`9c0a400`](https://github.com/yielded-dev/agent/commit/9c0a400c82b725514c7397485bac3bddeeb984f5) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce CPU overhead for ordinary model responses. Preserve native ArrayBuffer and URL prototypes in application and provider values so their retained storage remains measurable.
+
+- [#880](https://github.com/yielded-dev/agent/pull/880) [`3c534a1`](https://github.com/yielded-dev/agent/commit/3c534a1b4c5e3f4c425447c5dd785c95c5857b92) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reuse captured tool-cycle commits and settled prompt records, and retain each active Run continuation once. BEHAVIOR CHANGE: Execution checkpoints use wire version 2; native stores upgrade atomically from layouts 25 or 26 to 27, which older releases cannot reopen.
+
 ## 0.1.0-beta.170
 
 ### Minor Changes
