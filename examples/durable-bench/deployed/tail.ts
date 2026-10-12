@@ -9,6 +9,8 @@ const Marker = Schema.Struct({
   object: Schema.NonEmptyString,
   sample: Schema.NonEmptyString,
   invocation: Schema.NonEmptyString,
+  dispatchSource: Schema.optionalKey(Schema.NonEmptyString),
+  completes: Schema.optionalKey(Schema.NonEmptyString),
 });
 
 const Stored = Schema.Struct({
@@ -50,7 +52,13 @@ export default {
             marker.sample === first.sample,
         );
 
-        const valid = oneSample && !event.truncated && event.durableObjectId !== undefined;
+        const valid =
+          oneSample &&
+          !event.truncated &&
+          event.durableObjectId !== undefined &&
+          markers.every(
+            (marker) => marker.kind !== "dispatch" || marker.dispatchSource !== undefined,
+          );
 
         const record = Schema.encodeSync(Stored)({
           invocation: first.invocation,
@@ -61,7 +69,32 @@ export default {
             kind: valid ? first.kind : "ambiguous",
             kinds: markers.map((marker) => marker.kind),
             invocationIds: markers.map((marker) => marker.invocation),
-            invocationType: event.event && "rpcMethod" in event.event ? "jsrpc" : first.kind,
+            invocationType:
+              event.event === null
+                ? "unknown"
+                : "rpcMethod" in event.event
+                  ? "jsrpc"
+                  : "request" in event.event
+                    ? "fetch"
+                    : "scheduledTime" in event.event && !("cron" in event.event)
+                      ? "alarm"
+                      : "other",
+            ...(event.event && "rpcMethod" in event.event
+              ? { invocationMethod: event.event.rpcMethod }
+              : event.event && "request" in event.event
+                ? { invocationMethod: new URL(event.event.request.url).pathname }
+                : {}),
+            dispatches: markers.flatMap((marker) =>
+              marker.kind !== "dispatch" || marker.dispatchSource === undefined
+                ? []
+                : [
+                    {
+                      id: marker.completes ?? marker.invocation,
+                      source: marker.dispatchSource,
+                      completed: marker.completes !== undefined,
+                    },
+                  ],
+            ),
             outcome: event.outcome,
             cpuMs:
               valid && Number.isFinite(event.cpuTime) && event.cpuTime >= 0 ? event.cpuTime : null,

@@ -127,8 +127,11 @@ export class Observation {
     this.alarms++;
   }
   cpuInvocations: Map<string, string[]> | undefined;
-  marker(kind: string, query = this.query) {
-    if (this.env.CPU !== true && this.env.CPU !== "true") return;
+  get cpuEnabled() {
+    return this.env.CPU === true || this.env.CPU === "true";
+  }
+  marker(kind: string, query = this.query, dispatchSource?: string, completes?: string) {
+    if (!this.cpuEnabled) return;
     if (!query) return;
     const invocation = crypto.randomUUID();
 
@@ -143,7 +146,11 @@ export class Observation {
       sample: query.sample,
       kind,
       invocation,
+      ...(dispatchSource === undefined ? {} : { dispatchSource }),
+      ...(completes === undefined ? {} : { completes }),
     });
+
+    return invocation;
   }
   readonly fetch: typeof globalThis.fetch = async (input, init) => {
     const query = this.query;

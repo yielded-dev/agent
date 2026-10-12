@@ -321,17 +321,24 @@ The gap is measured between outgoing model requests and consumed responses on on
 clock. Last-response-to-client crosses Object/driver clocks and is approximate; it is
 not an exact settlement-notification decomposition. CPU is opt-in. `--cpu` attaches a Tail
 Worker that stores marked native Object invocations in a temporary R2 bucket. It sums each
-invocation's CPU once per turn, including marked submission, settlement wait, alarm, text
+invocation's CPU once per turn, including marked submission, settlement wait, dispatch, text
 observation and fallback record reads; driver, provider, metrics collection and deployment CPU are outside that
-total. Multiple markers in one native invocation do not multiply its CPU. After the final
+total. Dispatch includes native alarms and effect-cf's post-response work. The invocation hook
+retains the originating RPC/fetch sample through post-response dispatch; its CPU belongs to
+that native invocation. Multiple markers in one native invocation do not multiply its CPU. After the final
 quiescent metrics, the harness closes each Object so native text observers finish before
 Tail collection. This happens outside the timers. Coverage requires the controller-planned
-Yielded submit/await/alarm or native run roles, a text invocation for every target with an
+Yielded submit/await/dispatch or native run roles, a text invocation for every target with an
 observer, and any fallback record read issued by the driver. The requirements do not depend
 on emitted markers or which text source wins a race; an unknown read plan is incomplete.
-Every acknowledged marker must also be present.
-Text-stream cancellation or disconnection counts only when the measured turn succeeded
-and the invocation has finite CPU.
+Every acknowledged marker must also be present. Every dispatch start requires a matching
+successful completion, including dispatch attached to a text stream. CPU-only metrics wait
+for active dispatches after both timer endpoints and before closing the observer.
+Tail can label a post-response continuation as a canceled alarm. A canceled text or
+post-response-only invocation counts only when the measured turn succeeded, its CPU is
+finite, and every dispatch completed. A canceled native-alarm dispatch remains invalid.
+The result retains native event type, method or fetch path, and dispatch origin so the
+collector does not infer ownership from Tail's event label.
 Missing, truncated or ambiguous records invalidate the Object pair; missing CPU is never
 zero. The paired report compares whole-Object medians with Object-level bootstrap 95% CIs.
 These are observed invocation totals, not billing totals or sampled CPU profiles (`--profile cpu`).
