@@ -1,0 +1,129 @@
+---
+title: Context management
+description: Keep model context bounded while retaining Thread history and application-owned memory.
+---
+
+import { FlowMap } from "@yielded/starlight-theme/components";
+
+<a id="context-management"></a>
+
+A Thread can outlive a model's context window. Keep three things separate: retained conversation
+history, the working prompt for one model call, and application-owned memory shared across tasks.
+Compaction reduces the prompt; it does not erase history or resolve unfinished work.
+
+<FlowMap
+  title="History, context, and memory"
+  description="The runtime builds a bounded model prompt from Thread history and authorized application memory. Compaction changes the prompt view, not the retained history."
+  columns={2}
+  nodes={[
+    {
+      id: "history",
+      at: [1, 1],
+      owner: "library",
+      title: "Thread history",
+      note: "Retained conversation",
+    },
+    {
+      id: "memory",
+      at: [2, 2],
+      owner: "app",
+      title: "Memory sources",
+      note: "Authorized reference material",
+    },
+    {
+      id: "prompt",
+      at: [2, 1],
+      owner: "library",
+      title: "Working prompt",
+      note: "Prepared and bounded per call",
+    },
+    { id: "model", at: [3, 1], owner: "external", title: "Model" },
+  ]}
+  edges={[
+    { from: "history", to: "prompt", label: "compact" },
+    { from: "memory", to: "prompt", label: "recall" },
+    { from: "prompt", to: "model" },
+  ]}
+/>
+
+## Choose limits
+
+```ts twoslash
+import { AgentPolicy, CompactionPolicy } from "@yielded/agent/agent-policy";
+
+const policy = AgentPolicy.resolve({
+  contextTokenLimit: 40_000,
+  tokenBudget: 200_000,
+  completionReserveTokens: 16_000,
+  compaction: CompactionPolicy.make({ keepRecentTokens: 8_000 }),
+});
+```
+
+Use this policy on an Agent with a model whose window leaves room for output and request overhead.
+These numbers are workload choices, not provider defaults. `contextTokenLimit` bounds one call;
+`tokenBudget` counts cumulative input and output. `completionReserveTokens` leaves cumulative
+budget for finishing. It is separate from a model's per-call output allowance.
+
+A context limit does **not** bound process memory. Current durable recovery reconstructs the
+Run's original saved history range to verify context consistency, even after later compaction.
+Configure compaction before a Thread becomes large; enabling it later can still require a large
+initial read.
+
+## Compaction
+
+The default `ContextCompactor.layer` first prunes older application tool results, then makes a
+metered summary call if needed. It keeps protected instructions/input and complete tool pairs.
+Summary work consumes the Run's budget. Durable compaction boundaries survive restart.
+
+Install `ContextCompactor.layerWithModel` for a separate summarizer, or `layerRollover` to start
+fresh windows without a summary model call. Rollover retains original instructions and input
+plus bounded continuation notes. It preserves the Run's cumulative charges and unresolved work;
+it does not start a new Run. Provider overflow permits one bounded compaction retry when a
+context allowance is configured; it is not unlimited retry.
+
+## Start fresh context windows
+
+Add `ContextTools.toolkit` and its handler Layer when the model should request `new_context`,
+inspect remaining capacity, or search/read retained context. `new_context` must be called alone.
+Supply `ThreadContextHistory` for durable history lookup. Searches use literal text, so short
+identifiers or exact phrases work better than a compound search expression.
+
+`MemoryNotes` can bind read/write tools to one host-selected document for working notes across
+windows. The host owns its address, visibility, and storage. Notes and historical excerpts remain
+untrusted reference material.
+
+## Prompt preparation order
+
+`RunContextPreparation` transforms the source prompt before compaction. Its `transientContext`
+loader then adds current references for each Turn. These references consume context capacity but
+stay outside canonical history and summary coverage. A same-Turn overflow retry reuses the loaded
+snapshot.
+
+Use the Agent's `inputPrompt` to choose model-visible input. Preparation must preserve protected
+input and already-compacted prefixes; it cannot safely rewrite those boundaries. For dynamic
+model routing, return `modelCall` with capacity and output-reserve information matching the selected
+model. See [model selection](/reference/decision-models/).
+
+<a id="recall-memory"></a>
+
+## Recall application-owned sources
+
+`Memory.recall` combines host-selected readers under item, byte, token, and time limits. Your
+application owns source selection and access checks. Keep recalled text in transient user context,
+never trusted instructions. Optional semantic retrieval ranks candidates, then revalidates them
+against current sources; an index match grants no access.
+
+Correction and withdrawal affect future authoritative recall checks. They do not erase past
+outputs, captured views, or backups. `Remembering` can queue extraction into application memory;
+queued means retained work, not already saved knowledge. The host must drive that work and own
+acceptance and sharing policy.
+
+## Limit tool output
+
+`toolResultBounds` bounds encoded results before retention and prompt reuse. Oversized results
+become an explicit truncation envelope. Return concise findings or resource identifiers when the
+model does not need the full payload.
+
+See [budgets](/concepts/budgets/) for defaults and the
+[context-continuity example](https://github.com/yielded-dev/agent/tree/main/tooling/context-continuity-eval)
+for runnable rollover and recovery scenarios.

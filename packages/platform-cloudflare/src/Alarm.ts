@@ -586,6 +586,8 @@ const decodeRecoveryEvent = Schema.decodeUnknownSync(ThreadRecoveryFaultEvent);
  * Object and sequence; callbacks may repeat after interruption. This is a trusted host hook,
  * not pre-authorized UI data: the host owns recipient authorization and safe presentation.
  * Capture services in the Layer. Do not call producers or write the raw alarm slot.
+ * Without this service, maintenance acknowledges and discards transitions. Install the
+ * handler before the first maintenance pass if the application needs that event stream.
  */
 export class ThreadRecoveryEvents extends Context.Service<
   ThreadRecoveryEvents,

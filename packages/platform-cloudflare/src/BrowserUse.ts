@@ -105,50 +105,43 @@ const observedUrl = (url: string): string => {
 // local adoption, not the CDP response size.
 const discoverClosedRoots = async (frame: Frame): Promise<boolean> => {
   const realm = frame.isolatedRealm();
-  const document = await realm.evaluateHandle(() => globalThis.document);
 
-  try {
-    const { node } = await frame.client.send("DOM.describeNode", {
-      objectId: document.remoteObject().objectId,
-      depth: -1,
-      pierce: true,
-    });
+  await using document = await realm.evaluateHandle(() => globalThis.document);
 
-    const pending = [node];
-    const roots: Array<number> = [];
-    let scanned = 0;
+  const { node } = await frame.client.send("DOM.describeNode", {
+    objectId: document.remoteObject().objectId,
+    depth: -1,
+    pierce: true,
+  });
 
-    while (pending.length > 0 && scanned++ < 10_000 && roots.length < 256) {
-      const current = pending.pop();
+  const pending = [node];
+  const roots: Array<number> = [];
+  let scanned = 0;
 
-      if (current === undefined) break;
-      if (current.shadowRootType === "closed") roots.push(current.backendNodeId);
-      pending.push(...(current.children ?? []));
-      pending.push(
-        ...(current.shadowRoots ?? []).filter((root) => root.shadowRootType !== "user-agent"),
-      );
-    }
-    await realm.evaluate(() => {
-      Reflect.set(globalThis, "@effect-agent/native-browser-closed-roots", new Map());
-    });
-    for (const id of roots) {
-      const root = await realm.adoptBackendNode(id);
+  while (pending.length > 0 && scanned++ < 10_000 && roots.length < 256) {
+    const current = pending.pop();
 
-      try {
-        await realm.evaluate((node) => {
-          if (!(node instanceof ShadowRoot) || node.mode !== "closed")
-            throw new Error("Closed shadow root is unavailable");
-          Reflect.get(globalThis, "@effect-agent/native-browser-closed-roots").set(node.host, node);
-        }, root);
-      } finally {
-        await root.dispose();
-      }
-    }
-
-    return pending.length > 0;
-  } finally {
-    await document.dispose();
+    if (current === undefined) break;
+    if (current.shadowRootType === "closed") roots.push(current.backendNodeId);
+    pending.push(...(current.children ?? []));
+    pending.push(
+      ...(current.shadowRoots ?? []).filter((root) => root.shadowRootType !== "user-agent"),
+    );
   }
+  await realm.evaluate(() => {
+    Reflect.set(globalThis, "@effect-agent/native-browser-closed-roots", new Map());
+  });
+  for (const id of roots) {
+    await using root = await realm.adoptBackendNode(id);
+
+    await realm.evaluate((node) => {
+      if (!(node instanceof ShadowRoot) || node.mode !== "closed")
+        throw new Error("Closed shadow root is unavailable");
+      Reflect.get(globalThis, "@effect-agent/native-browser-closed-roots").set(node.host, node);
+    }, root);
+  }
+
+  return pending.length > 0;
 };
 
 /** One application-neutral controller over an existing scoped native attachment.
@@ -668,20 +661,12 @@ export const make = Effect.fnUntraced(function* <R>(
 
     while (parent !== null) {
       await discoverClosedRoots(parent);
-      const owner = await current.frameElement();
+      await using owner = await current.frameElement();
 
       if (owner === null) return false;
-      try {
-        const isolatedOwner = await parent.isolatedRealm().adoptHandle(owner);
+      await using isolatedOwner = await parent.isolatedRealm().adoptHandle(owner);
 
-        try {
-          point = await isolatedOwner.evaluate(checkFrameDom, point, scroll);
-        } finally {
-          await isolatedOwner.dispose();
-        }
-      } finally {
-        await owner.dispose();
-      }
+      point = await isolatedOwner.evaluate(checkFrameDom, point, scroll);
       if (point === false) return false;
       current = parent;
       parent = current.parentFrame();

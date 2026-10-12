@@ -1,0 +1,121 @@
+---
+title: Yielded Agent
+description: Durable agent Threads for TypeScript, built on Effect and Effect AI.
+template: splash
+tableOfContents: false
+hero:
+  title: Agents that keep their place.
+  tagline: Durable agent Threads for TypeScript, built on Effect and Effect AI.
+  actions:
+    - text: Try an agent
+      link: /agent/guide/getting-started/
+      icon: right-arrow
+    - text: Understand the runtime
+      link: /agent/concepts/runtime-model/
+      icon: right-arrow
+      variant: secondary
+---
+
+import { FlowMap } from "@yielded/starlight-theme/components";
+
+Yielded Agent runs agents whose conversations and work can outlive a request or a process.
+You define schemas, instructions, and tools. The library runs the model/tool loop,
+validates output, and—when you choose a durable host—retains accepted work for recovery.
+Your application owns authorization, external effects, and deployment.
+
+## Why durable Threads?
+
+A support case can span several requests, wait for approval, delegate research, and resume
+after deployment. A **Thread** gives that work a stable conversation. A **Run** is one
+logical execution; additional input can join it. A durable Run can continue across several
+**Attempts** as processes come and go.
+
+Conversation history, the model's context window, and unfinished work have different
+lifetimes. Yielded Agent keeps them separate: compaction reduces what the model sees,
+while the log retains history and the active Run checkpoint retains progress.
+
+<FlowMap
+  title="Who owns an agent's work"
+  description="Your application admits authorized input to a Yielded Agent Thread. The runtime calls your chosen model and tools and retains progress in your selected storage."
+  columns={3}
+  nodes={[
+    {
+      id: "app",
+      at: [1, 1],
+      owner: "app",
+      title: "Your application",
+      note: "Identity, authorization, input",
+    },
+    {
+      id: "thread",
+      at: [1, 2],
+      owner: "library",
+      title: "Thread runtime",
+      note: "Runs, tools, recovery",
+    },
+    {
+      id: "model",
+      at: [1, 3],
+      owner: "external",
+      title: "Effect AI model",
+      note: "Your provider choice",
+    },
+    {
+      id: "storage",
+      at: [2, 1],
+      owner: "external",
+      title: "Your storage",
+      note: "History and unfinished work",
+    },
+    {
+      id: "tools",
+      at: [2, 3],
+      owner: "app",
+      title: "Your tools",
+      note: "Business logic and effects",
+    },
+  ]}
+  edges={[
+    { from: "app", to: "thread" },
+    { from: "thread", to: "model" },
+    { from: "thread", to: "storage" },
+    { from: "thread", to: "tools" },
+  ]}
+/>
+
+## What it guarantees
+
+A durable receipt means the runtime owes that accepted submission one terminal settlement.
+Recorded tool results are reused during recovery. An ordinary mutating tool that may have acted
+without a recorded result remains **Unknown** until reconciled; the runtime does not blindly
+repeat it. Durable Steps can repeat external execution and need application idempotency.
+
+One process owns each Thread at a time. The host must preserve that routing boundary,
+including with PostgreSQL. There is no exactly-once external execution guarantee.
+Read the [durability contract](/concepts/durability/) before choosing your host.
+
+## Where it runs
+
+| Use                                                   | Assembly                                               |
+| ----------------------------------------------------- | ------------------------------------------------------ |
+| Try an agent or retain conversations in one process   | `InMemory.layer`                                       |
+| Keep completed history without recovering active work | SQLite or PostgreSQL history adapter                   |
+| Recover accepted work in a Node service               | Supplied SQLite host, or a custom host with PostgreSQL |
+| Recover work on Cloudflare                            | One Thread per SQLite-backed Durable Object            |
+
+[Choose a platform](/platforms/) or [compare storage](/storage/).
+
+## Built on Effect
+
+`AgentRuntime.run` returns an `Effect`; streaming returns a `Stream`. Errors stay typed,
+services remain visible, and resources belong to a Scope. Tools, models, and providers use
+native Effect AI APIs. Add [subagents](/guide/subagents/), [browser access](/guide/browser/),
+or [Code Mode](/guide/code-mode/) when the application needs them.
+
+Choose Yielded Agent when you need conversation continuity, bounded execution, and explicit
+recovery inside an Effect application. For a single generation, Effect AI's model APIs may
+already cover your needs. For comparisons with pi-durable and other runtimes, use the
+[runnable durable benchmark](https://github.com/yielded-dev/agent/tree/main/examples/durable-bench)
+and its stated workload boundaries.
+
+[Run your first agent](/guide/getting-started/), then decide [what your Thread should retain](/guide/threads/).

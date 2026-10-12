@@ -185,15 +185,15 @@ secrets instead.
 
 ## Documentation examples
 
-Lead implementation guides with a short, concrete code example after at most one introductory
-sentence. Explain behavior after the code it describes. Keep complete setup available and
-type-check examples through their runnable entry points; move advanced contracts and recovery
-details into linked reference pages instead of front-loading them in walkthroughs.
+Lead guides with the mental model, ownership, and essential usage. Use one focused example
+and link to runnable examples for complete setup. Source and API comments own implementation
+contracts; references contain scannable public options and caller-visible limits. Follow the
+[documentation rules](../AGENTS.md#documentation) when editing a page.
 
 Public pages live in `docs/src/content/docs`; contributor material stays outside that collection.
-The homepage loads `docs/snippets/travel-planner/*.ts` through source-backed code fences.
-Edit those files to change its examples. A `twoslash` fence enables type hovers and compiler
-validation during `vp run docs:build`. Relative imports resolve from that snippet directory.
+Source-backed fences can load `docs/snippets/travel-planner/*.ts`. A `twoslash` fence enables type
+hovers and compiler validation during `vp run docs:build`; use it for TypeScript examples.
+Relative imports resolve from that snippet directory.
 
 Twoslash uses the pinned `typescript-twoslash` JavaScript compiler API. The docs workspace uses
 the compatible TypeScript 6 compiler from the root `docs` catalog; library checks use

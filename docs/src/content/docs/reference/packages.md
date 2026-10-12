@@ -1,540 +1,107 @@
 ---
 title: Package map
-description: Choose packages, adapters, and providers for your application.
+description: Find the package, public import, and ownership boundary for each capability.
 ---
 
 <a id="package-map"></a>
 
-Start with `@yielded/agent@beta` for agent definitions, conversations, execution, and durability.
-Install storage, platform, sandbox execution, and testing packages as needed.
-
-Keep all framework packages at the same release. Package manifests declare the compatible
-Effect and platform versions.
-Before 1.0, APIs and stored data may change without a migration path.
+`@yielded/agent` owns agent definitions, execution, Thread contracts, and durability.
+Hosts and adapters supply concrete execution environments and persistence. Install
+only the capabilities your application needs, keeping Yielded Agent packages on
+the same release. Package manifests declare peer compatibility.
 
 ## Public imports
 
-Prefer named namespace imports from package roots in application code and examples.
-Namespaces use PascalCase; direct module paths use kebab-case. Agent definitions, execution,
-capabilities, and durability live in one package:
+Root exports are module namespaces. Direct module paths use kebab-case and can
+select individual declarations:
 
 ```ts twoslash
 import { Agent, AgentRuntime } from "@yielded/agent";
+import { IdGenerator } from "@yielded/agent/id-generator";
 
 Agent.make;
 AgentRuntime.run;
+IdGenerator;
 ```
 
-The same convention applies to adapters:
+The direct equivalents are `@yielded/agent/agent` and
+`@yielded/agent/agent-runtime`. Use direct paths for lazy-loading boundaries and
+runtime-specific helpers. A static root import can load modules you intended to
+defer; a root namespace is not a lazy loader. Both import forms address the same API.
 
-```ts twoslash
-import { NodeDurableHost } from "@yielded/agent-platform-node";
-
-NodeDurableHost.layer;
-```
-
-For direct module access, unbundled startup, or lazy-loading boundaries, use:
-
-```ts
-import * as NodeDurableHost from "@yielded/agent-platform-node/node-durable-host";
-import * as Agent from "@yielded/agent/agent";
-import * as AgentRuntime from "@yielded/agent/agent-runtime";
-```
-
-Both forms support tree shaking in bundles. Native Node evaluates every namespace re-exported
-by a root import; `sideEffects` does not make those exports lazy. Direct paths limit the initial
-module graph, including when importing upstream Effect modules. Other root imports in the same
-process can still load those shared modules.
-
-Use direct module paths at lazy-loading boundaries: mixing a
-static root import with a dynamic import of that same root can pull the runtime into the initial
-bundle. Also use dedicated subpaths for optional adapters and helpers intended for another
-runtime, such as the Node-safe Cloudflare AI Gateway helper. The Cloudflare package root
-includes Workers-specific modules. Provider, storage, platform, and testing packages remain
-separate installs.
-
-`Agent.make` and `AgentRuntime.run` have the same call shape through either import form.
-Use direct imports for individual declarations, including services and Schema values, instead
-of importing a namespace when only its service key is needed:
-
-```ts
-import { IdGenerator } from "@yielded/agent/id-generator";
-import { CommandDrainPolicy, RunSchedulingOverride } from "@yielded/agent/run-options";
-```
-
-Root imports name module namespaces. For example, root `AgentPolicy` exposes its Schema class as
-`AgentPolicy.AgentPolicy`; a named import from `@yielded/agent/agent-policy` selects that class
-directly. Ordinary agent definitions can pass a plain `policy` object to `Agent.make`, which
-validates it and fills defaults.
-
-Operations are available directly on their module namespace: `Subagent.layer`,
-`ThreadHistory.layer`, and `IdGenerator.layer`. Service keys remain inside those modules,
-for example `IdGenerator.IdGenerator` when supplying a custom generator.
+Cloudflare's root includes Workers-specific modules. Use its dedicated
+`/cloudflare-ai-gateway`, `/browser-rest-capture`, or `/browser-rest-crawl` subpaths
+from Node. Unlisted source files are private implementation details.
 
 ### Model requirements
 
-Provide a native Effect model with `Effect.provide(model)` around an agent Run, or
-`Layer.provide(model)` around `Subagent.layer(delegation)`. The [agent guide](/guide/agents/#provide-native-model-services)
-shows this default composition. [AutoModel](/reference/decision-models/#automodel) uses the same API.
-
-For an explicit reusable pairing, `Agent.withModel(definition, model)` returns an optional Agent
-Binding. `Subagent.layer(delegation, model)` also accepts an explicit model override.
-Durable registration uses `{ agent: definition, model, definitions: versions }` so the host owns
-each agent's model and version declarations; an existing Binding is also accepted.
+Provide a native Effect Model around a Run or subagent handler Layer.
+`Agent.withModel` optionally pairs a definition and Model into a Binding.
+Durable registrations carry `{ agent, model, definitions }`; hosts acquire their
+services once. Providers come from upstream Effect AI, including OpenAI, Anthropic,
+and TypeSafe. Yielded Agent does not wrap their tool or prompt types.
 
 ### In-memory defaults
 
-Import `InMemory` from `@yielded/agent`, or use `import * as InMemory from "@yielded/agent/in-memory"`.
-
-`InMemory.layer` supplies in-memory conversation history and a shared subagent reservation ledger.
-Provide it once around the parent program and all child handler Layers. Runs with the same Thread
-ID retain their conversation for that application Scope; independent builds have independent state.
-Complete history updates remain after a failed or interrupted Run. Scope closure or process loss
-releases the state; this layer provides no crash recovery. See [in-memory conversations](/guide/threads/#in-memory-conversations)
-for limits and a follow-up example.
-
-Runtime IDs have an overridable default; no ID Layer is required. Context preparation is also
-optional. `InMemory.layer` preserves custom IDs and context preparation supplied by the caller.
-Models, tool handlers, credentials, and durable storage remain explicit application choices.
-
-For storage-backed history, provide `PersistentHistory.layer` with a store and, when using subagents,
-one shared `SubagentReservationsMemoryLive` instead of `InMemory.layer`. Durable hosts select
-their own history and reservation services.
-
-`IdGenerator` is a `Context.Reference`. Override it with `Layer.succeed`, `Layer.effect`, or
-`Effect.provideService`. The module-level `layer` from `@yielded/agent/id-generator` restores
-the default.
-
-Use direct module paths when you need an individual module:
-
-| Module or declarations                           | Owning module                          |
-| ------------------------------------------------ | -------------------------------------- |
-| Agent constructors and inferred types            | `@yielded/agent/agent`                 |
-| Recall composition, sources, and outcomes        | `@yielded/agent/memory`                |
-| Memory passages and recall limits                | `@yielded/agent/memory-reference`      |
-| Memory reader/writer contracts                   | `@yielded/agent/memory-store`          |
-| Remembering checkpoints and persistence contract | `@yielded/agent/remembering-store`     |
-| Durable admission and finite remembering passes  | `@yielded/agent/remembering`           |
-| `MemoryAccess`, `revalidateMemoryLookup`         | `@yielded/agent/memory-revalidation`   |
-| Semantic index contracts and errors              | `@yielded/agent/semantic-memory-index` |
-| Delegation contracts and reservation amounts     | `@yielded/agent/subagent-contract`     |
-| Runtime operations and inferred failures         | `@yielded/agent/agent-runtime`         |
-| Native tool selection schemas and annotations    | `@yielded/agent/tool-exposure`         |
-| Host tool visibility and eligible catalogue      | `@yielded/agent/tool-exposure`         |
-| Bounded native and Code Mode discovery           | `@yielded/agent/tool-discovery`        |
-| Compactor service                                | `@yielded/agent/context-compactor`     |
-| Command-drain, scheduling, and run options       | `@yielded/agent/run-options`           |
-| Subagent authoring and handlers                  | `@yielded/agent/subagent`              |
-| Semantic indexing/query implementation           | `@yielded/agent/semantic-memory`       |
-
-Import individual declarations from their owning modules, or use the root module namespace.
-`CommandDrainPolicy` and `RunSchedulingOverride` each expose a Schema and its inferred type
-from `RunOptions`. `MemoryThreadStoreLive` comes from
-`@yielded/agent-storage-memory/memory-thread-store`; SQLite memory readers and writers come
-from `@yielded/agent/sql-memory-store`.
-
-Test controls and conformance suites use `/testing/module` paths. Browser adapters, fixtures,
-and other specialized paths use the same kebab-case convention. Unlisted source files and
-implementation directories are private.
-
-Use `ContextCompactor` to customize compaction and `AgentPolicy.runStatus` to configure status
-messages. Token estimators and `ContextCompactionState` support custom compactors.
+`InMemory.layer` provides scoped conversation history and attached-subagent
+reservations. Model clients, credentials, and tool handlers remain explicit.
+For completed history across restarts, use `PersistentHistory.layer` with a store;
+for recovery, use a durable host. See [storage](/storage/).
 
 <a id="capability-inventory"></a>
 
 ## Find a capability
 
-| Need                                       | Guide                                                            | Your application supplies                                                |
-| ------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Run or stream an agent                     | [Execution](/guide/run-agents/)                                  | Model, tool handlers, history policy                                     |
-| Discover a large registered tool catalogue | [Progressive discovery](/guide/tools/#progressive-discovery)     | Native toolkit, grouping metadata, optional search and visibility policy |
-| Retain completed threads                   | [History](/guide/threads/#retain-completed-runs)                 | Store and thread IDs                                                     |
-| Recover work after a crash                 | [Durability](/concepts/durability/)                              | Registered agents, workers, storage, authorization                       |
-| Drive durable work with Effect Workflow    | [Effect Workflows](/guide/workflows/)                            | Workflow engine, dispatch store, repair trigger                          |
-| Prune, summarize, or roll over context     | [Context management](/guide/context-management/)                 | Context limits and compaction policy                                     |
-| Search prior context windows               | [Context windows](/guide/context-management/#context-windows)    | Authorized ThreadStore or ContextHistory adapter                         |
-| Keep working notes across windows          | [Context windows](/guide/context-management/#context-windows)    | Memory document identity, reader, writer                                 |
-| Recall application-owned sources           | [Context management](/guide/context-management/#recall-memory)   | Readable passages, provenance, query policy                              |
-| Remember in the background                 | [Remembering](/guide/context-management/#background-remembering) | Durable jobs, source policy, extraction, merging and cleanup             |
-| Require approval or limit spending         | [Run hooks](/guide/run-agents/#operational-hooks)                | Approval policy, budget hooks, cost estimates                            |
-| Delegate to another agent                  | [Subagents](/guide/subagents/)                                   | Targets, bindings, permissions, budgets                                  |
-| Schedule new input                         | [Scheduling](/guide/operations/#scheduled-input)                 | Owner policy, registered inputs, driver                                  |
-| React to external events                   | [Subscriptions](/guide/operations/#event-subscriptions)          | Authenticated source, preparation, authorization                         |
-| Run generated JavaScript                   | [Code Mode](/guide/code-mode/)                                   | Authorized tools and an isolated executor                                |
-| Run trusted local commands                 | [Sandbox execution](/guide/sandbox/)                             | Executable, environment, output and time limits                          |
-| Capture, crawl, or interact with pages     | [Browser tools](/guide/browser/)                                 | Browser binding or credentials, target policy                            |
-| Search the web                             | [Web search](/guide/tools/#web-search)                           | Hosted search toolkit or nested search-model Layer                       |
-| Use Cloudflare AI Gateway                  | [AI Gateway](/platforms/cloudflare/#ai-gateway)                  | Account, gateway, credentials, upstream Effect client                    |
-| Call tools on an MCP server                | [MCP servers](/guide/tools/#mcp)                                 | Transport, `HttpClient` or process spawner, bounds                       |
+| Need                             | Starting point                                                 |
+| -------------------------------- | -------------------------------------------------------------- |
+| Define, run, or stream           | [Agents](/guide/agents/), [execution](/guide/run-agents/)      |
+| Tools, MCP, approvals, discovery | [Tools](/guide/tools/)                                         |
+| Delegate or exchange work        | [Subagents](/guide/subagents/), [messaging](/guide/messaging/) |
+| Compaction, recall, remembering  | [Context management](/guide/context-management/)               |
+| Browser or generated code        | [Browser](/guide/browser/), [Code Mode](/guide/code-mode/)     |
+| Scheduled or event-driven input  | [Operations](/guide/operations/)                               |
+
+## Packages
+
+| Package                                                                           | Owns                                                                                        |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| <a id="effect-agent-umbrella"></a>`@yielded/agent`                                | Platform-neutral definitions, runtime, capabilities, schemas, storage ports, and recovery   |
+| <a id="decision-models"></a>`@yielded/agent-ai-decision`                          | [AutoModel and language-model decisions](/reference/decision-models/)                       |
+| <a id="effect-agent-platform-node"></a>`@yielded/agent-platform-node`             | [SQLite host, workers, and Node scheduling](/platforms/node/)                               |
+| <a id="effect-agent-platform-cloudflare"></a>`@yielded/agent-platform-cloudflare` | [Thread Objects, RPC, alarms, and Cloudflare adapters](/platforms/cloudflare/)              |
+| <a id="effect-agent-storage-memory"></a>`@yielded/agent-storage-memory`           | [Non-durable canonical stores](/storage/memory/) for tests and custom assemblies            |
+| <a id="effect-agent-storage-sql"></a>`@yielded/agent-storage-sql`                 | Shared SQL implementations; concrete adapters supply connection and transaction integration |
+| <a id="effect-agent-storage-sqlite"></a>`@yielded/agent-storage-sqlite`           | [Node SQLite persistence](/storage/sqlite/)                                                 |
+| <a id="effect-agent-storage-postgres"></a>`@yielded/agent-storage-postgres`       | [PostgreSQL persistence](/storage/postgres/) through your SQL client                        |
+| <a id="effect-agent-storage-cloudflare"></a>`@yielded/agent-storage-cloudflare`   | [Object-local SQLite persistence](/storage/cloudflare/)                                     |
+| <a id="effect-agent-workflow"></a>`@yielded/agent-workflow`                       | [Effect Workflow integration](/guide/workflows/) with an injected engine                    |
+| <a id="effect-agent-sandbox-local"></a>`@yielded/agent-sandbox-local`             | [Trusted local child processes](/guide/sandbox/); reports unisolated execution              |
+| <a id="effect-agent-testing"></a>`@yielded/agent-testing`                         | [Scripted models and conformance helpers](/guide/testing/)                                  |
+| <a id="effect-agent-pr-review"></a>`@yielded/agent-pr-review`                     | Provider-neutral review over supplied patches and immutable source                          |
+
+<a id="typesafe-ai"></a>
+
+Upstream `@effect/ai-typesafe` provides Jev decisions. See its
+[configuration](/reference/decision-models/#typesafe-client).
 
 <a id="compaction-and-unsupported-capabilities"></a>
 
 ### Limits and unsupported features
 
-[MCP servers](/guide/tools/#mcp) connect through `McpClient.layer` over Streamable HTTP or stdio;
-`connectMcp` bounds discovery and returns dynamic tools. Server-initiated sampling, elicitation,
-resources, and prompts are not served.
-
-[Background subagents](/guide/subagents/background/) and
-[bounded nested delegation](/reference/subagents/#bound-nested-delegation) have public APIs.
-Subagent handoff, runtime Skills, a framework-owned memory extraction or sharing policy,
-arbitrary Thread metadata, and dynamic Turn Plans have no public APIs.
-Applications own domain state. `Memory.recall` reads bounded passages from sources they select; it
-does not store them. Thread history and compaction summaries do not replace application state.
-
-Automatic compaction uses `ContextCompactor`. The separate
-[artifact utilities](/guide/context-management/#explicit-compaction-artifacts) validate and apply
-application-managed summaries; they do not run or persist automatically.
-
-Scheduling and subscription ownership does not isolate thread storage.
-Enforce [storage separation and authorization](/guide/operations/#authorization-and-isolation)
-in your host.
-
-## Packages
-
-<a id="decision-models"></a>
-
-### `@yielded/agent-ai-decision`
-
-Thread-owned automatic model selection, using the native Effect `DecisionModel` service.
-The package depends only on Effect and exports `AutoModel` and `LanguageModelDecisionModel`.
-The latter adapts any structured-output language model to native decisions. Import ordinary assessments
-from `effect/ai` using `Decision` and `DecisionModel`.
-[`AutoModel`](/reference/decision-models/#automodel) selects a native model from described profiles on each thread's
-first turn, including new subagents. A shared selection store retains choices across follow-ups.
-
-Start with the [decision guide](/guide/tools/#decision-transitions), then use the
-[API reference](/reference/decision-models/) for options and results.
-
-<a id="typesafe-ai"></a>
-
-### `@effect/ai-typesafe` (upstream)
-
-The Jev adapter: `TypeSafeDecisionModel` supplies the shared decision service, while
-`TypeSafeClient` and `TypeSafeSchema` expose the native choice, score, and noul API.
-This upstream Effect provider replaces `@effect-agent/ai-typesafe` and uses an Effect HttpClient.
-
-See [client configuration](/reference/decision-models/#typesafe-client) or wrap an assessment in a
-[native Effect AI tool](/guide/tools/#typesafe-evaluations).
-
-<a id="effect-agent-umbrella"></a>
-
-### `@yielded/agent`
-
-Agent definitions, schemas, execution, streaming, policies, subagents, memory capabilities,
-MCP, durable execution, and platform-neutral sandbox contracts. It has no database driver or platform runtime dependency.
-Start with `Agent`, `AgentRuntime`, and `InMemory.layer`.
-
-`InMemory.layer` retains in-memory conversation history and shared attached-subagent reservations.
-For storage-backed history, use the root namespace `PersistentHistory.layer`.
-Models, provider clients, credentials, tool handlers, and durable hosts remain application choices.
-
-`BrowserUse.make` (`@yielded/agent/browser-use`) returns a matching `toolkit` and `layer()`
-for a model agent; it defaults to single actions, or `mode: "batched"`. `BrowserUse.runJev`
-drives the page with a native Effect `DecisionModel` instead. Applications supply observed
-controls and guarded actions through `BrowserActions`. See [browser tools](/guide/browser/#let-jev-drive-the-browser).
-
-Sandbox contracts including `Sandbox`, `CodeExecutor`, `PageCapture`, and `InteractiveBrowser`
-are part of this package; concrete executors and browser adapters are separate. See
-[sandbox execution](/guide/sandbox/) and [browser tools](/guide/browser/).
-
-### Source layout
-
-```text
-packages/effect-agent/src/
-├─ core/           # agent definitions, Thread, schemas, identifiers
-├─ engine/         # immediate execution and history integration
-├─ capabilities/   # subagents, memory, MCP, tools
-├─ sandbox/        # platform-neutral execution contracts
-└─ durable/        # persistence, journals, recovery, scheduling
-```
-
-These are internal directories, not separate packages or import prefixes. Storage drivers,
-platform hosts, workflow integrations, sandbox execution, and testing remain separate packages.
-
-<a id="effect-agent-sandbox-local"></a>
-
-### `@yielded/agent-sandbox-local`
-
-Runs trusted code in local child processes. It reports `unisolated` and rejects policies
-requiring isolation it cannot enforce.
-
-Follow the [local process walkthrough](/guide/sandbox/#run-a-trusted-local-process).
-
-### Threads and durability in `@yielded/agent`
-
-`Thread` describes an identified, ordered conversation. `Thread.Store` holds in-memory snapshots
-and `InMemory.layer` shares it across Runs. Persistence and execution recovery are separate choices.
-
-Versioned records, storage contracts, recovery, scheduling, and subscriptions live under
-`packages/effect-agent/src/durable`. Import their public namespaces from `@yielded/agent`, or use
-kebab-case subpaths such as `@yielded/agent/persistent-history` and `@yielded/agent/durable-agent-runtime`.
-`DurableAgentRuntime.layerRegistered` hashes version declarations and captures agent services
-once at construction. `layerWithBindings` accepts previously compiled registrations owned by
-the application's Scope. Worker operations use those registrations without accepting services.
-Optional `processCommittedActivity` runs bounded, resumable passes with separate processor
-progress. The host owns record eligibility, extraction, and durable output application. See
-[committed memory processing](/guide/context-management/#committed-memory).
-
-Custom drivers can advance one FIFO-head Attempt with `processThreadHead(threadId)` and apply one
-submission's recovery decision with `recoverSubmission`. `submissionStatus` is the authorized
-nonblocking read; `inspectSubmissionStatus` is reserved for trusted workers. Pending status and
-an empty processing result do not imply completion.
-
-| Import                                                  | Use                                               |
-| ------------------------------------------------------- | ------------------------------------------------- |
-| `@yielded/agent/persistent-history`                     | Persistent history implementation                 |
-| `@yielded/agent/thread-store`                           | History storage contracts                         |
-| `@yielded/agent/run-continuation`                       | Current Run progress and work discovery contracts |
-| `@yielded/agent/thread-history`                         | Interpreter history service                       |
-| `@yielded/agent/durable-agent-runtime`                  | Durable runtime                                   |
-| `@yielded/agent/submission-ledger`                      | Accepted-work storage contracts                   |
-| `@yielded/agent/git-hub-workflow-source`                | GitHub event source                               |
-| `@yielded/agent/testing/certification`                  | Adapter certification                             |
-| `@yielded/agent/testing/thread-store-conformance`       | History conformance                               |
-| `@yielded/agent/testing/submission-ledger-conformance`  | Accepted-work conformance                         |
-| `@yielded/agent/testing/durable-failpoint-test-control` | Runtime failpoint controls                        |
-
-<a id="effect-agent-workflow"></a>
-
-### `@yielded/agent-workflow`
-
-`AgentWorkflow.execute(agent, input, { name })` composes registered Agents inside native
-`Workflow.toLayer` handlers. Stable step names deduplicate admission across replays; Effect's
-`DurableDeferred` suspends and resumes the parent. Results are decoded from canonical
-settlements, and `AgentWorkflow.Error` supplies the workflow's typed error Schema.
-
-Import `AgentWorkflow` from the package root or use the direct
-`@yielded/agent-workflow/agent-workflow` module. The `WorkflowExecution` module exports
-the step options, Agent contract, and `WorkflowExecutionFailure` schema.
-
-Optional `WorkflowAgentHost` over an injected upstream Effect `WorkflowEngine`. It reuses the
-durable runtime's admission, journal recovery, authorization, and settlement protocol.
-`WorkflowAgentHost.layer(options)` consumes a runtime whose Layer owns agent registration.
-Its required `principal` supplies the identity for workflow-originated submissions.
-`WorkflowDispatchStore` retains dispatch intents; `WorkflowRepairTrigger` requires the host to
-schedule startup and repeated repair. The shared package starts no polling loop and imports no
-Node or Cloudflare implementation.
-
-See the [Effect Workflows guide](/guide/workflows/) for host composition, engine substitution,
-and cancellation semantics, including the [Node.js SQL setup](/guide/workflows/#node).
-Install it separately from `@yielded/agent`.
-
-<a id="effect-agent-storage-memory"></a>
-
-### `@yielded/agent-storage-memory`
-
-Scoped in-memory thread and submission stores for tests. The ledger is non-durable.
-For ordinary conversations, use [`InMemory.layer`](/storage/memory/) from `@yielded/agent`.
-The independent `inMemorySemanticIndexLayer` supplies a bounded exact cosine derivative index.
-It is disposable and must be rebuilt from authoritative sources after its Scope closes.
-
-<a id="effect-agent-storage-sql"></a>
-
-### `@yielded/agent-storage-sql`
-
-Shared SQL implementations of thread history, submissions, schedules, subscriptions, message
-delivery, and activity progress. SQLite and Postgres supply connections, format initialization,
-and transaction settings. Cloudflare reuses the SQL helpers that fit Durable Objects.
-Applications normally install their database adapter; adapter authors can use these factories
-with Effect's `SqlClient`. The shared package imports no platform runtime.
-`makeSqlThreadStore` and `makeSqlSubmissionLedger` return individual service values in Effects.
-Durable adapters also need `SettlementPublisher`: `makeSqlSubmissionLedgerKernel` returns
-co-owned `ledger` and `publisher` services over the supplied journal. Install them together
-with `Layer.effectContext`, alongside the thread store built over that journal.
-
-<a id="effect-agent-storage-sqlite"></a>
-
-### `@yielded/agent-storage-sqlite`
-
-Stores thread history and pending work in one Node SQLite database.
-Accepts fresh databases or the exact current thread format; rejects mismatches without migration.
-`CurrentSqliteStorageVersion` identifies the supported version.
-See the [SQLite storage guide](/storage/sqlite/) for installation and agent wiring.
-
-The independent `memoryStoreLayer` from `@yielded/agent/sql-memory-store` supplies optional `MemoryReader`, `MemoryWriter`, and `SqlMemoryBatchWriter` ports
-for conditional document updates and terminal withdrawal. It initializes only memory tables.
-Use `memoryReaderLayer` when the application needs no writer. See
-[memory lifecycle](/guide/context-management/#memory-lifecycle).
-
-`activityProcessorStoreLayer` retains prepared output and a cursor per processor/version/Thread
-for finite committed-activity passes. Sessions belong to Scope; live Layers share one native
-SQL client and local owner. Its fresh activity format is independent of the Thread journal and
-submission ledger, with no persisted ownership or lease.
-
-<a id="effect-agent-storage-postgres"></a>
-
-### `@yielded/agent-storage-postgres`
-
-Stores thread history and pending work in one Postgres database. Route each Thread and activity
-consumer key to one process and share its SQL client across live Layers; there is no distributed
-ownership fallback. Rejects incompatible stored versions; no migration path is promised.
-Requires Postgres 16 or newer.
-
-`PostgresStorage.layer` provides `ThreadStore`, `ThreadReader`, `SubmissionLedger`, and
-`SettlementPublisher`, requiring the application's native Effect `SqlClient` and `Crypto`.
-See the [PostgreSQL storage guide](/storage/postgres/)
-for client composition and agent wiring. Use `PostgresStorage.layerWith(options)` to configure
-the core pair, or select individual ports:
-
-| Constructor                                       | Provides                                  |
-| ------------------------------------------------- | ----------------------------------------- |
-| `threadStoreLayer(options = {})`                  | `ThreadStore`, `ThreadReader`             |
-| `submissionLedgerLayer(options = {})`             | `SubmissionLedger`, `SettlementPublisher` |
-| `scheduleStoreLayer(options = {})`                | `ScheduleStore`                           |
-| `activityStoreLayer(options = {})`                | `ActivityProcessorStore`                  |
-| `messageDeliveryStoreLayer(options = {})`         | `MessageDeliveryStore`                    |
-| `subscriptionStoreLayer(partition, options = {})` | `SubscriptionStore`                       |
-
-These constructors are exported by `PostgresStorage`. Activity progress remains independent of
-the journal; subscriptions require an explicit partition. Message delivery accepts `limits` in
-its options. The `failpoint` and `activityFailpoint`
-options accept test handlers.
-
-The `schema` option qualifies storage tables and defaults to `public`. It leaves the client's
-search path unchanged; pre-provisioned schemas need no database-wide `CREATE` permission.
-Storage decodes native `BIGINT` values to safe integers and uses its persisted column names,
-while application queries keep the client's codecs and name transformations.
-
-Writes use `READ COMMITTED` and serialize on one transaction-scoped advisory lock. A lock timeout
-appears as a retryable `PostgresWriteContention` cause in thread and submission errors; other stores
-report their own storage errors. Invoke storage writes and snapshot reads outside an existing
-SQL transaction: they own top-level transactions and reject nesting with a typed failure.
-Identifiers and other text parameters must contain valid Unicode without NUL; canonical JSON
-payloads still preserve arbitrary strings. The `@yielded/agent/sql-memory-store` ports stay
-SQLite-only.
-
-<a id="effect-agent-platform-node"></a>
-
-### `@yielded/agent-platform-node`
-
-`NodeDurableHost.layer(registrations, options)` acquires storage, recovers pending work, and
-starts a bounded worker pool. `NodeDurableHost.run` observes that pool and propagates worker
-failure to the application. Provide the host Layer once around the supervised application;
-its Scope closes admission and joins workers before releasing runtime resources.
-
-Assembles SQLite storage, recovery, and workers through `NodeDurableHost`.
-Registers agent bindings before execution, recovers before admission, and releases ownership
-before closing storage. See the [Node.js guide](/platforms/node/).
-
-`NodeDurableAgentRuntimeOptions.toolFailureObserver` installs a local tool-failure observer.
-
-The optional `@yielded/agent-platform-node/node-workflow` import supplies `SqlWorkflowDispatchStore`
-over an injected `SqlClient` and `NodeWorkflowRepairTrigger` with scoped startup and polling.
-Pair them with `NodeDurableAgentRuntime.layerRegistered` and `WorkflowAgentHost.layer` as shown
-in the [Workflow guide's Node.js setup](/guide/workflows/#node). This assembly does not start
-the ordinary Node worker loop.
-
-<a id="effect-agent-storage-cloudflare"></a>
-
-### `@yielded/agent-storage-cloudflare`
-
-Stores history and pending work in each Durable Object's SQLite database.
-Accepts injected Object handles without importing `cloudflare:workers`.
-Rejects incompatible stored versions; `CurrentDoStorageVersion` identifies the supported version.
-Failpoints and eviction helpers are in `@yielded/agent-storage-cloudflare/testing/do-storage-failpoint-testing`.
-See [Cloudflare storage](/storage/cloudflare/) for host ownership and direct adapter use.
-
-`doMemoryStoreLayer` supplies optional memory ports using storage-backed SQLite transactions.
-The separate memory protocol defines bounded batch requests, responses, and typed errors.
-
-<a id="effect-agent-platform-cloudflare"></a>
-
-### `@yielded/agent-platform-cloudflare`
-
-Assembles the durable host, RPC client, alarms, and Code Mode executor.
-See the [Cloudflare guide](/platforms/cloudflare/) for bindings, service lifetimes, and admission limits.
-The [Code Mode guide](/guide/code-mode/#run-generated-code-on-cloudflare) covers the independent
-Dynamic Worker executor and Worker Loader binding.
-`ThreadObject.Options.toolFailureObserver` installs a local tool-failure observer.
-
-`MemoryObject.make` and `CloudflareMemoryClient` share namespace-owned memory across
-Threads, with one authoritative batch RPC per recall. See [shared memory](/platforms/cloudflare/#shared-memory).
-
-Browser adapters use separate imports:
-
-| Subpath                 | Adapter and requirements                                                                                                  |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `/cloudflare-browser`   | Page capture through a browser binding; structured extraction also needs explicit Workers AI authorization and accounting |
-| `/browser-rest-capture` | Node-safe page capture with account credentials and `HttpClient`                                                          |
-| `/browser-rest-crawl`   | Node-safe same-host Markdown crawl with bounded polling and scoped job cleanup                                            |
-| `/interactive-browser`  | Bounded interactive browser and host controls with the included Puppeteer client                                          |
-| `/browser-session`      | Host-owned native sessions, scoped attachments, operator controls, keepalive, and exact-session cleanup                   |
-| `/browser-credentials`  | Login/card fill schemas and invocation-specific credential authority; fills the current native page                       |
-
-Durable hosts and the stateless browser adapters do not load Puppeteer.
-
-See [browser setup and limits](/guide/browser/) for credentials, network policies,
-action failures, and cleanup.
-
-#### Browser session options
-
-`BrowserSessions.layer({ browser, accountId, apiToken })` requires `HttpClient`.
-`create(options, retain)` calls the host's retention Effect with a private
-`BrowserSessionReference`; successful retention makes the host responsible for remote cleanup.
-`createAttached(options, retain)` returns a `BrowserSession` after the same retention step,
-keeping its initial connection in the caller's `Scope`. Failed acquisition releases the child
-scope before returning the failure. Its 30-second acquisition timeout does not cover subsequent
-commands; each command uses the reference's remaining expiry and command timeout.
-`attach(reference)` acquires a local connection in `Scope`. Its finalizer disconnects locally.
-
-| Creation option        | Default  | Meaning                                                        |
-| ---------------------- | -------- | -------------------------------------------------------------- |
-| `maxElapsedMillis`     | Required | Positive safe integer; fixes the session's absolute expiry     |
-| `keepAliveMillis`      | `600000` | Requested provider idle allowance, from 1 through 600,000 ms   |
-| `commandTimeoutMillis` | `30000`  | Positive safe integer; bounds each authorized native operation |
-
-The reference stores redacted session, context, and page identities, `expiresAt`, and
-`commandTimeoutMillis`. Keep it in private host storage. `keepAlive(sessionId)` refreshes
-provider inactivity without changing `expiresAt`; `close(sessionId)` requires confirmed
-termination or exact-session absence. The owner supplies its existing expiry/cleanup trigger.
-Provider expiry can happen sooner; attachment never creates a replacement session.
-
-`session.run(authorize, action)` checks current host authority under the attachment's lock before
-passing its native Puppeteer page to trusted code. The host owns network policy, output bounds,
-controller fencing, and action receipts. `handoff`, `getLiveView`, and `getHandoffState` take the
-same authorization Effect and use the existing `BrowserRun` request/result schemas.
-Await all SDK work inside the native callback. A settled SDK rejection preserves the session for
-inspection while reporting uncertain dispatch; unfinished or unsafe operations can terminate it.
-Neither outcome authorizes automatic replay.
-
-`session.fillCredential(request)` requires `BrowserCredentialAccess` for each call. Its
-`FillCredentialRequest` selects 1–8 fields by explicit selector and role within one native form;
-an optional `frame` path selects at most eight nested iframes. The service authorizes current
-origins and resolves host-only material. The helper fills without submitting and returns only
-dispatch evidence and the number of acknowledged writes. Ordinary browser observations remain
-available after filling.
-If a fill times out, `CredentialFillError` reports `reason: "timeout"`, the acknowledged
-`filled` count, dispatch evidence, and whether browser cleanup was confirmed. A pending write
-reply remains `possibly-dispatched`; its assignment is not included in `filled`.
-
-<a id="effect-agent-pr-review"></a>
-
-### `@yielded/agent-pr-review`
-
-Runs a provider-neutral PR review over supplied patches and immutable base/head source.
-Returns a schema-validated report, validated paths and line anchors, and token usage.
-The host supplies provider configuration, pricing, GitHub access, and publication.
-
-<a id="effect-agent-testing"></a>
-
-### `@yielded/agent-testing`
-
-Provides scripted models for offline tests.
-Fixtures, certification, chaos, and CodeExecutor helpers have
-[dedicated imports](/guide/testing/#choose-a-testing-entry-point).
-Production packages must not depend on this package.
+Storage supplies persistence, never distributed Thread ownership. Local sandbox
+execution is not an isolation boundary. Memory extraction, sharing policy, and
+application domain state remain host responsibilities. Read each guide's constraints
+before choosing an adapter.
 
 ## GitHub Action
 
 The [review Action](https://github.com/yielded-dev/agent/blob/main/action/README.md)
-adds GitHub admission, source retrieval, provider setup, and report publication to `pr-review`.
+adds GitHub integration and report publication around the review library.
 
 <a id="leaf-examples"></a>
 
 ## Examples
 
-- [Cloudflare travel planner](https://github.com/yielded-dev/agent/tree/main/examples/travel-planner): the canonical application, deployed with Alchemy.
-- [Operational harnesses](https://github.com/yielded-dev/agent/tree/main/tooling): release gates, performance measurements, and opt-in provider verification.
-
-For repository layout and contribution rules, see the [toolchain guide](https://github.com/yielded-dev/agent/blob/main/docs/TOOLCHAIN.md).
+Start with the [runnable planner](https://github.com/yielded-dev/agent/tree/main/docs/snippets/travel-planner)
+or the [Cloudflare application](https://github.com/yielded-dev/agent/tree/main/examples/travel-planner).
+These show complete service composition through public imports.

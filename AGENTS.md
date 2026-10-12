@@ -49,7 +49,7 @@ Before editing code:
 2. Read `GLOSSARY.md` when changing domain concepts or public terminology.
 3. Read `docs/TOOLCHAIN.md`.
    Before changing runtime, storage, or platform packages, also read the authoritative
-   [runtime model](docs/src/content/docs/concepts/runtime-model.md).
+   [runtime model](docs/src/content/docs/concepts/runtime-model.mdx).
 4. Read the relevant guide, API comments, and neighboring tests for the modules in scope.
 5. Read `node_modules/effect/AGENTS.md` before writing Effect code (the canonical Effect
    guidance; `.agents/skills` carries the focused task skills).
@@ -64,18 +64,35 @@ or investigation logs to the product repository.
 
 ## Documentation
 
-Documentation is for humans learning the library. Guides must be terse and explain
-concepts succinctly: what a feature does, how it fits, and how to use it.
+Documentation helps humans evaluate and understand the current library, then use it.
+Keep it terse and edit whole pages for a clear reading path. Agents can read source
+and API comments; product documentation is not their implementation context.
+A feature or fix usually needs a small change to existing guidance, not another section.
 
-- Lead with the mental model and ownership boundaries. Use small architecture or
-  flow diagrams and only the code snippets essential to understanding and usage.
-- Put detailed options, defaults, and API behavior in scannable reference pages.
-  Link to runnable examples for complete setup.
-- Keep implementation contracts in source, schemas, and API comments. LLMs can
-  read the code; do not turn user guides into agent context or implementation audits.
-- Keep crucial caveats beside the relevant concept; link to reference details.
-- Edit the page as a whole. Do not append feature inventories, change histories,
-  or long defensive explanations to an otherwise focused guide.
+- Guides explain the mental model, ownership, and essential usage. Use one focused
+  example and link to runnable examples for complete setup.
+- References describe public options, defaults, and caller-visible limitations in
+  a scannable form. Keep essential security and recovery caveats beside their API.
+- Source, schemas, and API comments own implementation contracts. Keep SQL query
+  plans, predicate inventories, internal state-machine walkthroughs, and exhaustive
+  failure explanations out of guides and reference pages. Move an enduring contract
+  into its owning API comment when it is missing there.
+- PRs and release notes own release history, package-version availability,
+  `main`/unreleased warnings, old-version fallbacks, migration stories, investigation
+  findings, and verification results. Keep these out of product documentation,
+  including banners, callouts, compatibility sections, and annotated examples.
+- Review every changed page as a whole before handoff. Remove repetition and material
+  that does not help a reader evaluate the library, use an API, or avoid a concrete
+  pitfall. Preserve the actual constraint briefly; put its implementation rationale
+  in source or the PR. Documentation is not a work log or feature inventory.
+- Use small diagrams when they clarify ownership or usage. Draw architecture flows
+  with `FlowMap` and request sequences with `Trace` from
+  `@yielded/starlight-theme/components`, in `.mdx`. Give each `FlowMap` a `title` and
+  `description`; the shared theme owns layout, ownership colors, and theming.
+- Use `bun add` for consumer installation examples. Package manifests and the root
+  catalog own package versions and peer compatibility. Never repeat Effect's current
+  version in documentation or installation commands; use plain `effect`. Retain
+  protocol identifiers and contributor toolchain requirements where needed for usage.
 
 ## Non-negotiable architecture rules
 

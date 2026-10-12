@@ -1,314 +1,61 @@
 ---
 title: Code Mode
-description: Let an agent run one bounded JavaScript program through an explicit tool allowlist.
+description: Let a model compose a bounded JavaScript program over explicitly allowed tools.
 ---
 
-<a id="code-mode"></a>
-
-Code Mode gives an agent one Effect AI Tool for a small JavaScript program. The program can call a
-fixed set of application Tools through named globals, then return one JSON value. It fits questions
-that need authorized reads and writes, overlapping independent I/O, and a compact answer.
-
-For example, an invoice analyst can answer a question this way:
-
-```ts
-const code = `async () => {
-  const result = await warehouse.query({
-    sql: "SELECT region, SUM(revenue) AS total FROM invoice_summary GROUP BY region",
-  });
-  return result.rows.sort((a, b) => Number(b.total) - Number(a.total))[0];
-}`;
-```
-
-`warehouse` is not a database client. It is a generated global that routes through the runtime's
-Tool broker to an application-owned Tool handler. The handler decides which resources the program may read or change.
+Code Mode lets the model write one program that calls several application tools, transforms their
+results, and returns compact JSON. It is useful when intermediate data needs computation but does
+not need another model turn. Your host fixes the callable methods and their authority.
 
 ## Build an analyst
 
-In your Yielded Agent application, add the Cloudflare executor:
-
-```sh
-bun add @yielded/agent-platform-cloudflare@beta effect
-```
-
-Keep framework packages at the [same release](/guide/getting-started/#installation-and-compatibility).
-
-This smaller example uses fixed invoice rows so the complete Tool and handler are visible.
-Generated code calls `warehouse.invoices({ region: "emea" })` and computes its answer from those
-rows. The linked warehouse example replaces the fixed data with a brokered SQL query.
-
 ```ts twoslash
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
-// @types: @cloudflare/workers-types
-import { InMemory, CodeMode, Agent, AgentRuntime } from "@yielded/agent";
-import { CloudflareCodeMode } from "@yielded/agent-platform-cloudflare/cloudflare-code-mode";
-import { ToolExecutionClass } from "@yielded/agent/durable-step";
-import { Effect, Layer, Redacted, Schema } from "effect";
-import { WorkerEnvironment } from "effect-cf";
-import { Tool, Toolkit } from "effect/ai";
-import { FetchHttpClient } from "effect/http";
-
-// In an application, Wrangler generates these binding types.
-declare global {
-  namespace Cloudflare {
-    interface Env {
-      readonly LOADER: WorkerLoader;
-      readonly OPENAI_API_KEY: string;
-    }
-  }
-}
-
-const ListInvoices = Tool.make("list_invoices", {
-  description: "Read invoice totals for a region: emea or americas.",
-  parameters: Schema.Struct({ region: Schema.Literals(["emea", "americas"]) }),
-  success: Schema.Array(Schema.Struct({ customer: Schema.String, revenue: Schema.Number })),
-}).annotate(ToolExecutionClass, "readonly");
-
-const InvoiceHandlers = Toolkit.make(ListInvoices).toLayer({
-  list_invoices: ({ region }) =>
-    Effect.succeed(
-      [
-        { customer: "Acme", region: "emea", revenue: 12_000 },
-        { customer: "Atlas", region: "emea", revenue: 8_000 },
-        { customer: "Beacon", region: "americas", revenue: 15_000 },
-      ].filter((invoice) => invoice.region === region),
-    ),
-});
-
-const codeMode = CodeMode.make("run_javascript", {
-  description: "Read invoices, calculate the answer in JavaScript, and return a small JSON result.",
-  tools: { warehouse: { invoices: ListInvoices } },
-  maxEgressBytes: 8 * 1024,
-});
-
-const analyst = Agent.make("invoice-analyst", {
-  input: Schema.String,
-  output: Schema.Struct({ answer: Schema.String }),
-  instructions: "Use run_javascript to calculate invoice answers. Return an answer as JSON.",
-  toolkit: Toolkit.make(codeMode.tool),
-  policy: {
-    maxTurns: 3,
-    maxToolCalls: 6,
-    maxDuration: "45 seconds",
-    // This sandbox example runs one generated program at a time.
-    toolConcurrency: 1,
-  },
-});
-
-const AnalystLive = Layer.unwrap(
-  Effect.gen(function* () {
-    const env = yield* WorkerEnvironment;
-    const CodeModeLive = CloudflareCodeMode.layer(codeMode, {
-      loader: env.LOADER,
-      handlers: InvoiceHandlers,
-    });
-    const ModelLive = OpenAiLanguageModel.model("gpt-6-luna").pipe(
-      Layer.provide(
-        OpenAiClient.layer({ apiKey: Redacted.make(env.OPENAI_API_KEY) }).pipe(
-          Layer.provide(FetchHttpClient.layer),
-        ),
-      ),
-    );
-
-    return Layer.mergeAll(CodeModeLive, ModelLive, InMemory.layer);
-  }),
-);
-
-export const program = AgentRuntime.run(analyst, "What is the total invoice revenue in EMEA?").pipe(
-  Effect.provide(AnalystLive),
-  Effect.scoped,
-);
-```
-
-Only the question is input to the agent. `AnalystLive` yields `WorkerEnvironment` to obtain the
-loader and provider key, leaving that service visible in the composed `program`'s requirements.
-An `effect-cf` Worker supplies it. The application owns the HTTP response and authentication.
-
-`CodeMode.make` fixes the namespaces and methods visible to generated code. Include `codeMode.tool`
-in the agent's Toolkit. `CloudflareCodeMode.layer` supplies the selected Tool handlers and executor
-at construction, capturing the services used by inner calls. Handler construction errors and
-remaining service requirements stay visible. The runtime supplies its own Tool broker.
-For a custom executor, provide it and the selected handlers directly to `codeMode.handlers`.
-
-Code Mode accepts read and mutation Tools without additional approval requirements. The broker
-retains parameter and result schemas, visibility, inherited grants, host action-time authorization,
-and run budgets. `RunToolAuthorization` receives each inner call with its `programmatic` parent
-identity before reservation and execution. Approving the outer Tool does not authorize its inner calls. Already
-authorized calls require no additional approval round trip; Tools declaring `needsApproval` remain
-unsupported and fail closed. Enforce resource and tenant access inside handlers. For read-only
-workloads, use a read-only database identity where available. The warehouse example's Durable Object uses an
-application SQL allowlist because its SQLite authorizer blocks `PRAGMA query_only`. That scanner is
-a demo boundary.
-
-<a id="discovery"></a>
-
-## Discover method documentation
-
-For a large allowlist, set `includeDeclarations: false` to keep namespace inventories and full
-declarations out of the initial tool description. Add `ToolDiscovery.make` beside the execution
-tool. Discovery returns only matching, currently eligible methods and their encoded schemas.
-
-```ts twoslash
-import { Agent, CodeMode, ToolDiscovery } from "@yielded/agent";
-import { ToolExecutionClass } from "@yielded/agent/durable-step";
+import { CodeMode } from "@yielded/agent";
 import { Schema } from "effect";
-import { Tool, Toolkit } from "effect/ai";
+import { Tool } from "effect/ai";
 
-const ListInvoices = Tool.make("list_invoices", {
-  description: "Read invoice amounts for a customer.",
-  parameters: Schema.Struct({ customer: Schema.String }),
-  success: Schema.Array(Schema.Struct({ amountCents: Schema.Int })),
-}).annotate(ToolExecutionClass, "readonly");
-
-export const codeMode = CodeMode.make("run_javascript", {
-  description: "Use discovered methods to compute invoice answers in JavaScript.",
-  includeDeclarations: false,
-  tools: { billing: { invoices: ListInvoices } },
-});
-export const discovery = ToolDiscovery.make();
-
-export const analyst = Agent.make("invoice-discovery", {
-  input: Schema.String,
-  output: Schema.Struct({ answer: Schema.String }),
-  instructions: "Discover invoice methods, compute the answer, then return JSON.",
-  toolkit: Toolkit.make(discovery.tool, codeMode.tool),
-  toolExposure: { initialToolNames: [], maxTools: 8, maxSchemaBytes: 32_768 },
+const Sales = Tool.make("read_sales", {
+  parameters: Schema.Struct({ region: Schema.String }),
+  success: Schema.Array(Schema.Number),
 });
 
-// Host-side selective TypeScript declarations; fails with CodeModeDescriptionError.
-export const invoiceDeclarations = codeMode.describe(["billing.invoices"], { maxBytes: 8_192 });
+const Analyze = CodeMode.make("analyze", {
+  description: "Read regional sales and calculate a summary.",
+  tools: { sales: { read: Sales } },
+});
 ```
 
-Provide `discovery.handlers` alongside the existing Code Mode executor/handler Layer. A discovery
-call with `{ query: "invoice", namespace: "billing" }` describes `billing.invoices` and selects
-the owning `run_javascript` tool for the next turn. Generated code can then call
-`await billing.invoices({ customer: "Acme" })`. Common native tools can remain pinned alongside
-these two tools.
-
-Each match has a distinct ID such as `code-mode:run_javascript:billing.invoices`, its native tool
-name, namespace and method. This remains unambiguous when one Tool has several aliases or is also
-registered natively. Selecting a Code Mode match exposes its outer execution tool; it does not
-expand the construction-time allowlist. Inner broker calls do not change native exposure.
-
-`describe` is a host API over that fixed allowlist, not a visibility-filtered model tool. It accepts
-one to 64 unique exact method paths and defaults to 16 KiB of complete UTF-8 declarations, with a
-256 KiB maximum. Invalid paths and excessive output fail with `CodeModeDescriptionError`.
-Declarations and discovery results use the native encoded parameter/success schemas; provider
-schema transformations do not change the sandbox wire contract. The full `declarations` string
-remains available to the host even when omitted from the model description.
-
-Use `discover_tools` for model-facing documentation subject to host visibility and inherited
-grants. The runtime filters the sandbox's actual namespaces and methods as well, so generated code
-cannot enumerate hidden methods. If grants or host policy hide an allowlisted method while
-`includeDeclarations` is still true, the runtime refuses the configuration before its full
-description can leak. Use generic shared descriptions and `includeDeclarations: false` for that
-case. Default eager Code Mode behavior remains available when the full allowlist is eligible.
-Approval, budget and handler authorization constraints continue to apply.
+Give the Agent `Analyze.tool` and provide `Analyze.layer`, the selected tool handlers, and a
+`CodeExecutor`. The generated program can call `sales.read`; it cannot discover arbitrary host
+services. Handlers still authorize the specific account or dataset being accessed.
 
 ## Program results and limits
 
-Each generated namespace method returns a Promise. The program must be one
-async function expression, runs once with no arguments, and returns JSON. `console.log` output
-returns with the result. Expected inner Tool failures reject the Promise with a JSON failure
-envelope, which generated code can catch and handle. Invalid inner arguments are rejected by the
-broker before their handler starts. Invalid arguments to the outer Code Mode tool, such as an empty
-`code` string, return a native `ToolParameterValidationError` result so the model can correct them
-without starting the executor.
+The program is one async function expression returning JSON. Namespace methods return Promises;
+use `await` for dependencies and bounded executor concurrency for independent calls. Logs and the
+result share a model-visible byte budget. Source, time, host-call count, concurrency, and payloads
+have separate limits. Inner calls also count toward the Agent's tool-call budget.
 
-The Tool broker rejects calls outside the construction-time allowlist. Use `Promise.all` for
-independent calls and `await` for actual dependencies:
-
-```js
-async () => {
-  const project = await tools.createProject({ name: "Launch" });
-  const tasks = await Promise.all(
-    ["Design", "Build", "Ship"].map((title) => tools.createTask({ projectId: project.id, title })),
-  );
-  return { projectId: project.id, tasksCreated: tasks.length };
-};
-```
-
-Set `limits.maxHostCallConcurrency` from 1 through 64 (default 4). Both the executor and broker
-bound active calls; waiting calls stay in Effect structured concurrency. Independent results return
-when ready, without waiting for earlier calls. `toolConcurrency` limits outer Tool Calls, so several
-simultaneous Code Mode passes can each use their inner concurrency allowance. Set it to 1 when the
-inner bound should also be the run's bound.
-
-The executor enforces source, wall-clock, log, result, host-call, and per-host-call byte limits. Code Mode applies `maxEgressBytes` after optional redaction to the result, logs, and
-thrown value visible to the model. The agent policy's `maxToolCalls` also includes brokered inner
-calls. See [Budgets & bounded autonomy](/concepts/budgets/#programmatic-calls-and-code-mode).
-
-The default executor limits include 30 seconds and 64 host calls. Supply a `CodeExecutionLimits`
-value through `limits` when constructing Code Mode to change them; `maxWallTime` takes an Effect
-`Duration`. An agent's smaller remaining budget still applies. `redactEgress` can transform the
-result and logs before the aggregate model-visible byte limit.
-Its required services remain in the Code Mode handler Layer's requirements and are captured when
-that Layer is built. Temporary redactor resources close with each invocation. The redactor must
-be total: defects and interruption retain their Effect semantics.
+Arguments are Schema-validated before handlers start. Calls requiring additional approval fail
+closed inside the program; obtain approval through an appropriate outer workflow.
 
 ## Partial outcomes
 
-Writes are not transactional. A rejected `Promise.all` ends the program and interrupts outstanding
-calls; completed writes remain completed. Await every call the result depends on, and use
-`Promise.allSettled` when independent failures should not stop the remaining work.
+Writes are not transactional. A failed program can leave successful writes behind. Failure reports
+classify calls as succeeded, failed, uncertain, or not started; omitted evidence does not mean a
+call never ran. Reconcile uncertain effects before retrying.
 
-A `CodeModeFailure` includes invocation-ordered `calls` with `succeeded`, `failed`, `uncertain`, or
-`not-started` status. A confirmed failure does not imply rollback. A started call without a confirmed
-outcome is uncertain and must be reconciled with the application before retrying. Calls that cannot
-fit the output budget are counted in `omittedCalls`; do not assume an omitted call never ran.
-Evidence takes priority over logs and thrown values when the budget is tight.
-
-Set `onPassExit` to receive the full ephemeral report after executor fibers and resources close,
-including timeout, defect, and interruption. The host callback's Effect service requirements remain
-visible in the handler Layer. Reports contain tool names and statuses, without copying arguments or
-results. Existing programmatic Tool spans retain per-call timing and execution identity. No inner
-Canonical Records or program checkpoints are created; a process loss also loses these local reports.
-
-The outer Tool is always `uncertain` and `Tool.Readonly` is false. Under a durable host, an unresolved
-program enters the ordinary unknown-outcome protocol; it is never automatically replayed, even if
-its selected Tools happen to be readonly or idempotent. Recovery of a complete JavaScript program
-requires separate checkpoint/resume semantics.
+The outer Code Mode tool is always `uncertain`, even if its allowlisted tools are readonly.
+A durable host cannot checkpoint or replay an unfinished JavaScript program automatically.
+Host `onPassExit` reports are ephemeral and do not survive process loss.
 
 ## Run generated code on Cloudflare
 
-`@yielded/agent-platform-cloudflare` supplies `dynamicWorkerCodeExecutorLayer`. It loads each pass
-into a fresh Cloudflare Dynamic Worker with `globalOutbound: null`. Generated code has no ambient
-network, bindings, secrets, filesystem, or environment. Its only host authority is the scoped RPC
-capability for allowlisted Tool calls.
+`CloudflareCodeMode.layer` supplies an executor through a Worker Loader binding. Each pass runs
+in a fresh Dynamic Worker with ambient network disabled and no application bindings, secrets,
+filesystem, or environment. Its authority is the scoped callback for allowlisted tools.
 
-Declare a Worker Loader binding in `wrangler.jsonc`. Cloudflare documents `worker_loaders` as the
-binding that gives a Worker access to `env.LOADER`.
-
-```jsonc
-{
-  "name": "warehouse-analyst",
-  "main": "src/worker.ts",
-  "compatibility_date": "2025-05-01",
-  "worker_loaders": [{ "binding": "LOADER" }],
-}
-```
-
-`CloudflareCodeMode.layer` uses that resolved binding. The lower-level
-`dynamicWorkerCodeExecutorLayer({ loader })` remains available for direct `CodeExecutor` access.
-
-See Cloudflare's [Dynamic Workers guide](https://developers.cloudflare.com/dynamic-workers/getting-started/)
-for Worker Loader setup and loading modes. This adapter uses `load()` for a fresh pass.
-
-Code Mode is ephemeral. The executor retains no pass state, and a later pass can run in another
-isolate. It does not make an Agent durable, persist generated programs, reconnect a lost pass, or
-replay an unresolved call. Use a Durable Object or another application store for data that must
-outlive a request. A warehouse application can use a Durable Object for its invoice data.
-
-## Application integration
-
-Use the [canonical Cloudflare application](https://github.com/yielded-dev/agent/tree/main/examples/travel-planner)
-for the repository's deployment setup. A Code Mode integration additionally needs a Worker Loader
-binding and a bounded Tool allowlist. The broker prevents calls to unlisted Tools, but the
-application's handlers still decide which tenant, table, account, or secret may be accessed.
-
-## Related capabilities
-
-[Sandbox execution](/guide/sandbox/) covers trusted local commands. Its local adapter is unisolated and
-does not implement the `CodeExecutor` required here. [Browser tools](/guide/browser/) cover page capture,
-crawl, and interactive passes. Tools with uncertain external effects still require application
-resource authorization when exposed through Code Mode.
+The [Cloudflare application](https://github.com/yielded-dev/agent/tree/main/examples/travel-planner)
+provides runnable deployment setup; Code Mode additionally needs a Worker Loader binding.
+Use `ToolDiscovery` with `includeDeclarations: false` when method documentation is too large to
+send on every request. Discovery still respects the host's visibility policy.

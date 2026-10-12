@@ -57,9 +57,14 @@ const AgentPolicyFields = Schema.Struct({
   toolConcurrency: PositiveInt,
   repeatedFailureLimit: NonNegativeInt,
   onExhaustion: OnExhaustion,
+  /** Observed cumulative usage can cross this threshold before exhaustion is handled. */
   tokenBudget: Schema.optionalKey(PositiveInt),
   /** Tokens withheld from research calls so one final delivery call remains admissible. */
   completionReserveTokens: NonNegativeInt,
+  /**
+   * Estimated observed cost, not prepaid spending admission. Usage can overshoot; a strict
+   * monetary ceiling requires host reservation of possible charges before provider I/O.
+   */
   costBudgetMicrousd: Schema.optionalKey(NonNegativeInt),
   /** Per-model-call live-context bound; crossing it triggers compaction rather than failure. */
   contextTokenLimit: Schema.optionalKey(PositiveInt),

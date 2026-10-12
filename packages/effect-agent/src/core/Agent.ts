@@ -98,6 +98,10 @@ export interface CompletionToolDeclaration<
   readonly tool: string;
   /** Require native Tool use on every model Turn and this Tool for final completion. */
   readonly required?: boolean | undefined;
+  /**
+   * Pure, deterministic projection: recovery may reevaluate a recorded Tool result before
+   * RunCompleted commits. Once committed, that stored output wins across later code changes.
+   */
   readonly project: (input: CompletionProjectionInput<Parameters, Result>) => Output;
 }
 
@@ -160,7 +164,11 @@ export interface Definition<
    * Stored history is unchanged.
    */
   readonly instructions: Instructions;
-  /** Optional projection from decoded input to model-visible native Effect AI prompt content. */
+  /**
+   * Optional projection from decoded input to model-visible native Effect AI prompt content.
+   * This controls disclosure only: durable admission retains the complete input and Tool
+   * authorization receives it. A projection failure never falls back to sending full input.
+   */
   readonly inputPrompt?: InputPromptValue | undefined;
   /** Native Effect AI toolkit whose failures and requirements remain visible. */
   readonly toolkit: ToolkitValue;
