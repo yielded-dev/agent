@@ -31,9 +31,15 @@ import {
   FileSystem,
   Option,
   Result,
+  Redacted,
   Schema,
 } from "effect";
 
+import {
+  DependencySources,
+  loadDependencySources,
+  type DependencySnapshot,
+} from "./dependency-sources.ts";
 import { type GeneratedContentOmission, omitGeneratedSourceMaps } from "./generated-content.ts";
 import {
   type ChangedFile,
@@ -83,6 +89,8 @@ const MAX_HYDRATED_SOURCE_BYTES = 16_000_000;
 const ACTION_INPUT_BY_CONFIG: Readonly<Record<string, string>> = {
   OPENAI_API_KEY: "INPUT_OPENAI-API-KEY",
   GITHUB_TOKEN: "INPUT_GITHUB-TOKEN",
+  PR_REVIEW_DEPENDENCY_SOURCES: "INPUT_DEPENDENCY-SOURCES",
+  PR_REVIEW_DEPENDENCY_TOKEN: "INPUT_DEPENDENCY-TOKEN",
   PR_REVIEW_PULL_REQUEST: "INPUT_PULL-REQUEST",
   PR_REVIEW_AUTHOR: "INPUT_REVIEW-AUTHOR",
   PR_REVIEW_MODE: "INPUT_MODE",
@@ -711,24 +719,45 @@ export const makeReviewRepository = (input: {
   readonly head: RepositorySnapshot;
   readonly ignore: ReadonlyArray<string>;
   readonly unavailablePaths: ReadonlySet<string>;
+  readonly dependencies?: ReadonlyArray<DependencySnapshot>;
 }): ReviewRepository["Service"] => {
-  const snapshot = (revision: "base" | "head") => (revision === "base" ? input.base : input.head);
+  const snapshot = (request: { readonly revision: "base" | "head"; readonly source?: string }) => {
+    if (request.source === undefined)
+      return Effect.succeed(request.revision === "base" ? input.base : input.head);
 
-  const outsideScope = (path: string) =>
+    const dependency = input.dependencies?.find(
+      ({ scope }) => scope.source === request.source && scope.revision === request.revision,
+    );
+
+    return dependency?.snapshot === undefined
+      ? Effect.fail(
+          reviewContextFailure(
+            "Dependency source is unavailable. Consult list_sources once; do not retry guessed paths or public searches for private source.",
+          ),
+        )
+      : Effect.succeed(dependency.snapshot);
+  };
+
+  const outsideScope = (path: string, source?: string) =>
+    path
+      .split("/")
+      .some((part) => part === "" || part === "." || part === ".." || part === "node_modules") ||
+    path.includes("\\") ||
     isBinaryAssetPath(path) ||
-    input.unavailablePaths.has(path) ||
-    input.ignore.some((pattern) => matchesIgnore(path, pattern));
+    (source === undefined &&
+      (input.unavailablePaths.has(path) ||
+        input.ignore.some((pattern) => matchesIgnore(path, pattern))));
 
   const isReadableEntry = (entry: ReturnType<RepositorySnapshot["entry"]>) =>
     entry?.type === "blob" && entry.mode !== "120000";
 
   const readFile = Effect.fnUntraced(function* (request: ReviewReadFileInput) {
-    if (outsideScope(request.path)) {
+    if (outsideScope(request.path, request.source)) {
       return yield* reviewContextFailure(
         "The requested path is outside this review's source scope.",
       );
     }
-    const selected = snapshot(request.revision);
+    const selected = yield* snapshot(request);
 
     if (!isReadableEntry(selected.entry(request.path))) {
       return yield* reviewContextFailure(
@@ -749,32 +778,30 @@ export const makeReviewRepository = (input: {
     return yield* ReviewSource.fromText(request, content);
   });
 
-  const findFiles = (request: ReviewFindFilesInput) => {
-    const selected = snapshot(request.revision);
+  const findFiles = Effect.fnUntraced(function* (request: ReviewFindFilesInput) {
+    const selected = yield* snapshot(request);
 
     const matches = selected.paths
       .filter(
         (path) =>
           path.length <= 512 &&
-          !outsideScope(path) &&
+          !outsideScope(path, request.source) &&
           isReadableEntry(selected.entry(path)) &&
           path.includes(request.query),
       )
       .sort();
 
-    return Effect.succeed(
-      ReviewFileList.make({ paths: matches.slice(0, 100), truncated: matches.length > 100 }),
-    );
-  };
+    return ReviewFileList.make({ paths: matches.slice(0, 100), truncated: matches.length > 100 });
+  });
 
   const searchCode = Effect.fnUntraced(function* (request: ReviewSearchCodeInput) {
-    const selected = snapshot(request.revision);
+    const selected = yield* snapshot(request);
 
     const paths = selected.paths
       .filter(
         (path) =>
           path.length <= 512 &&
-          !outsideScope(path) &&
+          !outsideScope(path, request.source) &&
           isReadableEntry(selected.entry(path)) &&
           path.includes(request.path),
       )
@@ -830,7 +857,12 @@ export const makeReviewRepository = (input: {
     });
   });
 
-  return ReviewRepository.of({ readFile, findFiles, searchCode });
+  return ReviewRepository.of({
+    dependencySources: input.dependencies?.map(({ scope }) => scope) ?? [],
+    readFile,
+    findFiles,
+    searchCode,
+  });
 };
 
 export const reviewEventFor = (blockingFindings: number): "COMMENT" | "REQUEST_CHANGES" =>
@@ -881,6 +913,31 @@ const prepareReview = Effect.gen(function* () {
   );
 
   const token = yield* Config.Redacted("GITHUB_TOKEN");
+
+  const dependencyConfiguration = yield* Config.String("PR_REVIEW_DEPENDENCY_SOURCES").pipe(
+    Config.withDefault("[]"),
+    Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(DependencySources))),
+    Effect.mapError(() =>
+      ActionConfigurationError.make({
+        message:
+          "Invalid dependency-sources: supply at most eight unique aliases, owner/repository names and allowlisted full 40-character lowercase commit SHAs.",
+      }),
+    ),
+  );
+
+  if (
+    new Set(dependencyConfiguration.map(({ alias }) => alias)).size !==
+    dependencyConfiguration.length
+  ) {
+    return yield* ActionConfigurationError.make({
+      message: "dependency-sources aliases must be unique.",
+    });
+  }
+
+  const dependencyToken = yield* Config.Redacted("PR_REVIEW_DEPENDENCY_TOKEN").pipe(
+    Config.option,
+    Effect.map(Option.filter((value) => Redacted.value(value).length > 0)),
+  );
 
   const reviewAuthor = yield* Config.NonEmptyString("PR_REVIEW_AUTHOR").pipe(
     Config.withDefault("github-actions[bot]"),
@@ -1042,6 +1099,9 @@ const prepareReview = Effect.gen(function* () {
     baseCostUsd,
     guidanceFile,
     ignore,
+    dependencyConfiguration,
+    dependencyToken: Option.getOrElse(dependencyToken, () => token),
+    apiUrl,
   };
 });
 
@@ -1064,6 +1124,9 @@ const reviewPullRequest = Effect.fnUntraced(function* (
     baseCostUsd,
     guidanceFile,
     ignore,
+    dependencyConfiguration,
+    dependencyToken,
+    apiUrl,
   } = prepared;
 
   let unresolvedReviews = selectUnresolvedChangeRequests({ reviewAuthor, history });
@@ -1163,7 +1226,16 @@ const reviewPullRequest = Effect.fnUntraced(function* (
       yield* Effect.logInfo("Generated source-map payloads omitted", { ...omission });
     }
 
+    const dependencies = yield* loadDependencySources({
+      configuration: dependencyConfiguration,
+      base: comparison.base,
+      head: comparison.head,
+      token: dependencyToken,
+      apiUrl,
+    });
+
     const reviewRepository = makeReviewRepository({
+      dependencies,
       base: comparison.base,
       head: comparison.head,
       ignore,

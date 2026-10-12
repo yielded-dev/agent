@@ -172,7 +172,11 @@ the newest 60 entries within 32,000 serialized characters, clipping each body at
 Uncorrelated dismissal events and omitted or clipped context are marked partial; a failed or
 mismatched response is marked unavailable. A missing review commit does not exclude otherwise
 attributable dismissal evidence.
-The source tools read committed Git files and do not install dependencies.
+The source tools read committed Git files and do not install dependencies or expose the runner's
+filesystem. `list_sources` identifies authorized dependency aliases and their availability at each
+reviewed revision. Missing dependency internals alone do not require an exhaustive dependency audit;
+`blockedOn` remains appropriate when a specific material contract of the changed behavior cannot
+be assessed from the available evidence. Unseen internals are never treated as verified.
 
 Set `web-search: "true"` (local `PR_REVIEW_WEB_SEARCH=true`) to let the reviewer
 search and open public documentation through OpenAI's hosted web tool. It is off
@@ -258,6 +262,56 @@ five matching lines per file. Snippets retain the complete query within 200 char
 cursor identifies more files; `truncated` identifies omitted matching lines, and unreadable paths
 are listed separately. A partial search cannot establish that no callers exist. Ignore rules,
 binary exclusions, and symlink restrictions apply equally to reads, filename search, and code search.
+
+### Pinned dependency source
+
+Use `dependency-sources` to authorize source reads from selected GitHub dependency repositories.
+The trusted workflow owns the aliases, repositories, allowed commits, and credentials. Never build
+this input from PR-controlled files or expressions. A root `package.json` catalog entry selects an
+allowed pin separately at the exact review base and head (including an incremental baseline):
+
+```yaml
+with:
+  dependency-sources: |
+    [{"alias":"@example/adapter","repository":"example/adapter","commits":["0123456789abcdef0123456789abcdef01234567"]}]
+  dependency-token: ${{ steps.dependency-token.outputs.token }}
+```
+
+The catalog value must be `git+https://github.com/OWNER/REPO.git#FULL_COMMIT_SHA` (Bun's empty
+username form `git+https://@github.com/…` is also accepted). This is source for the declared catalog
+pin, not an installed-package or lockfile resolver. Other manifests, registry versions, named
+catalogs, branch/tag refs, credentials in URLs, and repositories on other hosts are unsupported.
+Allow both commits during a pin change; one revision's source never substitutes for the other's.
+Unapproved or unsupported pins stay unavailable without granting access to the requested target.
+
+For a private dependency, install a GitHub App on only the required repository with **Contents:
+read** permission. Mint a separate installation token in the trusted workflow, for example:
+
+```yaml
+- uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+  id: dependency-token
+  with:
+    app-id: ${{ secrets.DEPENDENCY_APP_ID }}
+    private-key: ${{ secrets.DEPENDENCY_APP_PRIVATE_KEY }}
+    owner: example
+    repositories: adapter
+    permission-contents: read
+```
+
+Pass that token through `dependency-token`; it does not change the review/check publishing identity.
+An existing App with access can mint an equally restricted token instead. No organization-wide token
+or dependency write permission is needed. The input defaults to `github-token`, but the workflow's
+`github.token` is scoped to the consumer repository and cannot read another private repository.
+For local use, set `PR_REVIEW_DEPENDENCY_SOURCES` and `PR_REVIEW_DEPENDENCY_TOKEN`.
+
+At most eight aliases with eight allowed full lowercase 40-character commit SHAs each are accepted.
+Only the two selected trees per alias are exposed. Reads use GitHub's immutable commit/tree/blob
+APIs and the existing source bounds: 200 lines/20,000 characters per read, 2 MB per text blob,
+100 filename matches, and twenty files per code-search page. Symlinks, submodules, binary paths,
+traversal, and `node_modules` are unavailable. Dependency paths are relative to their own tree;
+the consumer's `ignore` input applies only to consumer source. A failed tree acquisition is recorded
+once for the attempt; the inventory tells the reviewer to stop retrying and identifies the host
+permission/pin check needed. No dependency lifecycle scripts or PR-head code execute.
 
 ### Generated files
 

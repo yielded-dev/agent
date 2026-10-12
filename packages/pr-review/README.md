@@ -13,6 +13,13 @@ Read inline diffs directly without fetching them again. Pages contain at most 32
 characters and can cross file boundaries or split lines.
 Original unified patches, hunk coordinates, deletions, renames, and mode metadata remain intact.
 
+`list_sources` lists host-authorized dependency aliases, exact commits, and availability separately
+for the consumer's base and head. An empty list means only the reviewed repository is available.
+Source tools accept an optional `source` alias from that inventory; omission selects the reviewed
+repository. Dependency paths are relative to their own tree. There is no ambient installed-package
+or runner filesystem access. An unavailable scope is not retried through guessed paths or public
+web searches for private symbols.
+
 `read_file` reads up to 200 lines and 20,000 characters at the exact base or head.
 `find_files` searches filenames. `search_code` searches literal, case-sensitive source text to
 find definitions, callers, consumers, and tests, including unchanged code. Its path filter is a
@@ -95,8 +102,10 @@ coverage are already known. Direct submission still checks for unread ranges.
 Completion means a source-based assessment of the admitted changes and material supported
 hypotheses, not proof of correctness or an exhaustive audit of every dependency. The model can
 report `blockedOn` only for specific unavailable evidence, naming the affected behavior and its
-attempts to retrieve that evidence. It must still review the remaining patches. The bounded
-reason is retained in the outcome and summary, forces incompleteness, and prevents resolutions.
+unavailable source scope or failed retrieval. Missing transitive implementation alone does not
+require auditing an existing dependency; assess changed wiring against available contracts and
+caller evidence without claiming unseen internals were verified. It must still review the remaining
+patches. The bounded reason is retained in the outcome and summary, forces incompleteness, and prevents resolutions.
 Excluded artifacts, lack of live execution, and hypothetical uncertainty do not themselves
 block assessment of the admitted change.
 
@@ -165,8 +174,8 @@ and one to three distinct admitted changed paths. Instructions ask neutrally for
 refuting evidence and discourage generic second reviews; children use the same finding rubric.
 The host selects their exact patches, rejecting more than 32,000 total patch characters.
 Children receive the immutable revisions and current saved findings, and can use the
-three repository read tools, the host's optional web search, `record_finding`, and `finish_research`. The completion contains
-an evidence summary and incomplete flag; findings go directly to the same canonical ledger.
+source inventory and three repository read tools, the host's optional web search, `record_finding`,
+and `finish_research`. The completion contains an evidence summary and incomplete flag; findings go directly to the same canonical ledger.
 Children cannot delegate further, establish parent diff coverage, or resolve prior reviews.
 
 Native reservations and child fibers belong to the review's Scope. Child compaction cannot
@@ -211,8 +220,10 @@ const program = reviewer.review(request).pipe(Effect.provideService(ReviewReposi
 ```
 
 `ReviewRepository` implementations provide typed Effect operations for `readFile`, `findFiles`,
-and `searchCode`. Hosts authorize source sent to models, pin immutable revisions, enforce read
-bounds, and treat all source and model output as untrusted. The reviewer has no ambient filesystem
+and `searchCode`. An optional `dependencySources` inventory admits named dependency scopes;
+without it, tool calls selecting a dependency fail closed. Hosts must bind each admitted alias
+and revision to its declared immutable commit and enforce the same read bounds. Hosts authorize
+source sent to models, pin immutable revisions, enforce read bounds, and treat all source and model output as untrusted. The reviewer has no ambient filesystem
 or network access; optional hosted search is supplied explicitly. `ReviewSource.fromText` applies the shared source-range bounds.
 
 The navigable diff approach is informed by [Pullfrog's review workflow](https://github.com/pullfrog/pullfrog/blob/0212dedb0f92b8ba4020c17dc30d3eced32415d7/modes.ts)
