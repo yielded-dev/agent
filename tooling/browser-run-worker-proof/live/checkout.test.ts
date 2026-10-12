@@ -1,7 +1,8 @@
+import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 
-import * as Cloudflare from "alchemy/Cloudflare";
-import * as Test from "alchemy/Test/Vitest";
+import { NodeServices } from "@effect/platform-node";
+import { it } from "@effect/vitest";
 import {
   Cause,
   Clock,
@@ -9,20 +10,34 @@ import {
   Effect,
   Exit,
   FileSystem,
+  Layer,
   Option,
   Redacted,
   Schedule,
   Schema,
+  Stream,
 } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { Evidence, type Receipt, RunId, WorkerFailure } from "../src/proof.ts";
-import { checkoutStack } from "../src/stack.ts";
 
-const lifecycle = Test.make({ providers: Cloudflare.providers(), dev: false });
 const Commit = Schema.String.check(Schema.isPattern(/^[a-f0-9]{40}$/));
 const Failure = Schema.Struct({ stage: Schema.String, status: Schema.NullOr(Schema.Int) });
+
+const WorkerBindings = Schema.Struct({
+  CHECKOUT_TOKEN: Schema.String,
+  CHECKOUT_PASSWORD: Schema.String,
+  CHECKOUT_MODEL: Schema.String,
+  OPENAI_API_KEY: Schema.String,
+  CLOUDFLARE_ACCOUNT_ID: Schema.String,
+  BROWSER_RENDERING_API_TOKEN: Schema.String,
+});
+
+const AccountSubdomain = Schema.Struct({
+  success: Schema.Literal(true),
+  result: Schema.Struct({ subdomain: Schema.String }),
+});
 
 class GateFailure extends Schema.TaggedError<GateFailure>()(
   "CheckoutGateFailure",
@@ -126,7 +141,7 @@ const proof = Effect.gen(function* () {
   if (yield* Config.Boolean("ALCHEMY_TEST_DEV").pipe(Config.withDefault(false)))
     return yield* fail("configuration:hosted-required");
 
-  // Validate bindings before Alchemy provisions anything, including during recovery.
+  // Validate bindings before provisioning anything, including during recovery.
   for (const name of [
     "CHECKOUT_MODEL",
     "CHECKOUT_TOKEN",
@@ -156,22 +171,96 @@ const proof = Effect.gen(function* () {
   const origin = "https://" + workerName + "." + subdomain + ".workers.dev";
   const directory = ".checkout-proof/" + run;
   const reportPath = directory + "/report.json";
+  const accountUrl = "https://api.cloudflare.com/client/v4/accounts/" + account;
+  const workerUrl = accountUrl + "/workers/scripts/" + workerName;
   let report: typeof Report.Type;
 
   const workerStatus = client
-    .execute(
-      HttpClientRequest.get(
-        "https://api.cloudflare.com/client/v4/accounts/" +
-          account +
-          "/workers/scripts/" +
-          workerName,
-      ).pipe(HttpClientRequest.bearerToken(cloudflareToken)),
-    )
+    .execute(HttpClientRequest.get(workerUrl).pipe(HttpClientRequest.bearerToken(cloudflareToken)))
     .pipe(
       Effect.map((response) => response.status),
       Effect.timeout("30 seconds"),
       Effect.mapError(() => fail("worker-status")),
     );
+
+  // Recovery must confirm closure on the same account whose Worker it retires.
+  yield* Effect.gen(function* () {
+    const response = yield* client.execute(
+      HttpClientRequest.get(accountUrl + "/workers/subdomain").pipe(
+        HttpClientRequest.bearerToken(cloudflareToken),
+      ),
+    );
+
+    if (response.status !== 200) return yield* fail("configuration:subdomain", response.status);
+
+    const observed = yield* response.text.pipe(
+      Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(AccountSubdomain))),
+    );
+
+    if (observed.result.subdomain !== subdomain)
+      return yield* fail("configuration:origin-mismatch");
+  }).pipe(
+    Effect.timeout("30 seconds"),
+    Effect.mapError((error) =>
+      Schema.is(GateFailure)(error) ? error : fail("configuration:subdomain"),
+    ),
+  );
+
+  const deploy = Effect.gen(function* () {
+    const temporary = yield* fs.makeTempDirectoryScoped({ prefix: "checkout-worker-" });
+    const secretsPath = temporary + "/bindings.json";
+
+    const bindings = yield* Schema.encodeEffect(Schema.fromJsonString(WorkerBindings))({
+      CHECKOUT_TOKEN: Redacted.value(token),
+      CHECKOUT_PASSWORD: Redacted.value(yield* Config.Redacted("CHECKOUT_PASSWORD")),
+      CHECKOUT_MODEL: model,
+      OPENAI_API_KEY: Redacted.value(yield* Config.Redacted("OPENAI_API_KEY")),
+      CLOUDFLARE_ACCOUNT_ID: account,
+      BROWSER_RENDERING_API_TOKEN: Redacted.value(
+        yield* Config.Redacted("BROWSER_RENDERING_API_TOKEN"),
+      ),
+    });
+
+    yield* fs.writeFileString(secretsPath, bindings, { mode: 0o600 });
+
+    // A single upload prevents the DO from serving an earlier empty bootstrap class.
+    const child = yield* ChildProcess.make(
+      "vp",
+      [
+        "exec",
+        "wrangler",
+        "deploy",
+        "--config",
+        fileURLToPath(new URL("../wrangler.jsonc", import.meta.url)),
+        "--name",
+        workerName,
+        "--secrets-file",
+        secretsPath,
+        "--no-autoconfig",
+      ],
+      {
+        cwd: fileURLToPath(new URL("..", import.meta.url)),
+        env: {
+          CI: "true",
+          CLOUDFLARE_ACCOUNT_ID: account,
+          CLOUDFLARE_API_TOKEN: Redacted.value(cloudflareToken),
+          WRANGLER_SEND_METRICS: "false",
+          WRANGLER_WRITE_LOGS: "false",
+        },
+        extendEnv: true,
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+
+    yield* Stream.runDrain(child.all);
+    if ((yield* child.exitCode) !== 0) return yield* fail("deployment:wrangler");
+  }).pipe(
+    Effect.scoped,
+    Effect.timeout("5 minutes"),
+    Effect.mapError((error) => (Schema.is(GateFailure)(error) ? error : fail("deployment"))),
+  );
 
   const save = Effect.fnUntraced(
     function* () {
@@ -286,9 +375,18 @@ const proof = Effect.gen(function* () {
       // Persist closure before teardown. A failed close preserves the owner and its alarm.
       report = { ...report, cleanup: "browsers-closed" };
       yield* save();
-      yield* lifecycle
-        .destroy(checkoutStack, { stage: run })
+
+      const removed = yield* client
+        .execute(
+          HttpClientRequest.delete(workerUrl).pipe(
+            HttpClientRequest.setUrlParam("force", "true"),
+            HttpClientRequest.bearerToken(cloudflareToken),
+          ),
+        )
         .pipe(Effect.mapError(() => fail("cleanup:destroy")));
+
+      if (removed.status !== 200 && removed.status !== 404)
+        return yield* fail("cleanup:destroy", removed.status);
       const absent = yield* workerStatus;
 
       if (absent !== 404) return yield* fail("cleanup:worker-remains", absent);
@@ -315,12 +413,7 @@ const proof = Effect.gen(function* () {
   );
 
   const checkout = Effect.gen(function* () {
-    const deployed = yield* lifecycle
-      .deploy(checkoutStack, { stage: run })
-      .pipe(Effect.mapError(() => fail("deployment")));
-
-    if (deployed.workerName !== workerName || deployed.url !== origin)
-      return yield* fail("deployment:origin-mismatch");
+    yield* deploy;
     // Wait for the fresh namespace's authenticated receiver before the one-shot dispatch.
     yield* request("evidence").pipe(
       Effect.filterOrFail(
@@ -427,4 +520,6 @@ const proof = Effect.gen(function* () {
   Effect.provideService(FetchHttpClient.RequestInit, { redirect: "error" }),
 );
 
-lifecycle.test("submits once and verifies the independent receipt and browser closure", proof);
+it.live("submits once and verifies the independent receipt and browser closure", () =>
+  proof.pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, FetchHttpClient.layer))),
+);
