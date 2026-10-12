@@ -313,8 +313,7 @@ describe("PR commit review checks", () => {
 
         if (url.pathname.includes("/check-runs")) {
           expect(request.headers.authorization).toBe("Bearer checks-token");
-          if (request.method === "GET") body = { total_count: checks.length, check_runs: checks };
-          else if (request.method === "POST") {
+          if (request.method === "POST") {
             body = { ...check, id: 100 + checks.length };
             checks.push({ ...check, id: 100 + checks.length });
           } else body = checks.find(({ id }) => url.pathname.endsWith(`/${String(id)}`));
@@ -491,14 +490,15 @@ describe("PR commit review checks", () => {
 
       prior.state = "DISMISSED";
       yield* test.run();
-      expect(test.writes).toHaveLength(2);
-
-      yield* test.run(manual);
       expect(test.writes).toHaveLength(4);
       expect(test.writes.at(-1)?.body).toMatchObject({ conclusion: "success" });
 
+      yield* test.run(manual);
+      expect(test.writes).toHaveLength(6);
+      expect(test.writes.at(-1)?.body).toMatchObject({ conclusion: "success" });
+
       yield* test.run();
-      expect(test.writes).toHaveLength(4);
+      expect(test.writes).toHaveLength(8);
 
       history.push(
         reviewHistoryWire(
@@ -620,7 +620,7 @@ describe("PR commit review checks", () => {
       yield* test.run(options);
       expect(published).toHaveLength(1);
       expect(sourceReads).toBe(0);
-      expect(test.writes).toHaveLength(2);
+      expect(test.writes).toHaveLength(4);
 
       yield* test.run({
         ...options,

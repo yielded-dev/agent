@@ -44,11 +44,6 @@ const CheckRunWire = Schema.Struct({
   external_id: Schema.NullOr(ShortString),
 });
 
-const CheckRunsWire = Schema.Struct({
-  total_count: Schema.Natural.check(Schema.isLessThanOrEqualTo(100)),
-  check_runs: Schema.Array(CheckRunWire).check(Schema.isMaxLength(100)),
-});
-
 export interface ReviewCheck {
   readonly id: number;
   readonly name: string;
@@ -1258,26 +1253,6 @@ export const makeGitHubClient = Effect.fnUntraced(function* (options: {
     wire.head_sha === check.headRevision &&
     wire.external_id === checkExternalId;
 
-  /** Skipped events preserve an existing attempt instead of replacing its result. */
-  const hasReviewCheck = Effect.fnUntraced(function* (check: Omit<ReviewCheck, "id">) {
-    const result = yield* readJson(
-      "list review checks",
-      HttpClientRequest.get(
-        `${apiUrl}/repos/${options.repository}/commits/${encodeURIComponent(check.headRevision)}/check-runs`,
-      ).pipe(
-        HttpClientRequest.setUrlParams({
-          check_name: check.name,
-          filter: "latest",
-          per_page: "100",
-        }),
-      ),
-      CheckRunsWire,
-      checksToken,
-    );
-
-    return result.check_runs.some((wire) => validateCheck(wire, check));
-  });
-
   const writeReviewCheck = Effect.fnUntraced(function* (
     operation: string,
     request: HttpClientRequest.HttpClientRequest,
@@ -1367,7 +1342,6 @@ export const makeGitHubClient = Effect.fnUntraced(function* (options: {
     acknowledgeComment,
     publishReview,
     publishAttemptMarker,
-    hasReviewCheck,
     startReviewCheck,
     completeReviewCheck,
   } as const;

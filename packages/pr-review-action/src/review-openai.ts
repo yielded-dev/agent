@@ -63,12 +63,14 @@ export const reviewCostLimitMicrousd = (
 };
 
 const MAX_INPUT_TOKENS = 128_000;
+// Search context is not total billed input. Reserve the complete supported price band.
+// https://developers.openai.com/api/docs/pricing
+const MAX_PRICED_INPUT_TOKENS = 272_000;
 const MAX_OUTPUT_TOKENS = 32_000;
-// Responses web search has a 128k context and bills $0.01 per search, at either tier.
-// https://developers.openai.com/api/docs/guides/tools-web-search#limitations
+// Responses web search bills $0.01 per search, at either tier.
 // https://developers.openai.com/api/docs/pricing#built-in-tools
 const WEB_SEARCH_COST_MICROUSD = 10_000;
-const PRICING_VERSION = "openai-2026-09-29";
+const PRICING_VERSION = "openai-2026-10-12";
 
 interface Pricing {
   readonly label: string;
@@ -79,7 +81,7 @@ interface Pricing {
   readonly output: number;
 }
 
-// Hundredths of a microdollar per token. Direct OpenAI, standard tier, <=128k input.
+// Hundredths of a microdollar per token. Direct OpenAI, standard tier, <=272k input.
 // https://developers.openai.com/api/docs/pricing
 const modelPricing: Readonly<Record<string, Pricing>> = {
   "gpt-6-astra": {
@@ -290,6 +292,7 @@ interface Reservation {
 interface Spending {
   readonly stopped: boolean;
   readonly inputLimitExceeded: boolean;
+  readonly stopReason: string | undefined;
   readonly closed: boolean;
   readonly modelCalls: number;
   readonly pending: ReadonlyMap<number, Reservation>;
@@ -338,6 +341,7 @@ export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
   const state = yield* Ref.make<Spending>({
     stopped: false,
     inputLimitExceeded: false,
+    stopReason: undefined,
     closed: false,
     modelCalls: 0,
     pending: new Map(),
@@ -353,7 +357,11 @@ export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
   const close = Ref.update(state, (current) => ({ ...current, closed: true }));
 
   const refuse = Effect.fnUntraced(function* (message: string) {
-    yield* close;
+    yield* Ref.update(state, (current) => ({
+      ...current,
+      closed: true,
+      stopReason: current.stopReason ?? message,
+    }));
     // These messages are fixed host diagnostics, never provider text or causes.
     yield* Effect.logWarning("Review request refused", { reason: message });
 
@@ -455,7 +463,7 @@ export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
         inputTokenLimit: MAX_INPUT_TOKENS,
       });
 
-      return yield* refuse("The counted review input exceeds the 128,000-token price boundary.");
+      return yield* refuse("The counted review input exceeds the 128,000-token request limit.");
     }
     const requestedOutputTokens = original.max_output_tokens ?? MAX_OUTPUT_TOKENS;
 
@@ -467,9 +475,9 @@ export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
 
     const webToolCalls = canSearch ? REVIEW_WEB_SEARCH_MAX_TOOL_CALLS : 0;
     const searchCost = webToolCalls * WEB_SEARCH_COST_MICROUSD;
-    // Preflight cannot count retrieved text. Reserve the entire documented search
-    // context at the cache-write rate, then settle only observed tokens and searches.
-    const reservedInputTokens = canSearch ? MAX_INPUT_TOKENS : inputTokens;
+    // Hosted retrieval adds input after preflight. Reserve the supported price
+    // band's full input allowance, then settle only observed tokens and searches.
+    const reservedInputTokens = canSearch ? MAX_PRICED_INPUT_TOKENS : inputTokens;
 
     const outputTokens = Math.min(
       requestedOutputTokens,
@@ -572,7 +580,6 @@ export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
     if (
       response.model !== options.model ||
       chargedPricing === undefined ||
-      usage.input_tokens > reservation.inputTokens ||
       usage.output_tokens > reservation.outputTokens ||
       webSearchCalls > reservation.webToolCalls ||
       (reservation.webToolCalls === 0 && webCalls.length > 0)
@@ -590,6 +597,11 @@ export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
       });
 
       return yield* refuse("Provider response violated the counted model and tier price contract.");
+    }
+    if (usage.input_tokens > reservation.inputTokens) {
+      return yield* refuse(
+        `Provider input usage (${String(usage.input_tokens)} tokens) exceeded the reserved ${String(reservation.inputTokens)}-token pricing allowance.`,
+      );
     }
     const read = usage.input_tokens_details.cached_tokens;
     const write = usage.input_tokens_details.cache_write_tokens;
@@ -677,6 +689,7 @@ export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
       ReviewCostSnapshot.make({
         stopped: current.stopped,
         ...(current.inputLimitExceeded ? { inputLimitExceeded: true } : {}),
+        ...(current.stopReason === undefined ? {} : { stopReason: current.stopReason }),
         modelCalls: current.modelCalls,
         usage: ReviewUsage.make({
           inputTokens: current.input,

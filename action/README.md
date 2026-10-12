@@ -29,16 +29,16 @@ project code with repository write permission. Package releases remain separate.
 ## PR check status
 
 Set the same `check-name` for automatic and comment-triggered reviews. In a workflow that
-already authorizes review commands, add `checks: write` to its permissions and these inputs:
+already authorizes review commands, grant the review GitHub App Checks write permission,
+request `permission-checks: write` when minting its installation token, and pass that token:
 
 ```yaml
 check-name: Effect Agent review
-checks-token: ${{ github.token }}
+checks-token: ${{ steps.app-token.outputs.token }}
 ```
 
-`checks-token` defaults to `github-token`. Passing `github.token` separately lets the reviewer
-keep its existing GitHub App identity without granting that App Checks write permission.
-Omitting `check-name` preserves existing behavior and requires no new permissions.
+`checks-token` defaults to `github-token`. Use the same App for automatic and manual checks;
+the workflow token needs no Checks write permission. Omitting `check-name` disables checks.
 
 Each admitted review creates an **in progress** check on the inspected PR head, linked to the
 workflow and then the published review. Manual retries replace the displayed result under the
@@ -65,8 +65,8 @@ prefix with `contains(github.event.comment.body, '@effect-agent')`. Pass the raw
 The Action skips unsupported mentions before making GitHub or model requests.
 
 Complete reviews without unresolved blockers pass. Blockers and incomplete coverage fail;
-a paused, unreviewed commit requires action. Automatic skipped events preserve an existing check
-unless trusted history requires an incomplete result; missing checks report trusted review history.
+a paused, unreviewed commit requires action. Automatic skipped events refresh the check from
+trusted review history without another model call, even when a check already exists.
 The [dismiss command](#dismissing-a-review) records a reason and refreshes the check in one run.
 After using GitHub's **Dismiss review** UI instead, request
 `@effect-agent review` on the unchanged head to refresh its check without another model call
@@ -79,9 +79,10 @@ Cancellation closes the attempt's check when cleanup can run. A push during publ
 only the inspected head's check. Check writes time out after ten seconds and are never retried;
 runner loss or an uncertain write can leave a check in progress until another review replaces it.
 
-For required reviews, configure branch protection to require this check from its publishing app.
-Enabling it does not change branch protection or rewrite old workflow results. A new push after
-the workflow upgrade refreshes the PR's workflow job; later manual reviews update the shared check.
+For required reviews, configure branch protection to require `Effect Agent review` from the
+Effect Agent App and the separate `ready` check from GitHub Actions. Consumers using another
+review App or check name must select that publishing App and name. Enabling checks does not
+configure branch protection; manual reviews update the same required review check.
 
 ### Dismissing a review
 
@@ -334,9 +335,11 @@ with extra hosted output items produces a count-only warning. Token usage, billa
 and total cost must fit the reservation; exceeding those bounds stops the review as incomplete
 and retains its reservation.
 The model may continue searching or opening pages in later turns. Because preflight cannot count
-retrieved text, admission reserves the full 128,000-token search context at the
-cache-write rate, plus eight $0.01 searches and the output allowance. Settlement charges
-observed tokens and searches within the same spending cap. This conservative reserve
+retrieved text, admission reserves the full supported 272,000-token short-context pricing allowance
+at the cache-write rate, plus eight $0.01 searches and the output allowance. Observed input beyond
+that supported allowance stops the review with a specific safe host reason and retains its
+reservation. Preflight input remains limited to 128,000 tokens. Settlement charges observed tokens
+and searches within the same spending cap. This conservative reserve
 can stop a review while some allowance remains. Exact-function finalization uses the
 ordinary counted reservation. Search pricing follows
 [OpenAI's built-in tool rates](https://developers.openai.com/api/docs/pricing#built-in-tools).
@@ -374,7 +377,8 @@ report with those diagnostics even when no finding was recorded. Each review's l
 show model calls, ordinary input, cache reads, cache writes, output, cache-hit ratio, and estimated
 cost. Provider failures identify the model call, request or stream phase, typed reason, transport
 category, HTTP status, and bounded request ID when available. Admission refusals use fixed host
-messages to distinguish invalid usage or pricing contracts from network failures. Raw provider
+messages to distinguish invalid usage or pricing contracts from network failures. The review body
+and check summary include the safe host stop reason. Raw provider
 failure causes, response bodies, credentials, and repository source are excluded from diagnostics.
 Stream error events log a recognized public provider error code or `unrecognized`, alongside the
 request ID. Error messages and parameters remain excluded. A provider error event can surface as

@@ -216,6 +216,8 @@ describe("review provider boundary", () => {
   // https://github.com/yielded-dev/agent/commit/65b285991
   // Charged searches but rejected all hosted outputs above eight.
   // Control the provider boundary: live inference cannot reliably reproduce that output.
+  // PR #862 also returned 140,435 billed input tokens after a 98,180-token preflight.
+  // Hosted search context is not the complete response's billed input total.
   it.effect.each([false, true])(
     "settles nine hosted outputs with two searches and continues (streaming=%s)",
     (streaming) =>
@@ -239,9 +241,9 @@ describe("review provider boundary", () => {
           HttpClient.make((httpRequest, url) =>
             Effect.sync(() => {
               if (url.pathname.endsWith("/input_tokens"))
-                return json(httpRequest, { object: "response.input_tokens", input_tokens: 10_000 });
+                return json(httpRequest, { object: "response.input_tokens", input_tokens: 98_180 });
               sent.push(decodeWire(httpRequest));
-              const completed = { ...response(rawUsage(10_000, 500, 2_000, 1_000)), output };
+              const completed = { ...response(rawUsage(140_435, 500, 100_000, 10_000)), output };
 
               return streaming
                 ? HttpClientResponse.fromWeb(
@@ -259,8 +261,8 @@ describe("review provider boundary", () => {
         const provider = yield* makeReviewOpenAi({
           model: "gpt-6-sol",
           cacheKey: "hosted-actions",
-          // One $0.0419 settlement leaves exactly the next $0.72 full reservation.
-          costLimitMicrousd: 761_900,
+          // One $0.13087 settlement leaves the next full $1.08 reservation.
+          costLimitMicrousd: 1_210_870,
         }).pipe(Effect.provideService(OpenAiClient.OpenAiClient, native));
 
         const input: OpenAiSchema.CreateResponse = {
@@ -279,7 +281,7 @@ describe("review provider boundary", () => {
         expect(yield* provider.costControl.snapshot).toMatchObject({
           stopped: false,
           modelCalls: 1,
-          usage: { webSearchCalls: 2, estimatedCostMicrousd: 41_900, reservedCostMicrousd: 0 },
+          usage: { webSearchCalls: 2, estimatedCostMicrousd: 130_870, reservedCostMicrousd: 0 },
         });
         yield* operation;
         expect(sent).toHaveLength(2);
@@ -287,7 +289,7 @@ describe("review provider boundary", () => {
           expect(wire).toMatchObject({ max_tool_calls: 8, max_output_tokens: 32_000 });
         expect(yield* provider.costControl.snapshot).toMatchObject({
           modelCalls: 2,
-          usage: { webSearchCalls: 4, estimatedCostMicrousd: 83_800, reservedCostMicrousd: 0 },
+          usage: { webSearchCalls: 4, estimatedCostMicrousd: 261_740, reservedCostMicrousd: 0 },
         });
       }),
   );
@@ -357,7 +359,7 @@ describe("review provider boundary", () => {
           modelCalls: 1,
           usage: {
             estimatedCostMicrousd: 0,
-            reservedCostMicrousd: forbidden ? 345_000 : 720_000,
+            reservedCostMicrousd: forbidden ? 345_000 : 1_000_000,
           },
         });
         yield* provider.client.createResponse(input).pipe(Effect.flip);
@@ -605,15 +607,17 @@ describe("review provider boundary", () => {
     }),
   );
 
-  it.effect.each(["complete", "cost-finding"] as const)(
+  // PR #862's completed Action hid its accounting refusal behind "Review incomplete".
+  // Force that provider boundary here: a live model cannot reliably produce the violation.
+  it.effect.each(["complete", "cost-finding", "provider-accounting"] as const)(
     "recovers an automatic review after a rebase with outcome %s under the same cap",
     (outcome) =>
       Effect.gen(function* () {
         const complete = outcome.startsWith("complete");
-        const fast = false;
+        const accountingFailure = outcome === "provider-accounting";
         const inputTokens = 70_000;
         const hasFinding = outcome.endsWith("finding");
-        const checkEnabled = fast || outcome.startsWith("cost");
+        const checkEnabled = accountingFailure || outcome.startsWith("cost");
         const checkWrites: Array<Schema.Json> = [];
 
         const published: Array<{
@@ -680,7 +684,7 @@ describe("review provider boundary", () => {
                 httpRequest,
                 modelCalls,
                 complete ? [submit] : hasFinding && modelCalls === 1 ? [record, read] : [read],
-                rawUsage(inputTokens, complete ? 100 : 32_000),
+                rawUsage(accountingFailure ? 272_001 : inputTokens, complete ? 100 : 32_000),
                 "completed",
                 "default",
               );
@@ -847,7 +851,10 @@ describe("review provider boundary", () => {
                 GITHUB_API_URL: "https://api.github.test",
                 OPENAI_API_KEY: "openai-fixture",
                 PR_REVIEW_PULL_REQUEST: "12",
-                PR_REVIEW_MAX_COST_USD: "0.495",
+                PR_REVIEW_MAX_COST_USD: accountingFailure ? "3" : "0.495",
+                ...(accountingFailure
+                  ? { PR_REVIEW_WEB_SEARCH: "true", PR_REVIEW_BASE_COST_USD: "3" }
+                  : {}),
                 PR_REVIEW_MODEL: "gpt-6-sol",
                 PR_REVIEW_PRIORITY: "default",
                 ...(checkEnabled ? { PR_REVIEW_CHECK_NAME: "Effect Agent review" } : {}),
@@ -892,6 +899,16 @@ describe("review provider boundary", () => {
         });
         expect(published[0]?.comments).toHaveLength(hasFinding ? 1 : 0);
         expect(published[0]?.body).toContain(reviewMarker(true, complete));
+        if (accountingFailure) {
+          const reason =
+            "Provider input usage (272001 tokens) exceeded the reserved 272000-token pricing allowance.";
+
+          expect(published[0]?.body).toContain(reason);
+          expect(checkWrites.at(-1)).toMatchObject({
+            conclusion: "failure",
+            output: { summary: expect.stringContaining(reason) },
+          });
+        }
       }),
   );
 

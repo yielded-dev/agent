@@ -131,11 +131,12 @@ export class UnresolvedChangeRequests extends Schema.TaggedError<UnresolvedChang
 
 export class IncompleteReview extends Schema.TaggedError<IncompleteReview>()("IncompleteReview", {
   unreviewedPaths: Schema.Int,
+  summary: Schema.optionalKey(ReviewReport.fields.summary),
 }) {}
 
 export class ReviewAttemptIncomplete extends Schema.TaggedError<ReviewAttemptIncomplete>()(
   "ReviewAttemptIncomplete",
-  {},
+  { summary: Schema.optionalKey(ReviewReport.fields.summary) },
 ) {}
 
 export class ReviewRequired extends Schema.TaggedError<ReviewRequired>()("ReviewRequired", {}) {}
@@ -204,7 +205,13 @@ const reviewCheckCompletion = (
               );
             case "IncompleteReview":
             case "ReviewAttemptIncomplete":
-              return result("failure", "Review incomplete");
+              return result(
+                "failure",
+                "Review incomplete",
+                error.summary === undefined
+                  ? undefined
+                  : `${error.summary}\n\nRequest @effect-agent review full after addressing this cause.`,
+              );
             case "IncrementalScopeUnavailable":
               return result("action_required", "Full review required");
             case "ReviewRequired":
@@ -246,6 +253,7 @@ export const reviewPublicationFailure = (input: {
   readonly unresolvedChangeRequests: number;
   readonly exhausted?: ReviewOutcome["exhausted"];
   readonly incomplete?: boolean;
+  readonly summary?: string;
 }):
   | BlockingFindings
   | IncompleteReview
@@ -254,10 +262,15 @@ export const reviewPublicationFailure = (input: {
   | undefined => {
   if (input.blockingFindings > 0) return BlockingFindings.make({ count: input.blockingFindings });
   if (input.unreviewedPaths > 0) {
-    return IncompleteReview.make({ unreviewedPaths: input.unreviewedPaths });
+    return IncompleteReview.make({
+      unreviewedPaths: input.unreviewedPaths,
+      ...(input.summary === undefined ? {} : { summary: input.summary }),
+    });
   }
   if (input.exhausted !== undefined || input.incomplete === true)
-    return ReviewAttemptIncomplete.make({});
+    return ReviewAttemptIncomplete.make(
+      input.summary === undefined ? {} : { summary: input.summary },
+    );
   if (input.unresolvedChangeRequests > 0) {
     return UnresolvedChangeRequests.make({ count: input.unresolvedChangeRequests });
   }
@@ -1539,6 +1552,7 @@ const reviewPullRequest = Effect.fnUntraced(function* (
     unresolvedChangeRequests: unresolvedReviews.length,
     exhausted,
     incomplete,
+    summary: report.summary,
   });
 
   if (publicationFailure !== undefined) return yield* publicationFailure;
@@ -1562,15 +1576,6 @@ export const reviewActionProgram = Effect.gen(function* () {
 
   const identity = { name: checkName, headRevision: pull.headRevision };
 
-  // Refresh explicit requests and incomplete history without another audit.
-  // Automatic duplicate events preserve checks for completed heads.
-  const existing =
-    selection._tag !== "review" &&
-    selection._tag !== "reconcile" &&
-    selection.reason !== "head-review-incomplete" &&
-    selection.reason !== "head-not-reviewed" &&
-    (yield* github.hasReviewCheck(identity));
-
   const runId = yield* Config.schema(Schema.Natural, "GITHUB_RUN_ID").pipe(Config.option);
 
   const serverUrl = yield* Config.NonEmptyString("GITHUB_SERVER_URL").pipe(
@@ -1585,21 +1590,17 @@ export const reviewActionProgram = Effect.gen(function* () {
   // defect, or interruption. Check writes are bounded and are never retried.
   // Capture the review Exit so a failed completion write cannot be swallowed
   // while translating a published review result into workflow success.
-  const reviewExit = yield* existing
-    ? Effect.exit(review)
-    : Effect.acquireUseRelease(
-        github.startReviewCheck({ ...identity, detailsUrl }),
-        () => Effect.exit(review),
-        (check, exit) =>
-          github.completeReviewCheck(
-            check,
-            reviewCheckCompletion(
-              Exit.isSuccess(exit) ? exit.value : exit,
-              selection,
-              publication.url,
-            ),
-          ),
-      );
+  // Refresh skipped events too: a check from another App must not suppress the
+  // current publisher's result. Trusted history avoids another model call.
+  const reviewExit = yield* Effect.acquireUseRelease(
+    github.startReviewCheck({ ...identity, detailsUrl }),
+    () => Effect.exit(review),
+    (check, exit) =>
+      github.completeReviewCheck(
+        check,
+        reviewCheckCompletion(Exit.isSuccess(exit) ? exit.value : exit, selection, publication.url),
+      ),
+  );
 
   if (
     Exit.isFailure(reviewExit) &&

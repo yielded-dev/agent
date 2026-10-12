@@ -127,6 +127,8 @@ accepted note updates, pending paths, and emitted compactions. They contain no s
 repeated reads can be legitimate evidence checks and do not themselves establish wasted work.
 Failure logs retain the typed error category and specific policy limit. A duration stop is also
 identified as the five-minute deadline in the review summary.
+Hosts can supply a safe `stopReason` through `ReviewCostSnapshot` to explain an incomplete
+review in its summary. Keep provider messages, source text, and credentials out of this diagnostic.
 
 Every measured outcome includes `compactions`, an array of emitted native `CompactionPerformed`
 events containing only `kind`, `turn`, `tokensBeforeEstimate`, and `tokensAfterEstimate`.
