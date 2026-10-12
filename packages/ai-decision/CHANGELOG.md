@@ -1,5 +1,11 @@
 # @yielded/agent-ai-decision
 
+## 0.1.0-beta.168
+
+### Patch Changes
+
+- [#784](https://github.com/yielded-dev/agent/pull/784) [`80deef0`](https://github.com/yielded-dev/agent/commit/80deef0af2af790c68c2fda8701b3fed77c07db9) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce tracing overhead by keeping operation spans and removing private helper spans and stack frames. BEHAVIOR CHANGE: Update filters that use private helper span names to use the enclosing agent, model, tool, storage, or recovery operation.
+
 ## 0.1.0-beta.167
 
 ## 0.1.0-beta.166
