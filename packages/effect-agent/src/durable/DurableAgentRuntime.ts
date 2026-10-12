@@ -3409,12 +3409,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const linkage = submission.parentLinkage;
 
     if (linkage === undefined) return;
-    yield* ledger.recordChildSettled(
+
+    const outcome = yield* ledger.recordChildSettled(
       ChildSettledNotification.make({
         parentSubmissionId: linkage.parentSubmissionId,
         childSubmissionId: submission.submissionId,
       }),
     );
+
+    if (outcome === "still-waiting") return;
 
     const parent = yield* ledger.lookup(
       SubmissionLookupById.make({ submissionId: linkage.parentSubmissionId }),
