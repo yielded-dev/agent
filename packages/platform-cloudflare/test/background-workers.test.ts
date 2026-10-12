@@ -177,6 +177,18 @@ it("admits workers in one RPC and reads completions concurrently only at capacit
               ),
             );
             await drainAlarmsUntil(child.worker.threadId, allSettled(child.worker.threadId));
+            // Finish parent accounting before its foreign reads can enter the next sample's probe.
+            const acknowledgement = `worker-effects-resolved:${child.delivery.message.messageId}`;
+
+            await drainAlarmsUntil(source, async () =>
+              (await readCanonical(source)).some(
+                ({ record }) =>
+                  record.recordId === acknowledgement &&
+                  record.payload._tag === "WorkerInputCompleted" &&
+                  record.payload.effectsResolved === true &&
+                  record.payload.workerThreadId === child.worker.threadId,
+              ),
+            );
           } catch (cause) {
             failure ??= cause;
           }
