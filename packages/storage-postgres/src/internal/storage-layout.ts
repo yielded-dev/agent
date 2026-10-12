@@ -1430,6 +1430,9 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
     if (header.layoutVersion !== 25 && header.layoutVersion !== 26)
       return yield* incompatible(header.layoutVersion, "Unsupported layout upgrade.");
 
+    // READ COMMITTED must observe in-flight writers before reading checkpoints for conversion.
+    yield* execute(sql`LOCK TABLE ${table("effect_agent_executions")} IN SHARE ROW EXCLUSIVE MODE`);
+
     if (header.layoutVersion === 25) {
       yield* execute(
         sql`ALTER TABLE ${table("effect_agent_message_deliveries")} ADD COLUMN peer_retained_until_millis BIGINT`,

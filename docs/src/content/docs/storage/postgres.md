@@ -61,6 +61,10 @@ The Layer initializes tables on acquisition. Pre-provisioning the schema avoids
 requiring database-wide schema creation permission. Storage leaves the client's
 search path and application query transforms unchanged.
 
+Before upgrading a storage layout, stop every owner sharing that schema. Open it
+once with the new release to apply the atomic upgrade, then restart those owners
+on the same release. Older releases cannot reopen the upgraded layout.
+
 Call storage writes and snapshot reads outside `sql.withTransaction`; the adapter
 owns its transactions. It rejects unsupported [layouts and formats](/storage/).
 Keep original stores intact when an open fails.
