@@ -58,6 +58,12 @@ export const Options = Schema.Struct({
 
 export type Options = typeof Options.Type;
 
+export const Dispatch = Schema.Struct({
+  id: Schema.NonEmptyString,
+  source: Schema.NonEmptyString,
+  completed: Schema.Boolean,
+});
+
 export const Invocation = Schema.Struct({
   invocationId: Schema.optionalKey(Schema.String),
   invocationIds: Schema.optionalKey(Schema.Array(Schema.String)),
@@ -65,7 +71,7 @@ export const Invocation = Schema.Struct({
   kind: Schema.String,
   invocationType: Schema.optionalKey(Schema.String),
   invocationMethod: Schema.optionalKey(Schema.String),
-  dispatchSources: Schema.optionalKey(Schema.Array(Schema.String)),
+  dispatches: Schema.optionalKey(Schema.Array(Dispatch)),
   outcome: Schema.String,
   cpuMs: Schema.NullOr(Schema.Number),
   wallMs: Schema.NullOr(Schema.Number),

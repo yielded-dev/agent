@@ -10,6 +10,7 @@ const Marker = Schema.Struct({
   sample: Schema.NonEmptyString,
   invocation: Schema.NonEmptyString,
   dispatchSource: Schema.optionalKey(Schema.NonEmptyString),
+  completes: Schema.optionalKey(Schema.NonEmptyString),
 });
 
 const Stored = Schema.Struct({
@@ -51,7 +52,13 @@ export default {
             marker.sample === first.sample,
         );
 
-        const valid = oneSample && !event.truncated && event.durableObjectId !== undefined;
+        const valid =
+          oneSample &&
+          !event.truncated &&
+          event.durableObjectId !== undefined &&
+          markers.every(
+            (marker) => marker.kind !== "dispatch" || marker.dispatchSource !== undefined,
+          );
 
         const record = Schema.encodeSync(Stored)({
           invocation: first.invocation,
@@ -77,8 +84,16 @@ export default {
               : event.event && "request" in event.event
                 ? { invocationMethod: new URL(event.event.request.url).pathname }
                 : {}),
-            dispatchSources: markers.flatMap((marker) =>
-              marker.dispatchSource === undefined ? [] : [marker.dispatchSource],
+            dispatches: markers.flatMap((marker) =>
+              marker.kind !== "dispatch" || marker.dispatchSource === undefined
+                ? []
+                : [
+                    {
+                      id: marker.completes ?? marker.invocation,
+                      source: marker.dispatchSource,
+                      completed: marker.completes !== undefined,
+                    },
+                  ],
             ),
             outcome: event.outcome,
             cpuMs:

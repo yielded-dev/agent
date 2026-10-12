@@ -268,8 +268,18 @@ export const sampleCpu = (result: Result) => {
       ...(!buildHistory && sample.target !== "tardie" ? ["text"] : []),
     ];
 
+    const dispatches = invocations?.flatMap((row) => row.dispatches ?? []) ?? [];
+    const started = dispatches.filter((dispatch) => !dispatch.completed);
+    const completed = dispatches.filter((dispatch) => dispatch.completed);
+    const starts = new Map(started.map((dispatch) => [dispatch.id, dispatch.source]));
+    const completions = new Map(completed.map((dispatch) => [dispatch.id, dispatch.source]));
+
     const complete =
       (sample.target !== "yielded" || sample.settlementRecordRead !== undefined) &&
+      starts.size === started.length &&
+      completions.size === completed.length &&
+      starts.size === completions.size &&
+      started.every((dispatch) => completions.get(dispatch.id) === dispatch.source) &&
       invocations !== undefined &&
       sample.cpuInvocationIds !== undefined &&
       sample.cpuInvocationIds.length > 0 &&
@@ -284,9 +294,13 @@ export const sampleCpu = (result: Result) => {
           row.cpuMs !== null &&
           Number.isFinite(row.cpuMs) &&
           row.cpuMs >= 0 &&
+          (!(row.kinds ?? [row.kind]).includes("dispatch") || !!row.dispatches?.length) &&
           (row.outcome === "ok" ||
-            (row.kind === "text" &&
-              ["canceled", "aborted", "responseStreamDisconnected"].includes(row.outcome))),
+            (["canceled", "aborted", "responseStreamDisconnected"].includes(row.outcome) &&
+              (row.kinds ?? [row.kind]).every((kind) => kind === "text" || kind === "dispatch") &&
+              // Tail can label post-response RPC continuations as canceled alarms.
+              // Require matched success markers above; a native alarm cancellation still fails.
+              (row.dispatches ?? []).every((dispatch) => dispatch.source !== "alarm"))),
       );
 
     return {

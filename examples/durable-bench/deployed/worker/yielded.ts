@@ -163,7 +163,9 @@ export class YieldedDO extends YieldedDOBase {
     effect: Effect.Effect<A, E, InvocationServices>,
     options: DurableObject.RunOptions = {},
   ): Promise<A> {
-    if (options.event === "rpc" || options.event === "fetch")
+    if (options.event === "rpc" || options.event === "fetch") {
+      if (!this.host.meter.cpuEnabled) return super[DurableObject.RunSymbol](effect, options);
+
       return this.invocationQuery.run(
         {
           ...(this.invocationQuery.getStore() ?? { query: this.host.meter.query }),
@@ -171,6 +173,7 @@ export class YieldedDO extends YieldedDOBase {
         },
         () => super[DurableObject.RunSymbol](effect, options),
       );
+    }
     if (options.event !== "alarm") return super[DurableObject.RunSymbol](effect, options);
 
     // effect-cf's response.finally/waitUntil dispatch bypasses public alarm(), but
@@ -178,28 +181,43 @@ export class YieldedDO extends YieldedDOBase {
     const invocation = this.invocationQuery.getStore();
     const query = invocation === undefined ? this.host.meter.query : invocation.query;
 
-    if (query) this.host.meter.marker("dispatch", query, invocation?.source ?? "alarm");
+    const source = invocation?.source ?? "alarm";
+    const started = query ? this.host.meter.marker("dispatch", query, source) : undefined;
     const running = super[DurableObject.RunSymbol](effect, options);
 
-    this.activeDispatches.add(running);
+    const completed =
+      started && query
+        ? running.then((value) => {
+            this.host.meter.marker("dispatch", query, source, started);
 
-    return running.finally(() => {
-      this.activeDispatches.delete(running);
+            return value;
+          })
+        : running;
+
+    this.activeDispatches.add(completed);
+
+    return completed.finally(() => {
+      this.activeDispatches.delete(completed);
     });
   }
   override alarm(...args: Parameters<ThreadObject.Instance["alarm"]>): Promise<void> | void {
     this.host.meter.alarm();
+    if (!this.host.meter.cpuEnabled) return super.alarm(...args);
 
     return this.invocationQuery.run({ query: this.host.meter.query, source: "alarm" }, () =>
       super.alarm(...args),
     );
   }
-  override fetch(request: Request): Promise<Response> {
+  private async drainDispatches() {
+    while (this.activeDispatches.size) await Promise.all(this.activeDispatches);
+  }
+  override async fetch(request: Request): Promise<Response> {
+    // CPU evidence is captured after both timer endpoints, before the observer closes.
+    if (this.host.meter.cpuEnabled && new URL(request.url).pathname === "/metrics")
+      await this.drainDispatches();
+
     return this.host.fetch(request, {
-      close: async () => {
-        // Native post-settlement checkpoint writers must finish before cold eviction.
-        while (this.activeDispatches.size) await Promise.all(this.activeDispatches);
-      },
+      close: () => this.drainDispatches(),
       run: (input) => this.historyTurn(input),
     });
   }
