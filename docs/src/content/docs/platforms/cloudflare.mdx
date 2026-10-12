@@ -103,9 +103,10 @@ permanently retires matching drafts, including after reconnects. Drafts disappea
 maintenance and composes application registrations from `options.alarms`. Do not
 write the raw alarm slot or replace its handler.
 
-`dispatchAfterEvent` defaults to **false**. To opt in, provide
-`DurableObjectAlarm.ScheduleConfiguration` with `{ dispatchAfterEvent: true }` through
-`Layer.provideMerge` on the application Layer. Native alarms remain the recovery driver.
+`dispatchAfterEvent` defaults to **true**, starting due work sooner but potentially delaying
+cold receipts. To opt out, provide `DurableObjectAlarm.ScheduleConfiguration` with
+`{ dispatchAfterEvent: false }` through `Layer.provideMerge` on the application Layer.
+Native alarms remain the recovery driver.
 
 | Setting                          | Default                     |
 | -------------------------------- | --------------------------- |
