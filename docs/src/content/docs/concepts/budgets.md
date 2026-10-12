@@ -82,7 +82,8 @@ Subagents reserve from a shared pool with their own count, concurrency, duration
 bounds. Unknown usage stays charged conservatively. See the [subagent reference](/reference/subagents/).
 
 Optional usage-budget hooks share accounting across application scopes such as tenant and
-Thread. Code Mode separately bounds inner host calls; its default concurrency is four.
+Thread; the application owns their accounting period. Code Mode separately bounds inner host
+calls; its default concurrency is four.
 See [Code Mode](/guide/code-mode/) for its caller-visible limits.
 
 ## Durable storage bounds
@@ -95,6 +96,9 @@ See [Code Mode](/guide/code-mode/) for its caller-visible limits.
 | Run execution dispatch                             | 16,384 facts and 32 MiB |
 | Distinct application tool-call IDs per durable Run | 4,096                   |
 
-The durable log has no lifetime record cap. Reservations can refuse a dispatch before its byte
-ceiling to retain room for outcomes and failure settlement. These limits do not replace model
-context sizing or the application's physical storage capacity.
+Thread history has no lifetime quota; these bounds apply per payload, Turn or Run.
+Reservations can refuse a dispatch before its byte ceiling to retain room for outcomes and
+failure settlement. These limits do not replace model context sizing or the application's
+physical storage capacity.
+
+Persisted sequence numbers and counters use safe integers with a representational ceiling of 2⁵³−1.

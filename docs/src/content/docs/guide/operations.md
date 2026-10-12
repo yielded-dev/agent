@@ -97,5 +97,8 @@ Schedules and event subscriptions retain delivery obligations separately from Ag
 A retained event or message is not a submission receipt, and a receipt does not prove processing.
 Inspect parked deliveries and preserve their original idempotency keys when retrying.
 
+Schedule and subscription limits count active or pending work, including paused registrations,
+parked deliveries and settlement observation. Settled history does not consume these slots.
+
 Use the [Node scheduling example](https://github.com/yielded-dev/agent/blob/main/packages/platform-node/test/fixtures/scheduling-example.ts)
 for runnable setup, and [messaging](/guide/messaging/) for retained-send semantics.

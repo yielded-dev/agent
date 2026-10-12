@@ -76,9 +76,8 @@ are saved, then import the completed archive into an empty destination Thread.
 Pending work, approvals, unknown outcomes, or deliveries can prevent export.
 See [operations](/guide/operations/) for the procedure.
 
-SQL adapters initialize fresh stores or open the supported layout: **25**, with
-record format **`effect-agent/thread@6`**. Unsupported layouts and formats are rejected;
-there is no predecessor-layout upgrade. Preserve the original store on refusal.
+Adapters reject unsupported or ambiguous storage layouts and record formats without changing
+the store.
 
 ## Build another adapter
 
