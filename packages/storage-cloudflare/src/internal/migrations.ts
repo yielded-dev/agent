@@ -12,7 +12,7 @@ import {
   DoStorageError,
 } from "../DoStorageError.ts";
 
-export const CurrentDoStorageVersion = 25;
+export const CurrentDoStorageVersion = 26;
 
 /** Fresh layout only. Unsupported stores are rejected before these statements execute. */
 const layoutStatements = [
@@ -44,7 +44,7 @@ const layoutStatements = [
   'CREATE INDEX effect_agent_records_subtree ON "effect_agent_canonical_records"(thread_id, source_submission_id, sequence) WHERE record_tag = 22',
   'CREATE INDEX effect_agent_records_worker_input ON "effect_agent_canonical_records"(thread_id, message_id) WHERE record_tag = 34',
   "CREATE INDEX effect_agent_submissions_nonterminal ON effect_agent_submissions (thread_id, queue_sequence) WHERE state <> 'settled'",
-  "CREATE TABLE effect_agent_message_deliveries ( owner_thread_id TEXT NOT NULL, message_id TEXT NOT NULL, version INTEGER NOT NULL, state TEXT NOT NULL, deadline_at_millis INTEGER, record_json TEXT NOT NULL, PRIMARY KEY (owner_thread_id, message_id) )",
+  "CREATE TABLE effect_agent_message_deliveries ( owner_thread_id TEXT NOT NULL, message_id TEXT NOT NULL, version INTEGER NOT NULL, state TEXT NOT NULL, deadline_at_millis INTEGER, peer_retained_until_millis INTEGER, record_json TEXT NOT NULL, PRIMARY KEY (owner_thread_id, message_id) )",
   "CREATE INDEX effect_agent_message_deliveries_due ON effect_agent_message_deliveries (deadline_at_millis, owner_thread_id, message_id) WHERE deadline_at_millis IS NOT NULL",
   "CREATE INDEX effect_agent_message_deliveries_pending ON \"effect_agent_message_deliveries\"(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused')",
   "CREATE TABLE effect_agent_worker_stops (thread_id TEXT PRIMARY KEY NOT NULL, terminal TEXT)",
@@ -60,7 +60,8 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_records_worker_completed ON effect_agent_canonical_records(thread_id, message_id, sequence) WHERE record_tag = 32",
   "CREATE INDEX effect_agent_records_worker_stop ON effect_agent_canonical_records(thread_id, worker_thread_id, sequence) WHERE record_tag = 38",
   "CREATE INDEX effect_agent_message_deliveries_identity ON effect_agent_message_deliveries(owner_thread_id, json_quote(message_id))",
-  "CREATE INDEX effect_agent_message_deliveries_peer ON effect_agent_message_deliveries(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused') AND json_extract(record_json, '$.envelope.messageAdmission.schemaVersion') = 1",
+  "CREATE INDEX effect_agent_message_deliveries_peer_retained ON effect_agent_message_deliveries(owner_thread_id, peer_retained_until_millis, message_id) WHERE peer_retained_until_millis IS NOT NULL",
+  "CREATE INDEX effect_agent_message_deliveries_peer ON effect_agent_message_deliveries(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused') AND json_extract(record_json, '$.envelope.messageAdmission.peerName') IS NOT NULL",
   "CREATE TABLE effect_agent_journal_ranges (thread_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, record_count INTEGER NOT NULL, batch_count INTEGER NOT NULL, byte_count INTEGER NOT NULL, state TEXT NOT NULL, locator TEXT, PRIMARY KEY (thread_id, first_sequence), FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT)",
   "CREATE TABLE effect_agent_archive_batches (thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, range_first_sequence INTEGER NOT NULL, batch_json TEXT NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id, batch_id) REFERENCES effect_agent_canonical_batches(thread_id, batch_id) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_batches_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)",
   "CREATE TABLE effect_agent_archive_records (thread_id TEXT NOT NULL, sequence INTEGER NOT NULL, range_first_sequence INTEGER NOT NULL, record_json TEXT NOT NULL, PRIMARY KEY (thread_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_records_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)",

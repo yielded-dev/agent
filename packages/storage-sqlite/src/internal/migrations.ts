@@ -13,7 +13,7 @@ import {
   SqliteStorageError,
 } from "../SqliteStorageError.ts";
 
-export const CurrentSqliteStorageVersion = 25;
+export const CurrentSqliteStorageVersion = 26;
 
 /** Fresh layout only. Unsupported stores are rejected before these statements execute. */
 const layoutStatements = [
@@ -45,14 +45,18 @@ const layoutStatements = [
   'CREATE TABLE "effect_agent_subscription_sequences" ( tenant_id TEXT NOT NULL, source_address TEXT NOT NULL, sequence INTEGER NOT NULL, event_scan_cursor TEXT NOT NULL, delivery_scan_cursor TEXT NOT NULL, recovery_scan_cursor INTEGER NOT NULL, PRIMARY KEY (tenant_id, source_address) )',
   'CREATE TABLE "effect_agent_subscriptions" ( tenant_id TEXT NOT NULL, source_address TEXT NOT NULL, owner_id TEXT NOT NULL, subscription_id TEXT NOT NULL, ordinal INTEGER NOT NULL, source_name TEXT NOT NULL, source_version TEXT NOT NULL, matching_key TEXT NOT NULL, state TEXT NOT NULL, expires_at_millis INTEGER, recovery_at_millis INTEGER, recovery_present INTEGER NOT NULL DEFAULT 0, record_json TEXT NOT NULL, PRIMARY KEY (tenant_id, source_address, owner_id, subscription_id), UNIQUE (tenant_id, source_address, ordinal) )',
   'CREATE INDEX effect_agent_subscriptions_owner ON "effect_agent_subscriptions" (tenant_id, source_address, owner_id, ordinal)',
+  "CREATE INDEX effect_agent_subscriptions_capacity ON \"effect_agent_subscriptions\" (tenant_id, source_address, expires_at_millis) WHERE state IN ('active', 'paused')",
+  "CREATE INDEX effect_agent_subscriptions_owner_capacity ON \"effect_agent_subscriptions\" (tenant_id, source_address, owner_id, expires_at_millis) WHERE state IN ('active', 'paused')",
   'CREATE INDEX effect_agent_subscriptions_candidates ON "effect_agent_subscriptions" (tenant_id, source_address, source_name, source_version, matching_key, ordinal)',
   'CREATE INDEX effect_agent_subscriptions_recovery ON "effect_agent_subscriptions" (tenant_id, source_address, recovery_at_millis, ordinal) WHERE recovery_at_millis IS NOT NULL',
   'CREATE TABLE "effect_agent_subscription_events" ( tenant_id TEXT NOT NULL, source_address TEXT NOT NULL, event_id TEXT NOT NULL, source_name TEXT NOT NULL, source_version TEXT NOT NULL, matching_key TEXT NOT NULL, payload_digest TEXT NOT NULL, cutoff INTEGER NOT NULL, cursor INTEGER NOT NULL, routing_complete INTEGER NOT NULL, tombstone INTEGER NOT NULL DEFAULT 0, next_attempt_at_millis INTEGER NOT NULL, record_json TEXT NOT NULL, PRIMARY KEY (tenant_id, source_address, event_id) )',
   'CREATE INDEX effect_agent_subscription_events_pending ON "effect_agent_subscription_events" (tenant_id, source_address, routing_complete, next_attempt_at_millis, event_id)',
-  'CREATE TABLE "effect_agent_subscription_deliveries" ( tenant_id TEXT NOT NULL, source_address TEXT NOT NULL, owner_id TEXT NOT NULL, subscription_id TEXT NOT NULL, event_id TEXT NOT NULL, delivery_key TEXT NOT NULL, state TEXT NOT NULL, next_attempt_at_millis INTEGER NOT NULL, record_json TEXT NOT NULL, PRIMARY KEY (tenant_id, source_address, owner_id, subscription_id, event_id), UNIQUE (tenant_id, source_address, delivery_key) )',
+  'CREATE TABLE "effect_agent_subscription_deliveries" ( tenant_id TEXT NOT NULL, source_address TEXT NOT NULL, owner_id TEXT NOT NULL, subscription_id TEXT NOT NULL, event_id TEXT NOT NULL, delivery_key TEXT NOT NULL, state TEXT NOT NULL, next_attempt_at_millis INTEGER NOT NULL, observe_settlement INTEGER NOT NULL DEFAULT 0 CHECK (observe_settlement IN (0, 1)), record_json TEXT NOT NULL, PRIMARY KEY (tenant_id, source_address, owner_id, subscription_id, event_id), UNIQUE (tenant_id, source_address, delivery_key) )',
   'CREATE INDEX effect_agent_subscription_deliveries_pending ON "effect_agent_subscription_deliveries" (tenant_id, source_address, state, next_attempt_at_millis, delivery_key)',
   'CREATE INDEX effect_agent_subscription_deliveries_registration ON "effect_agent_subscription_deliveries" (tenant_id, source_address, owner_id, subscription_id, delivery_key)',
-  'CREATE TABLE "effect_agent_message_deliveries" ( owner_thread_id TEXT NOT NULL, message_id TEXT NOT NULL, version INTEGER NOT NULL, state TEXT NOT NULL, deadline_at_millis INTEGER, record_json TEXT NOT NULL, PRIMARY KEY (owner_thread_id, message_id) )',
+  "CREATE INDEX effect_agent_subscription_deliveries_capacity ON \"effect_agent_subscription_deliveries\" (tenant_id, source_address, owner_id) WHERE state IN ('selected', 'prepared')",
+  "CREATE INDEX effect_agent_subscription_deliveries_observing ON \"effect_agent_subscription_deliveries\" (tenant_id, source_address, owner_id) WHERE state='delivered' AND observe_settlement=1",
+  'CREATE TABLE "effect_agent_message_deliveries" ( owner_thread_id TEXT NOT NULL, message_id TEXT NOT NULL, version INTEGER NOT NULL, state TEXT NOT NULL, deadline_at_millis INTEGER, peer_retained_until_millis INTEGER, record_json TEXT NOT NULL, PRIMARY KEY (owner_thread_id, message_id) )',
   'CREATE INDEX effect_agent_message_deliveries_due ON "effect_agent_message_deliveries" (deadline_at_millis, owner_thread_id, message_id) WHERE deadline_at_millis IS NOT NULL',
   "CREATE INDEX effect_agent_submissions_nonterminal ON \"effect_agent_submissions\" (thread_id, queue_sequence) WHERE state <> 'settled'",
   'CREATE INDEX effect_agent_records_call ON "effect_agent_canonical_records"(thread_id, record_tag, run_id, tool_call_id) WHERE tool_call_id IS NOT NULL',
@@ -72,7 +76,8 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_records_worker_completed ON effect_agent_canonical_records(thread_id, message_id, sequence) WHERE record_tag = 32",
   "CREATE INDEX effect_agent_records_worker_stop ON effect_agent_canonical_records(thread_id, worker_thread_id, sequence) WHERE record_tag = 38",
   "CREATE INDEX effect_agent_message_deliveries_identity ON effect_agent_message_deliveries(owner_thread_id, json_quote(message_id))",
-  "CREATE INDEX effect_agent_message_deliveries_peer ON effect_agent_message_deliveries(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused') AND json_extract(record_json, '$.envelope.messageAdmission.schemaVersion') = 1",
+  "CREATE INDEX effect_agent_message_deliveries_peer_retained ON effect_agent_message_deliveries(owner_thread_id, peer_retained_until_millis, message_id) WHERE peer_retained_until_millis IS NOT NULL",
+  "CREATE INDEX effect_agent_message_deliveries_peer ON effect_agent_message_deliveries(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused') AND json_extract(record_json, '$.envelope.messageAdmission.peerName') IS NOT NULL",
   "CREATE TABLE effect_agent_journal_ranges (thread_id TEXT NOT NULL, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL, record_count INTEGER NOT NULL, batch_count INTEGER NOT NULL, byte_count INTEGER NOT NULL, state TEXT NOT NULL, locator TEXT, PRIMARY KEY (thread_id, first_sequence), FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT)",
   "CREATE TABLE effect_agent_archive_batches (thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, range_first_sequence INTEGER NOT NULL, batch_json TEXT NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id, batch_id) REFERENCES effect_agent_canonical_batches(thread_id, batch_id) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_batches_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)",
   "CREATE TABLE effect_agent_archive_records (thread_id TEXT NOT NULL, sequence INTEGER NOT NULL, range_first_sequence INTEGER NOT NULL, record_json TEXT NOT NULL, PRIMARY KEY (thread_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_records_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)",

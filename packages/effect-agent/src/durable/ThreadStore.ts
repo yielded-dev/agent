@@ -32,6 +32,7 @@ import {
   RunContinuation,
 } from "./Records.ts";
 import { subagentLineageRecordId, workerOriginRecordId } from "./RunJournal.ts";
+import { ScheduleInstant } from "./Schedule.ts";
 import type { OwnershipLost } from "./SubmissionLedger.ts";
 import {
   AbortIntent,
@@ -105,9 +106,10 @@ export const ThreadWorkerStateRequest = Schema.Struct({
 
 export type ThreadWorkerStateRequest = typeof ThreadWorkerStateRequest.Type;
 
-/** Saturating live peer-delivery count: retained terminal identities do not consume capacity. */
+/** Saturating count of outstanding peer intents and terminal deliveries inside their retention window. */
 export const ThreadPeerCountRequest = Schema.Struct({
   threadId: ThreadId,
+  nowMillis: ScheduleInstant,
   limit: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(1000)),
 });
 

@@ -13,8 +13,7 @@ import { utf8ByteLength } from "./internal/utf8.ts";
 
 /** Bound applied to one text projection before it can enter a model context. */
 export const ThreadText = Schema.String.check(Schema.isMaxLength(64 * 1024));
-const MAX_THREAD_MESSAGES = 1_024;
-const MAX_THREAD_CONTENT_BYTES = 4 * 1024 * 1024;
+const MAX_MESSAGE_CONTENT_BYTES = 4 * 1024 * 1024;
 const MAX_THREADS = 256;
 const MAX_STORE_CONTENT_BYTES = 64 * 1024 * 1024;
 
@@ -26,7 +25,7 @@ export class ThreadMessage extends Schema.Class<ThreadMessage>(
   sequence: Schema.Natural,
   runId: Schema.optionalKey(RunId),
   message: Prompt.Message,
-  encodedBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_THREAD_CONTENT_BYTES)),
+  encodedBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_MESSAGE_CONTENT_BYTES)),
   timestamp: Schema.DateTimeUtcFromString,
 }) {}
 
@@ -35,8 +34,8 @@ export class Thread extends Schema.Class<Thread>("@effect-agent/capabilities/Thr
   version: Schema.Literal(1),
   threadId: ThreadId,
   nextSequence: Schema.Natural,
-  contentBytes: Schema.Natural.check(Schema.isLessThanOrEqualTo(MAX_THREAD_CONTENT_BYTES)),
-  messages: Schema.Array(ThreadMessage).check(Schema.isMaxLength(MAX_THREAD_MESSAGES)),
+  contentBytes: Schema.Natural,
+  messages: Schema.Array(ThreadMessage),
 }) {}
 
 /** Portable conversation snapshot. Its format is independent of the durable execution journal. */
@@ -61,12 +60,12 @@ export class ThreadNotFound extends Schema.TaggedError<ThreadNotFound>()("Thread
   threadId: ThreadId,
 }) {}
 
-/** A process-local Thread store reached an explicit count or encoded-content bound. */
+/** A message or the process-local host exceeded capacity; no bound counts a Thread's lifetime. */
 export class ThreadLimitExceeded extends Schema.TaggedError<ThreadLimitExceeded>()(
   "ThreadLimitExceeded",
   {
     threadId: ThreadId,
-    limit: Schema.Literals(["messages", "content-bytes", "threads", "store-content-bytes"]),
+    limit: Schema.Literals(["content-bytes", "threads", "store-content-bytes"]),
     limitValue: Schema.Natural,
     observedValue: Schema.Natural,
   },
@@ -229,6 +228,21 @@ const put = (state: State, owner: Owner, snapshot: Thread): State => ({
     (state.threads.get(snapshot.threadId)?.snapshot.contentBytes ?? 0),
 });
 
+const messageSize = (threadId: ThreadId, encoded: string) => {
+  const observedValue = utf8ByteLength(encoded);
+
+  return observedValue <= MAX_MESSAGE_CONTENT_BYTES
+    ? Effect.succeed(observedValue)
+    : Effect.fail(
+        ThreadLimitExceeded.make({
+          threadId,
+          limit: "content-bytes",
+          limitValue: MAX_MESSAGE_CONTENT_BYTES,
+          observedValue,
+        }),
+      );
+};
+
 const appendEncoded = Effect.fnUntraced(function* (
   state: State,
   owner: Owner,
@@ -239,25 +253,8 @@ const appendEncoded = Effect.fnUntraced(function* (
 ) {
   const threadId = current.threadId;
 
-  if (current.messages.length >= MAX_THREAD_MESSAGES) {
-    return yield* ThreadLimitExceeded.make({
-      threadId,
-      limit: "messages",
-      limitValue: MAX_THREAD_MESSAGES,
-      observedValue: current.messages.length + 1,
-    });
-  }
-  const messageBytes = utf8ByteLength(encoded);
+  const messageBytes = yield* messageSize(threadId, encoded);
   const contentBytes = current.contentBytes + messageBytes;
-
-  if (contentBytes > MAX_THREAD_CONTENT_BYTES) {
-    return yield* ThreadLimitExceeded.make({
-      threadId,
-      limit: "content-bytes",
-      limitValue: MAX_THREAD_CONTENT_BYTES,
-      observedValue: contentBytes,
-    });
-  }
   const storeBytes = state.contentBytes + messageBytes;
 
   if (storeBytes > MAX_STORE_CONTENT_BYTES) {
@@ -395,27 +392,9 @@ export const layerMemory = Layer.effect(
             for (const entry of incoming.slice(currentEncoded.length)) {
               const append = ThreadAppend.make({ runId: historyRunId, message: entry.message });
 
-              // Preserve append's first failing bound and observed value without publishing
-              // intermediate snapshots or rescanning the store for each suffix message.
-              if (messages.length >= MAX_THREAD_MESSAGES) {
-                return yield* ThreadLimitExceeded.make({
-                  threadId,
-                  limit: "messages",
-                  limitValue: MAX_THREAD_MESSAGES,
-                  observedValue: messages.length + 1,
-                });
-              }
-              const messageBytes = utf8ByteLength(entry.encoded);
+              const messageBytes = yield* messageSize(threadId, entry.encoded);
 
               contentBytes += messageBytes;
-              if (contentBytes > MAX_THREAD_CONTENT_BYTES) {
-                return yield* ThreadLimitExceeded.make({
-                  threadId,
-                  limit: "content-bytes",
-                  limitValue: MAX_THREAD_CONTENT_BYTES,
-                  observedValue: contentBytes,
-                });
-              }
               storeBytes += messageBytes;
               if (storeBytes > MAX_STORE_CONTENT_BYTES) {
                 return yield* ThreadLimitExceeded.make({

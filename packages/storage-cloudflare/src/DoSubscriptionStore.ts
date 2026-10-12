@@ -10,7 +10,7 @@ import { Context, Effect, Layer, Schema } from "effect";
 import * as SqlClientService from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 
-const CURRENT_SUBSCRIPTION_STORE_VERSION = 3;
+const CURRENT_SUBSCRIPTION_STORE_VERSION = 4;
 
 const ScanRow = Schema.Struct({
   event_scan_cursor: Schema.String,
@@ -110,6 +110,10 @@ const initializeDoSubscriptionStore = Effect.fnUntraced(function* () {
       )`.withoutTransform;
           yield* sql`CREATE INDEX effect_agent_subscriptions_owner ON effect_agent_subscriptions (tenant_id, source_address, owner_id, ordinal)`
             .withoutTransform;
+          yield* sql`CREATE INDEX effect_agent_subscriptions_capacity ON effect_agent_subscriptions (tenant_id, source_address, expires_at_millis) WHERE state IN ('active', 'paused')`
+            .withoutTransform;
+          yield* sql`CREATE INDEX effect_agent_subscriptions_owner_capacity ON effect_agent_subscriptions (tenant_id, source_address, owner_id, expires_at_millis) WHERE state IN ('active', 'paused')`
+            .withoutTransform;
           yield* sql`CREATE INDEX effect_agent_subscriptions_candidates ON effect_agent_subscriptions (tenant_id, source_address, source_name, source_version, matching_key, ordinal)`
             .withoutTransform;
           yield* sql`CREATE INDEX effect_agent_subscriptions_recovery ON effect_agent_subscriptions (tenant_id, source_address, recovery_at_millis, ordinal) WHERE recovery_at_millis IS NOT NULL`
@@ -125,12 +129,17 @@ const initializeDoSubscriptionStore = Effect.fnUntraced(function* () {
           yield* sql`CREATE TABLE effect_agent_subscription_deliveries (
         tenant_id TEXT NOT NULL, source_address TEXT NOT NULL, owner_id TEXT NOT NULL, subscription_id TEXT NOT NULL,
         event_id TEXT NOT NULL, delivery_key TEXT NOT NULL, state TEXT NOT NULL, next_attempt_at_millis INTEGER NOT NULL,
+        observe_settlement INTEGER NOT NULL DEFAULT 0 CHECK (observe_settlement IN (0, 1)),
         record_json TEXT NOT NULL, PRIMARY KEY (tenant_id, source_address, owner_id, subscription_id, event_id),
         UNIQUE (tenant_id, source_address, delivery_key)
       )`.withoutTransform;
           yield* sql`CREATE INDEX effect_agent_subscription_deliveries_pending ON effect_agent_subscription_deliveries (tenant_id, source_address, state, next_attempt_at_millis, delivery_key)`
             .withoutTransform;
           yield* sql`CREATE INDEX effect_agent_subscription_deliveries_registration ON effect_agent_subscription_deliveries (tenant_id, source_address, owner_id, subscription_id, delivery_key)`
+            .withoutTransform;
+          yield* sql`CREATE INDEX effect_agent_subscription_deliveries_capacity ON effect_agent_subscription_deliveries (tenant_id, source_address, owner_id) WHERE state IN ('selected', 'prepared')`
+            .withoutTransform;
+          yield* sql`CREATE INDEX effect_agent_subscription_deliveries_observing ON effect_agent_subscription_deliveries (tenant_id, source_address, owner_id) WHERE state='delivered' AND observe_settlement=1`
             .withoutTransform;
           yield* sql`INSERT INTO effect_agent_subscription_store_state (singleton, storage_version, alarm_generation)
         VALUES (1, ${CURRENT_SUBSCRIPTION_STORE_VERSION}, 0)`.withoutTransform;

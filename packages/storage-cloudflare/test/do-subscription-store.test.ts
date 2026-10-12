@@ -123,7 +123,7 @@ describe("Durable Object SubscriptionStore conformance", () => {
           expect(failure).toMatchObject({
             _tag: "SubscriptionError",
             reason: "corrupt",
-            code: "incompatible subscription storage version 1; expected 3",
+            code: "incompatible subscription storage version 1; expected 4",
           });
 
           const state = yield* sql<Record<string, unknown>>`

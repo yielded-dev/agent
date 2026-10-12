@@ -95,7 +95,7 @@ export interface MemoryDeliveryTransfer {
   readonly startImport: (
     threadId: ThreadId,
   ) => Effect.Effect<MemoryDeliveryImport, ThreadImportRejected | ThreadStoreError>;
-  readonly pendingPeerCount: (threadId: ThreadId, limit: number) => number;
+  readonly peerCount: (threadId: ThreadId, nowMillis: number, limit: number) => number;
 }
 
 /** Native control metadata only; callers already hold the journal's shared gate. */

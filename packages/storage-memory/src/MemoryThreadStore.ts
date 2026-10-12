@@ -185,7 +185,6 @@ interface StoredThread {
   readonly applicationInputs: Array<CanonicalRecordEnvelope>;
   readonly durableOwners: Array<CanonicalRecordEnvelope>;
   readonly windowBoundaries: Map<string, Array<CanonicalRecordEnvelope>>;
-  readonly peerCount: number;
   readonly workerRecords: Map<string, Array<CanonicalRecordEnvelope>>;
   readonly byId: Map<string, CanonicalRecordEnvelope>;
   readonly runInputs: Map<string, CanonicalRecordEnvelope | null>;
@@ -274,7 +273,6 @@ type NativeIndexes = Pick<
   | "applicationInputs"
   | "durableOwners"
   | "windowBoundaries"
-  | "peerCount"
   | "workerRecords"
   | "byId"
   | "runInputs"
@@ -292,7 +290,6 @@ const emptyIndexes = (): NativeIndexes => ({
   applicationInputs: [],
   durableOwners: [],
   windowBoundaries: new Map(),
-  peerCount: 0,
   workerRecords: new Map(),
   byId: new Map(),
   runInputs: new Map(),
@@ -516,7 +513,6 @@ const prepareIndexes = (
   previous: NativeIndexes,
   records: ReadonlyArray<CanonicalRecordEnvelope>,
 ) => {
-  let peerCount = previous.peerCount;
   // Latest execution entries are replaced in this private map; owner histories only append.
   // Rebuild staging is private: reuse it only in the synchronous cursor publication step.
   const workerRecords = new Map<string, Array<CanonicalRecordEnvelope>>();
@@ -624,7 +620,6 @@ const prepareIndexes = (
         );
     }
 
-    if (payload._tag === "PeerMessagePrepared") peerCount++;
     if (
       isWorker &&
       (payload._tag === "UserInputRecorded" || payload._tag === "SubmissionSettled") &&
@@ -691,7 +686,7 @@ const prepareIndexes = (
   }
 
   return {
-    indexes: { ...previous, peerCount },
+    indexes: previous,
     commit: () => {
       commitIndex(previous.runRecords, runRecords);
       commitIndex(previous.operationRecords, operationAppends);
@@ -1154,7 +1149,6 @@ const makeThreadStore = Effect.gen(function* () {
             tailSequence: ZERO_CANONICAL_SEQUENCE,
             byId: new Map(),
             workerRecords: new Map(),
-            peerCount: 0,
             runInputs: new Map(),
             runRecords: new Map(),
             operationRecords: new Map(),
@@ -1527,7 +1521,7 @@ const makeThreadStore = Effect.gen(function* () {
 
       return Math.min(
         index.foreign.peer +
-          (deliveryTransfer?.pendingPeerCount(request.threadId, request.limit) ?? 0),
+          (deliveryTransfer?.peerCount(request.threadId, request.nowMillis, request.limit) ?? 0),
         request.limit,
       );
     });

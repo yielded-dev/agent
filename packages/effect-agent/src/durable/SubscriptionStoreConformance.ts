@@ -269,6 +269,28 @@ const onceAndCapacity = conformanceCase(
       const first = yield* store.accept(event("first"), defaultSubscriptionLimits);
       const second = yield* store.accept(event("second"), defaultSubscriptionLimits);
 
+      const duplicate = yield* store
+        .select(
+          first,
+          [delivery(once, first), delivery(once, first)],
+          once.ordinal,
+          true,
+          20,
+          defaultSubscriptionLimits,
+        )
+        .pipe(Effect.result);
+
+      yield* ensure(
+        Result.isFailure(duplicate) &&
+          duplicate.failure._tag === "SubscriptionError" &&
+          duplicate.failure.reason === "validation",
+        "duplicate batch keys must not charge capacity twice for one retained delivery",
+      );
+      yield* ensure(
+        (yield* store.get(once.key))?.state === "active" &&
+          (yield* store.event(first.eventId))?.cursor === 0,
+        "duplicate batch rejection consumed once or advanced routing",
+      );
       yield* store.select(
         first,
         [delivery(once, first)],
@@ -747,6 +769,296 @@ const sustainedRetention = conformanceCase(
     }),
 );
 
+const lifetimeCapacity = conformanceCase(
+  "reuses subscription capacity without retention and preserves live host guards and replay",
+  (ensure) =>
+    Effect.gen(function* () {
+      const store = yield* SubscriptionStore;
+
+      const limits = {
+        ...defaultSubscriptionLimits,
+        maxRegistrations: 1,
+        maxRegistrationsPerOwner: 1,
+        maxEvents: 1,
+        maxDeliveries: 1,
+        maxDeliveriesPerOwner: 1,
+      };
+
+      const retained: Array<{
+        registration: SubscriptionRecord;
+        accepted: AcceptedEvent;
+        completed: SubscriptionDelivery;
+      }> = [];
+
+      for (let index = 0; index < 4; index++) {
+        const registration = yield* store.register(record(`lifetime-${index}`), limits);
+        const accepted = yield* store.accept(event(`lifetime-${index}`), limits);
+        const deliveryId = Schema.decodeSync(Digest)(index.toString(16).padStart(64, "0"));
+
+        const selected = {
+          ...delivery(registration, accepted),
+          deliveryId,
+          admissionKey: Schema.decodeSync(IdempotencyKey)(`subscription:${deliveryId}`),
+        };
+
+        if (index === 3) {
+          yield* store.select(accepted, [], 0, true, 20, limits);
+          yield* store.catchUp(accepted, selected, 20, limits);
+        } else {
+          yield* store.select(accepted, [selected], registration.ordinal, true, 20, limits);
+        }
+
+        if (index % 2 === 0) {
+          yield* store.changeDelivery(selected.key, deliveryId, {
+            _tag: "Prepare",
+            envelope: preparedInput(selected),
+            envelopeDigest: digest("4"),
+            nowMillis: 20,
+          });
+          yield* store.changeDelivery(selected.key, deliveryId, {
+            _tag: "Complete",
+            receipt,
+            nowMillis: 21,
+          });
+        } else {
+          yield* store.changeDelivery(selected.key, deliveryId, {
+            _tag: "Refuse",
+            refusal: { phase: "preparation", code: "refused" },
+            nowMillis: 21,
+          });
+        }
+        const completed = yield* store.delivery(selected.key);
+
+        if (completed === null)
+          return yield* ensure(false, "completion discarded exact delivery evidence");
+        retained.push({ registration, accepted, completed });
+      }
+
+      for (const { registration, accepted, completed } of retained) {
+        const replay = yield* store.register(registration, limits);
+        const intakeReplay = yield* store.accept(accepted, limits);
+
+        yield* ensure(
+          replay.state === "consumed" && replay.ordinal === registration.ordinal,
+          "creation replay changed or resurrected a consumed registration",
+        );
+        yield* ensure(
+          intakeReplay.routingComplete &&
+            intakeReplay.cutoff === accepted.cutoff &&
+            JSON.stringify(intakeReplay.payload) === JSON.stringify(accepted.payload),
+          "retained event replay lost its payload/cutoff or reopened routing",
+        );
+        if (completed.state === "delivered")
+          yield* store.changeDelivery(completed.key, completed.deliveryId, {
+            _tag: "Complete",
+            receipt,
+            nowMillis: 99,
+          });
+        yield* ensure(
+          JSON.stringify(yield* store.delivery(completed.key)) === JSON.stringify(completed),
+          "terminal replay changed prepared input, receipt, refusal or completion time",
+        );
+      }
+
+      const assertHostGuard = <A>(
+        effect: Effect.Effect<A, SubscriptionStoreFailure>,
+        code: string,
+      ) =>
+        Effect.gen(function* () {
+          const result = yield* Effect.result(effect);
+
+          yield* ensure(
+            Result.isFailure(result) &&
+              result.failure._tag === "SubscriptionError" &&
+              result.failure.reason === "capacity" &&
+              result.failure.code === code,
+            `host ${code} guard ignored live work`,
+          );
+        });
+
+      const active = yield* store.register(record("host-active"), limits);
+      const activeEvent = yield* store.accept(event("host-active"), limits);
+
+      yield* assertHostGuard(
+        store.register(record("host-excess", "once", "other-owner"), limits),
+        "registrations",
+      );
+      yield* assertHostGuard(store.accept(event("host-excess"), limits), "events");
+      yield* store.select(
+        activeEvent,
+        [delivery(active, activeEvent)],
+        active.ordinal,
+        true,
+        20,
+        limits,
+      );
+
+      const nextRegistration = yield* store.register(
+        record("host-excess", "once", "other-owner"),
+        limits,
+      );
+
+      const nextEvent = yield* store.accept(event("host-excess"), limits);
+
+      yield* assertHostGuard(
+        store.select(
+          nextEvent,
+          [delivery(nextRegistration, nextEvent)],
+          nextRegistration.ordinal,
+          true,
+          20,
+          limits,
+        ),
+        "deliveries",
+      );
+      yield* ensure(
+        (yield* store.event(nextEvent.eventId))?.cursor === 0 &&
+          (yield* store.get(nextRegistration.key))?.state === "active",
+        "host capacity rejection changed routing or registration evidence",
+      );
+    }),
+);
+
+const capacityReactivation = conformanceCase(
+  "reserves live capacity across expiry, pause and settlement observation",
+  (ensure) =>
+    Effect.gen(function* () {
+      const store = yield* SubscriptionStore;
+
+      const limits = {
+        ...defaultSubscriptionLimits,
+        maxRegistrations: 32,
+        maxRegistrationsPerOwner: 1,
+        maxEvents: 32,
+        maxDeliveries: 32,
+        maxDeliveriesPerOwner: 1,
+      };
+
+      const expectCapacity = <A>(effect: Effect.Effect<A, SubscriptionStoreFailure>) =>
+        Effect.gen(function* () {
+          const result = yield* Effect.result(effect);
+
+          yield* ensure(
+            Result.isFailure(result) &&
+              result.failure._tag === "SubscriptionError" &&
+              result.failure.reason === "capacity",
+            "live work did not reserve capacity",
+          );
+        });
+
+      const expiring = record("expiring");
+
+      yield* store.register(
+        { ...expiring, configuration: { ...expiring.configuration, expiresAtMillis: 1 } },
+        limits,
+      );
+      yield* TestClock.setTime(2);
+      const current = yield* store.register(record("current", "continuous"), limits);
+      const paused = yield* store.change(current.key, 1, { _tag: "Pause" }, limits);
+
+      yield* expectCapacity(store.register(record("excess"), limits));
+
+      const revive = {
+        _tag: "Update" as const,
+        configuration: expiring.configuration,
+        configurationFingerprint: expiring.configurationFingerprint,
+        recovery: null,
+      };
+
+      yield* expectCapacity(store.change(expiring.key, 1, revive, limits));
+      yield* ensure(
+        (yield* store.get(expiring.key))?.configurationRevision === 1,
+        "rejected revival changed registration evidence",
+      );
+      yield* store.cancel(current.key, paused.configurationRevision);
+      const registration = yield* store.change(expiring.key, 1, revive, limits);
+      const accepted = yield* store.accept(event("observed"), limits);
+
+      yield* expectCapacity(store.accept(event("unrouted-excess"), { ...limits, maxEvents: 1 }));
+      const selected = { ...delivery(registration, accepted), observeSettlement: true };
+
+      yield* store.select(accepted, [selected], registration.ordinal, true, 20, limits);
+      const nextRegistration = yield* store.register(record("next"), limits);
+      const nextEvent = yield* store.accept(event("next-event"), limits);
+      const next = delivery(nextRegistration, nextEvent, "1");
+
+      const selectNext = store.select(
+        nextEvent,
+        [next],
+        nextRegistration.ordinal,
+        true,
+        20,
+        limits,
+      );
+
+      yield* store.changeDelivery(selected.key, selected.deliveryId, {
+        _tag: "Retry",
+        retry: { ...selected.retry, attempts: 1, automaticAttempts: 1, parked: true },
+        nowMillis: 20,
+      });
+      yield* expectCapacity(selectNext);
+      yield* store.changeDelivery(selected.key, selected.deliveryId, {
+        _tag: "Prepare",
+        envelope: preparedInput(selected),
+        envelopeDigest: digest("4"),
+        nowMillis: 20,
+      });
+      yield* store.changeDelivery(selected.key, selected.deliveryId, {
+        _tag: "Complete",
+        receipt,
+        nowMillis: 21,
+      });
+      yield* expectCapacity(selectNext);
+      yield* ensure(
+        (yield* store.event(nextEvent.eventId))?.cursor === 0 &&
+          (yield* store.get(nextRegistration.key))?.state === "active",
+        "capacity rejection consumed a registration or advanced routing",
+      );
+      yield* store.changeDelivery(selected.key, selected.deliveryId, {
+        _tag: "ObserveSettlement",
+        receipt,
+        settled: true,
+        nowMillis: 22,
+        nextAttemptAtMillis: 22,
+      });
+      yield* selectNext;
+      yield* store.changeDelivery(next.key, next.deliveryId, {
+        _tag: "Prepare",
+        envelope: preparedInput(next),
+        envelopeDigest: digest("4"),
+        nowMillis: 22,
+      });
+      yield* store.changeDelivery(next.key, next.deliveryId, {
+        _tag: "Complete",
+        receipt,
+        nowMillis: 23,
+      });
+      const blocker = yield* store.register(record("blocker"), limits);
+      const blockerEvent = yield* store.accept(event("blocker"), limits);
+      const blockerDelivery = delivery(blocker, blockerEvent);
+
+      yield* store.select(blockerEvent, [blockerDelivery], blocker.ordinal, true, 24, limits);
+      yield* expectCapacity(
+        store.changeDelivery(
+          next.key,
+          next.deliveryId,
+          {
+            _tag: "ObserveSettlement",
+            receipt,
+            settled: false,
+            nowMillis: 24,
+            nextAttemptAtMillis: 25,
+          },
+          limits,
+        ),
+      );
+      yield* ensure(
+        (yield* store.delivery(next.key))?.observeSettlement !== true,
+        "rejected observation reactivation changed delivery evidence",
+      );
+    }),
+);
+
 const recoveryRevisionFence = conformanceCase(
   "fences source recovery across pause, resume and configuration replacement",
   (ensure) =>
@@ -936,6 +1248,8 @@ export const subscriptionStoreConformanceCases: ReadonlyArray<SubscriptionStoreC
   retryGenerationFence,
   retentionFairness,
   sustainedRetention,
+  lifetimeCapacity,
+  capacityReactivation,
   revisionsAndRetention,
   cutoffAndIntake,
   onceAndCapacity,

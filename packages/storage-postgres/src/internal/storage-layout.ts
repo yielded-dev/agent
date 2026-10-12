@@ -13,7 +13,7 @@ import {
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 25;
+export const CurrentPostgresStorageVersion = 26;
 
 /** Only live child membership changes on reservation mutations. */
 const liveChildFunctionBody = `
@@ -80,6 +80,8 @@ const layoutStatements = [
   'CREATE TABLE __NAMESPACE__."effect_agent_subscription_sequences" ( tenant_id TEXT COLLATE "C" NOT NULL, source_address TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, event_scan_cursor TEXT COLLATE "C" NOT NULL, delivery_scan_cursor TEXT COLLATE "C" NOT NULL, recovery_scan_cursor BIGINT NOT NULL, PRIMARY KEY (tenant_id, source_address) )',
   'CREATE TABLE __NAMESPACE__."effect_agent_subscriptions" ( tenant_id TEXT COLLATE "C" NOT NULL, source_address TEXT COLLATE "C" NOT NULL, owner_id TEXT COLLATE "C" NOT NULL, subscription_id TEXT COLLATE "C" NOT NULL, ordinal BIGINT NOT NULL, source_name TEXT COLLATE "C" NOT NULL, source_version TEXT COLLATE "C" NOT NULL, matching_key TEXT COLLATE "C" NOT NULL, state TEXT COLLATE "C" NOT NULL, expires_at_millis BIGINT, recovery_at_millis BIGINT, recovery_present BIGINT NOT NULL DEFAULT 0, record_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (tenant_id, source_address, owner_id, subscription_id), UNIQUE (tenant_id, source_address, ordinal) )',
   'CREATE INDEX effect_agent_subscriptions_owner ON __NAMESPACE__."effect_agent_subscriptions" (tenant_id, source_address, owner_id, ordinal)',
+  "CREATE INDEX effect_agent_subscriptions_capacity ON __NAMESPACE__.\"effect_agent_subscriptions\" (tenant_id, source_address, expires_at_millis) WHERE state IN ('active', 'paused')",
+  "CREATE INDEX effect_agent_subscriptions_owner_capacity ON __NAMESPACE__.\"effect_agent_subscriptions\" (tenant_id, source_address, owner_id, expires_at_millis) WHERE state IN ('active', 'paused')",
   'CREATE INDEX effect_agent_subscriptions_candidates ON __NAMESPACE__."effect_agent_subscriptions" (tenant_id, source_address, source_name, source_version, matching_key, ordinal)',
   'CREATE INDEX effect_agent_subscriptions_recovery ON __NAMESPACE__."effect_agent_subscriptions" (tenant_id, source_address, recovery_at_millis, ordinal) WHERE recovery_at_millis IS NOT NULL',
   'CREATE TABLE __NAMESPACE__."effect_agent_subscription_events" ( tenant_id TEXT COLLATE "C" NOT NULL, source_address TEXT COLLATE "C" NOT NULL, event_id TEXT COLLATE "C" NOT NULL, source_name TEXT COLLATE "C" NOT NULL, source_version TEXT COLLATE "C" NOT NULL, matching_key TEXT COLLATE "C" NOT NULL, payload_digest TEXT COLLATE "C" NOT NULL, cutoff BIGINT NOT NULL, cursor BIGINT NOT NULL, routing_complete BIGINT NOT NULL, tombstone BIGINT NOT NULL DEFAULT 0, next_attempt_at_millis BIGINT NOT NULL, record_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (tenant_id, source_address, event_id) )',
@@ -87,7 +89,9 @@ const layoutStatements = [
   'CREATE TABLE __NAMESPACE__."effect_agent_subscription_deliveries" ( tenant_id TEXT COLLATE "C" NOT NULL, source_address TEXT COLLATE "C" NOT NULL, owner_id TEXT COLLATE "C" NOT NULL, subscription_id TEXT COLLATE "C" NOT NULL, event_id TEXT COLLATE "C" NOT NULL, delivery_key TEXT COLLATE "C" NOT NULL, state TEXT COLLATE "C" NOT NULL, next_attempt_at_millis BIGINT NOT NULL, record_json TEXT COLLATE "C" NOT NULL, retry_parked BOOLEAN NOT NULL, observe_settlement BOOLEAN NOT NULL, PRIMARY KEY (tenant_id, source_address, owner_id, subscription_id, event_id), UNIQUE (tenant_id, source_address, delivery_key) )',
   'CREATE INDEX effect_agent_subscription_deliveries_pending ON __NAMESPACE__."effect_agent_subscription_deliveries" (tenant_id, source_address, state, next_attempt_at_millis, delivery_key)',
   'CREATE INDEX effect_agent_subscription_deliveries_registration ON __NAMESPACE__."effect_agent_subscription_deliveries" (tenant_id, source_address, owner_id, subscription_id, delivery_key)',
-  'CREATE TABLE __NAMESPACE__."effect_agent_message_deliveries" ( owner_thread_id TEXT COLLATE "C" NOT NULL, message_id TEXT COLLATE "C" NOT NULL, version BIGINT NOT NULL, state TEXT COLLATE "C" NOT NULL, deadline_at_millis BIGINT, record_json TEXT COLLATE "C" NOT NULL, read_metadata JSONB NOT NULL, PRIMARY KEY (owner_thread_id, message_id) )',
+  "CREATE INDEX effect_agent_subscription_deliveries_capacity ON __NAMESPACE__.\"effect_agent_subscription_deliveries\" (tenant_id, source_address, owner_id) WHERE state IN ('selected', 'prepared')",
+  "CREATE INDEX effect_agent_subscription_deliveries_observing ON __NAMESPACE__.\"effect_agent_subscription_deliveries\" (tenant_id, source_address, owner_id) WHERE state='delivered' AND observe_settlement",
+  'CREATE TABLE __NAMESPACE__."effect_agent_message_deliveries" ( owner_thread_id TEXT COLLATE "C" NOT NULL, message_id TEXT COLLATE "C" NOT NULL, version BIGINT NOT NULL, state TEXT COLLATE "C" NOT NULL, deadline_at_millis BIGINT, peer_retained_until_millis BIGINT, record_json TEXT COLLATE "C" NOT NULL, read_metadata JSONB NOT NULL, PRIMARY KEY (owner_thread_id, message_id) )',
   'CREATE INDEX effect_agent_message_deliveries_due ON __NAMESPACE__."effect_agent_message_deliveries" (deadline_at_millis, owner_thread_id, message_id) WHERE deadline_at_millis IS NOT NULL',
   "CREATE INDEX effect_agent_submissions_nonterminal ON __NAMESPACE__.\"effect_agent_submissions\" (thread_id, queue_sequence) WHERE state <> 'settled'",
   'CREATE TABLE __NAMESPACE__."effect_agent_worker_stops" (thread_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, terminal TEXT COLLATE "C")',
@@ -107,6 +111,7 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_records_worker_completed ON __NAMESPACE__.effect_agent_canonical_records(thread_id, message_id, sequence) WHERE record_tag = 32",
   "CREATE INDEX effect_agent_records_worker_stop ON __NAMESPACE__.effect_agent_canonical_records(thread_id, worker_thread_id, sequence) WHERE record_tag = 38",
   "CREATE INDEX effect_agent_message_deliveries_identity ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, (read_metadata ->> 'messageId'))",
+  "CREATE INDEX effect_agent_message_deliveries_peer_retained ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, peer_retained_until_millis, message_id) WHERE peer_retained_until_millis IS NOT NULL",
   "CREATE INDEX effect_agent_message_deliveries_peer ON __NAMESPACE__.effect_agent_message_deliveries(owner_thread_id, message_id) WHERE state NOT IN ('processed', 'refused') AND (read_metadata ->> 'peer') = 'true'",
   'CREATE TABLE __NAMESPACE__.effect_agent_journal_ranges (thread_id TEXT COLLATE "C" NOT NULL, first_sequence BIGINT NOT NULL, last_sequence BIGINT NOT NULL, record_count BIGINT NOT NULL, batch_count BIGINT NOT NULL, byte_count BIGINT NOT NULL, state TEXT COLLATE "C" NOT NULL, locator TEXT COLLATE "C", PRIMARY KEY (thread_id, first_sequence), FOREIGN KEY (thread_id) REFERENCES __NAMESPACE__.effect_agent_threads(thread_id) ON DELETE RESTRICT)',
   'CREATE TABLE __NAMESPACE__.effect_agent_archive_batches (thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, range_first_sequence BIGINT NOT NULL, batch_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id, batch_id) REFERENCES __NAMESPACE__.effect_agent_canonical_batches(thread_id, batch_id) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_batches_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES __NAMESPACE__.effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)',
@@ -470,6 +475,7 @@ const layoutShape: Readonly<
       "version:bigint:true",
       "state:text:true",
       "deadline_at_millis:bigint:false",
+      "peer_retained_until_millis:bigint:false",
       "record_json:text:true",
       "read_metadata:jsonb:true",
     ],
@@ -762,6 +768,11 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
     columns: ["owner_thread_id", null],
     expressions: ["messageId"],
   },
+  effect_agent_message_deliveries_peer_retained: {
+    table: "effect_agent_message_deliveries",
+    columns: ["owner_thread_id", "peer_retained_until_millis", "message_id"],
+    predicate: ["notNull", ["column", "peer_retained_until_millis"]],
+  },
   effect_agent_message_deliveries_peer: {
     table: "effect_agent_message_deliveries",
     columns: ["owner_thread_id", "message_id"],
@@ -864,6 +875,22 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
     table: "effect_agent_subscription_deliveries",
     columns: ["tenant_id", "source_address", "state", "next_attempt_at_millis", "delivery_key"],
   },
+  effect_agent_subscription_deliveries_capacity: {
+    table: "effect_agent_subscription_deliveries",
+    columns: ["tenant_id", "source_address", "owner_id"],
+    predicate: ["in", ["column", "state"], ["selected", "prepared"]],
+  },
+  effect_agent_subscription_deliveries_observing: {
+    table: "effect_agent_subscription_deliveries",
+    columns: ["tenant_id", "source_address", "owner_id"],
+    predicate: [
+      "and",
+      [
+        ["eq", ["column", "state"], ["text", "delivered"]],
+        ["column", "observe_settlement"],
+      ],
+    ],
+  },
   effect_agent_subscription_deliveries_registration: {
     table: "effect_agent_subscription_deliveries",
     columns: ["tenant_id", "source_address", "owner_id", "subscription_id", "delivery_key"],
@@ -892,6 +919,16 @@ const layoutIndexes: Readonly<Record<string, LayoutIndex>> = {
   effect_agent_subscriptions_owner: {
     table: "effect_agent_subscriptions",
     columns: ["tenant_id", "source_address", "owner_id", "ordinal"],
+  },
+  effect_agent_subscriptions_capacity: {
+    table: "effect_agent_subscriptions",
+    columns: ["tenant_id", "source_address", "expires_at_millis"],
+    predicate: ["in", ["column", "state"], ["active", "paused"]],
+  },
+  effect_agent_subscriptions_owner_capacity: {
+    table: "effect_agent_subscriptions",
+    columns: ["tenant_id", "source_address", "owner_id", "expires_at_millis"],
+    predicate: ["in", ["column", "state"], ["active", "paused"]],
   },
   effect_agent_subscriptions_recovery: {
     table: "effect_agent_subscriptions",

@@ -477,15 +477,20 @@ const makeManagement = Effect.fnUntraced(function* (requested: SubscriptionLimit
         configuration: encoded,
       });
 
-      const updated = yield* store.change(key, expectedRevision, {
-        _tag: "Update",
-        configuration,
-        configurationFingerprint,
-        recovery:
-          behavior.reconcile === undefined
-            ? null
-            : { attempts: 0, nextAttemptAtMillis: time, lastFailure: null },
-      });
+      const updated = yield* store.change(
+        key,
+        expectedRevision,
+        {
+          _tag: "Update",
+          configuration,
+          configurationFingerprint,
+          recovery:
+            behavior.reconcile === undefined
+              ? null
+              : { attempts: 0, nextAttemptAtMillis: time, lastFailure: null },
+        },
+        limits,
+      );
 
       return snapshot(updated, time);
     },
@@ -500,7 +505,13 @@ const makeManagement = Effect.fnUntraced(function* (requested: SubscriptionLimit
     const owner = yield* scope(scopeValue);
 
     yield* authorizer.manage(change._tag === "Pause" ? "pause" : "resume", owner);
-    const updated = yield* store.change(yield* ownedKey(owner, key), expectedRevision, change);
+
+    const updated = yield* store.change(
+      yield* ownedKey(owner, key),
+      expectedRevision,
+      change,
+      limits,
+    );
 
     return snapshot(updated, yield* now);
   });
@@ -580,10 +591,15 @@ const makeManagement = Effect.fnUntraced(function* (requested: SubscriptionLimit
         yield* authorizer.manage("recover", owner);
 
         return snapshot(
-          yield* store.change(yield* ownedKey(owner, key), expectedRevision, {
-            _tag: "Recover",
-            nowMillis: yield* now,
-          }),
+          yield* store.change(
+            yield* ownedKey(owner, key),
+            expectedRevision,
+            {
+              _tag: "Recover",
+              nowMillis: yield* now,
+            },
+            limits,
+          ),
           yield* now,
         );
       }),
@@ -942,13 +958,18 @@ const makeDriver = Effect.fnUntraced(function* (requested: SubscriptionLimits) {
 
       const time = yield* now;
 
-      yield* store.changeDelivery(delivery.key, delivery.deliveryId, {
-        _tag: "ObserveSettlement",
-        receipt: delivery.receipt,
-        settled,
-        nowMillis: time,
-        nextAttemptAtMillis: nextAttempt(time),
-      });
+      yield* store.changeDelivery(
+        delivery.key,
+        delivery.deliveryId,
+        {
+          _tag: "ObserveSettlement",
+          receipt: delivery.receipt,
+          settled,
+          nowMillis: time,
+          nextAttemptAtMillis: nextAttempt(time),
+        },
+        limits,
+      );
 
       return;
     }

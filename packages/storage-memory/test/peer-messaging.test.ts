@@ -46,7 +46,7 @@ import { PreparedInput } from "@yielded/agent/subscription";
 import { ThreadTailRequest, ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Context, Duration, Effect, Layer, Option, Schema, Stream } from "effect";
+import { Clock, Context, Duration, Effect, Layer, Option, Schema, Stream } from "effect";
 import { LanguageModel, Model, Toolkit, type Response } from "effect/ai";
 import { TestClock } from "effect/testing";
 
@@ -354,6 +354,63 @@ const makeHarness = Effect.fn(function* (
 });
 
 describe("durable peer messaging boundaries", () => {
+  // Requested regression for https://github.com/yielded-dev/agent/issues/785:
+  // settled history must outlive a finite send-retention allowance.
+  it.effect(
+    "keeps sending across settled Runs beyond the old lifetime cap",
+    () =>
+      Effect.gen(function* () {
+        const h = yield* makeHarness({ maxMessagesPerSource: 2, lifetimeMillis: 1_000 });
+        const first = yield* h.send("retained-0");
+
+        yield* h.driver.process(first.message);
+        yield* h.runtime.processThreadResolved(destinationThread);
+        const original = yield* h.host.inspect({ ...peer, message: first.message });
+
+        expect(original.status).toBe("processed");
+        expect(yield* h.send("retained-0")).toEqual(original);
+
+        const second = yield* h.send("retained-1");
+
+        yield* h.driver.process(second.message);
+        yield* h.runtime.processThreadResolved(destinationThread);
+        expect(yield* h.send("window-full").pipe(Effect.flip)).toMatchObject({
+          reason: "capacity",
+        });
+        yield* TestClock.adjust("1 second");
+
+        for (let index = 2; index < 258; index++) {
+          const next = yield* h.send(`retained-${index}`);
+
+          yield* h.driver.process(next.message);
+          yield* h.runtime.processThreadResolved(destinationThread);
+          expect((yield* h.host.inspect({ ...peer, message: next.message })).status).toBe(
+            "processed",
+          );
+          yield* TestClock.adjust("1 second");
+        }
+        expect(yield* h.host.inspect({ ...peer, message: first.message })).toEqual(original);
+        expect(yield* h.send("retained-0")).toEqual(original);
+        expect(yield* h.proofs()).toHaveLength(258);
+
+        const now = yield* Clock.currentTimeMillis;
+
+        yield* TestClock.setTime(0);
+        expect(yield* h.send("clock-rollback").pipe(Effect.flip)).toMatchObject({
+          reason: "capacity",
+        });
+        yield* TestClock.setTime(now);
+
+        const parked = yield* h.send("still-owed");
+
+        yield* TestClock.adjust("1 second");
+        expect((yield* h.driver.process(parked.message)).status).toBe("parked");
+        yield* h.send("also-owed");
+        expect(yield* h.send("live-full").pipe(Effect.flip)).toMatchObject({ reason: "capacity" });
+      }).pipe(Effect.scoped),
+    { timeout: 60_000 },
+  );
+
   it.effect.each(["peer:after-prepared-append", "message-delivery:insert:after"])(
     "replays the frozen route, input, principal and lifetime after %s",
     (point) =>

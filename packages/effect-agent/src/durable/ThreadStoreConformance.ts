@@ -882,7 +882,7 @@ const nativeWorkerAccounting = conformanceCase(
         tail,
       );
       yield* ensure(
-        (yield* store.countPeerMessages!({ threadId, limit: 1 })) === 0,
+        (yield* store.countPeerMessages!({ threadId, nowMillis: 0, limit: 1 })) === 0,
         "Conversation history does not count as peer sends",
       );
 
@@ -901,8 +901,8 @@ const nativeWorkerAccounting = conformanceCase(
 
       tail = yield* append(threadId, batch("peer-proofs", [peerProof(0), peerProof(1)]), tail);
       yield* ensure(
-        (yield* store.countPeerMessages!({ threadId, limit: 1 })) === 1 &&
-          (yield* store.countPeerMessages!({ threadId, limit: 1000 })) === 2,
+        (yield* store.countPeerMessages!({ threadId, nowMillis: 0, limit: 1 })) === 1 &&
+          (yield* store.countPeerMessages!({ threadId, nowMillis: 0, limit: 1000 })) === 2,
         "Peer count saturates at the requested capacity without returning payloads",
       );
 

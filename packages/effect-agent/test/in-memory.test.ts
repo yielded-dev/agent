@@ -1,10 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Deferred, Effect, Fiber, Layer, Ref, Schema, Stream } from "effect";
-import { LanguageModel, Model, type Response, Toolkit } from "effect/ai";
+import { LanguageModel, Model, Prompt, type Response, Toolkit } from "effect/ai";
 import type { expectTypeOf as ExpectTypeOf } from "vite-plus/test";
 
 import * as Agent from "../src/core/Agent.ts";
-import { ThreadId } from "../src/core/Identifiers.ts";
+import { RunId, ThreadId } from "../src/core/Identifiers.ts";
+import * as Thread from "../src/core/Thread.ts";
 import * as AgentRuntime from "../src/engine/AgentRuntime.ts";
 import { ThreadHistory } from "../src/engine/ThreadHistory.ts";
 import * as InMemory from "../src/InMemory.ts";
@@ -55,6 +56,48 @@ const child = Agent.make("child", {
 });
 
 describe("in-memory assembly", () => {
+  // #785: settled conversation history must not consume a lifetime allowance.
+  it.effect("retains an unbounded conversation while bounding individual messages", () =>
+    Effect.gen(function* () {
+      const store = yield* Thread.Store;
+      const threadId = ThreadId.make("continuing");
+      const messages: Array<Prompt.Message> = [];
+
+      yield* store.create(threadId);
+      for (let slice = 0; slice < 9; slice++) {
+        for (let index = 0; index < 128; index++)
+          messages.push(
+            Prompt.userMessage({
+              content: [Prompt.textPart({ text: `${slice}:${index}:${"x".repeat(4_200)}` })],
+            }),
+          );
+        yield* store.recordHistory(
+          threadId,
+          RunId.make(`run-${slice}`),
+          Prompt.fromMessages(messages),
+        );
+      }
+      const saved = yield* store.snapshot(threadId);
+
+      expect(Thread.toPrompt(saved).content).toEqual(messages);
+      expect(saved.contentBytes).toBeGreaterThan(4 * 1024 * 1024);
+      expect((yield* store.export(threadId)).snapshot).toEqual(saved);
+      expect(
+        yield* store
+          .append(
+            threadId,
+            Thread.ThreadAppend.make({
+              message: Prompt.userMessage({
+                content: [Prompt.textPart({ text: "x".repeat(4 * 1024 * 1024) })],
+              }),
+            }),
+          )
+          .pipe(Effect.flip),
+      ).toMatchObject({ _tag: "ThreadLimitExceeded", limit: "content-bytes" });
+      expect(yield* store.snapshot(threadId)).toEqual(saved);
+    }).pipe(Effect.provide(InMemory.layer)),
+  );
+
   it.effect(
     "rejects stale concurrent history without erasing the winning conversation or retrying",
     () =>

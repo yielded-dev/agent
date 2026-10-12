@@ -298,10 +298,15 @@ export type SubscriptionRetentionPolicy = typeof SubscriptionRetentionPolicy.Typ
 
 export const SubscriptionLimits = Schema.Struct({
   retention: Schema.optionalKey(SubscriptionRetentionPolicy),
+  /** Partition-wide active/paused, unexpired registration capacity. */
   maxRegistrations: Positive.check(Schema.isLessThanOrEqualTo(100_000)),
+  /** Active and paused registrations whose expiry has not passed. */
   maxRegistrationsPerOwner: Positive.check(Schema.isLessThanOrEqualTo(10_000)),
+  /** Partition-wide unfinished routing capacity; selected deliveries have their own limits. */
   maxEvents: Positive.check(Schema.isLessThanOrEqualTo(100_000)),
+  /** Partition-wide selected/prepared work and observed unsettled admission capacity. */
   maxDeliveries: Positive.check(Schema.isLessThanOrEqualTo(100_000)),
+  /** Selected/prepared work, including parked retries, and observed unsettled admissions. */
   maxDeliveriesPerOwner: Positive.check(Schema.isLessThanOrEqualTo(10_000)),
   maxPayloadBytes: Positive.check(Schema.isLessThanOrEqualTo(65_536)),
   maxContextBytes: Positive.check(Schema.isLessThanOrEqualTo(16_384)),
@@ -390,7 +395,8 @@ export type SubscriptionScanCursors = typeof SubscriptionScanCursors.Type;
 /**
  * One store instance owns exactly one tenant/source partition. Every mutation is local and
  * atomic, including required Cloudflare wakes. Node has one process owner per database.
- * Records are retained for the partition lifetime; hard quotas reject new retained work.
+ * Without retention, records remain for the partition lifetime. Partition-wide and per-owner
+ * quotas bound live work, never completed replay history. Retention controls evidence reclamation.
  * No pruning may discard creation replay, deduplication, or unfinished-work evidence.
  */
 export class SubscriptionStore extends Context.Service<
@@ -422,6 +428,8 @@ export class SubscriptionStore extends Context.Service<
       key: SubscriptionKey,
       expectedRevision: number,
       change: SubscriptionChange,
+      /** Reopening expired work reserves capacity; defaults to defaultSubscriptionLimits. */
+      limits?: SubscriptionLimits,
     ) => Effect.Effect<SubscriptionRecord, SubscriptionStoreFailure>;
     readonly cancel: (
       key: SubscriptionKey,
@@ -443,7 +451,7 @@ export class SubscriptionStore extends Context.Service<
       event: AcceptedEvent,
       limit: number,
     ) => Effect.Effect<ReadonlyArray<SubscriptionRecord>, SubscriptionError>;
-    /** Recheck cursor, eligibility, lifecycle and expiry; consume once + insert obligations + cursor together. */
+    /** Distinct delivery keys only. Recheck eligibility and consume once + insert obligations + cursor atomically. */
     readonly select: (
       event: AcceptedEvent,
       deliveries: ReadonlyArray<SubscriptionDelivery>,
@@ -480,11 +488,13 @@ export class SubscriptionStore extends Context.Service<
     /**
      * A matching deliveryId fences stale outcomes. Prepare rechecks cancellation and expiry atomically.
      * Retry advances only with a higher attempt count and a nondecreasing next-attempt time.
+     * Starting settlement observation reserves capacity using the supplied or default limits.
      */
     readonly changeDelivery: (
       key: SubscriptionDeliveryKey,
       deliveryId: Digest,
       change: DeliveryChange,
+      limits?: SubscriptionLimits,
     ) => Effect.Effect<SubscriptionDelivery, SubscriptionStoreFailure>;
     readonly recovering: (
       nowMillis: number,

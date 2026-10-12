@@ -314,6 +314,14 @@ export const messageDeliveryKeyString = (key: MessageDeliveryKey): string =>
 export const messageDeliveryUsesCapacity = (record: MessageDeliveryRecord): boolean =>
   record.status !== "processed" && record.status !== "refused";
 
+/** Terminal peer sends retain capacity through the last granted delivery window, never for life. */
+export const peerMessageRetentionDeadline = (record: MessageDeliveryRecord): number | null =>
+  !messageDeliveryUsesCapacity(record) &&
+  record.envelope.messageAdmission !== undefined &&
+  "peerName" in record.envelope.messageAdmission
+    ? record.deadlineAtMillis
+    : null;
+
 export const isWorkerUpdateDelivery = (record: MessageDeliveryRecord): boolean =>
   Schema.is(WorkerUpdate)(record.envelope.messageAdmission);
 

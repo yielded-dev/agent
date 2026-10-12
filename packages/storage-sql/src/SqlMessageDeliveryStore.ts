@@ -12,6 +12,7 @@ import {
   MessageDeliveryStore,
   MessageDeliveryStoreLimits,
   messageDeliveryDeadline,
+  peerMessageRetentionDeadline,
   isWorkerUpdateDelivery,
   messageDeliveryCapacity,
   sameMessageDeliveryIdentity,
@@ -106,6 +107,7 @@ const Row = Schema.Struct({
   version: SqlInteger,
   state: Schema.String,
   deadline_at_millis: Schema.NullOr(SqlInteger.pipe(Schema.decodeTo(ScheduleInstant))),
+  peer_retained_until_millis: Schema.NullOr(SqlInteger.pipe(Schema.decodeTo(ScheduleInstant))),
   record_json: Schema.String,
 });
 
@@ -322,7 +324,8 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
       record.key.messageId !== row.message_id ||
       record.version !== row.version ||
       record.status !== row.state ||
-      messageDeliveryDeadline(record) !== row.deadline_at_millis
+      messageDeliveryDeadline(record) !== row.deadline_at_millis ||
+      peerMessageRetentionDeadline(record) !== row.peer_retained_until_millis
     ) {
       return yield* corrupt("row-metadata");
     }
@@ -341,7 +344,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
 
     const rows = yield* query(
       "get",
-      sql`SELECT owner_thread_id, message_id, version, state, deadline_at_millis, record_json FROM ${relation("effect_agent_message_deliveries")} WHERE owner_thread_id = ${input.ownerThreadId} AND message_id = ${input.messageId}`,
+      sql`SELECT owner_thread_id, message_id, version, state, deadline_at_millis, peer_retained_until_millis, record_json FROM ${relation("effect_agent_message_deliveries")} WHERE owner_thread_id = ${input.ownerThreadId} AND message_id = ${input.messageId}`,
     );
 
     return (yield* decodeRows(rows))[0] ?? null;
@@ -419,7 +422,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
           return yield* MessageDeliveryError.make({ reason: "capacity", operation: "insert" });
         yield* query(
           "insert",
-          sql`INSERT INTO ${relation("effect_agent_message_deliveries")} (owner_thread_id, message_id, version, state, deadline_at_millis, record_json ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata` })}) VALUES (${input.key.ownerThreadId}, ${input.key.messageId}, ${input.version}, ${input.status}, ${messageDeliveryDeadline(input)}, ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, ${messageDeliveryMetadata(input)}::jsonb` })})`,
+          sql`INSERT INTO ${relation("effect_agent_message_deliveries")} (owner_thread_id, message_id, version, state, deadline_at_millis, peer_retained_until_millis, record_json ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata` })}) VALUES (${input.key.ownerThreadId}, ${input.key.messageId}, ${input.version}, ${input.status}, ${messageDeliveryDeadline(input)}, ${peerMessageRetentionDeadline(input)}, ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, ${messageDeliveryMetadata(input)}::jsonb` })})`,
         );
         yield* work
           .transferDelivery(input.key.ownerThreadId, input.key.messageId)
@@ -478,7 +481,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
 
           const updated = yield* query(
             "change",
-            sql`UPDATE ${relation("effect_agent_message_deliveries")} SET version = ${next.version}, state = ${next.status}, deadline_at_millis = ${messageDeliveryDeadline(next)}, record_json = ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata = ${messageDeliveryMetadata(next)}::jsonb` })} WHERE owner_thread_id = ${decodedKey.ownerThreadId} AND message_id = ${decodedKey.messageId} AND version = ${current.version} RETURNING owner_thread_id, message_id, version, state, deadline_at_millis, record_json`,
+            sql`UPDATE ${relation("effect_agent_message_deliveries")} SET version = ${next.version}, state = ${next.status}, deadline_at_millis = ${messageDeliveryDeadline(next)}, peer_retained_until_millis = ${peerMessageRetentionDeadline(next)}, record_json = ${text} ${sql.onDialectOrElse({ orElse: () => sql``, pg: () => sql`, read_metadata = ${messageDeliveryMetadata(next)}::jsonb` })} WHERE owner_thread_id = ${decodedKey.ownerThreadId} AND message_id = ${decodedKey.messageId} AND version = ${current.version} RETURNING owner_thread_id, message_id, version, state, deadline_at_millis, peer_retained_until_millis, record_json`,
           );
 
           const rows = yield* decodeRows(updated);
@@ -567,7 +570,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
           ) {
             const rows = yield* query(
               "pending-view",
-              sql`SELECT owner_thread_id, message_id, version, state, deadline_at_millis, record_json FROM ${relation("effect_agent_message_deliveries")} WHERE owner_thread_id = ${input.ownerThreadId} AND state NOT IN ('processed', 'refused') ORDER BY message_id LIMIT ${pendingRowLimit + 1}`,
+              sql`SELECT owner_thread_id, message_id, version, state, deadline_at_millis, peer_retained_until_millis, record_json FROM ${relation("effect_agent_message_deliveries")} WHERE owner_thread_id = ${input.ownerThreadId} AND state NOT IN ('processed', 'refused') ORDER BY message_id LIMIT ${pendingRowLimit + 1}`,
             );
 
             const records = yield* decodeRowArray(rows).pipe(
@@ -628,7 +631,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
 
       const rows = yield* query(
         "list",
-        sql`SELECT owner_thread_id, message_id, version, state, deadline_at_millis, record_json FROM ${relation("effect_agent_message_deliveries")} WHERE owner_thread_id = ${input.ownerThreadId} ${input.after === undefined ? sql`` : sql`AND message_id > ${input.after}`} ${input.pendingOnly ? sql`AND state NOT IN ('processed', 'refused')` : sql``}
+        sql`SELECT owner_thread_id, message_id, version, state, deadline_at_millis, peer_retained_until_millis, record_json FROM ${relation("effect_agent_message_deliveries")} WHERE owner_thread_id = ${input.ownerThreadId} ${input.after === undefined ? sql`` : sql`AND message_id > ${input.after}`} ${input.pendingOnly ? sql`AND state NOT IN ('processed', 'refused')` : sql``}
         ${
           input.workerStarts === undefined
             ? sql``
@@ -662,7 +665,7 @@ export const makeSqlMessageDeliveryStore = Effect.fnUntraced(function* (
 
       const rows = yield* query(
         "due",
-        sql`SELECT owner_thread_id, message_id, version, state, deadline_at_millis, record_json FROM ${relation("effect_agent_message_deliveries")} WHERE deadline_at_millis IS NOT NULL AND deadline_at_millis <= ${input.nowMillis} ${input.ownerThreadId === undefined ? sql`` : sql`AND owner_thread_id = ${input.ownerThreadId}`} ORDER BY deadline_at_millis, owner_thread_id, message_id LIMIT ${input.limit}`,
+        sql`SELECT owner_thread_id, message_id, version, state, deadline_at_millis, peer_retained_until_millis, record_json FROM ${relation("effect_agent_message_deliveries")} WHERE deadline_at_millis IS NOT NULL AND deadline_at_millis <= ${input.nowMillis} ${input.ownerThreadId === undefined ? sql`` : sql`AND owner_thread_id = ${input.ownerThreadId}`} ORDER BY deadline_at_millis, owner_thread_id, message_id LIMIT ${input.limit}`,
       );
 
       return (yield* decodeRows(rows)).map((record) => record.key);
