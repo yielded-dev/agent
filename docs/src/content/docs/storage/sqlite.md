@@ -33,6 +33,8 @@ Save the returned `threadId` and pass it to later Runs, including after restart.
 Acquire `History` once around the application so calls share its store. Keep the
 file on persistent local storage with working SQLite locks. The convenience Layer
 holds an exclusive connection lock; independent readers must wait until it closes.
+Use SQLite 3.43 or later, including when supplying a custom SQL client to
+`SqliteThreadStore.threadStoreLayer`.
 
 ## What is retained
 

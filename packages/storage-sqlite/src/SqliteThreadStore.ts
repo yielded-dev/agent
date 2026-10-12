@@ -174,7 +174,7 @@ const makeServices = Effect.fnUntraced(function* () {
 /**
  * SQLite Thread Store implementation with configuration, failpoint, SQL, and Crypto
  * authority kept visible in its input channel.
- * Inject a client opened with `disableWAL: true`; this adapter enables WAL only for a
+ * Inject a SQLite 3.43 or later client opened with `disableWAL: true`; this adapter enables WAL only for a
  * fresh file so unsupported files reject before persistent driver configuration changes.
  */
 export const threadStoreLayer: Layer.Layer<
