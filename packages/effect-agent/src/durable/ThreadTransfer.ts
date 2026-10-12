@@ -4,7 +4,6 @@ import type { ThreadId } from "../core/Identifiers.ts";
 import { canonicalJson, utf8ByteLength } from "./Digest.ts";
 import { ImportSourcePhase } from "./internal/thread-transfer-source.ts";
 import { transferRecordDependencies } from "./internal/transfer-dependencies.ts";
-import { ExportRecord } from "./RecordFormat.ts";
 import {
   type RecordId,
   CURRENT_RECORD_FORMAT,
@@ -190,15 +189,9 @@ export const exportThreadPage = Effect.fnUntraced(function* (input: ThreadExport
       )
         return yield* failure("Canonical batch identity or sequence mismatch");
 
-    const records = yield* Effect.forEach(canonical.records, (entry) =>
-      Schema.encodeEffect(ExportRecord)(entry.record).pipe(
-        Effect.mapError(() => failure("Canonical record lost its exact wire")),
-      ),
-    );
-
     position = {
       ...position,
-      fromSequence: fromSequence + records.length,
+      fromSequence: fromSequence + canonical.records.length,
     };
   } else {
     while (position.section < transferSections.length) {
