@@ -23,6 +23,23 @@ export class ExportedRecord extends RecordEnvelope.extend<ExportedRecord>(
 
 const decodeRecord = Schema.decodeUnknownEffect(RecordEnvelope);
 const sameRecord = Schema.toEquivalence(RecordEnvelope);
+const decodeRecordJson = Schema.decodeEffect(Schema.fromJsonString(RecordJson));
+
+/**
+ * Decode stored text, checking JSON bounds and the supported view while retaining additive wire.
+ * The parsed graph stays private until both validations finish, so class construction can
+ * reuse the validated fields. Object-input codecs must still validate caller-owned wire.
+ */
+export const decodeExportRecordJson = (
+  encoded: string,
+): Effect.Effect<ExportedRecord, Schema.SchemaError> =>
+  decodeRecordJson(encoded).pipe(
+    Effect.flatMap((wire) =>
+      decodeRecord(wire).pipe(
+        Effect.map((record) => ExportedRecord.makeUnsafe({ ...record, wire })),
+      ),
+    ),
+  );
 
 // Both codecs validate RecordJson before this getter; decode the supported view once.
 const decodeView = SchemaGetter.transformEffect((value: RecordJson) =>

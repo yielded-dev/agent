@@ -618,7 +618,7 @@
     "@typescript/typescript-darwin-arm64",
   ],
   "patchedDependencies": {
-    "effect@4.0.3": "patches/effect@4.0.3-stream-decoder.patch",
+    "effect@4.0.3": "patches/effect@4.0.3.patch",
   },
   "overrides": {
     "@effect/platform-browser": "catalog:",

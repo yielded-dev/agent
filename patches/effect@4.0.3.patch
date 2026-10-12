@@ -124,3 +124,133 @@ diff --git a/dist/ai/LanguageModel.js b/dist/ai/LanguageModel.js
      // If tool call resolution is disabled, return the response without
      // resolving the tool calls that were generated
      if (options.disableToolCallResolution === true) {
+diff --git a/dist/Schema.d.ts b/dist/Schema.d.ts
+index 3f872b568d1026cb40909310dc60afc0b3c0e9d6..f55d7074b19706e99fa6d5ec5d339590640dd51e 100644
+--- a/dist/Schema.d.ts
++++ b/dist/Schema.d.ts
+@@ -10766,6 +10766,17 @@ export interface Class<Self, S extends Constraint & {
+     new (...args: {} extends S["~type.make.in"] ? [props?: S["~type.make.in"], options?: MakeOptions] : [props: S["~type.make.in"], options?: MakeOptions]): S["Type"] & Inherited;
+     readonly identifier: string;
+     readonly fields: S["fields"];
++    /**
++     * Creates a new instance from a fully validated, decoded struct value.
++     *
++     * **Warning**: This is unsafe. Input must already satisfy the entire struct,
++     * including defaults and tags. No validation, decoding, default application,
++     * or excess-property removal is performed. Nested references are retained.
++     * User and inherited constructors still run and may throw.
++     *
++     * @since 4.1.0
++     */
++    makeUnsafe(input: S["Type"]): Self;
+     /**
+      * Returns a new struct with the fields modified by the provided function.
+      *
+@@ -12718,4 +12729,3 @@ export declare namespace Annotations {
+         readonly message?: string | undefined;
+     }
+ }
+-//# sourceMappingURL=Schema.d.ts.map
+\ No newline at end of file
+diff --git a/dist/Schema.js b/dist/Schema.js
+index 20a313affc659bb5c227cbf8f9fffdd4044eb08a..d9b6bba84f03700399859cf414ca73768a3b3bc4 100644
+--- a/dist/Schema.js
++++ b/dist/Schema.js
+@@ -9521,6 +9521,9 @@ function makeClass(Inherited, identifier, struct, annotations, proto) {
+     static make(input, options) {
+       return SchemaParser.make(getClassSchema(this))(input ?? {}, options);
+     }
++    static makeUnsafe(input) {
++      return makeClassInstance(this, input);
++    }
+     static makeOption(input, options) {
+       return SchemaParser.makeOption(getClassSchema(this))(input ?? {}, options);
+     }
+@@ -9558,14 +9561,18 @@ function makeClass(Inherited, identifier, struct, annotations, proto) {
+   }
+   return out;
+ }
+-function getClassTransformation(self) {
+-  return new SchemaTransformation.Transformation(SchemaGetter.transform(input => new self(input, {
++function makeClassInstance(self, input) {
++  return new self(input, {
+     "~payload": {
+       token: payloadToken,
+       value: input
+     }
+-  })), SchemaGetter.passthrough());
++  });
++}
++function getClassTransformation(self) {
++  return new SchemaTransformation.Transformation(SchemaGetter.transform(input => makeClassInstance(self, input)), SchemaGetter.passthrough());
+ }
++
+ function getClassTypeId(identifier) {
+   return `~effect/Schema/Class/${identifier}`;
+ }
+@@ -10272,4 +10279,3 @@ export function resolveAnnotations(schema) {
+ export function resolveAnnotationsKey(schema) {
+   return schema.ast.context?.annotations;
+ }
+-//# sourceMappingURL=Schema.js.map
+\ No newline at end of file
+diff --git a/src/Schema.ts b/src/Schema.ts
+index ba90501bad99c10fabdd81ac4c9e8f8758650e29..e248edd39506fceddc51e1211af7638f13886471 100644
+--- a/src/Schema.ts
++++ b/src/Schema.ts
+@@ -15761,6 +15761,18 @@ export interface Class<Self, S extends Constraint & { readonly fields: Struct.Fi
+   readonly identifier: string
+   readonly fields: S["fields"]
+ 
++  /**
++   * Creates a new instance from a fully validated, decoded struct value.
++   *
++   * **Warning**: This is unsafe. Input must already satisfy the entire struct,
++   * including defaults and tags. No validation, decoding, default application,
++   * or excess-property removal is performed. Nested references are retained.
++   * User and inherited constructors still run and may throw.
++   *
++   * @since 4.1.0
++   */
++  makeUnsafe(input: S["Type"]): Self
++
+   /**
+    * Returns a new struct with the fields modified by the provided function.
+    *
+@@ -15886,6 +15898,9 @@ function makeClass<
+     static make(input: S["~type.make.in"], options?: MakeOptions): Self {
+       return SchemaParser.make(getClassSchema(this) as any)(input ?? {}, options) as Self
+     }
++    static makeUnsafe(input: S["Type"]): Self {
++      return makeClassInstance(this, input)
++    }
+     static makeOption(input: S["~type.make.in"], options?: MakeOptions): Option_.Option<Self> {
+       return SchemaParser.makeOption(getClassSchema(this) as any)(input ?? {}, options) as any
+     }
+@@ -15937,16 +15952,18 @@ function makeClass<
+   return out
+ }
+ 
++function makeClassInstance(self: new(...args: ReadonlyArray<any>) => any, input: unknown) {
++  return new self(input, {
++    "~payload": {
++      token: payloadToken,
++      value: input
++    }
++  })
++}
++
+ function getClassTransformation(self: new(...args: ReadonlyArray<any>) => any) {
+   return new SchemaTransformation.Transformation<any, any, never, never>(
+-    SchemaGetter.transform((input) =>
+-      new self(input, {
+-        "~payload": {
+-          token: payloadToken,
+-          value: input
+-        }
+-      })
+-    ),
++    SchemaGetter.transform((input) => makeClassInstance(self, input)),
+     SchemaGetter.passthrough()
+   )
+ }

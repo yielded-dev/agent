@@ -46,8 +46,8 @@ Cloudflare tests use `@cloudflare/vitest-plugin` 1.4.0. Keep the Vitest catalog 
 equal to Vite+'s bundled version and verify upgrades with the existing suites.
 Operational harnesses under `tooling/*` also use Vite tasks for Miniflare tests.
 
-The root temporarily patches Effect 4.0.3 to reuse streaming response decoders when
-tool declarations stay unchanged. This applies to repository installations; published
+The root temporarily patches Effect 4.0.3 for streaming response decoder reuse and
+decoded schema class construction. This applies to repository installations; published
 libraries still resolve their consumer's Effect peer. Remove the patch when adopting
 an upstream release containing the change.
 

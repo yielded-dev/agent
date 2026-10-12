@@ -153,7 +153,7 @@
     }
   },
   "patchedDependencies": {
-    "effect@4.0.3": "patches/effect@4.0.3-stream-decoder.patch"
+    "effect@4.0.3": "patches/effect@4.0.3.patch"
   },
   "trustedDependencies": [
     "@effect/tsgo-darwin-arm64",
