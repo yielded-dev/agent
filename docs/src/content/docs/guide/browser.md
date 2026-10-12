@@ -61,6 +61,10 @@ authorizes each operation against current page and target information. Page cont
 arguments cannot supply authority. A successful input call proves SDK completion, not that a
 website accepted an order, login, or upload; inspect the site's outcome separately.
 
+Native observations and input support controls and frames in open and closed shadow roots.
+Closed-root discovery reads the frame's DOM through CDP; output limits do not bound that transfer.
+Inspect again if a new closed root is attached after a condition wait starts.
+
 ## Keep a browser across attempts
 
 `BrowserSessions` keeps a private reference to one exact browser, context, and page while Attempts

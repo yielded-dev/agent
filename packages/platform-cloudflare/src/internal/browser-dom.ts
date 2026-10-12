@@ -113,6 +113,12 @@ export const inspectDom = pageFunction(
     Reflect.set(globalThis, "@effect-agent/native-browser", registry);
     Reflect.set(globalThis, "@effect-agent/native-browser-name-checks", nameChecks);
     const roots: Array<Document | ShadowRoot> = [document];
+
+    const closedRoots: ReadonlyMap<Element, ShadowRoot> | undefined = Reflect.get(
+      globalThis,
+      "@effect-agent/native-browser-closed-roots",
+    );
+
     const visited = new Set<Node>();
     let discoveredElements = 0;
     const candidates: Array<HTMLElement> = [];
@@ -153,7 +159,11 @@ export const inspectDom = pageFunction(
             truncated = true;
             break;
           }
-          if (node instanceof Element && node.shadowRoot !== null) roots.push(node.shadowRoot);
+          if (node instanceof Element) {
+            const shadow = node.shadowRoot ?? closedRoots?.get(node);
+
+            if (shadow !== undefined && shadow !== null) roots.push(shadow);
+          }
           node = discovery.nextNode();
         }
       }
@@ -186,7 +196,10 @@ export const inspectDom = pageFunction(
           }
           if (node instanceof Element) {
             nodes.push(node);
-            if (selector === undefined && node.shadowRoot !== null) roots.push(node.shadowRoot);
+            const shadow = node.shadowRoot ?? closedRoots?.get(node);
+
+            if (selector === undefined && shadow !== undefined && shadow !== null)
+              roots.push(shadow);
           } else if (node instanceof Text) {
             const parent = node.parentElement;
 
@@ -613,7 +626,6 @@ export const checkDom = pageFunction(
       kind !== expected.kind ||
       associated.matches(":disabled") ||
       associated.getAttribute("aria-disabled") === "true" ||
-      node.closest('[inert],[aria-hidden="true"]') !== null ||
       !node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
     )
       return false;
@@ -653,6 +665,8 @@ export const checkDom = pageFunction(
     let ancestor: Node | null = node;
 
     while (ancestor !== null) {
+      if (ancestor instanceof Element && ancestor.matches('[inert],[aria-hidden="true"]'))
+        return false;
       ancestors.add(ancestor);
       ancestor = ancestor instanceof ShadowRoot ? ancestor.host : ancestor.parentNode;
     }
@@ -697,8 +711,13 @@ export const checkDom = pageFunction(
 
     let hit = document.elementFromPoint(x, y);
 
-    while (hit?.shadowRoot !== null && hit?.shadowRoot !== undefined) {
-      const next = hit.shadowRoot.elementFromPoint(x, y);
+    while (hit !== null && hit !== node && !node.contains(hit)) {
+      const shadow: ShadowRoot | undefined | null =
+        hit.shadowRoot ??
+        Reflect.get(globalThis, "@effect-agent/native-browser-closed-roots")?.get(hit);
+
+      if (shadow === undefined || shadow === null) break;
+      const next = shadow.elementFromPoint(x, y);
 
       if (next === null || next === hit) break;
       hit = next;
@@ -728,7 +747,6 @@ export const checkFrameDom = pageFunction(
     if (
       !(node instanceof HTMLElement) ||
       !node.isConnected ||
-      node.closest('[inert],[aria-hidden="true"]') !== null ||
       !node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
     )
       return false;
@@ -752,6 +770,7 @@ export const checkFrameDom = pageFunction(
       );
 
       if (
+        ancestor.matches('[inert],[aria-hidden="true"]') ||
         !(
           matrix.m11 === 1 &&
           matrix.m12 === 0 &&
@@ -775,7 +794,9 @@ export const checkFrameDom = pageFunction(
         (current.zoom !== "1" && current.zoom !== "normal")
       )
         return false;
-      ancestor = ancestor.parentElement;
+      const root = ancestor.getRootNode();
+
+      ancestor = ancestor.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
     }
     const rect = node.getBoundingClientRect();
 
@@ -783,7 +804,19 @@ export const checkFrameDom = pageFunction(
       rect.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft) + point.x;
 
     const y = rect.top + parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop) + point.y;
-    const hit = document.elementFromPoint(x, y);
+    let hit = document.elementFromPoint(x, y);
+
+    while (hit !== null && hit !== node && !node.contains(hit)) {
+      const shadow: ShadowRoot | undefined | null =
+        hit.shadowRoot ??
+        Reflect.get(globalThis, "@effect-agent/native-browser-closed-roots")?.get(hit);
+
+      if (shadow === undefined || shadow === null) break;
+      const next = shadow.elementFromPoint(x, y);
+
+      if (next === null || next === hit) break;
+      hit = next;
+    }
 
     return hit === node ? { x, y } : false;
   },
@@ -791,6 +824,12 @@ export const checkFrameDom = pageFunction(
 
 export const waitDom = pageFunction((selector: string, state: string, text: string | undefined) => {
   const roots: Array<Document | ShadowRoot> = [document];
+
+  const closedRoots: ReadonlyMap<Element, ShadowRoot> | undefined = Reflect.get(
+    globalThis,
+    "@effect-agent/native-browser-closed-roots",
+  );
+
   const expectedText = text?.replace(/\s+/g, " ").trim();
   let scanned = 0;
 
@@ -818,7 +857,9 @@ export const waitDom = pageFunction((selector: string, state: string, text: stri
     while (node !== null) {
       if (++scanned > 10_000) return false;
       if (node instanceof Element) {
-        if (node.shadowRoot !== null) roots.push(node.shadowRoot);
+        const shadow = node.shadowRoot ?? closedRoots?.get(node);
+
+        if (shadow !== undefined && shadow !== null) roots.push(shadow);
         if (
           node instanceof HTMLElement &&
           node.matches(selector) &&

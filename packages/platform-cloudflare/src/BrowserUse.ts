@@ -99,6 +99,51 @@ const observedUrl = (url: string): string => {
     : `${url.slice(0, Math.min(payload, 256))},[payload omitted]`;
 };
 
+// CDP can resolve closed roots without modifying the page's realm or attachShadow.
+// Keep those nodes in the same isolated realm as native refs and discard old roots per read.
+// The command deadline bounds this full-frame read; the node/root caps below only bound
+// local adoption, not the CDP response size.
+const discoverClosedRoots = async (frame: Frame): Promise<boolean> => {
+  const realm = frame.isolatedRealm();
+
+  await using document = await realm.evaluateHandle(() => globalThis.document);
+
+  const { node } = await frame.client.send("DOM.describeNode", {
+    objectId: document.remoteObject().objectId,
+    depth: -1,
+    pierce: true,
+  });
+
+  const pending = [node];
+  const roots: Array<number> = [];
+  let scanned = 0;
+
+  while (pending.length > 0 && scanned++ < 10_000 && roots.length < 256) {
+    const current = pending.pop();
+
+    if (current === undefined) break;
+    if (current.shadowRootType === "closed") roots.push(current.backendNodeId);
+    pending.push(...(current.children ?? []));
+    pending.push(
+      ...(current.shadowRoots ?? []).filter((root) => root.shadowRootType !== "user-agent"),
+    );
+  }
+  await realm.evaluate(() => {
+    Reflect.set(globalThis, "@effect-agent/native-browser-closed-roots", new Map());
+  });
+  for (const id of roots) {
+    await using root = await realm.adoptBackendNode(id);
+
+    await realm.evaluate((node) => {
+      if (!(node instanceof ShadowRoot) || node.mode !== "closed")
+        throw new Error("Closed shadow root is unavailable");
+      Reflect.get(globalThis, "@effect-agent/native-browser-closed-roots").set(node.host, node);
+    }, root);
+  }
+
+  return pending.length > 0;
+};
+
 /** One application-neutral controller over an existing scoped native attachment.
  * No allocation, model, provider choice, input retry, or arbitrary page JS is exposed.
  * Reads re-authorize at most five times when page/frame URLs change during authorization.
@@ -507,8 +552,12 @@ export const make = Effect.fnUntraced(function* <R>(
 
         if (ref === undefined) continue;
 
-        const read = async (): Promise<unknown> =>
-          limits.observationMode === "jev"
+        const read = async (): Promise<unknown> => {
+          const rootsTruncated = await discoverClosedRoots(frame);
+
+          truncated ||= rootsTruncated;
+
+          return limits.observationMode === "jev"
             ? frame
                 .isolatedRealm()
                 .evaluate(
@@ -528,6 +577,7 @@ export const make = Effect.fnUntraced(function* <R>(
                   request.optionFilter,
                   limits.viewportOnly,
                 );
+        };
 
         let result = Schema.decodeUnknownSync(Observation)(await read());
 
@@ -610,14 +660,13 @@ export const make = Effect.fnUntraced(function* <R>(
     let parent = current.parentFrame();
 
     while (parent !== null) {
-      const owner = await current.frameElement();
+      await discoverClosedRoots(parent);
+      await using owner = await current.frameElement();
 
       if (owner === null) return false;
-      try {
-        point = await owner.evaluate(checkFrameDom, point, scroll);
-      } finally {
-        await owner.dispose();
-      }
+      await using isolatedOwner = await parent.isolatedRealm().adoptHandle(owner);
+
+      point = await isolatedOwner.evaluate(checkFrameDom, point, scroll);
       if (point === false) return false;
       current = parent;
       parent = current.parentFrame();
@@ -1300,6 +1349,7 @@ export const make = Effect.fnUntraced(function* <R>(
       const frame = frameRef === undefined ? page.mainFrame() : resolveFrame(page, frameRef);
 
       if (frame === undefined) throw new Error("Frame detached");
+      await discoverClosedRoots(frame);
 
       try {
         const handle = await frame.isolatedRealm().waitForFunction(
