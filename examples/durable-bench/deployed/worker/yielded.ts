@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai-compat";
 import { BrowserCrypto } from "@effect/platform-browser";
 import { ThreadObject } from "@yielded/agent-platform-cloudflare";
@@ -12,7 +14,7 @@ import { text } from "@yielded/agent/output";
 import { IdempotencyKey, Principal, Receipt } from "@yielded/agent/receipt";
 import { DefinitionDigestInput, PersistedJson } from "@yielded/agent/records";
 import { Effect, Layer, Schema } from "effect";
-import { DurableObjectState } from "effect-cf";
+import { DurableObject, DurableObjectState } from "effect-cf";
 import { Model, Tool, Toolkit } from "effect/ai";
 import { FetchHttpClient } from "effect/http";
 
@@ -72,13 +74,20 @@ const application = ThreadObject.layer([{ agent, definitions }]).pipe(
   Layer.provide(tools.toLayer({ lookup: ({ n }) => Effect.succeed(payload(n)) })),
 );
 
-export class YieldedDO extends ThreadObject.make(application, {
+const YieldedDOBase = ThreadObject.make(application, {
   namespaceBinding: "YIELDED",
   deploymentId: "durable-bench",
   producerPrefix: "durable-bench",
-}) {
+});
+
+type InvocationServices = Effect.Services<
+  Parameters<InstanceType<typeof YieldedDOBase>[typeof DurableObject.RunSymbol]>[0]
+>;
+
+export class YieldedDO extends YieldedDOBase {
   private readonly host: Host;
-  private readonly activeAlarms = new Set<Promise<void>>();
+  private readonly activeDispatches = new Set<Promise<unknown>>();
+  private readonly invocationQuery = new AsyncLocalStorage<{ readonly query: Query | undefined }>();
   constructor(ctx: globalThis.DurableObjectState, env: Env) {
     const constructedMs = Date.now();
 
@@ -144,25 +153,44 @@ export class YieldedDO extends ThreadObject.make(application, {
   async benchWatchText(encoded: unknown, query: Query): Promise<unknown> {
     this.host.meter.marker("text", query);
 
-    return this.watchTextEncoded(encoded);
+    // Observation opens before begin(), while the Object still holds the previous sample.
+    return this.invocationQuery.run({ query }, () => this.watchTextEncoded(encoded));
   }
-  override async alarm(...args: Parameters<ThreadObject.Instance["alarm"]>): Promise<void> {
-    this.host.meter.alarm();
-    this.host.meter.marker("alarm");
-    const running = Promise.resolve(super.alarm(...args));
+  override [DurableObject.RunSymbol]<A, E>(
+    effect: Effect.Effect<A, E, InvocationServices>,
+    options: DurableObject.RunOptions = {},
+  ): Promise<A> {
+    if (options.event === "rpc" || options.event === "fetch")
+      return this.invocationQuery.run(
+        this.invocationQuery.getStore() ?? { query: this.host.meter.query },
+        () => super[DurableObject.RunSymbol](effect, options),
+      );
+    if (options.event !== "alarm") return super[DurableObject.RunSymbol](effect, options);
 
-    this.activeAlarms.add(running);
-    try {
-      await running;
-    } finally {
-      this.activeAlarms.delete(running);
-    }
+    // effect-cf's response.finally/waitUntil dispatch bypasses public alarm(), but
+    // enters this hook inside the originating RPC/fetch invocation. Tail counts it once.
+    const invocation = this.invocationQuery.getStore();
+    const query = invocation === undefined ? this.host.meter.query : invocation.query;
+
+    if (query) this.host.meter.marker("dispatch", query);
+    const running = super[DurableObject.RunSymbol](effect, options);
+
+    this.activeDispatches.add(running);
+
+    return running.finally(() => {
+      this.activeDispatches.delete(running);
+    });
+  }
+  override alarm(...args: Parameters<ThreadObject.Instance["alarm"]>): Promise<void> | void {
+    this.host.meter.alarm();
+
+    return super.alarm(...args);
   }
   override fetch(request: Request): Promise<Response> {
     return this.host.fetch(request, {
       close: async () => {
         // Native post-settlement checkpoint writers must finish before cold eviction.
-        while (this.activeAlarms.size) await Promise.all(this.activeAlarms);
+        while (this.activeDispatches.size) await Promise.all(this.activeDispatches);
       },
       run: (input) => this.historyTurn(input),
     });

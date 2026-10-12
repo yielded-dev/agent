@@ -263,7 +263,7 @@ export const sampleCpu = (result: Result) => {
     const invocations = cpu.get(`${sample.target}/${sample.object}/${sample.sample}`);
 
     const expectedKinds = [
-      ...(sample.target === "yielded" ? ["submit", "await", "alarm"] : ["run"]),
+      ...(sample.target === "yielded" ? ["submit", "await", "dispatch"] : ["run"]),
       ...(sample.settlementRecordRead ? ["result"] : []),
       ...(!buildHistory && sample.target !== "tardie" ? ["text"] : []),
     ];
