@@ -31,7 +31,7 @@ export const command = Command.make(
     verifyIncarnationRecovery: Flag.Boolean("verify-incarnation-recovery").pipe(
       Flag.withDefault(false),
       Flag.withDescription(
-        "Diagnostic: abort one settled Object per target before metrics, then verify pass recovery",
+        "Diagnostic: abort one settled Object per target before metrics, then verify sample recovery",
       ),
     ),
     fixtureDirectory: Flag.String("fixture-directory").pipe(

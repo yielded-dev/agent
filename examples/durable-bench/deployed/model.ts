@@ -92,7 +92,7 @@ export const Sample = Schema.Struct({
   epoch: Schema.Natural,
   order: Schema.optionalKey(Schema.Literals(["AB", "BA"])),
   repeat: Schema.Natural,
-  state: Schema.Literals(["cold", "warmup", "warm", "preparation"]),
+  state: Schema.Literals(["cold", "warmup", "warm", "preparation", "recovery"]),
   preparationTables: Schema.optionalKey(Counts),
   status: Schema.Literals(["running", "ok", "failed", "invalidated"]),
   driverMs: Schema.optionalKey(Schema.Number),
@@ -221,6 +221,20 @@ export const Result = Schema.Struct({
     }),
   ),
   samples: Schema.Array(Sample),
+  recoveries: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        target: Target,
+        object: Schema.String,
+        epoch: Schema.Natural,
+        repeat: Schema.Natural,
+        sample: Schema.String,
+        replacementSample: Schema.String,
+        reason: Schema.Literals(["incarnation-lost", "storage-reset", "object-connection-lost"]),
+        error: Schema.String,
+      }),
+    ),
+  ),
   readiness: Schema.Array(
     Schema.Struct({
       target: Target,

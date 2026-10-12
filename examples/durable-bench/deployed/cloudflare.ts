@@ -1,7 +1,19 @@
-import { Config, Context, Effect, Layer, Redacted, Schema, Stream, type Duration } from "effect";
+import {
+  Config,
+  Context,
+  Effect,
+  Layer,
+  Option,
+  Redacted,
+  Schema,
+  Stream,
+  type Duration,
+} from "effect";
 import { Ndjson } from "effect/encoding";
 
+import { DriverRequest } from "./model.ts";
 import { BenchError, redact } from "./platform.ts";
+import { Failure } from "./worker/protocol.ts";
 
 const Workers = Schema.Array(Schema.Struct({ id: Schema.String }));
 
@@ -231,6 +243,19 @@ const fetchResponse = (
         try: () => response.text(),
         catch: () => new BenchError({ message: "Cannot read Worker failure." }),
       });
+
+      if (new URL(url).pathname === "/measure") {
+        const sent = Schema.decodeUnknownOption(DriverRequest)(body);
+        const failure = Schema.decodeUnknownOption(Schema.fromJsonString(Failure))(text);
+
+        if (
+          Option.isSome(sent) &&
+          Option.isSome(failure) &&
+          failure.value.sample === sent.value.query.sample &&
+          failure.value.transport !== undefined
+        )
+          return yield* failure.value.transport;
+      }
 
       return yield* new BenchError({
         message: `Worker ${new URL(url).pathname} returned HTTP ${response.status}; the input will not be retried. ${redact(text, [token]).slice(0, 1200)}`,

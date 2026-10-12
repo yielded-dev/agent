@@ -52,6 +52,7 @@ import { prepareProfile, profileBatches } from "./profile.ts";
 import { median, sampleCpu, table } from "./report.ts";
 import { tailCpu } from "./tail-cpu.ts";
 import { PREAMBLE, responseText } from "./text.ts";
+import type { TransientObjectTransport } from "./worker/protocol.ts";
 import {
   ColdResult,
   expectedSeed,
@@ -485,10 +486,13 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     const turnsPerEpoch = options.repeats + (options.buildHistory ? 1 : 3);
 
     const sampleName = (epoch: number, index: number, attempt = 0) =>
-      options.buildHistory ? `m${index}` : `${attempt === 0 ? "e" : "r"}${epoch}-t${index}`;
+      options.buildHistory
+        ? `m${index}`
+        : `${attempt === 0 ? "e" : "r"}${epoch}${attempt > 1 ? `a${attempt}` : ""}-t${index}`;
 
     const references = new Map<number, Map<string, string[]>>();
     const seedReferences = new Map<number, Map<number, string>>();
+    const seededTranscripts = new Map<number, readonly Message[]>();
 
     for (const size of options.sizes) {
       let messages: Message[] = [];
@@ -511,6 +515,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
       const seededMessages = [...messages];
 
+      seededTranscripts.set(size, seededMessages);
+
       for (let epoch = 0; epoch < epochs.length; epoch++) {
         if (
           !options.buildHistory &&
@@ -526,20 +532,6 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           );
         }
       }
-      // Recovery uses fresh input IDs with the same shape, after restoring the original fixture.
-      if (!options.buildHistory)
-        for (let epoch = 0; epoch < epochs.length; epoch++) {
-          const retryMessages = [...seededMessages];
-
-          for (let index = 0; index < turnsPerEpoch; index++) {
-            const sample = sampleName(epoch, index, 1);
-
-            expected.set(
-              sample,
-              append(retryMessages, turn(sample, MEASURED_TOOLS), options.textStreaming),
-            );
-          }
-        }
       references.set(size, expected);
     }
 
@@ -629,15 +621,38 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     const isolateEpochs = new Map<string, number>();
 
     const poolCohorts = cohorts;
+    const retriedSamples = new Set<string>();
 
     const measureEpoch = Effect.fnUntraced(function* (
       epoch: number,
       defaultLabel: Label,
       cohorts: typeof poolCohorts,
       attempt: number,
+      replayBefore: ReadonlyMap<string, number>,
     ) {
       const active = new Set(cohorts.map(objectKey));
-      const retryCohorts: typeof poolCohorts = [];
+      const retryFrom = new Map<string, number>();
+
+      // Rebuild the acknowledged prefix with fresh IDs after restoring the fixture.
+      // These reference transcripts are computed before any replacement is timed.
+      if (attempt > 0)
+        for (const size of new Set(cohorts.map((cohort) => cohort.history))) {
+          const seeded = seededTranscripts.get(size);
+          const expected = references.get(size);
+
+          if (!seeded || !expected)
+            return yield* new BenchError({ message: "Missing recovery reference transcript." });
+          const messages = [...seeded];
+
+          for (let index = 0; index < turnsPerEpoch; index++) {
+            const sample = sampleName(epoch, index, attempt);
+
+            expected.set(
+              sample,
+              append(messages, turn(sample, MEASURED_TOOLS), options.textStreaming),
+            );
+          }
+        }
 
       // Different formats cannot share persisted state; matching formats can opt into identical pass inputs.
       const restorePass =
@@ -1385,12 +1400,69 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         (cohort) => {
           const { label } = assignment(cohort);
           const expectedBuild = expectedFor(cohort);
+          const resumeAt = replayBefore.get(objectKey(cohort)) ?? 0;
+          let currentSample: Sample | undefined;
 
           const profiled =
             epoch === 0 &&
             options.profileAfter === undefined &&
             options.profiles.length > 0 &&
             cohort.object.endsWith("-o0");
+
+          const recover = (error: IncarnationLost | TransientObjectTransport) =>
+            Effect.gen(function* () {
+              const sample = currentSample;
+              const key = `${objectKey(cohort)}/${epoch}/${sample?.repeat}`;
+
+              // Never retry against advanced storage. A failed prefix rebuild or a second
+              // failure at this logical index is fatal, even after another Object recovers.
+              if (
+                !recoveryAvailable ||
+                profiled ||
+                !sample ||
+                sample.state === "recovery" ||
+                retriedSamples.has(key)
+              )
+                return yield* new BenchError({
+                  message: error.message + "; automatic sample recovery unavailable or exhausted.",
+                });
+              retriedSamples.add(key);
+              retryFrom.set(objectKey(cohort), sample.repeat);
+              const reason = error._tag === "IncarnationLost" ? "incarnation-lost" : error.reason;
+              const replacementSample = sampleName(epoch, sample.repeat, attempt + 1);
+
+              yield* update((value) => ({
+                ...value,
+                samples: value.samples.map((row) =>
+                  objectKey(row) === objectKey(cohort) && row.sample === sample.sample
+                    ? {
+                        ...row,
+                        status: "invalidated",
+                        error: error.message,
+                        ...(error._tag === "IncarnationLost"
+                          ? { invalidatedIdentity: error.identity }
+                          : {}),
+                      }
+                    : row,
+                ),
+                recoveries: [
+                  ...(value.recoveries ?? []),
+                  {
+                    target: cohort.target,
+                    object: cohort.object,
+                    epoch,
+                    repeat: sample.repeat,
+                    sample: sample.sample,
+                    replacementSample,
+                    reason,
+                    error: error.message,
+                  },
+                ],
+              }));
+              yield* Console.error(
+                `${cohort.target}/${cohort.history}/${cohort.ttftMs} ${sample.sample}: ${reason}; restoring and rebuilding ${sample.repeat} acknowledged turns before one replacement.`,
+              );
+            });
 
           return Effect.gen(function* () {
             const capture = profiled
@@ -1499,9 +1571,11 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   : {}),
                 epoch,
                 repeat: index,
-                state,
+                state: index < resumeAt ? "recovery" : state,
                 status: "running",
               };
+
+              currentSample = sample;
 
               const matches = (row: Sample) =>
                 row.target === query.target &&
@@ -1611,7 +1685,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   });
                 if (!firstAfterReset && incarnation !== metrics.identity.incarnation)
                   return yield* new IncarnationLost({
-                    message: "Warm Object incarnation changed; the entire pass must be restored.",
+                    message: "Warm Object incarnation changed; the sample prefix must be restored.",
                     identity: metrics.identity,
                   });
                 if (
@@ -1769,33 +1843,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           }).pipe(
             Effect.scoped,
             (batch) => (profiled ? withProfileBatch(batch) : batch),
-            Effect.catchTag("IncarnationLost", (error) =>
-              Effect.gen(function* () {
-                // Never resubmit an ambiguous input or continue an advanced history. Only a complete
-                // snapshot-backed pass can be replaced, once, after other Objects finish this pass.
-                if (!recoveryAvailable || attempt !== 0 || profiled)
-                  return yield* new BenchError({
-                    message: error.message + "; automatic pass recovery unavailable or exhausted.",
-                  });
-                retryCohorts.push(cohort);
-                yield* update((value) => ({
-                  ...value,
-                  samples: value.samples.map((row) =>
-                    objectKey(row) === objectKey(cohort) && row.epoch === epoch
-                      ? {
-                          ...row,
-                          status: "invalidated",
-                          error: error.message,
-                          invalidatedIdentity: error.identity,
-                        }
-                      : row,
-                  ),
-                }));
-                yield* Console.error(
-                  `${objectKey(cohort)}: incarnation lost; restoring and remeasuring this Object's pass once.`,
-                );
-              }),
-            ),
+            Effect.catchTag("IncarnationLost", recover),
+            Effect.catchTag("TransientObjectTransport", recover),
             Effect.catchCause((cause) =>
               Effect.gen(function* () {
                 if (Cause.hasInterrupts(cause)) return yield* Effect.failCause(cause);
@@ -1814,13 +1863,17 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         { concurrency: options.concurrency, discard: true },
       );
 
-      return retryCohorts;
+      return retryFrom;
     });
 
     for (const [epoch, defaultLabel] of epochs.entries()) {
-      const retryCohorts = yield* measureEpoch(epoch, defaultLabel, poolCohorts, 0);
+      let pending = poolCohorts;
+      let from: ReadonlyMap<string, number> = new Map();
 
-      if (retryCohorts.length > 0) yield* measureEpoch(epoch, defaultLabel, retryCohorts, 1);
+      for (let attempt = 0; pending.length > 0; attempt++) {
+        from = yield* measureEpoch(epoch, defaultLabel, pending, attempt, from);
+        pending = pending.filter((cohort) => from.has(objectKey(cohort)));
+      }
     }
   }).pipe(Effect.onExit(finish));
 }, Effect.scoped);

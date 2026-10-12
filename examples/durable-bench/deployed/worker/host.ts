@@ -6,11 +6,14 @@ import { tables } from "../../src/serve.ts";
 import { attach, type Observation } from "./observe.ts";
 import {
   errorText,
+  Failure,
   readQuery,
   ProfileTarget,
   SeedBatch,
   SeedProgress,
   SeedResult,
+  TransientObjectTransport,
+  transientObjectTransport,
   type Env,
   type Query,
   type Target,
@@ -219,7 +222,9 @@ export class Host {
         if (!handlers.run) throw new Error("Yielded uses submit and await");
         this.meter.begin(query);
         this.meter.marker("run");
-        await handlers.run(turn(query.sample, MEASURED_TOOLS), query);
+        await handlers.run(turn(query.sample, MEASURED_TOOLS), query).catch((cause: unknown) => {
+          throw transientObjectTransport(cause) ?? cause;
+        });
         this.meter.settled();
 
         return Response.json({ ok: true, outcome: "completed", identity: this.meter.entry });
@@ -258,8 +263,15 @@ export class Host {
 
       return new Response("not found", { status: 404 });
     } catch (cause) {
+      const transport = Schema.is(TransientObjectTransport)(cause) ? cause : undefined;
+
       return Response.json(
-        { ok: false, error: errorText(cause), sample: query.sample },
+        Schema.encodeSync(Failure)({
+          ok: false,
+          error: errorText(cause),
+          sample: query.sample,
+          ...(transport === undefined ? {} : { transport }),
+        }),
         { status: 500 },
       );
     }

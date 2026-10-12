@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { Schema } from "../../../node_modules/effect/dist/index.js";
 import { TEXT_OUTPUT_INSTRUCTIONS } from "../../../deployed/text.ts";
 
 import { payload, type Turn } from "../../../src/plan.ts";
@@ -26,7 +27,7 @@ import {
 import { openDurableObjectSqliteStorage } from "../../node_modules/@earendil-works/pi-durable/dist/storage/sqlite/cloudflare.js";
 import { Host } from "../../../deployed/worker/host.ts";
 import { type Observation } from "../../../deployed/worker/observe.ts";
-import { readQuery, type Env, type Query, type TextObservation } from "../../../deployed/worker/protocol.ts";
+import { Failure, errorText, readQuery, transientObjectTransport, type Env, type Query, type TextObservation } from "../../../deployed/worker/protocol.ts";
 
 const messageText = (message: Message | undefined): string =>
   message?.role === "assistant"
@@ -224,7 +225,17 @@ export class PiDO extends DurableObject<Env> {
     });
   }
   override fetch(request: Request) {
-    if (new URL(request.url).pathname === "/text") return this.textResponse(request);
+    if (new URL(request.url).pathname === "/text")
+      return this.textResponse(request).catch((cause: unknown) => {
+        const transport = transientObjectTransport(cause);
+
+        return Response.json(Schema.encodeSync(Failure)({
+          ok: false,
+          error: transport?.message ?? errorText(cause),
+          sample: new URL(request.url).searchParams.get("sample"),
+          ...(transport === undefined ? {} : { transport }),
+        }), { status: 500 });
+      });
 
     return this.host.fetch(request, {
       run: (input, _query?: Query) => this.turn(input),

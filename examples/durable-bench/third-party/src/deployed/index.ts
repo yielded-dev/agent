@@ -1,6 +1,6 @@
 import { BrowserCrypto } from "../../../node_modules/@effect/platform-browser/dist/index.js";
 import { ThreadObjectNamespace } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
-import { CloudflareThreadClient } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
+import { CloudflareThreadClient, ThreadClientError } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import { digestDefinitions } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { IdempotencyKey, Principal, Receipt } from "@yielded/agent/receipt";
@@ -12,7 +12,7 @@ import { MEASURED_TOOLS, turn } from "../../../src/plan.ts";
 import { COLD_ABORT } from "../../../deployed/worker/host.ts";
 import { EffectAiFloorDO } from "../../../deployed/worker/effect-ai-floor.ts";
 import { PiDO } from "./pi.ts";
-import { BulkFixture, Identity, ObjectIdentity, MetricsResult, measurementPaths, SeedBatch, TextObservation, errorText, readQuery, type Env, type Query } from "../../../deployed/worker/protocol.ts";
+import { BulkFixture, Failure, Identity, ObjectIdentity, MetricsResult, measurementPaths, SeedBatch, TextObservation, TransientObjectTransport, errorText, readQuery, transientObjectTransport, type Env, type Query } from "../../../deployed/worker/protocol.ts";
 import { ActorDO, ThreadDO, cloudflareThreadName, coordinate } from "./tardie.ts";
 import { agent, definitions, YieldedDO } from "../../../deployed/worker/yielded.ts";
 
@@ -162,6 +162,14 @@ export default {
                 locationHint: "wnam",
               });
 
+      const fetchObject = async (request: Request): Promise<Response> => {
+        try {
+          return await stub.fetch(request);
+        } catch (cause) {
+          throw transientObjectTransport(cause) ?? cause;
+        }
+      };
+
       if (url.pathname === "/text" && query.target === "yielded") {
         const cached = getClient(env);
         cached.observations?.set(query.storageObject ?? query.object, query);
@@ -187,7 +195,7 @@ export default {
       }
 
       if (url.pathname === "/identity") {
-        const response = await stub.fetch(new Request(url, { headers: request.headers }));
+        const response = await fetchObject(new Request(url, { headers: request.headers }));
 
         if (!response.ok) throw new Error("Object identity probe failed");
 
@@ -201,13 +209,13 @@ export default {
         const identityUrl = new URL(url);
 
         identityUrl.pathname = "/identity";
-        const response = await stub.fetch(new Request(identityUrl, { headers: request.headers }));
+        const response = await fetchObject(new Request(identityUrl, { headers: request.headers }));
 
         if (!response.ok) throw new Error("Pre-cold identity failed");
         const before = Schema.decodeUnknownSync(Identity)(await response.json());
         const directoryBefore = actor === undefined ? undefined : await actor.identity();
 
-        const threadAborted = await expectedAbort(() => stub.fetch(request));
+        const threadAborted = await expectedAbort(() => fetchObject(request));
         const directoryAborted =
           actor === undefined ? undefined : await expectedAbort(() => actor.abortCold());
 
@@ -264,7 +272,13 @@ export default {
               const settlement = yield* client.awaitSettlement(receipt);
 
               return { ok: true, settlement: yield* Schema.encodeEffect(Settlement)(settlement) };
-            }),
+            }).pipe(
+              Effect.mapError((error) =>
+                Schema.is(ThreadClientError)(error)
+                  ? transientObjectTransport(error.cause) ?? error
+                  : error,
+              ),
+            ),
           );
 
           return Response.json(result);
@@ -290,7 +304,7 @@ export default {
           throw new Error("Invalid history batch");
         if (batch.from === 0) await actor.prepareSeed(query);
       }
-      const response = await stub.fetch(request);
+      const response = await fetchObject(request);
 
       if (url.pathname === "/restore/start" && directoryTables && response.ok)
         return Response.json({
@@ -319,8 +333,15 @@ export default {
 
       return response;
     } catch (cause) {
+      const transport = Schema.is(TransientObjectTransport)(cause) ? cause : undefined;
+
       return Response.json(
-        { ok: false, error: errorText(cause), sample: url.searchParams.get("sample") },
+        Schema.encodeSync(Failure)({
+          ok: false,
+          error: errorText(cause),
+          sample: url.searchParams.get("sample"),
+          ...(transport === undefined ? {} : { transport }),
+        }),
         { status: 500 },
       );
     }

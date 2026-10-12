@@ -289,10 +289,44 @@ export const MetricsUnavailable = Schema.Struct({
 
 export const MetricsResult = Schema.Union([Metrics, MetricsUnavailable]);
 
+export class TransientObjectTransport extends Schema.TaggedError<TransientObjectTransport>()(
+  "TransientObjectTransport",
+  {
+    message: Schema.String,
+    reason: Schema.Literals(["storage-reset", "object-connection-lost"]),
+  },
+) {}
+
+/** Classify only a native Object rejection, before diagnostic or HTTP wrapping. */
+export const transientObjectTransport = (cause: unknown): TransientObjectTransport | undefined => {
+  if (!(cause instanceof Error) || cause.name !== "Error" || "_tag" in cause) return undefined;
+
+  if (
+    /^Internal error in Durable Object storage caused object to be reset(?:; reference = [a-zA-Z0-9-]{1,128})?$/.test(
+      cause.message,
+    )
+  )
+    return new TransientObjectTransport({
+      reason: "storage-reset",
+      message: "Internal error in Durable Object storage caused object to be reset",
+    });
+  if (
+    cause.message ===
+    "Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request."
+  )
+    return new TransientObjectTransport({
+      reason: "object-connection-lost",
+      message: cause.message,
+    });
+
+  return undefined;
+};
+
 export const Failure = Schema.Struct({
   ok: Schema.Literal(false),
   error: Schema.String,
   sample: Schema.NullOr(Schema.String),
+  transport: Schema.optionalKey(TransientObjectTransport),
 });
 
 export type Failure = typeof Failure.Type;

@@ -1,4 +1,4 @@
-import { Cause, Clock, Deferred, Effect, Schema, Stream } from "effect";
+import { Cause, Clock, Deferred, Effect, Option, Schema, Stream } from "effect";
 import { Ndjson } from "effect/encoding";
 
 import {
@@ -12,6 +12,7 @@ import {
 import {
   AwaitResult,
   ColdResult,
+  Failure,
   MetricsResult,
   measurementPaths,
   errorText,
@@ -22,6 +23,7 @@ import {
   SettledTextResult,
   SubmitResult,
   TextObservation,
+  TransientObjectTransport,
 } from "./worker/protocol.ts";
 
 class ObservationError extends Schema.TaggedError<ObservationError>()("ObservationError", {
@@ -31,7 +33,10 @@ class ObservationError extends Schema.TaggedError<ObservationError>()("Observati
 const attempt = <A>(body: () => Promise<A>) =>
   Effect.tryPromise({
     try: body,
-    catch: (cause) => new ObservationError({ message: errorText(cause) }),
+    catch: (cause) =>
+      Schema.is(TransientObjectTransport)(cause)
+        ? cause
+        : new ObservationError({ message: errorText(cause) }),
   });
 
 interface Env {
@@ -47,6 +52,8 @@ export default {
       return new Response("unauthorized", { status: 401 });
     if (new URL(request.url).pathname === "/health")
       return Response.json({ ok: true, build: env.BUILD });
+    let sample: string | null = null;
+
     try {
       const address = new URL(request.url);
 
@@ -81,6 +88,8 @@ export default {
           headers: { authorization: `Bearer ${env.BENCH_TOKEN}`, "cache-control": "no-store" },
         });
       const { query } = Schema.decodeUnknownSync(DriverRequest)(input);
+
+      sample = query.sample;
 
       if (readiness) {
         const routes = await Effect.runPromise(
@@ -142,10 +151,21 @@ export default {
           signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), cancellation.signal]),
         });
 
-        if (!response.ok)
+        if (!response.ok) {
+          const text = await response.text();
+          const failure = Schema.decodeUnknownOption(Schema.fromJsonString(Failure))(text);
+
+          if (
+            Option.isSome(failure) &&
+            failure.value.sample === query.sample &&
+            failure.value.transport !== undefined
+          )
+            throw failure.value.transport;
+
           throw new Error(
-            `Target ${path} returned HTTP ${response.status}: ${await response.text()}; input will not be retried.`,
+            `Target ${path} returned HTTP ${response.status}: ${text}; input will not be retried.`,
           );
+        }
 
         return response;
       };
@@ -258,7 +278,11 @@ export default {
 
       if (expectedDriverBuild !== env.BUILD)
         return Response.json(
-          { ok: false, error: "Driver build mismatch; request was not dispatched" },
+          Schema.encodeSync(Failure)({
+            ok: false,
+            error: "Driver build mismatch; request was not dispatched",
+            sample,
+          }),
           { status: 503 },
         );
 
@@ -459,11 +483,15 @@ export default {
         ),
       );
     } catch (cause) {
+      const transport = Schema.is(TransientObjectTransport)(cause) ? cause : undefined;
+
       return Response.json(
-        {
+        Schema.encodeSync(Failure)({
           ok: false,
           error: errorText(cause),
-        },
+          sample,
+          ...(transport === undefined ? {} : { transport }),
+        }),
         { status: 502 },
       );
     }

@@ -261,15 +261,18 @@ that Object; short intervals may resolve to zero. Object/driver clock offsets ar
 tardie's Actor directory and Thread are both restarted. It verifies a new instance, no
 earlier alarm entry, and a first request. This is a cold Object over retained storage,
 not a cold isolate, cold disk, or newly seeded conversation. Warm samples require the
-same live instance throughout the Object's sequential repeat batch.
+same live instance as the preceding verified turn.
 The driver collects metrics after its timer endpoints, before closing the text observer.
-A confirmed lost incarnation invalidates the Object's entire pass; the result retains those
-records. Snapshot-backed passes restore and verify the same Object, repeat preparation,
-and remeasure once with fresh input IDs. A second loss, sample-key mismatch, wrong build,
-or ambiguous turn failure stops the run. Real-history builds and passes that carry history
-into or out of another pass cannot recover this way. `--verify-incarnation-recovery` exercises this path by
-aborting one settled Object per target before metrics; its interrupted passes are classified
-and excluded, so use this diagnostic separately from a latency comparison.
+A confirmed lost incarnation or a classified native Object storage reset/connection loss
+can replace the affected sample once. After the other Objects finish the pass, the controller
+restores and verifies the fixture, rebuilds the acknowledged prefix with fresh input IDs,
+then measures the replacement and continues. Prefix turns reestablish the cold/warm boundary
+and are excluded from timing and CPU comparisons. Original failures and replacement IDs
+remain in JSON; earlier valid measurements are retained. A second failure at the same sample,
+a failed prefix rebuild, sample-key mismatch, wrong build, or unclassified failure stops the run.
+Real-history builds and passes carrying history into or out of another pass cannot recover
+this way. `--verify-incarnation-recovery` aborts one settled Object per target before metrics
+to exercise recovery; use this diagnostic separately from a latency comparison.
 Tardie's native reference can skip the Actor directory. `directoryUsed` records whether
 the Thread has called it since reset; an unused directory's identity observes residency only.
 

@@ -359,7 +359,8 @@ export const table = (result: Result): string => {
     ...(result.complete ? [] : ["INCOMPLETE RUN — diagnostic results only.", ""]),
     ...(result.samples.some((row) => row.status === "invalidated")
       ? [
-          `Invalidated pass records: ${result.samples.filter((row) => row.status === "invalidated").length}; retained in JSON and replaced by a verified pass.`,
+          `Invalidated sample attempts: ${result.samples.filter((row) => row.status === "invalidated").length}; original errors, restores and replacement IDs are retained in JSON.`,
+          `Recovery prefix turns: ${result.samples.filter((row) => row.state === "recovery").length}; setup only, excluded from timing and CPU comparisons.`,
         ]
       : []),
     "Driver-observed milliseconds; median [Q1–Q3] of Object medians.",
