@@ -1,5 +1,16 @@
 # @yielded/agent-storage-memory
 
+## 0.1.0-beta.170
+
+### Minor Changes
+
+- [#868](https://github.com/yielded-dev/agent/pull/868) [`63bb8b5`](https://github.com/yielded-dev/agent/commit/63bb8b5bbbc18abec209ca173661ee35f6d27a9b) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Remove per-Thread conversation quotas and reuse messaging and subscription capacity after work settles or its retention window expires, preserving exact receipts and host capacity bounds. Upgrade released layout-25 stores and standalone Cloudflare subscription stores v3 atomically on open; custom Thread stores must count peer sends at the request's `nowMillis`.
+
+### Patch Changes
+
+- Updated dependencies [[`7dbe5be`](https://github.com/yielded-dev/agent/commit/7dbe5bec64097562991d8f4126797d4590a03084), [`8554d50`](https://github.com/yielded-dev/agent/commit/8554d509163e4ff8380d04a1478da67ff99a87a6), [`63bb8b5`](https://github.com/yielded-dev/agent/commit/63bb8b5bbbc18abec209ca173661ee35f6d27a9b)]:
+  - @yielded/agent@0.1.0-beta.170
+
 ## 0.1.0-beta.169
 
 ### Patch Changes
