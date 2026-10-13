@@ -43,11 +43,11 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Run the live continuity gate
-        run: ./node_modules/.bin/vp run --no-cache context-continuity-eval --require-clean --profile explicit-rollover-sqlite-v1 --max-cost-usd 10
+        run: ./node_modules/.bin/vp run --no-cache context-continuity-eval --require-clean --profile explicit-rollover-sqlite-v1 --effort medium --service-tier ultrafast --max-cost-usd 10
         env:
           EFFECT_AGENT_LIVE: "1"
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          CONTEXT_EVAL_MODEL: ${{ vars.CONTEXT_EVAL_MODEL || 'gpt-6-astra' }}
+          CONTEXT_EVAL_MODEL: ${{ vars.CONTEXT_EVAL_MODEL || 'gpt-6.1-sol' }}
 
       - name: Preserve continuity gate evidence
         if: always()

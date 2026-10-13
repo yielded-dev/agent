@@ -19,7 +19,7 @@ const completeReport = (): EvaluationReport => ({
   model: "gpt-6-astra",
   reasoningEffort: "low",
   serviceTier: "default",
-  pricingVersion: "openai-2026-09-08-conservative",
+  pricingVersion: "openai-2026-10-13-conservative",
   contextTokenLimit: 16_000,
   maxOutputTokens: 4_096,
   maxCostMicrousd: 10_000_000,

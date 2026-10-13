@@ -44,6 +44,7 @@ it("refuses inference and retry while spending is unresolved", async () => {
 
       const live = yield* makeLiveClient({
         model: "gpt-6-astra",
+        serviceTier: "default",
         maxCostMicrousd: 10_000_000,
         initialUsage: initial,
         phase,

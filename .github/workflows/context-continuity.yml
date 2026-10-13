@@ -13,8 +13,8 @@ on:
       model:
         description: Model to evaluate
         type: choice
-        default: gpt-6-astra
-        options: [gpt-6-astra, gpt-6-sol, gpt-6-luna]
+        default: gpt-6.1-sol
+        options: [gpt-6.1-sol, gpt-6-astra]
 
 permissions:
   contents: read
@@ -47,12 +47,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Run the live continuity gate
-        run: ./node_modules/.bin/vp run --no-cache context-continuity-eval --require-clean --profile "$CONTEXT_EVAL_PROFILE" --max-cost-usd 10
+        run: ./node_modules/.bin/vp run --no-cache context-continuity-eval --require-clean --profile "$CONTEXT_EVAL_PROFILE" --effort medium --service-tier ultrafast --max-cost-usd 10
         env:
           CONTEXT_EVAL_PROFILE: ${{ inputs.profile || 'explicit-rollover-sqlite-v1' }}
           EFFECT_AGENT_LIVE: "1"
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          CONTEXT_EVAL_MODEL: ${{ inputs.model || vars.CONTEXT_EVAL_MODEL || 'gpt-6-astra' }}
+          CONTEXT_EVAL_MODEL: ${{ inputs.model || vars.CONTEXT_EVAL_MODEL || 'gpt-6.1-sol' }}
       - name: Preserve this attempt's evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -48,8 +48,9 @@ release coordinator owns that receipt. No paid profile runs solely because a run
 Run `vp run context-continuity-eval --help` for configuration. One bounded live attempt:
 
 ```sh
-EFFECT_AGENT_LIVE=1 vp run context-continuity-eval --require-clean --model gpt-6-astra \
-  --profile pressure-restart-sqlite-v1 --max-cost-usd 10 --output-dir /tmp/context-eval-1
+EFFECT_AGENT_LIVE=1 vp run context-continuity-eval --require-clean --model gpt-6.1-sol \
+  --effort medium --service-tier ultrafast --profile pressure-restart-sqlite-v1 \
+  --max-cost-usd 10 --output-dir /tmp/context-eval-1
 ```
 
 Supply `OPENAI_API_KEY` through the environment or an existing `--env-file`. Each attempt needs a
@@ -57,8 +58,9 @@ new output directory. The CLI checks source identity before and after a run. `--
 model calls and cannot pass the live gate. Preserve failures; rerunning adds evidence rather than
 repairing the first result. Never repeat an unchanged candidate just to get a passing sample.
 
-Nightly and confirmed-unpublished-release jobs continue to run exactly the existing default
-profile with a $10 ceiling. Manual Actions dispatch can select one bounded SQLite profile. There
+Nightly and confirmed-unpublished-release jobs use `gpt-6.1-sol`, medium reasoning effort, and
+ultrafast processing with the default profile and a $10 ceiling. Budget reservations include
+ultrafast pricing. Manual Actions dispatch can select one bounded SQLite profile. There
 is no paid PR trigger or profile matrix. Cloudflare and production-capacity runs are not added to
 automatic jobs. Published versions skip evaluation/publication; registry errors fail closed.
 
