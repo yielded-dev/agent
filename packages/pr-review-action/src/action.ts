@@ -1562,6 +1562,7 @@ const reviewPullRequest = Effect.fnUntraced(function* (
 
 export const reviewActionProgram = Effect.gen(function* () {
   const setup = yield* prepareReview.pipe(
+    Effect.tapErrorTag("ConfigError", (error) => Effect.logError(error.message)),
     Effect.tapErrorTag("ActionConfigurationError", (error) => Effect.logError(error.message)),
   );
 

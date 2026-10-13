@@ -65,6 +65,8 @@ export default defineConfig({
             { pattern: "!**/node_modules/.vite*", base: "workspace" },
             { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
           ],
+          // Runner identity changes every job but does not affect the bundle.
+          untrackedEnv: ["ACTIONS_ORCHESTRATION_ID"],
         },
       },
       test: {
