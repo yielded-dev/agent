@@ -947,13 +947,14 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                   }),
                   Context.add(SubmissionLedger, {
                     ...ledger,
-                    ...(options.hostLanesForMutation === undefined
+                    ...(options.hostLanesForMutation === undefined &&
+                    options.lifecyclePublication === undefined
                       ? {}
                       : {
-                          admit: (request: AdmissionRequest) =>
+                          admit: (...args: Parameters<SubmissionLedger["Service"]["admit"]>) =>
                             observeMutation(
-                              { _tag: "Admission", request },
-                              ledger.admit(request),
+                              { _tag: "Admission", request: args[0] },
+                              ledger.admit(...args),
                               false,
                             ),
                         }),

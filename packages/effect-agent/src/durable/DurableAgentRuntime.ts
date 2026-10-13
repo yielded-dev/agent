@@ -11165,7 +11165,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         queueSequence: admitted.queueSequence,
       });
     }
-    const admitted = yield* ledger.admit(request);
+    const admitted = yield* ledger.admit(request, { readyIfInitialized: true });
 
     yield* hit("submit:after-admit");
 
@@ -11181,10 +11181,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     if (admitted.replayed && admitted.state !== "admitted") {
       return receipt;
     }
-    yield* materializeThread(options.threadId);
-    yield* ensureThreadCreated(options.threadId, agent.definition.id, options.definitions);
-    yield* hit("submit:after-materialize");
-    yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
+    if (admitted.state === "admitted") {
+      yield* materializeThread(options.threadId);
+      yield* ensureThreadCreated(options.threadId, agent.definition.id, options.definitions);
+      yield* hit("submit:after-materialize");
+      yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
+    }
     yield* wake.notify(options.threadId);
 
     return receipt;

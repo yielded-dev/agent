@@ -1036,6 +1036,7 @@ const makeServices = Effect.fnUntraced(function* () {
 
   const admit: SubmissionLedger["Service"]["admit"] = Effect.fnUntraced(function* (
     request: AdmissionRequest,
+    options?: { readonly readyIfInitialized?: boolean },
   ) {
     const operation = "ledger admit";
 
@@ -1280,6 +1281,16 @@ const makeServices = Effect.fnUntraced(function* () {
         ).pipe(Effect.mapError(internalFailure(operation)));
 
         const now = yield* currentInstant;
+        // The first canonical record is ThreadCreated. This is the same positive-tail proof
+        // used by ensureThreadCreated, captured under this admission's owner transaction.
+        const ready =
+          options?.readyIfInitialized === true &&
+          validated.workerAdmission === undefined &&
+          (yield* journal
+            .getThread(validated.threadId)
+            .pipe(Effect.mapError(internalFailure(operation)))).some(
+            (thread) => thread.tail_sequence > 0,
+          );
 
         yield* sql`
             INSERT INTO effect_agent_submissions (
@@ -1296,6 +1307,7 @@ const makeServices = Effect.fnUntraced(function* () {
               receipt_id,
               state,
               created_at,
+              ready_at,
               parent_submission_id,
               parent_tool_call_id,
               admission_group,
@@ -1314,8 +1326,9 @@ const makeServices = Effect.fnUntraced(function* () {
               ${inputJson},
               ${validated.inputDigest},
               ${mintedReceiptId},
-              'admitted',
+              ${ready ? "ready" : "admitted"},
               ${now.iso},
+              ${ready ? now.iso : null},
               ${validated.parentLinkage?.parentSubmissionId ?? null},
               ${validated.parentLinkage?.parentToolCallId ?? null},
               ${validated.admissionGroup ?? null},
@@ -1350,13 +1363,21 @@ const makeServices = Effect.fnUntraced(function* () {
 
         yield* recordProgress("submission", operation);
 
-        return yield* decodeAdmissionResult({
+        const admitted = yield* decodeAdmissionResult({
           submissionId: mintedSubmissionId,
           receiptId: mintedReceiptId,
           queueSequence,
-          state: "admitted",
+          state: ready ? "ready" : "admitted",
           replayed: false,
         }).pipe(Effect.mapError(internalFailure(operation)));
+
+        if (ready && lifecycle !== undefined)
+          yield* retainLifecycle(yield* requireSubmission(operation, mintedSubmissionId), {
+            _tag: "SubmissionReady",
+            submissionId: admitted.submissionId,
+          });
+
+        return admitted;
       }),
     );
 

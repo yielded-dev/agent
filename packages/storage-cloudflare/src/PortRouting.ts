@@ -570,9 +570,9 @@ const makeRoutedLedgerServices = Effect.fnUntraced(function* (options: RoutedPor
   const routed = SubmissionLedger.of({
     capabilities: local.capabilities,
 
-    admit: (request) =>
+    admit: (request, admissionOptions) =>
       options.ownsThread(request.threadId)
-        ? local.admit(request)
+        ? local.admit(request, admissionOptions)
         : foreignLedgerCall(
             "ledger admit",
             request.threadId,
