@@ -8,6 +8,7 @@ import {
   PersistedJson,
   WorkerAdmission,
   RecordEnvelope,
+  RecordId,
   SettlementOutcome,
 } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
@@ -178,7 +179,7 @@ class SubmissionRow extends Schema.Class<SubmissionRow>("SubmissionRow")({
   receipt_id: BoundedIdentifier,
   state: SubmissionState,
   settled_outcome: Schema.NullOr(SettlementOutcome),
-  settled_record_id: Schema.NullOr(BoundedIdentifier),
+  settled_record_id: Schema.NullOr(BoundedIdentifier.pipe(Schema.decodeTo(RecordId))),
   finalized_at: Schema.NullOr(BoundedTimestamp),
   created_at: BoundedTimestamp,
   ready_at: Schema.NullOr(BoundedTimestamp),
@@ -661,6 +662,11 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
 
     const admission = yield* decodeAdmissionFact(row).pipe(Effect.mapError(rowFailure));
 
+    const settledAt =
+      row.finalized_at === null
+        ? undefined
+        : yield* decodeUtcInstant(row.finalized_at).pipe(Effect.mapError(rowFailure));
+
     const readyAt =
       row.ready_at === null
         ? undefined
@@ -670,6 +676,8 @@ export const makeSqlSubmissionLedgerKernel = Effect.fnUntraced(function* <
       ...admission,
       state: row.state,
       ...(row.settled_outcome === null ? {} : { settledOutcome: row.settled_outcome }),
+      ...(settledAt === undefined ? {} : { settledAt }),
+      ...(row.settled_record_id === null ? {} : { settledRecordId: row.settled_record_id }),
       ...(readyAt === undefined ? {} : { readyAt }),
     }).pipe(Effect.mapError(rowFailure));
   });

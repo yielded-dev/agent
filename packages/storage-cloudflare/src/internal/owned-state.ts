@@ -195,16 +195,19 @@ export const ownedRows = <A, I>(
       maxRows = Infinity,
     ) =>
       state.read(
-        Effect.gen(function* () {
+        Effect.suspend(() => {
           const view = current.get(id);
 
-          if (view !== undefined) return view.rows;
+          if (view !== undefined) return Effect.succeed(view.rows);
 
-          const rows = yield* decode(yield* query);
+          return query.pipe(
+            Effect.flatMap(decode),
+            Effect.map((rows) => {
+              retain(id, matches, rows, maxRows);
 
-          retain(id, matches, rows, maxRows);
-
-          return rows;
+              return rows;
+            }),
+          );
         }),
       );
 

@@ -39,6 +39,10 @@ export interface RecordEncoding {
   readonly progress: ProgressAppendRecord;
 }
 
+interface CapturedRecordEncoding extends RecordEncoding {
+  readonly wire: typeof RecordEnvelope.Encoded;
+}
+
 /** Private capture metadata, never caller-supplied wire data or execution authority. */
 export interface ProgressAppendRecord {
   readonly recordId: RecordEnvelope["recordId"];
@@ -67,7 +71,40 @@ const progressRecord = (record: RecordEnvelope, bytes: number): ProgressAppendRe
   });
 };
 
-const captured = new WeakMap<RecordEnvelope, RecordEncoding>();
+const captured = new WeakMap<RecordEnvelope, CapturedRecordEncoding>();
+
+// Define own data properties so valid JSON keys never invoke inherited setters.
+const setOwn = (target: object, key: PropertyKey, value: unknown): void => {
+  Object.defineProperty(target, key, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+};
+
+/** JSON arrays use indexed values, even when inherited or non-enumerable. */
+const copyOwn = (value: object): object => {
+  if (!Array.isArray(value)) {
+    const copy = { ...value };
+
+    Object.setPrototypeOf(copy, Object.getPrototypeOf(value));
+
+    return copy;
+  }
+  const copy: Array<unknown> = [];
+
+  for (let index = 0; index < value.length; index++) setOwn(copy, index, value[index]);
+  for (const key of Reflect.ownKeys(value)) {
+    if (
+      !Object.hasOwn(copy, key) &&
+      Object.getOwnPropertyDescriptor(value, key)?.enumerable === true
+    )
+      setOwn(copy, key, Reflect.get(value, key));
+  }
+
+  return copy;
+};
 
 /** Own every fact before suspension; encoded JSON fields can share these private frozen values. */
 const capturePayload = (payload: CanonicalRecordPayload) => {
@@ -76,31 +113,26 @@ const capturePayload = (payload: CanonicalRecordPayload) => {
   Object.setPrototypeOf(copy, Object.getPrototypeOf(payload));
   const copies = new WeakMap<object, object>([[payload, copy]]);
 
-  const pending: Array<{ readonly source: object; readonly target: object }> = [
-    { source: payload, target: copy },
-  ];
+  const pending: Array<object> = [copy];
 
   const owned: Array<object> = [copy];
 
   while (pending.length > 0) {
     const next = pending.pop()!;
 
-    for (const [key, value] of Object.entries(next.source)) {
-      if (!Predicate.isObject(value)) continue;
+    for (const [key, value] of Object.entries(next)) {
+      if (!Predicate.isObjectOrArray(value)) continue;
       let child = copies.get(value);
 
       if (child === undefined) {
-        const created: object = Array.isArray(value)
-          ? []
-          : Object.create(Object.getPrototypeOf(value));
+        const created = copyOwn(value);
 
-        Object.assign(created, value);
         copies.set(value, created);
         owned.push(created);
-        pending.push({ source: value, target: created });
+        pending.push(created);
         child = created;
       }
-      Reflect.set(next.target, key, child);
+      setOwn(next, key, child);
     }
   }
   for (const value of owned) Object.freeze(value);
@@ -109,17 +141,17 @@ const capturePayload = (payload: CanonicalRecordPayload) => {
 };
 
 /** Schema-created structures are private; detach JSON pass-throughs using the same owned copy. */
-const ownWire = (wire: RecordJson, copies: WeakMap<object, object>): RecordJson => {
-  const pending: Array<object> = Predicate.isObject(wire) ? [wire] : [];
+const ownWire = <Wire extends RecordJson>(wire: Wire, copies: WeakMap<object, object>): Wire => {
+  const pending: Array<object> = Predicate.isObjectOrArray(wire) ? [wire] : [];
 
   while (pending.length > 0) {
     const next = pending.pop()!;
 
     for (const [key, value] of Object.entries(next)) {
-      if (!Predicate.isObject(value)) continue;
+      if (!Predicate.isObjectOrArray(value)) continue;
       const copy = copies.get(value);
 
-      if (copy !== undefined) Reflect.set(next, key, copy);
+      if (copy !== undefined) setOwn(next, key, copy);
       else pending.push(value);
     }
     Object.freeze(next);
@@ -129,7 +161,7 @@ const ownWire = (wire: RecordJson, copies: WeakMap<object, object>): RecordJson 
 };
 
 /** Capture at the Schema boundary; only the privately owned result can reuse its encoding. */
-export const captureRecord = (input: RecordEnvelope): RecordEncoding => {
+export const captureRecord = (input: RecordEnvelope): CapturedRecordEncoding => {
   const existing = captured.get(input);
 
   if (existing !== undefined) return existing;

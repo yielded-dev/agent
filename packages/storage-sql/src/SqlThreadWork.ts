@@ -130,6 +130,13 @@ const CountRow = Schema.Tuple([Count]);
 const decodeCountRow = Schema.decodeUnknownEffect(CountRow);
 const EntryRow = Schema.Struct({ id: Schema.String, entry_json: Schema.NullOr(Schema.String) });
 const EntryRows = Schema.Array(EntryRow);
+
+interface WorkEntryWrite {
+  readonly existed: boolean | undefined;
+  readonly entry: CanonicalWorkEntry | undefined;
+  readonly encoded?: string;
+}
+
 const WorkEntryJson = Schema.fromJsonString(CanonicalWorkEntry);
 const decodeWorkEntry = Schema.decodeEffect(WorkEntryJson);
 const encodeWorkEntry = Schema.encodeEffect(WorkEntryJson);
@@ -301,6 +308,66 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     return rows[0] === undefined ? undefined : yield* decodeEntry(rows[0]);
   });
 
+  const pendingEntry = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    id: string,
+    writes: Map<string, WorkEntryWrite>,
+    initiallyEmpty: boolean,
+  ) {
+    const pending = writes.get(id);
+
+    if (pending !== undefined) return pending.entry;
+    // The header verifies emptiness against COUNT(*) in this transaction. Staged
+    // writes above are authoritative for every key touched since that snapshot.
+    const entry = initiallyEmpty ? undefined : yield* getEntry(threadId, id);
+
+    writes.set(id, { existed: entry !== undefined, entry });
+
+    return entry;
+  });
+
+  const flushEntries = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    writes: ReadonlyMap<string, WorkEntryWrite>,
+  ) {
+    let delta = 0;
+
+    for (const [id, pending] of writes) {
+      const { entry, encoded } = pending;
+
+      if (entry === undefined) {
+        if (pending.existed === false) continue;
+
+        const deleted = yield* query(
+          sql`DELETE FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId} AND id=${id} RETURNING id`,
+        );
+
+        delta -= deleted.length;
+        continue;
+      }
+      // A failed conditional removal may have loaded an unchanged entry.
+      if (encoded === undefined) continue;
+
+      const existed =
+        pending.existed ??
+        (yield* query(
+          sql`SELECT 1 FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId} AND id=${id}`,
+        )).length > 0;
+
+      if (!existed) delta++;
+      const messageId = entry.owner._tag === "Handoff" ? entry.owner.messageId : undefined;
+      const worker = entry.owner._tag === "WorkerInput" ? entry.owner : undefined;
+      const handoff = entry.owner._tag === "Handoff" ? entry.owner.kind : null;
+
+      yield* query(sql`INSERT INTO ${table("effect_agent_work_entries")} (thread_id, id, message_id, entry_json, created_sequence, owner_tag, worker_thread_id, worker_update, handoff_kind)
+        VALUES (${threadId}, ${entry.id}, ${messageId === undefined ? null : JSON.stringify(messageId)}, ${encoded}, ${entry.createdSequence}, ${entry.owner._tag}, ${worker === undefined ? null : JSON.stringify(worker.workerThreadId)}, ${worker === undefined ? null : worker.update ? 1 : 0}, ${handoff})
+        ON CONFLICT (thread_id, id) DO UPDATE SET message_id=excluded.message_id, entry_json=excluded.entry_json,
+          created_sequence=excluded.created_sequence, owner_tag=excluded.owner_tag, worker_thread_id=excluded.worker_thread_id, worker_update=excluded.worker_update, handoff_kind=excluded.handoff_kind`);
+    }
+
+    return delta;
+  });
+
   const indexCanonicalPointers = Effect.fnUntraced(function* (
     threadId: ThreadId,
     sequence: CanonicalSequence,
@@ -348,6 +415,8 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     sequence: CanonicalSequence,
     record: CanonicalRecord,
     workerMode: WorkerReportingMode,
+    writes: Map<string, WorkEntryWrite>,
+    initiallyEmpty: boolean,
   ) {
     // Append facts are privately captured; rebuild facts have crossed the persisted Schema.
     const envelope = new CanonicalRecordEnvelope(
@@ -361,11 +430,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       { disableChecks: true },
     );
 
-    const changes = yield* workIndexChanges(envelope, workerMode).pipe(
-      Effect.provideService(Crypto.Crypto, crypto),
-    );
-
-    let delta = 0;
+    const changes = yield* workIndexChanges(envelope, workerMode);
 
     for (const change of changes) {
       if (change._tag === "WorkerMode") {
@@ -374,7 +439,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       }
       if (change._tag === "Remove") {
         if (change.stateRecordId !== undefined) {
-          const previous = yield* getEntry(threadId, change.id);
+          const previous = yield* pendingEntry(threadId, change.id, writes, initiallyEmpty);
 
           if (
             previous?.stateReference._tag !== "Canonical" ||
@@ -383,12 +448,10 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
             continue;
         }
 
-        // apply/rebuild already hold the native writer, so this comparison and delete are atomic.
-        const deleted = yield* query(
-          sql`DELETE FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId} AND id=${change.id} RETURNING id`,
-        );
-
-        delta -= deleted.length;
+        writes.set(change.id, {
+          existed: writes.get(change.id)?.existed ?? (initiallyEmpty ? false : undefined),
+          entry: undefined,
+        });
         continue;
       }
 
@@ -402,10 +465,8 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
 
         if (rows.length > 0) continue;
       }
-      const previous = yield* getEntry(threadId, change.entry.id);
+      const previous = yield* pendingEntry(threadId, change.entry.id, writes, initiallyEmpty);
       const entry = advanceWorkEntry(previous, change.entry);
-
-      if (previous === undefined) delta++;
 
       const encoded = yield* encodeWorkEntry(entry).pipe(
         Effect.mapError((cause) => failure("encode work entry", cause)),
@@ -413,16 +474,10 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
 
       if (new TextEncoder().encode(encoded).byteLength > MAX_WORK_ENTRY_BYTES)
         return yield* failure("work entry byte bound");
-      const worker = entry.owner._tag === "WorkerInput" ? entry.owner : undefined;
-      const handoff = entry.owner._tag === "Handoff" ? entry.owner.kind : null;
-
-      yield* query(sql`INSERT INTO ${table("effect_agent_work_entries")} (thread_id, id, message_id, entry_json, created_sequence, owner_tag, worker_thread_id, worker_update, handoff_kind)
-        VALUES (${threadId}, ${entry.id}, ${messageId === undefined ? null : JSON.stringify(messageId)}, ${encoded}, ${entry.createdSequence}, ${entry.owner._tag}, ${worker === undefined ? null : JSON.stringify(worker.workerThreadId)}, ${worker === undefined ? null : worker.update ? 1 : 0}, ${handoff})
-        ON CONFLICT (thread_id, id) DO UPDATE SET message_id=excluded.message_id, entry_json=excluded.entry_json,
-          created_sequence=excluded.created_sequence, owner_tag=excluded.owner_tag, worker_thread_id=excluded.worker_thread_id, worker_update=excluded.worker_update, handoff_kind=excluded.handoff_kind`);
+      writes.set(entry.id, { existed: writes.get(entry.id)?.existed, entry, encoded });
     }
 
-    return { workerMode, delta };
+    return { workerMode };
   });
 
   const headerFields = (
@@ -496,10 +551,20 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     let count = current.entry_count;
     let input = current.worker_input_sequence;
     let settlement = current.worker_settlement_sequence;
+    // The writer exposes only the final derivative; transient entries never need a SQL row.
+    const writes = new Map<string, WorkEntryWrite>();
 
     for (const record of records) {
       through = CanonicalSequence.make(through + 1);
-      const folded = yield* fold(threadId, through, record, workerMode);
+
+      const folded = yield* fold(
+        threadId,
+        through,
+        record,
+        workerMode,
+        writes,
+        current.entry_count === 0,
+      );
 
       if (workerMode === "none" && folded.workerMode !== "none") {
         const prior = yield* workerExecutionThrough(threadId, through - 1);
@@ -508,7 +573,6 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
         settlement = prior.settlement;
       }
       workerMode = folded.workerMode;
-      count += folded.delta;
       if (workerMode !== "none") {
         if (record.payload._tag === "UserInputRecorded" && record.payload.runId !== undefined)
           input = through;
@@ -516,6 +580,8 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
           settlement = through;
       }
     }
+
+    count += yield* flushEntries(threadId, writes);
 
     return headerFields(through, workerMode, "ready", count, input, settlement);
   });
@@ -659,7 +725,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
           offset: ObservationOffset.make(`work-index:${origin.sequence}`),
         }),
         "none",
-      ).pipe(Effect.provideService(Crypto.Crypto, crypto));
+      );
 
       for (const change of changes) if (change._tag === "WorkerMode") expectedMode = change.mode;
     }
@@ -690,63 +756,76 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
             Effect.provideService(Crypto.Crypto, crypto),
           );
 
-          const after = cursor.after;
-          let entries: ReadonlyArray<ThreadWorkEntry>;
-          let next: string | undefined;
+          let source = cursor.source;
+          let after = cursor.after;
 
-          if (cursor.source === "admissions") {
-            const sequence =
-              after === undefined
-                ? 0
-                : yield* decode(
-                    Schema.FiniteFromString.pipe(Schema.decodeTo(Schema.Natural)),
-                    after,
-                  );
+          while (true) {
+            let entries: ReadonlyArray<ThreadWorkEntry>;
+            let next: string | undefined;
 
-            const rows = yield* decode(
-              Schema.Array(
-                Schema.Struct({
-                  ...SubmissionWorkItem.fields,
-                  queueSequence: SqlInteger.pipe(
-                    Schema.decodeTo(SubmissionWorkItem.fields.queueSequence),
-                  ),
-                }),
-              ),
-              yield* query(sql`SELECT submission_id AS "submissionId", thread_id AS "threadId", queue_sequence AS "queueSequence",
+            if (source === "admissions") {
+              const sequence =
+                after === undefined
+                  ? 0
+                  : yield* decode(
+                      Schema.FiniteFromString.pipe(Schema.decodeTo(Schema.Natural)),
+                      after,
+                    );
+
+              const rows = yield* decode(
+                Schema.Array(
+                  Schema.Struct({
+                    ...SubmissionWorkItem.fields,
+                    queueSequence: SqlInteger.pipe(
+                      Schema.decodeTo(SubmissionWorkItem.fields.queueSequence),
+                    ),
+                  }),
+                ),
+                yield* query(sql`SELECT submission_id AS "submissionId", thread_id AS "threadId", queue_sequence AS "queueSequence",
             principal, idempotency_key AS "idempotencyKey", deployment_id AS "deploymentId", receipt_id AS "receiptId", state
             FROM ${table("effect_agent_submissions")} ${admissionIndex} WHERE thread_id=${request.threadId} AND state <> 'settled'
               AND queue_sequence>${sequence} ORDER BY queue_sequence LIMIT ${request.limit + 1}`),
-            );
+              );
 
-            const more = rows.length > request.limit ? rows[request.limit - 1] : undefined;
+              if (rows.length === 0) {
+                source = "canonical";
+                after = undefined;
+                continue;
+              }
+              const more = rows.length > request.limit ? rows[request.limit - 1] : undefined;
 
-            entries = rows.slice(0, request.limit).map(admissionWork);
-            next = encodeWorkCursor({
-              version: WORK_INDEX_VERSION,
-              threadDigest: cursor.threadDigest,
-              source: more === undefined ? "canonical" : "admissions",
-              ...(more === undefined ? {} : { after: String(more.queueSequence) }),
-            });
-          } else if (cursor.source === "canonical") {
-            const rows = yield* decode(
-              Schema.Array(EntryRow),
-              yield* query(sql`SELECT id, ${boundedEntryJson} FROM ${table("effect_agent_work_entries")}
+              entries = rows.slice(0, request.limit).map(admissionWork);
+              next = encodeWorkCursor({
+                version: WORK_INDEX_VERSION,
+                threadDigest: cursor.threadDigest,
+                source: more === undefined ? "canonical" : "admissions",
+                ...(more === undefined ? {} : { after: String(more.queueSequence) }),
+              });
+            } else if (source === "canonical") {
+              const rows = yield* decode(
+                Schema.Array(EntryRow),
+                yield* query(sql`SELECT id, ${boundedEntryJson} FROM ${table("effect_agent_work_entries")}
             WHERE thread_id=${request.threadId} ${after === undefined ? sql`` : sql`AND id>${after}`} ORDER BY id LIMIT ${request.limit + 1}`),
-            );
+              );
 
-            const more = rows.length > request.limit ? rows[request.limit - 1] : undefined;
+              if (rows.length === 0) {
+                source = "deliveries";
+                after = undefined;
+                continue;
+              }
+              const more = rows.length > request.limit ? rows[request.limit - 1] : undefined;
 
-            entries = yield* Effect.forEach(rows.slice(0, request.limit), decodeEntry);
-            next = encodeWorkCursor({
-              version: WORK_INDEX_VERSION,
-              threadDigest: cursor.threadDigest,
-              source: more === undefined ? "deliveries" : "canonical",
-              ...(more === undefined ? {} : { after: more.id }),
-            });
-          } else {
-            const rows = yield* decode(
-              Schema.Array(DeliveryRow),
-              yield* query(sql`SELECT message_id, version, state, deadline_at_millis,
+              entries = yield* Effect.forEach(rows.slice(0, request.limit), decodeEntry);
+              next = encodeWorkCursor({
+                version: WORK_INDEX_VERSION,
+                threadDigest: cursor.threadDigest,
+                source: more === undefined ? "deliveries" : "canonical",
+                ...(more === undefined ? {} : { after: more.id }),
+              });
+            } else {
+              const rows = yield* decode(
+                Schema.Array(DeliveryRow),
+                yield* query(sql`SELECT message_id, version, state, deadline_at_millis,
               ${sql.onDialectOrElse({
                 pg: () =>
                   sql`CASE (read_metadata ->> 'workerUpdate') WHEN 'true' THEN 'update' WHEN 'false' THEN 'ordinary' ELSE NULL END`,
@@ -755,38 +834,43 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
               })} AS partition
             FROM ${table("effect_agent_message_deliveries")} ${deliveryIndex} WHERE owner_thread_id=${request.threadId} AND state NOT IN ('processed', 'refused')
             ${after === undefined ? sql`` : sql`AND message_id>${after}`} ORDER BY message_id LIMIT ${request.limit + 1}`),
+              );
+
+              const more = rows.length > request.limit ? rows[request.limit - 1] : undefined;
+
+              entries = rows.slice(0, request.limit).map((row): ThreadWorkEntry => ({
+                id: workId("delivery", row.message_id),
+                owner: { _tag: "Delivery", messageId: row.message_id },
+                stateReference: {
+                  _tag: "Delivery",
+                  messageId: row.message_id,
+                  version: row.version,
+                },
+                state: row.state === "pending" ? "ready" : "waiting",
+                partition: row.partition,
+                ...(row.state === "parked"
+                  ? { wait: "parked" }
+                  : row.state === "accepted"
+                    ? { wait: "destination" }
+                    : {}),
+                ...(row.deadline_at_millis === null
+                  ? {}
+                  : { notBeforeMillis: row.deadline_at_millis }),
+              }));
+              if (more !== undefined)
+                next = encodeWorkCursor({
+                  version: WORK_INDEX_VERSION,
+                  threadDigest: cursor.threadDigest,
+                  source: "deliveries",
+                  after: more.message_id,
+                });
+            }
+
+            return yield* validateWorkPage(
+              { entries, ...(next === undefined ? {} : { cursor: next }) },
+              request.limit,
             );
-
-            const more = rows.length > request.limit ? rows[request.limit - 1] : undefined;
-
-            entries = rows.slice(0, request.limit).map((row): ThreadWorkEntry => ({
-              id: workId("delivery", row.message_id),
-              owner: { _tag: "Delivery", messageId: row.message_id },
-              stateReference: { _tag: "Delivery", messageId: row.message_id, version: row.version },
-              state: row.state === "pending" ? "ready" : "waiting",
-              partition: row.partition,
-              ...(row.state === "parked"
-                ? { wait: "parked" }
-                : row.state === "accepted"
-                  ? { wait: "destination" }
-                  : {}),
-              ...(row.deadline_at_millis === null
-                ? {}
-                : { notBeforeMillis: row.deadline_at_millis }),
-            }));
-            if (more !== undefined)
-              next = encodeWorkCursor({
-                version: WORK_INDEX_VERSION,
-                threadDigest: cursor.threadDigest,
-                source: "deliveries",
-                after: more.message_id,
-              });
           }
-
-          return yield* validateWorkPage(
-            { entries, ...(next === undefined ? {} : { cursor: next }) },
-            request.limit,
-          );
         }),
       );
     }),
@@ -888,6 +972,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
           let settlement = current.worker_settlement_sequence;
           let processedBytes = 0;
           let processedRecords = 0;
+          const writes = new Map<string, WorkEntryWrite>();
 
           for (const row of plan) {
             if (row.sequence !== through + 1 || row.record_bytes > MAX_WORK_REBUILD_BYTES)
@@ -921,7 +1006,15 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
               yield* query(sql`INSERT INTO ${table("effect_agent_record_runs")} (thread_id, run_id, sequence)
             VALUES (${request.threadId}, ${yield* physical.run(request.threadId, runId)}, ${row.sequence})`);
             yield* indexCanonicalPointers(request.threadId, row.sequence, record, true);
-            const folded = yield* fold(request.threadId, row.sequence, record, workerMode);
+
+            const folded = yield* fold(
+              request.threadId,
+              row.sequence,
+              record,
+              workerMode,
+              writes,
+              current.entry_count === 0,
+            );
 
             if (workerMode === "none" && folded.workerMode !== "none") {
               const prior = yield* workerExecutionThrough(request.threadId, row.sequence - 1);
@@ -930,7 +1023,6 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
               settlement = prior.settlement;
             }
             workerMode = folded.workerMode;
-            count += folded.delta;
             if (workerMode !== "none") {
               if (record.payload._tag === "UserInputRecorded" && record.payload.runId !== undefined)
                 input = row.sequence;
@@ -941,6 +1033,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
             processedBytes += row.record_bytes;
             processedRecords++;
           }
+          count += yield* flushEntries(request.threadId, writes);
           const latestTail = yield* tail(request.threadId);
 
           if (processedRecords === 0 && through < latestTail)

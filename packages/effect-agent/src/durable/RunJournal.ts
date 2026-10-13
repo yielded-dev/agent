@@ -1,4 +1,4 @@
-import { Brand, type Crypto, Effect, Predicate, Schema, Stream, type DateTime } from "effect";
+import { Brand, Effect, Predicate, Schema, Stream, type DateTime } from "effect";
 import { Prompt } from "effect/ai";
 
 import {
@@ -22,13 +22,14 @@ import {
   contextWindowMessage,
 } from "../engine/Compaction.ts";
 import type { RunTurnToolResult } from "../engine/RunOptions.ts";
-import { digestJson, type DigestError } from "./Digest.ts";
+import { digestJson } from "./Digest.ts";
 import {
   makeJournalMetadata,
   toolCallSettledRecordId,
   type JournalMetadata,
   type JournalRecordEnvelope,
 } from "./internal/journal-metadata.ts";
+import { continuationUsage } from "./internal/usage-totals.ts";
 import {
   type BatchId,
   type RecordId,
@@ -1704,7 +1705,7 @@ const requireCanonicalTurn = (turn: number): Effect.Effect<void, RunJournalError
 
 const modelResponseRecord = Effect.fnUntraced(function* (
   input: TurnCommitInput,
-): Effect.fn.Return<RecordEnvelope, RunJournalError | DigestError, Crypto.Crypto> {
+): Effect.fn.Return<RecordEnvelope, RunJournalError> {
   const promptMessages = input.responseMessages;
 
   if (promptMessages.length === 0) {
@@ -1753,14 +1754,14 @@ const modelResponseRecord = Effect.fnUntraced(function* (
       return yield* journalError("Turn model usage must contain at least one completed call");
     }
 
-    const summary = yield* summarizeModelUsage(modelUsage).pipe(
+    const summary = yield* continuationUsage(modelUsage).pipe(
       Effect.mapError((cause) => journalError("Turn model usage exceeds accounting bounds", cause)),
     );
 
     if (
       input.usage === undefined ||
-      input.usage.inputTokens !== summary.inputTokens.total ||
-      input.usage.outputTokens !== summary.outputTokens.total ||
+      input.usage.inputTokens !== summary.inputTokens ||
+      input.usage.outputTokens !== summary.outputTokens ||
       (input.usage.costMicrousd ?? 0) !== summary.costMicrousd
     ) {
       return yield* journalError("Turn detailed and aggregate model usage disagree");
@@ -1882,7 +1883,7 @@ const runCompletionRecord = Effect.fnUntraced(function* (input: TurnCommitInput)
  */
 export const turnCanonicalBatch = Effect.fnUntraced(function* (
   input: TurnCommitInput,
-): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
+): Effect.fn.Return<CanonicalBatch, RunJournalError> {
   yield* requireCanonicalTurn(input.turn);
   const modelResponse = yield* modelResponseRecord(input);
   const toolRecords = yield* toolSettledRecords(input);
@@ -1907,7 +1908,7 @@ export const turnCanonicalBatch = Effect.fnUntraced(function* (
  */
 export const turnResponseBatch = Effect.fnUntraced(function* (
   input: TurnCommitInput,
-): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
+): Effect.fn.Return<CanonicalBatch, RunJournalError> {
   yield* requireCanonicalTurn(input.turn);
   const modelResponse = yield* modelResponseRecord(input);
 
@@ -1926,7 +1927,7 @@ export const turnResponseBatch = Effect.fnUntraced(function* (
  */
 export const turnResultsBatch = Effect.fnUntraced(function* (
   input: TurnCommitInput,
-): Effect.fn.Return<CanonicalBatch, RunJournalError | DigestError, Crypto.Crypto> {
+): Effect.fn.Return<CanonicalBatch, RunJournalError> {
   yield* requireCanonicalTurn(input.turn);
   const toolRecords = yield* toolSettledRecords(input);
   const first = toolRecords[0];

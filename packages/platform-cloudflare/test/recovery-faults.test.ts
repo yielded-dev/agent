@@ -39,6 +39,7 @@ import {
   SubmissionLookupById,
   SubmissionLookupByKey,
   submissionAbortRecordId,
+  submissionSettlementRecordId,
 } from "@yielded/agent/submission-ledger";
 import { PreparedInput } from "@yielded/agent/subscription";
 import {
@@ -1309,6 +1310,8 @@ describe("recovery faults independent of execution history", () => {
             ...row,
             state: "settled",
             settledOutcome: "aborted",
+            settledAt: expect.anything(),
+            settledRecordId: submissionSettlementRecordId(queued.submissionId),
           })),
         );
         expect(supplierCountsFor(old)).toEqual({ book: 1 });

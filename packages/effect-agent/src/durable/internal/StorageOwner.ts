@@ -52,9 +52,13 @@ export const makeStorageOwner = Effect.fnUntraced(function* (gate: MutationGate)
   const active = new Map<string, { readonly claim: Claim; closed: boolean }>();
 
   const withMutation: MutationGate = (effect) =>
-    Effect.flatMap(ActiveOwner, (current) =>
-      current === identity ? effect : gate(Effect.provideService(effect, ActiveOwner, identity)),
-    );
+    Effect.withFiber((fiber) => {
+      const current = fiber.getRef(ActiveOwner);
+
+      return current === identity
+        ? effect
+        : gate(Effect.provideService(effect, ActiveOwner, identity));
+    });
 
   yield* Effect.addFinalizer(() =>
     withMutation(
@@ -70,7 +74,9 @@ export const makeStorageOwner = Effect.fnUntraced(function* (gate: MutationGate)
     identity,
     withMutation,
     withProgress: (threadId, effect) =>
-      Effect.flatMap(ActiveProgress, (current) => {
+      Effect.withFiber((fiber) => {
+        const current = fiber.getRef(ActiveProgress);
+
         if (current?.owner === identity && current.threadId === threadId) return effect;
 
         return Effect.suspend(() => {

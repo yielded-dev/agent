@@ -1662,6 +1662,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     let context: RunJournalContext | undefined;
     let progress: RunContinuation | undefined;
     let progressThrough: CanonicalSequence | undefined;
+    let operational: ReadonlyArray<RecordEnvelope> = [];
 
     const invalid = (message: string) =>
       ThreadStoreError.make({
@@ -1822,6 +1823,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         context = saved;
         progress = cursor;
         progressThrough = envelope.throughSequence;
+        operational = envelope.operational;
       }
     }
 
@@ -1833,7 +1835,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       ).values(),
     ].sort((left, right) => left.sequence - right.sequence);
 
-    return { canonical: Stream.fromIterable(records), context, progress, progressThrough };
+    return { records, context, progress, progressThrough, operational };
   });
 
   const readControl = Effect.fnUntraced(function* (
@@ -1843,9 +1845,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
     const view = yield* recoveryView(threadId, tail.tailSequence, submissionIds);
 
-    return yield* Stream.runCollect(
-      view.canonical.pipe(Stream.filter(controlRecords(submissionIds))),
-    );
+    return view.records.filter(controlRecords(submissionIds));
   });
 
   const readAllTolerant = (
@@ -1888,9 +1888,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       return { records: [], materialized: false, throughSequence: ZERO_SEQUENCE, submissionIds };
 
     const records = yield* recoveryView(threadId, tail.value.tailSequence, submissionIds).pipe(
-      Effect.flatMap((view) =>
-        Stream.runCollect(view.canonical.pipe(Stream.filter(controlRecords(submissionIds)))),
-      ),
+      Effect.map((view) => view.records.filter(controlRecords(submissionIds))),
       Effect.catchTag("ThreadNotMaterialized", (error) =>
         ThreadStoreError.make({
           operation: "read recovery history",
@@ -3207,15 +3205,23 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     yield* ownership.markInputApplied({ recordId, sequence: result.firstSequence });
   });
 
-  const readRunStart = Effect.fnUntraced(function* (threadId: ThreadId, runId: RunId) {
-    const loaded = yield* reader
-      .readExecution({ threadId, runId })
-      .pipe(Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(Option.none())));
+  const readRunStart = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    runId: RunId,
+    operational?: ReadonlyArray<RecordEnvelope>,
+  ) {
+    if (operational === undefined) {
+      const loaded = yield* reader
+        .readExecution({ threadId, runId })
+        .pipe(Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed(Option.none())));
 
-    if (Option.isNone(loaded)) return undefined;
+      if (Option.isNone(loaded)) return undefined;
+      operational = loaded.value.operational;
+    }
+
     const recordId = runStartedRecordId(runId);
-    const starts = loaded.value.operational.filter(({ payload }) => payload._tag === "RunStarted");
-    const existing = loaded.value.operational.find((record) => record.recordId === recordId);
+    const starts = operational.filter(({ payload }) => payload._tag === "RunStarted");
+    const existing = operational.find((record) => record.recordId === recordId);
 
     if (
       starts.length > 1 ||
@@ -3234,11 +3240,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     submission: SubmissionSnapshot,
     maxDurationMillis: number,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
+    operational: ReadonlyArray<RecordEnvelope>,
   ) {
     const writer = yield* CurrentRunWriter;
     const runId = runIdForSubmission(submission.submissionId);
     const recordId = runStartedRecordId(runId);
-    const existing = yield* readRunStart(submission.threadId, runId);
+    const existing = yield* readRunStart(submission.threadId, runId, operational);
     let start: RecordEnvelope;
     let allowance = maxDurationMillis;
     let committed = existing !== undefined;
@@ -6065,9 +6072,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 // The interpreter supplies only closed siblings, in declaration order.
                 // Per-call identities retain each result before the child suspension.
                 for (const result of toolResults) {
-                  const batch = yield* withCrypto(
-                    turnResultsBatch({ ...input, toolResults: [result] }),
-                  );
+                  const batch = yield* turnResultsBatch({ ...input, toolResults: [result] });
 
                   yield* appendBatch(
                     ctx,
@@ -6100,47 +6105,45 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   turnId: commit.turnId,
                   // The journal owns encoded messages. Detach the remaining small metadata
                   // trees too: Schema validation alone is not an ownership transfer.
-                  batch: yield* withCrypto(
-                    turnCanonicalBatch({
-                      ...input,
-                      toolParameterRejections: input.toolParameterRejections?.map((rejection) => ({
-                        ...rejection,
-                        parameters: copyJson(rejection.parameters),
-                        error: { ...rejection.error, reason: { ...rejection.error.reason } },
-                      })),
-                      toolExposure:
-                        input.toolExposure === undefined
-                          ? undefined
-                          : Snapshot.make({
-                              exposedToolNames: [...input.toolExposure.exposedToolNames],
-                              ...(input.toolExposure.selection === undefined
-                                ? {}
-                                : {
-                                    selection: Selection.make({
-                                      toolNames: [...input.toolExposure.selection.toolNames],
-                                    }),
+                  batch: yield* turnCanonicalBatch({
+                    ...input,
+                    toolParameterRejections: input.toolParameterRejections?.map((rejection) => ({
+                      ...rejection,
+                      parameters: copyJson(rejection.parameters),
+                      error: { ...rejection.error, reason: { ...rejection.error.reason } },
+                    })),
+                    toolExposure:
+                      input.toolExposure === undefined
+                        ? undefined
+                        : Snapshot.make({
+                            exposedToolNames: [...input.toolExposure.exposedToolNames],
+                            ...(input.toolExposure.selection === undefined
+                              ? {}
+                              : {
+                                  selection: Selection.make({
+                                    toolNames: [...input.toolExposure.selection.toolNames],
                                   }),
-                            }),
-                      usage:
-                        input.usage === undefined
-                          ? undefined
-                          : {
-                              ...input.usage,
-                              modelUsage: input.usage.modelUsage?.map((usage) =>
-                                ModelCallUsage.make({
-                                  ...usage,
-                                  ...(usage.response === undefined
-                                    ? {}
-                                    : {
-                                        response: ModelResponseIdentity.make({ ...usage.response }),
-                                      }),
-                                  inputTokens: InputTokenUsage.make({ ...usage.inputTokens }),
-                                  outputTokens: OutputTokenUsage.make({ ...usage.outputTokens }),
                                 }),
-                              ),
-                            },
-                    }),
-                  ),
+                          }),
+                    usage:
+                      input.usage === undefined
+                        ? undefined
+                        : {
+                            ...input.usage,
+                            modelUsage: input.usage.modelUsage?.map((usage) =>
+                              ModelCallUsage.make({
+                                ...usage,
+                                ...(usage.response === undefined
+                                  ? {}
+                                  : {
+                                      response: ModelResponseIdentity.make({ ...usage.response }),
+                                    }),
+                                inputTokens: InputTokenUsage.make({ ...usage.inputTokens }),
+                                outputTokens: OutputTokenUsage.make({ ...usage.outputTokens }),
+                              }),
+                            ),
+                          },
+                  }),
                 };
 
                 const progress = progressWriters.get(ctx);
@@ -6163,17 +6166,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               let batch: CanonicalBatch;
 
               if (deferred === undefined) {
-                batch = yield* withCrypto(
-                  commit._tag === "Response"
-                    ? turnResponseBatch(input)
-                    : response === undefined
-                      ? turnResultsBatch(input)
-                      : turnCanonicalBatch(input),
-                );
+                batch = yield* commit._tag === "Response"
+                  ? turnResponseBatch(input)
+                  : response === undefined
+                    ? turnResultsBatch(input)
+                    : turnCanonicalBatch(input);
               } else if (toolResults.length === 0 && runCompletion === undefined) {
                 batch = deferred.batch;
               } else {
-                const results = yield* withCrypto(turnResultsBatch(input));
+                const results = yield* turnResultsBatch(input);
 
                 batch = CanonicalBatch.make({
                   ...deferred.batch,
@@ -8273,9 +8274,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         return metadata;
       };
 
-      let records: ReadonlyArray<CanonicalRecordEnvelope> = yield* Stream.runCollect(
-        initialView.canonical.pipe(Stream.filter(collectControl)),
-      );
+      let records: ReadonlyArray<CanonicalRecordEnvelope> =
+        initialView.records.filter(collectControl);
 
       // The append-only prefix remains valid for this Attempt. Retain only this Run's control
       // evidence and validate each newly visible suffix against its own captured tail.
@@ -8382,6 +8382,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         submission,
         Duration.toMillis(agent.definition.policy.maxDuration),
         yield* refreshControl(),
+        // Applying the input cannot change the Run start captured by this Attempt's owner.
+        initialView.operational,
       ).pipe(Effect.provideService(CurrentRunWriter, ctx));
 
       const savedRunTiming = start.timing;
@@ -8625,7 +8627,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         let canonical: Stream.Stream<
           JournalRecordEnvelope,
           ThreadStoreError | ThreadNotMaterialized | RunJournalError
-        > = view.canonical;
+        > = Stream.fromIterable(view.records);
 
         let initialJournal: InitialJournalSource | undefined;
 
@@ -10057,9 +10059,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const hostId = snapshot.hostSubmissionId;
       const hostView = yield* recoveryView(submission.threadId, history.throughSequence, [hostId]);
 
-      const hostRecords = yield* Stream.runCollect(
-        hostView.canonical.pipe(Stream.filter(controlRecords([hostId]))),
-      );
+      const hostRecords = hostView.records.filter(controlRecords([hostId]));
 
       const merged = new Map(history.records.map((entry) => [entry.sequence, entry]));
 
@@ -11248,14 +11248,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     }
     if (snapshot.value.state !== "settled") return Option.none();
 
-    // Finalization replay reads the canonical outcome without changing settledAt.
-    const settlement = yield* ledger.finalizeSettlement(
-      SettlementFinalization.make({
-        submissionId: receipt.submissionId,
-        settlementId: submissionSettlementId(receipt.submissionId),
-      }),
-    );
-
+    // Finalization replay reads the canonical outcome for adapters without finalized
+    // metadata. Native projections already retain the first settledAt and exact record.
     const canonical = yield* getRecord({
       threadId: receipt.threadId,
       recordId: submissionSettlementRecordId(receipt.submissionId),
@@ -11278,6 +11272,40 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     }
 
     const record = yield* settlementPayloadFromRecord(canonical.value.record, receipt.submissionId);
+    const finalized = snapshot.value;
+
+    const retainedFinalization =
+      finalized.settledAt !== undefined &&
+      finalized.settledRecordId !== undefined &&
+      finalized.settledOutcome !== undefined;
+
+    if (
+      retainedFinalization &&
+      (finalized.settledRecordId !== canonical.value.record.recordId ||
+        finalized.settledOutcome !== record.outcome ||
+        canonical.value.batchId !== submissionSettlementBatchId(receipt.submissionId))
+    ) {
+      return yield* LedgerError.make({
+        operation: "awaitSettlement",
+        message: "Settled projection disagrees with its canonical Settlement",
+      });
+    }
+
+    const settlement = retainedFinalization
+      ? Settlement.make({
+          submissionId: receipt.submissionId,
+          settlementId: record.settlementId,
+          receiptId: record.receiptId,
+          outcome: record.outcome,
+          ...(record.outcome === "failed" ? { failure: record.result } : {}),
+          settledAt: finalized.settledAt,
+        })
+      : yield* ledger.finalizeSettlement(
+          SettlementFinalization.make({
+            submissionId: receipt.submissionId,
+            settlementId: submissionSettlementId(receipt.submissionId),
+          }),
+        );
 
     if (
       record.receiptId !== receipt.receiptId ||
