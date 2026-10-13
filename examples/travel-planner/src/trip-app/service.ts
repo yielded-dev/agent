@@ -15,7 +15,7 @@ import { TRIP_APP_MAP_FILES, TRIP_APP_TEMPLATE_FILES } from "./template.ts";
 const files = (source: Readonly<Record<string, string>>): ReadonlyArray<AppFile> =>
   Object.entries(source).map(([path, content]) => ({ path, content }));
 
-const failed = (message: string) => new PlannerError({ code: "unavailable", message });
+const failed = (message: string) => PlannerError.make({ code: "unavailable", message });
 const now = DateTime.now.pipe(Effect.map(DateTime.formatIso));
 
 export { requireAppTrip } from "./scope.ts";
@@ -26,7 +26,10 @@ const requireApp = Effect.fn("requireTripApp")(function* (tripId: string) {
   const app = yield* apps.get(tripId);
 
   if (app === null)
-    return yield* new PlannerError({ code: "not-found", message: "Create this trip's app first." });
+    return yield* PlannerError.make({
+      code: "not-found",
+      message: "Create this trip's app first.",
+    });
 
   return app;
 });
@@ -145,7 +148,7 @@ export const readTripAppFiles = Effect.fn("readTripAppFiles")(function* (
     selected.reduce((size, file) => size + new TextEncoder().encode(file.content).byteLength, 0) >
     18 * 1024
   )
-    return yield* new PlannerError({
+    return yield* PlannerError.make({
       code: "invalid",
       message: "Read fewer files at once (18 KiB limit).",
     });
@@ -164,7 +167,7 @@ export const editTripApp = Effect.fn("editTripApp")(function* (input: {
   const app = yield* requireApp(input.tripId);
 
   if (app.sourceCommit !== input.expectedCommit)
-    return yield* new PlannerError({
+    return yield* PlannerError.make({
       code: "conflict",
       message: "The app source changed. Read its files again before editing.",
     });
@@ -255,7 +258,7 @@ export const restoreTripApp = Effect.fn("restoreTripApp")(function* (
   );
 
   if (!app.versions.some((version) => version.commitId === target))
-    return yield* new PlannerError({
+    return yield* PlannerError.make({
       code: "invalid",
       message: "Only a successfully built app version can be restored.",
     });

@@ -46,34 +46,33 @@ it.effect("filters executor inventory and guessed calls using the live invocatio
     const brokerCalls = yield* Ref.make(0);
 
     const executor = CodeExecutor.of({
-      execute: (request) =>
-        Effect.gen(function* () {
-          const host = yield* CodeExecutionHost;
+      execute: Effect.fnUntraced(function* (request) {
+        const host = yield* CodeExecutionHost;
 
-          const hidden = yield* host.call({
-            namespace: "warehouse",
-            method: "hidden",
-            argument: { sql: "select" },
-          });
+        const hidden = yield* host.call({
+          namespace: "warehouse",
+          method: "hidden",
+          argument: { sql: "select" },
+        });
 
-          return CodeExecutionResult.make({
-            implementation: scriptedExecutorImplementation,
-            value: {
-              namespaces: request.namespaces.map((namespace) => ({
-                name: namespace.name,
-                methods: namespace.methods,
-              })),
-              hidden,
-            },
-            logs: [],
-            resourceUse: {
-              wallTime: Duration.millis(1),
-              hostCalls: 1,
-              logBytes: 0,
-              resultBytes: 0,
-            },
-          });
-        }),
+        return CodeExecutionResult.make({
+          implementation: scriptedExecutorImplementation,
+          value: {
+            namespaces: request.namespaces.map((namespace) => ({
+              name: namespace.name,
+              methods: namespace.methods,
+            })),
+            hidden,
+          },
+          logs: [],
+          resourceUse: {
+            wallTime: Duration.millis(1),
+            hostCalls: 1,
+            logBytes: 0,
+            resultBytes: 0,
+          },
+        });
+      }),
     });
 
     const entries = [
@@ -174,14 +173,13 @@ class RedactionPolicy extends Context.Service<RedactionPolicy, string>()(
 const redactedDefinition = CodeMode.make("redacted_code_mode", {
   description: "redacted",
   tools: { warehouse: { query: Query } },
-  redactEgress: (egress) =>
-    Effect.gen(function* () {
-      const result = yield* RedactionPolicy;
+  redactEgress: Effect.fnUntraced(function* (egress) {
+    const result = yield* RedactionPolicy;
 
-      yield* Effect.addFinalizer(() => Effect.void);
+    yield* Effect.addFinalizer(() => Effect.void);
 
-      return { ...egress, result };
-    }),
+    return { ...egress, result };
+  }),
 });
 
 type LayerContext<L> = L extends Layer.Layer<infer _Out, infer _Error, infer R> ? R : never;

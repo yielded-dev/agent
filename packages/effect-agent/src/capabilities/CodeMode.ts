@@ -300,9 +300,11 @@ const renderJsonSchemaType = (
   indent: string,
 ): string => {
   if (depth > MAX_RENDER_DEPTH) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- CodeMode.make synchronously bounds recursive Schema declaration rendering before creating the Tool.
     throw new Error("Code Mode declaration rendering exceeded its depth bound");
   }
   if (!isJsonSchemaRecord(schema)) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- CodeMode.make synchronously rejects unsupported JSON Schema declaration fragments.
     throw new Error(`Code Mode cannot render the JSON schema fragment ${JSON.stringify(schema)}`);
   }
   const reference = schema.$ref;
@@ -314,6 +316,7 @@ const renderJsonSchemaType = (
     const resolved = key === undefined ? undefined : defs[key];
 
     if (resolved === undefined) {
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- CodeMode.make synchronously rejects unresolved declaration references.
       throw new Error(`Code Mode cannot resolve the JSON schema reference ${reference}`);
     }
 
@@ -353,6 +356,7 @@ const renderJsonSchemaType = (
     }
     case "array": {
       if (!("items" in schema)) {
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- CodeMode.make synchronously requires item schemas for array declarations.
         throw new Error("Code Mode cannot render an array schema without items");
       }
 
@@ -398,6 +402,7 @@ const renderJsonSchemaType = (
       break;
     }
   }
+  // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- CodeMode.make synchronously rejects declaration schemas it cannot faithfully render.
   throw new Error(
     `Code Mode cannot render the JSON schema fragment ${JSON.stringify(schema).slice(0, 200)}; fix or simplify the Tool's Schema`,
   );
@@ -420,8 +425,26 @@ interface ResolvedMethod {
   readonly tool: Tool.Any;
 }
 
-const renderDeclarations = (methods: ReadonlyArray<ResolvedMethod>): string => {
-  const namespaces = new Map<string, Array<ResolvedMethod>>();
+interface RenderedMethod extends ResolvedMethod {
+  readonly declaration: string;
+}
+
+/** Render once at the synchronous construction boundary; describe only selects frozen declarations. */
+const renderMethodDeclaration = (method: string, tool: Tool.Any): string => {
+  const parameters = renderTopLevel(Tool.getJsonSchema(tool), "  ");
+  const success = renderTopLevel(Tool.getJsonSchemaFromSchema(tool.successSchema), "  ");
+
+  // A description is arbitrary text: newlines and comment terminators
+  // must not be able to break out of the documentation comment.
+  const safeDescription = tool.description?.replaceAll("*/", "*\\/").replaceAll(/\s*\n\s*/g, " ");
+
+  const description = safeDescription === undefined ? "" : `  /** ${safeDescription} */\n`;
+
+  return `${description}  ${method}(input: ${parameters}): Promise<${success}>;`;
+};
+
+const renderDeclarations = (methods: ReadonlyArray<RenderedMethod>): string => {
+  const namespaces = new Map<string, Array<RenderedMethod>>();
 
   for (const method of methods) {
     const existing = namespaces.get(method.namespace) ?? [];
@@ -431,20 +454,7 @@ const renderDeclarations = (methods: ReadonlyArray<ResolvedMethod>): string => {
   }
 
   const blocks = [...namespaces.entries()].map(([namespace, members]) => {
-    const lines = members.map((member) => {
-      const parameters = renderTopLevel(Tool.getJsonSchema(member.tool), "  ");
-      const success = renderTopLevel(Tool.getJsonSchemaFromSchema(member.tool.successSchema), "  ");
-
-      // A description is arbitrary text: newlines and comment terminators
-      // must not be able to break out of the documentation comment.
-      const safeDescription = member.tool.description
-        ?.replaceAll("*/", "*\\/")
-        .replaceAll(/\s*\n\s*/g, " ");
-
-      const description = safeDescription === undefined ? "" : `  /** ${safeDescription} */\n`;
-
-      return `${description}  ${member.method}(input: ${parameters}): Promise<${success}>;`;
-    });
+    const lines = members.map((member) => member.declaration);
 
     return `declare const ${namespace}: {\n${lines.join("\n")}\n};`;
   });
@@ -581,6 +591,7 @@ const make = <
     maxEgressBytes < 256 ||
     maxEgressBytes > 4 * 1024 * 1024
   ) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- CodeMode.make synchronously rejects invalid egress bounds before creating the Tool.
     throw new Error(
       `Code Mode maxEgressBytes must be an integer between 256 and ${4 * 1024 * 1024}; received ${String(maxEgressBytes)}`,
     );
@@ -593,15 +604,18 @@ const make = <
 
   for (const [namespace, namespaceMethods] of Object.entries(options.tools)) {
     if (Option.isNone(decodeIdentifier(namespace))) {
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- CodeMode.make synchronously requires valid JavaScript namespace identifiers.
       throw new Error(`Code Mode namespace ${namespace} is not a valid JavaScript identifier`);
     }
     const entries = Object.entries(namespaceMethods);
 
     if (entries.length === 0) {
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- CodeMode.make synchronously rejects namespaces without callable methods.
       throw new Error(`Code Mode namespace ${namespace} declares no methods`);
     }
     for (const [method, tool] of entries) {
       if (Option.isNone(decodeIdentifier(method))) {
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- CodeMode.make synchronously requires valid JavaScript method identifiers.
         throw new Error(
           `Code Mode method ${namespace}.${method} is not a valid JavaScript identifier`,
         );
@@ -609,6 +623,7 @@ const make = <
       const approval = tool.needsApproval;
 
       if (approval !== undefined && approval !== false) {
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- CodeMode.make synchronously rejects approval-requiring Tools from its programmatic allowlist.
         throw new Error(
           `Code Mode rejects Tool ${tool.name} (${namespace}.${method}): approval-requiring Tools cannot be invoked programmatically in the ephemeral slice`,
         );
@@ -616,6 +631,7 @@ const make = <
       const existing = toolsByName.get(tool.name);
 
       if (existing !== undefined && existing !== tool) {
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- CodeMode.make synchronously rejects conflicting Tools sharing one name.
         throw new Error(
           `Code Mode selected two different Tools named ${tool.name}; Tool names must identify one Tool`,
         );
@@ -626,15 +642,21 @@ const make = <
     }
   }
   if (methods.length === 0) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- CodeMode.make synchronously requires a nonempty Tool allowlist.
     throw new Error("Code Mode requires at least one allowlisted Tool");
   }
 
   // Declarations derive from the encoded Schemas and fail construction closed
   // on anything the renderer cannot express.
-  const declarations = renderDeclarations(methods);
+  const renderedMethods = methods.map((method): RenderedMethod => ({
+    ...method,
+    declaration: renderMethodDeclaration(method.method, method.tool),
+  }));
+
+  const declarations = renderDeclarations(renderedMethods);
 
   const methodsByPath = new Map(
-    methods.map((method) => [`${method.namespace}.${method.method}`, method]),
+    renderedMethods.map((method) => [`${method.namespace}.${method.method}`, method]),
   );
 
   const describe = Effect.fnUntraced(function* (
@@ -662,7 +684,7 @@ const make = <
       ),
     );
 
-    const selectedMethods: Array<ResolvedMethod> = [];
+    const selectedMethods: Array<RenderedMethod> = [];
 
     for (const path of paths) {
       const method = methodsByPath.get(path);
@@ -799,7 +821,13 @@ const make = <
     });
 
   const build = Effect.gen(function* () {
-    const captured = yield* Effect.context<never>();
+    const captured =
+      yield* Effect.context<
+        Tool.HandlerServices<
+          CodeModeSelectedRecord<Namespaces>[keyof CodeModeSelectedRecord<Namespaces>]
+        >
+      >();
+
     const redactionServices = yield* Effect.context<Exclude<RedactionRequirements, Scope.Scope>>();
     const configuredRedactor = options.redactEgress;
 
@@ -975,20 +1003,10 @@ const make = <
         );
       }).pipe(
         Effect.scoped,
-        // The live engine broker is re-provided innermost so a Layer built
-        // inside another Run can never shadow it; the captured construction
-        // context supplies the selected handlers' services (same idiom as
-        // Subagent.layer). TypeScript cannot reduce the deferred Exclude
-        // over the generic namespace record, so the same private-assertion
-        // contract as the engine's provideHookServices pins the identity
-        // that providing the captured Context leaves no requirements; it
-        // never bypasses validation.
+        // Keep invocation authority innermost while restoring the declared handler services.
         Effect.provideService(ToolBroker, broker),
-        Effect.provideContext(captured),
-      ) as Effect.Effect<
-        CodeExecutionResult,
-        CodeExecutionError | ToolBrokerUnavailableError | ToolBrokerConfigurationError
-      >;
+        Effect.updateContext((current: Context.Context<never>) => Context.merge(current, captured)),
+      );
 
       return yield* execution.pipe(
         Effect.catch((error) => failureEgress(error).pipe(Effect.flatMap(Effect.fail))),
@@ -1052,6 +1070,9 @@ const make = <
       never,
       | CodeExecutor
       | Tool.HandlersFor<CodeModeSelectedRecord<Namespaces>>
+      | Tool.HandlerServices<
+          CodeModeSelectedRecord<Namespaces>[keyof CodeModeSelectedRecord<Namespaces>]
+        >
       | Exclude<RedactionRequirements, Scope.Scope>
     >,
   ) as unknown as Layer.Layer<

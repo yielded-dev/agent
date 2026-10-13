@@ -62,19 +62,17 @@ type WorkflowFile = typeof WorkflowFile.Type;
 // silently audits the wrong tree.
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url)).replace(/\/$/, "");
 
-const readRepositoryFile = (path: string) =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
+const readRepositoryFile = Effect.fnUntraced(function* (path: string) {
+  const fs = yield* FileSystem.FileSystem;
 
-    return yield* fs.readFileString(`${repositoryRoot}/${path}`);
-  });
+  return yield* fs.readFileString(`${repositoryRoot}/${path}`);
+});
 
-const readWorkflow = (path: string) =>
-  Effect.gen(function* () {
-    const contents = yield* readRepositoryFile(path);
+const readWorkflow = Effect.fnUntraced(function* (path: string) {
+  const contents = yield* readRepositoryFile(path);
 
-    return yield* Schema.decodeUnknownEffect(WorkflowFile)(Yaml.parse(contents));
-  });
+  return yield* Schema.decodeUnknownEffect(WorkflowFile)(Yaml.parse(contents));
+});
 
 const workflowStep = (workflow: WorkflowFile, jobName: string, stepName: string) => {
   const step = workflow.jobs[jobName]?.steps?.find((candidate) => candidate.name === stepName);

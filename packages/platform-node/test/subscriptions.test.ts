@@ -184,27 +184,26 @@ const subscribe = (subscriptions: Subscriptions["Service"]) =>
     definitions,
   });
 
-const waitForDelivery = (
+const waitForDelivery = Effect.fnUntraced(function* (
   subscriptions: Subscriptions["Service"],
   predicate: (delivery: typeof SubscriptionDeliverySnapshot.Type) => boolean,
-) =>
-  Effect.gen(function* () {
-    for (let attempt = 0; attempt < 128; attempt += 1) {
-      const page = yield* subscriptions.listDeliveries(scope, {
-        partition,
-        ownerId: scope.ownerId,
-        subscriptionId: "workflow-completion",
-      });
+) {
+  for (let attempt = 0; attempt < 128; attempt += 1) {
+    const page = yield* subscriptions.listDeliveries(scope, {
+      partition,
+      ownerId: scope.ownerId,
+      subscriptionId: "workflow-completion",
+    });
 
-      const item = page.items[0];
+    const item = page.items[0];
 
-      if (item !== undefined && predicate(item)) return item;
-      yield* TestClock.adjust(10);
-      yield* Effect.yieldNow;
-    }
+    if (item !== undefined && predicate(item)) return item;
+    yield* TestClock.adjust(10);
+    yield* Effect.yieldNow;
+  }
 
-    return yield* Effect.die("Timed out waiting for subscription delivery");
-  });
+  return yield* Effect.die("Timed out waiting for subscription delivery");
+});
 
 const usage = { inputTokens: {}, outputTokens: {} };
 

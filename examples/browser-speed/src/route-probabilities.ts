@@ -39,10 +39,10 @@ export const routeProbabilities = Effect.fnUntraced(function* (
       mass <= 0 ||
       (Math.abs(mass - 1) > 1e-6 && (!rounded || Math.abs(mass - 1) > 0.020000001))
     )
-      return yield* new AiError.AiError({
+      return yield* AiError.AiError.make({
         module: "JevDecision",
         method: "routeProbabilities",
-        reason: new AiError.InvalidOutputError({
+        reason: AiError.InvalidOutputError.make({
           description: `Jev returned an invalid distribution for ${question} (reported mass ${mass.toFixed(4)}). Only two-decimal rounding within 0.02 is supported.`,
         }),
       });

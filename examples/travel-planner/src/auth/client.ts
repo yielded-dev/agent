@@ -68,7 +68,7 @@ export class BrowserFlowUnavailable extends Schema.TaggedError<BrowserFlowUnavai
 ) {}
 
 const browser = <A>(run: () => A) =>
-  Effect.try({ try: run, catch: () => new BrowserFlowUnavailable() });
+  Effect.try({ try: run, catch: () => BrowserFlowUnavailable.make() });
 
 const id = () => browser(() => crypto.randomUUID());
 const ReturnTarget = Schema.Literals(["/travel/", "/browser-use/"]);
@@ -163,22 +163,22 @@ export const callbackInput = Effect.gen(function* () {
     return { query, pending };
   });
 
-  if (!captured.query || !captured.pending) return yield* new BrowserFlowUnavailable();
+  if (!captured.query || !captured.pending) return yield* BrowserFlowUnavailable.make();
   const pending = yield* Schema.decodeEffect(PendingOAuth)(captured.pending);
 
   if (location.pathname !== `/travel/auth/${pending.provider}/callback`)
-    return yield* new BrowserFlowUnavailable();
+    return yield* BrowserFlowUnavailable.make();
   const query = new URLSearchParams(captured.query);
 
   for (const key of ["state", "code", "error", "iss"])
-    if (query.getAll(key).length > 1) return yield* new BrowserFlowUnavailable();
+    if (query.getAll(key).length > 1) return yield* BrowserFlowUnavailable.make();
 
   const state = query.get("state"),
     code = query.get("code"),
     error = query.get("error"),
     issuer = query.get("iss");
 
-  if (!state || (code === null) === (error === null)) return yield* new BrowserFlowUnavailable();
+  if (!state || (code === null) === (error === null)) return yield* BrowserFlowUnavailable.make();
 
   return {
     ...pending,
@@ -214,7 +214,7 @@ export const completeOAuth = Atom.fn<void>()((_, get) =>
         },
       });
 
-      if (registered._tag !== "RegistrationAccepted") return yield* new BrowserFlowUnavailable();
+      if (registered._tag !== "RegistrationAccepted") return yield* BrowserFlowUnavailable.make();
       // Accepted registration creates an account, not a session. Start a NEW authorized flow.
       yield* startOAuth({ provider: input.provider, returnTarget });
     }
@@ -319,7 +319,7 @@ export const verifyEmailCode = Atom.fn<{
         commandId: yield* id(),
       });
 
-      if (result._tag !== "RegistrationAccepted") return yield* new BrowserFlowUnavailable();
+      if (result._tag !== "RegistrationAccepted") return yield* BrowserFlowUnavailable.make();
 
       return yield* sendSignInCode(email, returnTarget);
     }

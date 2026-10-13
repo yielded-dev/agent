@@ -221,22 +221,21 @@ const blockedForeverScript = (
   return () => Stream.fromEffect(touch(markerFile).pipe(Effect.andThen(Effect.never)));
 };
 
-const submitPlannerQuestion = (key: string, question: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
-    const model = yield* makeScriptedModel(() => finalParts(CHILD_ANSWER));
-    const agent = Agent.withModel(plannerDefinition, model);
+const submitPlannerQuestion = Effect.fnUntraced(function* (key: string, question: string) {
+  const runtime = yield* DurableAgentRuntime;
+  const model = yield* makeScriptedModel(() => finalParts(CHILD_ANSWER));
+  const agent = Agent.withModel(plannerDefinition, model);
 
-    const receipt: Receipt = yield* runtime.submit(
-      agent,
-      { question },
-      crashSubmitOptions(env.EFFECT_AGENT_THREAD, key),
-    );
+  const receipt: Receipt = yield* runtime.submit(
+    agent,
+    { question },
+    crashSubmitOptions(env.EFFECT_AGENT_THREAD, key),
+  );
 
-    yield* emit({ kind: "receipt", key, receipt });
+  yield* emit({ kind: "receipt", key, receipt });
 
-    return receipt;
-  });
+  return receipt;
+});
 
 const submitPlanner = (key: string) => submitPlannerQuestion(key, CRASH_QUESTION);
 
@@ -306,27 +305,25 @@ const makeSubagentBindings = Effect.gen(function* () {
   });
 });
 
-const driveResolved = (thread: ThreadId) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
+const driveResolved = Effect.fnUntraced(function* (thread: ThreadId) {
+  const runtime = yield* DurableAgentRuntime;
 
-    return yield* runtime.processThreadResolved(thread);
-  });
+  return yield* runtime.processThreadResolved(thread);
+});
 
-const submitCoordinator = (key: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
+const submitCoordinator = Effect.fnUntraced(function* (key: string) {
+  const runtime = yield* DurableAgentRuntime;
 
-    const receipt: Receipt = yield* runtime.submit(
-      coordinatorSubmitSlice,
-      { mission: CRASH_QUESTION },
-      crashSubmitOptions(env.EFFECT_AGENT_THREAD, key),
-    );
+  const receipt: Receipt = yield* runtime.submit(
+    coordinatorSubmitSlice,
+    { mission: CRASH_QUESTION },
+    crashSubmitOptions(env.EFFECT_AGENT_THREAD, key),
+  );
 
-    yield* emit({ kind: "receipt", key, receipt });
+  yield* emit({ kind: "receipt", key, receipt });
 
-    return receipt;
-  });
+  return receipt;
+});
 
 const scenario = Effect.gen(function* () {
   const runtime = yield* DurableAgentRuntime;

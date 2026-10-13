@@ -103,37 +103,35 @@ const Status = Schema.Struct({
   submissionIds: Schema.Array(Schema.String),
 });
 
-const waitForAlarm = (runtime: Miniflare) =>
-  Effect.gen(function* () {
-    for (let attempt = 0; attempt < 200; attempt += 1) {
-      const raw = yield* call(runtime, "/introspect");
+const waitForAlarm = Effect.fnUntraced(function* (runtime: Miniflare) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const raw = yield* call(runtime, "/introspect");
 
-      const observed = yield* Schema.decodeUnknownEffect(Introspection)(raw).pipe(
-        Effect.mapError(() => RestartHarnessError.make({ operation: "validate introspection" })),
-      );
+    const observed = yield* Schema.decodeUnknownEffect(Introspection)(raw).pipe(
+      Effect.mapError(() => RestartHarnessError.make({ operation: "validate introspection" })),
+    );
 
-      if (observed.completedAlarmDeliveries > 0) return observed;
-      yield* Effect.sleep("50 millis");
-    }
+    if (observed.completedAlarmDeliveries > 0) return observed;
+    yield* Effect.sleep("50 millis");
+  }
 
-    return yield* RestartHarnessError.make({ operation: "wait for persisted Schedule alarm" });
-  });
+  return yield* RestartHarnessError.make({ operation: "wait for persisted Schedule alarm" });
+});
 
-const waitForLostReply = (runtime: Miniflare) =>
-  Effect.gen(function* () {
-    for (let attempt = 0; attempt < 200; attempt += 1) {
-      const raw = yield* call(runtime, "/introspect");
+const waitForLostReply = Effect.fnUntraced(function* (runtime: Miniflare) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const raw = yield* call(runtime, "/introspect");
 
-      const observed = yield* Schema.decodeUnknownEffect(Introspection)(raw).pipe(
-        Effect.mapError(() => RestartHarnessError.make({ operation: "validate introspection" })),
-      );
+    const observed = yield* Schema.decodeUnknownEffect(Introspection)(raw).pipe(
+      Effect.mapError(() => RestartHarnessError.make({ operation: "validate introspection" })),
+    );
 
-      if (observed.admissionReplyFailures > 0) return observed;
-      yield* Effect.sleep("50 millis");
-    }
+    if (observed.admissionReplyFailures > 0) return observed;
+    yield* Effect.sleep("50 millis");
+  }
 
-    return yield* RestartHarnessError.make({ operation: "wait for lost admission reply" });
-  });
+  return yield* RestartHarnessError.make({ operation: "wait for lost admission reply" });
+});
 
 it.live(
   "recovers a lost admission reply from only the persisted wake after Miniflare restart",

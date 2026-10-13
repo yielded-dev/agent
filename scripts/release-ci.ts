@@ -30,7 +30,7 @@ export class ProofUnavailable extends Schema.TaggedError<ProofUnavailable>()("Pr
 }) {}
 
 export const requireProof = (condition: boolean, message: string) =>
-  condition ? Effect.void : Effect.fail(new ProofUnavailable({ message }));
+  condition ? Effect.void : Effect.fail(ProofUnavailable.make({ message }));
 
 /** Full Git tree differences, including file modes; never a GitHub paths summary. */
 export interface MetadataChange {
@@ -85,7 +85,7 @@ export const verifyMetadata = Effect.fn("releaseCi.verifyMetadata")(function* (
       changelog === undefined ||
       changelog.after === null
     )
-      return yield* new ProofUnavailable({ message: "Missing package version or changelog" });
+      return yield* ProofUnavailable.make({ message: "Missing package version or changelog" });
     const before = yield* Schema.decodeEffect(Schema.fromJsonString(Manifest))(change.before);
     const after = yield* Schema.decodeEffect(Schema.fromJsonString(Manifest))(change.after);
     const dot = before.version.lastIndexOf(".");
@@ -404,7 +404,7 @@ export const readMetadata = Effect.fn("releaseCi.readMetadata")(function* (
     const match = record?.match(/^:(\d{6}) (\d{6}) [a-f0-9]{40} [a-f0-9]{40} ([AMD])$/);
 
     if (match === null || match === undefined || path === undefined)
-      return yield* new ProofUnavailable({ message: "Unsupported Git change" });
+      return yield* ProofUnavailable.make({ message: "Unsupported Git change" });
     changes.push({
       path,
       oldMode: match[1] === "000000" ? null : (match[1] ?? null),
@@ -605,7 +605,7 @@ export const proveReleaseCi = Effect.fn("releaseCi.prove")(function* (
   );
   const run = runs.workflow_runs.toSorted((a, b) => b.id - a.id)[0];
 
-  if (run === undefined) return yield* new ProofUnavailable({ message: "No base CI run" });
+  if (run === undefined) return yield* ProofUnavailable.make({ message: "No base CI run" });
 
   const jobs = yield* get(
     `actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100`,
@@ -631,7 +631,7 @@ export const proveReleaseCi = Effect.fn("releaseCi.prove")(function* (
       .toSorted((a, b) => b.id - a.id)
       .find((candidate) => candidate.status !== "completed" || candidate.conclusion !== "skipped");
     if (buildRun === undefined)
-      return yield* new ProofUnavailable({ message: "No version PR build" });
+      return yield* ProofUnavailable.make({ message: "No version PR build" });
 
     const buildJobs = yield* get(
       `actions/runs/${buildRun.id}/attempts/${buildRun.run_attempt}/jobs?per_page=100`,
@@ -684,7 +684,7 @@ export const proveMergedReleaseCi = Effect.fn("releaseCi.proveMerged")(function*
   yield* requireProof(pulls.length === 1, "Ambiguous merged PR");
   const pull = pulls[0];
 
-  if (pull === undefined) return yield* new ProofUnavailable({ message: "No merged PR" });
+  if (pull === undefined) return yield* ProofUnavailable.make({ message: "No merged PR" });
 
   return yield* proveReleaseCi(
     root,
@@ -755,7 +755,7 @@ export const proveGatedRelease = Effect.fn("releaseCi.proveGatedRelease")(functi
     .toSorted((a, b) => b.id - a.id)
     .find((candidate) => candidate.status !== "completed" || candidate.conclusion !== "skipped");
 
-  if (run === undefined) return yield* new ProofUnavailable({ message: "No version PR CI" });
+  if (run === undefined) return yield* ProofUnavailable.make({ message: "No version PR CI" });
 
   const jobs = yield* get(
     `actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100`,

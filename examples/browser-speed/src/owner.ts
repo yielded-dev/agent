@@ -98,12 +98,11 @@ export const makeOwner = (
 
   const provider = <A, E extends { readonly _tag: string }, R>(effect: Effect.Effect<A, E, R>) =>
     effect.pipe(
-      Effect.mapError(
-        (error) =>
-          new LabError({
-            code: "browser",
-            message: `Browser operation failed (${error._tag}). Close the browser before trying a fresh run.`,
-          }),
+      Effect.mapError((error) =>
+        LabError.make({
+          code: "browser",
+          message: `Browser operation failed (${error._tag}). Close the browser before trying a fresh run.`,
+        }),
       ),
     );
 
@@ -181,7 +180,7 @@ export const makeOwner = (
 
   const close = Effect.fnUntraced(function* () {
     if (running !== undefined)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "busy",
         message: "Stop the active run before closing its browser.",
       });
@@ -228,7 +227,7 @@ export const makeOwner = (
         !wikipedia.target ||
         wikipedia.start === wikipedia.target)
     )
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message:
           "A Wikipedia race needs two different article titles and individual agent actions.",
@@ -239,29 +238,29 @@ export const makeOwner = (
     const shopping = requested.scenario === "coffee" || requested.scenario === "shop";
 
     if (hybrid && !shopping)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message: "Jev with a model fallback runs on store tasks only.",
       });
 
     if (shopping && (requested.mode !== "agent" || (requested.engine ?? "chromium") !== "chromium"))
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message: "Store tasks run individual actions in Chromium.",
       });
     if (requested.scenario === "shop" && requested.shop === undefined)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message: "The store task needs a store link and an item.",
       });
     // Real merchants: strangers must not fill stores with abandoned carts and test orders.
     if (config.public && shopping && !access.funded)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "configuration",
         message: "Store tasks run only for allowlisted accounts. Sign in to run them.",
       });
     if (config.public && requested.mode === "scripted")
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message: "The public lab runs Jev and model agents only. Choose a driver and add your key.",
       });
@@ -273,7 +272,7 @@ export const makeOwner = (
         requested.reasoning !== undefined ||
         requested.serviceTier !== undefined)
     )
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message:
           "Jev chooses every action itself: use individual mode and omit model, reasoning and service tier.",
@@ -285,7 +284,7 @@ export const makeOwner = (
       !(requested.model ?? config.model).startsWith("@cf/");
 
     if (!openai && (requested.reasoning !== undefined || requested.serviceTier !== undefined))
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message: "Reasoning and service tier are available only for OpenAI agent runs.",
       });
@@ -321,24 +320,24 @@ export const makeOwner = (
     const state = store.read();
 
     if (state.active !== null || state.admitted.includes(input.id) || input.id === state.lastRun)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "busy",
         message: "This run is active or was already admitted. It will not be replayed.",
       });
     if (state.admitted.length >= 100)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message:
           "This tab has reached its 100-run limit. Close the browser, export your results, and reload to start a new session.",
       });
     if (state.report?.cleanup === "failed")
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "busy",
         message: "Close the browser to resolve the previous cleanup failure before another run.",
       });
 
     if (input.engine === "kitesurf" && config.kitesurf === undefined)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "configuration",
         message: "Kitesurf is not configured in this host.",
       });
@@ -349,7 +348,7 @@ export const makeOwner = (
         : config.models?.find((candidate) => candidate.model === input.model);
 
     if (selectedModel === undefined)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "configuration",
         message: "This model is not available in the lab.",
       });
@@ -374,24 +373,24 @@ export const makeOwner = (
         : config.jevText;
 
     if (!jev && input.mode !== "scripted" && !modelKey)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "configuration",
         message: cloudflareModel
           ? "This model is not available in the lab."
           : "Add your OpenAI key to run the model agent.",
       });
     if ((jev || hybrid) && !jevKey)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "configuration",
         message: "Add your TypeSafe key to run Jev.",
       });
     if ((jev || hybrid) && input.scenario !== "wikipedia" && jevText === undefined)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "configuration",
         message: "Add an OpenRouter or OpenAI key so Jev can type into fields.",
       });
     if (input.scenario === "custom" && (input.mode === "scripted" || !input.prompt.trim()))
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message: "Free-form requests need a prompt and an agent mode.",
       });
@@ -438,7 +437,7 @@ export const makeOwner = (
           const open = config.kitesurf;
 
           if (open === undefined)
-            return yield* new LabError({
+            return yield* LabError.make({
               code: "configuration",
               message: "Kitesurf is unavailable.",
             });
@@ -456,7 +455,7 @@ export const makeOwner = (
         const reference = store.read().reference;
 
         if (reference === null)
-          return yield* new LabError({
+          return yield* LabError.make({
             code: "expired",
             message: "The browser is no longer available.",
           });
@@ -509,7 +508,7 @@ export const makeOwner = (
         browserUserAgent: identity.userAgent,
       });
       if ((input.engine === "kitesurf") !== (identity.revision === "@kitesurf"))
-        return yield* new LabError({
+        return yield* LabError.make({
           code: "configuration",
           message:
             "The provider returned a different browser engine. This run cannot be benchmarked.",
@@ -576,7 +575,10 @@ export const makeOwner = (
         duration: "4 minutes",
         orElse: () =>
           Effect.fail(
-            new LabError({ code: "browser", message: "The four-minute run deadline was reached." }),
+            LabError.make({
+              code: "browser",
+              message: "The four-minute run deadline was reached.",
+            }),
           ),
       }),
       Effect.onExit(() => {

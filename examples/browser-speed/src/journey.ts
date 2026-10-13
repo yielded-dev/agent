@@ -249,7 +249,7 @@ const recordedJevLayer = (output: string) =>
   );
 
 const sdk = <A>(stage: string, action: () => Promise<A>) =>
-  Effect.tryPromise({ try: action, catch: () => new JourneyError({ stage }) }).pipe(
+  Effect.tryPromise({ try: action, catch: () => JourneyError.make({ stage }) }).pipe(
     Effect.withSpan(`browser.${stage}`),
   );
 
@@ -354,8 +354,8 @@ export const journey = Effect.gen(function* () {
   );
 
   if (!["local-chromium", "chromium", "kitesurf"].includes(engine))
-    return yield* new JourneyError({ stage: "invalid-engine" });
-  if (yield* fs.exists(output)) return yield* new JourneyError({ stage: "existing-output" });
+    return yield* JourneyError.make({ stage: "invalid-engine" });
+  if (yield* fs.exists(output)) return yield* JourneyError.make({ stage: "existing-output" });
   yield* fs.makeDirectory(output, { recursive: true });
   const started = yield* Clock.currentTimeMillis;
   const clock = yield* Clock.Clock;
@@ -423,7 +423,7 @@ export const journey = Effect.gen(function* () {
     });
 
     if ((engine === "kitesurf") !== identity.revision.includes("@kitesurf"))
-      return yield* new JourneyError({ stage: "engine-mismatch" });
+      return yield* JourneyError.make({ stage: "engine-mismatch" });
     yield* sdk("viewport", () => page.setViewport(viewport));
     const setupStarted = yield* Clock.currentTimeMillis;
     const setupUrl = yield* Config.option(Config.String("BROWSER_JOURNEY_SETUP_URL"));
@@ -500,7 +500,7 @@ export const journey = Effect.gen(function* () {
             yield* authorize;
 
             if (fenced)
-              return yield* new BrowserSessionError({
+              return yield* BrowserSessionError.make({
                 reason: "closed",
                 dispatch: "not-dispatched",
                 cleanup: "not-requested",
@@ -515,7 +515,7 @@ export const journey = Effect.gen(function* () {
 
             return yield* Effect.tryPromise({
               try: () => action(page),
-              catch: (cause) => new JourneyProviderError({ cause }),
+              catch: (cause) => JourneyProviderError.make({ cause }),
             }).pipe(
               Effect.tapError(({ cause }) =>
                 fs.writeFileString(
@@ -537,13 +537,12 @@ export const journey = Effect.gen(function* () {
                 ),
               ),
               // Provider text stays in private run artifacts, never the model-visible error.
-              Effect.mapError(
-                () =>
-                  new BrowserSessionError({
-                    reason: "provider",
-                    dispatch: "possibly-dispatched",
-                    cleanup: "not-requested",
-                  }),
+              Effect.mapError(() =>
+                BrowserSessionError.make({
+                  reason: "provider",
+                  dispatch: "possibly-dispatched",
+                  cleanup: "not-requested",
+                }),
               ),
               Effect.timeoutOrElse({
                 duration: options?.timeoutMillis ?? 30_000,
@@ -551,7 +550,7 @@ export const journey = Effect.gen(function* () {
                   terminate.pipe(
                     Effect.andThen(
                       Effect.fail(
-                        new BrowserSessionError({
+                        BrowserSessionError.make({
                           reason: "timeout",
                           dispatch: "possibly-dispatched",
                           cleanup: "unconfirmed",
@@ -582,28 +581,25 @@ export const journey = Effect.gen(function* () {
     };
 
     const controller = yield* NativeBrowser.make(session, {
-      authorize: (command, context) =>
-        Effect.gen(function* () {
-          const permitted =
-            (allowed(
-              command.kind === "navigate"
-                ? command.request.url
-                : command.kind === "select-tab"
-                  ? context.tabUrl
-                  : context.pageUrl,
-            ) ||
-              (context.pageUrl === undefined &&
-                command.kind === "observe" &&
-                allowed(page.url()))) &&
-            (!("frameUrl" in context) || allowed(context.frameUrl));
+      authorize: Effect.fnUntraced(function* (command, context) {
+        const permitted =
+          (allowed(
+            command.kind === "navigate"
+              ? command.request.url
+              : command.kind === "select-tab"
+                ? context.tabUrl
+                : context.pageUrl,
+          ) ||
+            (context.pageUrl === undefined && command.kind === "observe" && allowed(page.url()))) &&
+          (!("frameUrl" in context) || allowed(context.frameUrl));
 
-          if (!permitted)
-            return yield* new BrowserUse.BrowserUseError({
-              code: "invalid",
-              message: "Host URL policy refused this browser operation.",
-              dispatch: "not-dispatched",
-            });
-        }),
+        if (!permitted)
+          return yield* BrowserUse.BrowserUseError.make({
+            code: "invalid",
+            message: "Host URL policy refused this browser operation.",
+            dispatch: "not-dispatched",
+          });
+      }),
       maxActions: 200,
       maxReturnedBytes: 128 * 1024,
       viewportOnly: compactLoop || optimizedFrontier,
@@ -670,16 +666,15 @@ export const journey = Effect.gen(function* () {
           : AgentRuntime.run(agent, goal, {
               threadId,
               context: {
-                prepare: ({ source, turn }) =>
-                  Effect.gen(function* () {
-                    yield* fs.writeFileString(
-                      `${output}/context-requests.jsonl`,
-                      `${Schema.encodeSync(ContextRequestRecord)({ turn, sourceCharacters: JSON.stringify(source).length, prompt: source.content })}\n`,
-                      { flag: "a" },
-                    );
+                prepare: Effect.fnUntraced(function* ({ source, turn }) {
+                  yield* fs.writeFileString(
+                    `${output}/context-requests.jsonl`,
+                    `${Schema.encodeSync(ContextRequestRecord)({ turn, sourceCharacters: JSON.stringify(source).length, prompt: source.content })}\n`,
+                    { flag: "a" },
+                  );
 
-                    return { prompt: source };
-                  }),
+                  return { prompt: source };
+                }),
               },
             }).pipe(
               Effect.provide(browser.layer().pipe(Layer.provide(controller.layer))),
@@ -850,7 +845,7 @@ export const journey = Effect.gen(function* () {
     });
 
     yield* fs.writeFileString(`${output}/result.json`, json);
-    if (result._tag === "Failure") return yield* new JourneyError({ stage: "agent-run" });
+    if (result._tag === "Failure") return yield* JourneyError.make({ stage: "agent-run" });
   }).pipe(
     Effect.scoped,
     Effect.onExit(() =>

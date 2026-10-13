@@ -307,59 +307,58 @@ export const makePerformanceDeployment = Effect.fn("Performance.deployment")(fun
             "--secrets-file",
             secretsFile,
           ]),
-    remove: (target) =>
-      Effect.gen(function* () {
-        if (!(yield* exists(target))) return;
-        // Downloaded artifact configuration cannot redirect deletion.
-        yield* writeCleanupConfig(target).pipe(
-          Effect.provideService(FileSystem.FileSystem, fs),
-          Effect.provideService(Path.Path, path),
+    remove: Effect.fnUntraced(function* (target) {
+      if (!(yield* exists(target))) return;
+      // Downloaded artifact configuration cannot redirect deletion.
+      yield* writeCleanupConfig(target).pipe(
+        Effect.provideService(FileSystem.FileSystem, fs),
+        Effect.provideService(Path.Path, path),
+        Effect.mapError(() =>
+          EvaluationError.make({
+            stage: "cleanup",
+            message: "Cannot prepare the fixed namespace deletion config",
+          }),
+        ),
+      );
+      // This removes the DO namespace and stored data before removing the Worker.
+      yield* run(target, "delete-namespace", [
+        "deploy",
+        "--config",
+        path.join(target.directory, "cleanup.json"),
+        "--no-bundle",
+      ]);
+      // The fixture owns no KV assets. Wrangler's delete command also scans legacy KV
+      // namespaces after deleting the Worker, requiring unrelated account permissions.
+      yield* client
+        .execute(
+          HttpClientRequest.delete(
+            `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/workers/scripts/${target.name}`,
+          ).pipe(HttpClientRequest.bearerToken(config.apiToken)),
+        )
+        .pipe(
+          Effect.timeout("20 seconds"),
+          Effect.flatMap((response) =>
+            response.status === 404 || (response.status >= 200 && response.status < 300)
+              ? Effect.void
+              : Effect.fail(
+                  EvaluationError.make({
+                    stage: "delete-worker",
+                    message: `Worker deletion failed: ${target.name}`,
+                  }),
+                ),
+          ),
           Effect.mapError(() =>
             EvaluationError.make({
-              stage: "cleanup",
-              message: "Cannot prepare the fixed namespace deletion config",
+              stage: "delete-worker",
+              message: `Worker deletion failed: ${target.name}; cleanup may need retry`,
             }),
           ),
         );
-        // This removes the DO namespace and stored data before removing the Worker.
-        yield* run(target, "delete-namespace", [
-          "deploy",
-          "--config",
-          path.join(target.directory, "cleanup.json"),
-          "--no-bundle",
-        ]);
-        // The fixture owns no KV assets. Wrangler's delete command also scans legacy KV
-        // namespaces after deleting the Worker, requiring unrelated account permissions.
-        yield* client
-          .execute(
-            HttpClientRequest.delete(
-              `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/workers/scripts/${target.name}`,
-            ).pipe(HttpClientRequest.bearerToken(config.apiToken)),
-          )
-          .pipe(
-            Effect.timeout("20 seconds"),
-            Effect.flatMap((response) =>
-              response.status === 404 || (response.status >= 200 && response.status < 300)
-                ? Effect.void
-                : Effect.fail(
-                    EvaluationError.make({
-                      stage: "delete-worker",
-                      message: `Worker deletion failed: ${target.name}`,
-                    }),
-                  ),
-            ),
-            Effect.mapError(() =>
-              EvaluationError.make({
-                stage: "delete-worker",
-                message: `Worker deletion failed: ${target.name}; cleanup may need retry`,
-              }),
-            ),
-          );
-        if (yield* exists(target))
-          return yield* EvaluationError.make({
-            stage: "cleanup",
-            message: `Worker deletion was not confirmed: ${target.name}`,
-          });
-      }),
+      if (yield* exists(target))
+        return yield* EvaluationError.make({
+          stage: "cleanup",
+          message: `Worker deletion was not confirmed: ${target.name}`,
+        });
+    }),
   });
 });

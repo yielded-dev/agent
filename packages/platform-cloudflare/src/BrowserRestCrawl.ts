@@ -100,6 +100,7 @@ const privateCause = (value: unknown, apiToken: Redacted.Redacted<string>): Erro
   if (raw.length === 0) return undefined;
   const token = Redacted.value(apiToken);
 
+  // oxlint-disable-next-line effect/no-native-error -- Bounded, redacted foreign response diagnostic retained as cause, never as the Effect failure.
   return new Error(token.length === 0 ? raw : raw.replaceAll(token, "[REDACTED]"));
 };
 

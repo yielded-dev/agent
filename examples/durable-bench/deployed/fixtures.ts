@@ -154,7 +154,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
 
         if (!(yield* fs.exists(local + ".json"))) {
           if (options.ref && formatKey !== (yield* fixtureFormat()))
-            return yield* new FixtureError({
+            return yield* FixtureError.make({
               message:
                 "A new format requires a natural 1,000-turn fixture; select --sizes 1000 first or supply a matching saved fixture directory.",
             });
@@ -163,7 +163,8 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
             DURABLE_BENCH_FIXTURE_DIRECTORY: join(scratch, "seed"),
           });
 
-          if (seeded.code !== 0) return yield* new FixtureError({ message: `Seed ${name} failed` });
+          if (seeded.code !== 0)
+            return yield* FixtureError.make({ message: `Seed ${name} failed` });
         }
         yield* fs.makeDirectory(directory, { recursive: true });
 
@@ -175,13 +176,13 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
           source,
         ]);
 
-        if (copied.code !== 0) return yield* new FixtureError({ message: `Cache ${name} failed` });
+        if (copied.code !== 0) return yield* FixtureError.make({ message: `Cache ${name} failed` });
         yield* fs.copyFile(local + ".json", source + ".json");
       }
       const meta = yield* read(source + ".json", Meta);
 
       if (meta.formatKey !== undefined && meta.formatKey !== formatKey)
-        return yield* new FixtureError({
+        return yield* FixtureError.make({
           message: `Saved ${name} belongs to another storage format`,
         });
 
@@ -189,7 +190,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
         (target === "pi" && meta.version !== dependencies["@earendil-works/pi-durable"]) ||
         (target === "tardie" && meta.version !== dependencies.tardie)
       )
-        return yield* new FixtureError({ message: `Unexpected ${target} fixture version` });
+        return yield* FixtureError.make({ message: `Unexpected ${target} fixture version` });
 
       const classDirectory = join(
         source,
@@ -202,12 +203,12 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
       );
 
       if (databases.length !== 1)
-        return yield* new FixtureError({ message: `Ambiguous ${name} snapshot` });
+        return yield* FixtureError.make({ message: `Ambiguous ${name} snapshot` });
 
       const db: DatabaseSync = yield* Effect.acquireRelease(
         Effect.try({
           try: () => new DatabaseSync(join(classDirectory, databases[0]!), { readOnly: true }),
-          catch: () => new FixtureError({ message: `Open ${name} snapshot` }),
+          catch: () => FixtureError.make({ message: `Open ${name} snapshot` }),
         }),
         (db) => Effect.sync(() => db.close()),
       );
@@ -248,7 +249,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
             return n;
           },
           catch: () =>
-            new FixtureError({
+            FixtureError.make({
               message: `Snapshot ${name} must be idle and have a recognized storage header`,
             }),
         });
@@ -256,7 +257,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
 
       const exported: SqlDump = yield* Effect.try({
         try: () => dumpDatabase(db),
-        catch: () => new FixtureError({ message: `Read ${name} schema` }),
+        catch: () => FixtureError.make({ message: `Read ${name} schema` }),
       });
 
       if (
@@ -265,7 +266,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
           .sort()
           .join() !== Object.keys(meta.tables).sort().join()
       )
-        return yield* new FixtureError({ message: `Saved ${name} table inventory mismatch` });
+        return yield* FixtureError.make({ message: `Saved ${name} table inventory mismatch` });
       const paths: string[] = [];
       let parts: RestoreChunk["parts"][number][] = [];
       let bytes = 64;
@@ -276,7 +277,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
         const text = JSON.stringify({ sequence: paths.length, parts });
 
         if (Buffer.byteLength(text) > requestBytes)
-          return yield* new FixtureError({ message: "Restore framing exceeds byte bound" });
+          return yield* FixtureError.make({ message: "Restore framing exceeds byte bound" });
         yield* fs.writeFileString(path, text);
         paths.push(path);
         parts = [];
@@ -302,7 +303,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
           const size = Buffer.byteLength(JSON.stringify(decoded)) + 1;
 
           if (size + 256 > requestBytes)
-            return yield* new FixtureError({ message: "Snapshot row exceeds restore byte bound" });
+            return yield* FixtureError.make({ message: "Snapshot row exceeds restore byte bound" });
           if (bytes + size + 256 > requestBytes) {
             if (rows.length) parts.push({ table: table.name, offset, rows });
             yield* flush();
@@ -318,7 +319,9 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
           bytes += 256;
         }
         if (count !== meta.tables[table.name])
-          return yield* new FixtureError({ message: `Saved ${name}/${table.name} count mismatch` });
+          return yield* FixtureError.make({
+            message: `Saved ${name}/${table.name} count mismatch`,
+          });
       }
       yield* flush();
       let actor: SqlDump | undefined;
@@ -331,7 +334,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
         );
 
         if (databases.length !== 1)
-          return yield* new FixtureError({ message: "Ambiguous Actor snapshot" });
+          return yield* FixtureError.make({ message: "Ambiguous Actor snapshot" });
         actor = yield* Effect.try({
           try: () => {
             const db = new DatabaseSync(join(actorDirectory, databases[0]!), { readOnly: true });
@@ -342,7 +345,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
               db.close();
             }
           },
-          catch: () => new FixtureError({ message: "Read Actor snapshot" }),
+          catch: () => FixtureError.make({ message: "Read Actor snapshot" }),
         });
       }
       fixtures.push({
@@ -358,7 +361,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
         ...(actor === undefined ? {} : { actor }),
       });
       if (Buffer.byteLength(JSON.stringify(fixtures.at(-1))) > requestBytes)
-        return yield* new FixtureError({
+        return yield* FixtureError.make({
           message: `Saved ${name} restore schema envelope exceeds --restore-bytes (${requestBytes})`,
         });
       chunks.set(name, paths);
@@ -372,7 +375,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
       );
 
       if (!reference)
-        return yield* new FixtureError({
+        return yield* FixtureError.make({
           message: "The floor comparison needs a Yielded reference fixture",
         });
       fixtures.push({

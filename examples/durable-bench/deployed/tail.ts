@@ -135,6 +135,7 @@ export default {
       page.objects.map(async ({ key }) => {
         const value = await env.RECORDS.get(key);
 
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native Tail fetch handler rejects an incomplete R2 listing instead of returning partial CPU evidence.
         if (!value) throw new Error("Missing persisted CPU record");
 
         return Schema.decodeUnknownSync(Stored)(await value.json());

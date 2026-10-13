@@ -51,7 +51,7 @@ const ApiKey = Schema.String.check(Schema.isPattern(/^[\x21-\x7e]{16,512}$/));
 const empty: OpenAiConnection = { connected: false, lastFour: null, updatedAt: null };
 
 const unavailable = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "unavailable",
     message: "Your OpenAI connection is unavailable. Refresh before retrying.",
   });
@@ -63,8 +63,8 @@ export const credentialSourceLayer = (env: CredentialBindings) =>
       BYOK_ENCRYPTION_KEY: env.BYOK_ENCRYPTION_KEY,
       SERVER_OPENAI_KEY: env.SERVER_OPENAI_KEY,
     },
-    funded: (owner) =>
-      Effect.gen(function* () {
+    funded: Effect.fnUntraced(
+      function* (owner) {
         if (!env.SERVER_OPENAI_KEY) return false;
         const id = ownerOfThread(owner).slice("account-".length);
         const auth = env.AUTH_V2;
@@ -90,7 +90,9 @@ export const credentialSourceLayer = (env: CredentialBindings) =>
         );
 
         return status.allowed;
-      }).pipe(Effect.timeout("10 seconds"), Effect.mapError(unavailable)),
+      },
+      (effect) => effect.pipe(Effect.timeout("10 seconds"), Effect.mapError(unavailable)),
+    ),
     stored: (owner) =>
       Effect.tryPromise({
         try: () => env.PLANNER_THREADS_V3.getByName(owner).modelCredential(),
@@ -102,13 +104,13 @@ export const credentialSourceLayer = (env: CredentialBindings) =>
   });
 
 export const missingKey = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "invalid",
     message: "Connect your OpenAI API key in Settings to continue planning.",
   });
 
 const storageError = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "storage",
     message:
       "Your OpenAI connection contains unreadable or unsupported data. No changes were made.",
@@ -117,17 +119,19 @@ const storageError = () =>
 const bytes = (value: string) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
 const base64 = (value: Uint8Array) => btoa(String.fromCharCode(...value));
 
-const encryptionKey = (env: CredentialEnvironment) =>
-  Effect.tryPromise({
-    try: async () => {
-      const raw = bytes(env.BYOK_ENCRYPTION_KEY ?? "");
-
-      if (raw.byteLength !== 32) throw new Error("Invalid encryption configuration");
-
-      return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
-    },
+const encryptionKey = Effect.fnUntraced(function* (env: CredentialEnvironment) {
+  const raw = yield* Effect.try({
+    try: () => bytes(env.BYOK_ENCRYPTION_KEY ?? ""),
     catch: unavailable,
   });
+
+  if (raw.byteLength !== 32) return yield* unavailable();
+
+  return yield* Effect.tryPromise({
+    try: () => crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]),
+    catch: unavailable,
+  });
+});
 
 const aad = (owner: string) => new TextEncoder().encode(`travel-planner:openai:v1:${owner}`);
 
@@ -163,7 +167,10 @@ export const validateOpenAiKey = Effect.fn("validateOpenAiKey")(
     const raw = Redacted.value(candidate).trim();
 
     if (!Schema.is(ApiKey)(raw))
-      return yield* new PlannerError({ code: "invalid", message: "Enter a valid OpenAI API key." });
+      return yield* PlannerError.make({
+        code: "invalid",
+        message: "Enter a valid OpenAI API key.",
+      });
     const http = yield* HttpClient.HttpClient;
 
     const response = yield* HttpClient.withScope(http)
@@ -174,23 +181,22 @@ export const validateOpenAiKey = Effect.fn("validateOpenAiKey")(
       )
       .pipe(
         Effect.timeout("15 seconds"),
-        Effect.mapError(
-          () =>
-            new PlannerError({
-              code: "unavailable",
-              message:
-                "Couldn't verify your key with OpenAI. Try again; your previous key is unchanged.",
-            }),
+        Effect.mapError(() =>
+          PlannerError.make({
+            code: "unavailable",
+            message:
+              "Couldn't verify your key with OpenAI. Try again; your previous key is unchanged.",
+          }),
         ),
       );
 
     if (response.status === 401 || response.status === 403)
-      return yield* new PlannerError({
+      return yield* PlannerError.make({
         code: "invalid",
         message: "OpenAI rejected this key. Check that it is active and has model access.",
       });
     if (response.status !== 200)
-      return yield* new PlannerError({
+      return yield* PlannerError.make({
         code: "unavailable",
         message:
           "OpenAI couldn't verify the key right now. Try again; your previous key is unchanged.",

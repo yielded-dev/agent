@@ -165,8 +165,7 @@ export const verifyCheckout = Effect.gen(function* () {
     message: `Verified: the checkout lists 1 × ${item.name}, the test buyer's email and delivery are complete, and the test card is entered. Payment was never submitted.`,
   };
 }).pipe(
-  Effect.mapError(
-    () =>
-      new LabError({ code: "browser", message: "The checkout order summary could not be read." }),
+  Effect.mapError(() =>
+    LabError.make({ code: "browser", message: "The checkout order summary could not be read." }),
   ),
 );

@@ -40,10 +40,10 @@ export class PlannerAuthV2 extends DurableObject<Cloudflare.Env> {
 
 export const authenticate = Effect.fn("Planner.requireSession")(function* (request: Request) {
   if (!request.headers.get("cookie"))
-    return yield* new AccountError({ code: "unauthorized", message: "Sign in to continue." });
+    return yield* AccountError.make({ code: "unauthorized", message: "Sign in to continue." });
 
   const unavailable = () =>
-    new AccountError({
+    AccountError.make({
       code: "unavailable",
       message: "Authentication is temporarily unavailable.",
     });
@@ -64,7 +64,7 @@ export const authenticate = Effect.fn("Planner.requireSession")(function* (reque
   });
 
   if (response.status === 401)
-    return yield* new AccountError({ code: "unauthorized", message: "Sign in to continue." });
+    return yield* AccountError.make({ code: "unauthorized", message: "Sign in to continue." });
   if (!response.ok) return yield* unavailable();
 
   return yield* Effect.tryPromise({ try: () => response.json(), catch: unavailable }).pipe(

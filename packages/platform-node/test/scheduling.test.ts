@@ -72,21 +72,20 @@ const withTemporaryDatabase = <A, E>(
     }),
   ).pipe(Effect.provide(NodeFileSystem.layer));
 
-const waitForSnapshot = (
+const waitForSnapshot = Effect.fnUntraced(function* (
   scheduling: Scheduling["Service"],
   predicate: (snapshot: ScheduleSnapshot) => boolean,
   id: ScheduleId = scheduleId,
-) =>
-  Effect.gen(function* () {
-    for (let attempt = 0; attempt < 256; attempt += 1) {
-      const snapshot = yield* scheduling.get(scheduleScope, id);
+) {
+  for (let attempt = 0; attempt < 256; attempt += 1) {
+    const snapshot = yield* scheduling.get(scheduleScope, id);
 
-      if (predicate(snapshot)) return snapshot;
-      yield* Effect.yieldNow;
-    }
+    if (predicate(snapshot)) return snapshot;
+    yield* Effect.yieldNow;
+  }
 
-    return yield* Effect.die("Timed out waiting for the Node scheduling driver");
-  });
+  return yield* Effect.die("Timed out waiting for the Node scheduling driver");
+});
 
 it.effect("wakes for an earlier deadline and repairs a lost insert hint by indexed polling", () =>
   withTemporaryDatabase((filename) =>

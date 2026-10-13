@@ -87,7 +87,7 @@ const onCheckout = (url: string | undefined) => {
 };
 
 const refuse = (message: string) =>
-  Effect.fail(new BrowserUseError({ code: "invalid", message, dispatch: "not-dispatched" }));
+  Effect.fail(BrowserUseError.make({ code: "invalid", message, dispatch: "not-dispatched" }));
 
 /**
  * Host authorization for real stores. Everywhere: no purchase or express-payment buttons, no

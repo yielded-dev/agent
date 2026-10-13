@@ -130,7 +130,8 @@ export const verifyThreadInvariants = Effect.fnUntraced(function* <E, R>(
               selected === undefined ||
               selected.sequence !== entry.sequence ||
               selected.batchId !== entry.batchId ||
-              recordEncoding(selected.record).json !== recordEncoding(entry.record).json
+              (yield* Effect.fromResult(recordEncoding(selected.record))).json !==
+                (yield* Effect.fromResult(recordEncoding(entry.record))).json
             )
               fail(
                 "continuation-evidence",

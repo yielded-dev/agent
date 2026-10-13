@@ -364,7 +364,7 @@ export const makeInitialProgressRead = Effect.fnUntraced(function* (namespace?: 
           Effect.gen(function* () {
             const record = yield* decodeExportRecordJson(row.record_json);
 
-            return new CanonicalRecordEnvelope(
+            return CanonicalRecordEnvelope.make(
               {
                 threadId: row.thread_id,
                 sequence: row.sequence,

@@ -13,7 +13,7 @@ export interface ProgressEnvironment {
 }
 
 const unavailable = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "unavailable",
     message: "Live progress is temporarily unavailable. Your planner can continue working.",
   });

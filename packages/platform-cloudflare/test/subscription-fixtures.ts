@@ -158,8 +158,8 @@ export const subscriptionAlarmExtensionLayer = Layer.effect(
         message: Schema.String,
       }),
       timeoutMillis: 5_000,
-      handle: (event) =>
-        Effect.gen(function* () {
+      handle: Effect.fnUntraced(
+        function* (event) {
           const state = yield* DurableObjectState.DurableObjectState;
           const { partition } = yield* SubscriptionPartitionIdentity;
           const subscriptions = yield* Subscriptions;
@@ -177,9 +177,12 @@ export const subscriptionAlarmExtensionLayer = Layer.effect(
 
           yield* intake.accept(subscriptionPrincipal, SubscriptionTestSourceVersion, event.payload);
           yield* driver.runDue;
-        }).pipe(
-          Effect.mapError(() => SubscriptionAlarmExtensionError.make({ code: "native-intake" })),
-        ),
+        },
+        (effect) =>
+          effect.pipe(
+            Effect.mapError(() => SubscriptionAlarmExtensionError.make({ code: "native-intake" })),
+          ),
+      ),
     });
 
     return { handlers: [failing, replacement, intake] };

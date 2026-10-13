@@ -584,25 +584,24 @@ const makeManagement = Effect.fnUntraced(function* (requested: SubscriptionLimit
 
   return Subscriptions.of({
     getSubscription,
-    recoverSubscription: (scopeValue, key, expectedRevision) =>
-      Effect.gen(function* () {
-        const owner = yield* scope(scopeValue);
+    recoverSubscription: Effect.fnUntraced(function* (scopeValue, key, expectedRevision) {
+      const owner = yield* scope(scopeValue);
 
-        yield* authorizer.manage("recover", owner);
+      yield* authorizer.manage("recover", owner);
 
-        return snapshot(
-          yield* store.change(
-            yield* ownedKey(owner, key),
-            expectedRevision,
-            {
-              _tag: "Recover",
-              nowMillis: yield* now,
-            },
-            limits,
-          ),
-          yield* now,
-        );
-      }),
+      return snapshot(
+        yield* store.change(
+          yield* ownedKey(owner, key),
+          expectedRevision,
+          {
+            _tag: "Recover",
+            nowMillis: yield* now,
+          },
+          limits,
+        ),
+        yield* now,
+      );
+    }),
     recoverDelivery,
     subscribe,
     updateSubscription,

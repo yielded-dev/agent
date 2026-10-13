@@ -100,7 +100,7 @@ class Bench extends Context.Service<
 >()("issue692/Bench") {}
 
 const check = (valid: boolean, message: string) =>
-  valid ? Effect.void : Effect.fail(new BenchError({ message }));
+  valid ? Effect.void : Effect.fail(BenchError.make({ message }));
 
 const bytes = (text: string) => new TextEncoder().encode(text).length;
 
@@ -319,7 +319,7 @@ const application = Layer.unwrap(
           effect.pipe(
             Effect.provideService(Crypto.Crypto, crypto),
             Effect.catchCause((cause) =>
-              Effect.fail(new BenchError({ message: Cause.pretty(cause).slice(0, 2_000) })),
+              Effect.fail(BenchError.make({ message: Cause.pretty(cause).slice(0, 2_000) })),
             ),
           );
 
@@ -333,7 +333,7 @@ const application = Layer.unwrap(
           const last = pages.at(-1);
 
           if (last === undefined)
-            return yield* new BenchError({ message: "Missing canonical export snapshot" });
+            return yield* BenchError.make({ message: "Missing canonical export snapshot" });
 
           return {
             records: pages.flatMap((page) => page.records),
@@ -393,7 +393,7 @@ const application = Layer.unwrap(
             }
             const [first, ...rest] = records;
 
-            if (first === undefined) return yield* new BenchError({ message: "Empty seed batch" });
+            if (first === undefined) return yield* BenchError.make({ message: "Empty seed batch" });
             const tail = yield* store.inspectTail(ThreadTailRequest.make({ threadId }));
 
             yield* store.append(
@@ -446,7 +446,7 @@ const application = Layer.unwrap(
             );
             const method = REPLAY_CPU_PHASES[phase - 1];
 
-            if (method === undefined) return yield* new BenchError({ message: "Unknown phase" });
+            if (method === undefined) return yield* BenchError.make({ message: "Unknown phase" });
 
             calls = 0;
             finalizers = 0;
@@ -873,7 +873,7 @@ export default {
         const rpc = <A>(run: () => Promise<A>) =>
           Effect.tryPromise({
             try: run,
-            catch: (cause) => new BenchError({ message: String(cause).slice(0, 2_000) }),
+            catch: (cause) => BenchError.make({ message: String(cause).slice(0, 2_000) }),
           });
 
         if (url.pathname === "/evidence" && request.method === "GET")

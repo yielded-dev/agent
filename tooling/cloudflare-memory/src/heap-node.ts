@@ -8,13 +8,18 @@ import { Effect, FileSystem } from "effect";
 
 import { HeapProbeError, NodeSample } from "./heap-contracts.ts";
 
-const collect = Effect.try({
-  try: () => {
-    if (!globalThis.gc) throw new Error("Run with --expose-gc");
-    globalThis.gc();
-    globalThis.gc();
-  },
-  catch: (cause) => HeapProbeError.make({ operation: "Node GC", cause }),
+const collect = Effect.gen(function* () {
+  const gc = globalThis.gc;
+
+  if (gc === undefined)
+    return yield* HeapProbeError.make({ operation: "Node GC", cause: "Run with --expose-gc" });
+  yield* Effect.try({
+    try: () => {
+      gc();
+      gc();
+    },
+    catch: (cause) => HeapProbeError.make({ operation: "Node GC", cause }),
+  });
 });
 
 const memory = Effect.sync(() => ({ ...process.memoryUsage() }));
@@ -104,6 +109,7 @@ export const measureNode = Effect.fn("heap.measureNode")(function* (bundle: stri
       await module.link((specifier) => {
         const imported = realm.imports.get(specifier);
 
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Node VM module linker requires throwing to reject an unsupported external module.
         if (!imported) throw new Error(`Unsupported external import ${specifier}`);
 
         return imported;

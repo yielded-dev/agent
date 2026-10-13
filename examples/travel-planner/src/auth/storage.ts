@@ -31,12 +31,19 @@ export const initializeAuthStorage = (storage: DurableObjectStorage) =>
             Schema.Array(Schema.Struct({ version: Schema.Int })),
           )(storage.sql.exec("select version from auth_format").toArray());
 
-          if (version.length === 1 && version[0]?.version === 1) return;
-          throw new AuthStorageError({ cause: "Unsupported auth format" });
+          return version.length === 1 && version[0]?.version === 1;
         }
         for (const statement of statements) storage.sql.exec(statement);
         storage.sql.exec("create table auth_format (version integer not null)");
         storage.sql.exec("insert into auth_format values (1)");
+
+        return true;
       }),
-    catch: (cause) => new AuthStorageError({ cause }),
-  });
+    catch: (cause) => AuthStorageError.make({ cause }),
+  }).pipe(
+    Effect.filterOrFail(
+      (supported) => supported,
+      () => AuthStorageError.make({ cause: "Unsupported auth format" }),
+    ),
+    Effect.asVoid,
+  );

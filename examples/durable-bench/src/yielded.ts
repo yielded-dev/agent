@@ -12,7 +12,15 @@ import { IdempotencyKey, Principal } from "@yielded/agent/receipt";
 import { DefinitionDigestInput } from "@yielded/agent/records";
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect";
 import { DurableObject } from "effect-cf";
-import { LanguageModel, Model, Tool, Toolkit, type Prompt, type Response } from "effect/ai";
+import {
+  AiError,
+  LanguageModel,
+  Model,
+  Tool,
+  Toolkit,
+  type Prompt,
+  type Response,
+} from "effect/ai";
 
 import { fingerprint, next, payload, type Message, type Turn } from "./plan.ts";
 import { serve, tables, type Bench } from "./serve.ts";
@@ -69,12 +77,20 @@ const transcript = (prompt: Prompt.Prompt): readonly Message[] => {
 
 let seen: readonly Message[] = [];
 
-const respond = (prompt: Prompt.Prompt): ReadonlyArray<Response.StreamPartEncoded> => {
+const respond = Effect.fnUntraced(function* (
+  prompt: Prompt.Prompt,
+): Effect.fn.Return<ReadonlyArray<Response.StreamPartEncoded>, AiError.AiError> {
   seen = transcript(prompt);
   const user = seen.findLast((message) => message.role === "user");
 
   if (user === undefined || !/tools=\d+/.test(user.text)) {
-    throw new Error(`scripted model lost the turn text: ${JSON.stringify(seen.slice(-4))}`);
+    return yield* AiError.AiError.make({
+      module: "ScriptedModel",
+      method: "streamText",
+      reason: AiError.InvalidRequestError.make({
+        description: `scripted model lost the turn text: ${JSON.stringify(seen.slice(-4))}`,
+      }),
+    });
   }
   const step = next(seen);
 
@@ -97,7 +113,7 @@ const respond = (prompt: Prompt.Prompt): ReadonlyArray<Response.StreamPartEncode
     { type: "text-end", id: "answer" },
     { type: "finish", reason: "stop", usage },
   ];
-};
+});
 
 const lookup = Tool.make("lookup", {
   description: "Look up record number n",
@@ -131,7 +147,8 @@ const scripted = Model.make(
     LanguageModel.LanguageModel,
     LanguageModel.make({
       generateText: () => Effect.succeed([]),
-      streamText: (request) => Stream.fromIterable(respond(request.prompt)),
+      streamText: (request) =>
+        Stream.unwrap(respond(request.prompt).pipe(Effect.map(Stream.fromIterable))),
     }),
   ),
 );
@@ -193,26 +210,25 @@ const recover = Effect.gen(function* () {
   return yield* Effect.die("recovery did not finish");
 });
 
-const execute = (input: Turn) =>
-  Effect.gen(function* () {
-    const agentRuntime = yield* DurableAgentRuntime;
-    const { threadId } = yield* ThreadObjectIdentity;
+const execute = Effect.fnUntraced(function* (input: Turn) {
+  const agentRuntime = yield* DurableAgentRuntime;
+  const { threadId } = yield* ThreadObjectIdentity;
 
-    const receipt = yield* agentRuntime.submitRegistered(agent, input.text, {
-      threadId,
-      principal,
-      idempotencyKey: IdempotencyKey.make(input.id),
-    });
-
-    const settled = yield* agentRuntime.processThreadResolved(threadId);
-    const own = settled.find((item) => item.submissionId === receipt.submissionId);
-
-    if (own?.outcome !== "completed") {
-      return yield* Effect.die(
-        `turn ${input.id} did not complete: ${JSON.stringify(own ?? settled)}`,
-      );
-    }
+  const receipt = yield* agentRuntime.submitRegistered(agent, input.text, {
+    threadId,
+    principal,
+    idempotencyKey: IdempotencyKey.make(input.id),
   });
+
+  const settled = yield* agentRuntime.processThreadResolved(threadId);
+  const own = settled.find((item) => item.submissionId === receipt.submissionId);
+
+  if (own?.outcome !== "completed") {
+    return yield* Effect.die(
+      `turn ${input.id} did not complete: ${JSON.stringify(own ?? settled)}`,
+    );
+  }
+});
 
 export class YieldedDO
   extends ThreadObject.make(runtime, {
@@ -222,16 +238,10 @@ export class YieldedDO
   })
   implements Bench
 {
-  private run<A>(effect: Effect.Effect<A, unknown, unknown>): Promise<A> {
-    // The isolate provides the agent runtime. The runner's context type does not name it.
-    return this[DurableObject.RunSymbol](effect as Effect.Effect<A, unknown, never>).catch(
-      (error: unknown) => {
-        const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
-
-        console.error(message);
-        throw new Error(message);
-      },
-    );
+  private run<A, E>(
+    effect: Effect.Effect<A, E, DurableAgentRuntime | ThreadObjectIdentity>,
+  ): Promise<A> {
+    return this[DurableObject.RunSymbol](effect.pipe(Effect.tapCause(Effect.logError)));
   }
 
   /** Inline baseline only: open the runtime and explicitly repair the canonical log. */

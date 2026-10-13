@@ -42,7 +42,7 @@ const access = (overrides: Partial<BrowserCredentialAccess["Service"]> = {}) =>
         request.target.frameOrigin === frameOrigin &&
         request.target.recipientOrigin === recipientOrigin
         ? Effect.void
-        : Effect.fail(new CredentialAccessError({ reason: "denied" }));
+        : Effect.fail(CredentialAccessError.make({ reason: "denied" }));
     },
     resolve: () => Effect.succeed(login),
     ...overrides,
@@ -115,21 +115,20 @@ for (const mode of ["revoked", "replaced", "form-action"] as const) {
 
         const authority = access({
           authorize: () =>
-            allowed ? Effect.void : Effect.fail(new CredentialAccessError({ reason: "denied" })),
-          resolve: () =>
-            Effect.gen(function* () {
-              if (mode === "revoked") allowed = false;
-              else
-                yield* Effect.promise(() =>
-                  page.evaluate(
-                    mode === "replaced"
-                      ? "document.querySelector('#password').replaceWith(document.querySelector('#password').cloneNode())"
-                      : "document.querySelector('form').action='https://other.test/submit'",
-                  ),
-                );
+            allowed ? Effect.void : Effect.fail(CredentialAccessError.make({ reason: "denied" })),
+          resolve: Effect.fnUntraced(function* () {
+            if (mode === "revoked") allowed = false;
+            else
+              yield* Effect.promise(() =>
+                page.evaluate(
+                  mode === "replaced"
+                    ? "document.querySelector('#password').replaceWith(document.querySelector('#password').cloneNode())"
+                    : "document.querySelector('form').action='https://other.test/submit'",
+                ),
+              );
 
-              return login;
-            }),
+            return login;
+          }),
         });
 
         expect(
@@ -155,12 +154,11 @@ it.live(
       const { page } = yield* BrowserSessionPage;
 
       const authority = access({
-        authorize: () =>
-          Effect.gen(function* () {
-            const writes = (yield* read(page)).writes;
+        authorize: Effect.fnUntraced(function* () {
+          const writes = (yield* read(page)).writes;
 
-            if (writes.length > 0) return yield* new CredentialAccessError({ reason: "busy" });
-          }),
+          if (writes.length > 0) return yield* CredentialAccessError.make({ reason: "busy" });
+        }),
       });
 
       expect(

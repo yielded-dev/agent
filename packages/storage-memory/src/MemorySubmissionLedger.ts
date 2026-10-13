@@ -662,19 +662,19 @@ function* threadRows(state: LedgerState, threadId: ThreadId, after = -1) {
   }
 }
 
-/**
- * Reference in-memory SubmissionLedger. Admission, ordered selection and canonical settlement
- * share the Memory kernel's mutation gate. The kernel Scope owns local Run capabilities;
- * selecting work does not write execution ownership into the ledger.
- *
- * Joining retains the contiguous ready prefix and exact host linkage. Canonical settlement
- * authorizes finalization and child wake repair, while bound sessions reject late commands.
- * Child wake checks read the child rows directly, without a separate notification marker.
- * Admission resolution is strongly consistent; resolveAdmissionFault injects the
- * Indeterminate outcome for existing caller conformance workflows.
- */
-const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
-  Effect.gen(function* () {
+const makeSubmissionLedger = Effect.fnUntraced(
+  /**
+   * Reference in-memory SubmissionLedger. Admission, ordered selection and canonical settlement
+   * share the Memory kernel's mutation gate. The kernel Scope owns local Run capabilities;
+   * selecting work does not write execution ownership into the ledger.
+   *
+   * Joining retains the contiguous ready prefix and exact host linkage. Canonical settlement
+   * authorizes finalization and child wake repair, while bound sessions reject late commands.
+   * Child wake checks read the child rows directly, without a separate notification marker.
+   * Admission resolution is strongly consistent; resolveAdmissionFault injects the
+   * Indeterminate outcome for existing caller conformance workflows.
+   */
+  function* (options: MemorySubmissionLedgerOptions = {}) {
     const journal = yield* MemoryThreadStoreKernel;
     const crypto = yield* Crypto.Crypto;
 
@@ -721,47 +721,46 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
             };
           }),
         ),
-      page: (threadId, after, limit) =>
-        Effect.gen(function* () {
-          const current = yield* Ref.get(state);
+      page: Effect.fnUntraced(function* (threadId, after, limit) {
+        const current = yield* Ref.get(state);
 
-          const candidates = boundedWorkSelection<SubmissionId>(limit + 1, (id) => id, after);
+        const candidates = boundedWorkSelection<SubmissionId>(limit + 1, (id) => id, after);
 
-          for (const id of current.activeByThread.get(threadId) ?? []) candidates.add(id);
-          const ids = candidates.values;
+        for (const id of current.activeByThread.get(threadId) ?? []) candidates.add(id);
+        const ids = candidates.values;
 
-          const entries = [];
+        const entries = [];
 
-          for (const id of ids.slice(0, limit)) {
-            const stored = current.submissions.get(id);
+        for (const id of ids.slice(0, limit)) {
+          const stored = current.submissions.get(id);
 
-            if (
-              stored === undefined ||
-              stored.row.threadId !== threadId ||
-              stored.row.state === "settled"
-            )
-              return yield* ThreadStoreError.make({
-                operation: "admission work",
-                message: "Active admission index is incomplete or corrupt",
-              });
-            const entry = admissionWork(stored.row);
+          if (
+            stored === undefined ||
+            stored.row.threadId !== threadId ||
+            stored.row.state === "settled"
+          )
+            return yield* ThreadStoreError.make({
+              operation: "admission work",
+              message: "Active admission index is incomplete or corrupt",
+            });
+          const entry = admissionWork(stored.row);
 
-            entries.push(
-              stored.suspension === undefined
-                ? entry
-                : {
-                    ...entry,
-                    wait:
-                      stored.suspension.reason._tag === "WaitingForChild"
-                        ? ("child" as const)
-                        : ("approval" as const),
-                  },
-            );
-          }
-          const next = ids.length > limit ? ids[limit - 1] : undefined;
+          entries.push(
+            stored.suspension === undefined
+              ? entry
+              : {
+                  ...entry,
+                  wait:
+                    stored.suspension.reason._tag === "WaitingForChild"
+                      ? ("child" as const)
+                      : ("approval" as const),
+                },
+          );
+        }
+        const next = ids.length > limit ? ids[limit - 1] : undefined;
 
-          return { entries, ...(next === undefined ? {} : { after: next }) };
-        }),
+        return { entries, ...(next === undefined ? {} : { after: next }) };
+      }),
     });
 
     const admissionFence = yield* SubmissionAdmissionFence;
@@ -3521,7 +3520,8 @@ const makeSubmissionLedger = (options: MemorySubmissionLedgerOptions = {}) =>
     return Context.make(SubmissionLedger, ledger).pipe(
       Context.add(SettlementPublisher, { publish }),
     );
-  });
+  },
+);
 
 /** Construction options for the in-memory reference SubmissionLedger. */
 export interface MemorySubmissionLedgerOptions {

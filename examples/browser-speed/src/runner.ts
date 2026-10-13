@@ -157,7 +157,7 @@ export const executeTask = Effect.fnUntraced(function* (
         const verdict = yield* verifyCheckout.pipe(Effect.provideService(Browser, browser));
 
         if (!verdict.passed)
-          return yield* new LabError({
+          return yield* LabError.make({
             code: "invalid",
             message: `${verdict.message} Continue the task, then finish.`,
           });
@@ -166,7 +166,7 @@ export const executeTask = Effect.fnUntraced(function* (
       if (input.scenario === "shop" && !browser.cardEntered() && !finishWithoutCard) {
         finishWithoutCard = true;
 
-        return yield* new LabError({
+        return yield* LabError.make({
           code: "invalid",
           message:
             "No card field was filled yet. Continue to checkout and fill the test card on the payment step. If the store makes that impossible, call finish again and say why.",
@@ -181,7 +181,7 @@ export const executeTask = Effect.fnUntraced(function* (
 
       trace.update({ board });
       if (input.scenario !== "custom" && !verify(input.scenario, board))
-        return yield* new LabError({
+        return yield* LabError.make({
           code: "invalid",
           message: `Saved tasks do not match the request. Inspect and correct the remaining differences before finishing. Current saved board: ${Schema.encodeSync(Schema.fromJsonString(Board))(board)}`,
         });
@@ -200,7 +200,7 @@ export const executeTask = Effect.fnUntraced(function* (
   if (input.scenario === "coffee") yield* openStore(storeUrl, 'a[href*="/store/p/"]');
   else if (input.scenario === "shop") {
     if (input.shop === undefined)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "invalid",
         message: "The store task needs a store link.",
       });
@@ -272,19 +272,18 @@ export const executeTask = Effect.fnUntraced(function* (
     const result = yield* traceModels(
       run.pipe(Effect.provide([InMemory.layer, modelLayer, completionLayer])),
     ).pipe(
-      Effect.mapError(
-        (error) =>
-          new LabError({
-            code: "browser",
-            message:
-              error._tag === "ModelProtocolError" ||
-              error._tag === "AgentPolicyError" ||
-              error._tag === "ContextBudgetError"
-                ? `Agent stopped: ${error.message}`
-                : error._tag === "AiError"
-                  ? `Model request failed (${error.reason._tag}): ${"description" in error.reason ? error.reason.description : "No provider detail."}`
-                  : `Agent stopped: ${error._tag}. Inspect the model and action spans.`,
-          }),
+      Effect.mapError((error) =>
+        LabError.make({
+          code: "browser",
+          message:
+            error._tag === "ModelProtocolError" ||
+            error._tag === "AgentPolicyError" ||
+            error._tag === "ContextBudgetError"
+              ? `Agent stopped: ${error.message}`
+              : error._tag === "AiError"
+                ? `Model request failed (${error.reason._tag}): ${"description" in error.reason ? error.reason.description : "No provider detail."}`
+                : `Agent stopped: ${error._tag}. Inspect the model and action spans.`,
+        }),
       ),
     );
 
@@ -295,7 +294,7 @@ export const executeTask = Effect.fnUntraced(function* (
 
   if (input.driver === "jev" || input.driver === "hybrid") {
     if (jevText === undefined)
-      return yield* new LabError({
+      return yield* LabError.make({
         code: "configuration",
         message: "Jev task-board runs need a field-text model.",
       });
@@ -315,7 +314,7 @@ export const executeTask = Effect.fnUntraced(function* (
           textModelLayer(jevText),
         ]),
       ),
-    ).pipe(Effect.mapError((error) => new LabError({ code: "invalid", message: error.message })));
+    ).pipe(Effect.mapError((error) => LabError.make({ code: "invalid", message: error.message })));
 
     trace.update({
       message:

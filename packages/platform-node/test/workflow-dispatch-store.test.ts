@@ -26,7 +26,7 @@ it.live("retains a later completion token against stale repair and cleanup", () 
   Effect.gen(function* () {
     const store = yield* WorkflowDispatchStore;
 
-    const scan = new WorkflowDispatchScan({
+    const scan = WorkflowDispatchScan.make({
       deploymentId: intent.deploymentId,
       workflowName: intent.workflowName,
       limit: 1,
@@ -34,13 +34,13 @@ it.live("retains a later completion token against stale repair and cleanup", () 
 
     yield* store.put(intent);
 
-    const token = new DurableDeferred.TokenParsed({
+    const token = DurableDeferred.TokenParsed.make({
       workflowName: "Parent",
       executionId: "parent-1",
       deferredName: "agent",
     }).asToken;
 
-    const waiting = new WorkflowDispatchIntent({ ...intent, completionToken: token });
+    const waiting = WorkflowDispatchIntent.make({ ...intent, completionToken: token });
 
     expect(yield* store.put(waiting)).toEqual(waiting);
     // A repair discovery without a token must retain the waiter. A stale cleanup must
@@ -51,9 +51,9 @@ it.live("retains a later completion token against stale repair and cleanup", () 
     expect(
       yield* store
         .put(
-          new WorkflowDispatchIntent({
+          WorkflowDispatchIntent.make({
             ...intent,
-            completionToken: new DurableDeferred.TokenParsed({
+            completionToken: DurableDeferred.TokenParsed.make({
               workflowName: "Other",
               executionId: "parent-1",
               deferredName: "agent",

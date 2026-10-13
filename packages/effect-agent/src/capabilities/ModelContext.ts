@@ -177,8 +177,10 @@ export const prepareModelContext = <
 >(
   snapshot: ThreadSnapshot,
   transforms?: { readonly [Index in keyof Requirements]: ContextTransform<Requirements[Index]> },
-): Effect.Effect<PreparedModelContext, ContextTransformError, Requirements[number]> =>
-  (transforms ?? [])
+): Effect.Effect<PreparedModelContext, ContextTransformError, Requirements[number]> => {
+  const declared: ReadonlyArray<ContextTransform<Requirements[number]>> = transforms ?? [];
+
+  return declared
     .reduce<
       Effect.Effect<ReadonlyArray<ModelContextMessage>, ContextTransformError, Requirements[number]>
     >(
@@ -198,6 +200,7 @@ export const prepareModelContext = <
         }),
       ),
     );
+};
 
 const exactSourceRange = (
   snapshot: ThreadSnapshot,

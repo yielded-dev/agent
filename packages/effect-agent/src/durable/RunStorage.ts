@@ -171,71 +171,70 @@ const makeWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
     }),
   );
 
-  const append: RunWriter["append"] = (batch, executions) =>
-    Effect.gen(function* () {
-      const captured = yield* PreparedAppend.capture(
-        AppendRequest.make({
-          threadId,
-          expectedTailSequence: tail.sequence,
-          batch,
-          ...(executions === undefined ? {} : { executions }),
-        }),
-      ).pipe(
-        Effect.mapError((cause) =>
-          ThreadStoreError.make({
-            operation: "capture append",
-            message: cause.message,
-            cause,
-          }),
-        ),
-      );
-
-      return yield* owner.withProgress(
+  const append: RunWriter["append"] = Effect.fnUntraced(function* (batch, executions) {
+    const captured = yield* PreparedAppend.capture(
+      AppendRequest.make({
         threadId,
-        owner.withMutation(
-          Effect.gen(function* () {
-            yield* checkActive;
-            for (let retries = 0; ; retries++) {
-              const result = yield* store
-                .append(
-                  captured.expectedTailSequence === tail.sequence
-                    ? captured
-                    : AppendRequest.make({
-                        ...captured,
-                        expectedTailSequence: tail.sequence,
-                      }),
-                )
-                .pipe(
-                  Effect.catchTag("AppendConflict", (conflict) => {
-                    if (
-                      conflict.reason !== "tail" ||
-                      conflict.actualTailSequence === undefined ||
-                      retries >= 8
-                    )
-                      return Effect.fail(conflict);
-                    tail = { sequence: conflict.actualTailSequence };
-                    if (captured.executions !== undefined) return Effect.fail(conflict);
+        expectedTailSequence: tail.sequence,
+        batch,
+        ...(executions === undefined ? {} : { executions }),
+      }),
+    ).pipe(
+      Effect.mapError((cause) =>
+        ThreadStoreError.make({
+          operation: "capture append",
+          message: cause.message,
+          cause,
+        }),
+      ),
+    );
 
-                    return Effect.succeed(undefined);
-                  }),
-                );
+    return yield* owner.withProgress(
+      threadId,
+      owner.withMutation(
+        Effect.gen(function* () {
+          yield* checkActive;
+          for (let retries = 0; ; retries++) {
+            const result = yield* store
+              .append(
+                captured.expectedTailSequence === tail.sequence
+                  ? captured
+                  : AppendRequest.make({
+                      ...captured,
+                      expectedTailSequence: tail.sequence,
+                    }),
+              )
+              .pipe(
+                Effect.catchTag("AppendConflict", (conflict) => {
+                  if (
+                    conflict.reason !== "tail" ||
+                    conflict.actualTailSequence === undefined ||
+                    retries >= 8
+                  )
+                    return Effect.fail(conflict);
+                  tail = { sequence: conflict.actualTailSequence };
+                  if (captured.executions !== undefined) return Effect.fail(conflict);
 
-              if (result === undefined) continue;
-              // A historical replay returns its original coordinates, not today's canonical tail.
-              if (result.replayed) yield* refresh;
-              else tail = { sequence: result.lastSequence };
+                  return Effect.succeed(undefined);
+                }),
+              );
 
-              return result;
-            }
-          }).pipe(
-            // Revoke uncertain writes before releasing the writer's mutation gate.
-            Effect.onError((cause) =>
-              isDefiniteWriteFailure(cause) ? Effect.void : ownership.release,
-            ),
+            if (result === undefined) continue;
+            // A historical replay returns its original coordinates, not today's canonical tail.
+            if (result.replayed) yield* refresh;
+            else tail = { sequence: result.lastSequence };
+
+            return result;
+          }
+        }).pipe(
+          // Revoke uncertain writes before releasing the writer's mutation gate.
+          Effect.onError((cause) =>
+            isDefiniteWriteFailure(cause) ? Effect.void : ownership.release,
           ),
         ),
-      );
-    });
+      ),
+    );
+  });
 
   const writer = {
     threadId,
@@ -371,73 +370,72 @@ export const make = Effect.gen(function* () {
                       ),
                     ),
                 ),
-              publishSettlement: (batch, executions) =>
-                Effect.gen(function* () {
-                  const captured = yield* PreparedAppend.capture(
-                    AppendRequest.make({
-                      threadId: request.threadId,
-                      expectedTailSequence: (yield* writer.tail).sequence,
-                      batch,
-                      ...(executions === undefined ? {} : { executions }),
+              publishSettlement: Effect.fnUntraced(function* (batch, executions) {
+                const captured = yield* PreparedAppend.capture(
+                  AppendRequest.make({
+                    threadId: request.threadId,
+                    expectedTailSequence: (yield* writer.tail).sequence,
+                    batch,
+                    ...(executions === undefined ? {} : { executions }),
+                  }),
+                ).pipe(
+                  Effect.mapError((cause) =>
+                    LedgerError.make({
+                      operation: "capture settlement",
+                      message: cause.message,
+                      cause,
                     }),
-                  ).pipe(
-                    Effect.mapError((cause) =>
-                      LedgerError.make({
-                        operation: "capture settlement",
-                        message: cause.message,
-                        cause,
-                      }),
-                    ),
-                  );
+                  ),
+                );
 
-                  return yield* owner.withProgress(
-                    request.threadId,
-                    owned(
-                      Effect.gen(function* () {
-                        for (let retries = 0; ; retries++) {
-                          const result = yield* publisher
-                            .publish(
-                              SettlementPublication.make({
-                                submissionId: claimed.submissionId,
-                                authority: { _tag: "Owned" },
-                                append: AppendRequest.make({
-                                  ...captured,
-                                  expectedTailSequence: (yield* writer.tail).sequence,
-                                }),
+                return yield* owner.withProgress(
+                  request.threadId,
+                  owned(
+                    Effect.gen(function* () {
+                      for (let retries = 0; ; retries++) {
+                        const result = yield* publisher
+                          .publish(
+                            SettlementPublication.make({
+                              submissionId: claimed.submissionId,
+                              authority: { _tag: "Owned" },
+                              append: AppendRequest.make({
+                                ...captured,
+                                expectedTailSequence: (yield* writer.tail).sequence,
                               }),
-                            )
-                            .pipe(
-                              Effect.catchTag("AppendConflict", (conflict) => {
-                                if (
-                                  conflict.reason !== "tail" ||
-                                  conflict.actualTailSequence === undefined ||
-                                  retries >= 8
-                                )
-                                  return Effect.fail(conflict);
+                            }),
+                          )
+                          .pipe(
+                            Effect.catchTag("AppendConflict", (conflict) => {
+                              if (
+                                conflict.reason !== "tail" ||
+                                conflict.actualTailSequence === undefined ||
+                                retries >= 8
+                              )
+                                return Effect.fail(conflict);
 
-                                return writer.refresh.pipe(
-                                  Effect.andThen(
-                                    captured.executions === undefined
-                                      ? Effect.succeed(undefined)
-                                      : Effect.fail(conflict),
-                                  ),
-                                );
-                              }),
-                            );
+                              return writer.refresh.pipe(
+                                Effect.andThen(
+                                  captured.executions === undefined
+                                    ? Effect.succeed(undefined)
+                                    : Effect.fail(conflict),
+                                ),
+                              );
+                            }),
+                          );
 
-                          if (result === undefined) continue;
-                          adoptTail(result.tailSequence);
+                        if (result === undefined) continue;
+                        adoptTail(result.tailSequence);
 
-                          return result;
-                        }
-                      }).pipe(
-                        Effect.onError((cause) =>
-                          isDefiniteWriteFailure(cause) ? Effect.void : generation.release,
-                        ),
+                        return result;
+                      }
+                    }).pipe(
+                      Effect.onError((cause) =>
+                        isDefiniteWriteFailure(cause) ? Effect.void : generation.release,
                       ),
                     ),
-                  );
-                }),
+                  ),
+                );
+              }),
               reserveChildBudget: (value) =>
                 owned(
                   ledger.reserveChildBudget(

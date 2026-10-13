@@ -60,6 +60,7 @@ export const candidates = (name: BenchmarkCase): MemoryLookup => ({
   passages: Array.from({ length: name === "duplicates" ? 128 : sourceCount(name) }, (_, i) => {
     const write = command(name, i % sourceCount(name));
 
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Synchronous benchmark fixture constructor requires a seed Put command.
     if (write._tag !== "Put") throw new Error("Expected seed Put");
 
     return MemoryPassage.make({

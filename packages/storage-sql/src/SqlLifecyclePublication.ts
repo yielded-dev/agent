@@ -629,8 +629,8 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
   }, transaction);
 
   const storage: LifecyclePublicationStorage = {
-    pending: (nowMillis, limit, options) =>
-      Effect.gen(function* () {
+    pending: Effect.fnUntraced(
+      function* (nowMillis, limit, options) {
         yield* Schema.decodeEffect(
           Schema.Struct({
             nowMillis: Schema.Natural,
@@ -763,7 +763,9 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
         }
 
         return batches;
-      }).pipe(source === undefined ? read : transaction),
+      },
+      (effect) => effect.pipe(source === undefined ? read : transaction),
+    ),
     acknowledge: (batch) => acknowledgeMany([batch]),
     acknowledgeMany,
     claim: (batch, nowMillis, timeoutMillis) =>

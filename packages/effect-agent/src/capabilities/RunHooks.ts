@@ -82,70 +82,67 @@ export const toRunApprovalHook = (
   | RedactionError,
   ApprovalResolver | ApprovalAudit | Redactor
 > => ({
-  request: (engineRequest) =>
-    Effect.gen(function* () {
-      const validatedPolicy = yield* Schema.decodeEffect(RunApprovalAdapterPolicySchema)(
-        policy,
-      ).pipe(
-        Effect.mapError((error) =>
-          ApprovalAdapterError.make({
-            message: `Approval adapter policy is invalid: ${error.message}`,
-          }),
-        ),
-      );
-
-      const now = yield* Clock.currentTimeMillis;
-
-      const metadata = yield* Effect.try({
-        try: () => ({
-          actionSummary: policy.actionSummary(engineRequest),
-          resourceTargets: policy.resourceTargets(engineRequest),
+  request: Effect.fnUntraced(function* (engineRequest) {
+    const validatedPolicy = yield* Schema.decodeEffect(RunApprovalAdapterPolicySchema)(policy).pipe(
+      Effect.mapError((error) =>
+        ApprovalAdapterError.make({
+          message: `Approval adapter policy is invalid: ${error.message}`,
         }),
-        catch: () =>
-          ApprovalAdapterError.make({
-            message: "Approval policy failed while describing the native Tool request",
-          }),
-      });
+      ),
+    );
 
-      const draft = yield* Schema.decodeEffect(ApprovalRequestDraft)({
-        requestId: engineRequest.request.approvalId,
-        runId: engineRequest.runId,
-        threadId: engineRequest.threadId,
-        toolCallId: engineRequest.toolCallId,
-        toolName: engineRequest.toolName,
-        actionSummary: metadata.actionSummary,
-        resourceTargets: metadata.resourceTargets,
-        risk: validatedPolicy.risk,
-        expiresAt: DateTime.formatIso(
-          DateTime.toUtc(DateTime.makeUnsafe(now + validatedPolicy.expiresInMillis)),
-        ),
-        denial: validatedPolicy.denial,
-      }).pipe(
-        Effect.mapError((error) =>
-          ApprovalAdapterError.make({
-            message: `Approval adapter policy is invalid: ${error.message}`,
-          }),
-        ),
-      );
+    const now = yield* Clock.currentTimeMillis;
 
-      const request = yield* makeApprovalRequest(draft, engineRequest.parameters);
-      const decision = yield* requestApproval(request);
+    const metadata = yield* Effect.try({
+      try: () => ({
+        actionSummary: policy.actionSummary(engineRequest),
+        resourceTargets: policy.resourceTargets(engineRequest),
+      }),
+      catch: () =>
+        ApprovalAdapterError.make({
+          message: "Approval policy failed while describing the native Tool request",
+        }),
+    });
 
-      if (decision._tag === "ApprovalApproved") {
-        return { _tag: "approved" as const };
-      }
-      if (decision.timedOut && request.denial === "recoverable") {
-        return {
-          _tag: "unresolved" as const,
-          reason: decision.reason,
-        };
-      }
+    const draft = yield* Schema.decodeEffect(ApprovalRequestDraft)({
+      requestId: engineRequest.request.approvalId,
+      runId: engineRequest.runId,
+      threadId: engineRequest.threadId,
+      toolCallId: engineRequest.toolCallId,
+      toolName: engineRequest.toolName,
+      actionSummary: metadata.actionSummary,
+      resourceTargets: metadata.resourceTargets,
+      risk: validatedPolicy.risk,
+      expiresAt: DateTime.formatIso(
+        DateTime.toUtc(DateTime.makeUnsafe(now + validatedPolicy.expiresInMillis)),
+      ),
+      denial: validatedPolicy.denial,
+    }).pipe(
+      Effect.mapError((error) =>
+        ApprovalAdapterError.make({
+          message: `Approval adapter policy is invalid: ${error.message}`,
+        }),
+      ),
+    );
 
+    const request = yield* makeApprovalRequest(draft, engineRequest.parameters);
+    const decision = yield* requestApproval(request);
+
+    if (decision._tag === "ApprovalApproved") {
+      return { _tag: "approved" as const };
+    }
+    if (decision.timedOut && request.denial === "recoverable") {
       return {
-        _tag: "denied" as const,
+        _tag: "unresolved" as const,
         reason: decision.reason,
       };
-    }),
+    }
+
+    return {
+      _tag: "denied" as const,
+      reason: decision.reason,
+    };
+  }),
 });
 
 /**

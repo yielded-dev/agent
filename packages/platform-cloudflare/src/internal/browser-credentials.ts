@@ -134,7 +134,7 @@ export const fillCredential = Effect.fnUntraced(function* (
   let filled = 0;
 
   const fail = (reason: CredentialFillError["reason"]) =>
-    new CredentialFillError({ reason, dispatch, filled, cleanup: "not-requested" });
+    CredentialFillError.make({ reason, dispatch, filled, cleanup: "not-requested" });
 
   const remote = <A>(run: (signal: AbortSignal) => Promise<A>) =>
     Effect.tryPromise({
@@ -164,28 +164,33 @@ export const fillCredential = Effect.fnUntraced(function* (
 
         if (signal.aborted) {
           await Promise.all(handles.map((handle) => handle.dispose().catch(() => {})));
-          throw fail("provider");
+
+          return undefined;
         }
 
         return handles;
-      }).pipe(Effect.interruptible),
+      }).pipe(
+        Effect.filterOrFail(
+          (handles) => handles !== undefined,
+          () => fail("provider"),
+        ),
+        Effect.interruptible,
+      ),
       release,
     );
 
-  const origin = (value: string) =>
-    Effect.try({
-      try: () => {
-        const url = new URL(value);
-
-        if (url.username || url.password) throw fail("denied");
-
-        return url.origin;
-      },
+  const origin = Effect.fnUntraced(function* (value: string) {
+    const url = yield* Effect.try({
+      try: () => new URL(value),
       catch: () => fail("denied"),
-    }).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(CredentialOrigin)),
+    });
+
+    if (url.username || url.password) return yield* fail("denied");
+
+    return yield* Schema.decodeEffect(CredentialOrigin)(url.origin).pipe(
       Effect.mapError(() => fail("denied")),
     );
+  });
 
   return yield* Effect.gen(function* () {
     const request = yield* Schema.decodeEffect(FillCredentialRequest, {

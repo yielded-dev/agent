@@ -143,15 +143,14 @@ for (const boundary of ["ThreadCreated", "SubagentLineageRecorded"] as const) {
                   Effect.sync(() => {
                     if (point === "subagent:after-admit") admitted = true;
                   }),
-                storageFailpoint: (point) =>
-                  Effect.gen(function* () {
-                    if (point !== "append:before" || !admitted) return;
-                    childAppends += 1;
-                    if (childAppends !== (boundary === "ThreadCreated" ? 1 : 2)) return;
-                    admitted = false;
-                    yield* Deferred.succeed(beforeAppend, undefined);
-                    yield* Deferred.await(resumeAppend);
-                  }),
+                storageFailpoint: Effect.fnUntraced(function* (point) {
+                  if (point !== "append:before" || !admitted) return;
+                  childAppends += 1;
+                  if (childAppends !== (boundary === "ThreadCreated" ? 1 : 2)) return;
+                  admitted = false;
+                  yield* Deferred.succeed(beforeAppend, undefined);
+                  yield* Deferred.await(resumeAppend);
+                }),
               },
             ).pipe(Layer.provide(handlers)),
           );

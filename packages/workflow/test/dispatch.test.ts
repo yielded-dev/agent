@@ -199,14 +199,13 @@ const makeFixture = Effect.fn("dispatch-test.makeFixture")(function* (ordinaryTo
 
   const toolContext = yield* Layer.build(
     holdTools.toLayer({
-      hold: () =>
-        Effect.gen(function* () {
-          yield* Ref.update(toolInvocations, (count) => count + 1);
-          yield* Deferred.succeed(toolEntered, undefined);
-          yield* Deferred.await(releaseTool);
+      hold: Effect.fnUntraced(function* () {
+        yield* Ref.update(toolInvocations, (count) => count + 1);
+        yield* Deferred.succeed(toolEntered, undefined);
+        yield* Deferred.await(releaseTool);
 
-          return "released";
-        }),
+        return "released";
+      }),
     }),
   );
 
@@ -253,84 +252,79 @@ const makeFixture = Effect.fn("dispatch-test.makeFixture")(function* (ordinaryTo
       Ref.update(launched, (ids) => [...ids, options.executionId]).pipe(
         Effect.andThen(native.execute(workflow, options)),
       ),
-    resume: (workflow, executionId) =>
-      Effect.gen(function* () {
-        const blocked = yield* Ref.get(blockedResume);
+    resume: Effect.fnUntraced(function* (workflow, executionId) {
+      const blocked = yield* Ref.get(blockedResume);
 
-        if (Option.isSome(blocked) && blocked.value === executionId) return yield* resumeBlock.run;
-        yield* native.resume(workflow, executionId);
-      }),
-    poll: (workflow, executionId) =>
-      Effect.gen(function* () {
-        const override = yield* Ref.get(pollOverride);
+      if (Option.isSome(blocked) && blocked.value === executionId) return yield* resumeBlock.run;
+      yield* native.resume(workflow, executionId);
+    }),
+    poll: Effect.fnUntraced(function* (workflow, executionId) {
+      const override = yield* Ref.get(pollOverride);
 
-        if (Option.isNone(override)) return yield* native.poll(workflow, executionId);
+      if (Option.isNone(override)) return yield* native.poll(workflow, executionId);
 
-        const value = yield* Schema.decodeEffect(workflow.successSchema)(override.value).pipe(
-          Effect.orDie,
-        );
+      const value = yield* Schema.decodeEffect(workflow.successSchema)(override.value).pipe(
+        Effect.orDie,
+      );
 
-        return Option.some(new Workflow.Complete({ exit: Exit.succeed(value) }));
-      }),
+      return Option.some(new Workflow.Complete({ exit: Exit.succeed(value) }));
+    }),
   });
 
   const dispatch = WorkflowDispatchStore.of({
-    put: (intent) =>
-      Effect.gen(function* () {
-        const previous = rows.get(intent.executionId);
+    put: Effect.fnUntraced(function* (intent) {
+      const previous = rows.get(intent.executionId);
 
-        if (previous !== undefined && !sameIntent(previous, intent)) {
+      if (previous !== undefined && !sameIntent(previous, intent)) {
+        return yield* WorkflowDispatchError.make({
+          operation: "put",
+          message: "Intent conflict",
+        });
+      }
+      rows.set(intent.executionId, intent);
+
+      return intent;
+    }),
+    scan: Effect.fnUntraced(function* (request) {
+      switch (yield* Ref.get(intentScanMode)) {
+        case "empty":
+          return [];
+        case "fail":
           return yield* WorkflowDispatchError.make({
-            operation: "put",
-            message: "Intent conflict",
+            operation: "test-scan",
+            message: "Scan failed",
           });
-        }
-        rows.set(intent.executionId, intent);
+        case "block":
+          return yield* intentBlock.run;
+        case "normal":
+          return [...rows.values()]
+            .filter(
+              (intent) =>
+                intent.deploymentId === request.deploymentId &&
+                intent.workflowName === request.workflowName &&
+                (request.after === undefined || intent.executionId > request.after),
+            )
+            .sort((left, right) =>
+              left.executionId < right.executionId
+                ? -1
+                : left.executionId > right.executionId
+                  ? 1
+                  : 0,
+            )
+            .slice(0, request.limit);
+      }
+    }),
+    remove: Effect.fnUntraced(function* (intent) {
+      const previous = rows.get(intent.executionId);
 
-        return intent;
-      }),
-    scan: (request) =>
-      Effect.gen(function* () {
-        switch (yield* Ref.get(intentScanMode)) {
-          case "empty":
-            return [];
-          case "fail":
-            return yield* WorkflowDispatchError.make({
-              operation: "test-scan",
-              message: "Scan failed",
-            });
-          case "block":
-            return yield* intentBlock.run;
-          case "normal":
-            return [...rows.values()]
-              .filter(
-                (intent) =>
-                  intent.deploymentId === request.deploymentId &&
-                  intent.workflowName === request.workflowName &&
-                  (request.after === undefined || intent.executionId > request.after),
-              )
-              .sort((left, right) =>
-                left.executionId < right.executionId
-                  ? -1
-                  : left.executionId > right.executionId
-                    ? 1
-                    : 0,
-              )
-              .slice(0, request.limit);
-        }
-      }),
-    remove: (intent) =>
-      Effect.gen(function* () {
-        const previous = rows.get(intent.executionId);
-
-        if (previous !== undefined && !sameIntent(previous, intent)) {
-          return yield* WorkflowDispatchError.make({
-            operation: "remove",
-            message: "Intent conflict",
-          });
-        }
-        rows.delete(intent.executionId);
-      }),
+      if (previous !== undefined && !sameIntent(previous, intent)) {
+        return yield* WorkflowDispatchError.make({
+          operation: "remove",
+          message: "Intent conflict",
+        });
+      }
+      rows.delete(intent.executionId);
+    }),
   });
 
   const services = base.pipe(

@@ -147,7 +147,7 @@ const failure = (
   reason: BrowserSessionError["reason"],
   dispatch: BrowserSessionError["dispatch"] = "not-dispatched",
   cleanup: BrowserSessionError["cleanup"] = "not-requested",
-) => new BrowserSessionError({ reason, dispatch, cleanup });
+) => BrowserSessionError.make({ reason, dispatch, cleanup });
 
 const decode = <A>(schema: Schema.Codec<A>, input: unknown) =>
   Schema.decodeUnknownEffect(schema, { onExcessProperty: "error" })(input).pipe(

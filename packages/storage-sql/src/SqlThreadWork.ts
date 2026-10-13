@@ -419,7 +419,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     initiallyEmpty: boolean,
   ) {
     // Append facts are privately captured; rebuild facts have crossed the persisted Schema.
-    const envelope = new CanonicalRecordEnvelope(
+    const envelope = CanonicalRecordEnvelope.make(
       {
         threadId,
         sequence,

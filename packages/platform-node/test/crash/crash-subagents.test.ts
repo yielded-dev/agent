@@ -71,109 +71,105 @@ import {
 const DELEGATE_CALL = decodeToolCallId(DELEGATE_CALL_ID);
 const CHILD_MODEL_COUNT_KEY = `${CHILD_MODEL_OP}:${RESEARCH_TOPIC}`;
 
-const submitCoordinator = (thread: string, key: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
+const submitCoordinator = Effect.fnUntraced(function* (thread: string, key: string) {
+  const runtime = yield* DurableAgentRuntime;
 
-    return yield* runtime.submit(
-      coordinatorSubmitSlice,
-      { mission: CRASH_QUESTION },
-      crashSubmitOptions(thread, key),
-    );
-  });
+  return yield* runtime.submit(
+    coordinatorSubmitSlice,
+    { mission: CRASH_QUESTION },
+    crashSubmitOptions(thread, key),
+  );
+});
 
 /** Drive one Thread lane through the S2 multi-binding worker path (SUB-023). */
-const drive = (thread: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
+const drive = Effect.fnUntraced(function* (thread: string) {
+  const runtime = yield* DurableAgentRuntime;
 
-    return yield* runtime.processThreadResolved(decodeThreadId(thread));
-  });
+  return yield* runtime.processThreadResolved(decodeThreadId(thread));
+});
 
 /** Restart-drive bindings: the parent model always answers final (batch resume, P5 precedent). */
 const restartBindings = (site: CrashSite) =>
   makeCrashSubagentBindings({ supplierDir: site.supplier });
 
-const reservationStatuses = (submissionId: SubmissionId) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
+const reservationStatuses = Effect.fnUntraced(function* (submissionId: SubmissionId) {
+  const ledger = yield* SubmissionLedger;
 
-    const snapshot = yield* ledger.loadRecoverySnapshot(
-      RecoverySnapshotRequest.make({ submissionId }),
-    );
+  const snapshot = yield* ledger.loadRecoverySnapshot(
+    RecoverySnapshotRequest.make({ submissionId }),
+  );
 
-    return snapshot.childReservations.map((row) => row.status);
-  });
+  return snapshot.childReservations.map((row) => row.status);
+});
 
-const submissionSnapshot = (submissionId: SubmissionId) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
-    const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
+const submissionSnapshot = Effect.fnUntraced(function* (submissionId: SubmissionId) {
+  const ledger = yield* SubmissionLedger;
+  const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
 
-    expect(Option.isSome(snapshot)).toBe(true);
-    if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
+  expect(Option.isSome(snapshot)).toBe(true);
+  if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
 
-    return snapshot.value;
-  });
+  return snapshot.value;
+});
 
-const startedPayloadOf = (thread: string) =>
-  Effect.gen(function* () {
-    const log = yield* readLog(thread);
-    const payload = payloadsOf(log, "SubagentStarted")[0]?.record.payload;
+const startedPayloadOf = Effect.fnUntraced(function* (thread: string) {
+  const log = yield* readLog(thread);
+  const payload = payloadsOf(log, "SubagentStarted")[0]?.record.payload;
 
-    if (payload?._tag !== "SubagentStarted") throw new Error("Expected SubagentStarted");
+  if (payload?._tag !== "SubagentStarted") throw new Error("Expected SubagentStarted");
 
-    return payload;
-  });
+  return payload;
+});
 
 /** The delegation call settled exactly once with the given payload expectations. */
-const assertDelegationSettled = (
+const assertDelegationSettled = Effect.fnUntraced(function* (
   thread: string,
   parentSubmissionId: SubmissionId,
   expected: { readonly isFailure: boolean; readonly result: unknown },
-) =>
-  Effect.gen(function* () {
-    const runId = runIdForSubmission(parentSubmissionId);
-    const log = yield* readLog(thread);
+) {
+  const runId = runIdForSubmission(parentSubmissionId);
+  const log = yield* readLog(thread);
 
-    const settled = log.filter(
-      (envelope) => envelope.record.recordId === toolCallSettledRecordId(runId, 1, DELEGATE_CALL),
-    );
+  const settled = log.filter(
+    (envelope) => envelope.record.recordId === toolCallSettledRecordId(runId, 1, DELEGATE_CALL),
+  );
 
-    expect(settled).toHaveLength(1);
-    const payload = settled[0]?.record.payload;
+  expect(settled).toHaveLength(1);
+  const payload = settled[0]?.record.payload;
 
-    expect(payload?._tag).toBe("ToolCallSettled");
-    if (payload?._tag === "ToolCallSettled") {
-      expect(payload.isFailure).toBe(expected.isFailure);
-      expect(payload.result).toEqual(expected.result);
-    }
-  });
+  expect(payload?._tag).toBe("ToolCallSettled");
+  if (payload?._tag === "ToolCallSettled") {
+    expect(payload.isFailure).toBe(expected.isFailure);
+    expect(payload.result).toEqual(expected.result);
+  }
+});
 
 /**
  * The one-child identity claims common to every converged establishment (SUB-016/SUB-017):
  * exactly one requested/started/joined record, one child Thread with one lineage record,
  * and the recorded Receipt naming the one admitted child.
  */
-const assertOneEstablishedChild = (thread: string, childThread: string) =>
-  Effect.gen(function* () {
-    const log = yield* readLog(thread);
+const assertOneEstablishedChild = Effect.fnUntraced(function* (
+  thread: string,
+  childThread: string,
+) {
+  const log = yield* readLog(thread);
 
-    expect(payloadsOf(log, "SubagentRequested")).toHaveLength(1);
-    expect(payloadsOf(log, "SubagentStarted")).toHaveLength(1);
-    expect(payloadsOf(log, "SubagentJoined")).toHaveLength(1);
-    const childLog = yield* readLog(childThread);
+  expect(payloadsOf(log, "SubagentRequested")).toHaveLength(1);
+  expect(payloadsOf(log, "SubagentStarted")).toHaveLength(1);
+  expect(payloadsOf(log, "SubagentJoined")).toHaveLength(1);
+  const childLog = yield* readLog(childThread);
 
-    expect(payloadsOf(childLog, "ThreadCreated")).toHaveLength(1);
-    expect(payloadsOf(childLog, "SubagentLineageRecorded")).toHaveLength(1);
-    const started = yield* startedPayloadOf(thread);
-    const child = yield* submissionSnapshot(started.childSubmissionId);
+  expect(payloadsOf(childLog, "ThreadCreated")).toHaveLength(1);
+  expect(payloadsOf(childLog, "SubagentLineageRecorded")).toHaveLength(1);
+  const started = yield* startedPayloadOf(thread);
+  const child = yield* submissionSnapshot(started.childSubmissionId);
 
-    expect(child.receiptId).toBe(started.childReceiptId);
-    expect(child.state).toBe("settled");
+  expect(child.receiptId).toBe(started.childReceiptId);
+  expect(child.state).toBe("settled");
 
-    return started;
-  });
+  return started;
+});
 
 layer(NodeFileSystem.layer, { excludeTestServices: true })(
   "S2 durable Subagent crash matrix (real process kills)",

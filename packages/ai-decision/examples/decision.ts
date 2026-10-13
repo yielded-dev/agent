@@ -39,9 +39,9 @@ export const advance = Effect.fn("ticket.advance")(function* (state: typeof Tick
 
   // Illustrative application thresholds; evaluate them against your own cases.
   if (answers.department.probabilities[answers.department.label] < 0.8)
-    return new Review({ message: state.message });
+    return Review.make({ message: state.message });
 
-  return new Routed({
+  return Routed.make({
     department: answers.department.label,
     priority:
       answers.severity.rating >= 1.5 || answers.urgent.probability >= 0.8 ? "high" : "normal",
@@ -53,5 +53,5 @@ export const DecisionLive = TypeSafeDecisionModel.model("jev-latest").pipe(
 );
 
 export const program = advance(
-  new Received({ message: "Our production deployment is blocked." }),
+  Received.make({ message: "Our production deployment is blocked." }),
 ).pipe(Effect.provide(DecisionLive));

@@ -293,8 +293,8 @@ export const sumRunTotals = Effect.fnUntraced(function* (
 
   for (const contribution of contributions) {
     const value = yield* Schema.decodeEffect(RunTotals)(contribution).pipe(
-      Effect.mapError(
-        () => new UsageAggregationError({ field: "totals", message: "Invalid Run totals" }),
+      Effect.mapError(() =>
+        UsageAggregationError.make({ field: "totals", message: "Invalid Run totals" }),
       ),
     );
 
@@ -376,12 +376,11 @@ export const summarizeModelUsage = Effect.fnUntraced(function* (
     seed === undefined
       ? undefined
       : yield* Schema.decodeEffect(RunUsageSummary)(seed).pipe(
-          Effect.mapError(
-            () =>
-              new UsageAggregationError({
-                field: "seed",
-                message: "Canonical usage seed does not satisfy the RunUsageSummary Schema",
-              }),
+          Effect.mapError(() =>
+            UsageAggregationError.make({
+              field: "seed",
+              message: "Canonical usage seed does not satisfy the RunUsageSummary Schema",
+            }),
           ),
         );
 

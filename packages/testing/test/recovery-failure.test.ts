@@ -85,25 +85,24 @@ describe("bounded recovery failure isolation", () => {
           Effect.map(SubmissionLedger, (ledger) =>
             SubmissionLedger.of({
               ...ledger,
-              loadRecoverySnapshot: (request) =>
-                Effect.gen(function* () {
-                  const snapshot = yield* ledger.loadRecoverySnapshot(request);
+              loadRecoverySnapshot: Effect.fnUntraced(function* (request) {
+                const snapshot = yield* ledger.loadRecoverySnapshot(request);
 
-                  if (snapshot.submission.threadId !== failingThread) return snapshot;
+                if (snapshot.submission.threadId !== failingThread) return snapshot;
 
-                  return yield* Effect.failCause(
-                    mixedCause
-                      ? Cause.combine(
-                          Cause.fail(failure),
-                          Cause.die(
-                            Object.assign(new Error("private cleanup defect"), {
-                              name: "private_fixture_payload_name",
-                            }),
-                          ),
-                        )
-                      : Cause.fail(failure),
-                  );
-                }),
+                return yield* Effect.failCause(
+                  mixedCause
+                    ? Cause.combine(
+                        Cause.fail(failure),
+                        Cause.die(
+                          Object.assign(new Error("private cleanup defect"), {
+                            name: "private_fixture_payload_name",
+                          }),
+                        ),
+                      )
+                    : Cause.fail(failure),
+                );
+              }),
             }),
           ),
         ).pipe(

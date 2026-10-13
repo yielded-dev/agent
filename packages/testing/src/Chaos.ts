@@ -243,6 +243,7 @@ const planShapeArbitrary = (
       const [first, ...rest] = submissions;
 
       // `lanes` >= 1 and every lane has depth >= 1, so `first` always exists.
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Arbitrary.map is a synchronous fast-check callback; an impossible generated shape is a generator defect.
       if (first === undefined) throw new Error("chaos generator produced an empty plan");
 
       return {
@@ -695,24 +696,23 @@ const makeLaneFixture = Effect.fnUntraced(function* (
       const agent = Agent.withModel(itineraryDefinition, model);
 
       const toolLayer = itineraryTools.toLayer({
-        itinerary: ({ ref: called }) =>
-          Effect.gen(function* () {
-            const step = yield* DurableStep;
+        itinerary: Effect.fnUntraced(function* ({ ref: called }) {
+          const step = yield* DurableStep;
 
-            const flight = yield* step.do(
-              "reserve-flight",
-              Schema.String,
-              desk.record(flightValue(called)).pipe(Effect.as(flightValue(called))),
-            );
+          const flight = yield* step.do(
+            "reserve-flight",
+            Schema.String,
+            desk.record(flightValue(called)).pipe(Effect.as(flightValue(called))),
+          );
 
-            const lodging = yield* step.do(
-              "reserve-lodging",
-              Schema.String,
-              desk.record(lodgingValue(called)).pipe(Effect.as(lodgingValue(called))),
-            );
+          const lodging = yield* step.do(
+            "reserve-lodging",
+            Schema.String,
+            desk.record(lodgingValue(called)).pipe(Effect.as(lodgingValue(called))),
+          );
 
-            return { state: `${flight}+${lodging}` };
-          }),
+          return { state: `${flight}+${lodging}` };
+        }),
       });
 
       return plainLaneFixture(

@@ -89,12 +89,12 @@ export const makeAuthHost = Effect.fn("Auth.host")(function* (
 
         const session = yield* auth
           .requireSession()
-          .pipe(Effect.mapError(() => new FundingError({ message: "Sign in to continue." })));
+          .pipe(Effect.mapError(() => FundingError.make({ message: "Sign in to continue." })));
 
         if (request.headers["x-elsewhere-account"] !== session.subjectId)
-          return yield* new FundingError({ message: "Account changed. Sign in again." });
+          return yield* FundingError.make({ message: "Account changed. Sign in again." });
         if (request.method !== "GET" && request.headers.origin !== config.AUTH_ORIGIN)
-          return yield* new FundingError({ message: "Invalid request origin." });
+          return yield* FundingError.make({ message: "Invalid request origin." });
 
         return session.subjectId;
       });

@@ -174,66 +174,65 @@ const basePolicy = {
 } as const;
 
 /** Capture model requests, published history and Run outcomes. */
-const driveRun = (setup: RunSetup) =>
-  Effect.gen(function* () {
-    const { policy, script, results, commitCompaction } = setup;
+const driveRun = Effect.fnUntraced(function* (setup: RunSetup) {
+  const { policy, script, results, commitCompaction } = setup;
 
-    const definition = Agent.make("compaction-agent", {
-      input: Schema.Struct({ question: Schema.String }),
-      output: answerOutput,
-      instructions: "Research the question with the search tool, then answer.",
-      toolkit: searchToolkit,
-      policy,
-    });
-
-    const { model, requests } = scriptedModel(script);
-    const callCount = yield* Ref.make(0);
-
-    const toolLayer = searchToolkit.toLayer({
-      search: () =>
-        Ref.getAndUpdate(callCount, (count) => count + 1).pipe(
-          Effect.map((count) => results[count] ?? "found"),
-        ),
-    });
-
-    const events = yield* Ref.make<ReadonlyArray<RunEvent>>([]);
-    const histories: Array<Prompt.Prompt> = [];
-
-    const durability: RunDurabilityHook | undefined =
-      commitCompaction === undefined
-        ? undefined
-        : {
-            toolResultMaxBytes: 1024 * 1024,
-            checkpoint: Effect.void,
-            initialize: () => Effect.void,
-            commitTurn: () => Effect.succeed("committed"),
-            checkToolDispatch: Effect.void,
-            step: {
-              lookup: () => Effect.succeed(Option.none()),
-              reserve: () => Effect.succeed(Effect.void),
-              commit: () => Effect.void,
-            },
-            commitCompaction,
-            noteTurnUsage: () => Effect.void,
-          };
-
-    const exit = yield* AgentRuntime.stream(
-      Agent.withModel(definition, model),
-      { question: "compact?" },
-      {
-        context: setup.context,
-        onHistory: (history) => Effect.sync(() => void histories.push(history)),
-        ...(durability === undefined ? {} : { durability }),
-      },
-    ).pipe(
-      Stream.tap((event) => Ref.update(events, (all) => [...all, event])),
-      Stream.runDrain,
-      Effect.provide(toolLayer),
-      Effect.exit,
-    );
-
-    return { exit, requests, histories, events: yield* Ref.get(events) };
+  const definition = Agent.make("compaction-agent", {
+    input: Schema.Struct({ question: Schema.String }),
+    output: answerOutput,
+    instructions: "Research the question with the search tool, then answer.",
+    toolkit: searchToolkit,
+    policy,
   });
+
+  const { model, requests } = scriptedModel(script);
+  const callCount = yield* Ref.make(0);
+
+  const toolLayer = searchToolkit.toLayer({
+    search: () =>
+      Ref.getAndUpdate(callCount, (count) => count + 1).pipe(
+        Effect.map((count) => results[count] ?? "found"),
+      ),
+  });
+
+  const events = yield* Ref.make<ReadonlyArray<RunEvent>>([]);
+  const histories: Array<Prompt.Prompt> = [];
+
+  const durability: RunDurabilityHook | undefined =
+    commitCompaction === undefined
+      ? undefined
+      : {
+          toolResultMaxBytes: 1024 * 1024,
+          checkpoint: Effect.void,
+          initialize: () => Effect.void,
+          commitTurn: () => Effect.succeed("committed"),
+          checkToolDispatch: Effect.void,
+          step: {
+            lookup: () => Effect.succeed(Option.none()),
+            reserve: () => Effect.succeed(Effect.void),
+            commit: () => Effect.void,
+          },
+          commitCompaction,
+          noteTurnUsage: () => Effect.void,
+        };
+
+  const exit = yield* AgentRuntime.stream(
+    Agent.withModel(definition, model),
+    { question: "compact?" },
+    {
+      context: setup.context,
+      onHistory: (history) => Effect.sync(() => void histories.push(history)),
+      ...(durability === undefined ? {} : { durability }),
+    },
+  ).pipe(
+    Stream.tap((event) => Ref.update(events, (all) => [...all, event])),
+    Stream.runDrain,
+    Effect.provide(toolLayer),
+    Effect.exit,
+  );
+
+  return { exit, requests, histories, events: yield* Ref.get(events) };
+});
 
 const compactionTestLayer = Layer.merge(identifiers, ContextCompactor.layer);
 
@@ -412,70 +411,67 @@ layer(testLayer)("engine compaction and overflow recovery", (it) => {
   }
 });
 
-export const verifyCompactionCallbackAndModelRequirements = () =>
-  Effect.gen(function* () {
-    class SummaryConfig extends Context.Service<SummaryConfig, { readonly text: string }>()(
-      "test/SummaryConfig",
-    ) {}
-    class SummaryFailure extends Schema.TaggedError<SummaryFailure>()("SummaryFailure", {}) {}
+export const verifyCompactionCallbackAndModelRequirements = Effect.fnUntraced(function* () {
+  class SummaryConfig extends Context.Service<SummaryConfig, { readonly text: string }>()(
+    "test/SummaryConfig",
+  ) {}
+  class SummaryFailure extends Schema.TaggedError<SummaryFailure>()("SummaryFailure", {}) {}
 
-    const source = Prompt.fromMessages([
-      Prompt.assistantMessage({ content: [Prompt.textPart({ text: "older history" })] }),
-      Prompt.userMessage({ content: [Prompt.textPart({ text: "latest input" })] }),
-    ]);
+  const source = Prompt.fromMessages([
+    Prompt.assistantMessage({ content: [Prompt.textPart({ text: "older history" })] }),
+    Prompt.userMessage({ content: [Prompt.textPart({ text: "latest input" })] }),
+  ]);
 
-    const compactor = yield* ContextCompactor;
+  const compactor = yield* ContextCompactor;
 
-    const summarize = () =>
+  const summarize = Effect.fnUntraced(function* () {
+    const config = yield* SummaryConfig;
+
+    if (config.text === "") return yield* SummaryFailure.make({});
+
+    return config.text;
+  });
+
+  const program = compactor
+    .compact({
+      source,
+      state: initialCompactionState(),
+      policy: CompactionPolicy.make({ keepRecentTokens: 1, mode: "summarize" }),
+      targetTokens: 10,
+      threadId: ThreadId.make("thread-compact"),
+      runId: RunId.make("run-compact"),
+      turn: 1,
+      trigger: "pressure",
+      modelCallAllowed: true,
+      summarize,
+    })
+    .pipe(Stream.runCollect);
+
+  const errorProof: SummaryFailure extends Effect.Error<typeof program> ? true : false = true;
+
+  const requirementProof: SummaryConfig extends Effect.Services<typeof program> ? true : false =
+    true;
+
+  const model = Model.make(
+    "test",
+    "configured",
+    Layer.effect(
+      LanguageModel.LanguageModel,
       Effect.gen(function* () {
         const config = yield* SummaryConfig;
 
-        if (config.text === "") return yield* SummaryFailure.make({});
+        return yield* LanguageModel.make({
+          generateText: () => Effect.succeed([]),
+          streamText: () => Stream.fromIterable(finalParts(config.text)),
+        });
+      }),
+    ),
+  );
 
-        return config.text;
-      });
+  const configured = ContextCompactor.layerWithModel(model);
 
-    const program = compactor
-      .compact({
-        source,
-        state: initialCompactionState(),
-        policy: CompactionPolicy.make({ keepRecentTokens: 1, mode: "summarize" }),
-        targetTokens: 10,
-        threadId: ThreadId.make("thread-compact"),
-        runId: RunId.make("run-compact"),
-        turn: 1,
-        trigger: "pressure",
-        modelCallAllowed: true,
-        summarize,
-      })
-      .pipe(Stream.runCollect);
+  const modelRequirements: SummaryConfig extends Layer.Services<typeof configured> ? true : false =
+    true;
 
-    const errorProof: SummaryFailure extends Effect.Error<typeof program> ? true : false = true;
-
-    const requirementProof: SummaryConfig extends Effect.Services<typeof program> ? true : false =
-      true;
-
-    const model = Model.make(
-      "test",
-      "configured",
-      Layer.effect(
-        LanguageModel.LanguageModel,
-        Effect.gen(function* () {
-          const config = yield* SummaryConfig;
-
-          return yield* LanguageModel.make({
-            generateText: () => Effect.succeed([]),
-            streamText: () => Stream.fromIterable(finalParts(config.text)),
-          });
-        }),
-      ),
-    );
-
-    const configured = ContextCompactor.layerWithModel(model);
-
-    const modelRequirements: SummaryConfig extends Layer.Services<typeof configured>
-      ? true
-      : false = true;
-
-    void [errorProof, requirementProof, modelRequirements];
-  });
+  void [errorProof, requirementProof, modelRequirements];
+});

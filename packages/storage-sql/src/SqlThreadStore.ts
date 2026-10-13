@@ -246,7 +246,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
       Effect.mapErrorEager((error) => schemaStoreError("decode batch identity", error)),
     );
 
-    return new CanonicalRecordEnvelope(
+    return CanonicalRecordEnvelope.make(
       { threadId, batchId, sequence, offset, record },
       { disableChecks: true },
     );

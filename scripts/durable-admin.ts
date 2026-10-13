@@ -95,12 +95,13 @@ const admin = CliCommand.make("durable-admin").pipe(
   ),
 );
 
-const withRuntime = <A, E>(effect: Effect.Effect<A, E, DurableAgentRuntime>) =>
-  Effect.gen(function* () {
-    const { database: filename } = yield* admin;
+const withRuntime = Effect.fnUntraced(function* <A, E>(
+  effect: Effect.Effect<A, E, DurableAgentRuntime>,
+) {
+  const { database: filename } = yield* admin;
 
-    return yield* effect.pipe(Effect.provide(runtimeLayerFor(filename)));
-  });
+  return yield* effect.pipe(Effect.provide(runtimeLayerFor(filename)));
+});
 
 const printExplanation = (explanation: RecoveryExplanation, asJson: boolean) =>
   asJson

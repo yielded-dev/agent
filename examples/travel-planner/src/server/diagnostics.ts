@@ -170,7 +170,7 @@ export class FailureDiagnostics extends Context.Service<
 >()("travel-planner/FailureDiagnostics") {}
 
 const unavailable = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "storage",
     message: "Failure diagnostics could not be stored or read.",
   });

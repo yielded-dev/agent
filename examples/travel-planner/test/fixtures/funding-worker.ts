@@ -78,7 +78,7 @@ export class FundingFixture extends DurableObject {
           hit: (point) => {
             if (point !== url.searchParams.get("point")) return Effect.void;
 
-            return Effect.fail(new FundingError({ message: "Injected lost response" }));
+            return Effect.fail(FundingError.make({ message: "Injected lost response" }));
           },
         }),
         Effect.timeout("100 millis"),

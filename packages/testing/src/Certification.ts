@@ -544,24 +544,23 @@ const makeCell = Effect.fnUntraced(function* (scenario: CertificationScenario, s
       );
 
       const toolLayer = itineraryToolkit.toLayer({
-        itinerary: ({ ref }) =>
-          Effect.gen(function* () {
-            const step = yield* DurableStep;
+        itinerary: Effect.fnUntraced(function* ({ ref }) {
+          const step = yield* DurableStep;
 
-            const flight = yield* step.do(
-              "reserve-flight",
-              Schema.String,
-              Effect.succeed(`flight-${ref}`),
-            );
+          const flight = yield* step.do(
+            "reserve-flight",
+            Schema.String,
+            Effect.succeed(`flight-${ref}`),
+          );
 
-            const lodging = yield* step.do(
-              "reserve-lodging",
-              Schema.String,
-              Effect.succeed(`lodging-${ref}`),
-            );
+          const lodging = yield* step.do(
+            "reserve-lodging",
+            Schema.String,
+            Effect.succeed(`lodging-${ref}`),
+          );
 
-            return { state: `${flight}+${lodging}` };
-          }),
+          return { state: `${flight}+${lodging}` };
+        }),
       });
 
       const resolved = yield* DurableWorkerBinding.make(binding, DIGESTS).pipe(

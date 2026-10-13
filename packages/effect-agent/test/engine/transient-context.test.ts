@@ -153,12 +153,11 @@ export const verifyPreservesAPerRunOverridesTypedErrorAndServiceRequirement = ()
 
   const program = AgentRuntime.run(makeAgent(requests), "question", {
     transientContext: {
-      load: () =>
-        Effect.gen(function* () {
-          const dependency = yield* TransientContextDependency;
+      load: Effect.fnUntraced(function* () {
+        const dependency = yield* TransientContextDependency;
 
-          return yield* TransientContextFailure.make({ message: dependency.value });
-        }),
+        return yield* TransientContextFailure.make({ message: dependency.value });
+      }),
     },
   });
 

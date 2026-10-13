@@ -225,7 +225,11 @@ const storedBytes = (thread: StoredThread, sequence: number) =>
     (sequence - 1) % RECORD_CHUNK_SIZE
   ];
 
-const storedPage = (thread: StoredThread, after: number, limit: number) => {
+const storedPage = Effect.fnUntraced(function* (
+  thread: StoredThread,
+  after: number,
+  limit: number,
+) {
   const page: Array<CanonicalRecordEnvelope> = [];
   let bytes = 0;
 
@@ -236,7 +240,7 @@ const storedPage = (thread: StoredThread, after: number, limit: number) => {
   ) {
     const record = storedRecord(thread, sequence);
 
-    if (record === undefined) throw new Error("Incomplete canonical chunk table");
+    if (record === undefined) return yield* storeError("read", "Incomplete canonical chunk table");
     const size = storedBytes(thread, sequence) ?? 0;
 
     if (bytes + size > 32 * 1024 * 1024) break;
@@ -245,7 +249,7 @@ const storedPage = (thread: StoredThread, after: number, limit: number) => {
   }
 
   return page;
-};
+});
 
 const retainRecords = (thread: StoredThread, records: ReadonlyArray<CanonicalRecordEnvelope>) => {
   for (const entry of records) {
@@ -1533,7 +1537,7 @@ const makeThreadStore = Effect.gen(function* () {
   ) =>
     Ref.get(state).pipe(
       Effect.flatMap((current) => findThread(current, threadId)),
-      Effect.map((thread) => {
+      Effect.flatMap((thread) => {
         // Append assigns gap-free sequences starting at 1, so the exclusive cursor is an index.
         const start = afterSequence ?? ZERO_CANONICAL_SEQUENCE;
 
@@ -1598,7 +1602,7 @@ const makeThreadStore = Effect.gen(function* () {
             { after: request.afterSequence ?? ZERO_CANONICAL_SEQUENCE, count: 0 },
             (cursor) =>
               Effect.gen(function* () {
-                const page = storedPage(
+                const page = yield* storedPage(
                   thread,
                   cursor.after,
                   Math.min(READ_PAGE_SIZE, request.limit - cursor.count),
@@ -2038,26 +2042,25 @@ const makeThreadStore = Effect.gen(function* () {
   const verificationPage: ThreadStore["Service"]["export"] = (request) =>
     exportThreadPage(request).pipe(Effect.provideService(ThreadExporterReader, verificationReader));
 
-  const exactRunRecords = (thread: StoredThread, runId: RunId) =>
-    Effect.gen(function* () {
-      const records: Array<CanonicalRecordEnvelope> = [];
-      let bytes = 0;
-      const facts = thread.runRecords.get(runId) ?? [];
+  const exactRunRecords = Effect.fnUntraced(function* (thread: StoredThread, runId: RunId) {
+    const records: Array<CanonicalRecordEnvelope> = [];
+    let bytes = 0;
+    const facts = thread.runRecords.get(runId) ?? [];
 
-      if (
-        facts.length >
-        MAX_RUN_EVIDENCE_RECORDS + RUN_TERMINAL_RESERVE_RECORDS + MAX_RUN_RECOVERY_SUFFIX_RECORDS
-      )
-        return yield* storeError("Run evidence", "Run record bounds exceeded");
-      for (const entry of facts) {
-        bytes += canonicalRecordBytes(entry.record);
-        if (bytes > MAX_RUN_EVIDENCE_BYTES + MAX_RUN_TERMINAL_BYTES + MAX_RUN_RECOVERY_SUFFIX_BYTES)
-          return yield* storeError("Run evidence", "Run byte bounds exceeded");
-        records.push(entry);
-      }
+    if (
+      facts.length >
+      MAX_RUN_EVIDENCE_RECORDS + RUN_TERMINAL_RESERVE_RECORDS + MAX_RUN_RECOVERY_SUFFIX_RECORDS
+    )
+      return yield* storeError("Run evidence", "Run record bounds exceeded");
+    for (const entry of facts) {
+      bytes += canonicalRecordBytes(entry.record);
+      if (bytes > MAX_RUN_EVIDENCE_BYTES + MAX_RUN_TERMINAL_BYTES + MAX_RUN_RECOVERY_SUFFIX_BYTES)
+        return yield* storeError("Run evidence", "Run byte bounds exceeded");
+      records.push(entry);
+    }
 
-      return records.sort((a, b) => a.sequence - b.sequence);
-    });
+    return records.sort((a, b) => a.sequence - b.sequence);
+  });
 
   const exactRecordReader = (
     threadId: ThreadId,
@@ -2853,33 +2856,41 @@ const makeThreadStore = Effect.gen(function* () {
       },
       registerWorkOwner: (kind, owner) =>
         withMutation(
-          Effect.sync(() => {
+          Effect.gen(function* () {
             if (workOwners.has(kind))
-              throw new Error(`MemoryThreadStore already has a ${kind} work owner`);
+              return yield* Effect.die(
+                storeError("initialize", `MemoryThreadStore already has a ${kind} work owner`),
+              );
             workOwners.set(kind, owner);
           }),
         ),
       registerDeliveryLookup: (lookup) =>
         withMutation(
-          Effect.sync(() => {
+          Effect.gen(function* () {
             if (deliveryLookup !== undefined)
-              throw new Error("MemoryThreadStore already has a delivery lookup");
+              return yield* Effect.die(
+                storeError("initialize", "MemoryThreadStore already has a delivery lookup"),
+              );
             deliveryLookup = lookup;
           }),
         ),
       registerLedgerTransfer: (transfer) =>
         withMutation(
-          Effect.sync(() => {
+          Effect.gen(function* () {
             if (ledgerTransfer !== undefined)
-              throw new Error("MemoryThreadStore already has a paired SubmissionLedger");
+              return yield* Effect.die(
+                storeError("initialize", "MemoryThreadStore already has a paired SubmissionLedger"),
+              );
             ledgerTransfer = transfer;
           }),
         ),
       registerDeliveryTransfer: (transfer) =>
         withMutation(
-          Effect.sync(() => {
+          Effect.gen(function* () {
             if (deliveryTransfer !== undefined)
-              throw new Error("MemoryThreadStore already has a paired delivery store");
+              return yield* Effect.die(
+                storeError("initialize", "MemoryThreadStore already has a paired delivery store"),
+              );
             deliveryTransfer = transfer;
           }),
         ),

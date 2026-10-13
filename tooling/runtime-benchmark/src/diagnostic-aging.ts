@@ -203,21 +203,18 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
   );
 
   const handlers = toolkit.toLayer({
-    write: () =>
-      Effect.gen(function* () {
-        if (phase === "unknown") {
-          originalMutations++;
-          yield* fs
-            .writeFileString(mutationFile, `call-a:${originalMutations}\n`)
-            .pipe(Effect.orDie);
-          yield* Deferred.succeed(mutated, undefined);
+    write: Effect.fnUntraced(function* () {
+      if (phase === "unknown") {
+        originalMutations++;
+        yield* fs.writeFileString(mutationFile, `call-a:${originalMutations}\n`).pipe(Effect.orDie);
+        yield* Deferred.succeed(mutated, undefined);
 
-          return yield* Effect.never;
-        }
-        laterMutations++;
+        return yield* Effect.never;
+      }
+      laterMutations++;
 
-        return "recorded";
-      }),
+      return "recorded";
+    }),
   });
 
   const changedHandlers = toolkit.toLayer({
@@ -658,8 +655,8 @@ export const runAgingCase = Effect.fn("diagnostic.aging.run")(function* (storeSi
         ...raw,
         ...(current
           ? {
-              readExecution: (request: ThreadStorage.ExecutionRead) =>
-                Effect.gen(function* () {
+              readExecution: Effect.fnUntraced(
+                function* (request: ThreadStorage.ExecutionRead) {
                   const execution = yield* raw.readExecution(request);
 
                   const observed = {
@@ -683,7 +680,9 @@ export const runAgingCase = Effect.fn("diagnostic.aging.run")(function* (storeSi
                   ).pipe(Effect.orDie);
 
                   return execution;
-                }).pipe(Effect.orDie),
+                },
+                (effect) => effect.pipe(Effect.orDie),
+              ),
             }
           : {}),
         read: (request) =>

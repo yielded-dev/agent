@@ -141,8 +141,8 @@ const isNotificationTag = (tag: string): boolean => tag.startsWith("notification
 const isRpcClientError = Schema.is(RpcClientError.RpcClientError);
 
 const protocolDefect = (message: string, cause?: unknown): RpcClientError.RpcClientError =>
-  new RpcClientError.RpcClientError({
-    reason: new RpcClientError.RpcClientDefect({ message, cause }),
+  RpcClientError.RpcClientError.make({
+    reason: RpcClientError.RpcClientDefect.make({ message, cause }),
   });
 
 const InitializeProtocolVersion = Schema.Struct({ protocolVersion: Schema.String });

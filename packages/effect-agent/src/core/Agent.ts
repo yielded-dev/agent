@@ -570,9 +570,11 @@ export function make(
 
   for (const declaration of options.completionFromTools ?? []) {
     if (declaration.tool === options.completion?.tool || completionNames.has(declaration.tool)) {
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Agent.make synchronously rejects duplicate completion declarations before constructing the Definition.
       throw new Error(`Tool ${declaration.tool} has more than one completion declaration`);
     }
     if (!Object.hasOwn(options.toolkit.tools, declaration.tool)) {
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Agent.make synchronously rejects completion declarations for absent Tools.
       throw new Error(`Unknown completion Tool ${declaration.tool}`);
     }
     completionNames.add(declaration.tool);
@@ -622,11 +624,14 @@ export function make(
 }
 
 /** Bind a native model or thread resolver without acquiring or hiding its requirements. */
-export const withModel = <DefinitionValue extends AnyDefinition, ModelValue>(
+export function withModel<DefinitionValue extends AnyDefinition, ModelValue>(
   definition: DefinitionValue,
   model: NativeModel<ModelValue>,
-): Binding<DefinitionValue, ModelValue> =>
-  Object.freeze({
-    definition,
-    model,
-  });
+): Binding<DefinitionValue, ModelValue>;
+
+export function withModel<DefinitionValue extends AnyDefinition, ModelValue>(
+  definition: DefinitionValue,
+  model: ModelValue,
+) {
+  return Object.freeze({ definition, model });
+}

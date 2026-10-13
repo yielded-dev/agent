@@ -69,27 +69,36 @@ const Files = Schema.Array(
 );
 
 const failed = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "storage",
     message: "Trip app source storage is unavailable or contains invalid data.",
   });
 
 const invalid = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "invalid",
     message: "Invalid trip app source or source limits exceeded.",
   });
 
 const conflict = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "conflict",
     message: "Trip app source changed. Read the current version before retrying.",
   });
 
 const hasCode = (code: string) => Schema.is(Schema.Struct({ code: Schema.Literal(code) }));
 
-const operation = <A>(run: (signal: AbortSignal) => Promise<A>) =>
-  Effect.tryPromise({ try: run, catch: failed });
+const operation = <A, B = never>(
+  run: (signal: AbortSignal) => Promise<A>,
+  recover?: { readonly code: string; readonly value: B },
+) =>
+  Effect.tryPromise({ try: run, catch: (cause) => ({ cause }) }).pipe(
+    Effect.catch(({ cause }) =>
+      recover !== undefined && hasCode(recover.code)(cause)
+        ? Effect.succeed(recover.value)
+        : Effect.fail(failed()),
+    ),
+  );
 
 const normalize = Effect.fn("AppSource.normalize")(function* (files: ReadonlyArray<AppFile>) {
   return (yield* Schema.decodeEffect(Files)(files).pipe(Effect.mapError(invalid))).toSorted(
@@ -104,71 +113,104 @@ const sameFiles = (a: ReadonlyArray<AppFile>, b: ReadonlyArray<AppFile>) =>
 // redirects never receive repository credentials and cancellation closes body readers.
 const transport = (signal: AbortSignal): HttpClient => {
   let remaining = MAX_TRANSFER;
-
-  const count = (size: number) => {
-    remaining -= size;
-    if (remaining < 0) throw failed();
-  };
+  const io = <A>(run: () => Promise<A>) => Effect.tryPromise({ try: run, catch: failed });
 
   return {
-    request: async ({ url, method = "GET", headers, body }) => {
-      const chunks: Uint8Array[] = [];
-      let length = 0;
+    // isomorphic-git's Promise port is the execution boundary for this typed workflow.
+    request: ({ url, method = "GET", headers, body }) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const chunks: Uint8Array[] = [];
+          let size = 0;
 
-      if (body)
-        for await (const chunk of body) {
-          signal.throwIfAborted();
-          count(chunk.byteLength);
-          length += chunk.byteLength;
-          chunks.push(chunk);
-        }
-      const bytes = new Uint8Array(length);
-      let offset = 0;
+          if (body)
+            yield* Effect.acquireUseRelease(
+              // Git also supplies synchronous iterables despite its narrower declaration.
+              Effect.sync(() =>
+                (async function* () {
+                  yield* body;
+                })(),
+              ),
+              (iterator) =>
+                Effect.gen(function* () {
+                  while (true) {
+                    const next = yield* io(() => iterator.next());
 
-      for (const chunk of chunks) {
-        bytes.set(chunk, offset);
-        offset += chunk.byteLength;
-      }
+                    if (next.done) break;
+                    size += next.value.byteLength;
+                    remaining -= next.value.byteLength;
+                    if (remaining < 0) return yield* failed();
+                    chunks.push(next.value);
+                  }
+                }),
+              (iterator) =>
+                io(async () => {
+                  await iterator.return?.();
+                }),
+            );
+          const bytes = new Uint8Array(size);
+          let offset = 0;
 
-      const response = await fetch(url, {
-        method,
-        headers,
-        signal,
-        redirect: "manual",
-        ...(body ? { body: bytes } : {}),
-      });
-
-      if (response.status >= 300 && response.status < 400) {
-        await response.body?.cancel();
-        throw failed();
-      }
-      const reader = response.body?.getReader();
-      const result: Uint8Array[] = [];
-
-      try {
-        if (reader)
-          while (true) {
-            const next = await reader.read();
-
-            if (next.done) break;
-            count(next.value.byteLength);
-            result.push(next.value);
+          for (const chunk of chunks) {
+            bytes.set(chunk, offset);
+            offset += chunk.byteLength;
           }
-      } finally {
-        await reader?.cancel();
-      }
 
-      return {
-        url: response.url,
-        method,
-        headers: Object.fromEntries(response.headers),
-        statusCode: response.status,
-        statusMessage: response.statusText,
-        body: (async function* () {
-          yield* result;
-        })(),
-      };
-    },
+          // workerd supports manual/follow, but rejects redirect: "error" before I/O.
+          const response = yield* io(() =>
+            fetch(url, {
+              method: method,
+              headers,
+              signal,
+              redirect: "manual",
+              ...(body ? { body: bytes } : {}),
+            }),
+          );
+
+          if (response.status >= 300 && response.status < 400) {
+            yield* io(async () => {
+              await response.body?.cancel();
+            });
+
+            return yield* failed();
+          }
+          const result: Uint8Array[] = [];
+
+          size = 0;
+          yield* Effect.acquireUseRelease(
+            Effect.sync(() => response.body?.getReader()),
+            (reader) =>
+              Effect.gen(function* () {
+                if (reader)
+                  while (true) {
+                    const next = yield* io(() => reader.read());
+
+                    if (next.done) break;
+                    size += next.value.byteLength;
+                    remaining -= next.value.byteLength;
+                    if (remaining < 0) return yield* failed();
+                    result.push(next.value);
+                  }
+              }),
+            (reader) =>
+              io(async () => {
+                await reader?.cancel();
+              }),
+          );
+
+          return {
+            url: response.url,
+            method,
+            headers: Object.fromEntries(response.headers),
+            statusCode: response.status,
+            statusMessage: response.statusText,
+            body: (async function* () {
+              yield* result;
+            })(),
+          };
+        }),
+        { signal },
+      ),
   };
 };
 
@@ -223,22 +265,17 @@ export const appSourceLayer = (
 
   const getRepo = (name: string) =>
     Effect.acquireRelease(
-      operation(async (signal) => {
-        let repo: ArtifactsRepo;
+      operation(
+        async (signal) => {
+          const repo = await artifacts.get(name);
 
-        try {
-          repo = await artifacts.get(name);
-        } catch (error) {
-          if (hasCode("NOT_FOUND")(error)) return null;
-          throw error;
-        }
-        if (signal.aborted) {
-          disposeRepo(repo);
-          signal.throwIfAborted();
-        }
+          // An unabortable binding may resolve after interruption; dispose that late handle.
+          if (signal.aborted) disposeRepo(repo);
 
-        return repo;
-      }),
+          return repo;
+        },
+        { code: "NOT_FOUND", value: null },
+      ),
       (repo) => Effect.sync(() => disposeRepo(repo)),
       { interruptible: true },
     );
@@ -314,43 +351,54 @@ export const appSourceLayer = (
       });
     });
 
-  const treeFiles = (s: Session, oid: string) =>
-    operation(async () => {
-      const files: AppFile[] = [];
-      let bytes = 0;
-      let entries = 0;
+  const treeFiles = Effect.fnUntraced(function* (s: Session, oid: string) {
+    const files: AppFile[] = [];
+    let bytes = 0;
+    let entries = 0;
 
-      const walk = async (tree: string, prefix: string): Promise<void> => {
-        const result = await git.readTree({ fs: s.fs, dir: s.dir, oid: tree });
+    const walk = Effect.fnUntraced(function* (
+      tree: string,
+      prefix: string,
+    ): Effect.fn.Return<void, PlannerError> {
+      const result = yield* operation(() => git.readTree({ fs: s.fs, dir: s.dir, oid: tree }));
 
-        for (const entry of result.tree) {
-          // Every admitted file has at most 240 path characters. Bound even a
-          // hostile tree full of empty directories without excluding valid paths.
-          if (++entries > 100 * 240) throw failed();
-          const path = prefix + entry.path;
+      for (const entry of result.tree) {
+        // Every admitted file has at most 240 path characters. Bound even a
+        // hostile tree full of empty directories without excluding valid paths.
+        if (++entries > 100 * 240) return yield* failed();
+        const path = prefix + entry.path;
 
-          if (!Schema.is(SafePath)(path)) throw failed();
-          if (entry.type === "tree") await walk(entry.oid, `${path}/`);
-          else {
-            if (
-              entry.type !== "blob" ||
-              !["100644", "100755"].includes(entry.mode) ||
-              files.length >= 100
-            )
-              throw failed();
-            const { blob } = await git.readBlob({ fs: s.fs, dir: s.dir, oid: entry.oid });
+        if (!Schema.is(SafePath)(path)) return yield* failed();
+        if (entry.type === "tree") yield* walk(entry.oid, `${path}/`);
+        else {
+          if (
+            entry.type !== "blob" ||
+            !["100644", "100755"].includes(entry.mode) ||
+            files.length >= 100
+          )
+            return yield* failed();
 
-            bytes += blob.byteLength;
-            if (blob.byteLength > 128 * 1024 || bytes > MAX_SOURCE) throw failed();
-            files.push({ path, content: new TextDecoder("utf-8", { fatal: true }).decode(blob) });
-          }
+          const { blob } = yield* operation(() =>
+            git.readBlob({ fs: s.fs, dir: s.dir, oid: entry.oid }),
+          );
+
+          bytes += blob.byteLength;
+          if (blob.byteLength > 128 * 1024 || bytes > MAX_SOURCE) return yield* failed();
+
+          const content = yield* Effect.try({
+            try: () => new TextDecoder("utf-8", { fatal: true }).decode(blob),
+            catch: failed,
+          });
+
+          files.push({ path, content });
         }
-      };
+      }
+    });
 
-      await walk(oid, "");
+    yield* walk(oid, "");
 
-      return files;
-    }).pipe(Effect.flatMap(normalize), Effect.mapError(failed));
+    return yield* normalize(files).pipe(Effect.mapError(failed));
+  });
 
   const loadMain = Effect.fn("AppSource.loadMain")(function* (s: Session) {
     const commitId = yield* main(s);
@@ -432,8 +480,9 @@ export const appSourceLayer = (
     const failpoint = yield* TripFailpoint;
 
     yield* failpoint.hit("app-source:push:before");
-    yield* operation(async () => {
-      const result = await git.push({
+
+    const result = yield* operation(() =>
+      git.push({
         fs: s.fs,
         dir: s.dir,
         http: s.http,
@@ -442,10 +491,10 @@ export const appSourceLayer = (
         ref: "main",
         remoteRef: "main",
         force: false,
-      });
+      }),
+    );
 
-      if (!result.ok) throw failed();
-    });
+    if (!result.ok) return yield* failed();
     yield* failpoint.hit("app-source:push:after");
   });
 
@@ -488,15 +537,10 @@ export const appSourceLayer = (
     if (template === null) {
       yield* failpoint.hit("app-source:repo:before");
 
-      const created = yield* operation(async () => {
-        try {
-          return await artifacts.create(templateName, { setDefaultBranch: "main" });
-        } catch (error) {
-          if (!hasCode("ALREADY_EXISTS")(error)) throw error;
-
-          return null;
-        }
-      });
+      const created = yield* operation(
+        () => artifacts.create(templateName, { setDefaultBranch: "main" }),
+        { code: "ALREADY_EXISTS", value: null },
+      );
 
       if (created !== null) yield* discardCreationToken(templateName, created.token);
       yield* failpoint.hit("app-source:repo:after");
@@ -516,14 +560,9 @@ export const appSourceLayer = (
     if (seed.parent.length !== 0 || !sameFiles(seed.files, files)) return yield* conflict();
     yield* failpoint.hit("app-source:fork:before");
 
-    const forked = yield* operation(async () => {
-      try {
-        return await template.fork(repoName, { defaultBranchOnly: true });
-      } catch (error) {
-        if (!hasCode("ALREADY_EXISTS")(error)) throw error;
-
-        return null;
-      }
+    const forked = yield* operation(() => template.fork(repoName, { defaultBranchOnly: true }), {
+      code: "ALREADY_EXISTS",
+      value: null,
     }).pipe(Effect.result);
 
     if (forked._tag === "Success") {
@@ -556,7 +595,7 @@ export const appSourceLayer = (
     const repo = yield* getRepo(repoName);
 
     if (repo === null)
-      return yield* new PlannerError({ code: "not-found", message: "Trip app source not found." });
+      return yield* PlannerError.make({ code: "not-found", message: "Trip app source not found." });
     const s = yield* session(repo, repoName, "read");
 
     yield* fetchCommit(s, commitId);
@@ -588,7 +627,7 @@ export const appSourceLayer = (
     const repo = yield* getRepo(repoName);
 
     if (repo === null)
-      return yield* new PlannerError({ code: "not-found", message: "Trip app source not found." });
+      return yield* PlannerError.make({ code: "not-found", message: "Trip app source not found." });
     const s = yield* session(repo, repoName, "write");
     const previous = yield* loadMain(s);
 

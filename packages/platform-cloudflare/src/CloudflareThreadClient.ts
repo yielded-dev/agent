@@ -399,10 +399,10 @@ const decodeLiveText = (
     let streamId: string | undefined;
     const models = new Map<string, { attemptId: string; parts: Set<string> }>();
 
-    const accept = (frame: LiveTextFrame): boolean => {
+    const accept = Effect.fnUntraced(function* (frame: LiveTextFrame) {
       if (frame._tag === "Reset") {
         if (frame.streamId === streamId || frame.threadId !== threadId)
-          throw liveTextProtocolFailure();
+          return yield* liveTextProtocolFailure();
         streamId = frame.streamId;
         expected = 1;
         models.clear();
@@ -416,7 +416,7 @@ const decodeLiveText = (
         frame.event.threadId !== threadId ||
         !isBoundedEvent(frame.event)
       )
-        throw liveTextProtocolFailure();
+        return yield* liveTextProtocolFailure();
       const event = frame.event;
 
       if (event._tag === "AttemptEnded") {
@@ -435,12 +435,12 @@ const decodeLiveText = (
       let model = models.get(key);
 
       if (event.part.type === "text-start") {
-        if (model?.parts.has(event.part.id)) throw liveTextProtocolFailure();
+        if (model?.parts.has(event.part.id)) return yield* liveTextProtocolFailure();
         if (
           [...models.values()].reduce((size, value) => size + value.parts.size, 0) >=
           MAX_DRAFT_PARTS
         )
-          throw liveTextProtocolFailure();
+          return yield* liveTextProtocolFailure();
         if (model === undefined) {
           model = { attemptId: event.attemptId, parts: new Set() };
           models.set(key, model);
@@ -449,14 +449,14 @@ const decodeLiveText = (
 
         return true;
       }
-      if (!model?.parts.has(event.part.id)) throw liveTextProtocolFailure();
+      if (!model?.parts.has(event.part.id)) return yield* liveTextProtocolFailure();
       if (event.part.type === "text-end") {
         model.parts.delete(event.part.id);
         if (model.parts.size === 0) models.delete(key);
       }
 
       return true;
-    };
+    });
 
     return Stream.fromReadableStream({
       evaluate: () => source,
@@ -469,31 +469,35 @@ const decodeLiveText = (
           cause,
         }),
     }).pipe(
-      Stream.mapEffect((chunk) =>
-        Effect.try({
-          try: () => {
-            if (!(chunk instanceof Uint8Array)) throw liveTextProtocolFailure();
-            const frames: LiveTextFrame[] = [];
+      Stream.mapEffect(
+        Effect.fnUntraced(function* (chunk) {
+          if (!(chunk instanceof Uint8Array)) return yield* liveTextProtocolFailure();
+          const frames: LiveTextFrame[] = [];
 
-            for (let offset = 0; offset < chunk.byteLength;) {
-              const newline = chunk.indexOf(10, offset);
-              const end = newline < 0 ? chunk.byteLength : newline;
+          for (let offset = 0; offset < chunk.byteLength;) {
+            const newline = chunk.indexOf(10, offset);
+            const end = newline < 0 ? chunk.byteLength : newline;
 
-              pendingBytes += end - offset;
-              if (pendingBytes > MAX_FRAME_BYTES) throw liveTextProtocolFailure();
-              pending += decoder.decode(chunk.subarray(offset, end), { stream: newline < 0 });
-              offset = end + 1;
-              if (newline < 0) break;
-              const frame = decode(pending);
+            pendingBytes += end - offset;
+            if (pendingBytes > MAX_FRAME_BYTES) return yield* liveTextProtocolFailure();
+            pending += yield* Effect.try({
+              try: () => decoder.decode(chunk.subarray(offset, end), { stream: newline < 0 }),
+              catch: liveTextProtocolFailure,
+            });
+            offset = end + 1;
+            if (newline < 0) break;
 
-              pending = "";
-              pendingBytes = 0;
-              if (accept(frame)) frames.push(frame);
-            }
+            const frame = yield* Effect.try({
+              try: () => decode(pending),
+              catch: liveTextProtocolFailure,
+            });
 
-            return frames;
-          },
-          catch: liveTextProtocolFailure,
+            pending = "";
+            pendingBytes = 0;
+            if (yield* accept(frame)) frames.push(frame);
+          }
+
+          return frames;
         }),
       ),
       Stream.flatMap(Stream.fromArray),
@@ -702,40 +706,37 @@ export class CloudflareThreadClient extends Context.Service<
         };
       };
 
-      const readPage = (
+      const readPage = Effect.fnUntraced(function* (
         threadId: ThreadId,
         options?: {
           readonly afterSequence?: CanonicalSequence | undefined;
           readonly limit?: number | undefined;
         },
-      ) =>
-        Effect.gen(function* () {
-          const request = ObservePageRequest.make({
-            ...(options?.afterSequence === undefined
-              ? {}
-              : { afterSequence: options.afterSequence }),
-            limit: options?.limit ?? 256,
-          });
-
-          const encoded = yield* encodeObservePageRequest(request).pipe(
-            Effect.mapError((error) =>
-              HostProtocolError.make({
-                message: boundHostDiagnostic(`observePage request encode failed: ${error.message}`),
-              }),
-            ),
-          );
-
-          const response = yield* call(threadId, "observePage", encoded);
-
-          const page = yield* expect(
-            threadId,
-            "observePage",
-            ObservedPage,
-            ClientObserveHostFailure,
-          )(response);
-
-          return page.records;
+      ) {
+        const request = ObservePageRequest.make({
+          ...(options?.afterSequence === undefined ? {} : { afterSequence: options.afterSequence }),
+          limit: options?.limit ?? 256,
         });
+
+        const encoded = yield* encodeObservePageRequest(request).pipe(
+          Effect.mapError((error) =>
+            HostProtocolError.make({
+              message: boundHostDiagnostic(`observePage request encode failed: ${error.message}`),
+            }),
+          ),
+        );
+
+        const response = yield* call(threadId, "observePage", encoded);
+
+        const page = yield* expect(
+          threadId,
+          "observePage",
+          ObservedPage,
+          ClientObserveHostFailure,
+        )(response);
+
+        return page.records;
+      });
 
       const cancelProgress = (threadId: ThreadId, waiterId: string): Effect.Effect<void> =>
         encodeCancelProgressRequest(CancelProgressRequest.make({ waiterId })).pipe(
@@ -779,156 +780,149 @@ export class CloudflareThreadClient extends Context.Service<
       });
 
       return CloudflareThreadClient.of({
-        submit: <InputSchema extends Schema.Top>(
+        submit: Effect.fnUntraced(function* <InputSchema extends Schema.Top>(
           agent: DurableSubmitAgent<InputSchema>,
           input: InputSchema["Type"],
           options: DurableSubmitOptions,
-        ) =>
-          Effect.gen(function* () {
-            // Client-side half of `DurableAgentRuntime.submit`'s input boundary: encode
-            // through the Agent's input schema and prove the canonical persistence bounds.
-            const encodedInput = yield* Schema.encodeEffect(agent.definition.input)(input).pipe(
-              Effect.mapError((cause) =>
-                AgentInputError.make({ message: `Unable to encode Agent input: ${cause.message}` }),
-              ),
-            );
+        ) {
+          // Client-side half of `DurableAgentRuntime.submit`'s input boundary: encode
+          // through the Agent's input schema and prove the canonical persistence bounds.
+          const encodedInput = yield* Schema.encodeEffect(agent.definition.input)(input).pipe(
+            Effect.mapError((cause) =>
+              AgentInputError.make({ message: `Unable to encode Agent input: ${cause.message}` }),
+            ),
+          );
 
-            const inputPayload = yield* Schema.decodeUnknownEffect(PersistedJson)(
-              encodedInput,
-            ).pipe(
-              Effect.mapError(() =>
-                AgentInputError.make({
-                  message: "Agent input does not satisfy the canonical persistence bounds",
-                }),
-              ),
-            );
+          const inputPayload = yield* Schema.decodeUnknownEffect(PersistedJson)(encodedInput).pipe(
+            Effect.mapError(() =>
+              AgentInputError.make({
+                message: "Agent input does not satisfy the canonical persistence bounds",
+              }),
+            ),
+          );
 
-            const request = SubmitRequest.make({
-              agentId: agent.definition.id,
-              principal: options.principal,
-              idempotencyKey: options.idempotencyKey,
-              ...(options.admissionGroup === undefined
-                ? {}
-                : { admissionGroup: options.admissionGroup }),
-              ...(options.admissionFence === undefined
-                ? {}
-                : { admissionFence: options.admissionFence }),
-              ...(options.workerAdmission === undefined
-                ? {}
-                : { workerAdmission: options.workerAdmission }),
-              ...(options.messageAdmission === undefined
-                ? {}
-                : { messageAdmission: options.messageAdmission }),
-              definitions: options.definitions,
-              inputPayload,
-            });
+          const request = SubmitRequest.make({
+            agentId: agent.definition.id,
+            principal: options.principal,
+            idempotencyKey: options.idempotencyKey,
+            ...(options.admissionGroup === undefined
+              ? {}
+              : { admissionGroup: options.admissionGroup }),
+            ...(options.admissionFence === undefined
+              ? {}
+              : { admissionFence: options.admissionFence }),
+            ...(options.workerAdmission === undefined
+              ? {}
+              : { workerAdmission: options.workerAdmission }),
+            ...(options.messageAdmission === undefined
+              ? {}
+              : { messageAdmission: options.messageAdmission }),
+            definitions: options.definitions,
+            inputPayload,
+          });
 
-            const encoded = yield* encodeSubmitRequest(request).pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(`submit request encode failed: ${error.message}`),
-                }),
-              ),
-            );
+          const encoded = yield* encodeSubmitRequest(request).pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(`submit request encode failed: ${error.message}`),
+              }),
+            ),
+          );
 
-            const response = yield* call(options.threadId, "submit", encoded);
+          const response = yield* call(options.threadId, "submit", encoded);
 
-            const succeeded = yield* expect(
-              options.threadId,
-              "submit",
-              SubmitSucceeded,
-              ClientSubmitHostFailure,
-            )(response);
+          const succeeded = yield* expect(
+            options.threadId,
+            "submit",
+            SubmitSucceeded,
+            ClientSubmitHostFailure,
+          )(response);
 
-            return succeeded.receipt;
-          }),
+          return succeeded.receipt;
+        }),
 
-        submissionStatus: (receipt) =>
-          Effect.gen(function* () {
-            const encoded = yield* encodeReceipt(receipt).pipe(
-              Effect.mapError(() => HostProtocolError.make({ message: "Invalid receipt" })),
-            );
+        submissionStatus: Effect.fnUntraced(function* (receipt) {
+          const encoded = yield* encodeReceipt(receipt).pipe(
+            Effect.mapError(() => HostProtocolError.make({ message: "Invalid receipt" })),
+          );
 
-            const response = yield* call(receipt.threadId, "submissionStatus", encoded);
+          const response = yield* call(receipt.threadId, "submissionStatus", encoded);
 
-            const result = yield* expect(
-              receipt.threadId,
-              "submissionStatus",
-              SubmissionStatusResponse,
-              ClientAwaitHostFailure,
-            )(response);
+          const result = yield* expect(
+            receipt.threadId,
+            "submissionStatus",
+            SubmissionStatusResponse,
+            ClientAwaitHostFailure,
+          )(response);
 
-            return result.status;
-          }),
-        awaitSettlement: (receipt) =>
-          Effect.gen(function* () {
-            const response = yield* awaitSettlementCall(receipt, "awaitSettlement");
+          return result.status;
+        }),
+        awaitSettlement: Effect.fnUntraced(function* (receipt) {
+          const response = yield* awaitSettlementCall(receipt, "awaitSettlement");
 
-            const settled = yield* expect(
-              receipt.threadId,
-              "awaitSettlement",
-              SettlementReached,
-              ClientAwaitHostFailure,
-            )(response);
+          const settled = yield* expect(
+            receipt.threadId,
+            "awaitSettlement",
+            SettlementReached,
+            ClientAwaitHostFailure,
+          )(response);
 
-            return settled.settlement;
-          }),
+          return settled.settlement;
+        }),
 
-        awaitSettlementRecord: (receipt) =>
-          Effect.gen(function* () {
-            const response = yield* awaitSettlementCall(receipt, "awaitSettlementRecord");
+        awaitSettlementRecord: Effect.fnUntraced(function* (receipt) {
+          const response = yield* awaitSettlementCall(receipt, "awaitSettlementRecord");
 
-            const settled = yield* expect(
-              receipt.threadId,
-              "awaitSettlementRecord",
-              SettlementRecordReached,
-              ClientAwaitHostFailure,
-            )(response);
+          const settled = yield* expect(
+            receipt.threadId,
+            "awaitSettlementRecord",
+            SettlementRecordReached,
+            ClientAwaitHostFailure,
+          )(response);
 
-            return settled.record;
-          }),
+          return settled.record;
+        }),
 
-        awaitProgress: (threadId, afterSequence) =>
-          Effect.gen(function* () {
-            const waiterId = yield* crypto.randomUUIDv4().pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(
-                    `awaitProgress cancellation identity generation failed: ${error.message}`,
-                  ),
-                }),
-              ),
-            );
-
-            const request = AwaitProgressRequest.make({ afterSequence, waiterId });
-
-            const encoded = yield* encodeAwaitProgressRequest(request).pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(
-                    `awaitProgress request encode failed: ${error.message}`,
-                  ),
-                }),
-              ),
-            );
-
-            const attempt = (retry: number): Effect.Effect<void, ClientProgressFailure> =>
-              call(threadId, "awaitProgress", encoded).pipe(
-                Effect.flatMap(
-                  expect(threadId, "awaitProgress", ProgressObserved, ClientObserveHostFailure),
+        awaitProgress: Effect.fnUntraced(function* (threadId, afterSequence) {
+          const waiterId = yield* crypto.randomUUIDv4().pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(
+                  `awaitProgress cancellation identity generation failed: ${error.message}`,
                 ),
-                Effect.asVoid,
-                Effect.catchTag("ThreadClientError", (error) =>
-                  error.retryable === true && error.overloaded !== true && retry < 5
-                    ? Effect.sleep(Duration.millis(10 * 2 ** retry)).pipe(
-                        Effect.andThen(attempt(retry + 1)),
-                      )
-                    : Effect.fail(error),
-                ),
-              );
+              }),
+            ),
+          );
 
-            yield* attempt(0).pipe(Effect.onInterrupt(() => cancelProgress(threadId, waiterId)));
-          }),
+          const request = AwaitProgressRequest.make({ afterSequence, waiterId });
+
+          const encoded = yield* encodeAwaitProgressRequest(request).pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(
+                  `awaitProgress request encode failed: ${error.message}`,
+                ),
+              }),
+            ),
+          );
+
+          const attempt = (retry: number): Effect.Effect<void, ClientProgressFailure> =>
+            call(threadId, "awaitProgress", encoded).pipe(
+              Effect.flatMap(
+                expect(threadId, "awaitProgress", ProgressObserved, ClientObserveHostFailure),
+              ),
+              Effect.asVoid,
+              Effect.catchTag("ThreadClientError", (error) =>
+                error.retryable === true && error.overloaded !== true && retry < 5
+                  ? Effect.sleep(Duration.millis(10 * 2 ** retry)).pipe(
+                      Effect.andThen(attempt(retry + 1)),
+                    )
+                  : Effect.fail(error),
+              ),
+            );
+
+          yield* attempt(0).pipe(Effect.onInterrupt(() => cancelProgress(threadId, waiterId)));
+        }),
 
         watchText: (threadId) =>
           Stream.unwrap(
@@ -1027,89 +1021,83 @@ export class CloudflareThreadClient extends Context.Service<
 
         readPage,
 
-        readAll: (threadId) =>
-          Effect.gen(function* () {
-            const all: Array<CanonicalRecordEnvelope> = [];
-            let after: CanonicalSequence | undefined;
+        readAll: Effect.fnUntraced(function* (threadId) {
+          const all: Array<CanonicalRecordEnvelope> = [];
+          let after: CanonicalSequence | undefined;
 
-            for (;;) {
-              const page = yield* readPage(threadId, { afterSequence: after, limit: 1_024 });
+          for (;;) {
+            const page = yield* readPage(threadId, { afterSequence: after, limit: 1_024 });
 
-              all.push(...page);
-              const last = page.at(-1);
+            all.push(...page);
+            const last = page.at(-1);
 
-              if (page.length < 1_024 || last === undefined) return all;
-              after = last.sequence;
-            }
-          }),
+            if (page.length < 1_024 || last === undefined) return all;
+            after = last.sequence;
+          }
+        }),
 
-        abort: (threadId, command) =>
-          Effect.gen(function* () {
-            const encoded = yield* encodeAbortCommand(command).pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(`abort command encode failed: ${error.message}`),
-                }),
-              ),
-            );
+        abort: Effect.fnUntraced(function* (threadId, command) {
+          const encoded = yield* encodeAbortCommand(command).pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(`abort command encode failed: ${error.message}`),
+              }),
+            ),
+          );
 
-            const response = yield* call(threadId, "abort", encoded);
+          const response = yield* call(threadId, "abort", encoded);
 
-            const recorded = yield* expect(
-              threadId,
-              "abort",
-              AbortRecorded,
-              ClientAbortHostFailure,
-            )(response);
+          const recorded = yield* expect(
+            threadId,
+            "abort",
+            AbortRecorded,
+            ClientAbortHostFailure,
+          )(response);
 
-            return recorded.intent;
-          }),
+          return recorded.intent;
+        }),
 
-        resolveApproval: (threadId, command) =>
-          Effect.gen(function* () {
-            const encoded = yield* encodeApprovalDecisionCommand(command).pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(`approval command encode failed: ${error.message}`),
-                }),
-              ),
-            );
+        resolveApproval: Effect.fnUntraced(function* (threadId, command) {
+          const encoded = yield* encodeApprovalDecisionCommand(command).pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(`approval command encode failed: ${error.message}`),
+              }),
+            ),
+          );
 
-            const response = yield* call(threadId, "resolveApproval", encoded);
+          const response = yield* call(threadId, "resolveApproval", encoded);
 
-            const recorded = yield* expect(
-              threadId,
-              "resolveApproval",
-              ApprovalRecorded,
-              ClientApprovalHostFailure,
-            )(response);
+          const recorded = yield* expect(
+            threadId,
+            "resolveApproval",
+            ApprovalRecorded,
+            ClientApprovalHostFailure,
+          )(response);
 
-            return recorded.intent;
-          }),
+          return recorded.intent;
+        }),
 
-        resolveUnknown: (threadId, command) =>
-          Effect.gen(function* () {
-            const encoded = yield* encodeUnknownResolutionCommand(command).pipe(
-              Effect.mapError((error) =>
-                HostProtocolError.make({
-                  message: boundHostDiagnostic(
-                    `resolution command encode failed: ${error.message}`,
-                  ),
-                }),
-              ),
-            );
+        resolveUnknown: Effect.fnUntraced(function* (threadId, command) {
+          const encoded = yield* encodeUnknownResolutionCommand(command).pipe(
+            Effect.mapError((error) =>
+              HostProtocolError.make({
+                message: boundHostDiagnostic(`resolution command encode failed: ${error.message}`),
+              }),
+            ),
+          );
 
-            const response = yield* call(threadId, "resolveUnknown", encoded);
+          const response = yield* call(threadId, "resolveUnknown", encoded);
 
-            const recorded = yield* expect(
-              threadId,
-              "resolveUnknown",
-              UnknownResolutionRecorded,
-              ClientUnknownHostFailure,
-            )(response);
+          const recorded = yield* expect(
+            threadId,
+            "resolveUnknown",
+            UnknownResolutionRecorded,
+            ClientUnknownHostFailure,
+          )(response);
 
-            return recorded.intent;
-          }),
+          return recorded.intent;
+        }),
       });
     }),
   );

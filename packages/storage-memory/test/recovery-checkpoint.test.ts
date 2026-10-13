@@ -147,8 +147,8 @@ describe("retained Run recovery", () => {
 
       const binding = yield* DurableWorkerBinding.make(agent, definitions);
 
-      const process = (input: string, rollover: boolean, summarize = false) =>
-        Effect.gen(function* () {
+      const process = Effect.fnUntraced(
+        function* (input: string, rollover: boolean, summarize = false) {
           const compactor = yield* ContextCompactor.pipe(
             Effect.provide(ContextCompactor.layerRollover),
           );
@@ -210,7 +210,9 @@ describe("retained Run recovery", () => {
             outcome: "completed",
           });
           expect((yield* runtime.verify(threadId)).ok).toBe(true);
-        }).pipe(Effect.scoped);
+        },
+        (effect) => effect.pipe(Effect.scoped),
+      );
 
       yield* process("retired request", false);
       yield* process("begin compacted conversation", true);
@@ -576,22 +578,21 @@ describe("retained Run recovery", () => {
       );
 
       const handlers = tools.toLayer({
-        write: () =>
-          Effect.gen(function* () {
-            calls++;
-            if (scenario !== "reused-call-id") return "recorded";
-            const steps = yield* DurableStep;
+        write: Effect.fnUntraced(function* () {
+          calls++;
+          if (scenario !== "reused-call-id") return "recorded";
+          const steps = yield* DurableStep;
 
-            return yield* steps.do(
-              "write-once",
-              Schema.String,
-              Effect.sync(() => {
-                stepEffects++;
+          return yield* steps.do(
+            "write-once",
+            Schema.String,
+            Effect.sync(() => {
+              stepEffects++;
 
-                return "recorded";
-              }),
-            );
-          }),
+              return "recorded";
+            }),
+          );
+        }),
         approve: () =>
           Effect.sync(() => {
             calls++;

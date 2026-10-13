@@ -53,7 +53,7 @@ export const localPreview = Effect.fn("localPreview")(function* (
         },
         logLevel: "silent",
       }),
-    catch: (cause) => new PreviewError({ message: "Could not build the offline planner.", cause }),
+    catch: (cause) => PreviewError.make({ message: "Could not build the offline planner.", cause }),
   });
 
   const bindings = {
@@ -135,14 +135,14 @@ export const localPreview = Effect.fn("localPreview")(function* (
           }),
         ),
       catch: (cause) =>
-        new PreviewError({ message: "Could not create the preview runtime.", cause }),
+        PreviewError.make({ message: "Could not create the preview runtime.", cause }),
     }),
     (runtime) => Effect.promise(() => runtime.dispose()),
   );
 
   yield* Effect.tryPromise({
     try: () => preview.ready,
-    catch: (cause) => new PreviewError({ message: "Could not start the preview runtime.", cause }),
+    catch: (cause) => PreviewError.make({ message: "Could not start the preview runtime.", cause }),
   });
 
   return { preview, origin, directory };

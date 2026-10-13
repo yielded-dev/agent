@@ -3207,70 +3207,66 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
             .get({ ownerThreadId: context.source.threadId, messageId })
             .pipe(Effect.mapError(storageFailure("start")));
 
-        const replay = (saved: MessageDeliveryRecord) =>
-          Effect.gen(function* () {
-            const currentPrevious =
-              command.continuationOf === undefined
-                ? undefined
-                : yield* completedContinuation(
-                    context.source,
-                    command.continuationOf,
-                    command.target.id,
-                    command.delegationId,
-                    previous?.evidence,
-                  );
+        const replay = Effect.fnUntraced(function* (saved: MessageDeliveryRecord) {
+          const currentPrevious =
+            command.continuationOf === undefined
+              ? undefined
+              : yield* completedContinuation(
+                  context.source,
+                  command.continuationOf,
+                  command.target.id,
+                  command.delegationId,
+                  previous?.evidence,
+                );
 
-            const replayPrincipal = yield* authorize(
-              "start",
-              "send",
-              undefined,
+          const replayPrincipal = yield* authorize(
+            "start",
+            "send",
+            undefined,
+            currentPrevious?.evidence,
+          );
+
+          yield* binding(command.target, "start");
+          const metadata = saved.envelope.workerAdmission;
+
+          if (metadata === undefined) return yield* failure("start", "idempotency-conflict");
+          const origin = metadata.origin;
+
+          if (
+            !Schema.toEquivalence(Schema.UndefinedOr(WorkerContinuation))(
+              origin.continuationOf,
               currentPrevious?.evidence,
-            );
+            ) ||
+            origin.firstMessageId !== messageId ||
+            metadata.messageId !== messageId ||
+            origin.source.threadId !== context.source.threadId ||
+            origin.worker.delegationId !== command.delegationId ||
+            origin.worker.targetAgentId !== command.target.id ||
+            !sameJson(metadata.parameters, parameters) ||
+            !Schema.toEquivalence(SubagentGrant)(origin.grant, grant) ||
+            origin.budgetScope !== effectiveScope ||
+            origin.depth !== context.depth + 1 ||
+            (!("prepare" in command) &&
+              (!samePolicy(origin.policy, command.policy) ||
+                !Schema.toEquivalence(WorkerOrigin.fields.budget)(origin.budget, command.budget) ||
+                origin.toolCallAllowance !== command.toolCallAllowance))
+          )
+            return yield* failure("start", "idempotency-conflict");
 
-            yield* binding(command.target, "start");
-            const metadata = saved.envelope.workerAdmission;
+          yield* verifyContinuation(origin);
 
-            if (metadata === undefined) return yield* failure("start", "idempotency-conflict");
-            const origin = metadata.origin;
-
-            if (
-              !Schema.toEquivalence(Schema.UndefinedOr(WorkerContinuation))(
-                origin.continuationOf,
-                currentPrevious?.evidence,
-              ) ||
-              origin.firstMessageId !== messageId ||
-              metadata.messageId !== messageId ||
-              origin.source.threadId !== context.source.threadId ||
-              origin.worker.delegationId !== command.delegationId ||
-              origin.worker.targetAgentId !== command.target.id ||
-              !sameJson(metadata.parameters, parameters) ||
-              !Schema.toEquivalence(SubagentGrant)(origin.grant, grant) ||
-              origin.budgetScope !== effectiveScope ||
-              origin.depth !== context.depth + 1 ||
-              (!("prepare" in command) &&
-                (!samePolicy(origin.policy, command.policy) ||
-                  !Schema.toEquivalence(WorkerOrigin.fields.budget)(
-                    origin.budget,
-                    command.budget,
-                  ) ||
-                  origin.toolCallAllowance !== command.toolCallAllowance))
-            )
-              return yield* failure("start", "idempotency-conflict");
-
-            yield* verifyContinuation(origin);
-
-            return {
-              worker: origin.worker,
-              delivery: yield* send(
-                origin,
-                messageId,
-                "prepare" in command ? saved.envelope.input : command.encodedInput,
-                parameters,
-                replayPrincipal,
-                "start",
-              ),
-            };
-          });
+          return {
+            worker: origin.worker,
+            delivery: yield* send(
+              origin,
+              messageId,
+              "prepare" in command ? saved.envelope.input : command.encodedInput,
+              parameters,
+              replayPrincipal,
+              "start",
+            ),
+          };
+        });
 
         const existing = yield* retained();
 
@@ -3461,21 +3457,20 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
             .get({ ownerThreadId: context.source.threadId, messageId })
             .pipe(Effect.mapError(storageFailure("followUp")));
 
-        const replay = (saved: MessageDeliveryRecord) =>
-          Effect.gen(function* () {
-            const replayPrincipal = yield* authorize("followUp", "send", command.worker);
+        const replay = Effect.fnUntraced(function* (saved: MessageDeliveryRecord) {
+          const replayPrincipal = yield* authorize("followUp", "send", command.worker);
 
-            yield* currentPolicy;
+          yield* currentPolicy;
 
-            return yield* send(
-              origin,
-              messageId,
-              saved.envelope.input,
-              command.encodedParameters,
-              replayPrincipal,
-              "followUp",
-            );
-          });
+          return yield* send(
+            origin,
+            messageId,
+            saved.envelope.input,
+            command.encodedParameters,
+            replayPrincipal,
+            "followUp",
+          );
+        });
 
         const existing = "prepare" in command ? yield* retained() : null;
 

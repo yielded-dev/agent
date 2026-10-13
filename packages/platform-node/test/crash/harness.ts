@@ -322,19 +322,18 @@ export const failureTag = <A, E>(exit: Exit.Exit<A, E>): string => {
     : "unknown";
 };
 
-export const readLog = (thread: string) =>
-  Effect.gen(function* () {
-    const store = yield* ThreadStore;
+export const readLog = Effect.fnUntraced(function* (thread: string) {
+  const store = yield* ThreadStore;
 
-    return yield* Stream.runCollect(
-      store.read(
-        ThreadRead.make({
-          threadId: decodeThreadId(thread),
-          limit: 1_024,
-        }),
-      ),
-    );
-  });
+  return yield* Stream.runCollect(
+    store.read(
+      ThreadRead.make({
+        threadId: decodeThreadId(thread),
+        limit: 1_024,
+      }),
+    ),
+  );
+});
 
 export const logTags = (records: ReadonlyArray<CanonicalRecordEnvelope>): ReadonlyArray<string> =>
   records.map((envelope) => envelope.record.payload._tag);
@@ -345,34 +344,32 @@ export const payloadsOf = (
 ): ReadonlyArray<CanonicalRecordEnvelope> =>
   records.filter((envelope) => envelope.record.payload._tag === tag);
 
-export const lookupByKey = (thread: string, key: string) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
+export const lookupByKey = Effect.fnUntraced(function* (thread: string, key: string) {
+  const ledger = yield* SubmissionLedger;
 
-    const snapshot = yield* ledger.lookup(
-      SubmissionLookupByKey.make({
-        threadId: decodeThreadId(thread),
-        principal: crashSubmitOptions(thread, key).principal,
-        idempotencyKey: crashSubmitOptions(thread, key).idempotencyKey,
-      }),
-    );
+  const snapshot = yield* ledger.lookup(
+    SubmissionLookupByKey.make({
+      threadId: decodeThreadId(thread),
+      principal: crashSubmitOptions(thread, key).principal,
+      idempotencyKey: crashSubmitOptions(thread, key).idempotencyKey,
+    }),
+  );
 
-    expect(Option.isSome(snapshot)).toBe(true);
-    if (Option.isNone(snapshot)) throw new Error(`Expected an accepted Submission for ${key}`);
+  expect(Option.isSome(snapshot)).toBe(true);
+  if (Option.isNone(snapshot)) throw new Error(`Expected an accepted Submission for ${key}`);
 
-    return snapshot.value;
-  });
+  return snapshot.value;
+});
 
-export const lookupState = (submissionId: SubmissionId) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
-    const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
+export const lookupState = Effect.fnUntraced(function* (submissionId: SubmissionId) {
+  const ledger = yield* SubmissionLedger;
+  const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
 
-    expect(Option.isSome(snapshot)).toBe(true);
-    if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
+  expect(Option.isSome(snapshot)).toBe(true);
+  if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
 
-    return snapshot.value.state;
-  });
+  return snapshot.value.state;
+});
 
 /** The supplier-store honesty claims of one crash row (plan §4.3, durability §10). */
 export interface SupplierExpectation {
@@ -445,74 +442,71 @@ const assertSupplierHonesty = (
  * the row involves the external supplier, no recorded Tool result was fabricated and every
  * invocation count matches the row's honesty claim.
  */
-export const assertConvergence = (
+export const assertConvergence = Effect.fnUntraced(function* (
   thread: string,
   submissionIds: ReadonlyArray<SubmissionId>,
   supplier?: SupplierExpectation,
-) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
-    const snapshots: Array<SubmissionSnapshot> = [];
+) {
+  const ledger = yield* SubmissionLedger;
+  const snapshots: Array<SubmissionSnapshot> = [];
 
-    for (const submissionId of submissionIds) {
-      const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
+  for (const submissionId of submissionIds) {
+    const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
 
-      // No accepted Submission disappears (Accepted-work Contract).
-      expect(Option.isSome(snapshot)).toBe(true);
-      if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
-      expect(snapshot.value.state).toBe("settled");
-      snapshots.push(snapshot.value);
-    }
+    // No accepted Submission disappears (Accepted-work Contract).
+    expect(Option.isSome(snapshot)).toBe(true);
+    if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
+    expect(snapshot.value.state).toBe("settled");
+    snapshots.push(snapshot.value);
+  }
 
-    const ordered = [...snapshots].sort(
-      (left, right) => Number(left.queueSequence) - Number(right.queueSequence),
+  const ordered = [...snapshots].sort(
+    (left, right) => Number(left.queueSequence) - Number(right.queueSequence),
+  );
+
+  const records = yield* readLog(thread);
+  const recordIds = records.map((envelope) => envelope.record.recordId);
+
+  expect(new Set(recordIds).size).toBe(recordIds.length);
+  for (const snapshot of ordered) {
+    const settled = records.filter(
+      (envelope) =>
+        envelope.record.recordId === submissionSettlementRecordId(snapshot.submissionId),
     );
 
-    const records = yield* readLog(thread);
-    const recordIds = records.map((envelope) => envelope.record.recordId);
+    expect(settled).toHaveLength(1);
+    expect(settled[0]?.record.payload._tag).toBe("SubmissionSettled");
+  }
 
-    expect(new Set(recordIds).size).toBe(recordIds.length);
-    for (const snapshot of ordered) {
-      const settled = records.filter(
-        (envelope) =>
-          envelope.record.recordId === submissionSettlementRecordId(snapshot.submissionId),
-      );
+  const expectedInputs = ordered.map((snapshot) => submissionInputRecordId(snapshot.submissionId));
 
-      expect(settled).toHaveLength(1);
-      expect(settled[0]?.record.payload._tag).toBe("SubmissionSettled");
-    }
+  const inputOrder = recordIds.filter((recordId) =>
+    expectedInputs.some((expected) => expected === recordId),
+  );
 
-    const expectedInputs = ordered.map((snapshot) =>
-      submissionInputRecordId(snapshot.submissionId),
+  expect(inputOrder).toEqual(expectedInputs.filter((expected) => inputOrder.includes(expected)));
+
+  // P7 §7(c) exemption: an ABORTED settlement for never-run work (no canonical
+  // `input:{sid}` record) settles immediately by design — without waiting for the head —
+  // so it is excluded from the FIFO settlement comparison. DUR-004 bounds EXECUTION order,
+  // which never-run work has none of (mirrors `verifyThreadInvariants`).
+  const abortedNeverRan = (snapshot: SubmissionSnapshot): boolean =>
+    !recordIds.includes(submissionInputRecordId(snapshot.submissionId)) &&
+    records.some(
+      (envelope) =>
+        envelope.record.recordId === submissionSettlementRecordId(snapshot.submissionId) &&
+        envelope.record.payload._tag === "SubmissionSettled" &&
+        envelope.record.payload.outcome === "aborted",
     );
 
-    const inputOrder = recordIds.filter((recordId) =>
-      expectedInputs.some((expected) => expected === recordId),
-    );
+  const expectedSettlements = ordered
+    .filter((snapshot) => !abortedNeverRan(snapshot))
+    .map((snapshot) => submissionSettlementRecordId(snapshot.submissionId));
 
-    expect(inputOrder).toEqual(expectedInputs.filter((expected) => inputOrder.includes(expected)));
+  const settlementOrder = recordIds.filter((recordId) =>
+    expectedSettlements.some((expected) => expected === recordId),
+  );
 
-    // P7 §7(c) exemption: an ABORTED settlement for never-run work (no canonical
-    // `input:{sid}` record) settles immediately by design — without waiting for the head —
-    // so it is excluded from the FIFO settlement comparison. DUR-004 bounds EXECUTION order,
-    // which never-run work has none of (mirrors `verifyThreadInvariants`).
-    const abortedNeverRan = (snapshot: SubmissionSnapshot): boolean =>
-      !recordIds.includes(submissionInputRecordId(snapshot.submissionId)) &&
-      records.some(
-        (envelope) =>
-          envelope.record.recordId === submissionSettlementRecordId(snapshot.submissionId) &&
-          envelope.record.payload._tag === "SubmissionSettled" &&
-          envelope.record.payload.outcome === "aborted",
-      );
-
-    const expectedSettlements = ordered
-      .filter((snapshot) => !abortedNeverRan(snapshot))
-      .map((snapshot) => submissionSettlementRecordId(snapshot.submissionId));
-
-    const settlementOrder = recordIds.filter((recordId) =>
-      expectedSettlements.some((expected) => expected === recordId),
-    );
-
-    expect(settlementOrder).toEqual(expectedSettlements);
-    if (supplier !== undefined) assertSupplierHonesty(records, supplier);
-  });
+  expect(settlementOrder).toEqual(expectedSettlements);
+  if (supplier !== undefined) assertSupplierHonesty(records, supplier);
+});

@@ -17,24 +17,30 @@ const MAX_TRANSFER_BYTES = 4 * 1024 * 1024;
 const encoder = new TextEncoder();
 
 const failed = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "publication",
     message: "Trip publication storage is unavailable or contains invalid data.",
   });
 
 const conflict = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "conflict",
     message: "This published revision already contains different trip details.",
   });
 
 const hasCode = (code: string) => Schema.is(Schema.Struct({ code: Schema.Literal(code) }));
 
-const operation = <A>(name: string, run: () => Promise<A>) =>
-  Effect.tryPromise({
-    try: run,
-    catch: (error) => ({
-      reason:
+const operation = <A, B = never>(
+  name: string,
+  run: () => Promise<A>,
+  recover?: { readonly code: string; readonly value: B },
+) =>
+  Effect.tryPromise({ try: run, catch: (cause) => ({ cause }) }).pipe(
+    Effect.catch(({ cause: error }) => {
+      if (recover !== undefined && hasCode(recover.code)(error))
+        return Effect.succeed(recover.value);
+
+      const reason =
         error instanceof git.Errors.HttpError
           ? `HTTP ${error.data.statusCode}`
           : error instanceof TypeError
@@ -46,15 +52,13 @@ const operation = <A>(name: string, run: () => Promise<A>) =>
               }`
             : error instanceof ReferenceError
               ? "ReferenceError"
-              : "Git or binding error",
-    }),
-  }).pipe(
-    Effect.catch((diagnostic) =>
-      Effect.logWarning("Trip publication operation failed").pipe(
-        Effect.annotateLogs({ operation: name, ...diagnostic }),
+              : "Git or binding error";
+
+      return Effect.logWarning("Trip publication operation failed").pipe(
+        Effect.annotateLogs({ operation: name, reason }),
         Effect.andThen(Effect.fail(failed())),
-      ),
-    ),
+      );
+    }),
   );
 
 const identity = Schema.Struct({ tripId: TripId, revision: Revision });
@@ -72,67 +76,107 @@ export const ArtifactsFailpoint = Context.Reference<{
 
 // Git's HTTP port owns cancellation and byte limits; upstream's web client does
 // not expose an AbortSignal. Redirects cannot forward repository credentials.
-const transport = (signal: AbortSignal): HttpClient => ({
-  request: async ({ url, method = "GET", headers, body }) => {
-    const chunks: Uint8Array[] = [];
-    let size = 0;
+const transport = (signal: AbortSignal): HttpClient => {
+  const io = <A>(run: () => Promise<A>) => Effect.tryPromise({ try: run, catch: failed });
 
-    if (body)
-      for await (const chunk of body) {
-        signal.throwIfAborted();
-        size += chunk.byteLength;
-        if (size > MAX_TRANSFER_BYTES) throw failed();
-        chunks.push(chunk);
-      }
-    const bytes = new Uint8Array(size);
-    let offset = 0;
+  return {
+    // isomorphic-git's Promise port is the execution boundary for this typed workflow.
+    request: ({ url, method = "GET", headers, body }) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const chunks: Uint8Array[] = [];
+          let size = 0;
 
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-    // workerd supports manual/follow, but rejects redirect: "error" before I/O.
-    const request = { headers, signal, redirect: "manual" as const };
+          if (body)
+            yield* Effect.acquireUseRelease(
+              // Git also supplies synchronous iterables despite its narrower declaration.
+              Effect.sync(() =>
+                (async function* () {
+                  yield* body;
+                })(),
+              ),
+              (iterator) =>
+                Effect.gen(function* () {
+                  while (true) {
+                    const next = yield* io(() => iterator.next());
 
-    const response = await (body
-      ? fetch(url, { ...request, method: "POST", body: bytes })
-      : fetch(url, { ...request, method }));
+                    if (next.done) break;
+                    size += next.value.byteLength;
 
-    if (response.status >= 300 && response.status < 400) {
-      await response.body?.cancel();
-      throw failed();
-    }
+                    if (size > MAX_TRANSFER_BYTES) return yield* failed();
+                    chunks.push(next.value);
+                  }
+                }),
+              (iterator) =>
+                io(async () => {
+                  await iterator.return?.();
+                }),
+            );
+          const bytes = new Uint8Array(size);
+          let offset = 0;
 
-    const reader = response.body?.getReader();
-    const result: Uint8Array[] = [];
+          for (const chunk of chunks) {
+            bytes.set(chunk, offset);
+            offset += chunk.byteLength;
+          }
 
-    size = 0;
-    try {
-      if (reader)
-        while (true) {
-          const next = await reader.read();
+          // workerd supports manual/follow, but rejects redirect: "error" before I/O.
+          const response = yield* io(() =>
+            fetch(url, {
+              method: body ? "POST" : method,
+              headers,
+              signal,
+              redirect: "manual",
+              ...(body ? { body: bytes } : {}),
+            }),
+          );
 
-          if (next.done) break;
-          size += next.value.byteLength;
-          if (size > MAX_TRANSFER_BYTES) throw failed();
-          result.push(next.value);
-        }
-    } finally {
-      await reader?.cancel();
-    }
+          if (response.status >= 300 && response.status < 400) {
+            yield* io(async () => {
+              await response.body?.cancel();
+            });
 
-    return {
-      url: response.url,
-      method,
-      headers: Object.fromEntries(response.headers),
-      statusCode: response.status,
-      statusMessage: response.statusText,
-      body: (async function* () {
-        yield* result;
-      })(),
-    };
-  },
-});
+            return yield* failed();
+          }
+          const result: Uint8Array[] = [];
+
+          size = 0;
+          yield* Effect.acquireUseRelease(
+            Effect.sync(() => response.body?.getReader()),
+            (reader) =>
+              Effect.gen(function* () {
+                if (reader)
+                  while (true) {
+                    const next = yield* io(() => reader.read());
+
+                    if (next.done) break;
+                    size += next.value.byteLength;
+
+                    if (size > MAX_TRANSFER_BYTES) return yield* failed();
+                    result.push(next.value);
+                  }
+              }),
+            (reader) =>
+              io(async () => {
+                await reader?.cancel();
+              }),
+          );
+
+          return {
+            url: response.url,
+            method,
+            headers: Object.fromEntries(response.headers),
+            statusCode: response.status,
+            statusMessage: response.statusText,
+            body: (async function* () {
+              yield* result;
+            })(),
+          };
+        }),
+        { signal },
+      ),
+  };
+};
 
 const workspace = Effect.acquireRelease(
   Effect.sync(() => ({ ...memfs(), controller: new AbortController() })),
@@ -164,13 +208,9 @@ export const artifactsLayer = (
 ): Layer.Layer<TripSiteStore> => {
   const getRepo = (tripId: string) =>
     Effect.acquireRelease(
-      operation("get repository", async () => {
-        try {
-          return await artifacts.get(`trip-${tripId}`);
-        } catch (error) {
-          if (hasCode("NOT_FOUND")(error)) return null;
-          throw error;
-        }
+      operation("get repository", () => artifacts.get(`trip-${tripId}`), {
+        code: "NOT_FOUND",
+        value: null,
       }),
       releaseRepo,
     );
@@ -179,13 +219,11 @@ export const artifactsLayer = (
     const failpoint = yield* ArtifactsFailpoint;
 
     yield* failpoint.hit("repo:before");
-    yield* operation("create repository", async () => {
-      try {
-        await artifacts.create(`trip-${tripId}`, { setDefaultBranch: "main" });
-      } catch (error) {
-        if (!hasCode("ALREADY_EXISTS")(error)) throw error;
-      }
-    });
+    yield* operation(
+      "create repository",
+      () => artifacts.create(`trip-${tripId}`, { setDefaultBranch: "main" }),
+      { code: "ALREADY_EXISTS", value: undefined },
+    );
     yield* failpoint.hit("repo:after");
 
     return yield* Effect.acquireRelease(

@@ -304,48 +304,47 @@ const operations = <
       encodedGrant,
       ...(options.continuationOf === undefined ? {} : { continuationOf: options.continuationOf }),
       ...(options.budgetScope === undefined ? {} : { budgetScope: options.budgetScope }),
-      prepare: (budgetScope) =>
-        Effect.gen(function* () {
-          const encodedInput = yield* prepare(parameters, caller);
+      prepare: Effect.fnUntraced(function* (budgetScope) {
+        const encodedInput = yield* prepare(parameters, caller);
 
-          const effectiveTarget = yield* service.resolveTargetPolicy({
-            target: declaration.target,
-            encodedInput,
-            ...(options.continuationOf === undefined
+        const effectiveTarget = yield* service.resolveTargetPolicy({
+          target: declaration.target,
+          encodedInput,
+          ...(options.continuationOf === undefined
+            ? {}
+            : { continuationOf: options.continuationOf }),
+        });
+
+        const resolvedTarget = Option.getOrUndefined(effectiveTarget);
+
+        const resolved = resolveSubagentPolicy(
+          declaration,
+          budgetScope === "worker-run"
+            ? (resolvedTarget ?? declaration.target.policy)
+            : caller.policy,
+          undefined,
+          budgetScope === "worker-run" ? "root-attached" : "conserved",
+          resolvedTarget,
+        );
+
+        return {
+          encodedInput,
+          policy: resolved.childPolicy,
+          budget: SubagentBudgetReservation.make({
+            caps: resolved.caps,
+            allocation: resolved.allocation,
+            ...(resolved.policy.descendantInvocations === undefined
               ? {}
-              : { continuationOf: options.continuationOf }),
-          });
-
-          const resolvedTarget = Option.getOrUndefined(effectiveTarget);
-
-          const resolved = resolveSubagentPolicy(
-            declaration,
-            budgetScope === "worker-run"
-              ? (resolvedTarget ?? declaration.target.policy)
-              : caller.policy,
-            undefined,
-            budgetScope === "worker-run" ? "root-attached" : "conserved",
-            resolvedTarget,
-          );
-
-          return {
-            encodedInput,
-            policy: resolved.childPolicy,
-            budget: SubagentBudgetReservation.make({
-              caps: resolved.caps,
-              allocation: resolved.allocation,
-              ...(resolved.policy.descendantInvocations === undefined
-                ? {}
-                : { descendantInvocations: resolved.policy.descendantInvocations }),
-            }),
-            toolCallAllowance: resolveToolCallAllowance(
-              declaration.toolCallAllowance,
-              parameters,
-              resolved.policy,
-              resolved.childPolicy,
-            ),
-          };
-        }),
+              : { descendantInvocations: resolved.policy.descendantInvocations }),
+          }),
+          toolCallAllowance: resolveToolCallAllowance(
+            declaration.toolCallAllowance,
+            parameters,
+            resolved.policy,
+            resolved.childPolicy,
+          ),
+        };
+      }),
     });
 
     const validated = yield* Schema.decodeEffect(WorkerStarted)(started).pipe(
@@ -632,33 +631,32 @@ export const followUp = <
 ) => operations(declaration).followUp(worker, parameters, options);
 
 /** Inspect a continuing worker with the same summary contract returned by list. */
-export const summary = <const Name extends string>(
+export const summary = Effect.fnUntraced(function* <const Name extends string>(
   declaration: WorkerDeclaration<Name> & { readonly target: AnyDefinition },
   worker: Worker<Name>,
-) =>
-  Effect.gen(function* () {
-    const service = yield* host;
+) {
+  const service = yield* host;
 
-    const validated = yield* Schema.decodeEffect(Worker(declaration))(worker).pipe(
-      Effect.mapError(() => WorkerError.make({ operation: "inspect", reason: "worker-mismatch" })),
-    );
+  const validated = yield* Schema.decodeEffect(Worker(declaration))(worker).pipe(
+    Effect.mapError(() => WorkerError.make({ operation: "inspect", reason: "worker-mismatch" })),
+  );
 
-    const result = yield* service.summary({ worker: validated, target: declaration.target });
+  const result = yield* service.summary({ worker: validated, target: declaration.target });
 
-    const value = yield* Schema.decodeEffect(WorkerSummary)(result).pipe(
-      Effect.mapError(() => WorkerError.make({ operation: "inspect", reason: "corrupt" })),
-    );
+  const value = yield* Schema.decodeEffect(WorkerSummary)(result).pipe(
+    Effect.mapError(() => WorkerError.make({ operation: "inspect", reason: "corrupt" })),
+  );
 
-    if (
-      value.worker.threadId !== validated.threadId ||
-      value.worker.delegationId !== validated.delegationId ||
-      value.worker.targetAgentId !== validated.targetAgentId ||
-      (value.latestReceipt !== null && value.latestReceipt.threadId !== validated.threadId)
-    )
-      return yield* WorkerError.make({ operation: "inspect", reason: "worker-mismatch" });
+  if (
+    value.worker.threadId !== validated.threadId ||
+    value.worker.delegationId !== validated.delegationId ||
+    value.worker.targetAgentId !== validated.targetAgentId ||
+    (value.latestReceipt !== null && value.latestReceipt.threadId !== validated.threadId)
+  )
+    return yield* WorkerError.make({ operation: "inspect", reason: "worker-mismatch" });
 
-    return { ...value, worker: validated };
-  });
+  return { ...value, worker: validated };
+});
 
 /** Inspect a worker summary, retained MessageRef, or the result of one exact accepted Receipt. */
 export function inspect<
@@ -762,33 +760,32 @@ export const observe = <const Name extends string>(
   );
 
 /** Seal a continuing worker, retaining a stable command identity across retries and Runs. */
-export const stop = <const Name extends string>(
+export const stop = Effect.fnUntraced(function* <const Name extends string>(
   declaration: WorkerDeclaration<Name> & { readonly target: AnyDefinition },
   worker: Worker<Name>,
   options: { readonly idempotencyKey: IdempotencyKey },
-) =>
-  Effect.gen(function* () {
-    const service = yield* host;
+) {
+  const service = yield* host;
 
-    const command = yield* Schema.decodeEffect(WorkerStop)({ worker, ...options }).pipe(
-      Effect.mapError((cause) => WorkerError.make({ operation: "stop", reason: "corrupt", cause })),
-    );
+  const command = yield* Schema.decodeEffect(WorkerStop)({ worker, ...options }).pipe(
+    Effect.mapError((cause) => WorkerError.make({ operation: "stop", reason: "corrupt", cause })),
+  );
 
-    if (
-      worker.delegationId !== declaration.delegationId ||
-      worker.targetAgentId !== declaration.target.id
-    )
-      return yield* WorkerError.make({ operation: "stop", reason: "worker-mismatch" });
+  if (
+    worker.delegationId !== declaration.delegationId ||
+    worker.targetAgentId !== declaration.target.id
+  )
+    return yield* WorkerError.make({ operation: "stop", reason: "worker-mismatch" });
 
-    return yield* service.stop({ ...command, target: declaration.target }).pipe(
-      Effect.flatMap(Schema.decodeEffect(WorkerStopped)),
-      Effect.mapError((cause) =>
-        Schema.is(WorkerError)(cause)
-          ? cause
-          : WorkerError.make({ operation: "stop", reason: "corrupt", cause }),
-      ),
-    );
-  });
+  return yield* service.stop({ ...command, target: declaration.target }).pipe(
+    Effect.flatMap(Schema.decodeEffect(WorkerStopped)),
+    Effect.mapError((cause) =>
+      Schema.is(WorkerError)(cause)
+        ? cause
+        : WorkerError.make({ operation: "stop", reason: "corrupt", cause }),
+    ),
+  );
+});
 
 /** Wait for the exact Receipt. Interrupting this Effect never cancels accepted work. */
 export const awaitWorker = <
@@ -1066,6 +1063,21 @@ const modelKey = Effect.fnUntraced(function* (operation: "start" | "followUp") {
   );
 });
 
+type SelectionServices<Flag, Requirements> = Flag extends true ? Requirements : never;
+
+// Conditional flags retain services for either possible runtime branch. Disabled operations
+// never run the capture effect and cannot install a handler that consumes those services.
+const captureSelected = <Flag extends true | undefined>(flag: Flag) => {
+  function capture<A, R>(
+    effect: Effect.Effect<A, never, R>,
+  ): Effect.Effect<Option.Option<A>, never, SelectionServices<Flag, R>>;
+  function capture<A, R>(effect: Effect.Effect<A, never, R>) {
+    return flag === true ? Effect.map(effect, Option.some) : Effect.succeedNone;
+  }
+
+  return capture;
+};
+
 // Construction-local service keys distinguish projections for co-registered parent versions.
 // These keys are never persisted; worker/run identity and registration digests remain canonical.
 let reportingServiceId = 0;
@@ -1196,64 +1208,88 @@ export const background = <
     | Parameters["DecodingServices"]
     | Output["DecodingServices"]
     | Success["EncodingServices"];
-  type Services = PrepareServices | ProjectServices;
-  type SelectionServices<Flag, Requirements> = Flag extends true ? Requirements : never;
 
   const build = Effect.gen(function* () {
-    const captured = yield* Effect.context<Services>();
+    const start = yield* captureSelected<Selected["start"]>(selected.start)(
+      Effect.map(
+        Effect.context<PrepareServices>(),
+        (captured) => (parameters: Parameters["Type"]) =>
+          Effect.gen(function* () {
+            const service = yield* host;
+            const idempotencyKey = yield* modelKey("start");
+
+            return yield* ops
+              .start(parameters, {
+                idempotencyKey,
+                ...(selected.budgetScope === undefined
+                  ? {}
+                  : { budgetScope: selected.budgetScope }),
+              })
+              .pipe(Effect.provideService(SubagentHost, service), Effect.provide(captured));
+          }),
+      ),
+    );
+
+    const followUp = yield* captureSelected<Selected["followUp"]>(selected.followUp)(
+      Effect.map(
+        Effect.context<PrepareServices>(),
+        (captured) =>
+          (parameters: {
+            readonly worker: Worker<Name>;
+            readonly parameters: Parameters["Type"];
+          }) =>
+            Effect.gen(function* () {
+              const service = yield* host;
+              const idempotencyKey = yield* modelKey("followUp");
+
+              return yield* ops
+                .followUp(parameters.worker, parameters.parameters, { idempotencyKey })
+                .pipe(Effect.provideService(SubagentHost, service), Effect.provide(captured));
+            }),
+      ),
+    );
+
+    const inspect = yield* captureSelected<Selected["inspect"]>(selected.inspect)(
+      Effect.map(
+        Effect.context<ProjectServices>(),
+        (captured) =>
+          (parameters: {
+            readonly worker: Worker<Name>;
+            readonly message?: MessageRef;
+            readonly receipt?: Receipt;
+          }) =>
+            Effect.gen(function* () {
+              const service = yield* host;
+
+              if (parameters.message !== undefined)
+                return yield* ops.inspectMessage(parameters.worker, parameters.message);
+              if (parameters.receipt === undefined)
+                return yield* WorkerError.make({
+                  operation: "inspect",
+                  reason: "message-mismatch",
+                });
+
+              return yield* ops.observe("inspect", parameters.worker, parameters.receipt).pipe(
+                Effect.map((observed) => {
+                  if ("diagnostic" in observed) {
+                    const { diagnostic: _diagnostic, ...projected } = observed;
+
+                    return projected;
+                  }
+
+                  return observed;
+                }),
+                Effect.provideService(SubagentHost, service),
+                Effect.provide(captured),
+              );
+            }),
+      ),
+    );
 
     const handlers = {
-      [startTool.name]: (parameters: Parameters["Type"]) =>
-        Effect.gen(function* () {
-          const service = yield* host;
-          const idempotencyKey = yield* modelKey("start");
-
-          return yield* ops
-            .start(parameters, {
-              idempotencyKey,
-              ...(selected.budgetScope === undefined ? {} : { budgetScope: selected.budgetScope }),
-            })
-            .pipe(Effect.provideService(SubagentHost, service), Effect.provide(captured));
-        }),
-      [followUpTool.name]: (parameters: {
-        readonly worker: Worker<Name>;
-        readonly parameters: Parameters["Type"];
-      }) =>
-        Effect.gen(function* () {
-          const service = yield* host;
-          const idempotencyKey = yield* modelKey("followUp");
-
-          return yield* ops
-            .followUp(parameters.worker, parameters.parameters, { idempotencyKey })
-            .pipe(Effect.provideService(SubagentHost, service), Effect.provide(captured));
-        }),
-      [inspectTool.name]: (parameters: {
-        readonly worker: Worker<Name>;
-        readonly message?: MessageRef;
-        readonly receipt?: Receipt;
-      }) =>
-        Effect.gen(function* () {
-          const service = yield* host;
-
-          if (parameters.message !== undefined)
-            return yield* ops.inspectMessage(parameters.worker, parameters.message);
-          if (parameters.receipt === undefined)
-            return yield* WorkerError.make({ operation: "inspect", reason: "message-mismatch" });
-
-          return yield* ops.observe("inspect", parameters.worker, parameters.receipt).pipe(
-            Effect.map((observed) => {
-              if ("diagnostic" in observed) {
-                const { diagnostic: _diagnostic, ...projected } = observed;
-
-                return projected;
-              }
-
-              return observed;
-            }),
-            Effect.provideService(SubagentHost, service),
-            Effect.provide(captured),
-          );
-        }),
+      ...(Option.isSome(start) ? { [startTool.name]: start.value } : {}),
+      ...(Option.isSome(followUp) ? { [followUpTool.name]: followUp.value } : {}),
+      ...(Option.isSome(inspect) ? { [inspectTool.name]: inspect.value } : {}),
       [listTool.name]: (parameters: typeof ListParameters.Type) => ops.list(parameters),
       [summaryTool.name]: (parameters: { readonly worker: Worker<Name> }) =>
         summary(declaration, parameters.worker),
@@ -1263,7 +1299,7 @@ export const background = <
       }) => ops.cancel(parameters.worker, parameters.receipt),
     };
 
-    // Each handler above is paired with its native schema; computed generic names need this bridge.
+    // Each selected handler is paired with its native schema; computed names need this bridge.
     return handlers as unknown as Toolkit.HandlersFrom<Tools>;
   });
 
@@ -1273,18 +1309,20 @@ export const background = <
     | SelectionServices<Selected["inspect"], ProjectServices>
     | SelectionServices<Selected["reportToParent"], Exclude<ProjectServices, Scope.Scope>>;
 
-  // Unselected handlers are never installed. Only selected operations consume projection services.
-  const reportingLayer =
-    report === undefined
-      ? Layer.empty
-      : Layer.effect(
-          reportService,
-          Effect.map(
-            Effect.context<Effect.Services<ReturnType<typeof report.prepare>>>(),
-            (context): WorkerReporting<WorkerReportPreparationFailure> => ({
-              ...report,
+  const reportingLayer = Layer.effectContext(
+    Effect.gen(function* () {
+      const capturedReport = yield* captureSelected<Selected["reportToParent"]>(
+        selected.reportToParent,
+      )(
+        Effect.map(
+          Effect.context<Exclude<ProjectServices, Scope.Scope>>(),
+          (context): WorkerReporting<WorkerReportPreparationFailure> => {
+            const reporting = automaticReporting(declaration);
+
+            return {
+              ...reporting,
               prepare: (value) =>
-                Effect.scoped(Effect.suspend(() => report.prepare(value))).pipe(
+                Effect.scoped(Effect.suspend(() => reporting.prepare(value))).pipe(
                   Effect.provide(context),
                   Effect.mapError((error) =>
                     Schema.is(WorkerReportPreparationFailure)(error)
@@ -1292,15 +1330,21 @@ export const background = <
                       : WorkerReportPreparationFailure.make({ stage: "preparation" }),
                   ),
                 ),
-            }),
-          ),
-        );
+            };
+          },
+        ),
+      );
 
-  const layer = Layer.merge(toolkit.toLayer(build), reportingLayer) as Layer.Layer<
-    Tool.HandlersFor<Tools>,
-    never,
-    SelectedServices
-  >;
+      return Option.isNone(capturedReport)
+        ? Context.empty()
+        : Context.make(reportService, capturedReport.value);
+    }),
+  );
+
+  const layer: Layer.Layer<Tool.HandlersFor<Tools>, never, SelectedServices> = Layer.merge(
+    toolkit.toLayer(build),
+    reportingLayer,
+  );
 
   return Object.freeze({ tools: toolkit.tools, toolkit, layer });
 };

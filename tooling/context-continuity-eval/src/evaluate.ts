@@ -380,8 +380,8 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
     let atSettlement: Effect.Effect<void> = Effect.die("Settlement services not acquired");
     let activeBeforeSettlement: ExecutionCheckpoint | undefined;
 
-    const pauseForKill = (runId: RunId) =>
-      Effect.gen(function* () {
+    const pauseForKill = Effect.fnUntraced(
+      function* (runId: RunId) {
         if (options.processId === undefined)
           return yield* Effect.die("Missing supervised process identity");
         const notes = yield* readNotes(key);
@@ -428,7 +428,9 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
 
         // No scope closes and no failure is returned. Only the supervisor's SIGKILL ends this attempt.
         return yield* Effect.never;
-      }).pipe(Effect.orDie);
+      },
+      (effect) => effect.pipe(Effect.orDie),
+    );
 
     const host = NodeDurableAgentRuntime.layer({
       filename: path.join(options.outputDirectory, "thread.sqlite"),

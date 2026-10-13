@@ -91,43 +91,42 @@ const finalParts = (text: string): ReadonlyArray<Response.StreamPartEncoded> => 
  * Scripted model whose call counter and captured request prompts live OUTSIDE the Model Layer,
  * so they survive Layer rebuilds across Attempts (each Attempt provides the Model afresh).
  */
-const makeScriptedModel = (
+const makeScriptedModel = Effect.fnUntraced(function* (
   script: (
     call: number,
   ) =>
     | ReadonlyArray<Response.StreamPartEncoded>
     | Effect.Effect<ReadonlyArray<Response.StreamPartEncoded>>,
-) =>
-  Effect.gen(function* () {
-    const calls = yield* Ref.make(0);
-    const prompts: Array<Prompt.Prompt> = [];
+) {
+  const calls = yield* Ref.make(0);
+  const prompts: Array<Prompt.Prompt> = [];
 
-    const model = Model.make(
-      "scripted",
-      "durable-join-test",
-      Layer.effect(
-        LanguageModel.LanguageModel,
-        LanguageModel.make({
-          generateText: () => Effect.succeed([]),
-          streamText: (request) =>
-            Stream.unwrap(
-              Ref.getAndUpdate(calls, (call) => call + 1).pipe(
-                Effect.flatMap((call) => {
-                  prompts.push(request.prompt);
-                  const parts = script(call);
+  const model = Model.make(
+    "scripted",
+    "durable-join-test",
+    Layer.effect(
+      LanguageModel.LanguageModel,
+      LanguageModel.make({
+        generateText: () => Effect.succeed([]),
+        streamText: (request) =>
+          Stream.unwrap(
+            Ref.getAndUpdate(calls, (call) => call + 1).pipe(
+              Effect.flatMap((call) => {
+                prompts.push(request.prompt);
+                const parts = script(call);
 
-                  return Effect.isEffect(parts)
-                    ? Effect.map(parts, Stream.fromIterable)
-                    : Effect.succeed(Stream.fromIterable(parts));
-                }),
-              ),
+                return Effect.isEffect(parts)
+                  ? Effect.map(parts, Stream.fromIterable)
+                  : Effect.succeed(Stream.fromIterable(parts));
+              }),
             ),
-        }),
-      ),
-    );
+          ),
+      }),
+    ),
+  );
 
-    return { model, prompts };
-  });
+  return { model, prompts };
+});
 
 /** No-tool Q&A agent: the join seams under test are pure Turn seams. */
 const joinDefinition = Agent.make("durable-join", {
@@ -164,60 +163,59 @@ const testLayer = DurableAgentRuntime.layer
   .pipe(Layer.provide(runStorageLayer()))
   .pipe(Layer.provideMerge(baseLayer));
 
-const readLog = (threadId: string) =>
-  Effect.gen(function* () {
-    const store = yield* ThreadStore;
+const readLog = Effect.fnUntraced(function* (threadId: string) {
+  const store = yield* ThreadStore;
 
-    return yield* Stream.runCollect(
-      store.read(
-        ThreadRead.make({
-          threadId: decodeThreadId(threadId),
-          limit: 1_024,
-        }),
-      ),
-    );
-  });
+  return yield* Stream.runCollect(
+    store.read(
+      ThreadRead.make({
+        threadId: decodeThreadId(threadId),
+        limit: 1_024,
+      }),
+    ),
+  );
+});
 
 const recordsById = (records: ReadonlyArray<CanonicalRecordEnvelope>) =>
   new Map(records.map((envelope) => [envelope.record.recordId as string, envelope]));
 
-const lookupState = (submissionId: SubmissionId) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
-    const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
+const lookupState = Effect.fnUntraced(function* (submissionId: SubmissionId) {
+  const ledger = yield* SubmissionLedger;
+  const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
 
-    expect(Option.isSome(snapshot)).toBe(true);
-    if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
+  expect(Option.isSome(snapshot)).toBe(true);
+  if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
 
-    return snapshot.value.state;
-  });
+  return snapshot.value.state;
+});
 
-const armFailpoint = (location: DurableRuntimeFailpointLocation) =>
-  Effect.gen(function* () {
-    const control = yield* DurableRuntimeFailpointTestControl;
+const armFailpoint = Effect.fnUntraced(function* (location: DurableRuntimeFailpointLocation) {
+  const control = yield* DurableRuntimeFailpointTestControl;
 
-    yield* control.setHandler((hitLocation) =>
-      hitLocation === location
-        ? Effect.fail(DurableRuntimeFailpointError.make({ location: hitLocation }))
-        : Effect.void,
-    );
-  });
+  yield* control.setHandler((hitLocation) =>
+    hitLocation === location
+      ? Effect.fail(DurableRuntimeFailpointError.make({ location: hitLocation }))
+      : Effect.void,
+  );
+});
 
 /** Arm one failpoint to fire only on its N-th hit (1-based) within this handler's lifetime. */
-const armFailpointAt = (location: DurableRuntimeFailpointLocation, occurrence: number) =>
-  Effect.gen(function* () {
-    const control = yield* DurableRuntimeFailpointTestControl;
-    const seen = { count: 0 };
+const armFailpointAt = Effect.fnUntraced(function* (
+  location: DurableRuntimeFailpointLocation,
+  occurrence: number,
+) {
+  const control = yield* DurableRuntimeFailpointTestControl;
+  const seen = { count: 0 };
 
-    yield* control.setHandler((hitLocation) => {
-      if (hitLocation !== location) return Effect.void;
-      seen.count += 1;
+  yield* control.setHandler((hitLocation) => {
+    if (hitLocation !== location) return Effect.void;
+    seen.count += 1;
 
-      return seen.count === occurrence
-        ? Effect.fail(DurableRuntimeFailpointError.make({ location: hitLocation }))
-        : Effect.void;
-    });
+    return seen.count === occurrence
+      ? Effect.fail(DurableRuntimeFailpointError.make({ location: hitLocation }))
+      : Effect.void;
   });
+});
 
 const clearFailpoint = Effect.gen(function* () {
   const control = yield* DurableRuntimeFailpointTestControl;
@@ -464,14 +462,13 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
       const settlements = yield* runtime.processThread(agent, host.threadId).pipe(
         Effect.provide(
           toolkit.toLayer({
-            answer: () =>
-              Effect.gen(function* () {
-                followUp = yield* runtime
-                  .submit(agent, { question: "follow-up" }, submitOptions(thread, "later"))
-                  .pipe(Effect.orDie);
+            answer: Effect.fnUntraced(function* () {
+              followUp = yield* runtime
+                .submit(agent, { question: "follow-up" }, submitOptions(thread, "later"))
+                .pipe(Effect.orDie);
 
-                return "answered";
-              }),
+              return "answered";
+            }),
           }),
         ),
       );
@@ -522,16 +519,15 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
       const settlements = yield* runtime.processThread(agent, host.threadId).pipe(
         Effect.provide(
           toolkit.toLayer({
-            answer: () =>
-              Effect.gen(function* () {
-                if (followUp === undefined) {
-                  followUp = yield* runtime
-                    .submit(agent, { question: "later" }, submitOptions(thread, "later"))
-                    .pipe(Effect.orDie);
-                }
+            answer: Effect.fnUntraced(function* () {
+              if (followUp === undefined) {
+                followUp = yield* runtime
+                  .submit(agent, { question: "later" }, submitOptions(thread, "later"))
+                  .pipe(Effect.orDie);
+              }
 
-                return "answered";
-              }),
+              return "answered";
+            }),
           }),
         ),
       );
@@ -746,19 +742,14 @@ layer(testLayer)("DUR P5 joining/joined queued input (plan §2.5)", (it) => {
         const settlements = yield* runtime.processThread(agent, host.threadId).pipe(
           Effect.provide(
             toolkit.toLayer({
-              handoff: () =>
-                Effect.gen(function* () {
-                  handoffs++;
-                  followUp = yield* runtime
-                    .submit(
-                      agent,
-                      { question: "during-handoff" },
-                      submitOptions(thread, "follow-up"),
-                    )
-                    .pipe(Effect.orDie);
+              handoff: Effect.fnUntraced(function* () {
+                handoffs++;
+                followUp = yield* runtime
+                  .submit(agent, { question: "during-handoff" }, submitOptions(thread, "follow-up"))
+                  .pipe(Effect.orDie);
 
-                  return "delegated";
-                }),
+                return "delegated";
+              }),
               answer: () => Effect.succeed("all covered"),
             }),
           ),

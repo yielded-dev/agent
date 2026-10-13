@@ -104,33 +104,32 @@ describe("DoSubmissionLedger", () => {
         let unavailable = false;
 
         const fence = Layer.succeed(SubmissionAdmissionFence)({
-          check: (request) =>
-            Effect.gen(function* () {
-              if (unavailable)
-                return yield* AdmissionPolicyError.make({
-                  reason: "unavailable",
-                  code: "host-policy",
-                });
-              yield* sql`UPDATE host_admission_policy SET observations=observations+1`.pipe(
-                Effect.mapError(() =>
-                  AdmissionPolicyError.make({ reason: "unavailable", code: "host-policy" }),
-                ),
-              );
+          check: Effect.fnUntraced(function* (request) {
+            if (unavailable)
+              return yield* AdmissionPolicyError.make({
+                reason: "unavailable",
+                code: "host-policy",
+              });
+            yield* sql`UPDATE host_admission_policy SET observations=observations+1`.pipe(
+              Effect.mapError(() =>
+                AdmissionPolicyError.make({ reason: "unavailable", code: "host-policy" }),
+              ),
+            );
 
-              const rows = yield* sql<{
-                revision: string;
-              }>`SELECT revision FROM host_admission_policy`.pipe(
-                Effect.mapError(() =>
-                  AdmissionPolicyError.make({ reason: "unavailable", code: "host-policy" }),
-                ),
-              );
+            const rows = yield* sql<{
+              revision: string;
+            }>`SELECT revision FROM host_admission_policy`.pipe(
+              Effect.mapError(() =>
+                AdmissionPolicyError.make({ reason: "unavailable", code: "host-policy" }),
+              ),
+            );
 
-              if (request.admissionFence?.revision !== rows[0]?.revision)
-                return yield* AdmissionPolicyError.make({
-                  reason: "refused",
-                  code: "stale-revision",
-                });
-            }),
+            if (request.admissionFence?.revision !== rows[0]?.revision)
+              return yield* AdmissionPolicyError.make({
+                reason: "refused",
+                code: "stale-revision",
+              });
+          }),
         });
 
         yield* Effect.gen(function* () {

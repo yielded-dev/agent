@@ -53,18 +53,22 @@ const Input = Schema.Struct({
   ),
 });
 
+const plannerInstructions = Effect.fnUntraced(function* (city: string, days: number) {
+  const prefix = yield* Instructions;
+
+  if (prefix === "") return yield* InstructionError.make({});
+
+  return `${prefix} ${city} ${days}`;
+});
+
 const planner = Agent.make("typed-planner", {
   input: Input,
   output: Schema.Struct({ answer: Schema.String }),
-  instructions: ({ city, days }) =>
-    Effect.gen(function* () {
-      expectTypeOf(days).toEqualTypeOf<number>();
-      const prefix = yield* Instructions;
+  instructions: ({ city, days }) => {
+    expectTypeOf(days).toEqualTypeOf<number>();
 
-      if (prefix === "") return yield* new InstructionError({});
-
-      return `${prefix} ${city} ${days}`;
-    }),
+    return plannerInstructions(city, days);
+  },
   toolkit,
   policy: AgentPolicy.make({
     maxTurns: 2,
@@ -125,7 +129,7 @@ export const verifyPreservesCompletionCorrectionFailuresAndServicesInRunAndStrea
     const binding = Agent.withModel(completing, model);
 
     const options = {
-      beforeTurn: () => TurnHost.pipe(Effect.andThen(Effect.fail(new TurnHostError()))),
+      beforeTurn: () => TurnHost.pipe(Effect.andThen(Effect.fail(TurnHostError.make()))),
     };
 
     const run = AgentRuntime.run(binding, "question", options);
@@ -194,7 +198,7 @@ export const verifyPreservesEncodedInputOutputFailuresAndEveryUnsatisfiedService
   >();
 
   const gated = AgentRuntime.stream(planner, input, {
-    beforeTurn: () => TurnHost.pipe(Effect.andThen(Effect.fail(new TurnHostError()))),
+    beforeTurn: () => TurnHost.pipe(Effect.andThen(Effect.fail(TurnHostError.make()))),
   });
 
   expectTypeOf<Stream.Services<typeof gated>>().toEqualTypeOf<
@@ -206,7 +210,7 @@ export const verifyPreservesEncodedInputOutputFailuresAndEveryUnsatisfiedService
 
   const authorized = AgentRuntime.run(planner, input, {
     toolAuthorization: {
-      authorize: () => TurnHost.pipe(Effect.andThen(Effect.fail(new TurnHostError()))),
+      authorize: () => TurnHost.pipe(Effect.andThen(Effect.fail(TurnHostError.make()))),
     },
   });
 
@@ -324,14 +328,13 @@ export const verifyPreservesDisjointToolSchemasAndCallbacksWithDifferentInputTyp
   const topic = Agent.make("topic-agent", {
     input: Schema.Struct({ topic: Schema.String }),
     output: Schema.String,
-    instructions: ({ topic }) =>
-      Effect.gen(function* () {
-        const prefix = yield* TopicInstructions;
+    instructions: Effect.fnUntraced(function* ({ topic }) {
+      const prefix = yield* TopicInstructions;
 
-        if (prefix === "") return yield* TopicFailure.make({});
+      if (prefix === "") return yield* TopicFailure.make({});
 
-        return `${prefix}: ${topic}`;
-      }),
+      return `${prefix}: ${topic}`;
+    }),
     inputPrompt: ({ topic }) => Effect.map(TopicInstructions, (prefix) => `${prefix}: ${topic}`),
     toolkit: topicTools,
     policy: planner.policy,
@@ -399,15 +402,14 @@ export const verifyRetainsTransformedToolParameterServicesAndHandlerFailuresAcro
     const tools = Toolkit.make(Increment);
 
     const handlers = tools.toLayer({
-      increment: ({ value }) =>
-        Effect.gen(function* () {
-          expectTypeOf(value).toEqualTypeOf<number>();
-          const catalog = yield* Catalog;
+      increment: Effect.fnUntraced(function* ({ value }) {
+        expectTypeOf(value).toEqualTypeOf<number>();
+        const catalog = yield* Catalog;
 
-          if (catalog === "") return yield* ToolError.make({});
+        if (catalog === "") return yield* ToolError.make({});
 
-          return value + 1;
-        }),
+        return value + 1;
+      }),
     });
 
     const definition = Agent.make("transformed-tool", {
@@ -568,26 +570,25 @@ export const verifyTextOutputPreservesSchemaTransformationsErrorsAndDecoderRequi
 export const verifyResolvedCallPreparationPreservesHostAndProviderRequirementsAndTypedFailure =
   () => {
     const preparation: RunContextHook<TurnHostError, TurnHost | ProviderClient> = {
-      prepare: (request) =>
-        Effect.gen(function* () {
-          const host = yield* TurnHost;
+      prepare: Effect.fnUntraced(function* (request) {
+        const host = yield* TurnHost;
 
-          if (host === "") return yield* TurnHostError.make({});
-          const captured = yield* model.captureRequirements;
+        if (host === "") return yield* TurnHostError.make({});
+        const captured = yield* model.captureRequirements;
 
-          return {
-            prompt: request.source,
-            modelCall: {
-              model: captured,
-              context: ModelCallContext.make({
-                contextCapacity: 4_000,
-                maxInputTokens: 3_000,
-                outputReserveTokens: 500,
-                uncountedOverheadTokens: 100,
-              }),
-            },
-          };
-        }),
+        return {
+          prompt: request.source,
+          modelCall: {
+            model: captured,
+            context: ModelCallContext.make({
+              contextCapacity: 4_000,
+              maxInputTokens: 3_000,
+              outputReserveTokens: 500,
+              uncountedOverheadTokens: 100,
+            }),
+          },
+        };
+      }),
     };
 
     const run = AgentRuntime.run(

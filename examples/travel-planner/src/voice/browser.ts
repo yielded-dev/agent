@@ -4,7 +4,7 @@ import { LiveEvent, VoiceAnswer, VoiceError, type VoiceOffer } from "./protocol.
 import type { VoiceConnection } from "./session.ts";
 
 const failed = () =>
-  new VoiceError({ message: "Voice disconnected. Reconnect to check existing work." });
+  VoiceError.make({ message: "Voice disconnected. Reconnect to check existing work." });
 
 /** The call scope owns microphone tracks, media, data listeners, queues and the peer. */
 export const connectBrowserVoice = Effect.fn("connectBrowserVoice")(function* (
@@ -41,14 +41,17 @@ export const connectBrowserVoice = Effect.fn("connectBrowserVoice")(function* (
 
       if (signal.aborted || released) {
         media.getTracks().forEach((track) => track.stop());
-        throw failed();
+
+        return null;
       }
       captured = media;
 
       return media;
     },
-    catch: () => new VoiceError({ message: "Allow microphone access to start voice." }),
+    catch: () => VoiceError.make({ message: "Allow microphone access to start voice." }),
   });
+
+  if (microphone === null) return yield* failed();
 
   const channel = yield* Effect.acquireRelease(
     Effect.sync(() => peer.createDataChannel("oai-events")),
@@ -118,21 +121,28 @@ export const connectBrowserVoice = Effect.fn("connectBrowserVoice")(function* (
 
   if (!sdp) return yield* failed();
 
-  const answer = yield* Effect.tryPromise({
-    try: async (signal) => {
-      const response = await fetch("/travel/api/voice", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-elsewhere-account": subjectId },
-        body: JSON.stringify({ sdp, history }),
-        signal,
-      });
+  const answer = yield* Effect.acquireUseRelease(
+    Effect.sync(() => new AbortController()),
+    (controller) =>
+      Effect.gen(function* () {
+        const response = yield* Effect.tryPromise({
+          try: () =>
+            fetch("/travel/api/voice", {
+              method: "POST",
+              headers: { "content-type": "application/json", "x-elsewhere-account": subjectId },
+              body: JSON.stringify({ sdp, history }),
+              signal: controller.signal,
+            }),
+          catch: failed,
+        });
 
-      if (!response.ok) throw failed();
+        if (!response.ok) return yield* failed();
 
-      return await response.json();
-    },
-    catch: failed,
-  }).pipe(
+        return yield* Effect.tryPromise({ try: () => response.json(), catch: failed });
+      }),
+    // Keep cancellation attached until the answer body has also been read.
+    (controller) => Effect.sync(() => controller.abort()),
+  ).pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(VoiceAnswer)),
     Effect.timeout("30 seconds"),
     Effect.mapError(failed),
@@ -145,14 +155,11 @@ export const connectBrowserVoice = Effect.fn("connectBrowserVoice")(function* (
 
   return {
     events: Stream.fromQueue(queue),
-    send: (event) =>
-      Effect.try({
-        try: () => {
-          if (channel.readyState !== "open" || channel.bufferedAmount > 32 * 1024) throw failed();
-          channel.send(JSON.stringify(event));
-        },
-        catch: failed,
-      }),
+    send: Effect.fnUntraced(function* (event) {
+      if (channel.readyState !== "open" || channel.bufferedAmount > 32 * 1024)
+        return yield* failed();
+      yield* Effect.try({ try: () => channel.send(JSON.stringify(event)), catch: failed });
+    }),
     silence: Effect.sync(() => {
       audio.muted = true;
     }),

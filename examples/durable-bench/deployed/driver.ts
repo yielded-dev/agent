@@ -28,6 +28,7 @@ import {
 
 class ObservationError extends Schema.TaggedError<ObservationError>()("ObservationError", {
   message: Schema.String,
+  cause: Schema.optionalKey(Schema.Defect()),
 }) {}
 
 const attempt = <A>(body: () => Promise<A>) =>
@@ -36,7 +37,7 @@ const attempt = <A>(body: () => Promise<A>) =>
     catch: (cause) =>
       Schema.is(TransientObjectTransport)(cause)
         ? cause
-        : new ObservationError({ message: errorText(cause) }),
+        : ObservationError.make({ message: errorText(cause), cause }),
   });
 
 interface Env {
@@ -136,43 +137,70 @@ export default {
       }
       const cancellation = new AbortController();
 
-      const invoke = async (path: string, body?: unknown, timeoutMs = 180_000) => {
+      const invoke = Effect.fnUntraced(function* (
+        path: string,
+        body?: unknown,
+        timeoutMs = 180_000,
+      ) {
+        const controller = yield* Effect.acquireRelease(
+          Effect.sync(() => new AbortController()),
+          (controller) => Effect.sync(() => controller.abort()),
+        );
+
         const url = new URL(path, target);
 
         for (const [key, value] of Object.entries(query)) url.searchParams.set(key, String(value));
 
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${env.BENCH_TOKEN}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify(body ?? {}),
-          signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), cancellation.signal]),
-        });
+        const response = yield* attempt(() =>
+          fetch(url, {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${env.BENCH_TOKEN}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify(body ?? {}),
+            signal: AbortSignal.any([
+              AbortSignal.timeout(timeoutMs),
+              cancellation.signal,
+              controller.signal,
+            ]),
+          }),
+        );
 
         if (!response.ok) {
-          const text = await response.text();
-          const failure = Schema.decodeUnknownOption(Schema.fromJsonString(Failure))(text);
+          const text = yield* attempt(() => response.text());
+          const failure = Schema.decodeOption(Schema.fromJsonString(Failure))(text);
 
           if (
             Option.isSome(failure) &&
             failure.value.sample === query.sample &&
             failure.value.transport !== undefined
           )
-            throw failure.value.transport;
+            return yield* failure.value.transport;
 
-          throw new Error(
-            `Target ${path} returned HTTP ${response.status}: ${text}; input will not be retried.`,
-          );
+          return yield* ObservationError.make({
+            message: `Target ${path} returned HTTP ${response.status}: ${text}; input will not be retried.`,
+          });
         }
 
         return response;
-      };
+      });
+
+      const invokeJson = Effect.fnUntraced(function* <
+        S extends Schema.Top & { readonly DecodingServices: never },
+      >(schema: S, path: string, body?: unknown, timeoutMs?: number) {
+        const response = yield* invoke(path, body, timeoutMs);
+
+        return yield* Schema.decodeUnknownEffect(schema)(
+          yield* attempt(() => response.json()),
+        ).pipe(
+          Effect.mapError((cause) => ObservationError.make({ message: errorText(cause), cause })),
+        );
+      });
 
       if (new URL(request.url).pathname === "/history-checkpoint") {
-        const checkpoint = Schema.decodeUnknownSync(SeedCheckpoint)(
-          await (await invoke("/seed-progress")).json(),
+        const checkpoint = await Effect.runPromise(
+          invokeJson(SeedCheckpoint, "/seed-progress").pipe(Effect.scoped),
         );
 
         return Response.json({
@@ -209,17 +237,26 @@ export default {
               (async () => {
                 let completed = from;
 
+                const failed = (error: string) =>
+                  write({
+                    _tag: "Failed",
+                    completed,
+                    driverMs: Date.now() - startedMs,
+                    colo,
+                    error,
+                  });
+
                 try {
-                  const checkpoint = Schema.decodeUnknownSync(SeedCheckpoint)(
-                    await (await invoke("/seed-progress")).json(),
+                  const checkpoint = await Effect.runPromise(
+                    invokeJson(SeedCheckpoint, "/seed-progress").pipe(Effect.scoped),
                   );
 
                   if (checkpoint.inFlight || checkpoint.completed !== from || from >= query.history)
-                    throw new Error("History is not at the requested verified batch boundary");
+                    return failed("History is not at the requested verified batch boundary");
                   if (from > 0) {
                     // Close the preceding runtime before admitting this single batch.
-                    const reset = Schema.decodeUnknownSync(ColdResult)(
-                      await (await invoke("/cold")).json(),
+                    const reset = await Effect.runPromise(
+                      invokeJson(ColdResult, "/cold").pipe(Effect.scoped),
                     );
 
                     if (
@@ -229,12 +266,14 @@ export default {
                       reset.before.build !== query.expectedBuild ||
                       (reset.directoryBefore && reset.directoryBefore.build !== query.expectedBuild)
                     )
-                      throw new Error("History batch restart or Object build was not acknowledged");
+                      return failed("History batch restart or Object build was not acknowledged");
                   }
                   const to = Math.min(from + 50, query.history);
 
-                  const result = Schema.decodeUnknownSync(SeedResult)(
-                    await (await invoke("/seed", { from, to, startedMs }, 600_000)).json(),
+                  const result = await Effect.runPromise(
+                    invokeJson(SeedResult, "/seed", { from, to, startedMs }, 600_000).pipe(
+                      Effect.scoped,
+                    ),
                   );
 
                   if (
@@ -243,17 +282,11 @@ export default {
                     result.startedMs !== startedMs ||
                     result.identity.build !== query.expectedBuild
                   )
-                    throw new Error("History batch acknowledgement or Object build mismatch");
+                    return failed("History batch acknowledgement or Object build mismatch");
                   completed = to;
                   write({ _tag: "Batch", result, driverMs: Date.now() - startedMs, colo });
                 } catch (cause) {
-                  write({
-                    _tag: "Failed",
-                    completed,
-                    driverMs: Date.now() - startedMs,
-                    colo,
-                    error: errorText(cause),
-                  });
+                  failed(errorText(cause));
                 } finally {
                   stopHeartbeat();
                   if (!cancelled) controller.close();
@@ -291,11 +324,7 @@ export default {
           Effect.gen(function* () {
             const primeAt = yield* Clock.currentTimeMillis;
 
-            const primed = cold
-              ? yield* attempt(async () =>
-                  Schema.decodeUnknownSync(PrimeResult)(await (await invoke("/prime")).json()),
-                )
-              : undefined;
+            const primed = cold ? yield* invokeJson(PrimeResult, "/prime") : undefined;
 
             const primeMs = primed ? (yield* Clock.currentTimeMillis) - primeAt : 0;
             const constructorAndProbeMs = primed?.constructorAndProbeMs ?? 0;
@@ -306,7 +335,7 @@ export default {
                 primed.identity.priorAlarms !== 0 ||
                 primed.identity.build !== query.expectedBuild)
             )
-              return yield* new ObservationError({
+              return yield* ObservationError.make({
                 message: "Cold construction was not fresh or reported another build.",
               });
             const ready = yield* Deferred.make<void, ObservationError>();
@@ -320,20 +349,21 @@ export default {
 
             if (observeText && query.target !== "tardie") {
               observerOpenedMs = yield* Clock.currentTimeMillis;
-              const response = yield* attempt(() => invoke("/text"));
+              const response = yield* invoke("/text");
               const body = response.body;
 
               if (!body)
-                return yield* new ObservationError({ message: "Missing text observation body." });
+                return yield* ObservationError.make({ message: "Missing text observation body." });
 
               yield* Stream.fromReadableStream({
                 evaluate: () => body,
-                onError: () => new ObservationError({ message: "Text observation disconnected." }),
+                onError: (cause) =>
+                  ObservationError.make({ message: "Text observation disconnected.", cause }),
               }).pipe(
                 Stream.pipeThroughChannel(Ndjson.decodeSchema(TextObservation)()),
                 Stream.concat(
                   Stream.fail(
-                    new ObservationError({
+                    ObservationError.make({
                       message: "Text observation ended before cancellation.",
                     }),
                   ),
@@ -362,15 +392,18 @@ export default {
                     if (frame.input === input) yield* Deferred.succeed(first, seen);
                   }),
                 ),
-                Effect.catchCause((cause) =>
-                  Effect.gen(function* () {
-                    const error = new ObservationError({
-                      message: `Public text observation failed: ${Cause.pretty(cause)}`,
-                    });
+                Effect.catchCauseIf(
+                  (cause) => !Cause.hasInterrupts(cause),
+                  (cause) =>
+                    Effect.gen(function* () {
+                      const error = ObservationError.make({
+                        message: `Public text observation failed: ${Cause.pretty(cause)}`,
+                        cause,
+                      });
 
-                    yield* Deferred.fail(ready, error);
-                    yield* Deferred.fail(first, error);
-                  }),
+                      yield* Deferred.fail(ready, error);
+                      yield* Deferred.fail(first, error);
+                    }),
                 ),
                 Effect.forkScoped,
               );
@@ -385,9 +418,7 @@ export default {
             let settlementRecordRead = false;
 
             if (query.target === "yielded") {
-              const admission = yield* attempt(async () =>
-                Schema.decodeUnknownSync(SubmitResult)(await (await invoke("/submit")).json()),
-              );
+              const admission = yield* invokeJson(SubmitResult, "/submit");
 
               admissionMs = (yield* Clock.currentTimeMillis) - metricStartMs;
               receipt = admission.receipt;
@@ -396,20 +427,14 @@ export default {
 
               if (seen) yield* Deferred.succeed(first, seen);
 
-              const settled = yield* attempt(async () =>
-                Schema.decodeUnknownSync(AwaitResult)(
-                  await (await invoke("/await", admission.receipt)).json(),
-                ),
-              );
+              const settled = yield* invokeJson(AwaitResult, "/await", admission.receipt);
 
               if (settled.settlement.outcome !== "completed")
-                return yield* new ObservationError({
+                return yield* ObservationError.make({
                   message: "Yielded did not complete the turn.",
                 });
             } else {
-              yield* attempt(async () =>
-                Schema.decodeUnknownSync(RunResult)(await (await invoke("/run")).json()),
-              );
+              yield* invokeJson(RunResult, "/run");
             }
 
             // Preserve the completion endpoint even if the independent text transport arrives later.
@@ -420,11 +445,7 @@ export default {
               // Text may arrive during this read; its source cannot prove the RPC was skipped.
               settlementRecordRead = true;
 
-              const result = yield* attempt(async () =>
-                Schema.decodeUnknownSync(SettledTextResult)(
-                  await (await invoke("/result", receipt)).json(),
-                ),
-              );
+              const result = yield* invokeJson(SettledTextResult, "/result", receipt);
 
               const fallback: Visible = {
                 atMs: yield* Clock.currentTimeMillis,
@@ -439,21 +460,18 @@ export default {
               !observeText || query.target === "tardie" ? undefined : yield* Deferred.await(first);
 
             if (resetBeforeMetrics) {
-              const reset = yield* attempt(async () =>
-                Schema.decodeUnknownSync(ColdResult)(await (await invoke("/cold")).json()),
-              );
+              const reset = yield* invokeJson(ColdResult, "/cold");
 
               if (!reset.ok || !reset.threadAborted || reset.before.build !== query.expectedBuild)
-                return yield* new ObservationError({
+                return yield* ObservationError.make({
                   message: "Diagnostic reset was not acknowledged.",
                 });
             }
 
             // Capture volatile evidence before cancelling the observer, after both timer endpoints.
-            const metrics = yield* attempt(async () =>
-              Schema.decodeUnknownSync(MetricsResult)(
-                await (await invoke(quiescent ? "/metrics?quiescent=true" : "/metrics")).json(),
-              ),
+            const metrics = yield* invokeJson(
+              MetricsResult,
+              quiescent ? "/metrics?quiescent=true" : "/metrics",
             );
 
             return {

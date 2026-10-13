@@ -44,7 +44,7 @@ it.live("refuses a replaced observed target and recovers with fresh native input
             Effect.tryPromise({
               try: () => action(page),
               catch: () =>
-                new BrowserSessionError({
+                BrowserSessionError.make({
                   reason: "provider",
                   dispatch: "possibly-dispatched",
                   cleanup: "not-requested",
@@ -152,7 +152,7 @@ it.live("fills and clicks inside a cross-origin frame", (test) =>
             Effect.tryPromise({
               try: () => action(page),
               catch: () =>
-                new BrowserSessionError({
+                BrowserSessionError.make({
                   reason: "provider",
                   dispatch: "possibly-dispatched",
                   cleanup: "not-requested",
@@ -286,7 +286,7 @@ it.live(
             Effect.andThen(
               Effect.gen(function* () {
                 if (failAfterReady && (yield* owner.snapshot()).report?.readyAt !== null)
-                  return yield* new BrowserSessionError({
+                  return yield* BrowserSessionError.make({
                     reason: "provider",
                     dispatch: "possibly-dispatched",
                     cleanup: "not-requested",
@@ -295,7 +295,7 @@ it.live(
                 return yield* Effect.tryPromise({
                   try: () => action(page),
                   catch: () =>
-                    new BrowserSessionError({
+                    BrowserSessionError.make({
                       reason: "provider",
                       dispatch: "possibly-dispatched",
                       cleanup: "not-requested",
@@ -354,7 +354,7 @@ it.live(
         attach: () =>
           failedAttachments-- > 0
             ? Effect.fail(
-                new BrowserSessionError({
+                BrowserSessionError.make({
                   reason: "provider",
                   dispatch: "not-dispatched",
                   cleanup: "not-requested",

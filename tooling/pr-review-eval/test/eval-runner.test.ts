@@ -189,19 +189,18 @@ describe("PR-review model eval", () => {
 
       const variant: EvalVariant<Scope.Scope> = {
         configuration: configuration("write-failure"),
-        review: () =>
-          Effect.gen(function* () {
-            const call = yield* Ref.updateAndGet(calls, (count) => count + 1);
+        review: Effect.fnUntraced(function* () {
+          const call = yield* Ref.updateAndGet(calls, (count) => count + 1);
 
-            if (call === 1) {
-              return yield* Effect.acquireRelease(Deferred.succeed(blocked, undefined), () =>
-                Deferred.succeed(released, undefined),
-              ).pipe(Effect.andThen(Effect.never));
-            }
-            yield* Deferred.await(call === 2 ? blocked : saved);
+          if (call === 1) {
+            return yield* Effect.acquireRelease(Deferred.succeed(blocked, undefined), () =>
+              Deferred.succeed(released, undefined),
+            ).pipe(Effect.andThen(Effect.never));
+          }
+          yield* Deferred.await(call === 2 ? blocked : saved);
 
-            return successfulOutcome;
-          }),
+          return successfulOutcome;
+        }),
       };
 
       const outputFailure = PlatformError.systemError({

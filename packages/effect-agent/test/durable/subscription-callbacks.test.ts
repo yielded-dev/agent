@@ -98,17 +98,16 @@ describe("subscription callback resource ownership", () => {
             }),
           );
 
-          const scopedValue = (value: string) =>
-            Effect.gen(function* () {
-              acquired += 1;
-              yield* Effect.addFinalizer(() =>
-                Effect.sync(() => {
-                  finalized += 1;
-                }),
-              );
+          const scopedValue = Effect.fnUntraced(function* (value: string) {
+            acquired += 1;
+            yield* Effect.addFinalizer(() =>
+              Effect.sync(() => {
+                finalized += 1;
+              }),
+            );
 
-              return value;
-            });
+            return value;
+          });
 
           const codec = Schema.String.pipe(
             Schema.decodeTo(Schema.String, {

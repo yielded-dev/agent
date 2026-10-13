@@ -454,33 +454,31 @@ export const backgroundWorkerAuthority = Layer.mergeAll(
     },
   }),
   Layer.succeed(WorkerPolicyResolver)({
-    resolveSource: (request) =>
-      Effect.gen(function* () {
-        if (request.definition !== capturedPolicySource) return Option.none();
-        if (request.submission === undefined)
-          return yield* WorkerError.make({ operation: "start", reason: "unavailable" });
+    resolveSource: Effect.fnUntraced(function* (request) {
+      if (request.definition !== capturedPolicySource) return Option.none();
+      if (request.submission === undefined)
+        return yield* WorkerError.make({ operation: "start", reason: "unavailable" });
 
-        const input = yield* Schema.decodeUnknownEffect(capturedInput)(
-          request.submission.inputPayload,
-        ).pipe(Effect.mapError(() => WorkerError.make({ operation: "start", reason: "denied" })));
+      const input = yield* Schema.decodeUnknownEffect(capturedInput)(
+        request.submission.inputPayload,
+      ).pipe(Effect.mapError(() => WorkerError.make({ operation: "start", reason: "denied" })));
 
-        return Option.some(input.policy);
-      }),
-    resolveTarget: (request) =>
-      Effect.gen(function* () {
-        if (request.source.agentId !== capturedPolicySource.id) return Option.none();
-        if (request.definition !== independentPersona)
-          return yield* WorkerError.make({ operation: "start", reason: "denied" });
-        if (request._tag === "RetainedWorker") return Option.some(request.origin.policy);
-        if (request.sourceSubmission === undefined)
-          return yield* WorkerError.make({ operation: "start", reason: "unavailable" });
+      return Option.some(input.policy);
+    }),
+    resolveTarget: Effect.fnUntraced(function* (request) {
+      if (request.source.agentId !== capturedPolicySource.id) return Option.none();
+      if (request.definition !== independentPersona)
+        return yield* WorkerError.make({ operation: "start", reason: "denied" });
+      if (request._tag === "RetainedWorker") return Option.some(request.origin.policy);
+      if (request.sourceSubmission === undefined)
+        return yield* WorkerError.make({ operation: "start", reason: "unavailable" });
 
-        const input = yield* Schema.decodeUnknownEffect(capturedInput)(request.input).pipe(
-          Effect.mapError(() => WorkerError.make({ operation: "start", reason: "denied" })),
-        );
+      const input = yield* Schema.decodeUnknownEffect(capturedInput)(request.input).pipe(
+        Effect.mapError(() => WorkerError.make({ operation: "start", reason: "denied" })),
+      );
 
-        return Option.some(input.policy);
-      }),
+      return Option.some(input.policy);
+    }),
   }),
   Layer.succeed(WorkerHostConfig)({
     maxActiveWorkersPerSource: 2,
@@ -488,30 +486,25 @@ export const backgroundWorkerAuthority = Layer.mergeAll(
     lifetimeMillis: 86_400_000,
   }),
   Layer.succeed(WorkerBudgetAuthorizer)({
-    authorize: (request) =>
-      Effect.gen(function* () {
-        const source = request.source.threadId;
-        const calls = (independentBudgetAuthorityCalls.get(source) ?? 0) + 1;
+    authorize: Effect.fnUntraced(function* (request) {
+      const source = request.source.threadId;
+      const calls = (independentBudgetAuthorityCalls.get(source) ?? 0) + 1;
 
-        independentBudgetAuthorityCalls.set(source, calls);
+      independentBudgetAuthorityCalls.set(source, calls);
 
-        const declared =
-          (request.worker.targetAgentId === independentPersona.id &&
-            request.worker.delegationId === independentBudgetWorkers.delegationId) ||
-          (request.worker.targetAgentId === backgroundTarget.id &&
-            request.worker.delegationId === backgroundWorkers.delegationId) ||
-          (request.worker.targetAgentId === backgroundReportingWorkers.target.id &&
-            request.worker.delegationId === backgroundReportingWorkers.delegationId);
+      const declared =
+        (request.worker.targetAgentId === independentPersona.id &&
+          request.worker.delegationId === independentBudgetWorkers.delegationId) ||
+        (request.worker.targetAgentId === backgroundTarget.id &&
+          request.worker.delegationId === backgroundWorkers.delegationId) ||
+        (request.worker.targetAgentId === backgroundReportingWorkers.target.id &&
+          request.worker.delegationId === backgroundReportingWorkers.delegationId);
 
-        if (
-          request.principal !== TEST_PRINCIPAL ||
-          !independentBudgetGrants.has(source) ||
-          !declared
-        )
-          return yield* WorkerError.make({ operation: "start", reason: "denied" });
-        if (independentBudgetAdmissionOutages.has(source) && calls > 1)
-          return yield* WorkerError.make({ operation: "start", reason: "unavailable" });
-      }),
+      if (request.principal !== TEST_PRINCIPAL || !independentBudgetGrants.has(source) || !declared)
+        return yield* WorkerError.make({ operation: "start", reason: "denied" });
+      if (independentBudgetAdmissionOutages.has(source) && calls > 1)
+        return yield* WorkerError.make({ operation: "start", reason: "unavailable" });
+    }),
   }),
   Layer.succeed(WorkerHostAuthorizer)({
     authorize: (request) =>

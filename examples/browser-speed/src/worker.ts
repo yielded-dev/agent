@@ -120,7 +120,7 @@ export class BrowserLab extends DurableObject<Env> {
           yield* Effect.tryPromise({
             try: () => (at === null ? ctx.storage.deleteAlarm() : ctx.storage.setAlarm(at)),
             catch: () =>
-              new LabError({ code: "storage", message: "Could not schedule browser cleanup." }),
+              LabError.make({ code: "storage", message: "Could not schedule browser cleanup." }),
           });
           hit(`after:${transition}`);
         }),
@@ -189,13 +189,11 @@ export class BrowserLab extends DurableObject<Env> {
   private withBrowser<A>(effect: Effect.Effect<A, LabError, BrowserSessions>) {
     return effect.pipe(
       Effect.provide(this.sessions),
-      Effect.catchTag(
-        "BrowserRunCleanupError",
-        () =>
-          new LabError({
-            code: "configuration",
-            message: "Browser lifecycle credentials are invalid or unavailable.",
-          }),
+      Effect.catchTag("BrowserRunCleanupError", () =>
+        LabError.make({
+          code: "configuration",
+          message: "Browser lifecycle credentials are invalid or unavailable.",
+        }),
       ),
     );
   }
@@ -276,7 +274,7 @@ const errorResponse = (
   code: (typeof LabError.fields.code)["Type"] = "configuration",
 ) =>
   new Response(
-    Schema.encodeSync(Schema.fromJsonString(LabError))(new LabError({ code, message })),
+    Schema.encodeSync(Schema.fromJsonString(LabError))(LabError.make({ code, message })),
     { status, headers: { "content-type": "application/json", "cache-control": "no-store" } },
   );
 

@@ -41,47 +41,46 @@ const host: Effect.Effect<MessagingHost["Service"], MessagingError, MessagingHos
     ),
   );
 
-const dispatch = <Name extends string, Input extends Schema.Top>(
+const dispatch = Effect.fnUntraced(function* <Name extends string, Input extends Schema.Top>(
   declaration: Peer<Name, Input>,
   input: Input["Type"],
   options: { readonly idempotencyKey: IdempotencyKey; readonly inReplyTo?: MessageRef },
   operation: "send" | "reply",
-) =>
-  Effect.gen(function* () {
-    const service = yield* host;
-    const invalid = () => MessagingError.make({ operation, reason: "invalid-input" });
+) {
+  const service = yield* host;
+  const invalid = () => MessagingError.make({ operation, reason: "invalid-input" });
 
-    const idempotencyKey = yield* Schema.decodeEffect(IdempotencyKey)(options.idempotencyKey).pipe(
-      Effect.mapError(invalid),
-    );
+  const idempotencyKey = yield* Schema.decodeEffect(IdempotencyKey)(options.idempotencyKey).pipe(
+    Effect.mapError(invalid),
+  );
 
-    const encodedInput = yield* Schema.encodeEffect(declaration.target.input)(input).pipe(
-      Effect.mapError(invalid),
-    );
+  const encodedInput = yield* Schema.encodeEffect(declaration.target.input)(input).pipe(
+    Effect.mapError(invalid),
+  );
 
-    const inReplyTo =
-      options.inReplyTo === undefined
-        ? undefined
-        : yield* Schema.decodeEffect(MessageRef)(options.inReplyTo).pipe(Effect.mapError(invalid));
+  const inReplyTo =
+    options.inReplyTo === undefined
+      ? undefined
+      : yield* Schema.decodeEffect(MessageRef)(options.inReplyTo).pipe(Effect.mapError(invalid));
 
-    const request = {
-      ...declaration,
-      encodedInput,
-      idempotencyKey,
-      ...(inReplyTo === undefined ? {} : { inReplyTo }),
-    };
+  const request = {
+    ...declaration,
+    encodedInput,
+    idempotencyKey,
+    ...(inReplyTo === undefined ? {} : { inReplyTo }),
+  };
 
-    const result =
-      operation === "reply"
-        ? inReplyTo === undefined
-          ? yield* invalid()
-          : yield* service.reply({ ...request, inReplyTo })
-        : yield* service.send(request);
+  const result =
+    operation === "reply"
+      ? inReplyTo === undefined
+        ? yield* invalid()
+        : yield* service.reply({ ...request, inReplyTo })
+      : yield* service.send(request);
 
-    return yield* Schema.decodeEffect(MessageStatus)(result).pipe(
-      Effect.mapError(() => MessagingError.make({ operation, reason: "corrupt" })),
-    );
-  });
+  return yield* Schema.decodeEffect(MessageStatus)(result).pipe(
+    Effect.mapError(() => MessagingError.make({ operation, reason: "corrupt" })),
+  );
+});
 
 /** Retain a durable message. Its status distinguishes outbound retention from destination acceptance. */
 export const send = <Name extends string, Input extends Schema.Top>(
@@ -99,36 +98,33 @@ export const reply = <Name extends string, Input extends Schema.Top>(
 ) => dispatch(declaration, input, { ...options, inReplyTo }, "reply");
 
 /** Return bounded provenance for messages from this peer, without granting permission to reply. */
-export const inbox = <Name extends string, Input extends Schema.Top>(
+export const inbox = Effect.fnUntraced(function* <Name extends string, Input extends Schema.Top>(
   declaration: Peer<Name, Input>,
   options: { readonly after?: number; readonly limit?: number } = {},
-) =>
-  Effect.gen(function* () {
-    const service = yield* host;
+) {
+  const service = yield* host;
 
-    return yield* service.inbox({ ...declaration, ...options, limit: options.limit ?? 20 });
-  });
+  return yield* service.inbox({ ...declaration, ...options, limit: options.limit ?? 20 });
+});
 
-export const inspect = <Name extends string, Input extends Schema.Top>(
+export const inspect = Effect.fnUntraced(function* <Name extends string, Input extends Schema.Top>(
   declaration: Peer<Name, Input>,
   message: MessageRef,
-) =>
-  Effect.gen(function* () {
-    const service = yield* host;
+) {
+  const service = yield* host;
 
-    return yield* service.inspect({ ...declaration, message });
-  });
+  return yield* service.inspect({ ...declaration, message });
+});
 
 /** Explicitly renew a parked delivery's bounded retry budget, retaining its complete frozen envelope. */
-export const retry = <Name extends string, Input extends Schema.Top>(
+export const retry = Effect.fnUntraced(function* <Name extends string, Input extends Schema.Top>(
   declaration: Peer<Name, Input>,
   message: MessageRef,
-) =>
-  Effect.gen(function* () {
-    const service = yield* host;
+) {
+  const service = yield* host;
 
-    return yield* service.retry({ ...declaration, message });
-  });
+  return yield* service.retry({ ...declaration, message });
+});
 
 const modelKey = Effect.fnUntraced(function* () {
   const source = yield* (yield* host).context;

@@ -80,13 +80,12 @@ layer(base)("Agent updates", (it) => {
         Stream.runCollect,
         Effect.provide(ModelUsageAccounting.layerEphemeral),
         Effect.provideService(AgentUpdateAcceptance, {
-          accept: (update) =>
-            Effect.gen(function* () {
-              yield* Deferred.succeed(entered, undefined);
-              yield* Deferred.await(accepted);
+          accept: Effect.fnUntraced(function* (update) {
+            yield* Deferred.succeed(entered, undefined);
+            yield* Deferred.await(accepted);
 
-              return AgentUpdates.Update.make({ ...update, sequence: 42 });
-            }),
+            return AgentUpdates.Update.make({ ...update, sequence: 42 });
+          }),
         }),
         Effect.forkChild,
       );
@@ -130,25 +129,24 @@ layer(base)("Agent updates", (it) => {
       const key = Schema.decodeSync(IdempotencyKey)("stable");
 
       const handlers = tools.toLayer({
-        job: () =>
-          Effect.gen(function* () {
-            captured = yield* AgentUpdates.Emitter;
+        job: Effect.fnUntraced(function* () {
+          captured = yield* AgentUpdates.Emitter;
 
-            const first = yield* AgentUpdates.emit(agent, "candidateCount", {
-              idempotencyKey: key,
-            });
+          const first = yield* AgentUpdates.emit(agent, "candidateCount", {
+            idempotencyKey: key,
+          });
 
-            const second = yield* AgentUpdates.emit(agent, "candidateCount", {
-              idempotencyKey: key,
-            });
+          const second = yield* AgentUpdates.emit(agent, "candidateCount", {
+            idempotencyKey: key,
+          });
 
-            expect(second).toEqual(first);
-            expect(
-              yield* AgentUpdates.emit(agent, "changed", { idempotencyKey: key }).pipe(
-                Effect.match({ onFailure: (error) => error, onSuccess: () => undefined }),
-              ),
-            ).toEqual(new AgentUpdates.UpdateError({ reason: "conflict" }));
-          }),
+          expect(second).toEqual(first);
+          expect(
+            yield* AgentUpdates.emit(agent, "changed", { idempotencyKey: key }).pipe(
+              Effect.match({ onFailure: (error) => error, onSuccess: () => undefined }),
+            ),
+          ).toEqual(AgentUpdates.UpdateError.make({ reason: "conflict" }));
+        }),
       });
 
       const events = yield* AgentRuntime.stream(Agent.withModel(agent, model("job", {})), "go", {
@@ -161,7 +159,7 @@ layer(base)("Agent updates", (it) => {
         yield* captured!
           .emit({ target: agent, updateId: key, value: "candidateCount" })
           .pipe(Effect.match({ onFailure: (error) => error, onSuccess: () => undefined })),
-      ).toEqual(new AgentUpdates.UpdateError({ reason: "unavailable" }));
+      ).toEqual(AgentUpdates.UpdateError.make({ reason: "unavailable" }));
     }),
   );
 
@@ -188,27 +186,26 @@ layer(base)("Agent updates", (it) => {
       const hostValue = { finding: "accepted" };
 
       const handlers = tools.toLayer({
-        job: () =>
-          Effect.gen(function* () {
-            const input = { finding: "accepted" };
-            const first = yield* AgentUpdates.emit(agent, input, { idempotencyKey: key });
+        job: Effect.fnUntraced(function* () {
+          const input = { finding: "accepted" };
+          const first = yield* AgentUpdates.emit(agent, input, { idempotencyKey: key });
 
-            input.finding = "changed input";
-            hostValue.finding = "changed host value";
-            Reflect.set(first, "sequence", 99);
-            if (typeof first.value === "object" && first.value !== null)
-              Reflect.set(first.value, "finding", "changed acknowledgement");
-            Reflect.set(first, "value", { finding: "replacement acknowledgement" });
+          input.finding = "changed input";
+          hostValue.finding = "changed host value";
+          Reflect.set(first, "sequence", 99);
+          if (typeof first.value === "object" && first.value !== null)
+            Reflect.set(first.value, "finding", "changed acknowledgement");
+          Reflect.set(first, "value", { finding: "replacement acknowledgement" });
 
-            const retry = yield* AgentUpdates.emit(
-              agent,
-              { finding: "accepted" },
-              { idempotencyKey: key },
-            );
+          const retry = yield* AgentUpdates.emit(
+            agent,
+            { finding: "accepted" },
+            { idempotencyKey: key },
+          );
 
-            expect(retry.sequence).toBe(42);
-            expect(yield* AgentUpdates.decode(agent, retry)).toEqual({ finding: "accepted" });
-          }),
+          expect(retry.sequence).toBe(42);
+          expect(yield* AgentUpdates.decode(agent, retry)).toEqual({ finding: "accepted" });
+        }),
       });
 
       const events = yield* AgentRuntime.streamWithUsageAccountingUnknown(

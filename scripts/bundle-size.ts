@@ -69,7 +69,7 @@ const gzipBytes = (bytes: Uint8Array) =>
     gzip(bytes, { level: 9 }, (cause, compressed) =>
       resume(
         cause
-          ? Effect.fail(new BundleSizeError({ message: "Could not gzip bundle chunk", cause }))
+          ? Effect.fail(BundleSizeError.make({ message: "Could not gzip bundle chunk", cause }))
           : Effect.succeed(compressed.byteLength),
       ),
     );
@@ -113,7 +113,7 @@ const measureBundle = Effect.fn("bundleSize.measureBundle")(function* (options: 
         logLevel: "silent",
       }),
     catch: (cause) =>
-      new BundleSizeError({
+      BundleSizeError.make({
         message: `Could not bundle ${options.entry}: ${String(cause)}`,
         cause,
       }),
@@ -126,7 +126,7 @@ const measureBundle = Effect.fn("bundleSize.measureBundle")(function* (options: 
   );
 
   if (entry === undefined) {
-    return yield* new BundleSizeError({ message: `No output entry for ${options.entry}` });
+    return yield* BundleSizeError.make({ message: `No output entry for ${options.entry}` });
   }
 
   const initial = new Set<string>();
@@ -139,7 +139,7 @@ const measureBundle = Effect.fn("bundleSize.measureBundle")(function* (options: 
     initial.add(file);
     for (const imported of outputs[file]?.imports ?? []) {
       if (imported.external) {
-        return yield* new BundleSizeError({
+        return yield* BundleSizeError.make({
           message: `Unbundled dependency ${imported.path} in ${options.entry}`,
         });
       }
@@ -150,7 +150,7 @@ const measureBundle = Effect.fn("bundleSize.measureBundle")(function* (options: 
   // Also reject unresolved/external imports in deferred output.
   for (const output of Object.values(outputs)) {
     if (output.imports.some((imported) => imported.external)) {
-      return yield* new BundleSizeError({ message: `External import in ${options.entry}` });
+      return yield* BundleSizeError.make({ message: `External import in ${options.entry}` });
     }
   }
 
@@ -184,7 +184,7 @@ const measureBundle = Effect.fn("bundleSize.measureBundle")(function* (options: 
 
   const analysis = yield* Effect.tryPromise({
     try: () => analyzeMetafile(result.metafile, { verbose: true }),
-    catch: (cause) => new BundleSizeError({ message: "Could not analyze bundle", cause }),
+    catch: (cause) => BundleSizeError.make({ message: "Could not analyze bundle", cause }),
   });
 
   yield* fs.writeFileString(path.join(options.output, "modules.txt"), analysis);
@@ -245,7 +245,7 @@ const verifyRuntime = Effect.fn("bundleSize.verifyRuntime")(
           logLevel: "silent",
         }),
       catch: (cause) =>
-        new BundleSizeError({
+        BundleSizeError.make({
           message: `Could not bundle runtime smoke check: ${String(cause)}`,
           cause,
         }),
@@ -273,7 +273,7 @@ const verifyRuntime = Effect.fn("bundleSize.verifyRuntime")(
 
     yield* fs.writeFileString(path.join(options.output, "result.txt"), stdout + stderr);
     if (code !== 0) {
-      return yield* new BundleSizeError({
+      return yield* BundleSizeError.make({
         message: `Bundled runtime smoke check exited ${code}: ${stdout}${stderr}`,
       });
     }
@@ -357,7 +357,7 @@ const measureCheckout = Effect.fn("bundleSize.measureCheckout")(function* (
         if (missing.length > 0) {
           if (allowMissing) return { name: fixture.name, size: null, missing };
 
-          return yield* new BundleSizeError({
+          return yield* BundleSizeError.make({
             message: `Missing public exports: ${missing.join(", ")}`,
           });
         }
@@ -466,7 +466,7 @@ export const compareBundles = Effect.fn("bundleSize.compareBundles")(
       const previous = base.results.find((fixture) => fixture.name === current.name);
 
       if (current.size === null || previous === undefined) {
-        return yield* new BundleSizeError({
+        return yield* BundleSizeError.make({
           message: `Incomplete measurement for ${current.name}`,
         });
       }
@@ -504,7 +504,7 @@ export const compareBundles = Effect.fn("bundleSize.compareBundles")(
   Effect.mapError((cause) =>
     cause._tag === "BundleSizeError"
       ? cause
-      : new BundleSizeError({
+      : BundleSizeError.make({
           message: `Bundle comparison failed. Install dependencies and build packages in both checkouts. ${cause.message}`,
           cause,
         }),

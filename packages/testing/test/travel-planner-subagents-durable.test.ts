@@ -81,31 +81,28 @@ const withTemporaryDirectory = <A, E>(
     }),
   ).pipe(Effect.provide(NodeFileSystem.layer));
 
-const submitParent = (thread: string, key: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
+const submitParent = Effect.fnUntraced(function* (thread: string, key: string) {
+  const runtime = yield* DurableAgentRuntime;
 
-    return yield* runtime.submit(
-      s2CoordinatorSubmitAgent,
-      researchMission,
-      s2TravelPlannerSubmitOptions(decodeThreadId(thread), decodeIdempotencyKey(key)),
-    );
-  });
+  return yield* runtime.submit(
+    s2CoordinatorSubmitAgent,
+    researchMission,
+    s2TravelPlannerSubmitOptions(decodeThreadId(thread), decodeIdempotencyKey(key)),
+  );
+});
 
 /** Drive one Thread lane through the S2 multi-binding worker entry point. */
-const drive = (threadId: ThreadId) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
+const drive = Effect.fnUntraced(function* (threadId: ThreadId) {
+  const runtime = yield* DurableAgentRuntime;
 
-    return yield* runtime.processThreadResolved(threadId);
-  });
+  return yield* runtime.processThreadResolved(threadId);
+});
 
-const readLog = (threadId: ThreadId) =>
-  Effect.gen(function* () {
-    const store = yield* ThreadStore;
+const readLog = Effect.fnUntraced(function* (threadId: ThreadId) {
+  const store = yield* ThreadStore;
 
-    return yield* Stream.runCollect(store.read(ThreadRead.make({ threadId, limit: 1_024 })));
-  });
+  return yield* Stream.runCollect(store.read(ThreadRead.make({ threadId, limit: 1_024 })));
+});
 
 const payloadsOf = <Tag extends string>(
   records: ReadonlyArray<CanonicalRecordEnvelope>,
@@ -113,27 +110,25 @@ const payloadsOf = <Tag extends string>(
 ): ReadonlyArray<CanonicalRecordEnvelope> =>
   records.filter((envelope) => envelope.record.payload._tag === tag);
 
-const parentState = (submissionId: SubmissionId) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
-    const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
+const parentState = Effect.fnUntraced(function* (submissionId: SubmissionId) {
+  const ledger = yield* SubmissionLedger;
+  const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
 
-    expect(Option.isSome(snapshot)).toBe(true);
-    if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
+  expect(Option.isSome(snapshot)).toBe(true);
+  if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
 
-    return snapshot.value;
-  });
+  return snapshot.value;
+});
 
-const childReservations = (submissionId: SubmissionId) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
+const childReservations = Effect.fnUntraced(function* (submissionId: SubmissionId) {
+  const ledger = yield* SubmissionLedger;
 
-    const snapshot = yield* ledger.loadRecoverySnapshot(
-      RecoverySnapshotRequest.make({ submissionId }),
-    );
+  const snapshot = yield* ledger.loadRecoverySnapshot(
+    RecoverySnapshotRequest.make({ submissionId }),
+  );
 
-    return snapshot.childReservations;
-  });
+  return snapshot.childReservations;
+});
 
 const failureOf = <A, E>(exit: Exit.Exit<A, E>): unknown => {
   expect(Exit.isFailure(exit)).toBe(true);

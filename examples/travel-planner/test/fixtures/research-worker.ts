@@ -180,7 +180,7 @@ const model = Model.make(
 
 const sites = Layer.succeed(TripSiteStore, {
   publish: () =>
-    Effect.fail(new PlannerError({ code: "publication", message: "Unused fixture publication" })),
+    Effect.fail(PlannerError.make({ code: "publication", message: "Unused fixture publication" })),
   load: () => Effect.succeed(null),
 });
 

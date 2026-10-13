@@ -150,76 +150,74 @@ export const ApprovalAuditMemoryLive = Layer.effect(
     const state = yield* Ref.make<AuditState>({ events: [], pending: new Set() });
 
     return ApprovalAudit.of({
-      recordRequest: (request) =>
-        Effect.gen(function* () {
-          const recordedAt = DateTime.toUtc(DateTime.makeUnsafe(yield* Clock.currentTimeMillis));
+      recordRequest: Effect.fnUntraced(function* (request) {
+        const recordedAt = DateTime.toUtc(DateTime.makeUnsafe(yield* Clock.currentTimeMillis));
 
-          const error = yield* Ref.modify(state, (current) => {
-            // Each accepted request atomically reserves room for its decision.
-            const reservedSize = current.events.length + current.pending.size + 2;
+        const error = yield* Ref.modify(state, (current) => {
+          // Each accepted request atomically reserves room for its decision.
+          const reservedSize = current.events.length + current.pending.size + 2;
 
-            if (reservedSize > MAX_APPROVAL_AUDIT_EVENTS) {
-              return [
-                ApprovalAuditLimitExceeded.make({
-                  limitValue: MAX_APPROVAL_AUDIT_EVENTS,
-                  observedValue: reservedSize,
-                }),
-                current,
-              ] as const;
-            }
-
-            const event = ApprovalRequestRecorded.make({
-              sequence: current.events.length,
-              recordedAt,
-              request,
-            });
-
+          if (reservedSize > MAX_APPROVAL_AUDIT_EVENTS) {
             return [
-              undefined,
-              {
-                events: [...current.events, event],
-                pending: new Set(current.pending).add(request.requestId),
-              },
+              ApprovalAuditLimitExceeded.make({
+                limitValue: MAX_APPROVAL_AUDIT_EVENTS,
+                observedValue: reservedSize,
+              }),
+              current,
             ] as const;
+          }
+
+          const event = ApprovalRequestRecorded.make({
+            sequence: current.events.length,
+            recordedAt,
+            request,
           });
 
-          if (error !== undefined) return yield* error;
-        }),
-      recordDecision: (decision) =>
-        Effect.gen(function* () {
-          const recordedAt = DateTime.toUtc(DateTime.makeUnsafe(yield* Clock.currentTimeMillis));
+          return [
+            undefined,
+            {
+              events: [...current.events, event],
+              pending: new Set(current.pending).add(request.requestId),
+            },
+          ] as const;
+        });
 
-          const error = yield* Ref.modify(state, (current) => {
-            if (!current.pending.has(decision.requestId)) {
-              return [
-                ApprovalDecisionMismatch.make({
-                  expectedRequestId: [...current.pending][0] ?? "no-pending-request",
-                  observedRequestId: decision.requestId,
-                }),
-                current,
-              ] as const;
-            }
-            const pending = new Set(current.pending);
+        if (error !== undefined) return yield* error;
+      }),
+      recordDecision: Effect.fnUntraced(function* (decision) {
+        const recordedAt = DateTime.toUtc(DateTime.makeUnsafe(yield* Clock.currentTimeMillis));
 
-            pending.delete(decision.requestId);
-
-            const event = ApprovalDecisionRecorded.make({
-              sequence: current.events.length,
-              recordedAt,
-              decision,
-            });
-
+        const error = yield* Ref.modify(state, (current) => {
+          if (!current.pending.has(decision.requestId)) {
             return [
-              undefined,
-              {
-                events: [...current.events, event],
-                pending,
-              },
+              ApprovalDecisionMismatch.make({
+                expectedRequestId: [...current.pending][0] ?? "no-pending-request",
+                observedRequestId: decision.requestId,
+              }),
+              current,
             ] as const;
+          }
+          const pending = new Set(current.pending);
+
+          pending.delete(decision.requestId);
+
+          const event = ApprovalDecisionRecorded.make({
+            sequence: current.events.length,
+            recordedAt,
+            decision,
           });
 
-          if (error !== undefined) return yield* error;
-        }),
+          return [
+            undefined,
+            {
+              events: [...current.events, event],
+              pending,
+            },
+          ] as const;
+        });
+
+        if (error !== undefined) return yield* error;
+      }),
       events: Ref.get(state).pipe(Effect.map((current) => current.events)),
     });
   }),

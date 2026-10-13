@@ -49,13 +49,13 @@ export class TripRepository extends Context.Service<
 >()("travel-planner/TripRepository") {}
 
 const storageError = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "storage",
     message: "Trip storage is unavailable or contains unsupported data.",
   });
 
 const conflict = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "conflict",
     message: "This trip changed. Refresh it before saving or publishing.",
   });
@@ -168,7 +168,7 @@ export const TripRepositoryLive = Layer.effect(
         );
 
       if (rows[0] === undefined)
-        return yield* new PlannerError({ code: "not-found", message: "Trip not found." });
+        return yield* PlannerError.make({ code: "not-found", message: "Trip not found." });
       const trip = yield* decodeTrip(rows[0].value);
 
       return { ...trip, published: yield* publication(id) };
@@ -217,7 +217,7 @@ export const TripRepositoryLive = Layer.effect(
             const previous = request.tripId === null ? null : yield* get(request.tripId);
 
             if (previous !== null && (yield* conversationId(previous.id)) !== conversation)
-              return yield* new PlannerError({
+              return yield* PlannerError.make({
                 code: "invalid",
                 message: "Open this trip's conversation before changing it.",
               });
@@ -242,8 +242,8 @@ export const TripRepositoryLive = Layer.effect(
               revision: (previous?.revision ?? 0) + 1,
               published: previous?.published ?? null,
             }).pipe(
-              Effect.mapError(
-                () => new PlannerError({ code: "invalid", message: "Invalid trip details." }),
+              Effect.mapError(() =>
+                PlannerError.make({ code: "invalid", message: "Invalid trip details." }),
               ),
             );
 
@@ -324,7 +324,7 @@ export const publishTrip = Effect.fn("publishTrip")(function* (request: PublishT
   const site = yield* store.publish({ trip });
 
   if (site.tripId !== trip.id || site.revision !== trip.revision)
-    return yield* new PlannerError({
+    return yield* PlannerError.make({
       code: "publication",
       message: "The publication returned a different trip revision.",
     });

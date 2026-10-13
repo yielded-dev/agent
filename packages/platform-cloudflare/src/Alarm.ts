@@ -283,7 +283,7 @@ const makeAlarmOperation = Effect.gen(function* () {
             reason: UnknownError.make({
               operation: "begin maintenance source transaction",
               message: "Use ThreadMutationGate.withTransaction at the outermost source transaction",
-              cause: new Error("Unwrapped SQL transaction cannot own buffered maintenance intent"),
+              cause: "Unwrapped SQL transaction cannot own buffered maintenance intent",
             }),
           }),
         );
@@ -294,8 +294,15 @@ const makeAlarmOperation = Effect.gen(function* () {
 
           return transaction(
             Effect.flatMap(Effect.serviceOption(sql.transactionService), (transaction) =>
-              Effect.sync(() => {
-                if (transaction._tag === "None") throw new Error("SQL transaction unavailable");
+              Effect.gen(function* () {
+                if (transaction._tag === "None")
+                  return yield* SqlError.make({
+                    reason: UnknownError.make({
+                      operation: "begin maintenance source transaction",
+                      message: "SQL transaction unavailable",
+                      cause: "SQL transaction unavailable",
+                    }),
+                  });
                 frame = queue.begin(transaction.value[1]);
               }),
             ).pipe(
@@ -338,7 +345,12 @@ const makeAlarmOperation = Effect.gen(function* () {
       const tx = fiber.getRef(CurrentCheckpoint);
 
       if (tx === undefined)
-        return Effect.die(new Error("Maintenance checkpoint transaction unavailable"));
+        return Effect.die(
+          DurableAlarmError.make({
+            operation: "checkpoint",
+            message: "Maintenance checkpoint transaction unavailable",
+          }),
+        );
 
       return tx.requireActive.pipe(
         Effect.andThen(
@@ -631,6 +643,7 @@ const decodeRecoveryFaultValue = Schema.decodeUnknownSync(ThreadRecoveryFault);
 const decodeRecoveryFault = (threadId: ThreadId, encoded: unknown) => {
   const fault = decodeRecoveryFaultValue(encoded);
 
+  // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Native Durable Object transaction decoder must abort before corrupt persisted data can be committed.
   if (fault.threadId !== threadId) throw new Error("Recovery status does not match its Thread key");
 
   return fault;
@@ -1483,14 +1496,15 @@ export class ThreadMaintenance extends Context.Service<
           );
 
           for (let sequence = range.next; sequence <= range.through; sequence++) {
-            const event = yield* runTransaction("read recovery event", async () => {
-              const event = decodeRecoveryEvent(await ctx.storage.get(recoveryEventKey(sequence)));
+            const event = yield* runTransaction("read recovery event", async () =>
+              decodeRecoveryEvent(await ctx.storage.get(recoveryEventKey(sequence))),
+            );
 
-              if (event.sequence !== sequence)
-                throw new Error("Recovery event does not match its sequence key");
-
-              return event;
-            });
+            if (event.sequence !== sequence)
+              return yield* DurableAlarmError.make({
+                operation: "read recovery event",
+                message: "Recovery event does not match its sequence key",
+              });
 
             // No storage reservation or source mutation gate is held during host delivery.
             yield* recoveryEvents.publish(event);
@@ -1650,17 +1664,20 @@ export class ThreadMaintenance extends Context.Service<
         threadId: ThreadId,
         recovery: NativeRecovery,
       ) {
-        let cursor = yield* runTransaction("read work recovery cursor", async () => {
-          const retained = await ctx.storage.get(workCursorKey(threadId));
+        const retained = yield* runTransaction("read work recovery cursor", async () => {
+          const value = await ctx.storage.get(workCursorKey(threadId));
 
-          if (retained === undefined) return undefined;
-          const decoded = Schema.decodeUnknownSync(NativeWorkCursor)(retained);
-
-          if (decoded.threadId !== threadId)
-            throw new Error("Work cursor belongs to another Thread");
-
-          return decoded.cursor;
+          return value === undefined
+            ? undefined
+            : Schema.decodeUnknownSync(NativeWorkCursor)(value);
         });
+
+        if (retained !== undefined && retained.threadId !== threadId)
+          return yield* DurableAlarmError.make({
+            operation: "read work recovery cursor",
+            message: "Work cursor belongs to another Thread",
+          });
+        let cursor = retained?.cursor;
 
         do {
           const result = yield* runtime

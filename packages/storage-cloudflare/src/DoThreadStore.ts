@@ -223,7 +223,7 @@ const decodeEnvelope = Effect.fnUntraced(function* (row: {
     row.batch_id,
   ).pipe(Effect.mapError((error) => schemaStoreError("decode batch identity", error)));
 
-  const envelope = new CanonicalRecordEnvelope(
+  const envelope = CanonicalRecordEnvelope.make(
     { threadId, batchId, sequence: row.sequence, offset, record },
     { disableChecks: true },
   );
@@ -473,17 +473,20 @@ const makeServices = Effect.fnUntraced(function* () {
     offsetPrefix: DO_OFFSET_PREFIX,
     maxValueBytes: config.maxStoredValueBytes,
     // Import establishes a new sequence space; discard derivatives in this same transaction.
-    afterImport: ({ result }) =>
-      Effect.gen(function* () {
+    afterImport: Effect.fnUntraced(
+      function* ({ result }) {
         const prefix = promptCheckpointPrefix(result.threadId);
 
         yield* sql`DELETE FROM effect_agent_meta WHERE key >= ${prefix} AND key < ${prefix + "~"}`;
         // Closed imported history must not emit historical lifecycle notifications again.
         if (journal.lifecycle !== undefined)
           yield* sql`INSERT INTO effect_agent_lifecycle_cursors(thread_id, through_sequence) VALUES (${result.threadId}, ${result.tailSequence})`;
-      }).pipe(
-        Effect.catchTag("SqlError", (cause) => storeError("rebuild imported derivatives", cause)),
-      ),
+      },
+      (effect) =>
+        effect.pipe(
+          Effect.catchTag("SqlError", (cause) => storeError("rebuild imported derivatives", cause)),
+        ),
+    ),
     afterThreadRead: hitFailpoint("export:after-thread-read"),
     read: (body) =>
       journal.owner.transaction(body).pipe(

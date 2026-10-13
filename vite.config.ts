@@ -118,11 +118,13 @@ export default defineConfig({
     ignorePatterns: generatedPaths,
     options: {
       typeAware: true,
-      typeCheck: true,
+      // Patched tsc owns compiler and Effect diagnostics; keep unique typed lint rules.
+      typeCheck: false,
     },
     jsPlugins: [
       { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
       { name: "exports", specifier: "./oxlint/plugin-exports.ts" },
+      { name: "effect", specifier: "./oxlint/plugin-effect.ts" },
     ],
     rules: {
       "import/no-duplicates": "warn",
@@ -138,6 +140,18 @@ export default defineConfig({
       "vite-plus/prefer-vite-plus-imports": "error",
     },
     overrides: [
+      {
+        files: [
+          "packages/*/src/**/*.{ts,tsx}",
+          "examples/*/{src,deployed,preview}/**/*.{ts,tsx}",
+          "tooling/*/src/**/*.{ts,tsx}",
+          "scripts/**/*.ts",
+        ],
+        rules: {
+          "effect/no-native-error": "error",
+          "effect/no-untyped-throw": "error",
+        },
+      },
       {
         files: ["packages/*/src/**/*.ts"],
         rules: {
@@ -172,6 +186,10 @@ export default defineConfig({
       scripts: true,
     },
     tasks: {
+      "patch:tsgo": {
+        cache: false,
+        command: "effect-tsgo patch --typescript",
+      },
       "ci:format": {
         command: "vp fmt --check",
       },

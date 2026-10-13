@@ -204,7 +204,7 @@ it.effect(
           );
 
           const delegationLayer = Subagent.layer(delegation, child.model, {
-            mapChildFailure: (failure) => new ProbeFailed({ tag: failure._tag }),
+            mapChildFailure: (failure) => ProbeFailed.make({ tag: failure._tag }),
           }).pipe(Layer.provide([handlers, SubagentReservationsMemoryLive]));
 
           const bindings = [

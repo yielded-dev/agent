@@ -551,21 +551,18 @@ export const hydrateExactChanges = Effect.fnUntraced(function* (input: {
       continue;
     }
 
+    const readBefore =
+      beforeEntry === undefined
+        ? Effect.succeed("")
+        : input.base.readTextFile(basePath).pipe(Effect.catchTag("BinaryBlob", () => Effect.void));
+
+    const readAfter =
+      afterEntry === undefined
+        ? Effect.succeed("")
+        : input.head.readTextFile(file.path).pipe(Effect.catchTag("BinaryBlob", () => Effect.void));
+
     const contents = yield* Effect.all(
-      {
-        before:
-          beforeEntry === undefined
-            ? Effect.succeed("")
-            : input.base
-                .readTextFile(basePath)
-                .pipe(Effect.catchTag("BinaryBlob", () => Effect.succeed(undefined))),
-        after:
-          afterEntry === undefined
-            ? Effect.succeed("")
-            : input.head
-                .readTextFile(file.path)
-                .pipe(Effect.catchTag("BinaryBlob", () => Effect.succeed(undefined))),
-      },
+      { before: readBefore, after: readAfter },
       { concurrency: 2 },
     ).pipe(Effect.result);
 

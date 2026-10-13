@@ -380,18 +380,16 @@ const typedDelegation = Subagent.make("typed", {
   parameters: ResearchParams,
   success: ResearchFindings,
   failure: ResearchDelegationFailed,
-  prepareInput: ({ topic }) =>
-    Effect.gen(function* () {
-      const directory = yield* PrepareDirectory;
+  prepareInput: Effect.fnUntraced(function* ({ topic }) {
+    const directory = yield* PrepareDirectory;
 
-      return { question: `${directory.prefix}:${topic}` };
-    }),
-  projectResult: (output) =>
-    Effect.gen(function* () {
-      const stamper = yield* ProjectStamper;
+    return { question: `${directory.prefix}:${topic}` };
+  }),
+  projectResult: Effect.fnUntraced(function* (output) {
+    const stamper = yield* ProjectStamper;
 
-      return { summary: `${stamper.stamp}:${output.answer}` };
-    }),
+    return { summary: `${stamper.stamp}:${output.answer}` };
+  }),
   policy: researchPolicy,
 });
 
