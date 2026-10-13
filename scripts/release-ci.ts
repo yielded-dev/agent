@@ -267,10 +267,11 @@ const verifyJobs = Effect.fn("releaseCi.verifyJobs")(function* (
         job.head_sha === base &&
         job.status === "completed" &&
         job.conclusion === "success" &&
-        steps.length === 1 &&
-        steps[0]?.status === "completed" &&
-        steps[0].conclusion === "success",
-      `CI ${run.id}, attempt ${run.run_attempt} gate "${name}" / "${command}" at ${base}: expected one completed successful job and step; observed ${JSON.stringify(
+        (command === undefined ||
+          (steps.length === 1 &&
+            steps[0]?.status === "completed" &&
+            steps[0].conclusion === "success")),
+      `CI ${run.id}, attempt ${run.run_attempt} gate "${name}"${command === undefined ? "" : ` / "${command}"`} at ${base}: expected one completed successful job${command === undefined ? "" : " and step"}; observed ${JSON.stringify(
         matches.map((job) => ({
           runId: job.run_id,
           headSha: job.head_sha,
@@ -466,16 +467,19 @@ export const verifyBuildEvidence = Effect.fn("releaseCi.verifyBuildEvidence")(fu
     "No successful exact-input build run",
   );
 
-  const gates = [
-    ["Build", "Validate versioned release packages"],
-    ["Build", "Upload release build"],
-    ...(event === "pull_request"
-      ? [
+  // Main's Build unconditionally validates packages and uploads the artifact;
+  // either failure fails the job. GitHub can omit or indefinitely lag step
+  // telemetry even after success. Publication also verifies the exact-attempt
+  // artifact and its digest. PR reuse still needs steps to rule out skipped paths.
+  const gates =
+    event === "push"
+      ? [["Build"]]
+      : [
+          ["Build", "Validate versioned release packages"],
+          ["Build", "Upload release build"],
           ["Build", "Build packages, examples, and docs"],
           ["ready", "Verify all required gates passed"],
-        ]
-      : []),
-  ];
+        ];
 
   yield* verifyJobs(sha, run, jobs, gates);
 });
@@ -498,7 +502,7 @@ export const verifyMainBuild = Effect.fn("releaseCi.verifyMainBuild")(function* 
   const run = yield* get(`actions/runs/${runId}`, Run);
 
   yield* requireProof(run.id === runId && run.run_attempt === attempt, "CI attempt changed");
-  // A completed run can temporarily expose incomplete job/step results. Each
+  // A completed run can temporarily expose incomplete job results. Each
   // retry validates one whole fresh listing; never combine gates across reads.
   // The unchanged run/attempt is rechecked below before accepting any evidence.
   yield* Effect.gen(function* () {
