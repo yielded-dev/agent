@@ -26,9 +26,13 @@ export const annotateStorageError = (error: Tagged) =>
       : {}),
   });
 
-export const withStorageSpan =
-  (name: string, expected: (error: Tagged) => boolean = () => false) =>
-  <A, E extends Tagged, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+export const withStorageSpan = (
+  name: string,
+  expected: (error: Tagged) => boolean = () => false,
+) => {
+  const span = Effect.withSpan(name);
+
+  return <A, E extends Tagged, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
     storageResult(effect, expected).pipe(
       Effect.tap((result) =>
         Result.isFailure(result)
@@ -36,6 +40,7 @@ export const withStorageSpan =
           : Effect.void,
       ),
       Effect.tapError(annotateStorageError),
-      Effect.withSpan(name),
+      span,
       Effect.flatMap(Effect.fromResult),
     );
+};

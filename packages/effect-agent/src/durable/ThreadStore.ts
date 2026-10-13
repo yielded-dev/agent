@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Option, Predicate, Result, Schema, Stream, Struct } from "effect";
+import { Context, Effect, Layer, Option, Result, Schema, Stream, Struct } from "effect";
 
 import { ReceiptId, RunId, SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
@@ -356,11 +356,86 @@ const validateRecordCount = Schema.decodeUnknownSync(
   Schema.Array(Schema.Unknown).check(Schema.isMaxLength(256)),
 );
 
-const executionJson = Schema.fromJsonString(ExecutionUpdate);
-const encodeExecution = Schema.encodeSync(executionJson);
-const decodeExecution = Schema.decodeUnknownSync(ExecutionUpdate);
+const validateExecutionHeader = Schema.decodeUnknownSync(
+  Schema.Struct({
+    previousRevision: ExecutionUpdate.fields.previousRevision,
+    retire: ExecutionUpdate.fields.retire,
+    checkpoint: Schema.Struct({
+      version: ExecutionCheckpoint.fields.version,
+      canonicalRecords: ExecutionCheckpoint.fields.canonicalRecords,
+      originalSequence: ExecutionCheckpoint.fields.originalSequence,
+      throughSequence: ExecutionCheckpoint.fields.throughSequence,
+      batchId: ExecutionCheckpoint.fields.batchId,
+    }),
+  }),
+);
 
-const capturedAppends = new WeakMap<AppendRequest, PreparedAppend>();
+const validateExecutionRecordCount = Schema.decodeUnknownSync(
+  Schema.Array(Schema.Unknown).check(Schema.isMaxLength(8)),
+);
+
+/** Capture records once; wrapper fields retain their owning Schema's constraints. */
+const captureExecution = (input: ExecutionUpdate) => {
+  const header = validateExecutionHeader(input);
+  const operationalInput = input.checkpoint.operational;
+  const factsInput = input.facts;
+
+  const operationalLength = validateExecutionRecordCount(operationalInput).length;
+  const factsLength = validateExecutionRecordCount(factsInput).length;
+
+  const progress = captureRecord(input.checkpoint.progressRecord);
+  const progressRecord = progress.canonical;
+
+  if (!isExecutionProgressRecord(progressRecord))
+    throw ThreadStoreError.make({
+      operation: "prepare durable commit",
+      message: "Expected a Run continuation record",
+    });
+
+  // Use the Schema-validated indexed lengths, never a caller's iterator. Sparse slots
+  // still visit the record boundary, where undefined is refused.
+  const operational = Array.from({ length: operationalLength }, (_, index) =>
+    captureRecord(operationalInput[index]!),
+  );
+
+  const facts = Array.from({ length: factsLength }, (_, index) =>
+    captureRecord(factsInput[index]!),
+  );
+
+  // Keep the actual owned arrays within the persisted bounds as well.
+  validateExecutionRecordCount(operational);
+  validateExecutionRecordCount(facts);
+
+  const checkpoint = Object.freeze(
+    new ExecutionCheckpoint(
+      {
+        ...header.checkpoint,
+        progressRecord,
+        operational: Object.freeze(operational.map(({ canonical }) => canonical)),
+      },
+      { disableChecks: true },
+    ),
+  );
+
+  const update = Object.freeze(
+    new ExecutionUpdate(
+      {
+        previousRevision: header.previousRevision,
+        retire: header.retire,
+        checkpoint,
+        facts: Object.freeze(facts.map(({ canonical }) => canonical)),
+      },
+      { disableChecks: true },
+    ),
+  );
+
+  const checkpointJson = `{"version":${checkpoint.version},"progressRecord":${progress.json},"operational":[${operational.map(({ json }) => json).join(",")}],"canonicalRecords":${checkpoint.canonicalRecords},"originalSequence":${checkpoint.originalSequence},"throughSequence":${checkpoint.throughSequence},"batchId":${JSON.stringify(checkpoint.batchId)}}`;
+  const json = `{"previousRevision":${update.previousRevision},"checkpoint":${checkpointJson},"facts":[${facts.map(({ json }) => json).join(",")}],"retire":${update.retire}}`;
+
+  return Object.freeze({ update, json, checkpointJson, bytes: utf8ByteLength(json) });
+};
+
+const capturedAppends = new WeakMap<AppendRequest, CapturedAppend>();
 
 /**
  * Admission reserves one complete batch's envelope, references, snapshot and continuation cursor.
@@ -418,8 +493,16 @@ export interface PreparedAppend extends AppendRequest {
   }>;
 }
 
+interface CapturedAppend extends PreparedAppend {
+  readonly records: ReadonlyArray<
+    Omit<PreparedAppend["records"][number], "wire"> & {
+      readonly wire: typeof RecordEnvelope.Encoded;
+    }
+  >;
+}
+
 export const PreparedAppend = {
-  capture: (input: AppendRequest): Effect.Effect<PreparedAppend, ThreadStoreError> =>
+  capture: (input: AppendRequest): Effect.Effect<CapturedAppend, ThreadStoreError> =>
     Effect.suspend(() => {
       const existing = capturedAppends.get(input);
 
@@ -434,28 +517,16 @@ export const PreparedAppend = {
           });
 
           validateRecordCount(input.batch.records);
-          validateRecordCount(input.executions ?? []);
+          const executions = input.executions ?? [];
+          const executionLength = validateRecordCount(executions).length;
 
           const executionWrites = Object.freeze(
-            (input.executions ?? []).map((update) => {
-              const json = encodeExecution(update);
-              const wire: unknown = JSON.parse(json);
-              const decoded = decodeExecution(wire);
-
-              if (!Predicate.hasProperty(wire, "checkpoint"))
-                throw ThreadStoreError.make({
-                  operation: "prepare durable commit",
-                  message: "Captured execution has no checkpoint wire",
-                });
-
-              return Object.freeze({
-                update: decoded,
-                json,
-                checkpointJson: JSON.stringify(wire.checkpoint),
-                bytes: utf8ByteLength(json),
-              });
-            }),
+            Array.from({ length: executionLength }, (_, index) =>
+              captureExecution(executions[index]!),
+            ),
           );
+
+          validateRecordCount(executionWrites);
 
           if (input.batch.records.length === 0 && executionWrites.length === 0)
             throw ThreadStoreError.make({

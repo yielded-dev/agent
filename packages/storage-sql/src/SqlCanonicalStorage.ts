@@ -1,6 +1,7 @@
 import { canonicalJson, digestCanonicalJson } from "@yielded/agent/digest";
 import { Digest, RecordJson, type CanonicalRecordPayload } from "@yielded/agent/records";
-import { ThreadStoreError } from "@yielded/agent/thread-store";
+import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
+import { PreparedAppend, ThreadStoreError, type AppendRequest } from "@yielded/agent/thread-store";
 import { Crypto, Effect, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { Fragment, Statement } from "effect/sql/Statement";
@@ -83,13 +84,35 @@ const failure = (operation: string, cause?: unknown) =>
 const decodeWire = Schema.decodeUnknownEffect(Schema.Record(Schema.String, RecordJson));
 const decodeText = Schema.decodeUnknownEffect(Schema.String);
 
-/** Capture exact wire before any transaction suspension; no timestamp or JSON dialect conversion. */
-export const captureRecordStorage = Effect.fnUntraced(
-  function* (wire: RecordJson, json: string) {
-    const object = yield* decodeWire(wire);
-    const createdAt = yield* decodeText(object.createdAt);
-    const recordId = yield* decodeText(object.recordId);
-    const payload = yield* Schema.decodeEffect(RecordJson)(object.payload);
+// Pure dictionary identity, independent of transaction state. Keep only one small success
+// per Crypto service; injected implementations never share cached results.
+const envelopeDigests = new WeakMap<
+  Crypto.Crypto,
+  { readonly json: string; readonly digest: Digest }
+>();
+
+const digestEnvelope = Effect.fnUntraced(function* (envelope: typeof EnvelopeFragments.Type) {
+  const json = canonicalJson(envelope);
+  const crypto = yield* Crypto.Crypto;
+  const prior = envelopeDigests.get(crypto);
+
+  if (prior?.json === json) return prior.digest;
+
+  const digest = yield* digestCanonicalJson(json);
+
+  if (json.length <= 32_768) envelopeDigests.set(crypto, { json, digest });
+
+  return digest;
+});
+
+const captureValidatedStorage = Effect.fnUntraced(
+  function* (
+    object: Readonly<Record<string, RecordJson>>,
+    createdAt: string,
+    recordId: string,
+    payload: RecordJson,
+    json: string,
+  ) {
     const fragments = ["{", "", "", ""];
     let at = 0;
     let count = 0;
@@ -129,11 +152,42 @@ export const captureRecordStorage = Effect.fnUntraced(
       record_id_json: JSON.stringify(recordId),
       payload_json,
       envelope,
-      envelope_digest: yield* digestCanonicalJson(canonicalJson(envelope)),
+      envelope_digest: yield* digestEnvelope(envelope),
     });
   },
   Effect.mapError((cause) => failure("capture canonical storage", cause)),
 );
+
+/** Capture imported wire, including additive envelope members, through the complete codec. */
+export const captureRecordStorage = Effect.fnUntraced(
+  function* (wire: RecordJson, json: string) {
+    const object = yield* decodeWire(wire);
+    const createdAt = yield* decodeText(object.createdAt);
+    const recordId = yield* decodeText(object.recordId);
+    const payload = yield* Schema.decodeEffect(RecordJson)(object.payload);
+
+    return yield* captureValidatedStorage(object, createdAt, recordId, payload, json);
+  },
+  Effect.mapError((cause) => failure("capture canonical storage", cause)),
+);
+
+/**
+ * Authenticate capture before reusing its native wire type and bounds. Structural lookalikes
+ * undergo normal capture; physical reconstruction and fragment bounds remain checked below.
+ */
+export const capturePreparedRecordStorage = Effect.fnUntraced(function* (input: AppendRequest) {
+  const captured = yield* PreparedAppend.capture(input);
+
+  return yield* Effect.forEach(captured.records, (record) =>
+    captureValidatedStorage(
+      record.wire,
+      record.wire.createdAt,
+      record.wire.recordId,
+      record.wire.payload,
+      record.recordJson,
+    ).pipe(Effect.map((storage) => ({ ...record, storage }))),
+  );
+});
 
 /** SQL concatenation preserves additive envelope members and original scalar spelling. */
 export const hotRecordJson = (sql: SqlClient.SqlClient, namespace?: string, alias?: string) => {
@@ -200,11 +254,48 @@ export const definitionJson = (sql: SqlClient.SqlClient, namespace?: string, ali
   return sql`(SELECT value_json FROM ${table} WHERE definition_key=${owner}.definition_key)`;
 };
 
+interface DictionaryKeys {
+  envelope:
+    | {
+        readonly namespace: string | undefined;
+        readonly digest: Digest;
+        readonly key: number;
+        readonly value: typeof EnvelopeFragments.Type;
+      }
+    | undefined;
+  run:
+    | {
+        readonly namespace: string | undefined;
+        readonly threadId: string;
+        readonly runId: string;
+        readonly key: number;
+      }
+    | undefined;
+}
+
+// One bounded entry of each kind per mutation owner. Transaction rollback and direct
+// maintenance invalidate these immutable dictionary lookups before reopening the gate.
+const dictionaryKeys = new WeakMap<object, DictionaryKeys>();
+
 /** These writes run only inside the caller's existing fenced/admission/import transaction. */
 export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
   const crypto = yield* Crypto.Crypto;
   const { table, execute } = yield* makeSqlQuery(namespace);
+  const owner = yield* SqlStorageOwner;
+  const identity = owner?.identity ?? owner;
+  let keys = identity === undefined ? undefined : dictionaryKeys.get(identity);
+
+  if (owner !== undefined && identity !== undefined && keys === undefined) {
+    keys = { envelope: undefined, run: undefined };
+    dictionaryKeys.set(identity, keys);
+    const retained = keys;
+
+    owner.invalidators.add(() => {
+      retained.envelope = undefined;
+      retained.run = undefined;
+    });
+  }
 
   const query = <A extends object>(statement: Statement<A>) =>
     execute(statement).pipe(
@@ -224,6 +315,41 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
 
   const storage = {
     envelope: Effect.fnUntraced(function* (value: CapturedRecordStorage) {
+      const retained = keys?.envelope;
+
+      if (
+        retained !== undefined &&
+        retained.namespace === namespace &&
+        retained.digest === value.envelope_digest
+      ) {
+        if (!sameEnvelope(retained.value, value.envelope))
+          return yield* failure("envelope dictionary collision");
+
+        return retained.key;
+      }
+
+      const retain = (key: number) => {
+        const { prefix, before_payload, before_record_id, suffix } = value.envelope;
+
+        if (
+          keys !== undefined &&
+          (namespace?.length ?? 0) +
+            prefix.length +
+            before_payload.length +
+            before_record_id.length +
+            suffix.length <=
+            32_768
+        )
+          keys.envelope = {
+            namespace,
+            digest: value.envelope_digest,
+            key,
+            value: { prefix, before_payload, before_record_id, suffix },
+          };
+
+        return key;
+      };
+
       const read = Effect.fnUntraced(function* () {
         const [row] = yield* Schema.decodeUnknownEffect(
           Schema.Array(
@@ -252,27 +378,49 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
 
       const prior = yield* read();
 
-      if (prior !== undefined) return prior;
+      if (prior !== undefined) return retain(prior);
       yield* query(sql`INSERT INTO ${table("effect_agent_envelopes")}
         (content_digest, prefix, before_payload, before_record_id, suffix)
         VALUES (${value.envelope_digest}, ${value.envelope.prefix}, ${value.envelope.before_payload}, ${value.envelope.before_record_id}, ${value.envelope.suffix})
         ON CONFLICT(content_digest) DO NOTHING`);
       const inserted = yield* read();
 
-      return inserted === undefined ? yield* failure("missing envelope dictionary") : inserted;
+      return inserted === undefined
+        ? yield* failure("missing envelope dictionary")
+        : retain(inserted);
     }),
     run: Effect.fnUntraced(function* (threadId: string, runId: string) {
+      const retained = keys?.run;
+
+      if (
+        retained !== undefined &&
+        retained.namespace === namespace &&
+        retained.threadId === threadId &&
+        retained.runId === runId
+      )
+        return retained.key;
+
+      const retain = (key: number) => {
+        if (
+          keys !== undefined &&
+          (namespace?.length ?? 0) + threadId.length + runId.length <= 32_768
+        )
+          keys.run = { namespace, threadId, runId, key };
+
+        return key;
+      };
+
       const statement = sql`SELECT run_key AS key FROM ${table("effect_agent_run_keys")}
         WHERE thread_id=${threadId} AND run_id=${runId}`;
 
       const prior = yield* lookupKey(statement);
 
-      if (prior !== undefined) return prior;
+      if (prior !== undefined) return retain(prior);
       yield* query(sql`INSERT INTO ${table("effect_agent_run_keys")} (thread_id, run_id)
         VALUES (${threadId}, ${runId}) ON CONFLICT(thread_id, run_id) DO NOTHING`);
       const inserted = yield* lookupKey(statement);
 
-      return inserted === undefined ? yield* failure("missing Run dictionary") : inserted;
+      return inserted === undefined ? yield* failure("missing Run dictionary") : retain(inserted);
     }),
     definition: Effect.fnUntraced(function* (json: string) {
       const digest = yield* digestCanonicalJson(json).pipe(

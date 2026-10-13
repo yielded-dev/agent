@@ -1,4 +1,3 @@
-import type { Crypto } from "effect";
 import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
 
 import { ReceiptId, RunId, SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
@@ -487,7 +486,7 @@ export type WorkIndexChange =
 export const workIndexChanges = Effect.fnUntraced(function* (
   envelope: CanonicalRecordEnvelope,
   reporting: WorkerReportingMode,
-): Effect.fn.Return<ReadonlyArray<WorkIndexChange>, ThreadStoreError, Crypto.Crypto> {
+): Effect.fn.Return<ReadonlyArray<WorkIndexChange>, ThreadStoreError> {
   const { record, sequence } = envelope;
   const payload = record.payload;
 

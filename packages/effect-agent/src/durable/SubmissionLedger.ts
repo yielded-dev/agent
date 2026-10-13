@@ -228,6 +228,10 @@ export class SubmissionSnapshot extends Schema.Class<SubmissionSnapshot>(
   inputPayload: PersistedJson,
   inputDigest: Digest,
   settledOutcome: Schema.optionalKey(SettlementOutcome),
+  /** First committed finalization time; paired with settledRecordId by native adapters. */
+  settledAt: Schema.optionalKey(Schema.DateTimeUtcFromString),
+  /** Exact canonical settlement behind the finalized projection; not a substitute for reading it. */
+  settledRecordId: Schema.optionalKey(RecordId),
   createdAt: Schema.DateTimeUtcFromString,
   readyAt: Schema.optionalKey(Schema.DateTimeUtcFromString),
   admissionGroup: Schema.optionalKey(AdmissionGroup),

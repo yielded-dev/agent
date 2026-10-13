@@ -38,7 +38,7 @@ import {
 import { Clock, Crypto, Effect, Option, Ref, Schema, Stream } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 
-import { captureRecordStorage } from "./SqlCanonicalStorage.ts";
+import { capturePreparedRecordStorage } from "./SqlCanonicalStorage.ts";
 import {
   type RawAppendRequest,
   RawCheckpoint,
@@ -110,12 +110,8 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
       message: "Canonical batch exceeds its bounded transfer representation",
     });
 
-  const records = yield* Effect.forEach(captured.records, (record) =>
-    captureRecordStorage(record.wire, record.recordJson).pipe(
-      Effect.map((storage) =>
-        Object.freeze({ ...record, storage, readMetadata: canonicalRecordMetadata(record) }),
-      ),
-    ),
+  const records = (yield* capturePreparedRecordStorage(captured)).map((record) =>
+    Object.freeze({ ...record, readMetadata: canonicalRecordMetadata(record) }),
   );
 
   const executionWrites = captured.executionWrites;

@@ -624,7 +624,6 @@ const makeJournal = (
     const appendPrepared = Effect.fnUntraced(function* (
       request: RawAppendRequest,
     ): Effect.fn.Return<RawAppendResult, AppendError> {
-      const recordIds: Array<string> = request.records.map((record) => record.recordId);
       const threadRows = yield* getThread(request.threadId);
 
       const thread = threadRows.length === 1 ? threadRows[0] : undefined;
@@ -670,42 +669,6 @@ const makeJournal = (
             `Expected tail ${request.expectedTailSequence} ` + `but found ${thread.tail_sequence}.`,
           reason: "tail",
           actualTailSequence: thread.tail_sequence,
-        });
-      }
-
-      // Chunked to respect the Durable Object platform's 100-bound-parameter statement
-      // limit: a batch may carry up to 256 records.
-      const existingRecords: Array<RecordRow> =
-        prefix === undefined ? [] : prefix.filter((row) => recordIds.includes(row.record_id));
-
-      for (const chunk of prefix === undefined
-        ? chunked(recordIds, MAX_BOUND_PARAMETERS - 10)
-        : []) {
-        const existingRecordRows = yield* sql<Record<string, unknown>>`
-            SELECT
-              thread_id,
-              sequence,
-              record_id,
-              ${recordBatchId(sql)} AS batch_id,
-              ${recordJson} AS record_json
-            FROM effect_agent_canonical_records
-            WHERE thread_id = ${request.threadId}
-              AND record_id IN ${sql.in(chunk.map((id) => JSON.stringify(id)))}
-          `.pipe(Effect.mapError(storageError("check canonical record identities")));
-
-        existingRecords.push(
-          ...(yield* decodeRows(
-            Schema.Array(RecordRow),
-            "effect_agent_canonical_records",
-            `${request.threadId}/record_ids`,
-            existingRecordRows,
-          )),
-        );
-      }
-      if (existingRecords.length > 0) {
-        return yield* DoAppendConflict.make({
-          message: `Canonical record ID ${existingRecords[0].record_id} already exists.`,
-          reason: "record-identity",
         });
       }
 
@@ -776,9 +739,17 @@ const makeJournal = (
       // Captured scalar locators avoid parsing canonical JSON under the writer.
       // Eighteen bound columns per row stay within workerd's statement limit.
       for (const group of chunked(records, Math.floor(MAX_BOUND_PARAMETERS / 18))) {
-        yield* sql`INSERT INTO effect_agent_canonical_records ${sql.insert(group.map(({ row }) => row))}`.pipe(
-          Effect.mapError(storageError("insert canonical records")),
-        );
+        const inserted =
+          yield* sql`INSERT INTO effect_agent_canonical_records ${sql.insert(group.map(({ row }) => row))}
+          ON CONFLICT(thread_id, record_id) DO NOTHING RETURNING 1`.pipe(
+            Effect.mapError(storageError("insert canonical records")),
+          );
+
+        if (inserted.length !== group.length)
+          return yield* DoAppendConflict.make({
+            message: "A canonical record ID already exists.",
+            reason: "record-identity",
+          });
 
         const memberships = group.flatMap(({ memberships }) => memberships);
 

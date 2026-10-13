@@ -3,8 +3,9 @@ export { sqlStorageOwner } from "./internal/SqlOwner.ts";
 import { type RunId, ThreadId } from "@yielded/agent/identifiers";
 import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import type { Digest } from "@yielded/agent/records";
-import { CanonicalSequence } from "@yielded/agent/records";
+import { CanonicalSequence, RunContinuation } from "@yielded/agent/records";
 import { ProgressAppendReader, validateProgressAppend } from "@yielded/agent/run-continuation";
+import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import {
   AppendConflict,
   CheckpointRejected,
@@ -127,12 +128,93 @@ export class RawAppendResult extends Schema.Class<RawAppendResult>(
   replayed: Schema.Boolean,
 }) {}
 
+interface ExecutionPredecessor {
+  readonly progress: RunContinuation;
+  readonly originalSequence: CanonicalSequence;
+  readonly operational: ReadonlyArray<Pick<ExecutionCheckpoint["operational"][number], "recordId">>;
+}
+
+// Private predecessors belong to the physical owner's mutation gate. Failed transactions
+// and out-of-band maintenance discard them before readers can enter that gate again.
+const executionPredecessors = new WeakMap<
+  object,
+  Map<string, { readonly checkpoint: ExecutionPredecessor; readonly bytes: number }>
+>();
+
 /** Shared native transaction body; callers own the local capability check and mutation transaction. */
 export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
   const { table, execute } = yield* makeSqlQuery(namespace);
   const read = yield* makeExecutionRead(namespace);
   const readInitial = yield* makeInitialProgressRead(namespace);
+  const owner = yield* SqlStorageOwner;
+  const identity = owner?.identity ?? owner;
+  let predecessors = identity === undefined ? undefined : executionPredecessors.get(identity);
+
+  if (owner !== undefined && identity !== undefined && predecessors === undefined) {
+    predecessors = new Map();
+    executionPredecessors.set(identity, predecessors);
+    const retained = predecessors;
+
+    owner.invalidators.add(() => retained.clear());
+  }
+  const key = (threadId: string, runId: string) => JSON.stringify([namespace, threadId, runId]);
+
+  const readPrevious = (
+    threadId: ThreadId,
+    runId: RunId,
+  ): Effect.Effect<Option.Option<ExecutionPredecessor>, ThreadStoreError> => {
+    const retained = predecessors?.get(key(threadId, runId));
+
+    return retained === undefined
+      ? read({ threadId, runId })
+      : Effect.succeed(Option.some(retained.checkpoint));
+  };
+
+  const retain = (threadId: ThreadId, write: RawAppendRequest["executionWrites"][number]) => {
+    if (predecessors === undefined) return;
+    const id = key(threadId, write.update.checkpoint.progress.runId);
+
+    predecessors.delete(id);
+    if (!write.update.retire && write.bytes <= 4 * 1024 * 1024) {
+      const { progress, originalSequence, operational } = write.update.checkpoint;
+
+      // Detach the validator's small working set from the prepared append and its payloads.
+      predecessors.set(id, {
+        checkpoint: {
+          originalSequence,
+          operational: operational.map(({ recordId }) => ({ recordId })),
+          progress: new RunContinuation(
+            {
+              ...progress,
+              accounting: { ...progress.accounting },
+              originalInput: { ...progress.originalInput },
+              lastFact: { ...progress.lastFact },
+              ...(progress.savedContext === undefined
+                ? {}
+                : { savedContext: { ...progress.savedContext } }),
+              ...(progress.latestResponse === undefined
+                ? {}
+                : { latestResponse: { ...progress.latestResponse } }),
+              ...(progress.terminal === undefined ? {} : { terminal: { ...progress.terminal } }),
+            },
+            { disableChecks: true },
+          ),
+        },
+        bytes: write.bytes,
+      });
+    }
+    let bytes = 0;
+
+    for (const value of predecessors.values()) bytes += value.bytes;
+    while (predecessors.size > 128 || bytes > 4 * 1024 * 1024) {
+      const oldest = predecessors.entries().next().value;
+
+      if (oldest === undefined) break;
+      bytes -= oldest[1].bytes;
+      predecessors.delete(oldest[0]);
+    }
+  };
 
   const failed = (message: string, cause?: unknown) =>
     ThreadStoreError.make({
@@ -196,7 +278,7 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
     if (request.records.length > 0) return;
     for (const { update } of request.executionWrites) {
       const prior = Option.getOrUndefined(
-        yield* read({ threadId: request.threadId, runId: update.checkpoint.progress.runId }),
+        yield* readPrevious(request.threadId, update.checkpoint.progress.runId),
       );
 
       if (
@@ -211,7 +293,7 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
   });
 
   const validate = Effect.fnUntraced(function* (request: RawAppendRequest) {
-    // Both validators use this transaction's predecessor; never retain it across appends.
+    // Both validators use the same owner-fenced predecessor for this transaction.
     const prior = new Map<RunId, ExecutionCheckpoint["progress"] | undefined>();
 
     for (const { update } of request.executionWrites) {
@@ -220,9 +302,7 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
 
       if (prior.has(next.runId)) return yield* failed("Duplicate execution update");
 
-      const previous = Option.getOrUndefined(
-        yield* read({ threadId: request.threadId, runId: next.runId }),
-      );
+      const previous = Option.getOrUndefined(yield* readPrevious(request.threadId, next.runId));
 
       prior.set(next.runId, previous?.progress);
 
@@ -291,7 +371,8 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
   });
 
   const commit = Effect.fnUntraced(function* (request: RawAppendRequest, _result: RawAppendResult) {
-    for (const { update, checkpointJson } of request.executionWrites) {
+    for (const write of request.executionWrites) {
+      const { update, checkpointJson } = write;
       const run = JSON.stringify(update.checkpoint.progress.runId);
 
       if (update.retire) {
@@ -300,6 +381,7 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
 
         if (deleted.length !== (update.previousRevision === 0 ? 0 : 1))
           return yield* conflict(request, "tail");
+        retain(request.threadId, write);
         continue;
       }
 
@@ -311,6 +393,7 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
         WHERE ${table("effect_agent_executions")}.revision=${update.previousRevision} RETURNING run_id`);
 
       if (changed.length !== 1) return yield* conflict(request, "tail");
+      retain(request.threadId, write);
     }
   });
 
@@ -419,10 +502,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
   const decodeBatchRows = decodeRows(Schema.Array(BatchRow));
 
   const decodeRecordRows = decodeRows(Schema.Array(RecordRow));
-
-  const decodeRecordIdentityRows = decodeRows(
-    Schema.Array(Schema.Struct({ record_id: Schema.fromJsonString(BoundedIdentifier) })),
-  );
 
   const decodeCheckpointRows = decodeRows(Schema.Array(CheckpointRow));
   const decodeCanonicalSequence = Schema.decodeEffect(CanonicalSequence);
@@ -586,31 +665,6 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
       });
     }
 
-    const existingRecordRows =
-      recordIds.length === 0
-        ? []
-        : yield* sql<Record<string, unknown>>`
-        SELECT record_id
-        FROM ${relation("effect_agent_canonical_records")}
-        WHERE thread_id = ${request.threadId}
-          AND record_id IN ${sql.in(recordIds.map((id) => JSON.stringify(id)))}
-        LIMIT 1
-      `.pipe(execute, Effect.mapError(storageError("check canonical record identities")));
-
-    const existingRecords = yield* decodeRecordIdentityRows(
-      "effect_agent_canonical_records",
-      `${request.threadId}/record_ids`,
-      existingRecordRows,
-    );
-
-    if (existingRecords.length > 0) {
-      return yield* AppendConflict.make({
-        threadId: request.threadId,
-        batchId: request.batchId,
-        reason: "record-identity",
-      });
-    }
-
     const firstSequence = yield* decodeCanonicalSequence(
       thread.tail_sequence + (request.records.length === 0 ? 0 : 1),
     ).pipe(
@@ -673,9 +727,20 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     for (let at = 0; at < request.records.length; at += 5) {
       const records = request.records.slice(at, at + 5);
 
-      yield* sql`INSERT INTO ${relation("effect_agent_canonical_records")} ${sql.insert(
-        physicalRecords.slice(at, at + 5).map((record) => record.columns),
-      )}`.pipe(execute, Effect.mapError(storageError("insert canonical record")));
+      const inserted =
+        yield* sql`INSERT INTO ${relation("effect_agent_canonical_records")} ${sql.insert(
+          physicalRecords.slice(at, at + 5).map((record) => record.columns),
+        )} ON CONFLICT(thread_id, record_id) DO NOTHING RETURNING 1`.pipe(
+          execute,
+          Effect.mapError(storageError("insert canonical record")),
+        );
+
+      if (inserted.length !== records.length)
+        return yield* AppendConflict.make({
+          threadId: request.threadId,
+          batchId: request.batchId,
+          reason: "record-identity",
+        });
 
       const memberships = physicalRecords.slice(at, at + 5).flatMap((record) => record.memberships);
 
