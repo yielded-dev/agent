@@ -25,6 +25,8 @@ import {
   ModelId,
   modelChoices,
   requiresReasoning,
+  serviceTierForModel,
+  supportsUltrafast,
   racePrompt,
   Reasoning,
   scenarios,
@@ -306,6 +308,9 @@ export const App = () => {
   const validShop = Schema.is(ShopRequest)(shop);
   const effectiveReasoning = reasoning === "none" && requiresReasoning(model) ? "low" : reasoning;
 
+  const effectiveServiceTier =
+    model === "all" ? serviceTier : serviceTierForModel(model, serviceTier);
+
   const effectivePrompt = isWiki
     ? racePrompt({ start: wikiStart.trim(), target: wikiTarget.trim() })
     : scenario === "browse"
@@ -406,7 +411,9 @@ export const App = () => {
       liveView: liveView && engine === "chromium",
       repetitions,
       ...(engine === "all" ? { compareEngines: ["chromium", "kitesurf"] } : { engine: engine }),
-      ...(!model.startsWith("@cf/") ? { reasoning: effectiveReasoning, serviceTier } : {}),
+      ...(!model.startsWith("@cf/")
+        ? { reasoning: effectiveReasoning, serviceTier: effectiveServiceTier }
+        : {}),
       ...(model === "all"
         ? { compareModels: availableModels.map((choice) => choice.id) }
         : { model }),
@@ -690,12 +697,18 @@ export const App = () => {
                 <label>
                   <span>OpenAI speed</span>
                   <select
-                    value={serviceTier}
+                    value={effectiveServiceTier}
                     disabled={busy || model.startsWith("@cf/")}
                     onChange={(event) =>
                       setServiceTier(Schema.decodeUnknownSync(ServiceTier)(event.target.value))
                     }
                   >
+                    <option
+                      value="ultrafast"
+                      disabled={model !== "all" && !supportsUltrafast(model)}
+                    >
+                      Ultrafast
+                    </option>
                     <option value="fast">Fast</option>
                     <option value="default">Standard</option>
                   </select>
@@ -732,6 +745,12 @@ export const App = () => {
                 </select>
               </label>
             </div>
+            {model === "all" && serviceTier === "ultrafast" && (
+              <p className="fine">
+                Astra and Sol use Ultrafast; Luna uses Fast. Each run records its requested and
+                served tier.
+              </p>
+            )}
             <div className="toggles">
               <label>
                 <input

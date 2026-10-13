@@ -9,6 +9,7 @@ import {
   LabError,
   browserCommandTimeoutMillis,
   requiresReasoning,
+  supportsUltrafast,
   defaultChallenge,
   racePrompt,
   shopPrompt,
@@ -206,6 +207,14 @@ export const makeOwner = (
       return yield* LabError.make({
         code: "invalid",
         message: "Reasoning and service tier are available only for OpenAI models.",
+      });
+    if (
+      requested.serviceTier === "ultrafast" &&
+      !supportsUltrafast(requested.model ?? config.model)
+    )
+      return yield* LabError.make({
+        code: "invalid",
+        message: "Ultrafast is available only for GPT-6 Astra and GPT-6.1 Sol.",
       });
     if (requested.scenario === "browse" && (!requested.url || !requested.prompt.trim()))
       return yield* LabError.make({

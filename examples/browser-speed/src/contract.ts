@@ -94,30 +94,37 @@ export const StartUrl = Schema.String.check(
 );
 
 export const ModelId = Schema.Literals([
-  "gpt-6-luna",
-  "gpt-6-sol",
+  "gpt-6-astra",
   "gpt-6.1-sol",
+  "gpt-6-luna",
   "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
 ]);
 
 export type ModelId = typeof ModelId.Type;
 export const Reasoning = Schema.Literals(["none", "low", "medium", "high", "xhigh", "max"]);
-export const ServiceTier = Schema.Literals(["fast", "default"]);
+export const ServiceTier = Schema.Literals(["ultrafast", "fast", "default"]);
 
 export const modelChoices: ReadonlyArray<{
   id: ModelId;
   label: string;
   /** The model rejects reasoning effort "none"; runs use "low" instead. */
   requiresReasoning?: true;
+  supportsUltrafast?: true;
 }> = [
+  { id: "gpt-6-astra", label: "GPT-6 Astra", requiresReasoning: true, supportsUltrafast: true },
+  { id: "gpt-6.1-sol", label: "GPT-6.1 Sol", requiresReasoning: true, supportsUltrafast: true },
   { id: "gpt-6-luna", label: "GPT-6 Luna" },
-  { id: "gpt-6-sol", label: "GPT-6 Sol" },
-  { id: "gpt-6.1-sol", label: "GPT-6.1 Sol", requiresReasoning: true },
   { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", label: "Llama 3.3 · Workers AI" },
 ];
 
 export const requiresReasoning = (model: string) =>
   modelChoices.some((choice) => choice.id === model && choice.requiresReasoning === true);
+
+export const supportsUltrafast = (model: string) =>
+  modelChoices.some((choice) => choice.id === model && choice.supportsUltrafast === true);
+
+export const serviceTierForModel = (model: string, tier: typeof ServiceTier.Type) =>
+  tier === "ultrafast" && !supportsUltrafast(model) ? "fast" : tier;
 
 export const RunInput = Schema.Struct({
   id: Schema.String.check(Schema.isUUID()),

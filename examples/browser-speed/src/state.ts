@@ -7,6 +7,7 @@ import {
   Report,
   VisitorKey,
   requiresReasoning,
+  serviceTierForModel,
   type BrowserEngine,
   type ModelId,
   type RunInput,
@@ -157,7 +158,9 @@ export const runAtom = LabClient.runtime.fn<
                               ? "low"
                               : reasoning,
                         }),
-                    ...(serviceTier === undefined ? {} : { serviceTier }),
+                    ...(serviceTier === undefined
+                      ? {}
+                      : { serviceTier: serviceTierForModel(variant.model ?? "", serviceTier) }),
                   }
                 : {}),
               id: crypto.randomUUID(),

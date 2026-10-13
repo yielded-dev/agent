@@ -58,9 +58,12 @@ Open **http://127.0.0.1:5191/browser-use/** and press **Start race**, or choose 
 Browser and model calls use real services. `worker --local` is useful for API checks but
 disables the remote browser binding.
 
-The model picker uses a host-approved catalog. OpenAI runs default to Fast processing and no
-reasoning; models that require reasoning use low instead. Fast and reasoning are independent
-settings. Model spans retain returned token counts and service tiers when available.
+The OpenAI model picker offers GPT-6 Astra, GPT-6.1 Sol and GPT-6 Luna. Runs default to Fast
+processing; Standard is also available. Ultrafast is available for Astra and Sol. Comparing
+models with Ultrafast selected runs Luna on Fast, and switching to Luna displays Fast.
+Direct API requests for Luna with Ultrafast are rejected before opening a browser.
+Reasoning is independent of speed: Luna defaults to none, while Astra and Sol use low.
+Model spans retain returned token counts and service tiers when available.
 
 Chromium uses a host-owned Browser Session. Kitesurf uses its ephemeral CDP connection;
 it has no persistent Live View and may differ in website or CDP support. A requested engine

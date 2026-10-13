@@ -161,7 +161,7 @@ const decodeServedTier = Schema.decodeUnknownOption(
   }),
 );
 
-/** Preserve the raw served tier: the pinned provider omits the new "fast" alias from finish metadata. */
+/** Preserve raw served tiers, including aliases missing from the provider's finish metadata. */
 export const traceOpenAiClient = Effect.gen(function* () {
   const client = yield* OpenAiClient.OpenAiClient;
   const trace = yield* Trace;
