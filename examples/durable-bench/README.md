@@ -414,9 +414,9 @@ original SQLite rows and table counts, then run an excluded preparation turn.
 Repeated baselines reveal deployment/time/history drift. The output includes paired differences and confidence intervals. Do not claim gains smaller than
 the control or within-Object repeat spread; inspect all Objects, not just the median.
 
-Refs supply `packages/` sources and their own `bun.lock` dependencies. Different lockfiles
-receive isolated frozen installations; identical lockfiles reuse an installation. Cache installs
-use fresh temporary directories and atomic publication; a competing loser discards its copy. Both builds
+Refs supply `packages/` sources and their own frozen dependencies, including dependency patches.
+Each revision gets an isolated installation. Cache installs use fresh temporary directories
+and atomic publication; a competing loser discards its copy. Both builds
 use this harness, while pi and tardie retain their isolated vendor dependencies. Each
 revision must support its selected fixture. Import, recovery,
 transcript, build or residency failures invalidate the affected Object; the command never

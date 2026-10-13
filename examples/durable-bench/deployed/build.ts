@@ -26,11 +26,9 @@ const SourceMap = Schema.Struct({
   sources: Schema.Array(Schema.String),
 });
 
-// Reuse an installation only when the ref's complete lockfile matches.
+// Frozen revisions include dependency patch bytes that the lockfile does not identify.
 const dependenciesFor = Effect.fnUntraced(function* (revision: string) {
   const fs = yield* FileSystem.FileSystem;
-  const lock = yield* git(["show", `${revision}:bun.lock`]);
-  const harnessLock = (yield* fs.readFileString(join(repository, "bun.lock"))).trim();
 
   const catalog = yield* Schema.decodeEffect(Schema.fromJsonString(Catalog))(
     yield* git(["show", `${revision}:package.json`]),
@@ -40,21 +38,18 @@ const dependenciesFor = Effect.fnUntraced(function* (revision: string) {
 
   if (!expectedEffect)
     return yield* BenchError.make({ message: "Ref has no Effect catalog version." });
-  if (lock === harnessLock) return { root: repository, expectedEffect };
-
-  const lockHash = hash(lock);
 
   const root = join(
     tmpdir(),
     "durable-bench-dependencies",
     hash(repository).slice(0, 12),
-    lockHash,
+    revision,
   );
 
   const receipt = join(root, "node_modules", ".bench-frozen-install");
 
   const installed = Effect.gen(function* () {
-    return (yield* fs.exists(receipt)) && (yield* fs.readFileString(receipt)) === lockHash;
+    return (yield* fs.exists(receipt)) && (yield* fs.readFileString(receipt)) === revision;
   });
 
   if (!(yield* installed)) {
@@ -80,7 +75,7 @@ const dependenciesFor = Effect.fnUntraced(function* (revision: string) {
       return yield* BenchError.make({
         message: `Dependency install failed: ${redact(install.output).slice(-3000)}`,
       });
-    yield* fs.writeFileString(join(temporary, "node_modules", ".bench-frozen-install"), lockHash);
+    yield* fs.writeFileString(join(temporary, "node_modules", ".bench-frozen-install"), revision);
     // Only complete installations are visible. A competing winner is immutable;
     // the scoped temporary directory discards the losing installation.
     yield* fs
@@ -105,7 +100,7 @@ const entries = {
   restore: "worker/restore-worker.ts",
 };
 
-/** A ref supplies framework sources and, when its lock differs, its frozen dependencies. */
+/** A ref supplies framework sources and its complete frozen dependency installation. */
 export const build = Effect.fnUntraced(function* (
   output: string,
   entry: keyof typeof entries,
@@ -140,7 +135,7 @@ export const build = Effect.fnUntraced(function* (
       return yield* BenchError.make({
         message: "Could not unpack the requested framework revision.",
       });
-    // Framework links override workspace links; dependencies come from this revision's lockfile.
+    // Framework links override workspace links; dependencies come from the pinned installation.
     yield* fs.symlink(join(dependencyRoot, "node_modules"), join(output, "node_modules"));
     for (const name of yield* fs.readDirectory(join(sourceRoot, "packages"))) {
       const packageRoot = join(sourceRoot, "packages", name);
