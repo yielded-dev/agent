@@ -1281,6 +1281,7 @@ const makeServices = Effect.fnUntraced(function* () {
         ).pipe(Effect.mapError(internalFailure(operation)));
 
         const now = yield* currentInstant;
+
         // The first canonical record is ThreadCreated. This is the same positive-tail proof
         // used by ensureThreadCreated, captured under this admission's owner transaction.
         const ready =
