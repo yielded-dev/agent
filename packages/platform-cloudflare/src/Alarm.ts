@@ -334,7 +334,9 @@ const makeAlarmOperation = Effect.gen(function* () {
     operation: string,
     execute: (transaction: MaintenanceStorage, checkpoint: CheckpointIntent) => Promise<A>,
   ) => {
-    const commit = (tx: MaintenanceCheckpoint | undefined) => {
+    const commit = Effect.withFiber((fiber) => {
+      const tx = fiber.getRef(CurrentCheckpoint);
+
       if (tx === undefined)
         return Effect.die(new Error("Maintenance checkpoint transaction unavailable"));
 
@@ -364,21 +366,20 @@ const makeAlarmOperation = Effect.gen(function* () {
           }),
         ),
       );
-    };
+    });
 
     return Effect.withFiber((fiber) => {
       const current = fiber.getRef(CurrentCheckpoint);
 
-      if (current !== undefined) return commit(current);
+      if (current !== undefined) return commit;
       const ambient = Context.getOption(fiber.context, sql.transactionService);
-      const committed = Effect.flatMap(CurrentCheckpoint, commit);
 
       // Preserve eager writes and invalidation for an unwrapped host SQL transaction.
       return ambient._tag === "Some" && !DueQueue.buffering(ctx.storage)
-        ? transaction(committed).pipe(
+        ? transaction(commit).pipe(
             Effect.ensuring(Effect.sync(() => DueQueue.invalidate(ctx.storage))),
           )
-        : withTransaction(committed);
+        : withTransaction(commit);
     }).pipe(Effect.uninterruptible, Effect.mapError(alarmFailure(operation)));
   };
 
