@@ -37,26 +37,33 @@ export const canonicalJson = (value: Schema.Json, limits?: JsonLimits): string =
         throw new RangeError("Canonical JSON exceeds its collection bound");
       charge(2 + Math.max(0, value.length - 1));
 
-      return `[${globalThis.Array.from(value, (entry) => visit(entry, depth + 1)).join(",")}]`;
+      let json = "[";
+
+      for (let index = 0; index < value.length; index++) {
+        if (index > 0) json += ",";
+        json += visit(value[index], depth + 1);
+      }
+
+      return `${json}]`;
     }
 
-    const entries = Object.entries(value).sort(([left], [right]) =>
-      left < right ? -1 : left > right ? 1 : 0,
-    );
+    const keys = Object.keys(value).sort();
 
-    if (limits !== undefined && entries.length > limits.collectionLength)
+    if (limits !== undefined && keys.length > limits.collectionLength)
       throw new RangeError("Canonical JSON exceeds its collection bound");
-    charge(2 + Math.max(0, entries.length - 1));
+    charge(2 + Math.max(0, keys.length - 1));
+    let json = "{";
 
-    return `{${entries
-      .map(([key, entry]) => {
-        const encodedKey = JSON.stringify(key);
+    for (let index = 0; index < keys.length; index++) {
+      const key = keys[index];
+      const encodedKey = JSON.stringify(key);
 
-        charge(encodedKey.length + 1);
+      charge(encodedKey.length + 1);
+      if (index > 0) json += ",";
+      json += `${encodedKey}:${visit(value[key], depth + 1)}`;
+    }
 
-        return `${encodedKey}:${visit(entry, depth + 1)}`;
-      })
-      .join(",")}}`;
+    return `${json}}`;
   };
 
   return visit(value, 0);
