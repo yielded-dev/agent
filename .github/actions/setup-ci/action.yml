@@ -19,7 +19,9 @@ runs:
       with:
         node-version: "24.20.0"
         run-install: false
-        cache: true
+        # Restoring the full Bun dependency archive costs more than a fresh install.
+        # Keep the smaller, input-validated Vite Task cache below.
+        cache: false
 
     - name: Install dependencies (frozen, scripts suppressed)
       uses: ./.github/actions/run-ci

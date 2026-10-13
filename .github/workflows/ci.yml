@@ -133,7 +133,7 @@ jobs:
         with:
           node-version: "24.20.0"
           run-install: false
-          cache: true
+          cache: false
 
       - name: Install trusted base dependencies
         uses: ./.github/actions/run-ci
