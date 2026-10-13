@@ -1,4 +1,5 @@
 import { BrowserSessions } from "@yielded/agent-platform-cloudflare/browser-session";
+import { dynamicWorkerCodeExecutorLayer } from "@yielded/agent-platform-cloudflare/cloudflare-code-mode";
 import { DurableObject } from "cloudflare:workers";
 import { Context, Effect, Layer, Redacted, Schema } from "effect";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
@@ -11,6 +12,7 @@ import { Control, emptyControl, makeOwner } from "./owner.ts";
 export interface Env {
   readonly LAB: DurableObjectNamespace<BrowserLab>;
   readonly BROWSER: BrowserRun;
+  readonly LOADER: WorkerLoader;
   readonly ASSETS: Fetcher;
   readonly CLOUDFLARE_ACCOUNT_ID?: string;
   readonly BROWSER_RENDERING_API_TOKEN?: string;
@@ -19,18 +21,12 @@ export interface Env {
   readonly OPENAI_API_TYPE?: string;
   readonly OPENAI_MODEL?: string;
   readonly WORKERS_AI_API_KEY?: string;
-  readonly TYPESAFE_API_KEY?: string;
-  /** Mercury 2.5 writes Jev field text when set; otherwise GPT-6 Luna through OPENAI_API_KEY. */
-  readonly OPENROUTER_API_KEY?: string;
-  /** "true" runs on visitor keys only, without the scripted baseline. */
   readonly LAB_PUBLIC?: string;
   /** Per-address run admission for public labs. */
   readonly RUN_LIMIT?: RateLimit;
   /** The travel planner's auth on this origin; its allowlisted accounts run on FUNDED_* keys. */
   readonly AUTH?: DurableObjectNamespace;
   readonly FUNDED_OPENAI_API_KEY?: string;
-  readonly FUNDED_TYPESAFE_API_KEY?: string;
-  readonly FUNDED_OPENROUTER_API_KEY?: string;
 }
 
 /** Served under this path on agent.yielded.dev; the unprefixed API remains for local tools. */
@@ -96,6 +92,41 @@ export class BrowserLab extends DurableObject<Env> {
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS browser_lab (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)",
     );
+    ctx.storage.transactionSync(() => {
+      const row = ctx.storage.sql
+        .exec<{ value: string }>("SELECT value FROM browser_lab WHERE id=1")
+        .toArray()[0];
+
+      if (row === undefined) return;
+
+      const version = Schema.decodeSync(
+        Schema.fromJsonString(Schema.Struct({ version: Schema.Int })),
+      )(row.value).version;
+
+      if (version === 1) {
+        const previous = Schema.decodeSync(
+          Schema.fromJsonString(
+            Schema.Struct({
+              ...Control.fields,
+              version: Schema.Literal(1),
+              report: Schema.NullOr(Schema.Json),
+            }),
+          ),
+        )(row.value);
+
+        ctx.storage.sql.exec(
+          "UPDATE browser_lab SET value=? WHERE id=1",
+          Schema.encodeSync(codec)({
+            ...previous,
+            version: 2,
+            report: null,
+          }),
+        );
+      } else {
+        // Refuse unsupported versions before mutating stored ownership.
+        Schema.decodeSync(codec)(row.value);
+      }
+    });
     this.owner = makeOwner(
       {
         read: () => {
@@ -142,27 +173,7 @@ export class BrowserLab extends DurableObject<Env> {
             : "https://api.openai.com/v1",
           apiType: id.startsWith("@cf/") ? "chat-completions" : "responses",
         })),
-        jevApiKey: env.TYPESAFE_API_KEY,
         public: env.LAB_PUBLIC === "true",
-        ...(env.OPENROUTER_API_KEY
-          ? {
-              jevText: {
-                provider: "openrouter",
-                model: "inception/mercury-2.5",
-                reasoning: "none",
-                apiKey: Redacted.make(env.OPENROUTER_API_KEY),
-              },
-            }
-          : env.OPENAI_API_KEY
-            ? {
-                jevText: {
-                  provider: "openai",
-                  model: "gpt-6-luna",
-                  reasoning: "low",
-                  apiKey: Redacted.make(env.OPENAI_API_KEY),
-                },
-              }
-            : {}),
         kitesurf: (retainClose) =>
           connectKitesurf(
             {
@@ -214,22 +225,24 @@ export class BrowserLab extends DurableObject<Env> {
               request.headers.get("origin") === new URL(request.url).origin &&
               (yield* (yield* PlannerAccounts).read(request))?.funded === true;
 
+            if (
+              this.env.LAB_PUBLIC === "true" &&
+              (payload.scenario === "coffee" || payload.scenario === "shop") &&
+              !funded
+            )
+              return yield* LabError.make({
+                code: "configuration",
+                message: "Store scenarios are available only to signed-in, funded accounts.",
+              });
+
             return yield* this.withBrowser(
-              this.owner.run(
-                payload,
-                {
+              this.owner
+                .run(payload, {
                   openai:
                     headers["x-lab-openai-key"] ??
                     (funded ? this.env.FUNDED_OPENAI_API_KEY : undefined),
-                  typesafe:
-                    headers["x-lab-typesafe-key"] ??
-                    (funded ? this.env.FUNDED_TYPESAFE_API_KEY : undefined),
-                  openrouter:
-                    headers["x-lab-openrouter-key"] ??
-                    (funded ? this.env.FUNDED_OPENROUTER_API_KEY : undefined),
-                },
-                { funded },
-              ),
+                })
+                .pipe(Effect.provide(dynamicWorkerCodeExecutorLayer({ loader: this.env.LOADER }))),
             );
           }),
         )

@@ -76,19 +76,9 @@ const operationSpans: Readonly<Record<string, ReadonlyArray<string>>> = {
     "DoSubmissionLedger.publishSettlement",
     "DoSubmissionLedger.finalizeSettlement",
   ],
-  "packages/effect-agent/src/capabilities/BrowserUse.ts": [
-    "BrowserUse.runJev",
-    "BrowserUse.jevDecision",
-    "BrowserUse.jevWait",
-  ],
   "packages/sandbox-local/src/LocalSandbox.ts": ["LocalSandbox.execute"],
   "packages/platform-cloudflare/src/CloudflareThreadClient.ts": ["CloudflareThreadClient.call"],
   "packages/platform-cloudflare/src/internal/transport.ts": ["CloudflarePortTransport.call"],
-  "packages/platform-cloudflare/src/BrowserUse.ts": [
-    "BrowserUse.respond-dialog.input",
-    "BrowserUse.act",
-    "BrowserUse.respond-dialog",
-  ],
   "packages/storage-cloudflare/src/DoThreadStore.ts": [
     "DoThreadStore.materialize",
     "DoThreadStore.append",
@@ -114,9 +104,6 @@ const operationSpanExpressions: Readonly<Record<string, ReadonlyArray<string>>> 
     "`execute_tool ${call.name}`",
     "`execute_tool ${descriptor.toolName}`",
     "`invoke_agent ${context.agentId}`",
-  ],
-  "packages/platform-cloudflare/src/BrowserUse.ts": [
-    '`BrowserUse.${command.kind}${phase === undefined ? "" : `.${phase}`}`',
   ],
   "packages/storage-cloudflare/src/internal/storage-span.ts": ["name"],
 };

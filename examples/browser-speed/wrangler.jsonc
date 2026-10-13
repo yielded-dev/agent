@@ -13,6 +13,7 @@
     "run_worker_first": ["/api/*", "/browser-use/api/*"],
   },
   "browser": { "binding": "BROWSER", "remote": true },
+  "worker_loaders": [{ "binding": "LOADER" }],
   "durable_objects": { "bindings": [{ "name": "LAB", "class_name": "BrowserLab" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BrowserLab"] }],
   "observability": { "enabled": false },
@@ -29,6 +30,7 @@
       ],
       "vars": { "LAB_PUBLIC": "true" },
       "browser": { "binding": "BROWSER", "remote": true },
+      "worker_loaders": [{ "binding": "LOADER" }],
       "durable_objects": {
         "bindings": [
           { "name": "LAB", "class_name": "BrowserLab" },

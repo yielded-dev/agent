@@ -18,15 +18,15 @@ import {
 import { useRef, useState } from "react";
 
 import {
-  type Driver,
   ArticleTitle,
   BrowserEngine,
   defaultChallenge,
   defaultShopItem,
-  Mode,
   ModelId,
   modelChoices,
   requiresReasoning,
+  serviceTierForModel,
+  supportsUltrafast,
   racePrompt,
   Reasoning,
   scenarios,
@@ -35,6 +35,7 @@ import {
   shopTask,
   storeTask,
   ServiceTier,
+  StartUrl,
   type Phase,
   type Report,
   type Scenario,
@@ -58,7 +59,6 @@ import {
   selectedAtom,
   signInUrl,
   snapshotAtom,
-  submittedAtom,
   validKey,
   verifiedMillis,
   watchingAtom,
@@ -77,16 +77,13 @@ const seconds = (value: number | null | undefined) =>
   value === null || value === undefined ? "—" : (value / 1000).toFixed(2);
 
 const benchmarkReportUrl: unknown = import.meta.env.VITE_BROWSER_BENCHMARK_REPORT_URL;
-const docsUrl = "https://yielded.dev/agent/guide/browser/#let-jev-drive-the-browser";
+const docsUrl = "https://yielded.dev/agent/guide/browser/";
 const sourceUrl = "https://github.com/yielded-dev/agent/tree/main/examples/browser-speed";
 
 const phaseNames: Record<Phase, string> = {
   setup: "Setup",
   model: "Model turn",
-  decision: "Jev decision",
   action: "Browser action",
-  observation: "Read page",
-  wait: "Wait",
   capture: "Screenshot",
   verify: "Verify",
   cleanup: "Cleanup",
@@ -96,8 +93,9 @@ const tasks: ReadonlyArray<{ id: Scenario; title: string; detail: string }> = [
   {
     id: "wikipedia",
     title: "Wikipedia race",
-    detail: "Follow real article links to a destination",
+    detail: "Find a route between two articles",
   },
+  { id: "browse", title: "Browse a website", detail: "Your URL and goal · open-ended" },
   ...scenarios.map(({ id, title, detail }) => ({ id, title, detail })),
   { id: storeTask.id, title: storeTask.title, detail: storeTask.detail },
   shopTask,
@@ -105,8 +103,6 @@ const tasks: ReadonlyArray<{ id: Scenario; title: string; detail: string }> = [
 ];
 
 const keyLinks = {
-  typesafe: "https://docs.typesafe.ai/introduction/quickstart",
-  openrouter: "https://openrouter.ai/keys",
   openai: "https://platform.openai.com/api-keys",
 };
 
@@ -142,18 +138,20 @@ const Steps = ({ report }: { report: Report | null }) => {
         </p>
       </div>
       {!report?.spans.length ? (
-        <div className="empty">Run a task to see each decision, action and page read here.</div>
+        <div className="empty">
+          Run a task to see each model call, browser action and screenshot here.
+        </div>
       ) : (
         <div className="card steps">
           <div className="legend">
-            {(
-              ["decision", "model", "action", "observation", "wait", "verify", "setup"] as const
-            ).map((phase) => (
-              <span key={phase}>
-                <i className={`dot phase-${phase}`} />
-                {phaseNames[phase]}
-              </span>
-            ))}
+            {(["model", "action", "capture", "verify", "setup", "cleanup"] as const).map(
+              (phase) => (
+                <span key={phase}>
+                  <i className={`dot phase-${phase}`} />
+                  {phaseNames[phase]}
+                </span>
+              ),
+            )}
           </div>
           <ol className="step-list">
             {report.spans.map((span) => {
@@ -209,30 +207,11 @@ const Steps = ({ report }: { report: Report | null }) => {
                           ? ""
                           : ` · ${span.reasoningTokens} reasoning`}
                         {span.serviceTier === undefined ? "" : ` · tier ${span.serviceTier}`}
-                        {span.candidateCount === undefined
-                          ? ""
-                          : ` · ${span.candidateCount} candidates`}
-                        {span.questionCount === undefined
-                          ? ""
-                          : ` · ${span.questionCount} questions`}
+                        {` · turn ${span.turn} · starts at ${seconds(span.start)} s`}
                         {span.bytes === undefined ? "" : ` · ${span.bytes.toLocaleString()} bytes`}
                       </p>
                       {span.error && <p className="bad">{span.error}</p>}
                       {span.reasoningSummary && <p>{span.reasoningSummary}</p>}
-                      {span.choices?.map((choice) => (
-                        <p key={`${choice.target}/${choice.ref}`}>
-                          {choice.target} → #{choice.ref} · {(choice.probability * 100).toFixed(1)}%
-                        </p>
-                      ))}
-                      {span.decisionDistributions
-                        ?.filter((value) => Math.abs(value.reportedMass - 1) > 1e-6)
-                        .map((value) => (
-                          <p key={value.question}>
-                            Jev reported {(value.reportedProbability * 100).toFixed(1)}% for #
-                            {value.ref}; its distribution totaled {value.reportedMass.toFixed(2)}{" "}
-                            and was normalized. The choice is unchanged.
-                          </p>
-                        ))}
                     </div>
                   )}
                 </li>
@@ -288,10 +267,10 @@ export const App = () => {
   const [wikiStart, setWikiStart] = useState(defaultChallenge.start);
   const [wikiTarget, setWikiTarget] = useState(defaultChallenge.target);
   const [prompt, setPrompt] = useState("");
+  const [url, setUrl] = useState("https://example.com");
+  const [goal, setGoal] = useState("Read the page and tell me what it is for.");
   const [shopUrl, setShopUrl] = useState("");
   const [shopItem, setShopItem] = useState(defaultShopItem);
-  const [driver, setDriver] = useState<typeof Driver.Type>("jev");
-  const [mode, setMode] = useState<typeof Mode.Type>("batched");
   const [model, setModel] = useState<ModelId | "all">("gpt-6-luna");
   const [engine, setEngine] = useState<typeof BrowserEngine.Type | "all">("chromium");
   const [reasoning, setReasoning] = useState<typeof Reasoning.Type>("none");
@@ -308,13 +287,13 @@ export const App = () => {
   const snapshot = useAtomValue(snapshotAtom);
   const history = useAtomValue(historyAtom);
   const watching = useAtomValue(watchingAtom);
-  const submitted = useAtomValue(submittedAtom);
   const progress = useAtomValue(progressAtom);
   const [selected, select] = useAtom(selectedAtom);
   const download = useAtomSet(exportAtom);
   const remote = AsyncResult.isSuccess(snapshot) ? snapshot.value : null;
   const selectedSample = history.find(({ report }) => report.input.id === selected);
   const report = selectedSample?.report ?? remote?.report ?? history.at(-1)?.report ?? null;
+  const displayedScenario = report?.input.scenario ?? scenario;
   const busy = watching || remote?.busy === true;
   const connected = remote !== null;
   const publicLab = remote?.public ?? false;
@@ -327,46 +306,27 @@ export const App = () => {
   const isStore = scenario === "coffee" || scenario === "shop";
   const shop = { url: shopUrl.trim(), item: shopItem.trim() };
   const validShop = Schema.is(ShopRequest)(shop);
-  const jev = driver === "jev";
-  const hybrid = driver === "hybrid";
-  const scripted = !jev && !isWiki && !isStore && !publicLab && mode === "scripted";
-  // The real store runs one guarded action per call in Chromium.
-  const effectiveEngine = isStore ? "chromium" : engine;
-
   const effectiveReasoning = reasoning === "none" && requiresReasoning(model) ? "low" : reasoning;
 
-  const effectiveMode: typeof Mode.Type =
-    jev || isWiki || isStore
-      ? "agent"
-      : scripted
-        ? "scripted"
-        : mode === "scripted"
-          ? "batched"
-          : mode;
+  const effectiveServiceTier =
+    model === "all" ? serviceTier : serviceTierForModel(model, serviceTier);
 
   const effectivePrompt = isWiki
-    ? racePrompt({ start: wikiStart, target: wikiTarget })
-    : scenario === "custom"
-      ? prompt
-      : scenario === "shop"
-        ? shopPrompt(shop)
-        : isStore
-          ? storeTask.prompt
-          : (scenarios.find((preset) => preset.id === scenario)?.prompt ?? "");
+    ? racePrompt({ start: wikiStart.trim(), target: wikiTarget.trim() })
+    : scenario === "browse"
+      ? goal
+      : scenario === "custom"
+        ? prompt
+        : scenario === "shop"
+          ? shopPrompt(shop)
+          : isStore
+            ? storeTask.prompt
+            : (scenarios.find((preset) => preset.id === scenario)?.prompt ?? "");
 
   const validChallenge =
     Schema.is(ArticleTitle)(wikiStart.trim()) &&
     Schema.is(ArticleTitle)(wikiTarget.trim()) &&
     wikiStart.trim() !== wikiTarget.trim();
-
-  // A visitor key, a funded account, or a private lab's own key satisfies each requirement.
-  const hasTypesafe = funded || validKey(keys.typesafe) || remote?.jevConfigured === true;
-
-  const hasFieldText =
-    funded ||
-    validKey(keys.openrouter) ||
-    validKey(keys.openai) ||
-    (remote?.jevTextModel ?? null) !== null;
 
   const availableModels = modelChoices.filter(
     (choice) =>
@@ -383,21 +343,16 @@ export const App = () => {
   const needsAccount = isStore && publicLab;
 
   const needs = [
-    ...(needsAccount ? [{ label: "Allowlisted account", ok: funded }] : []),
-    ...(jev || hybrid
-      ? [
-          { label: "TypeSafe", ok: hasTypesafe },
-          ...(isWiki ? [] : [{ label: "OpenRouter or OpenAI", ok: hasFieldText }]),
-        ]
-      : []),
-    ...(jev || scripted
-      ? []
-      : [
-          {
-            label: model.startsWith("@cf/") ? "Workers AI (lab key)" : "OpenAI",
-            ok: modelReady,
-          },
-        ]),
+    ...(needsAccount ? [{ label: "Funded account", ok: funded }] : []),
+    {
+      label:
+        model === "all"
+          ? "Available models"
+          : model.startsWith("@cf/")
+            ? "Workers AI (lab key)"
+            : "OpenAI",
+      ok: modelReady,
+    },
   ];
 
   const canRun =
@@ -407,8 +362,10 @@ export const App = () => {
     !control.waiting &&
     (!isWiki || validChallenge) &&
     (scenario !== "shop" || validShop) &&
-    effectivePrompt.trim() !== "" &&
-    (scripted ? scenario !== "custom" : needs.every((need) => need.ok));
+    (scenario !== "browse" || Schema.is(StartUrl)(url.trim())) &&
+    effectivePrompt.trim().length > 0 &&
+    effectivePrompt.length <= 2000 &&
+    needs.every((need) => need.ok);
 
   const matches = report ? cohort(history, report) : [];
   const comparison = report ? comparisons(history, report) : [];
@@ -420,15 +377,21 @@ export const App = () => {
   });
 
   const started = matches.filter(({ report }) => flowStarted(report)).length;
-  const preparing = busy && (Predicate.isNullish(remote?.report?.readyAt) || !remote?.busy);
+
+  const preparing =
+    !selected && busy && (Predicate.isNullish(remote?.report?.readyAt) || !remote?.busy);
+
+  const showingActive = !selected && busy;
   const live = !selected && remote?.liveViewUrl;
   const captured = !selected && remote?.image;
   const lastHop = report?.race?.path.at(-1);
   const shopAddress = report?.input.shop?.url ?? (scenario === "shop" ? shop.url : "");
 
-  const flow = report
-    ? (verifiedMillis(report) ?? fromReady(report, report.finishedAt ?? report.elapsed))
-    : null;
+  const flow = preparing
+    ? null
+    : report
+      ? (verifiedMillis(report) ?? fromReady(report, report.finishedAt ?? report.elapsed))
+      : null;
 
   const count = (phase: Phase) => report?.spans.filter((span) => span.phase === phase).length ?? 0;
 
@@ -440,28 +403,23 @@ export const App = () => {
   const startRun = () =>
     start({
       scenario,
-      mode: effectiveMode,
-      driver,
       prompt: effectivePrompt,
       ...(isWiki ? { wikipedia: { start: wikiStart.trim(), target: wikiTarget.trim() } } : {}),
       ...(scenario === "shop" ? { shop } : {}),
+      ...(scenario === "browse" ? { url: url.trim() } : {}),
       screenshots,
-      liveView: liveView && effectiveEngine !== "kitesurf",
+      liveView: liveView && engine === "chromium",
       repetitions,
-      ...(effectiveEngine === "all"
-        ? { compareEngines: ["chromium", "kitesurf"] }
-        : { engine: effectiveEngine }),
-      ...(!jev && !scripted && !model.startsWith("@cf/")
-        ? { reasoning: effectiveReasoning, serviceTier }
+      ...(engine === "all" ? { compareEngines: ["chromium", "kitesurf"] } : { engine: engine }),
+      ...(!model.startsWith("@cf/")
+        ? { reasoning: effectiveReasoning, serviceTier: effectiveServiceTier }
         : {}),
-      ...(jev || scripted
-        ? {}
-        : model === "all"
-          ? { compareModels: availableModels.map((choice) => choice.id) }
-          : { model }),
+      ...(model === "all"
+        ? { compareModels: availableModels.map((choice) => choice.id) }
+        : { model }),
     });
 
-  const keyCount = [keys.typesafe, keys.openrouter, keys.openai].filter(validKey).length;
+  const keyCount = validKey(keys.openai) ? 1 : 0;
 
   return (
     <div className="page">
@@ -509,12 +467,11 @@ export const App = () => {
       </header>
 
       <section className="hero">
-        <p className="kicker mono">BrowserUse.runJev · live in a Cloudflare browser</p>
-        <h1>Watch Jev drive a real browser.</h1>
+        <p className="kicker mono">Code Mode · live in a Cloudflare browser</p>
+        <h1>Watch an agent drive a real browser.</h1>
         <p className="lede">
-          Jev picks each action and its target from what’s on screen, in one decision request per
-          step. Race it against a model agent on Wikipedia or a task board, and see where the time
-          goes.
+          Race across Wikipedia, work through a task board, or give the agent a website and a goal.
+          Watch it write browser code and compare models, settings, and every step along the way.
         </p>
       </section>
 
@@ -531,15 +488,7 @@ export const App = () => {
                     value={task.id}
                     checked={scenario === task.id}
                     disabled={busy}
-                    onChange={() => {
-                      setScenario(task.id);
-                      // Store checkouts need payment frames: GPT-6.1 Sol at low effort finds them.
-                      if (task.id === "coffee" || task.id === "shop") {
-                        setDriver("model");
-                        setModel("gpt-6.1-sol");
-                        setReasoning("low");
-                      } else if (driver === "hybrid") setDriver("jev");
-                    }}
+                    onChange={() => setScenario(task.id)}
                   />
                   <span className="task-title">{task.title}</span>
                   <span className="task-detail">{task.detail}</span>
@@ -567,6 +516,29 @@ export const App = () => {
                     disabled={busy}
                     maxLength={180}
                     onChange={(event) => setWikiTarget(event.target.value)}
+                  />
+                </label>
+              </div>
+            ) : scenario === "browse" ? (
+              <div className="browse-inputs">
+                <label>
+                  <span>Starting URL</span>
+                  <input
+                    type="url"
+                    value={url}
+                    disabled={busy}
+                    maxLength={2000}
+                    onChange={(event) => setUrl(event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Your goal</span>
+                  <textarea
+                    className="prompt"
+                    value={goal}
+                    disabled={busy}
+                    maxLength={2000}
+                    onChange={(event) => setGoal(event.target.value)}
                   />
                 </label>
               </div>
@@ -608,31 +580,17 @@ export const App = () => {
             )}
           </fieldset>
 
-          <fieldset className="group">
-            <legend>Driver</legend>
-            <div className="segmented" role="radiogroup" aria-label="Driver">
-              {(
-                [
-                  ["jev", "Jev", "One decision per step"],
-                  ["model", "Model agent", "An LLM calls browser tools"],
-                  ["hybrid", "Jev → model", "Jev first; a model finishes · stores"],
-                ] as const
-              ).map(([value, label, detail]) => (
-                <label key={value} className={driver === value ? "selected" : ""}>
-                  <input
-                    type="radio"
-                    name="driver"
-                    value={value}
-                    checked={driver === value}
-                    disabled={busy || (isStore ? value === "jev" : value === "hybrid")}
-                    onChange={() => setDriver(value)}
-                  />
-                  <strong>{label}</strong>
-                  <small>{detail}</small>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          <p className="fine">
+            {isWiki
+              ? "The host verifies arrival and records page navigations. Link-only racing rules are not enforced."
+              : isStore
+                ? "The agent is instructed to stop before payment. There is no hard payment guard; real purchases are possible."
+                : scenario === "browse"
+                  ? "The agent can take real actions on this website. Results are agent-reported, not independently verified."
+                  : scenario === "custom"
+                    ? "Custom task outcomes are not independently verified."
+                    : "The host compares the saved board with the preset. Page code can modify the fixture; this is not tamper-resistant proof."}
+          </p>
 
           {needs.length > 0 && (
             <div className="needs">
@@ -693,8 +651,8 @@ export const App = () => {
               <label>
                 <span>Browser</span>
                 <select
-                  value={effectiveEngine}
-                  disabled={busy || isStore}
+                  value={engine}
+                  disabled={busy}
                   onChange={(event) =>
                     setEngine(
                       event.target.value === "all"
@@ -708,82 +666,72 @@ export const App = () => {
                   <option value="all">Compare both</option>
                 </select>
               </label>
-              {!jev && (
-                <>
-                  <label>
-                    <span>Model</span>
-                    <select
-                      value={model}
-                      disabled={busy || scripted}
-                      onChange={(event) =>
-                        setModel(
-                          event.target.value === "all"
-                            ? "all"
-                            : Schema.decodeUnknownSync(ModelId)(event.target.value),
-                        )
-                      }
+              <>
+                <label>
+                  <span>Model</span>
+                  <select
+                    value={model}
+                    disabled={busy}
+                    onChange={(event) =>
+                      setModel(
+                        event.target.value === "all"
+                          ? "all"
+                          : Schema.decodeUnknownSync(ModelId)(event.target.value),
+                      )
+                    }
+                  >
+                    {modelChoices.map((choice) => (
+                      <option
+                        key={choice.id}
+                        value={choice.id}
+                        disabled={!availableModels.some((value) => value.id === choice.id)}
+                      >
+                        {choice.label}
+                      </option>
+                    ))}
+                    <option value="all" disabled={availableModels.length < 2}>
+                      Compare available models
+                    </option>
+                  </select>
+                </label>
+                <label>
+                  <span>OpenAI speed</span>
+                  <select
+                    value={effectiveServiceTier}
+                    disabled={busy || model.startsWith("@cf/")}
+                    onChange={(event) =>
+                      setServiceTier(Schema.decodeUnknownSync(ServiceTier)(event.target.value))
+                    }
+                  >
+                    <option
+                      value="ultrafast"
+                      disabled={model !== "all" && !supportsUltrafast(model)}
                     >
-                      {modelChoices.map((choice) => (
-                        <option
-                          key={choice.id}
-                          value={choice.id}
-                          disabled={!availableModels.some((value) => value.id === choice.id)}
-                        >
-                          {choice.label}
+                      Ultrafast
+                    </option>
+                    <option value="fast">Fast</option>
+                    <option value="default">Standard</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Reasoning</span>
+                  <select
+                    value={effectiveReasoning}
+                    disabled={busy || model.startsWith("@cf/")}
+                    onChange={(event) =>
+                      setReasoning(Schema.decodeUnknownSync(Reasoning)(event.target.value))
+                    }
+                  >
+                    {Reasoning.literals
+                      .filter((effort) => effort !== "none" || !requiresReasoning(model))
+                      .map((effort) => (
+                        <option key={effort} value={effort}>
+                          {effort}
                         </option>
                       ))}
-                      <option value="all" disabled={availableModels.length < 2}>
-                        Compare available models
-                      </option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>Execution</span>
-                    <select
-                      value={effectiveMode}
-                      disabled={busy || isWiki || isStore}
-                      onChange={(event) =>
-                        setMode(Schema.decodeUnknownSync(Mode)(event.target.value))
-                      }
-                    >
-                      <option value="agent">One action per call</option>
-                      <option value="batched">Batched actions</option>
-                      {!publicLab && <option value="scripted">Scripted baseline</option>}
-                    </select>
-                  </label>
-                  <label>
-                    <span>OpenAI speed</span>
-                    <select
-                      value={serviceTier}
-                      disabled={busy || scripted || model.startsWith("@cf/")}
-                      onChange={(event) =>
-                        setServiceTier(Schema.decodeUnknownSync(ServiceTier)(event.target.value))
-                      }
-                    >
-                      <option value="fast">Fast</option>
-                      <option value="default">Standard</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>Reasoning</span>
-                    <select
-                      value={effectiveReasoning}
-                      disabled={busy || scripted || model.startsWith("@cf/")}
-                      onChange={(event) =>
-                        setReasoning(Schema.decodeUnknownSync(Reasoning)(event.target.value))
-                      }
-                    >
-                      {Reasoning.literals
-                        .filter((effort) => effort !== "none" || !requiresReasoning(model))
-                        .map((effort) => (
-                          <option key={effort} value={effort}>
-                            {effort}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                </>
-              )}
+                  </select>
+                </label>
+              </>
               <label>
                 <span>Repetitions</span>
                 <select
@@ -797,12 +745,18 @@ export const App = () => {
                 </select>
               </label>
             </div>
+            {model === "all" && serviceTier === "ultrafast" && (
+              <p className="fine">
+                Astra and Sol use Ultrafast; Luna uses Fast. Each run records its requested and
+                served tier.
+              </p>
+            )}
             <div className="toggles">
               <label>
                 <input
                   type="checkbox"
-                  checked={liveView && effectiveEngine !== "kitesurf"}
-                  disabled={busy || effectiveEngine === "kitesurf"}
+                  checked={liveView && engine === "chromium"}
+                  disabled={busy || engine !== "chromium"}
                   onChange={(event) => setLiveView(event.target.checked)}
                 />
                 Live view <small>Chromium only</small>
@@ -814,14 +768,14 @@ export const App = () => {
                   disabled={busy}
                   onChange={(event) => setScreenshots(event.target.checked)}
                 />
-                Screenshot after each action
+                Screenshot after each code call
               </label>
             </div>
-            {effectiveEngine !== "chromium" && (
+            {engine !== "chromium" && (
               <p className="fine">
                 Kitesurf is Cloudflare’s experimental lightweight engine. It has no live view, no
                 native dialogs (the task board needs them), and large pages such as Wikipedia can
-                exhaust its memory.
+                exhaust its memory. Comparing browsers disables live view for both.
               </p>
             )}
           </details>
@@ -831,13 +785,13 @@ export const App = () => {
           <div className="hud">
             <div className="clock">
               <span
-                className={`clock-value mono ${busy && !preparing ? "ticking" : flow === null ? "idle" : ""}`}
+                className={`clock-value mono ${showingActive && !preparing ? "ticking" : flow === null ? "idle" : ""}`}
               >
                 {flow === null ? "0.00" : seconds(flow)}
                 <small>s</small>
               </span>
               <span className="clock-label">
-                {busy
+                {showingActive
                   ? preparing
                     ? "Preparing the browser · clock starts when the page is ready"
                     : "Page ready → now"
@@ -850,26 +804,25 @@ export const App = () => {
             </div>
             <div className="hud-stats">
               <span>
-                <b className="mono">{count("decision")}</b> Jev decisions
-              </span>
-              <span>
                 <b className="mono">{count("model")}</b> model calls
               </span>
               <span>
                 <b className="mono">{count("action")}</b> actions
               </span>
-              <span className={`status ${busy ? "running" : (report?.status ?? "idle")}`}>
-                {report?.status === "passed" && !busy ? (
+              <span className={`status ${showingActive ? "running" : (report?.status ?? "idle")}`}>
+                {report?.status === "passed" && !showingActive ? (
                   <Check size={13} />
                 ) : (
                   <Circle size={9} fill="currentColor" />
                 )}
-                {busy
+                {showingActive
                   ? preparing
                     ? "preparing"
                     : "running"
                   : report
-                    ? runOutcome(report)
+                    ? report.race && report.status === "passed"
+                      ? "arrival verified"
+                      : runOutcome(report)
                     : "ready"}
               </span>
             </div>
@@ -883,16 +836,26 @@ export const App = () => {
                 <i />
               </span>
               <span className="address mono">
-                {isWiki || report?.race
+                {displayedScenario === "wikipedia" || report?.race
                   ? (lastHop?.url.replace("https://", "") ?? "en.wikipedia.org")
-                  : shopAddress
-                    ? hostOf(shopAddress)
-                    : isStore || report?.input.scenario === "coffee"
-                      ? "www.hedge.coffee"
-                      : "task-board · synthetic data"}
+                  : displayedScenario === "browse"
+                    ? hostOf(report?.finalUrl ?? report?.input.url ?? url)
+                    : shopAddress
+                      ? hostOf(shopAddress)
+                      : displayedScenario === "coffee"
+                        ? "www.hedge.coffee"
+                        : "task-board · synthetic data"}
               </span>
               <span className={`view-label mono ${live ? "live" : ""}`}>
-                {live ? "LIVE" : captured ? "SCREENSHOT" : busy ? "CONNECTING" : "IDLE"}
+                {live
+                  ? "LIVE"
+                  : captured
+                    ? "SCREENSHOT"
+                    : showingActive
+                      ? "CONNECTING"
+                      : selected
+                        ? "SAVED"
+                        : "IDLE"}
               </span>
             </div>
             <div className="screen">
@@ -902,22 +865,23 @@ export const App = () => {
                   title="Read-only view of the agent’s browser"
                   src={live}
                   referrerPolicy="no-referrer"
-                  allow="clipboard-read; clipboard-write"
                 />
               ) : captured ? (
                 <img src={captured} alt="Latest screenshot of the agent’s browser" />
               ) : (
                 <div className="screen-empty">
                   <p>
-                    {busy
+                    {showingActive
                       ? "Connecting to the Cloudflare browser…"
-                      : isWiki
-                        ? `A Cloudflare browser opens ${wikiStart || "the start article"} on Wikipedia and follows article links to ${wikiTarget || "the destination"}. No search, no typed URLs.`
-                        : scenario === "shop"
-                          ? "A Cloudflare browser opens your store link, adds the item to the cart and fills checkout with a test buyer and the 4242 test card. The host refuses order and payment buttons, so nothing is bought. Each store differs, so the run is not verified."
+                      : selected
+                        ? "Saved run selected. Inspect its route, report and timeline below. Screenshots and live view are transient."
+                        : isWiki
+                          ? `A Cloudflare browser opens ${wikiStart || "the start article"} on Wikipedia and tries to reach ${wikiTarget || "the destination"}. Arrival is verified; link-only racing rules are not enforced.`
                           : isStore
-                            ? "A Cloudflare browser opens the Hedge Coffee store, adds one bag to the cart and fills checkout with a test buyer and the 4242 test card. The host refuses order and payment buttons, so nothing is bought, and then checks the checkout page itself."
-                            : "A Cloudflare browser opens a small task board. The run passes only if the saved board exactly matches the request."}
+                            ? "The agent opens the store, finds the item and prepares checkout. It is instructed to stop before payment, but there is no hard payment guard. Results are agent-reported."
+                            : scenario === "browse"
+                              ? "A Cloudflare browser opens your URL and works toward your goal using Code Mode."
+                              : "A Cloudflare browser opens a small task board. Preset runs compare the saved board with the requested result."}
                   </p>
                 </div>
               )}
@@ -930,27 +894,39 @@ export const App = () => {
           )}
 
           {report?.race && (
-            <ol className="route" aria-label="Route">
-              {report.race.path.map((hop, index) => (
-                <li key={`${index}-${hop.url}`}>
-                  <a href={hop.url} target="_blank" rel="noreferrer">
-                    {hop.title}
-                  </a>
-                  <small className="mono">
-                    {index === 0 ? "start" : `${seconds(fromReady(report, hop.at))} s`}
-                  </small>
-                </li>
-              ))}
-            </ol>
+            <div className="route-summary">
+              <p className="fine">
+                {report.race.start} → {report.race.target} ·{" "}
+                {Math.max(0, report.race.path.length - 1)} navigations
+                {report.status === "passed" ? " · arrival verified" : " · arrival not verified"}.
+                Link-only rules are not enforced.
+              </p>
+              {report.race.ruleViolation && <p className="bad">{report.race.ruleViolation}</p>}
+              <ol className="route" aria-label="Route">
+                {report.race.path.map((hop, index) => (
+                  <li
+                    key={`${index}-${hop.url}`}
+                    title={hop.via ? `Via ${hop.via.label}` : undefined}
+                  >
+                    <a href={hop.url} target="_blank" rel="noreferrer">
+                      {hop.title}
+                    </a>
+                    <small className="mono">
+                      {index === 0 ? "start" : `${seconds(fromReady(report, hop.at))} s`}
+                    </small>
+                  </li>
+                ))}
+              </ol>
+            </div>
           )}
 
-          {(failure || remote?.notice || submitted) && (
+          {(failure || remote?.notice || busy || report) && (
             <div
               className={`message ${failure || report?.status === "failed" ? "bad" : ""}`}
               role="status"
             >
               {failure ??
-                remote?.notice ??
+                (selected ? report?.message : remote?.notice) ??
                 (busy
                   ? preparing
                     ? "Preparing the starting page."
@@ -966,14 +942,69 @@ export const App = () => {
         </section>
       </main>
 
-      <Steps report={report} />
+      {report && (
+        <section className="section" aria-label="Run details">
+          <div className="stats">
+            <div>
+              <span>Total elapsed</span>
+              <b className="mono">{seconds(report.elapsed)} s</b>
+            </div>
+            <div>
+              <span>Page preparation</span>
+              <b className="mono">{seconds(report.readyAt)} s</b>
+            </div>
+            <div>
+              <span>First action after ready</span>
+              <b className="mono">{seconds(fromReady(report, report.firstActionAt))} s</b>
+            </div>
+            <div>
+              <span>Cleanup</span>
+              <b className="mono">{report.cleanup}</b>
+            </div>
+          </div>
+          {selectedSample && (
+            <p className="fine">
+              Client round trip: {seconds(selectedSample.clientElapsedMillis)} s
+            </p>
+          )}
+          {report.board.length > 0 && (
+            <details className="card board-result">
+              <summary>Saved task board · {report.board.length} tasks</summary>
+              <div className="table-wrap">
+                <table aria-label="Saved task board">
+                  <thead>
+                    <tr>
+                      <th>Task</th>
+                      <th>Assignee</th>
+                      <th>Priority</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.board.map((task) => (
+                      <tr key={task.id}>
+                        <td>{task.title}</td>
+                        <td>{task.assignee}</td>
+                        <td>{task.priority}</td>
+                        <td>{task.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )}
+        </section>
+      )}
+      <Steps key={report?.input.id ?? "empty"} report={report} />
 
       <section className="section" aria-labelledby="compare-title">
         <div className="section-head">
           <h2 id="compare-title">Compare runs</h2>
           <p>
             Runs in this tab, grouped by task and settings. Medians use verified runs only; failures
-            count toward the started total.
+            count toward the started total. Wikipedia verification confirms arrival only. Website
+            outcomes are agent-reported; their history is retained without verified-time rankings.
             {typeof benchmarkReportUrl === "string" && benchmarkReportUrl.length > 0 && (
               <>
                 {" "}
@@ -1021,7 +1052,6 @@ export const App = () => {
                 <table aria-label="Comparison">
                   <thead>
                     <tr>
-                      <th>Driver</th>
                       <th>Model</th>
                       <th>Browser</th>
                       <th>Reasoning</th>
@@ -1034,13 +1064,6 @@ export const App = () => {
                   <tbody>
                     {comparison.map((group) => (
                       <tr key={group.key}>
-                        <td>
-                          {group.driver === "jev"
-                            ? "Jev"
-                            : group.driver === "hybrid"
-                              ? "Jev → model"
-                              : "Model agent"}
-                        </td>
                         <td>
                           {modelChoices.find((value) => value.id === group.model)?.label ??
                             group.model}
@@ -1066,10 +1089,9 @@ export const App = () => {
                 <thead>
                   <tr>
                     <th>Task</th>
-                    <th>Driver</th>
                     <th>Model</th>
                     <th>Browser</th>
-                    <th className="num">Flow</th>
+                    <th className="num">Work time</th>
                     <th>Outcome</th>
                     <th>
                       <span className="sr-only">Inspect</span>
@@ -1081,26 +1103,28 @@ export const App = () => {
                     <tr key={row.input.id} className={selected === row.input.id ? "selected" : ""}>
                       <td>
                         {row.input.scenario === "wikipedia"
-                          ? `${row.race?.start ?? row.input.wikipedia?.start ?? defaultChallenge.start} → ${row.race?.target ?? row.input.wikipedia?.target ?? defaultChallenge.target}${row.race ? ` · ${row.race.path.length - 1} hops` : ""}`
-                          : (tasks.find((value) => value.id === row.input.scenario)?.title ??
-                            "Your own task")}
-                      </td>
-                      <td>
-                        {row.input.driver === "jev"
-                          ? "Jev"
-                          : row.input.driver === "hybrid"
-                            ? "Jev → model"
-                            : row.input.mode === "scripted"
-                              ? "Scripted"
-                              : `Model · ${row.input.mode === "batched" ? "batched" : "single"}`}
+                          ? `${row.race?.start ?? row.input.wikipedia?.start ?? defaultChallenge.start} → ${row.race?.target ?? row.input.wikipedia?.target ?? defaultChallenge.target}${row.race ? ` · ${Math.max(0, row.race.path.length - 1)} hops` : ""}`
+                          : row.input.scenario === "browse"
+                            ? hostOf(row.input.url ?? "Website")
+                            : (tasks.find((value) => value.id === row.input.scenario)?.title ??
+                              "Your own task")}
                       </td>
                       <td>
                         {modelChoices.find((value) => value.id === row.model)?.label ?? row.model}
                       </td>
                       <td>{row.input.engine === "kitesurf" ? "Kitesurf" : "Chromium"}</td>
-                      <td className="num mono">{seconds(verifiedMillis(row))} s</td>
+                      <td className="num mono">
+                        {seconds(
+                          verifiedMillis(row) ?? fromReady(row, row.finishedAt ?? row.elapsed),
+                        )}{" "}
+                        s
+                      </td>
                       <td>
-                        <span className={`outcome ${row.status}`}>{runOutcome(row)}</span>
+                        <span className={`outcome ${row.status}`}>
+                          {row.race && row.status === "passed"
+                            ? "arrival verified"
+                            : runOutcome(row)}
+                        </span>
                       </td>
                       <td>
                         <button
@@ -1120,30 +1144,6 @@ export const App = () => {
         ) : (
           <div className="empty">No runs yet. Your results appear here, side by side.</div>
         )}
-      </section>
-
-      <section className="section use" aria-labelledby="use-title">
-        <div className="section-head">
-          <h2 id="use-title">Use it in your agent</h2>
-          <p>
-            The Jev loop on this page is <code>BrowserUse.runJev</code> from{" "}
-            <code>@yielded/agent</code>. Provide a page adapter, a Jev decision model and a small
-            model for field text.
-          </p>
-        </div>
-        <pre className="code card">
-          <code>
-            <span className="tok-k">const</span> result = <span className="tok-k">yield</span>*{" "}
-            BrowserUse.<span className="tok-f">runJev</span>({"{"} goal:{" "}
-            <span className="tok-s">"Create a task called Ship demo."</span> {"}"});{"\n"}
-            <span className="tok-c">
-              {'// result.stop is why it ended; "done" is Jev\'s claim, so verify the outcome.'}
-            </span>
-          </code>
-        </pre>
-        <a className="fine-link" href={docsUrl}>
-          Read the guide <ArrowUpRight size={13} />
-        </a>
       </section>
 
       <footer className="foot">
@@ -1180,25 +1180,9 @@ export const App = () => {
               </p>
             )}
             <KeyField
-              id="typesafe"
-              label="TypeSafe"
-              hint="Runs Jev’s decisions."
-              href={keyLinks.typesafe}
-              value={draft.typesafe}
-              onChange={(typesafe) => setDraft({ ...draft, typesafe })}
-            />
-            <KeyField
-              id="openrouter"
-              label="OpenRouter"
-              hint="Mercury 2.5 writes Jev’s field text. Fastest option."
-              href={keyLinks.openrouter}
-              value={draft.openrouter}
-              onChange={(openrouter) => setDraft({ ...draft, openrouter })}
-            />
-            <KeyField
               id="openai"
               label="OpenAI"
-              hint="Runs the model agent; also writes Jev’s field text if OpenRouter isn’t set."
+              hint="Runs the selected OpenAI model using Code Mode."
               href={keyLinks.openai}
               value={draft.openai}
               onChange={(openai) => setDraft({ ...draft, openai })}
@@ -1216,9 +1200,7 @@ export const App = () => {
               <button
                 type="button"
                 className="ghost"
-                onClick={() =>
-                  setDraft({ typesafe: "", openrouter: "", openai: "", remember: false })
-                }
+                onClick={() => setDraft({ openai: "", remember: false })}
               >
                 Clear all
               </button>
@@ -1229,9 +1211,7 @@ export const App = () => {
               <button
                 type="submit"
                 className="primary"
-                disabled={[draft.typesafe, draft.openrouter, draft.openai].some(
-                  (value) => value.trim() !== "" && !validKey(value),
-                )}
+                disabled={[draft.openai].some((value) => value.trim() !== "" && !validKey(value))}
               >
                 Save keys
               </button>

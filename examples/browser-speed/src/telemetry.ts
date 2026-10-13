@@ -15,6 +15,7 @@ import { Telemetry } from "effect/ai";
 
 import {
   browserCommandTimeoutMillis,
+  isBoardScenario,
   LabError,
   type Phase,
   type Report,
@@ -32,11 +33,7 @@ type Details = Partial<
     | "reasoningSummary"
     | "serviceTier"
     | "bytes"
-    | "candidateCount"
-    | "questionCount"
     | "model"
-    | "choices"
-    | "decisionDistributions"
   >
 >;
 
@@ -49,8 +46,13 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
   const now = () => Number(clock.monotonicTimeNanosUnsafe() - origin) / 1_000_000;
 
   let report: Report = {
-    version: 1,
-    fixture: input.scenario === "wikipedia" ? "wikipedia-race-v1" : "task-board-v1",
+    version: 2,
+    fixture:
+      input.scenario === "wikipedia"
+        ? "wikipedia-race-v1"
+        : isBoardScenario(input.scenario)
+          ? "task-board-v1"
+          : "website",
     input,
     model,
     commandTimeoutMillis: browserCommandTimeoutMillis,
@@ -59,7 +61,6 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
     message: "Opening browser…",
     spans,
     elapsed: 0,
-    timing: "page-ready-v1",
     readyAt: null,
     finishedAt: null,
     verifiedAt: null,
@@ -124,13 +125,6 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
 
       if (index >= 0) spans[index] = { ...spans[index], ...details };
     },
-    annotateDecision: (details: Details) => {
-      const index = spans.findLastIndex(
-        (span) => span.phase === "decision" && span.outcome === "running",
-      );
-
-      if (index >= 0) spans[index] = { ...spans[index], ...details };
-    },
     snapshot: (): Report => ({
       ...report,
       spans: [...spans],
@@ -167,7 +161,7 @@ const decodeServedTier = Schema.decodeUnknownOption(
   }),
 );
 
-/** Preserve the raw served tier: the pinned provider omits the new "fast" alias from finish metadata. */
+/** Preserve raw served tiers, including aliases missing from the provider's finish metadata. */
 export const traceOpenAiClient = Effect.gen(function* () {
   const client = yield* OpenAiClient.OpenAiClient;
   const trace = yield* Trace;
@@ -205,12 +199,7 @@ export const traceOpenAiClient = Effect.gen(function* () {
   });
 });
 
-const jevSpans: Record<string, readonly [Phase, string]> = {
-  "BrowserUse.jevDecision": ["decision", "Jev · choose next action"],
-  "BrowserUse.jevWait": ["wait", "Jev · wait"],
-};
-
-/** Tap native model and Jev spans without replacing either model service. */
+/** Tap native model spans without replacing the model service. */
 export const traceModels = Effect.fnUntraced(function* <A, E, R>(effect: Effect.Effect<A, E, R>) {
   const trace = yield* Trace;
   const delegate = yield* Tracer.Tracer;
@@ -220,18 +209,12 @@ export const traceModels = Effect.fnUntraced(function* <A, E, R>(effect: Effect.
   const tracer = Tracer.make({
     span(options) {
       const span = delegate.span(options);
-      const jev = jevSpans[options.name];
 
-      if (
-        jev === undefined &&
-        !options.name.startsWith("chat ") &&
-        !options.name.startsWith("LanguageModel.")
-      )
+      if (!options.name.startsWith("chat ") && !options.name.startsWith("LanguageModel."))
         return span;
+      const finish = trace.begin("model", options.name);
 
-      const finish = jev === undefined ? trace.begin("model", options.name) : trace.begin(...jev);
-
-      if (jev === undefined) handles.set(span.spanId, finish);
+      handles.set(span.spanId, finish);
 
       return {
         _tag: span._tag,
@@ -251,23 +234,7 @@ export const traceModels = Effect.fnUntraced(function* <A, E, R>(effect: Effect.
           return span.status;
         },
         end(time, exit) {
-          const operation = span.attributes.get("browser.jev.operation");
-          const target = span.attributes.get("browser.jev.target");
-
-          finish.end(
-            exit,
-            jev?.[0] === "decision"
-              ? {
-                  model: "jev-latest",
-                  // Name the decision by the action Jev chose, such as "Jev · CLICK · Save task".
-                  ...(typeof operation === "string"
-                    ? {
-                        name: `Jev · ${operation}${typeof target === "string" && target ? ` · ${target}` : ""}`,
-                      }
-                    : {}),
-                }
-              : {},
-          );
+          finish.end(exit);
           span.end(time, exit);
         },
       };

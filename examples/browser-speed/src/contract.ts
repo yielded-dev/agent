@@ -17,36 +17,18 @@ export type Task = typeof Task.Type;
 export const Board = Schema.Array(Task).check(Schema.isMaxLength(50));
 
 export const Scenario = Schema.Literals([
+  "wikipedia",
+  "coffee",
+  "shop",
   "create",
   "triage",
   "batch",
   "custom",
-  "wikipedia",
-  "coffee",
-  "shop",
+  "browse",
 ]);
 
 export type Scenario = typeof Scenario.Type;
-export const Mode = Schema.Literals(["scripted", "agent", "batched"]);
-export type Mode = typeof Mode.Type;
 
-export const ModelId = Schema.Literals([
-  "gpt-6-luna",
-  "gpt-6-sol",
-  "gpt-6.1-sol",
-  "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-]);
-
-export type ModelId = typeof ModelId.Type;
-/**
- * `model`: an agent picks observed refs. `jev`: Jev decides every step, without an agent.
- * `hybrid`: Jev drives a store task first; when it stops short, a model agent continues.
- */
-export const Driver = Schema.Literals(["model", "jev", "hybrid"]);
-export const Reasoning = Schema.Literals(["none", "low", "medium", "high", "xhigh", "max"]);
-export const ServiceTier = Schema.Literals(["fast", "default"]);
-
-// Titles, not URLs or namespaces. Keeping this boundary narrow makes the race link-only.
 export const ArticleTitle = Schema.NonEmptyString.check(
   Schema.isMaxLength(180),
   Schema.isPattern(/^[^:#?[\]{}|<>\\\p{Cc}]+$/u),
@@ -62,7 +44,7 @@ export const racePrompt = (challenge: WikipediaChallenge) =>
 export const WikiHop = Schema.Struct({
   title: Schema.String,
   url: Schema.String,
-  at: Schema.Number,
+  at: Schema.Finite,
   via: Schema.optionalKey(Schema.Struct({ label: Schema.String, url: Schema.String })),
 });
 
@@ -72,9 +54,9 @@ export const WikiRace = Schema.Struct({
   targetUrl: Schema.String,
   maxHops: Schema.Natural,
   path: Schema.Array(WikiHop),
+  ruleViolation: Schema.optionalKey(Schema.String),
 });
 
-// Public https store pages only: no IP literals, ports or credentials in the address.
 export const ShopRequest = Schema.Struct({
   url: Schema.String.check(
     Schema.isMaxLength(500),
@@ -87,55 +69,81 @@ export type ShopRequest = typeof ShopRequest.Type;
 export const defaultShopItem = "a bag of natural process coffee";
 
 export const shopPrompt = (shop: ShopRequest) =>
-  `On the store at ${shop.url}, find ${shop.item}, add one to the cart and open checkout as a guest. Fill each checkout step with the test buyer and click Continue after each step. Leave marketing boxes unchecked. Fill the test card on the payment step, then stop: never place the order.`;
+  `On the store at ${shop.url}, find ${shop.item}, add one to the cart and open checkout as a guest. Fill the checkout with the test buyer. Leave marketing boxes unchecked. Stop before submitting an order or payment.`;
+
+export const storeTask = {
+  id: "coffee",
+  title: "Check out a bag of coffee",
+  detail: "Hedge Coffee · prepare checkout, stop before payment",
+  prompt: shopPrompt({ url: "https://www.hedge.coffee/store", item: "one bag of coffee" }),
+} as const;
+
+export const shopTask = {
+  id: "shop",
+  title: "Check out on any store",
+  detail: "Your store link · prepare checkout, stop before payment",
+} as const;
+
+export const isBoardScenario = (scenario: Scenario) =>
+  scenario === "create" || scenario === "triage" || scenario === "batch" || scenario === "custom";
+
+export const StartUrl = Schema.String.check(
+  Schema.makeFilter((value) => URL.canParse(value), { expected: "a valid URL" }),
+  Schema.isMaxLength(2_000),
+  Schema.isPattern(/^https?:\/\//),
+);
+
+export const ModelId = Schema.Literals([
+  "gpt-6-astra",
+  "gpt-6.1-sol",
+  "gpt-6-luna",
+  "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+]);
+
+export type ModelId = typeof ModelId.Type;
+export const Reasoning = Schema.Literals(["none", "low", "medium", "high", "xhigh", "max"]);
+export const ServiceTier = Schema.Literals(["ultrafast", "fast", "default"]);
 
 export const modelChoices: ReadonlyArray<{
   id: ModelId;
   label: string;
   /** The model rejects reasoning effort "none"; runs use "low" instead. */
   requiresReasoning?: true;
+  supportsUltrafast?: true;
 }> = [
+  { id: "gpt-6-astra", label: "GPT-6 Astra", requiresReasoning: true, supportsUltrafast: true },
+  { id: "gpt-6.1-sol", label: "GPT-6.1 Sol", requiresReasoning: true, supportsUltrafast: true },
   { id: "gpt-6-luna", label: "GPT-6 Luna" },
-  { id: "gpt-6-sol", label: "GPT-6 Sol" },
-  { id: "gpt-6.1-sol", label: "GPT-6.1 Sol", requiresReasoning: true },
   { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", label: "Llama 3.3 · Workers AI" },
 ];
 
 export const requiresReasoning = (model: string) =>
   modelChoices.some((choice) => choice.id === model && choice.requiresReasoning === true);
 
+export const supportsUltrafast = (model: string) =>
+  modelChoices.some((choice) => choice.id === model && choice.supportsUltrafast === true);
+
+export const serviceTierForModel = (model: string, tier: typeof ServiceTier.Type) =>
+  tier === "ultrafast" && !supportsUltrafast(model) ? "fast" : tier;
+
 export const RunInput = Schema.Struct({
   id: Schema.String.check(Schema.isUUID()),
   scenario: Scenario,
-  mode: Mode,
-  // Reports before engine selection used Chromium. New runs record the choice explicitly.
+  url: Schema.optionalKey(StartUrl),
+  wikipedia: Schema.optionalKey(WikipediaChallenge),
+  shop: Schema.optionalKey(ShopRequest),
   engine: Schema.optionalKey(BrowserEngine),
-  // Read legacy reports; new runs always prepare a fresh browser outside flow timing.
-  temperature: Schema.optionalKey(Schema.Literals(["cold", "warm"])),
   prompt: Schema.String.check(Schema.isMaxLength(2_000)),
   screenshots: Schema.Boolean,
   liveView: Schema.Boolean,
-  driver: Schema.optionalKey(Driver),
   model: Schema.optionalKey(ModelId),
   reasoning: Schema.optionalKey(Reasoning),
   serviceTier: Schema.optionalKey(ServiceTier),
-  wikipedia: Schema.optionalKey(WikipediaChallenge),
-  shop: Schema.optionalKey(ShopRequest),
 });
 
 export type RunInput = typeof RunInput.Type;
 
-export const Phase = Schema.Literals([
-  "setup",
-  "model",
-  "decision",
-  "action",
-  "observation",
-  "wait",
-  "capture",
-  "verify",
-  "cleanup",
-]);
+export const Phase = Schema.Literals(["setup", "model", "action", "capture", "verify", "cleanup"]);
 
 export type Phase = typeof Phase.Type;
 
@@ -143,8 +151,8 @@ export const Span = Schema.Struct({
   id: Schema.Natural,
   phase: Phase,
   name: Schema.String,
-  start: Schema.Number,
-  duration: Schema.NullOr(Schema.Number),
+  start: Schema.Finite,
+  duration: Schema.NullOr(Schema.Finite),
   outcome: Schema.Literals(["running", "success", "failure", "interrupted", "defect"]),
   turn: Schema.Natural,
   inputTokens: Schema.optionalKey(Schema.Natural),
@@ -153,36 +161,15 @@ export const Span = Schema.Struct({
   reasoningSummary: Schema.optionalKey(Schema.String),
   serviceTier: Schema.optionalKey(Schema.String),
   bytes: Schema.optionalKey(Schema.Natural),
-  candidateCount: Schema.optionalKey(Schema.Natural),
-  questionCount: Schema.optionalKey(Schema.Natural),
   model: Schema.optionalKey(Schema.String),
   error: Schema.optionalKey(Schema.String),
-  choices: Schema.optionalKey(
-    Schema.Array(
-      Schema.Struct({
-        target: Schema.String,
-        ref: Schema.String,
-        probability: Schema.Number,
-      }),
-    ),
-  ),
-  decisionDistributions: Schema.optionalKey(
-    Schema.Array(
-      Schema.Struct({
-        question: Schema.String,
-        ref: Schema.String,
-        reportedProbability: Schema.Number,
-        reportedMass: Schema.Number,
-      }),
-    ),
-  ),
 });
 
 export type Span = typeof Span.Type;
 
 export const Report = Schema.Struct({
-  version: Schema.Literal(1),
-  fixture: Schema.Literals(["task-board-v1", "wikipedia-race-v1"]),
+  version: Schema.Literal(2),
+  fixture: Schema.Literals(["task-board-v1", "wikipedia-race-v1", "website"]),
   input: RunInput,
   model: Schema.String,
   browserVersion: Schema.optionalKey(Schema.NonEmptyString.check(Schema.isMaxLength(256))),
@@ -193,16 +180,16 @@ export const Report = Schema.Struct({
   status: Schema.Literals(["running", "passed", "failed", "unverified", "cancelled"]),
   message: Schema.String,
   spans: Schema.Array(Span),
-  elapsed: Schema.Number,
-  // All timestamps share the admission-relative Worker clock. Missing timing means legacy admission timing.
-  timing: Schema.optionalKey(Schema.Literal("page-ready-v1")),
-  readyAt: Schema.optionalKey(Schema.NullOr(Schema.Number)),
-  finishedAt: Schema.optionalKey(Schema.NullOr(Schema.Number)),
-  verifiedAt: Schema.NullOr(Schema.Number),
-  firstActionAt: Schema.NullOr(Schema.Number),
+  elapsed: Schema.Finite,
+  // All timestamps share the admission-relative Worker clock.
+  readyAt: Schema.NullOr(Schema.Finite),
+  finishedAt: Schema.NullOr(Schema.Finite),
+  verifiedAt: Schema.NullOr(Schema.Finite),
+  firstActionAt: Schema.NullOr(Schema.Finite),
   cleanup: Schema.Literals(["pending", "closed", "retained", "failed"]),
   board: Board,
   race: Schema.optionalKey(WikiRace),
+  finalUrl: Schema.optionalKey(Schema.String),
 });
 
 export type Report = typeof Report.Type;
@@ -220,10 +207,6 @@ export const Snapshot = Schema.Struct({
   models: Schema.Array(
     Schema.Struct({ id: ModelId, label: Schema.String, configured: Schema.Boolean }),
   ),
-  jevConfigured: Schema.Boolean,
-  /** The field-text model a Jev task-board run would use; null when none is configured. */
-  jevTextModel: Schema.NullOr(Schema.String),
-  /** Public labs run only with visitor keys and have no scripted baseline. */
   public: Schema.Boolean,
   report: Schema.NullOr(Report),
   liveViewUrl: Schema.NullOr(Schema.String),
@@ -257,8 +240,6 @@ export const VisitorKey = Schema.String.check(Schema.isPattern(/^[\x21-\x7e]{16,
 
 const visitorKeyHeaders = {
   "x-lab-openai-key": Schema.optionalKey(VisitorKey),
-  "x-lab-typesafe-key": Schema.optionalKey(VisitorKey),
-  "x-lab-openrouter-key": Schema.optionalKey(VisitorKey),
 };
 
 /** A travel planner account signed in on this origin. Funded accounts run on the lab's keys. */
@@ -308,21 +289,6 @@ export const scenarios = [
   },
 ] as const;
 
-/** A real store, outside the task-board presets: there is no scripted baseline or board verifier. */
-export const storeTask = {
-  id: "coffee",
-  title: "Check out a bag of coffee",
-  detail: "A real store, hedge.coffee · test details, never pays",
-  prompt:
-    "On the Hedge Coffee store, open one coffee and click Add To Cart once. Then open the cart and click Checkout. Fill each checkout step with the test buyer and click Continue after the email and delivery steps; choose shipping. Leave the mailing-list box unchecked. On the payment step, fill the test card, then stop: never click Continue, Purchase or Place order there.",
-} as const;
-
-export const shopTask = {
-  id: "shop",
-  title: "Check out on any store",
-  detail: "Your store link · test details, never pays · not verified",
-} as const;
-
 export const seed: ReadonlyArray<Task> = [
   { id: 1, title: "Review onboarding", assignee: "Sam", priority: "Medium", status: "Todo" },
   { id: 2, title: "Fix keyboard navigation", assignee: "Alex", priority: "High", status: "Doing" },
@@ -355,10 +321,7 @@ export const verify = (scenario: Scenario, board: ReadonlyArray<Task>): boolean 
           : [];
 
   return (
-    scenario !== "custom" &&
-    scenario !== "wikipedia" &&
-    scenario !== "coffee" &&
-    scenario !== "shop" &&
+    scenario !== "browse" &&
     expected.length === board.length &&
     expected.every((task) => {
       const actual = board.find((value) => value.id === task.id);

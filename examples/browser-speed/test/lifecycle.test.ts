@@ -4,6 +4,7 @@ import {
   BrowserSessionReference,
   BrowserSessions,
 } from "@yielded/agent-platform-cloudflare/browser-session";
+import { CodeExecutor } from "@yielded/agent/code-executor";
 import type { Scope } from "effect";
 import { Deferred, Effect, Exit, Fiber, Redacted, Schema } from "effect";
 import { TestClock } from "effect/testing";
@@ -19,7 +20,7 @@ import { makeTrace } from "../src/telemetry.ts";
 
 expectTypeOf<Effect.Error<ReturnType<typeof executeTask>>>().toEqualTypeOf<LabError>();
 expectTypeOf<Effect.Services<ReturnType<typeof executeTask>>>().toEqualTypeOf<
-  Scope.Scope | Browser | Trace
+  Browser | Trace | CodeExecutor
 >();
 expectTypeOf<Effect.Error<ReturnType<typeof connectKitesurf>>>().toEqualTypeOf<LabError>();
 expectTypeOf<Effect.Services<ReturnType<typeof connectKitesurf>>>().toEqualTypeOf<Scope.Scope>();
@@ -33,7 +34,6 @@ expectTypeOf<
 const request = (): RunInput => ({
   id: crypto.randomUUID(),
   scenario: "create",
-  mode: "scripted",
   prompt: "",
   screenshots: false,
   liveView: false,
@@ -68,7 +68,7 @@ it.effect(
           },
           {
             model: "unused",
-            apiKey: "",
+            apiKey: "fixture-key",
             kitesurf: Effect.fnUntraced(function* (retainClose) {
               opened++;
               retainClose(
@@ -119,75 +119,11 @@ it.effect(
         assert.isNull(state.active);
         assert.isFalse((yield* owner.snapshot()).ready);
       }
-    }),
-);
-
-it.effect(
-  "admits Jev-only without a planner key and rejects conflicting settings before browser allocation",
-  () =>
-    Effect.gen(function* () {
-      let state: Control = emptyControl;
-      let allocations = 0;
-
-      const owner = makeOwner(
-        {
-          read: () => state,
-          write: (value) => {
-            state = value;
-          },
-          alarm: () => Effect.void,
-        },
-        { model: "gpt-6-luna", apiKey: "", jevApiKey: "test-key" },
-      );
-
-      const input: RunInput = {
-        ...request(),
-        scenario: "wikipedia",
-        mode: "agent",
-        driver: "jev",
-      };
-
-      const services = BrowserSessions.of({
-        createAttached: () => Effect.die("The lab creates and attaches separately"),
-        create: () => {
-          allocations++;
-
-          return Effect.fail(
-            BrowserSessionError.make({
-              reason: "provider",
-              dispatch: "not-dispatched",
-              cleanup: "not-requested",
-            }),
-          );
-        },
-        attach: () => Effect.die("Must not attach"),
-        close: () => Effect.void,
-        keepAlive: () => Effect.void,
-      });
-
-      yield* Effect.gen(function* () {
-        for (const invalid of [
-          { ...input, scenario: "create" as const },
-          { ...input, model: "gpt-6-luna" as const },
-          { ...input, reasoning: "low" as const },
-        ]) {
-          assert.strictEqual((yield* owner.run(invalid).pipe(Effect.result))._tag, "Failure");
-          assert.strictEqual(allocations, 0);
-        }
-        const report = yield* owner.run(input);
-
-        assert.strictEqual(
-          allocations,
-          2,
-          "Missing OpenAI key must not block the decision-only path",
-        );
-        assert.strictEqual(report.model, "jev-latest");
-        assert.strictEqual(report.input.engine, "chromium");
-        assert.strictEqual(report.input.reasoning, undefined);
-        assert.strictEqual(report.status, "failed", "Retain the simulated allocation failure");
-        assert.strictEqual(state.active, null);
-      }).pipe(Effect.provideService(BrowserSessions, services));
-    }),
+    }).pipe(
+      Effect.provideService(CodeExecutor, {
+        execute: () => Effect.die("This lifecycle test must not execute generated code"),
+      }),
+    ),
 );
 
 it.effect(
@@ -207,7 +143,7 @@ it.effect(
             },
             alarm: () => Effect.void,
           },
-          { model: "unused", apiKey: "" },
+          { model: "unused", apiKey: "fixture-key" },
         );
 
         const services = BrowserSessions.of({
@@ -265,7 +201,11 @@ it.effect(
           assert.isTrue(report.spans.some((span) => span.outcome !== "success"));
         }).pipe(Effect.provideService(BrowserSessions, services));
       }
-    }),
+    }).pipe(
+      Effect.provideService(CodeExecutor, {
+        execute: () => Effect.die("This lifecycle test must not execute generated code"),
+      }),
+    ),
 );
 
 it.effect(
@@ -284,7 +224,7 @@ it.effect(
           },
           alarm: () => Effect.void,
         },
-        { model: "unused", apiKey: "" },
+        { model: "unused", apiKey: "fixture-key" },
       );
 
       const unused = () => Effect.die("Lost work must not acquire or attach a browser");
@@ -320,7 +260,11 @@ it.effect(
             ),
         }),
       );
-    }),
+    }).pipe(
+      Effect.provideService(CodeExecutor, {
+        execute: () => Effect.die("This lifecycle test must not execute generated code"),
+      }),
+    ),
 );
 
 it.effect(
@@ -342,7 +286,11 @@ it.effect(
       assert.strictEqual(trace.snapshot().spans[0]?.duration, 2_000);
       assert.strictEqual(trace.snapshot().spans[0]?.outcome, "failure");
       assert.strictEqual(trace.snapshot().firstActionAt, null);
-    }),
+    }).pipe(
+      Effect.provideService(CodeExecutor, {
+        execute: () => Effect.die("This lifecycle test must not execute generated code"),
+      }),
+    ),
 );
 
 it("rejects extra writes, changed unrelated fields and agent-only success claims", () => {
@@ -360,7 +308,7 @@ it("rejects extra writes, changed unrelated fields and agent-only success claims
     verify("create", [...seed.map((task) => ({ ...task, priority: "High" as const })), created]),
   );
   assert.isFalse(verify("create", seed));
-  assert.isFalse(verify("custom", [...seed, created]));
+  assert.isFalse(verify("browse", [...seed, created]));
 });
 
 it.effect(
@@ -416,7 +364,7 @@ it.effect(
               }),
           };
 
-          const owner = makeOwner(store, { model: "unused", apiKey: "" });
+          const owner = makeOwner(store, { model: "unused", apiKey: "fixture-key" });
 
           const services = BrowserSessions.of({
             createAttached: () => Effect.die("The lab creates and attaches separately"),
@@ -457,7 +405,7 @@ it.effect(
             assert.isTrue(reached.has(location), `Unreached failpoint: ${location}`);
             const admitted = store.read().admitted.includes(input.id);
             const acquiredBeforeRecovery = acquisitions;
-            const recovered = makeOwner(store, { model: "unused", apiKey: "" });
+            const recovered = makeOwner(store, { model: "unused", apiKey: "fixture-key" });
 
             yield* recovered.close();
             assert.isFalse(alive, location);
@@ -476,7 +424,11 @@ it.effect(
           }).pipe(Effect.provideService(BrowserSessions, services));
         }
       assert.strictEqual(reached.size, transitions.length * 2);
-    }),
+    }).pipe(
+      Effect.provideService(CodeExecutor, {
+        execute: () => Effect.die("This lifecycle test must not execute generated code"),
+      }),
+    ),
 );
 
 it.effect(
@@ -502,5 +454,9 @@ it.effect(
       assert.strictEqual(verifiedMillis(report), 5_000);
       assert.strictEqual(report.elapsed, 53_000, "Keep full request evidence separately");
       assert.strictEqual(runOutcome(report), "passed");
-    }),
+    }).pipe(
+      Effect.provideService(CodeExecutor, {
+        execute: () => Effect.die("This lifecycle test must not execute generated code"),
+      }),
+    ),
 );
