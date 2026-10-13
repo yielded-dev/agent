@@ -189,8 +189,9 @@ jobs:
       - name: Patch Effect TypeScript-Go
         run: ./node_modules/.bin/vp run patch:tsgo
 
+      # 12.2.0 is the first npm that can manage dist-tags through trusted publishing.
       - name: Upgrade npm for trusted publishing
-        run: npm install --global npm@12.0.2
+        run: npm install --global npm@12.2.0
 
       - name: Mint the release token
         id: app-token
