@@ -1,5 +1,17 @@
 # @yielded/agent
 
+## 0.1.0-beta.174
+
+### Minor Changes
+
+- [#902](https://github.com/yielded-dev/agent/pull/902) [`0090e61`](https://github.com/yielded-dev/agent/commit/0090e61fb1e46ef2f574d79fde36e4cc3769bb41) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Replace ref-based browser actions and Jev with a Code Mode browser tool backed by host-authorized CDP commands. BEHAVIOR CHANGE: compose `BrowserUse.make().tool`, `BrowserUse.layer`, a scoped CDP adapter, and a Code Mode executor; authorize arbitrary page JavaScript as a broad browser capability.
+
+### Patch Changes
+
+- [#896](https://github.com/yielded-dev/agent/pull/896) [`fcfecdb`](https://github.com/yielded-dev/agent/commit/fcfecdb7b1116e97543f164356d4322ecf646434) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce per-turn durable storage and journal overhead while preserving captured values and recovery behavior.
+
+- [#897](https://github.com/yielded-dev/agent/pull/897) [`525b995`](https://github.com/yielded-dev/agent/commit/525b995025dba1ac26e5a06451fd24d6d28ab7c4) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce per-turn engine and encoding overhead while preserving tool validation and cleanup.
+
 ## 0.1.0-beta.173
 
 No changes in this release.
