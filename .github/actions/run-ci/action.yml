@@ -28,9 +28,6 @@ runs:
         # Wrapper controls are not build inputs. Keep them out of child tasks
         # so the same command can reuse its cache across different callers.
         export -n CI_COMMAND CI_TIMEOUT CI_RETRY_ERRORS
-        # Vite's environment tracking picks up this per-job runner identity.
-        # It is orchestration metadata, not an input to repository commands.
-        export -n ACTIONS_ORCHESTRATION_ID
         for attempt in 1 2; do
           echo "::group::Attempt $attempt of 2"
           # Kill the process group before retrying, including children that
