@@ -62,7 +62,7 @@ inputs:
     required: false
     default: "1.00"
   priority:
-    description: 'Processing priority: omit to use the OpenAI project setting, "default" to force Standard, or "fast" for Fast mode within the same spending cap.'
+    description: 'Processing priority: omit to use the OpenAI project setting, "default" for Standard, "fast" for Fast, or "ultrafast" for GPT-6 Astra and GPT-6.1 Sol. All tiers use the same spending cap.'
     required: false
   guidance-file:
     description: "Optional committed repository guidance file."
