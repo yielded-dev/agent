@@ -324,24 +324,31 @@ const gateAdmissionLimits = Effect.fnUntraced(function* (
   const ledger = yield* SubmissionLedger;
   const { ctx } = yield* DurableObjectContext;
 
-  const existing = yield* ledger.lookup(
-    SubmissionLookupByKey.make({
-      threadId,
-      principal: request.principal,
-      idempotencyKey: request.idempotencyKey,
-    }),
-  );
-
-  if (Option.isSome(existing)) return;
+  // Admission checks the key durably. The host needs an extra lookup only to
+  // exempt a retained receipt when a current limit would otherwise refuse it.
+  const refuseFresh = (error: AdmissionLimitExceeded) =>
+    ledger
+      .lookup(
+        SubmissionLookupByKey.make({
+          threadId,
+          principal: request.principal,
+          idempotencyKey: request.idempotencyKey,
+        }),
+      )
+      .pipe(
+        Effect.flatMap((existing) => (Option.isSome(existing) ? Effect.void : Effect.fail(error))),
+      );
 
   const inputBytes = utf8Bytes(request.inputPayload);
 
   if (inputBytes > config.limits.maxInputBytes) {
-    return yield* AdmissionLimitExceeded.make({
-      limit: "input-bytes",
-      actual: inputBytes,
-      maximum: config.limits.maxInputBytes,
-    });
+    return yield* refuseFresh(
+      AdmissionLimitExceeded.make({
+        limit: "input-bytes",
+        actual: inputBytes,
+        maximum: config.limits.maxInputBytes,
+      }),
+    );
   }
 
   const nonterminal = yield* ledger.scanNonterminal.pipe(
@@ -350,21 +357,25 @@ const gateAdmissionLimits = Effect.fnUntraced(function* (
   );
 
   if (nonterminal.length >= config.limits.maxQueueDepthPerLane) {
-    return yield* AdmissionLimitExceeded.make({
-      limit: "queue-depth",
-      actual: nonterminal.length,
-      maximum: config.limits.maxQueueDepthPerLane,
-    });
+    return yield* refuseFresh(
+      AdmissionLimitExceeded.make({
+        limit: "queue-depth",
+        actual: nonterminal.length,
+        maximum: config.limits.maxQueueDepthPerLane,
+      }),
+    );
   }
 
   const databaseBytes = yield* Effect.sync(() => ctx.storage.sql.databaseSize);
 
   if (databaseBytes > config.limits.maxDatabaseBytes) {
-    return yield* AdmissionLimitExceeded.make({
-      limit: "database-bytes",
-      actual: databaseBytes,
-      maximum: config.limits.maxDatabaseBytes,
-    });
+    return yield* refuseFresh(
+      AdmissionLimitExceeded.make({
+        limit: "database-bytes",
+        actual: databaseBytes,
+        maximum: config.limits.maxDatabaseBytes,
+      }),
+    );
   }
 });
 
