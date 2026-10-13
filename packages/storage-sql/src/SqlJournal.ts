@@ -13,7 +13,7 @@ import {
   type PreparedAppend,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option, Result, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 import type { Statement } from "effect/sql/Statement";
@@ -370,34 +370,40 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
     );
   });
 
-  const commit = Effect.fnUntraced(function* (request: RawAppendRequest, _result: RawAppendResult) {
-    for (const write of request.executionWrites) {
+  const prepareCommit = (request: RawAppendRequest) =>
+    request.executionWrites.map((write) => {
       const { update, checkpointJson } = write;
       const run = JSON.stringify(update.checkpoint.progress.runId);
 
-      if (update.retire) {
-        const deleted = yield* query(sql`DELETE FROM ${table("effect_agent_executions")}
-          WHERE thread_id=${request.threadId} AND run_id=${run} AND revision=${update.previousRevision} RETURNING run_id`);
-
-        if (deleted.length !== (update.previousRevision === 0 ? 0 : 1))
-          return yield* conflict(request, "tail");
-        retain(request.threadId, write);
-        continue;
-      }
-
-      const changed = yield* query(sql`INSERT INTO ${table("effect_agent_executions")}
+      const statement = update.retire
+        ? sql`DELETE FROM ${table("effect_agent_executions")}
+          WHERE thread_id=${request.threadId} AND run_id=${run} AND revision=${update.previousRevision} RETURNING run_id`
+        : sql`INSERT INTO ${table("effect_agent_executions")}
         (thread_id, run_id, input_sequence, revision, checkpoint_json, last_commit_id, last_commit_digest)
         VALUES (${request.threadId}, ${run}, ${update.checkpoint.originalSequence}, ${update.checkpoint.progress.revision}, ${checkpointJson}, ${request.batchId}, ${request.commitDigest})
         ON CONFLICT(thread_id, run_id) DO UPDATE SET revision=excluded.revision, checkpoint_json=excluded.checkpoint_json,
           last_commit_id=excluded.last_commit_id, last_commit_digest=excluded.last_commit_digest
-        WHERE ${table("effect_agent_executions")}.revision=${update.previousRevision} RETURNING run_id`);
+        WHERE ${table("effect_agent_executions")}.revision=${update.previousRevision} RETURNING run_id`;
 
-      if (changed.length !== 1) return yield* conflict(request, "tail");
-      retain(request.threadId, write);
-    }
+      return {
+        statement,
+        accept: (changed: ReadonlyArray<unknown>) => {
+          const expected = update.retire && update.previousRevision === 0 ? 0 : 1;
+
+          if (changed.length !== expected) return Result.fail(conflict(request, "tail"));
+          retain(request.threadId, write);
+
+          return Result.succeed(undefined);
+        },
+      };
+    });
+
+  const commit = Effect.fnUntraced(function* (request: RawAppendRequest, _result: RawAppendResult) {
+    for (const prepared of prepareCommit(request))
+      yield* Effect.fromResult(prepared.accept(yield* query(prepared.statement)));
   });
 
-  return { read, replay, checkCommitIntent, rejectSuperseded, validate, commit };
+  return { read, replay, checkCommitIntent, rejectSuperseded, validate, commit, prepareCommit };
 });
 
 export class RawReadRequest extends Schema.Class<RawReadRequest>(

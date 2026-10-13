@@ -155,7 +155,8 @@
     }
   },
   "patchedDependencies": {
-    "effect@4.0.3": "patches/effect@4.0.3-stream-decoder.patch"
+    "effect@4.0.3": "patches/effect@4.0.3-stream-decoder.patch",
+    "@effect/sql-sqlite-do@4.0.3": "patches/effect-sql-sqlite-do@4.0.3-borrower.patch"
   },
   "trustedDependencies": [
     "@effect/tsgo-darwin-arm64",
