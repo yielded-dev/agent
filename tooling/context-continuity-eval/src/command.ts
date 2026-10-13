@@ -59,6 +59,10 @@ export const command = Command.make(
       Flag.withDefault("low"),
       Flag.withDescription("Reasoning effort recorded with the result."),
     ),
+    serviceTier: Flag.Literals("service-tier", ["default", "ultrafast"]).pipe(
+      Flag.withDefault("default"),
+      Flag.withDescription("Processing tier used for requests and the spending ceiling."),
+    ),
     seed: Flag.Int("seed").pipe(
       Flag.withSchema(Schema.Natural.check(Schema.isLessThanOrEqualTo(1_000_000))),
       Flag.withDefault(17),
@@ -109,7 +113,12 @@ export const command = Command.make(
           liveEvaluation: false,
           plan: profilePlan(options.profile, options.productionContextTokens),
           ...(options.profile === "production-capacity-v1"
-            ? { costPlanning: productionCostPlan(options.productionContextTokens) }
+            ? {
+                costPlanning: productionCostPlan(
+                  options.productionContextTokens,
+                  options.serviceTier,
+                ),
+              }
             : {}),
         }),
       );
@@ -182,6 +191,7 @@ export const command = Command.make(
       const evaluationOptions = {
         model,
         reasoningEffort: options.effort,
+        serviceTier: options.serviceTier,
         seed: options.seed,
         outputDirectory,
         sourceCommit,

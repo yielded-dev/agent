@@ -166,6 +166,7 @@ const application = Layer.unwrap(
 
     const live = yield* makeLiveClient({
       model: identity.model,
+      serviceTier: "default",
       maxCostMicrousd: PERFORMANCE_BUDGET,
       maxModelCalls: 18,
       maxInputTokens: 8_192,

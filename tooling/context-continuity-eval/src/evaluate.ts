@@ -43,6 +43,7 @@ import {
   type Check,
   type PhaseResult,
   type RestartEvidence,
+  type ServiceTier,
 } from "./contracts.ts";
 import { gradePhase } from "./grade.ts";
 import {
@@ -91,6 +92,7 @@ export interface EvaluationOptions {
   readonly profile?: ProfileId;
   readonly processId?: number;
   readonly reasoningEffort: "low" | "medium" | "high";
+  readonly serviceTier: ServiceTier;
   readonly seed: number;
   readonly outputDirectory: string;
   readonly sourceCommit: string;
@@ -256,6 +258,7 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
     checkpoint !== undefined &&
     (checkpoint.report.scenarioDigest !== scenarioDigest ||
       checkpoint.report.reasoningEffort !== options.reasoningEffort ||
+      checkpoint.report.serviceTier !== options.serviceTier ||
       checkpoint.report.dirtyWorkingTree !== options.dirtyWorkingTree)
   )
     return yield* EvaluationError.make({
@@ -269,6 +272,7 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
 
   const live = yield* makeLiveClient({
     model: options.model,
+    serviceTier: options.serviceTier,
     maxCostMicrousd: options.maxCostMicrousd,
     ...(checkpoint === undefined ? {} : { initialUsage: checkpoint.report.usage }),
     phase: phaseIndex,
@@ -284,8 +288,8 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
     provider: "openai",
     model: options.model,
     reasoningEffort: options.reasoningEffort,
-    serviceTier: "default",
-    pricingVersion: "openai-2026-09-08-conservative",
+    serviceTier: options.serviceTier,
+    pricingVersion: "openai-2026-10-13-conservative",
     contextTokenLimit: CONTEXT_TOKEN_LIMIT,
     maxOutputTokens: MAX_OUTPUT_TOKENS,
     maxCostMicrousd: options.maxCostMicrousd,
@@ -338,7 +342,7 @@ export const runEvaluation = Effect.fn("ContextContinuity.runEvaluation")(functi
     max_output_tokens: MAX_OUTPUT_TOKENS,
     reasoning: { effort: options.reasoningEffort },
     store: false,
-    service_tier: "default",
+    service_tier: options.serviceTier,
     strictJsonSchema: true,
   } as const;
 

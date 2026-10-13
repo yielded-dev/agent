@@ -57,12 +57,13 @@ export const runCloudflareEvaluation = Effect.fn("ContextContinuity.runCloudflar
       identity.model !== options.model ||
       identity.seed !== options.seed ||
       options.reasoningEffort !== "low" ||
+      options.serviceTier !== "default" ||
       options.maxCostMicrousd !== identity.maxCostMicrousd
     )
       return yield* EvaluationError.make({
         stage: "source",
         message:
-          "Deployed Cloudflare bundle does not match the exact clean candidate, model, seed, effort, and budget",
+          "Deployed Cloudflare bundle does not match the exact clean candidate, model, seed, effort, service tier, and budget",
       });
     const scenario = pressureScenario(options.seed);
 
@@ -81,7 +82,7 @@ export const runCloudflareEvaluation = Effect.fn("ContextContinuity.runCloudflar
       model: options.model,
       reasoningEffort: options.reasoningEffort,
       serviceTier: "default",
-      pricingVersion: "openai-2026-09-08-conservative",
+      pricingVersion: "openai-2026-10-13-conservative",
       contextTokenLimit: identity.contextTokenLimit,
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       maxCostMicrousd: identity.maxCostMicrousd,

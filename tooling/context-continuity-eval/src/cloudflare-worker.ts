@@ -239,6 +239,7 @@ const application = Layer.unwrap(
 
     const live = yield* makeLiveClient({
       model: identity.model,
+      serviceTier: "default",
       maxCostMicrousd: identity.maxCostMicrousd,
       initialUsage: state.usage,
       phase,

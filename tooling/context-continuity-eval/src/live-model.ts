@@ -3,20 +3,21 @@ import { Effect, Ref, Schema, Semaphore, Stream } from "effect";
 import { AiError } from "effect/ai";
 import { HttpBody, HttpClientResponse } from "effect/http";
 
-import { type ModelUsage } from "./contracts.ts";
+import { type ModelUsage, type ServiceTier } from "./contracts.ts";
 import { MAX_COST_MICROUSD } from "./profiles.ts";
 import { RequestAuditSink, type RequestAudit } from "./request-audit.ts";
 
-export const MODEL_IDS = ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"] as const;
+export const MODEL_IDS = ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna"] as const;
 
 export const ModelId = Schema.Literals(MODEL_IDS);
 export type ModelId = typeof ModelId.Type;
 export const ReasoningEffort = Schema.Literals(["low", "medium", "high"]);
 
 // USD per million tokens = microdollars per token. Standard, short-context pricing,
-// checked 2026-09-22: https://developers.openai.com/api/docs/pricing
+// checked 2026-10-13: https://developers.openai.com/api/docs/pricing
 // Charge uncached input at the higher cache-write rate for a conservative estimate.
 const prices: Readonly<Record<ModelId, { input: number; cached: number; output: number }>> = {
+  "gpt-6.1-sol": { input: 2.5, cached: 0.1, output: 10 },
   "gpt-6-astra": { input: 12.5, cached: 1, output: 50 },
   "gpt-6-sol": { input: 2.5, cached: 0.2, output: 10 },
   "gpt-6-luna": { input: 0.125, cached: 0.01, output: 0.5 },
@@ -27,12 +28,20 @@ export const MAX_INPUT_TOKENS = 32_000;
 export const MAX_MODEL_CALLS = 200;
 
 /** Planning only: uncached 80%-full requests, one per window, excluding output and repeated reads. */
-export const productionCostPlan = (contextTokens: number) => ({
+export const productionCostPlan = (contextTokens: number, serviceTier: ServiceTier) => ({
+  serviceTier,
   assumedUncachedInputTokens: 12 * Math.floor(contextTokens * 0.8),
   estimateIsInvoice: false,
-  models: MODEL_IDS.map((model) => ({
+  models: MODEL_IDS.filter(
+    (model) => serviceTier === "default" || model === "gpt-6-astra" || model === "gpt-6.1-sol",
+  ).map((model) => ({
     model,
-    inputOnlyMicrousd: Math.ceil(12 * Math.floor(contextTokens * 0.8) * prices[model].input),
+    inputOnlyMicrousd: Math.ceil(
+      12 *
+        Math.floor(contextTokens * 0.8) *
+        prices[model].input *
+        (serviceTier === "ultrafast" ? 6 : 1),
+    ),
   })),
 });
 
@@ -78,6 +87,7 @@ interface Spending {
 /** One suite-wide budget, retained across every runtime/SQLite reacquisition. No inference retries. */
 export const makeLiveClient = Effect.fn("ContextContinuity.makeLiveClient")(function* (options: {
   readonly model: ModelId;
+  readonly serviceTier: ServiceTier;
   readonly maxCostMicrousd: number;
   readonly phase: Ref.Ref<number>;
   readonly initialUsage?: ModelUsage;
@@ -91,7 +101,14 @@ export const makeLiveClient = Effect.fn("ContextContinuity.makeLiveClient")(func
 }) {
   const native = yield* OpenAiClient.OpenAiClient;
   const auditSink = yield* RequestAuditSink;
-  const price = prices[options.model];
+  const standardPrice = prices[options.model];
+  const multiplier = options.serviceTier === "ultrafast" ? 6 : 1;
+
+  const price = {
+    input: standardPrice.input * multiplier,
+    cached: standardPrice.cached * multiplier,
+    output: standardPrice.output * multiplier,
+  };
 
   const state = yield* Ref.make<Spending>({
     closed:
@@ -130,6 +147,13 @@ export const makeLiveClient = Effect.fn("ContextContinuity.makeLiveClient")(func
       ),
     );
 
+  if (
+    options.serviceTier === "ultrafast" &&
+    options.model !== "gpt-6.1-sol" &&
+    options.model !== "gpt-6-astra"
+  )
+    return yield* refuse("Ultrafast evaluation requires gpt-6.1-sol or gpt-6-astra");
+
   const audit = (event: RequestAudit) =>
     auditSink
       .write(event)
@@ -144,7 +168,7 @@ export const makeLiveClient = Effect.fn("ContextContinuity.makeLiveClient")(func
       original.previous_response_id !== undefined ||
       original.conversation !== undefined ||
       original.background === true ||
-      original.service_tier !== "default" ||
+      original.service_tier !== options.serviceTier ||
       original.max_output_tokens !== MAX_OUTPUT_TOKENS ||
       original.tools?.some((tool) => tool.type !== "function")
     ) {
@@ -234,7 +258,7 @@ export const makeLiveClient = Effect.fn("ContextContinuity.makeLiveClient")(func
       usage.input_tokens !== reservation.tokens ||
       usage.output_tokens > MAX_OUTPUT_TOKENS ||
       cost > reservation.cost ||
-      (response.service_tier !== undefined && response.service_tier !== "default")
+      (response.service_tier !== undefined && response.service_tier !== options.serviceTier)
     )
       return yield* refuse("Provider usage or service tier escaped the preflight reservation");
     const before = yield* Ref.get(state);
@@ -258,7 +282,12 @@ export const makeLiveClient = Effect.fn("ContextContinuity.makeLiveClient")(func
       phase: reservation.phase,
       inputTokens: usage.input_tokens,
       outputTokens: usage.output_tokens,
-      json: JSON.stringify({ model: response.model, status, usage }),
+      json: JSON.stringify({
+        model: response.model,
+        service_tier: response.service_tier,
+        status,
+        usage,
+      }),
     });
     if (status !== "completed") return yield* refuse("Provider response did not complete");
   });

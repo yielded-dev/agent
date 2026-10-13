@@ -19,6 +19,7 @@ it("recovers the real SQLite runtime after two SIGKILLs with pressure and cumula
         {
           model: "gpt-6-astra",
           reasoningEffort: "low",
+          serviceTier: "default",
           seed: 17,
           outputDirectory,
           sourceCommit: "a".repeat(40),
@@ -91,6 +92,7 @@ it("does not respawn after an interruption", async () => {
         {
           model: "gpt-6-astra",
           reasoningEffort: "low",
+          serviceTier: "default",
           seed: 17,
           outputDirectory,
           sourceCommit: "a".repeat(40),
