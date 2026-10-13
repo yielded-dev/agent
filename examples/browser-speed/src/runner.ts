@@ -12,8 +12,17 @@ import { Toolkit } from "effect/ai";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 
 import { TaskResult, Browser, completionTools } from "./browser.ts";
-import { Board, LabError, verify, type ModelApi, type RunInput } from "./contract.ts";
+import {
+  Board,
+  LabError,
+  defaultChallenge,
+  isBoardScenario,
+  verify,
+  type ModelApi,
+  type RunInput,
+} from "./contract.ts";
 import { traceModels, traceOpenAiClient, Trace } from "./telemetry.ts";
+import { prepareWikipedia } from "./wikipedia.ts";
 
 const browserCode = BrowserUse.make();
 
@@ -85,27 +94,36 @@ export const executeTask = Effect.fnUntraced(function* (
   const trace = yield* Trace;
   const executor = yield* CodeExecutor;
 
+  yield* browser.prepare(input);
+
+  const race =
+    input.scenario === "wikipedia"
+      ? yield* prepareWikipedia(input.wikipedia ?? defaultChallenge)
+      : undefined;
+
+  trace.ready();
+  trace.update({
+    message: race === undefined ? "Agent is browsing…" : "Racing through Wikipedia…",
+  });
+
   const completionLayer = completionTools.toLayer({
     finish: Effect.fnUntraced(function* (result) {
-      if (input.scenario !== "browse") {
+      if (race !== undefined) yield* race.verify;
+      if (isBoardScenario(input.scenario)) {
         const board = yield* browser.readBoard;
 
         trace.update({ board });
-        if (!verify(input.scenario, board))
+        if (input.scenario !== "custom" && !verify(input.scenario, board))
           return yield* LabError.make({
             code: "invalid",
             message: `Saved tasks do not match the request. Correct the remaining differences before finishing. Current board: ${Schema.encodeSync(Schema.fromJsonString(Board))(board)}`,
           });
-        trace.update({ verifiedAt: trace.now() });
+        if (input.scenario !== "custom") trace.update({ verifiedAt: trace.now() });
       }
 
       return result;
     }),
   });
-
-  yield* browser.prepare(input);
-  trace.ready();
-  trace.update({ message: "Agent is browsing…" });
 
   const clientOptions = {
     apiKey: Redacted.make(apiKey),
@@ -144,8 +162,16 @@ export const executeTask = Effect.fnUntraced(function* (
     ),
   );
 
+  const store = input.scenario === "coffee" || input.scenario === "shop";
+
+  const prompt =
+    race?.prompt ??
+    (store
+      ? `${input.prompt} Use this synthetic test buyer: email buyer@example.com, name Test Buyer, address 1 Ferry Building, San Francisco, CA 94111, phone 415-555-0100. Test card 4242 4242 4242 4242, expiry 12/34, CVC 123. Never create an account or opt into marketing. Stop immediately after filling the payment fields; never submit an order, authorize payment, or press a payment confirmation. These are instructions, not a host-enforced payment guard. Inspect payment frames with cdp.frames when needed.`
+      : input.prompt);
+
   const result = yield* traceModels(
-    AgentRuntime.run(agent, input.prompt).pipe(
+    AgentRuntime.run(agent, prompt).pipe(
       Effect.provide([InMemory.layer, modelLayer, completionLayer, codeLayer]),
     ),
   ).pipe(
@@ -166,12 +192,17 @@ export const executeTask = Effect.fnUntraced(function* (
 
   const finalUrl = yield* browser.native(async (page) => page.url());
 
+  const checked =
+    race !== undefined || (isBoardScenario(input.scenario) && input.scenario !== "custom");
+
   trace.update({
-    finalUrl: input.scenario === "browse" ? finalUrl : "Task board",
-    status: input.scenario === "browse" ? "unverified" : "passed",
+    finalUrl: isBoardScenario(input.scenario) ? "Task board" : finalUrl,
+    status: checked ? "passed" : "unverified",
     message:
-      input.scenario === "browse"
-        ? `${result.output.message} (Not independently verified.)`
-        : `Verified: the saved board matches the preset. ${result.output.message}`,
+      race !== undefined
+        ? `Arrival checked in the browser. ${result.output.message} Link-only play is not enforced by the Code Mode capability.`
+        : !checked
+          ? `${result.output.message} (Not independently verified.)`
+          : `Verified: the saved board matches the preset. ${result.output.message}`,
   });
-});
+}, Effect.scoped);

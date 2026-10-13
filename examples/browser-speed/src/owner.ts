@@ -9,6 +9,10 @@ import {
   LabError,
   browserCommandTimeoutMillis,
   requiresReasoning,
+  defaultChallenge,
+  racePrompt,
+  shopPrompt,
+  storeTask,
   Report,
   scenarios,
   type ModelApi,
@@ -208,6 +212,10 @@ export const makeOwner = (
         code: "invalid",
         message: "Browsing needs a starting URL and a goal.",
       });
+    if (requested.scenario === "shop" && requested.shop === undefined)
+      return yield* LabError.make({ code: "invalid", message: "Choose a store URL and an item." });
+    if (requested.scenario === "custom" && !requested.prompt.trim())
+      return yield* LabError.make({ code: "invalid", message: "Describe the task-board goal." });
     const reasoning = requested.reasoning ?? "none";
 
     const input: RunInput = {
@@ -223,8 +231,14 @@ export const makeOwner = (
           }
         : {}),
       prompt:
-        scenarios.find((scenario) => scenario.id === requested.scenario)?.prompt ??
-        requested.prompt,
+        requested.scenario === "wikipedia"
+          ? racePrompt(requested.wikipedia ?? defaultChallenge)
+          : requested.scenario === "coffee"
+            ? storeTask.prompt
+            : requested.scenario === "shop" && requested.shop !== undefined
+              ? shopPrompt(requested.shop)
+              : (scenarios.find((scenario) => scenario.id === requested.scenario)?.prompt ??
+                requested.prompt),
     };
 
     const state = store.read();

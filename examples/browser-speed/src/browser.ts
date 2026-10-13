@@ -5,7 +5,7 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { Tool, Toolkit } from "effect/ai";
 import type { Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
-import { Board, LabError, type RunInput } from "./contract.ts";
+import { Board, LabError, defaultChallenge, isBoardScenario, type RunInput } from "./contract.ts";
 import { fixtureHtml } from "./fixture.ts";
 import { Trace } from "./telemetry.ts";
 
@@ -14,7 +14,7 @@ export const TaskResult = Schema.Struct({ message: Schema.String });
 export const completionTools = Toolkit.make(
   Tool.make("finish", {
     description:
-      "Finish with a concise account of what happened. For task-board presets the host checks the saved board and returns mismatches for correction. Website results are not independently verified.",
+      "Finish with a concise account of what happened. The host checks Wikipedia arrival or the saved task-board preset and returns mismatches for correction. Other website results are not independently verified.",
     parameters: TaskResult,
     success: TaskResult,
     failure: LabError,
@@ -85,7 +85,15 @@ export const makeBrowser = Effect.fnUntraced(function* (
               await page.goto(
                 input.scenario === "browse"
                   ? (input.url ?? "about:blank")
-                  : `data:text/html;charset=utf-8,${encodeURIComponent(fixtureHtml())}`,
+                  : input.scenario === "wikipedia"
+                    ? `https://en.wikipedia.org/wiki/${encodeURIComponent((input.wikipedia ?? defaultChallenge).start.trim().replaceAll(" ", "_"))}`
+                    : input.scenario === "coffee"
+                      ? "https://www.hedge.coffee/store"
+                      : input.scenario === "shop"
+                        ? (input.shop?.url ?? "about:blank")
+                        : isBoardScenario(input.scenario)
+                          ? `data:text/html;charset=utf-8,${encodeURIComponent(fixtureHtml())}`
+                          : "about:blank",
                 { waitUntil: "domcontentloaded" },
               );
             }),

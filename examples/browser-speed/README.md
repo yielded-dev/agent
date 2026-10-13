@@ -1,15 +1,29 @@
-# Browser lab
+# Browser speed lab
 
-Give an agent a starting URL and a goal, then watch it browse in a real Cloudflare browser.
-The model writes JavaScript through `browser_execute`, using CDP to read pages, navigate,
-interact with forms, and manage tabs. The UI shows the live browser, screenshots, model and
-CDP timings, and downloadable run reports.
+Start a **Wikipedia race**, prepare a store checkout, or try a task-board scenario in a real
+Cloudflare browser. The default race is **Mars → Nelson Mandela**. Watch the route and hop
+count, inspect the timing trace, and compare repeated runs with different models and settings.
+The model writes JavaScript through `browser_execute`, using CDP to inspect each website and
+choose its own interactions. The UI retains screenshots, live view and downloadable run reports.
+
+The Wikipedia race asks the agent to follow article links only, with no search, direct URL
+entry, back button or extra tabs. The host resolves the destination, records main-page
+navigations, and checks the final URL and canonical article. A passing run means **arrival
+checked**. Code Mode does not enforce link-only play or prevent page-script tampering;
+the route is observed navigation evidence, not proof that every move obeyed the game rules.
+Leaving ordinary English Wikipedia articles or exceeding 20 hops fails the arrival check.
+
+**Check out a bag of coffee** opens Hedge Coffee; **Check out on any store** accepts a store
+URL and item. Both instruct the agent to prepare checkout with synthetic test details and
+stop before submitting an order or payment. They remain available only to funded, signed-in
+accounts on the public demo. There is no hard payment guard, and their outcomes are
+**unverified**. Do not use these scenarios on a store you are not authorized to operate.
 
 The task-board presets provide a repeatable local page. On completion, the host compares the
 entire saved board with the preset's expected result and returns mismatches for correction.
 That check is independent of the agent's completion claim, but the page and its ledger remain
-writable by page JavaScript. It is not tamper-resistant evidence. Arbitrary website results
-are always marked **unverified**.
+writable by page JavaScript. It is not tamper-resistant evidence. Custom task-board goals
+and the **Browse a website** URL/goal scenario are marked **unverified**.
 
 The host explicitly permits arbitrary page CDP and JavaScript. There is no website allowlist,
 private-network containment or payment guard. Generated code can trigger real actions,
@@ -40,7 +54,7 @@ vp run -F @yielded/agent-example-browser-speed worker
 vp run -F @yielded/agent-example-browser-speed dev
 ```
 
-Open **http://127.0.0.1:5191/browser-use/**, enter a URL and goal, and start browsing.
+Open **http://127.0.0.1:5191/browser-use/** and press **Start race**, or choose another scenario.
 Browser and model calls use real services. `worker --local` is useful for API checks but
 disables the remote browser binding.
 
@@ -72,7 +86,7 @@ browser session, or on the device when explicitly selected. Live View URLs and s
 are transient and excluded from exports. Goals and model output may still contain sensitive
 website data; review exports before sharing them.
 
-Run history stays in the tab; the Durable Object keeps its latest report and admission state.
+Run history and comparisons stay in the tab; the Durable Object keeps its latest report and admission state.
 Export before reloading. The report's timestamps use one admission-relative Worker clock;
 work time starts after the initial page is loaded. CDP timing includes reads as well as writes.
 These reports do not establish a comparative performance claim.

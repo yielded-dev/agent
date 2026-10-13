@@ -225,6 +225,16 @@ export class BrowserLab extends DurableObject<Env> {
               request.headers.get("origin") === new URL(request.url).origin &&
               (yield* (yield* PlannerAccounts).read(request))?.funded === true;
 
+            if (
+              this.env.LAB_PUBLIC === "true" &&
+              (payload.scenario === "coffee" || payload.scenario === "shop") &&
+              !funded
+            )
+              return yield* LabError.make({
+                code: "configuration",
+                message: "Store scenarios are available only to signed-in, funded accounts.",
+              });
+
             return yield* this.withBrowser(
               this.owner
                 .run(payload, {

@@ -15,6 +15,7 @@ import { Telemetry } from "effect/ai";
 
 import {
   browserCommandTimeoutMillis,
+  isBoardScenario,
   LabError,
   type Phase,
   type Report,
@@ -46,7 +47,12 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
 
   let report: Report = {
     version: 2,
-    fixture: input.scenario === "browse" ? "website" : "task-board-v1",
+    fixture:
+      input.scenario === "wikipedia"
+        ? "wikipedia-race-v1"
+        : isBoardScenario(input.scenario)
+          ? "task-board-v1"
+          : "website",
     input,
     model,
     commandTimeoutMillis: browserCommandTimeoutMillis,

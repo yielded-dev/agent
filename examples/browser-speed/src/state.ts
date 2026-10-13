@@ -2,7 +2,15 @@ import { Cause, Effect, Option, Predicate, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { AsyncResult, Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 
-import { LabApi, Report, VisitorKey, type RunInput } from "./contract.ts";
+import {
+  LabApi,
+  Report,
+  VisitorKey,
+  requiresReasoning,
+  type BrowserEngine,
+  type ModelId,
+  type RunInput,
+} from "./contract.ts";
 
 export class LabClient extends AtomHttpApi.Service<LabClient>()("browser-speed/client", {
   api: LabApi,
@@ -13,6 +21,9 @@ export class LabClient extends AtomHttpApi.Service<LabClient>()("browser-speed/c
 const sessionId = crypto.randomUUID();
 
 export const watchingAtom = Atom.make(false);
+const stopRequestedAtom = Atom.make(false);
+
+export const progressAtom = Atom.make({ current: 0, total: 0 });
 
 export const ClientSample = Schema.Struct({ report: Report, clientElapsedMillis: Schema.Finite });
 export type ClientSample = typeof ClientSample.Type;
@@ -88,31 +99,91 @@ export const snapshotAtom = Atom.make((get) =>
   get(get(watchingAtom) ? pollingSnapshot : snapshotQuery),
 );
 
-export const runAtom = LabClient.runtime.fn<Omit<RunInput, "id">>()(
+export const runAtom = LabClient.runtime.fn<
+  Omit<RunInput, "id"> & {
+    readonly repetitions: number;
+    readonly compareModels?: ReadonlyArray<ModelId>;
+    readonly compareEngines?: ReadonlyArray<typeof BrowserEngine.Type>;
+  }
+>()(
   Effect.fnUntraced(function* (input, get) {
     const client = yield* LabClient;
 
-    get.set(watchingAtom, true);
-    get.set(selectedAtom, null);
-    const start = performance.now();
+    const {
+      repetitions,
+      compareModels,
+      compareEngines,
+      model,
+      engine,
+      reasoning,
+      serviceTier,
+      ...request
+    } = input;
 
-    return yield* Reactivity.mutation(
-      client.lab.run({
-        headers: { ...headers, ...keyHeaders(get(keysAtom)) },
-        payload: { ...input, id: crypto.randomUUID() },
-      }),
-      ["lab"],
-    ).pipe(
-      Effect.tap((report) =>
-        Effect.sync(() =>
-          get.set(
-            historyAtom,
-            [...get(historyAtom), { report, clientElapsedMillis: performance.now() - start }].slice(
-              -100,
-            ),
-          ),
-        ),
-      ),
+    const models = compareModels?.length ? compareModels : [model];
+    const engines = compareEngines?.length ? compareEngines : [engine ?? "chromium"];
+    const variants = models.flatMap((model) => engines.map((engine) => ({ model, engine })));
+
+    // Rotate which configuration runs first each round, keeping requests sequential.
+    const attempts = Array.from({ length: repetitions }, (_, round) =>
+      variants.map((variant, index) => variants[(index + round) % variants.length] ?? variant),
+    ).flat();
+
+    get.set(watchingAtom, true);
+    get.set(stopRequestedAtom, false);
+    get.set(selectedAtom, null);
+
+    return yield* Effect.gen(function* () {
+      for (const [index, variant] of attempts.entries()) {
+        if (get(stopRequestedAtom)) break;
+        get.set(progressAtom, { current: index + 1, total: attempts.length });
+        const start = performance.now();
+
+        const report = yield* Reactivity.mutation(
+          client.lab.run({
+            headers: { ...headers, ...keyHeaders(get(keysAtom)) },
+            payload: {
+              ...request,
+              engine: variant.engine,
+              liveView: request.liveView && variant.engine === "chromium",
+              ...(variant.model === undefined ? {} : { model: variant.model }),
+              ...(!variant.model?.startsWith("@cf/")
+                ? {
+                    ...(reasoning === undefined
+                      ? {}
+                      : {
+                          reasoning:
+                            reasoning === "none" && requiresReasoning(variant.model ?? "")
+                              ? "low"
+                              : reasoning,
+                        }),
+                    ...(serviceTier === undefined ? {} : { serviceTier }),
+                  }
+                : {}),
+              id: crypto.randomUUID(),
+            },
+          }),
+          ["lab"],
+        );
+
+        get.set(
+          historyAtom,
+          [
+            ...get(historyAtom),
+            {
+              report,
+              clientElapsedMillis: performance.now() - start,
+            },
+          ].slice(-100),
+        );
+        if (
+          report.status === "cancelled" ||
+          report.cleanup === "failed" ||
+          (report.status === "failed" && variants.length === 1)
+        )
+          break;
+      }
+    }).pipe(
       Effect.ensuring(
         Effect.sync(() => get.set(watchingAtom, false)).pipe(
           Effect.andThen(Reactivity.invalidate(["lab"])),
@@ -123,9 +194,10 @@ export const runAtom = LabClient.runtime.fn<Omit<RunInput, "id">>()(
 );
 
 export const controlAtom = LabClient.runtime.fn<"stop" | "close">()(
-  Effect.fnUntraced(function* (action) {
+  Effect.fnUntraced(function* (action, get) {
     const client = yield* LabClient;
 
+    if (action === "stop") get.set(stopRequestedAtom, true);
     yield* Reactivity.mutation(
       action === "stop" ? client.lab.stop({ headers }) : client.lab.close({ headers }),
       ["lab"],
@@ -177,3 +249,108 @@ export const runOutcome = (report: Report) =>
       : report.status === "cancelled"
         ? "preparation cancelled"
         : "preparation failed";
+
+export const flowStarted = (report: Report) => report.readyAt !== null;
+
+const sameWorkload = (value: Report, report: Report) =>
+  value.fixture === report.fixture &&
+  value.input.scenario === report.input.scenario &&
+  value.input.prompt === report.input.prompt &&
+  value.input.url === report.input.url &&
+  value.input.wikipedia?.start === report.input.wikipedia?.start &&
+  value.input.wikipedia?.target === report.input.wikipedia?.target &&
+  value.input.shop?.url === report.input.shop?.url &&
+  value.input.shop?.item === report.input.shop?.item &&
+  value.input.screenshots === report.input.screenshots &&
+  value.input.liveView === report.input.liveView;
+
+const settingsKey = (report: Report) =>
+  JSON.stringify([
+    report.input.engine ?? "chromium",
+    report.browserVersion ?? "unrecorded",
+    report.browserRevision ?? "unrecorded",
+    report.commandTimeoutMillis ?? "unrecorded",
+    report.input.reasoning ?? "provider-default",
+    report.input.serviceTier ?? "provider-default",
+  ]);
+
+export const cohort = (samples: ReadonlyArray<ClientSample>, report: Report) =>
+  samples.filter(
+    ({ report: value }) =>
+      sameWorkload(value, report) &&
+      value.model === report.model &&
+      settingsKey(value) === settingsKey(report),
+  );
+
+const servedTiers = (reports: ReadonlyArray<Report>) =>
+  [
+    ...new Set(
+      reports.flatMap((report) => {
+        const spans = report.spans.filter((span) => span.phase === "model");
+
+        return spans.length ? spans.map((span) => span.serviceTier ?? "unknown") : ["unknown"];
+      }),
+    ),
+  ]
+    .sort()
+    .join("+") || "unknown";
+
+/** Compare the same task and capture settings; only verified outcomes contribute timings. */
+export const comparisons = (samples: ReadonlyArray<ClientSample>, report: Report) => {
+  const groups = new Map<string, Array<Report>>();
+
+  for (const { report: candidate } of samples) {
+    if (!sameWorkload(candidate, report)) continue;
+    const key = `${candidate.model}/${settingsKey(candidate)}`;
+    const group = groups.get(key) ?? [];
+
+    group.push(candidate);
+    groups.set(key, group);
+  }
+
+  return [...groups.entries()].map(([key, reports]) => ({
+    key,
+    engine: reports[0]?.input.engine ?? "chromium",
+    browserVersion: reports[0]?.browserVersion,
+    browserRevision: reports[0]?.browserRevision,
+    model: reports[0]?.model ?? "unknown",
+    reasoning:
+      reports[0]?.input.reasoning ??
+      (reports[0]?.model.startsWith("@cf/") ? "n/a" : "provider-default"),
+    serviceTier:
+      reports[0]?.input.serviceTier ??
+      (reports[0]?.model.startsWith("@cf/") ? "n/a" : "provider-default"),
+    servedTier: servedTiers(reports),
+    count: reports.length,
+    started: reports.filter(flowStarted).length,
+    preparationFailed: reports.filter((value) => !flowStarted(value) && value.status !== "running")
+      .length,
+    passed: reports.filter((value) => value.status === "passed").length,
+    hops: percentile(
+      reports.flatMap((value) =>
+        value.status === "passed" && value.race ? [Math.max(0, value.race.path.length - 1)] : [],
+      ),
+      0.5,
+    ),
+    median: percentile(
+      reports.flatMap((value) => {
+        const time = verifiedMillis(value);
+
+        return value.status === "passed" && time !== null ? [time] : [];
+      }),
+      0.5,
+    ),
+  }));
+};
+
+export const percentile = (values: ReadonlyArray<number>, fraction: number): number | null => {
+  const sorted = [...values].sort((a, b) => a - b);
+
+  if (fraction === 0.5 && sorted.length > 0) {
+    const middle = Math.floor(sorted.length / 2);
+
+    return ((sorted[Math.ceil(sorted.length / 2) - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
+  }
+
+  return sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)] ?? null;
+};

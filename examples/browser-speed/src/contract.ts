@@ -16,8 +16,76 @@ export const Task = Schema.Struct({
 export type Task = typeof Task.Type;
 export const Board = Schema.Array(Task).check(Schema.isMaxLength(50));
 
-export const Scenario = Schema.Literals(["browse", "create", "triage", "batch"]);
+export const Scenario = Schema.Literals([
+  "wikipedia",
+  "coffee",
+  "shop",
+  "create",
+  "triage",
+  "batch",
+  "custom",
+  "browse",
+]);
+
 export type Scenario = typeof Scenario.Type;
+
+export const ArticleTitle = Schema.NonEmptyString.check(
+  Schema.isMaxLength(180),
+  Schema.isPattern(/^[^:#?[\]{}|<>\\\p{Cc}]+$/u),
+);
+
+export const WikipediaChallenge = Schema.Struct({ start: ArticleTitle, target: ArticleTitle });
+export type WikipediaChallenge = typeof WikipediaChallenge.Type;
+export const defaultChallenge: WikipediaChallenge = { start: "Mars", target: "Nelson Mandela" };
+
+export const racePrompt = (challenge: WikipediaChallenge) =>
+  `Starting at the Wikipedia page for ${challenge.start}, get to ${challenge.target}.`;
+
+export const WikiHop = Schema.Struct({
+  title: Schema.String,
+  url: Schema.String,
+  at: Schema.Finite,
+  via: Schema.optionalKey(Schema.Struct({ label: Schema.String, url: Schema.String })),
+});
+
+export const WikiRace = Schema.Struct({
+  start: Schema.String,
+  target: Schema.String,
+  targetUrl: Schema.String,
+  maxHops: Schema.Natural,
+  path: Schema.Array(WikiHop),
+  ruleViolation: Schema.optionalKey(Schema.String),
+});
+
+export const ShopRequest = Schema.Struct({
+  url: Schema.String.check(
+    Schema.isMaxLength(500),
+    Schema.isPattern(/^https:\/\/[a-z0-9.-]+\.[a-z]{2,}(?:[/?#]\S*)?$/i),
+  ),
+  item: Schema.NonEmptyString.check(Schema.isMaxLength(120)),
+});
+
+export type ShopRequest = typeof ShopRequest.Type;
+export const defaultShopItem = "a bag of natural process coffee";
+
+export const shopPrompt = (shop: ShopRequest) =>
+  `On the store at ${shop.url}, find ${shop.item}, add one to the cart and open checkout as a guest. Fill the checkout with the test buyer. Leave marketing boxes unchecked. Stop before submitting an order or payment.`;
+
+export const storeTask = {
+  id: "coffee",
+  title: "Check out a bag of coffee",
+  detail: "Hedge Coffee · prepare checkout, stop before payment",
+  prompt: shopPrompt({ url: "https://www.hedge.coffee/store", item: "one bag of coffee" }),
+} as const;
+
+export const shopTask = {
+  id: "shop",
+  title: "Check out on any store",
+  detail: "Your store link · prepare checkout, stop before payment",
+} as const;
+
+export const isBoardScenario = (scenario: Scenario) =>
+  scenario === "create" || scenario === "triage" || scenario === "batch" || scenario === "custom";
 
 export const StartUrl = Schema.String.check(
   Schema.makeFilter((value) => URL.canParse(value), { expected: "a valid URL" }),
@@ -55,6 +123,8 @@ export const RunInput = Schema.Struct({
   id: Schema.String.check(Schema.isUUID()),
   scenario: Scenario,
   url: Schema.optionalKey(StartUrl),
+  wikipedia: Schema.optionalKey(WikipediaChallenge),
+  shop: Schema.optionalKey(ShopRequest),
   engine: Schema.optionalKey(BrowserEngine),
   prompt: Schema.String.check(Schema.isMaxLength(2_000)),
   screenshots: Schema.Boolean,
@@ -92,7 +162,7 @@ export type Span = typeof Span.Type;
 
 export const Report = Schema.Struct({
   version: Schema.Literal(2),
-  fixture: Schema.Literals(["task-board-v1", "website"]),
+  fixture: Schema.Literals(["task-board-v1", "wikipedia-race-v1", "website"]),
   input: RunInput,
   model: Schema.String,
   browserVersion: Schema.optionalKey(Schema.NonEmptyString.check(Schema.isMaxLength(256))),
@@ -111,6 +181,7 @@ export const Report = Schema.Struct({
   firstActionAt: Schema.NullOr(Schema.Finite),
   cleanup: Schema.Literals(["pending", "closed", "retained", "failed"]),
   board: Board,
+  race: Schema.optionalKey(WikiRace),
   finalUrl: Schema.optionalKey(Schema.String),
 });
 
