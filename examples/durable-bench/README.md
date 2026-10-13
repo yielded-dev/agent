@@ -34,8 +34,10 @@ optimization when the interval includes zero.
 
 Quick runs retain one per-Object Worker pool per prefix. Changing pool options destroys
 the previous pool before allocating its replacement. Each Worker declares only its target's
-namespaces (one for Yielded or pi, two for Tardie). A pre-deploy account inventory rejects
-runs that would leave fewer than 100 of the account's 500 namespace slots free.
+namespaces (one for Yielded or pi, two for Tardie). Immediately before each deploy, a live
+account inventory requires at least 100 spare namespace slots, waiting 60 seconds between
+checks for up to 30 minutes. Each prefix is limited to 40 namespaces; split larger cell grids
+into separate runs with a single target (for example, `--targets pi`).
 Every run clears and restores
 its Objects. Histories through 1,000 turns restore before every pass, so both revisions start
 from identical saved state on those same Objects; earlier samples are never reused.
@@ -188,7 +190,7 @@ Use `--teardown` to discard retained runs or finish interrupted cleanup.
 Private ownership data and Alchemy state live under `~/.local/state/durable-bench` (mode
 700), outside the checkout. Keep that directory until cleanup. The command refuses to
 reuse it with another account, or adopt existing resources without ownership state.
-Run only one benchmark/teardown command at a time. Within a run, Objects are concurrent.
+The operator owns prefix uniqueness: run only one controller per prefix; there are no local locks.
 Set `DURABLE_BENCH_PREFIX=bench-profile` to isolate resource names and private state under
 that prefix; use the same environment value for `--teardown`.
 
@@ -269,7 +271,13 @@ restores and verifies the fixture, rebuilds the acknowledged prefix with fresh i
 then measures the replacement and continues. Prefix turns reestablish the cold/warm boundary
 and are excluded from timing and CPU comparisons. Original failures and replacement IDs
 remain in JSON; earlier valid measurements are retained. A second failure at the same sample,
-a failed prefix rebuild, sample-key mismatch, wrong build, or unclassified failure stops the run.
+a failed prefix rebuild, sample-key mismatch or wrong build stops the run.
+An unknown submitted-input outcome never resubmits the input: it retires that Object's entire
+A/B pair and continues the other Objects. Raw attempts remain in JSON; retirements are reported
+by target, history, TTFT, build and epoch. Each cell must retain at least 75% of its Object pairs
+(9 of 12); otherwise rerun a fresh cohort with 24 Objects per cell. Build-attributed retirements of at least three and at least twice the other
+build's count invalidate the cohort, checked per cell and per target across cells. Exclusions never
+depend on latency; all retained pairs still require complete CPU attribution when requested.
 Real-history builds and passes carrying history into or out of another pass cannot recover
 this way. `--verify-incarnation-recovery` aborts one settled Object per target before metrics
 to exercise recovery; use this diagnostic separately from a latency comparison.
@@ -290,7 +298,8 @@ later propagation stability: a wrong build during observation or timing still fa
 
 Cold setup then probes the physical Object's identity (including Tardie's Actor directory),
 retrying only a missing placeholder fetch handler or a wrong `BUILD` within a three-minute
-setup bound. An acknowledged cold reset retires a responding old incarnation before
+setup bound. Transient transport errors on safe reads and cold resets get up to three retries
+with 1/2/4-second backoff. An acknowledged cold reset retires a responding old incarnation before
 probing its replacement; placeholders are never reset. Every identity attempt and reset
 is recorded in `readiness`; other errors stop the run. Identity probes never import rows or submit turns. The final
 reset is followed by observer attachment, then the timed input; timing never retries.
@@ -320,7 +329,8 @@ Raw provider calls and available markers are included in result JSON and the qui
 The gap is measured between outgoing model requests and consumed responses on one Object
 clock. Last-response-to-client crosses Object/driver clocks and is approximate; it is
 not an exact settlement-notification decomposition. CPU is opt-in. `--cpu` attaches a Tail
-Worker that stores marked native Object invocations in a temporary R2 bucket. It sums each
+Worker that stores marked native Object invocations in a temporary R2 bucket, retaining
+outcomes, redacted exceptions, code versions and available colos for failure diagnosis. It sums each
 invocation's CPU once per turn, including marked submission, settlement wait, dispatch, text
 observation and fallback record reads; driver, provider, metrics collection and deployment CPU are outside that
 total. Dispatch includes native alarms and effect-cf's post-response work. The invocation hook
@@ -377,7 +387,10 @@ across Objects. Yielded restores through a seed-only Worker before deploying the
 runtime onto the same Objects. No canonical import normalization, history replay or identity rewriting
 runs during setup. Each Object's complete table counts and transcript fingerprint must
 match the saved source before timing. Every subsequent model request is checked against
-an independent reference transcript. Failed or uncertain mutations are never replayed.
+an independent reference transcript. Before the pass submits any input, a transient restore
+failure retries the whole clear/restore/verify sequence, never an individual chunk (up to three
+retries with 1/2/4-second backoff). Retired Objects are never restored or measured again.
+Safe Cloudflare inventory and Tail/CPU reads use the same bounded transient retry policy.
 
 Use `--build-history` only to measure real deployed history construction, as described
 below. This explicit mode retains its native submission/settlement path and checkpoints.
@@ -402,7 +415,8 @@ Repeated baselines reveal deployment/time/history drift. The output includes pai
 the control or within-Object repeat spread; inspect all Objects, not just the median.
 
 Refs supply `packages/` sources and their own `bun.lock` dependencies. Different lockfiles
-receive isolated frozen installations; identical locks reuse an installation. Both builds
+receive isolated frozen installations; identical lockfiles reuse an installation. Cache installs
+use fresh temporary directories and atomic publication; a competing loser discards its copy. Both builds
 use this harness, while pi and tardie retain their isolated vendor dependencies. Each
 revision must support its selected fixture. Import, recovery,
 transcript, build or residency failures invalidate the affected Object; the command never

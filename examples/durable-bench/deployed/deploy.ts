@@ -1,6 +1,6 @@
 import { basename, join } from "node:path";
 
-import { Clock, Console, Effect, FileSystem, Schedule, Schema } from "effect";
+import { Clock, Console, Effect, FileSystem, Schema } from "effect";
 
 import { build } from "./build.ts";
 import { Cloudflare, request } from "./cloudflare.ts";
@@ -11,7 +11,6 @@ import {
   execute,
   hash,
   nonce,
-  prefixLock,
   read,
   redact,
   repository,
@@ -97,85 +96,91 @@ export const deployments = Effect.gen(function* () {
   const provider = url(state.infrastructurePrefix + "-provider") + "/v1";
   const secrets = [cloud.accountId, cloud.apiToken, state.token, cloud.accountName];
 
-  const alchemy = Effect.fnUntraced(
-    function* (stack: Stack, action: "deploy" | "destroy", force = false) {
-      if (action === "deploy") {
-        // Coordinate headroom checks and allocation across this machine's bench prefixes.
-        yield* prefixLock("durable-bench-account-" + hash(cloud.accountId).slice(0, 16)).pipe(
-          Effect.tapError((error) =>
-            error._tag === "BenchError" && error.message.startsWith("Another controller owns")
-              ? Console.error(
-                  "Waiting for another bench deployment to release the account allocation lock…",
-                )
-              : Effect.void,
-          ),
-        );
+  const alchemy = Effect.fnUntraced(function* (
+    stack: Stack,
+    action: "deploy" | "destroy",
+    force = false,
+  ) {
+    if (action === "deploy") {
+      yield* Effect.gen(function* () {
+        for (;;) {
+          const headroom = yield* cloud.namespaceHeadroom(
+            stack.kind === "target" ? (stack.workers ?? [stack.name]) : [],
+          );
 
-        const headroom = yield* cloud.namespaceHeadroom(
-          stack.kind === "target" ? (stack.workers ?? [stack.name]) : [],
-        );
+          if (headroom.projectedOwned > 40)
+            return yield* BenchError.make({
+              message:
+                "This prefix would exceed 40 Durable Object namespaces; split the cells or reduce Objects.",
+            });
+          if (headroom.free >= 100) {
+            yield* Console.error(
+              `Namespace headroom: ${headroom.existing} existing, ${headroom.additional} additional, ${headroom.free} free after deployment; ${headroom.projectedOwned} owned.`,
+            );
 
-        yield* Console.error(
-          `Namespace headroom: ${headroom.existing} existing, ${headroom.additional} additional, ${headroom.free} free after deployment.`,
-        );
-      }
-      const startedMs = yield* Clock.currentTimeMillis;
-
-      const result = yield* execute(
-        [
-          "exec",
-          "alchemy",
-          action,
-          join(directory, "stack.ts"),
-          "--stage",
-          stack.name,
-          "--yes",
-          ...(force ? ["--force"] : []),
-        ],
-        privateDirectory,
-        {
-          CI: "true",
-          NO_COLOR: "1",
-          ALCHEMY_HOME: join(privateDirectory, "auth"),
-          CLOUDFLARE_ACCOUNT_ID: cloud.accountId,
-          CLOUDFLARE_API_TOKEN: cloud.apiToken,
-          DURABLE_BENCH_KIND: stack.kind,
-          DURABLE_BENCH_PREFIX: cloud.prefix,
-          DURABLE_BENCH_INFRA_PREFIX: state.infrastructurePrefix,
-          DURABLE_BENCH_NAME: stack.name,
-          DURABLE_BENCH_WORKERS: JSON.stringify(stack.workers ?? [stack.name]),
-          DURABLE_BENCH_WORKER_BUILDS: JSON.stringify(stack.workerBuilds ?? {}),
-          DURABLE_BENCH_BUNDLE: stack.bundle,
-          DURABLE_BENCH_BUILD: stack.build,
-          DURABLE_BENCH_TOKEN: state.token,
-          DURABLE_BENCH_CPU: String(stack.cpu),
-          DURABLE_BENCH_PROVIDER: provider,
-          DURABLE_BENCH_SUBDOMAIN: cloud.subdomain,
-        },
+            return;
+          }
+          yield* Console.error(
+            "Waiting 60 seconds for at least 100 spare namespaces after deployment…",
+          );
+          yield* Effect.sleep("60 seconds");
+        }
+      }).pipe(
+        Effect.timeoutOrElse({
+          duration: "30 minutes",
+          orElse: () =>
+            BenchError.make({ message: "Namespace headroom remained unavailable for 30 minutes." }),
+        }),
       );
+    }
+    const startedMs = yield* Clock.currentTimeMillis;
 
-      for (const line of result.output.split("\n")) {
-        const marker = line.indexOf("BENCH_DEPLOY_HTTP ");
+    const result = yield* execute(
+      [
+        "exec",
+        "alchemy",
+        action,
+        join(directory, "stack.ts"),
+        "--stage",
+        stack.name,
+        "--yes",
+        ...(force ? ["--force"] : []),
+      ],
+      privateDirectory,
+      {
+        CI: "true",
+        NO_COLOR: "1",
+        ALCHEMY_HOME: join(privateDirectory, "auth"),
+        CLOUDFLARE_ACCOUNT_ID: cloud.accountId,
+        CLOUDFLARE_API_TOKEN: cloud.apiToken,
+        DURABLE_BENCH_KIND: stack.kind,
+        DURABLE_BENCH_PREFIX: cloud.prefix,
+        DURABLE_BENCH_INFRA_PREFIX: state.infrastructurePrefix,
+        DURABLE_BENCH_NAME: stack.name,
+        DURABLE_BENCH_WORKERS: JSON.stringify(stack.workers ?? [stack.name]),
+        DURABLE_BENCH_WORKER_BUILDS: JSON.stringify(stack.workerBuilds ?? {}),
+        DURABLE_BENCH_BUNDLE: stack.bundle,
+        DURABLE_BENCH_BUILD: stack.build,
+        DURABLE_BENCH_TOKEN: state.token,
+        DURABLE_BENCH_CPU: String(stack.cpu),
+        DURABLE_BENCH_PROVIDER: provider,
+        DURABLE_BENCH_SUBDOMAIN: cloud.subdomain,
+      },
+    );
 
-        if (marker >= 0) yield* Console.error(line.slice(marker));
-      }
-      yield* Console.error(
-        `BENCH_DEPLOY ${JSON.stringify({ kind: stack.kind, action, retry: force, elapsedMs: (yield* Clock.currentTimeMillis) - startedMs })}`,
-      );
-      if (result.code !== 0)
-        return yield* BenchError.make({
-          message: `Alchemy ${action} failed (${result.code}): ${redact(result.output, secrets).slice(-3000)}`,
-        });
-    },
-    Effect.scoped,
-    Effect.retry({
-      times: 60,
-      schedule: Schedule.spaced("5 seconds"),
-      while: (error) =>
-        error._tag === "BenchError" &&
-        error.message.startsWith("Another controller owns the durable-bench-account-"),
-    }),
-  );
+    for (const line of result.output.split("\n")) {
+      const marker = line.indexOf("BENCH_DEPLOY_HTTP ");
+
+      if (marker >= 0) yield* Console.error(line.slice(marker));
+    }
+    yield* Console.error(
+      `BENCH_DEPLOY ${JSON.stringify({ kind: stack.kind, action, retry: force, elapsedMs: (yield* Clock.currentTimeMillis) - startedMs })}`,
+    );
+    if (result.code !== 0)
+      return yield* BenchError.make({
+        message: `Alchemy ${action} failed (${result.code}): ${redact(result.output, secrets).slice(-3000)}`,
+      });
+  }, Effect.scoped);
 
   const ready = Effect.fnUntraced(function* (
     endpoint: string,

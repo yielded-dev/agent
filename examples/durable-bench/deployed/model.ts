@@ -73,6 +73,13 @@ export const Invocation = Schema.Struct({
   invocationMethod: Schema.optionalKey(Schema.String),
   dispatches: Schema.optionalKey(Schema.Array(Dispatch)),
   outcome: Schema.String,
+  colo: Schema.optionalKey(Schema.String),
+  scriptVersion: Schema.optionalKey(Schema.String),
+  exceptions: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({ name: Schema.String, message: Schema.String, timestamp: Schema.Number }),
+    ),
+  ),
   cpuMs: Schema.NullOr(Schema.Number),
   wallMs: Schema.NullOr(Schema.Number),
   target: Schema.optionalKey(Target),
@@ -211,6 +218,7 @@ export const Result = Schema.Struct({
         epoch: Schema.optionalKey(Schema.Natural),
         build: Schema.optionalKey(Schema.String),
         requests: Schema.Int,
+        attempts: Schema.optionalKey(Schema.Natural),
         ms: Schema.Number,
       }),
     ),
@@ -229,6 +237,20 @@ export const Result = Schema.Struct({
     }),
   ),
   samples: Schema.Array(Sample),
+  retirements: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        target: Target,
+        object: Schema.String,
+        history: History,
+        ttftMs: Query.fields.ttftMs,
+        build: Sample.fields.build,
+        epoch: Schema.Natural,
+        sample: Schema.String,
+        error: Schema.String,
+      }),
+    ),
+  ),
   recoveries: Schema.optionalKey(
     Schema.Array(
       Schema.Struct({

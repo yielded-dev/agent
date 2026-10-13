@@ -6,6 +6,7 @@ import {
   Option,
   Redacted,
   Schema,
+  Schedule,
   Stream,
   type Duration,
 } from "effect";
@@ -13,7 +14,41 @@ import { Ndjson } from "effect/encoding";
 
 import { DriverRequest } from "./model.ts";
 import { BenchError, redact } from "./platform.ts";
-import { Failure } from "./worker/protocol.ts";
+import { errorText, Failure, UnknownOutcome } from "./worker/protocol.ts";
+
+/** A transient transport failure; only callers with an idempotent operation may retry. */
+export class RequestError extends Schema.TaggedError<RequestError>()("RequestError", {
+  message: Schema.String,
+}) {}
+
+export const retryRequest = <A, E extends { readonly _tag: string }, R>(
+  operation: Effect.Effect<A, E, R>,
+) =>
+  operation.pipe(
+    Effect.retry({
+      times: 3,
+      schedule: Schedule.exponential("1 second"),
+      while: (error) => error._tag === "RequestError",
+    }),
+  );
+
+const transientStatus = (status: number) => status === 408 || status === 429 || status >= 500;
+
+const nativeFailure = (cause: unknown, secrets: readonly string[]) => {
+  const detail = Schema.decodeUnknownOption(
+    Schema.Struct({
+      name: Schema.optionalKey(Schema.String),
+      code: Schema.optionalKey(Schema.String),
+    }),
+  )(cause);
+
+  return redact(
+    [...(Option.isSome(detail) ? [detail.value.name, detail.value.code] : []), errorText(cause)]
+      .filter((part) => part !== undefined)
+      .join(": "),
+    secrets,
+  ).slice(0, 1200);
+};
 
 const Workers = Schema.Array(Schema.Struct({ id: Schema.String }));
 
@@ -34,43 +69,63 @@ const connect = Effect.gen(function* () {
   const accountId = Redacted.value(yield* Config.Redacted("CLOUDFLARE_ACCOUNT_ID"));
   const apiToken = Redacted.value(yield* Config.Redacted("CLOUDFLARE_API_TOKEN"));
 
-  const api = Effect.fnUntraced(function* <
-    S extends Schema.Top & { readonly DecodingServices: never },
-  >(route: string, schema: S, body?: unknown) {
-    const response = yield* Effect.tryPromise({
-      try: (signal) =>
-        fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/${route}`, {
-          method: body === undefined ? "GET" : "POST",
-          signal,
-          headers: { authorization: `Bearer ${apiToken}`, "content-type": "application/json" },
-          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        }),
-      catch: () => BenchError.make({ message: "Cloudflare API request failed." }),
-    }).pipe(Effect.timeout("60 seconds"));
-
-    if (!response.ok)
-      return yield* BenchError.make({
-        message: `Cloudflare API returned HTTP ${response.status}.`,
+  const api = Effect.fnUntraced(
+    function* <S extends Schema.Top & { readonly DecodingServices: never }>(
+      route: string,
+      schema: S,
+      body?: unknown,
+    ) {
+      const response = yield* Effect.tryPromise({
+        try: (signal) =>
+          fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/${route}`, {
+            method: body === undefined ? "GET" : "POST",
+            signal,
+            headers: { authorization: `Bearer ${apiToken}`, "content-type": "application/json" },
+            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+          }),
+        catch: (cause) =>
+          RequestError.make({
+            message: `Cloudflare API request failed: ${nativeFailure(cause, [apiToken, accountId])}`,
+          }),
       });
 
-    const json = yield* Effect.tryPromise({
-      try: () => response.json(),
-      catch: () => BenchError.make({ message: "Invalid Cloudflare API JSON." }),
-    });
+      if (!response.ok)
+        return yield* (transientStatus(response.status) ? RequestError : BenchError).make({
+          message: `Cloudflare API returned HTTP ${response.status}.`,
+        });
 
-    const envelope = yield* Schema.decodeUnknownEffect(
-      Schema.Struct({ success: Schema.Boolean, result: Schema.Unknown }),
-    )(json).pipe(
-      Effect.mapError(() => BenchError.make({ message: "Unexpected Cloudflare API response." })),
-    );
+      const json = yield* Effect.tryPromise({
+        try: () => response.json(),
+        catch: (cause) =>
+          RequestError.make({
+            message: `Cannot read Cloudflare API JSON: ${nativeFailure(cause, [apiToken, accountId])}`,
+          }),
+      });
 
-    if (!envelope.success)
-      return yield* BenchError.make({ message: "Cloudflare API rejected the operation." });
+      const envelope = yield* Schema.decodeUnknownEffect(
+        Schema.Struct({ success: Schema.Boolean, result: Schema.Unknown }),
+      )(json).pipe(
+        Effect.mapError(() => BenchError.make({ message: "Unexpected Cloudflare API response." })),
+      );
 
-    return yield* Schema.decodeUnknownEffect(schema)(envelope.result).pipe(
-      Effect.mapError(() => BenchError.make({ message: "Unexpected Cloudflare API result." })),
-    );
-  });
+      if (!envelope.success)
+        return yield* BenchError.make({ message: "Cloudflare API rejected the operation." });
+
+      return yield* Schema.decodeUnknownEffect(schema)(envelope.result).pipe(
+        Effect.mapError(() => BenchError.make({ message: "Unexpected Cloudflare API result." })),
+      );
+    },
+    (operation, _route, _schema, body?: unknown) => {
+      const timed = operation.pipe(
+        Effect.timeoutOrElse({
+          duration: "60 seconds",
+          orElse: () => RequestError.make({ message: "Cloudflare API timed out." }),
+        }),
+      );
+
+      return body === undefined ? timed.pipe(retryRequest) : timed;
+    },
+  );
 
   const account = yield* api("", Schema.Struct({ id: Schema.String, name: Schema.String }));
 
@@ -132,12 +187,15 @@ const connect = Effect.gen(function* () {
     const additional = required.filter((name) => !existing.has(name)).length;
     const free = 500 - namespaces.length - additional;
 
-    if (free < 100)
-      return yield* BenchError.make({
-        message: `Durable Object namespace headroom: account has ${namespaces.length}/500; this run needs ${additional} additional namespaces and would leave ${free} free. At least 100 must remain free. Tear down unused bench pools with their owning prefixes before retrying.`,
-      });
+    const owned = namespaces.filter((namespace) => namespace.name.startsWith(prefix + "-")).length;
 
-    return { existing: namespaces.length, additional, free };
+    return {
+      existing: namespaces.length,
+      additional,
+      free,
+      owned,
+      projectedOwned: owned + additional,
+    };
   });
 
   const resources = Effect.fnUntraced(function* (workerName?: string, cpu = false) {
@@ -228,32 +286,45 @@ const fetchResponse = Effect.fnUntraced(function* (
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       }),
-    catch: () =>
-      BenchError.make({
-        message: "Worker response was lost; request outcome is unknown and will not be retried.",
+    catch: (cause) =>
+      RequestError.make({
+        message: `Controller → Worker ${new URL(url).pathname} response was lost; request outcome is unknown: ${nativeFailure(cause, [token])}`,
       }),
-  }).pipe(Effect.timeout(timeout));
+  }).pipe(
+    Effect.timeoutOrElse({
+      duration: timeout,
+      orElse: () => RequestError.make({ message: "Worker request timed out; outcome unknown." }),
+    }),
+  );
 
   if (!response.ok) {
     const text = yield* Effect.tryPromise({
       try: () => response.text(),
-      catch: () => BenchError.make({ message: "Cannot read Worker failure." }),
+      catch: (cause) =>
+        RequestError.make({
+          message: `Cannot read Worker failure: ${nativeFailure(cause, [token])}`,
+        }),
     });
 
     if (new URL(url).pathname === "/measure") {
       const sent = Schema.decodeUnknownOption(DriverRequest)(body);
       const failure = Schema.decodeOption(Schema.fromJsonString(Failure))(text);
 
-      if (
-        Option.isSome(sent) &&
-        Option.isSome(failure) &&
-        failure.value.sample === sent.value.query.sample &&
-        failure.value.transport !== undefined
-      )
-        return yield* failure.value.transport;
+      if (Option.isSome(sent) && Option.isSome(failure)) {
+        if (failure.value.sample !== sent.value.query.sample)
+          return yield* BenchError.make({
+            message: "Worker failure named a different sample; refusing retirement or recovery.",
+          });
+        if (failure.value.transport !== undefined) return yield* failure.value.transport;
+        if (failure.value.unknownOutcome !== undefined) return yield* failure.value.unknownOutcome;
+
+        return yield* BenchError.make({
+          message: redact(failure.value.error, [token]).slice(0, 1200),
+        });
+      }
     }
 
-    return yield* BenchError.make({
+    return yield* (transientStatus(response.status) ? RequestError : BenchError).make({
       message: `Worker ${new URL(url).pathname} returned HTTP ${response.status}; the input will not be retried. ${redact(text, [token]).slice(0, 1200)}`,
     });
   }
@@ -261,30 +332,51 @@ const fetchResponse = Effect.fnUntraced(function* (
   return response;
 });
 
-export const request = Effect.fnUntraced(function* <
-  S extends Schema.Top & { readonly DecodingServices: never },
->(
-  url: URL | string,
-  token: string,
-  schema: S,
-  body?: unknown,
-  timeout: Duration.Input = "3 minutes",
-) {
-  const response = yield* fetchResponse(url, token, body, timeout);
+export const request = Effect.fnUntraced(
+  function* <S extends Schema.Top & { readonly DecodingServices: never }>(
+    url: URL | string,
+    token: string,
+    schema: S,
+    body?: unknown,
+    timeout: Duration.Input = "3 minutes",
+  ) {
+    const response = yield* fetchResponse(url, token, body, timeout);
 
-  const raw = yield* Effect.tryPromise({
-    try: () => response.json(),
-    catch: () => BenchError.make({ message: "Worker returned invalid JSON." }),
-  });
+    const raw = yield* Effect.tryPromise({
+      try: () => response.json(),
+      catch: (cause) =>
+        RequestError.make({
+          message: `Controller → Worker ${new URL(url).pathname} returned unreadable JSON; outcome unknown: ${nativeFailure(cause, [token])}`,
+        }),
+    });
 
-  const value = yield* Schema.decodeUnknownEffect(schema)(raw).pipe(
-    Effect.mapError(() =>
-      BenchError.make({ message: "Worker response failed schema validation." }),
-    ),
-  );
+    const value = yield* Schema.decodeUnknownEffect(schema)(raw).pipe(
+      Effect.mapError(() =>
+        BenchError.make({ message: "Worker response failed schema validation." }),
+      ),
+    );
 
-  return { value, colo: response.headers.get("cf-ray")?.split("-").at(-1) ?? null };
-});
+    return { value, colo: response.headers.get("cf-ray")?.split("-").at(-1) ?? null };
+  },
+  (operation, url, _token, _schema, body?: unknown, timeout: Duration.Input = "3 minutes") => {
+    const timed = operation.pipe(
+      Effect.timeoutOrElse({
+        duration: timeout,
+        orElse: () => RequestError.make({ message: "Worker request timed out; outcome unknown." }),
+      }),
+    );
+
+    return body === undefined
+      ? timed.pipe(retryRequest)
+      : new URL(url).pathname === "/measure"
+        ? timed.pipe(
+            Effect.catchTag("RequestError", (error) =>
+              UnknownOutcome.make({ message: error.message }),
+            ),
+          )
+        : timed;
+  },
+);
 
 export const requestEvents = <S extends Schema.Top & { readonly DecodingServices: never }>(
   url: URL | string,

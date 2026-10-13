@@ -25,7 +25,7 @@ import {
   type Turn,
 } from "../src/plan.ts";
 import { build, ensureVendor } from "./build.ts";
-import { Cloudflare, request, requestEvents } from "./cloudflare.ts";
+import { Cloudflare, request, requestEvents, retryRequest } from "./cloudflare.ts";
 import { deployments } from "./deploy.ts";
 import { fixtureFormat, prepareFixtures } from "./fixtures.ts";
 import {
@@ -41,7 +41,6 @@ import {
   git,
   hash,
   nonce,
-  prefixLock,
   read,
   redact,
   save,
@@ -49,7 +48,7 @@ import {
   workspace,
 } from "./platform.ts";
 import { prepareProfile, profileBatches } from "./profile.ts";
-import { median, sampleCpu, table } from "./report.ts";
+import { median, retirementFailures, sampleCpu, table } from "./report.ts";
 import { tailCpu } from "./tail-cpu.ts";
 import { PREAMBLE, responseText } from "./text.ts";
 import {
@@ -116,7 +115,6 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
   const started = yield* Clock.currentTimeMillis;
   const cloud = yield* Cloudflare;
 
-  yield* prefixLock(cloud.prefix);
   const deploy = yield* deployments;
   const fs = yield* FileSystem.FileSystem;
   const privateDirectory = stateDirectory(cloud.prefix);
@@ -295,6 +293,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           ],
         };
     }
+    result = { ...result, failures: [...result.failures, ...retirementFailures(result)] };
     yield* phase("teardown");
     if (!options.keep && !preserved && !persistent) {
       yield* Console.error("Destroying target stack and verifying cleanup…");
@@ -856,7 +855,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             undefined,
             remaining,
           ).pipe(
-            Effect.catchTag("BenchError", (error) =>
+            Effect.catchTag("RequestError", (error) =>
               error.message.startsWith("Worker /identity returned HTTP 500;") &&
               error.message.includes('"error":"Handler does not export a fetch() function."')
                 ? Effect.succeed(undefined)
@@ -918,7 +917,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             ColdResult,
             {},
             resetRemaining,
-          )).value;
+          ).pipe(retryRequest)).value;
 
           if (!reset.ok || !reset.threadAborted || reset.directoryAborted === false)
             return yield* BenchError.make({ message: "Cold abort was not acknowledged." });
@@ -1231,38 +1230,78 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
               const restoreStarted = yield* Clock.currentTimeMillis;
 
-              if (clearBeforeRestore) {
-                yield* resetForBuild(cohort);
-                yield* request(yield* url("/restore/clear", cohort), deploy.token, RestoreAck, {});
-              }
+              let restoreAttempt = 0;
+              let restoreRequests = 0;
 
-              const start = yield* request(
-                yield* url("/restore/start", cohort),
-                deploy.token,
-                RestoreAck,
-                fixture,
-              );
+              yield* Effect.gen(function* () {
+                const clear = clearBeforeRestore || restoreAttempt > 0;
 
-              if (
-                fixture.actor &&
-                !equalCounts(
-                  start.value.directoryTables ?? {},
-                  Object.fromEntries(
-                    fixture.actor.tables.map((table) => [table.name, table.rows.length]),
-                  ),
-                )
-              )
-                return yield* BenchError.make({
-                  message: "Restored Actor table counts differ from source",
-                });
-              for (const path of chunks.get(`${cohort.target}-${cohort.history}`) ?? []) {
-                yield* request(
-                  yield* url("/restore/rows", cohort),
+                restoreAttempt++;
+                if (clear) {
+                  yield* resetForBuild(cohort);
+                  restoreRequests++;
+                  yield* request(
+                    yield* url("/restore/clear", cohort),
+                    deploy.token,
+                    RestoreAck,
+                    {},
+                  );
+                }
+
+                restoreRequests++;
+
+                const start = yield* request(
+                  yield* url("/restore/start", cohort),
                   deploy.token,
                   RestoreAck,
-                  yield* read(path, RestoreChunk),
+                  fixture,
                 );
-              }
+
+                if (
+                  fixture.actor &&
+                  !equalCounts(
+                    start.value.directoryTables ?? {},
+                    Object.fromEntries(
+                      fixture.actor.tables.map((table) => [table.name, table.rows.length]),
+                    ),
+                  )
+                )
+                  return yield* BenchError.make({
+                    message: "Restored Actor table counts differ from source",
+                  });
+                for (const path of chunks.get(`${cohort.target}-${cohort.history}`) ?? []) {
+                  restoreRequests++;
+                  yield* request(
+                    yield* url("/restore/rows", cohort),
+                    deploy.token,
+                    RestoreAck,
+                    yield* read(path, RestoreChunk),
+                  );
+                }
+
+                restoreRequests++;
+
+                const seeded = (yield* request(
+                  yield* url("/restore/finalize", cohort),
+                  deploy.token,
+                  ImportResult,
+                  {},
+                  "10 minutes",
+                )).value;
+
+                if (seeded.identity.build !== expectedBuild)
+                  return yield* BenchError.make({
+                    message: "Seeded Object reported the wrong build.",
+                  });
+                if (
+                  seeded.fingerprint !== fixture.fingerprint ||
+                  !equalCounts(seeded.tables, fixture.tables)
+                )
+                  return yield* BenchError.make({
+                    message:
+                      "Deployed seed fingerprint or complete table counts differ from the local fixture.",
+                  });
+              }).pipe(retryRequest);
 
               const restoreMs = (yield* Clock.currentTimeMillis) - restoreStarted;
 
@@ -1276,9 +1315,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                     history: cohort.history,
                     epoch,
                     build: label,
-                    requests:
-                      (clearBeforeRestore ? 2 : 1) +
-                      (chunks.get(`${cohort.target}-${cohort.history}`)?.length ?? 0),
+                    requests: restoreRequests,
+                    attempts: restoreAttempt,
                     ms: restoreMs,
                   },
                 ],
@@ -1310,45 +1348,6 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                 }),
               ),
             ),
-          { concurrency: options.buildConcurrency, discard: true },
-        );
-      }
-
-      if (restorePass) {
-        yield* phase("verify");
-        yield* Effect.forEach(
-          cohorts,
-          Effect.fnUntraced(function* (cohort) {
-            const { fixtures } = yield* assignment(cohort);
-            const expectedBuild = yield* expectedFor(cohort);
-
-            const fixture = fixtures.find(
-              (item) => item.target === cohort.target && item.history === cohort.history,
-            );
-
-            if (!fixture) return yield* BenchError.make({ message: "Missing restore fixture" });
-
-            const seeded = (yield* request(
-              yield* url("/restore/finalize", cohort),
-              deploy.token,
-              ImportResult,
-              {},
-              "10 minutes",
-            )).value;
-
-            if (seeded.identity.build !== expectedBuild)
-              return yield* BenchError.make({
-                message: "Seeded Object reported the wrong build.",
-              });
-            if (
-              seeded.fingerprint !== fixture.fingerprint ||
-              !equalCounts(seeded.tables, fixture.tables)
-            )
-              return yield* BenchError.make({
-                message:
-                  "Deployed seed fingerprint or complete table counts differ from the local fixture.",
-              });
-          }),
           { concurrency: options.buildConcurrency, discard: true },
         );
       }
@@ -1856,6 +1855,33 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             (batch) => (profiled ? withProfileBatch(batch) : batch),
             Effect.catchTag("IncarnationLost", recover),
             Effect.catchTag("TransientObjectTransport", recover),
+            Effect.catchTag("UnknownOutcome", (error) =>
+              Effect.gen(function* () {
+                const sample = currentSample;
+
+                if (!sample || options.buildHistory) return yield* error;
+                failedObjects.add(objectKey(cohort));
+                yield* update((value) => ({
+                  ...value,
+                  retirements: [
+                    ...(value.retirements ?? []),
+                    {
+                      target: cohort.target,
+                      object: cohort.object,
+                      history: cohort.history,
+                      ttftMs: cohort.ttftMs,
+                      build: sample.build,
+                      epoch,
+                      sample: sample.sample,
+                      error: message(Cause.fail(error)),
+                    },
+                  ],
+                }));
+                yield* Console.error(
+                  `${cohort.target}/${cohort.history}/${cohort.ttftMs}/${sample.build}/epoch${epoch}: retiring the complete Object pair after an unknown input outcome; no resubmission.`,
+                );
+              }),
+            ),
             Effect.catchCause((cause) =>
               Effect.gen(function* () {
                 if (Cause.hasInterrupts(cause)) return yield* Effect.failCause(cause);
@@ -1878,7 +1904,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     });
 
     for (const [epoch, defaultLabel] of epochs.entries()) {
-      let pending = poolCohorts;
+      let pending = poolCohorts.filter((cohort) => !failedObjects.has(objectKey(cohort)));
       let from: ReadonlyMap<string, number> = new Map();
 
       for (let attempt = 0; pending.length > 0; attempt++) {
@@ -1916,7 +1942,6 @@ export const resume = Effect.fnUntraced(function* (name: string) {
 export const teardown = Effect.gen(function* () {
   const cloud = yield* Cloudflare;
 
-  yield* prefixLock(cloud.prefix);
   const deploy = yield* deployments;
   const cleanup = yield* deploy.teardown;
 

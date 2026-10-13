@@ -2,7 +2,7 @@ import { builtinModules } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Effect, FileSystem, Schedule, Schema, Semaphore } from "effect";
+import { Effect, FileSystem, Schema } from "effect";
 import { ChildProcess } from "effect/process";
 import { build as bundle, type Plugin } from "esbuild";
 
@@ -12,7 +12,6 @@ import {
   execute,
   git,
   hash,
-  prefixLock,
   read,
   redact,
   repository,
@@ -26,8 +25,6 @@ const Catalog = Schema.Struct({ catalog: Schema.Record(Schema.String, Schema.Str
 const SourceMap = Schema.Struct({
   sources: Schema.Array(Schema.String),
 });
-
-const dependencyLock = Semaphore.makeUnsafe(1);
 
 // Reuse an installation only when the ref's complete lockfile matches.
 const dependenciesFor = Effect.fnUntraced(function* (revision: string) {
@@ -54,38 +51,48 @@ const dependenciesFor = Effect.fnUntraced(function* (revision: string) {
     lockHash,
   );
 
-  const lockName = "durable-bench-dependencies-" + hash(root);
+  const receipt = join(root, "node_modules", ".bench-frozen-install");
 
-  yield* dependencyLock.withPermit(
-    Effect.gen(function* () {
-      // Controllers with different deployment prefixes can share this cache.
-      yield* prefixLock(lockName);
-      if (!(yield* fs.exists(join(root, ".git")))) {
-        yield* fs.makeDirectory(join(root, ".."), { recursive: true });
-        yield* git(["worktree", "add", "--detach", root, revision]);
-      }
-      const receipt = join(root, "node_modules", ".bench-frozen-install");
+  const installed = Effect.gen(function* () {
+    return (yield* fs.exists(receipt)) && (yield* fs.readFileString(receipt)) === lockHash;
+  });
 
-      if (!(yield* fs.exists(receipt)) || (yield* fs.readFileString(receipt)) !== lockHash) {
-        const installed = yield* execute(["install", "--frozen-lockfile"], root);
+  if (!(yield* installed)) {
+    yield* fs.makeDirectory(join(root, ".."), { recursive: true });
 
-        if (installed.code !== 0)
-          return yield* BenchError.make({
-            message: `Dependency install failed: ${redact(installed.output).slice(-3000)}`,
-          });
-        yield* fs.writeFileString(receipt + ".tmp", lockHash, { mode: 0o600 });
-        yield* fs.rename(receipt + ".tmp", receipt);
-      }
-    }).pipe(
-      Effect.scoped,
-      Effect.retry({
-        schedule: Schedule.spaced("1 second").pipe(Schedule.jittered),
-        while: (error) =>
-          error._tag === "BenchError" &&
-          error.message === `Another controller owns the ${lockName} prefix.`,
-      }),
-    ),
-  );
+    const temporary = yield* Effect.acquireRelease(
+      fs.makeTempDirectory({ directory: join(root, "..") }),
+      (path) => fs.remove(path, { recursive: true, force: true }).pipe(Effect.orDie),
+    );
+
+    const archive = ChildProcess.make("vp", ["exec", "git", "archive", revision], {
+      cwd: repository,
+    });
+
+    const unpack = ChildProcess.make("vp", ["exec", "tar", "-x", "-C", temporary]);
+    const child = yield* archive.pipe(ChildProcess.pipeTo(unpack));
+
+    if ((yield* child.exitCode) !== 0)
+      return yield* BenchError.make({ message: "Could not unpack dependency sources." });
+    const install = yield* execute(["install", "--frozen-lockfile"], temporary);
+
+    if (install.code !== 0)
+      return yield* BenchError.make({
+        message: `Dependency install failed: ${redact(install.output).slice(-3000)}`,
+      });
+    yield* fs.writeFileString(join(temporary, "node_modules", ".bench-frozen-install"), lockHash);
+    // Only complete installations are visible. A competing winner is immutable;
+    // the scoped temporary directory discards the losing installation.
+    yield* fs
+      .rename(temporary, root)
+      .pipe(
+        Effect.catchTag("PlatformError", (error) =>
+          installed.pipe(
+            Effect.flatMap((complete) => (complete ? Effect.void : Effect.fail(error))),
+          ),
+        ),
+      );
+  }
 
   return { root, expectedEffect };
 });

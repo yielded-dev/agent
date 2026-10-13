@@ -55,6 +55,65 @@ const group = <A>(rows: readonly A[], key: (row: A) => string) => {
   return result;
 };
 
+/** Keep raw attempts intact; a retired Object contributes neither build to any metric. */
+const retainedSamples = (result: Result) => {
+  const retired = new Set((result.retirements ?? []).map((row) => `${row.target}/${row.object}`));
+
+  return result.samples.filter((row) => !retired.has(`${row.target}/${row.object}`));
+};
+
+/** Fixed before measurement: never select exclusions from observed latency. */
+export const retirementFailures = (result: Result): string[] => {
+  const { objects } = Schema.decodeUnknownSync(Schema.Struct({ objects: Schema.Int }))(
+    result.options,
+  );
+
+  const retirements = result.retirements ?? [];
+  const failures: string[] = [];
+  const cells = group(retirements, (row) => `${row.target}/${row.history}/${row.ttftMs}`);
+
+  for (const [cell, rows] of cells) {
+    const retired = new Set(rows.map((row) => row.object)).size;
+
+    if (retired / objects > 0.25)
+      failures.push(
+        `${cell}: retired ${retired}/${objects} Objects, leaving fewer than 75% of pairs.`,
+      );
+  }
+  for (const [cell, rows] of [...cells, ...group(retirements, (row) => row.target)]) {
+    const baseline = rows.filter((row) => row.build === "baseline").length;
+    const candidate = rows.filter((row) => row.build === "candidate").length;
+
+    if (
+      Math.max(baseline, candidate) >= 3 &&
+      Math.max(baseline, candidate) >= 2 * Math.min(baseline, candidate)
+    )
+      failures.push(
+        `${cell}: build-attributed retirements are asymmetric (baseline ${baseline}, candidate ${candidate}).`,
+      );
+  }
+
+  return failures;
+};
+
+const retirementTable = (result: Result): string[] => {
+  if (!result.retirements?.length) return [];
+
+  return [
+    "Retired Object pairs: both builds excluded from latency and CPU; all original attempts remain in JSON. Inputs with unknown outcomes were not resubmitted.",
+    "",
+    "| Target / history / TTFT / build / epoch | Retired Objects |",
+    "|---|---:|",
+    ...[
+      ...group(
+        result.retirements,
+        (row) => `${row.target}/${row.history}/${row.ttftMs}/${row.build}/${row.epoch}`,
+      ),
+    ].map(([cell, rows]) => `| ${cell} | ${rows.length} |`),
+    "",
+  ];
+};
+
 type Metric =
   | "driverMs"
   | "firstTextMs"
@@ -108,7 +167,7 @@ export const historySummary = (result: Result) => {
 
       const batches = [
         ...group(
-          result.samples.filter(
+          retainedSamples(result).filter(
             (row) =>
               row.target === first.target &&
               row.history === first.history &&
@@ -255,7 +314,7 @@ export const sampleCpu = (result: Result) => {
 
   const cpu = group(result.cpu ?? [], (row) => `${row.target}/${row.object}/${row.sample}`);
 
-  const rows = result.samples.filter(
+  const rows = retainedSamples(result).filter(
     (row) => row.status === "ok" && (row.state === "cold" || row.state === "warm"),
   );
 
@@ -359,7 +418,7 @@ export const pairedCpu = (result: Result) => {
 export const table = (result: Result): string => {
   if (result.histories.length) return historyTable(result);
 
-  const rows = result.samples
+  const rows = retainedSamples(result)
     .filter((row) => row.status === "ok" && (row.state === "cold" || row.state === "warm"))
     .sort(
       (a, b) =>
@@ -377,6 +436,7 @@ export const table = (result: Result): string => {
           `Recovery prefix turns: ${result.samples.filter((row) => row.state === "recovery").length}; setup only, excluded from timing and CPU comparisons.`,
         ]
       : []),
+    ...retirementTable(result),
     "Driver-observed milliseconds; median [Q1–Q3] of Object medians.",
     "Yielded falls back to settled text if no preview arrives; JSON records firstTextSource.",
     "Submit → X starts after observer acknowledgement. Observer-open → X also includes attachment and any opening work; both cold boundaries are shown separately. First text is n/a for tardie.",

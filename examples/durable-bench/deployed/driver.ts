@@ -24,6 +24,7 @@ import {
   SubmitResult,
   TextObservation,
   TransientObjectTransport,
+  UnknownOutcome,
 } from "./worker/protocol.ts";
 
 class ObservationError extends Schema.TaggedError<ObservationError>()("ObservationError", {
@@ -165,10 +166,19 @@ export default {
               controller.signal,
             ]),
           }),
+        ).pipe(
+          Effect.catchTag("ObservationError", (error) =>
+            UnknownOutcome.make({ message: `Driver → Target ${path}: ${error.message}` }),
+          ),
         );
 
         if (!response.ok) {
-          const text = yield* attempt(() => response.text());
+          const text = yield* attempt(() => response.text()).pipe(
+            Effect.catchTag("ObservationError", (error) =>
+              UnknownOutcome.make({ message: `Driver → Target ${path}: ${error.message}` }),
+            ),
+          );
+
           const failure = Schema.decodeOption(Schema.fromJsonString(Failure))(text);
 
           if (
@@ -177,6 +187,11 @@ export default {
             failure.value.transport !== undefined
           )
             return yield* failure.value.transport;
+
+          if (Option.isNone(failure) && response.status >= 500)
+            return yield* UnknownOutcome.make({
+              message: `Target ${path} returned HTTP ${response.status}; input outcome unknown.`,
+            });
 
           return yield* ObservationError.make({
             message: `Target ${path} returned HTTP ${response.status}: ${text}; input will not be retried.`,
@@ -192,7 +207,11 @@ export default {
         const response = yield* invoke(path, body, timeoutMs);
 
         return yield* Schema.decodeUnknownEffect(schema)(
-          yield* attempt(() => response.json()),
+          yield* attempt(() => response.json()).pipe(
+            Effect.catchTag("ObservationError", (error) =>
+              UnknownOutcome.make({ message: `Driver → Target ${path}: ${error.message}` }),
+            ),
+          ),
         ).pipe(
           Effect.mapError((cause) => ObservationError.make({ message: errorText(cause), cause })),
         );
@@ -503,12 +522,19 @@ export default {
     } catch (cause) {
       const transport = Schema.is(TransientObjectTransport)(cause) ? cause : undefined;
 
+      const unknownOutcome = Schema.is(UnknownOutcome)(cause)
+        ? cause
+        : Cause.isTimeoutError(cause)
+          ? UnknownOutcome.make({ message: "Driver timed out; input outcome unknown." })
+          : undefined;
+
       return Response.json(
         Schema.encodeSync(Failure)({
           ok: false,
           error: errorText(cause),
           sample,
           ...(transport === undefined ? {} : { transport }),
+          ...(unknownOutcome === undefined ? {} : { unknownOutcome }),
         }),
         { status: 502 },
       );

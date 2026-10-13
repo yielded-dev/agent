@@ -164,9 +164,6 @@ export const command = Command.make(
         .map(Number),
     );
 
-    if (!flags.buildHistory && !targets.includes("yielded"))
-      return yield* BenchError.make({ message: "Paired A/B requires the yielded target." });
-
     if (
       targets.includes("effect-ai-floor") &&
       (flags.buildHistory ||
