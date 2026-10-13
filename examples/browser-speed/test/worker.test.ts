@@ -84,7 +84,6 @@ it.live(
       assert.isFalse(body.ready);
       assert.isTrue(body.browserConfigured);
       assert.isFalse(body.agentConfigured);
-      assert.isFalse(body.jevConfigured);
       assert.strictEqual(body.models.length, 4);
       assert.isTrue(body.models.every((model) => !model.configured));
       assert.isFalse(body.busy);
@@ -117,7 +116,6 @@ it.live(
         { engine: "unapproved-browser" },
         { model: "unapproved-model" },
         { model: "gpt-6-luna" },
-        { model: "gpt-6-luna", driver: "jev" },
       ]) {
         const rejected = yield* status("/api/run", {
           method: "POST",
@@ -125,8 +123,6 @@ it.live(
           body: JSON.stringify({
             id: crypto.randomUUID(),
             scenario: "create",
-            mode: "agent",
-            temperature: "cold",
             prompt: "",
             screenshots: false,
             liveView: false,
@@ -144,12 +140,15 @@ it.live(
 
       const rejectedKitesurf = yield* status("/api/run", {
         method: "POST",
-        headers: { ...headers, "content-type": "application/json" },
+        headers: {
+          ...headers,
+          "x-lab-openai-key": "fixture-key-not-secret",
+          "content-type": "application/json",
+        },
         body: JSON.stringify({
           id: crypto.randomUUID(),
           engine: "kitesurf",
           scenario: "create",
-          mode: "scripted",
           prompt: "",
           screenshots: false,
           liveView: false,

@@ -58,7 +58,6 @@ export default defineConfig({
       build: {
         command: "vp build && wrangler deploy --dry-run",
         cache: {
-          env: ["VITE_BROWSER_BENCHMARK_REPORT_URL"],
           input: [
             { auto: true },
             "*",
@@ -77,10 +76,6 @@ export default defineConfig({
           untrackedEnv: ["WRANGLER_LOG_PATH"],
           output: ["dist/**"],
         },
-      },
-      journey: {
-        command: "bun src/journey-main.ts",
-        cache: false,
       },
       worker: {
         command: "wrangler dev --port 8791",

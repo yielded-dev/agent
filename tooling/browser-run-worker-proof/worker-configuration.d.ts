@@ -1,6 +1,7 @@
 declare namespace Cloudflare {
   interface Env {
     readonly BROWSER: BrowserRun;
+    readonly LOADER: WorkerLoader;
     readonly CHECKOUTS: DurableObjectNamespace;
     readonly CHECKOUT_TOKEN: string;
     readonly CHECKOUT_PASSWORD: string;

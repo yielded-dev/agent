@@ -11,12 +11,12 @@ Your application owns destination access, credentials, and cleanup.
 
 ## Choose an adapter
 
-| Need                                               | Capability                             | Host setup                                       |
-| -------------------------------------------------- | -------------------------------------- | ------------------------------------------------ |
-| Render Markdown, scrape, or take a PNG in a Worker | Quick Actions                          | Cloudflare browser binding                       |
-| Capture a page from Node or a Worker               | REST capture                           | Account ID, redacted token, Effect HttpClient    |
-| Crawl one HTTPS host into Markdown                 | REST crawl                             | REST credentials and a Scope                     |
-| Navigate, click, fill, or inspect a live page      | Interactive Browser / Browser Sessions | Worker binding and private lifecycle credentials |
+| Need                                               | Capability                                | Host setup                                                    |
+| -------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- |
+| Render Markdown, scrape, or take a PNG in a Worker | Quick Actions                             | Cloudflare browser binding                                    |
+| Capture a page from Node or a Worker               | REST capture                              | Account ID, redacted token, Effect HttpClient                 |
+| Crawl one HTTPS host into Markdown                 | REST crawl                                | REST credentials and a Scope                                  |
+| Let an agent navigate and interact with websites   | BrowserUse + Code Mode + Browser Sessions | Worker Loader, browser binding, private lifecycle credentials |
 
 ## Give an agent a capture Tool
 
@@ -56,14 +56,59 @@ explicit: `ExactHosts` is a URL allowlist, **not** connection-time private-netwo
 `PublicWeb` requires that isolation and is unsupported by the Cloudflare adapter. `Unrestricted`
 opts out of both host and private-network containment; only trusted host code should select it.
 
-Native `BrowserUse` tools operate through an existing Browser Session attachment. The host
-authorizes each operation against current page and target information. Page content and model
-arguments cannot supply authority. A successful input call proves SDK completion, not that a
-website accepted an order, login, or upload; inspect the site's outcome separately.
+`BrowserUse` gives the model one Code Mode tool. The model writes JavaScript for the website
+it actually encounters, using Chrome DevTools Protocol (CDP) to inspect the DOM, evaluate page
+JavaScript, navigate, or send native input. There is no framework classifier deciding which
+elements are actionable.
 
-Native observations and input support controls and frames in open and closed shadow roots.
-Closed-root discovery reads the frame's DOM through CDP; output limits do not bound that transfer.
-Inspect again if a new closed root is attached after a condition wait starts.
+```ts twoslash
+import { BrowserUse } from "@yielded/agent";
+import { Toolkit } from "effect/ai";
+
+const browser = BrowserUse.make();
+const tools = Toolkit.make(browser.tool);
+```
+
+Provide `BrowserUse.layer` with the scoped adapter from
+`@yielded/agent-platform-cloudflare/browser-use`, then pass those handlers to
+`CloudflareCodeMode.layer(browser, { loader, handlers })`. The adapter borrows an existing
+`BrowserSession`; the executor runs each program in a fresh Worker with no ambient network,
+bindings, or secrets. The browser remains attached across programs.
+
+Inside a program, `cdp.send({ method, params, targetId?, frameId? })` sends a CDP command.
+`cdp.tabs({})` discovers pages in the session's context, `cdp.newTab({})` opens a blank page,
+and `cdp.closeTab({ targetId })` closes a secondary page. Omit `targetId` to address the original
+page. Browser and Target protocol domains are reserved for the host.
+Use `cdp.frames({ targetId? })` to discover frames, including cross-origin frames, and `frameId` to
+route commands to a frame's session. `Page.createIsolatedWorld` supplies an execution context
+for evaluating JavaScript in that frame.
+
+For example, the model can inspect a page with:
+
+```js
+async () => {
+  const response = await cdp.send({
+    method: "Runtime.evaluate",
+    params: {
+      expression: "document.body.innerText.slice(0, 6000)",
+      returnByValue: true,
+      awaitPromise: true,
+    },
+  });
+  return response;
+};
+```
+
+The host authorizes every command with current page and target metadata and sets command,
+tab, and result limits. Code Mode adds execution and aggregate output limits. A result limit
+does not bound the upstream CDP transfer; programs should request small results. CDP events
+are not streamed to the program; inspect state or use bounded page-side conditions.
+
+Arbitrary page JavaScript is a broad capability: a URL check or a tool named “read” cannot
+guarantee read-only behavior, recipient restrictions, or safe checkout. Enforce network access
+outside generated code and authorize the task's actual capabilities. Page content remains
+untrusted. A completed command does not prove the website accepted an order, login, or upload;
+verify the site's outcome independently. Never replay uncertain input automatically.
 
 ## Keep a browser across attempts
 
@@ -90,8 +135,9 @@ already connected viewers.
 frame, and form-recipient origins. It fills supported native controls without submitting the form.
 Authorize filling itself: input handlers may send data immediately.
 
-Credentials stay out of the fill API's results and telemetry, but a website may echo them in later
-observations or screenshots. Your disclosure policy must cover those outputs. Uncertain fills or
+Credentials stay out of the fill API's results and telemetry, but generated page JavaScript can
+read filled fields and the website may echo values in later observations or screenshots.
+CDP also has access to browser cookies. Your disclosure policy must cover those outputs. Uncertain fills or
 actions must not be blindly retried; confirmed browser cleanup does not undo website effects.
 
 The [browser-speed example](https://github.com/yielded-dev/agent/tree/main/examples/browser-speed)

@@ -307,6 +307,9 @@ const renderJsonSchemaType = (
     // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- CodeMode.make synchronously rejects unsupported JSON Schema declaration fragments.
     throw new Error(`Code Mode cannot render the JSON schema fragment ${JSON.stringify(schema)}`);
   }
+  // An empty schema is explicitly unconstrained, including Schema.Json's array items.
+  // This is a faithful declaration; unrecognized nonempty fragments still fail below.
+  if (Object.keys(schema).length === 0) return "unknown";
   const reference = schema.$ref;
 
   if (typeof reference === "string") {

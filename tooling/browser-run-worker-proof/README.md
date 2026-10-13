@@ -2,8 +2,9 @@
 
 One ephemeral Worker serves a controlled store and a real model-driven buyer. Its
 `CheckoutRun` Durable Object owns the one-shot dispatch fence, private browser session,
-payment-attempt count, and receipt. The host uses BrowserUse over
-CloudflareInteractiveBrowser; the browser may reach only the fixture origin.
+payment-attempt count, and receipt. `BrowserUse.make()` exposes `browser_execute`
+through the Cloudflare Code Mode Worker Loader. Generated page-specific code uses
+CDP against an attachment owned by `BrowserSessions`.
 
 ```text
 Wrangler → Worker + CheckoutRun → Cloudflare Browser Run
@@ -25,13 +26,15 @@ independently checks every receipt field, including the designated buyer, delive
 shipping 500 cents, tax 312 cents, total 4212 cents, USD, and paid status.
 
 The payment endpoint deliberately returns an ambiguous 503 after committing the receipt.
-The terminal submission tool submits once and reads browser order history; ordinary
-browser actions cannot submit payment. The runner requires exactly one payment attempt
-and an independently fetched matching receipt. A model completion message or an HTTP
-success alone cannot pass the gate.
+Generated browser code submits the purchase and reads browser order history. The
+read-only `finish` tool checks that page against the server receipt and attempt count.
+The controlled fixture authorizes whole-page JavaScript, which can submit forms; no
+tool boundary guarantees a single payment attempt. The runner requires exactly one
+payment attempt and an independently fetched matching receipt. A model completion
+message or an HTTP success alone cannot pass the gate.
 
-The runner deploys the executable Worker, Durable Object migration, and secret bindings
-in one upload. It creates no temporary Durable Object class that could serve requests
+The runner deploys the executable Worker, Worker Loader binding, Durable Object migration,
+and secret bindings in one upload. It creates no temporary Durable Object class that could serve requests
 while the final version propagates. Before dispatch, it waits for authenticated evidence
 from a pristine Durable Object, retrying fresh-route 404 and transient 5xx/transport
 failures every two seconds for up to one minute.
@@ -45,17 +48,18 @@ This covers startup error pages that browser navigation accepts as completed loa
 
 A read-only scrape of inline fixture HTML runs before browser creation, avoiding
 propagation of a new public route to the Quick Actions browser. Transient 5xx/reset
-failures of that preflight may retry, at most twice. Read-only browser observations
-also retry an attached-session read failure twice, using public execution evidence.
-The runner never retries `POST /run`
-or a purchase. Lost responses remain unresolved, and the Durable Object's persisted
+failures of that preflight may retry, at most twice. After login, generated code
+inspects the page and performs the purchase without an automatic action retry.
+The runner never retries `POST /run` or a purchase. Lost responses remain unresolved, and the Durable Object's persisted
 started fence refuses a replacement run. Closure persists a stop fence before
 acknowledgement so a suspended preflight cannot allocate a browser afterward.
 
-The host injects `CHECKOUT_PASSWORD` through guarded credential input. It is a
-redacted Worker binding, not model input. This is host-owned credential injection,
-not coverage of the BrowserCredentialAccess helper. The separate control token
-authorizes `/run`, `/evidence`, and `/close`; fixture navigation never receives it.
+The host fills and submits the login form before giving generated code the signed-in
+page. `CHECKOUT_PASSWORD` remains a Worker binding, not a model prompt or tool argument.
+This is host-owned fixture authentication, not coverage of the BrowserCredentialAccess
+helper. The generated program receives no Worker secrets or ambient network access;
+its authorized CDP access still has the full authority of the signed-in browser page.
+The separate control token authorizes `/run`, `/evidence`, and `/close`; fixture navigation never receives it.
 Worker observability is disabled. Reports contain no transcripts, raw exceptions,
 passwords, control tokens, session IDs, or private URLs.
 
