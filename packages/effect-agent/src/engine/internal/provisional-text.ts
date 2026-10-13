@@ -30,9 +30,8 @@ const makeAttempt = Effect.fnUntraced(function* (
 ): Effect.fn.Return<Attempt> {
   const publisher = yield* ProvisionalText.Publisher;
   const identity = { threadId, submissionId, attemptId };
-  const active = new Set<ModelHandle>();
   let closed = false;
-  let generation = 0;
+  let nextGeneration = 0;
 
   const offerUnsafe = (event: ProvisionalText.Event): boolean => {
     try {
@@ -47,7 +46,7 @@ const makeAttempt = Effect.fnUntraced(function* (
     openModel: (runId, turnId) => {
       if (closed) return undefined;
 
-      const model = { ...identity, runId, turnId, generation: ++generation };
+      const generation = ++nextGeneration;
       let open = true;
 
       const handle: ModelHandle = {
@@ -61,28 +60,31 @@ const makeAttempt = Effect.fnUntraced(function* (
               ? Response.makePart("text-delta", { id: part.id, delta: part.delta })
               : Response.makePart(part.type, { id: part.id });
 
-          return offerUnsafe({ _tag: "Text", ...model, part: detached });
+          return offerUnsafe({
+            _tag: "Text",
+            ...identity,
+            runId,
+            turnId,
+            generation,
+            part: detached,
+          });
         },
         discard: () => {
-          if (!open) return;
+          if (!open || closed) return;
           handle.close();
-          offerUnsafe({ _tag: "Discard", ...model });
+          offerUnsafe({ _tag: "Discard", ...identity, runId, turnId, generation });
         },
         close: () => {
           if (!open) return;
           open = false;
-          active.delete(handle);
         },
       };
-
-      active.add(handle);
 
       return handle;
     },
     close: () => {
       if (closed) return;
       closed = true;
-      for (const handle of active) handle.close();
       offerUnsafe({ _tag: "AttemptEnded", ...identity });
     },
   };

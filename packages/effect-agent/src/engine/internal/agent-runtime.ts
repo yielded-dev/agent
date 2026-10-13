@@ -1244,7 +1244,10 @@ interface PreparedToolCall<Tools extends Record<string, Tool.Any>> {
   readonly call: Response.ToolCallPart<string, Schema.Json>;
   readonly name: keyof Tools & string;
   readonly toolCallId: ToolCallId;
-  readonly validation: Result.Result<Tool.Parameters<ToolUnion<Tools>>, ToolParameterRejection>;
+  readonly validation: Result.Result<
+    Option.Option<Tool.Parameters<ToolUnion<Tools>>>,
+    ToolParameterRejection
+  >;
   readonly tool: ToolUnion<Tools>;
   readonly declarationIndex: number;
 }
@@ -1375,9 +1378,15 @@ const decodeToolCallParameters = <Tools extends Record<string, Tool.Any>>(
   );
 };
 
+/** Native identity proves encoding does not transform the already validated parameters. */
+const reusesValidatedToolParameters = (tool: Tool.Any): boolean =>
+  (tool.needsApproval === undefined || tool.needsApproval === false) &&
+  SchemaAST.toEncoded(tool.parametersSchema.ast) === tool.parametersSchema.ast;
+
 /**
- * Decode executable parameters for approval while retaining their encoded form for
- * Toolkit.handle. A recorded rejection is a terminal failure, never an executable call.
+ * Fresh responses and resumed batches validate every call before reaching this boundary.
+ * Identity encodings with no approval need no second decoded value. Other codecs retain the
+ * complete batch preflight, including validation of their canonical round trip, before dispatch.
  */
 const prepareToolCall = <Tools extends Record<string, Tool.Any>>(
   toolkit: Toolkit.WithHandler<Tools>,
@@ -1398,17 +1407,26 @@ const prepareToolCall = <Tools extends Record<string, Tool.Any>>(
   }
   const tool = toolkit.tools[name] as ToolUnion<Tools>;
 
-  return Effect.gen(function* () {
-    const toolCallId = yield* decodeToolCallId(call.id);
+  return Effect.flatMap(decodeToolCallId(call.id), (toolCallId) => {
+    const prepared = (
+      validation: PreparedToolCall<Tools>["validation"],
+    ): PreparedToolCall<Tools> => ({
+      call,
+      name,
+      toolCallId,
+      validation,
+      tool,
+      declarationIndex,
+    });
 
-    const validation: PreparedToolCall<Tools>["validation"] =
-      rejection === undefined
-        ? Result.succeed(
-            yield* decodeToolCallParameters<Tools>(tool, call.name, copyJson(call.params)),
-          )
-        : Result.fail(rejection);
+    if (rejection !== undefined) return Effect.succeed(prepared(Result.fail(rejection)));
+    if (reusesValidatedToolParameters(tool))
+      return Effect.succeed(prepared(Result.succeed(Option.none())));
 
-    return { call, name, toolCallId, validation, tool, declarationIndex };
+    return Effect.map(
+      decodeToolCallParameters<Tools>(tool, call.name, copyJson(call.params)),
+      (parameters) => prepared(Result.succeed(Option.some(parameters))),
+    );
   });
 };
 
@@ -1802,7 +1820,8 @@ const prepareApprovalRequest = <Tools extends Record<string, Tool.Any>>(
     context,
     Effect.gen(function* () {
       if (Result.isFailure(prepared.validation)) return undefined;
-      const decodedParams = prepared.validation.success;
+      if (Option.isNone(prepared.validation.success)) return undefined;
+      const decodedParams = prepared.validation.success.value;
       const approval = prepared.tool.needsApproval;
 
       const required =
@@ -2491,6 +2510,7 @@ const executeToolBatch = Effect.fnUntraced(function* <
   | AgentUpdateAcceptance
   | ToolSpanTelemetry
   | ProgrammaticToolAuthorization
+  | Scope.Scope
   | Tool.HandlerServices<ToolUnion<Tools>>
 > {
   const exposed = context.toolExposure?.exposedToolNames;
@@ -2513,21 +2533,37 @@ const executeToolBatch = Effect.fnUntraced(function* <
       message: "Tool batch calls a Tool outside its request exposure or current visibility",
     });
 
-  const prepared = yield* prepareWithinDeadline(
-    context,
-    Effect.forEach(
-      calls.flatMap((call, declarationIndex) =>
-        settledCallIds?.has(call.id) ? [] : [{ call, declarationIndex }],
-      ),
-      ({ call, declarationIndex }) =>
-        prepareToolCall(
-          toolkit,
-          call,
-          declarationIndex,
-          trace.toolParameterRejections.get(call.id),
-        ),
+  const prepareCalls = Effect.forEach(
+    calls.flatMap((call, declarationIndex) =>
+      settledCallIds?.has(call.id) ? [] : [{ call, declarationIndex }],
     ),
+    ({ call, declarationIndex }) =>
+      prepareToolCall(toolkit, call, declarationIndex, trace.toolParameterRejections.get(call.id)),
   );
+
+  const needsParameterDecoding = calls.some(
+    (call) =>
+      !settledCallIds?.has(call.id) &&
+      !trace.toolParameterRejections.has(call.id) &&
+      hasTool(toolkit.tools, call.name) &&
+      !reusesValidatedToolParameters(toolkit.tools[call.name]),
+  );
+
+  const prepared = yield* needsParameterDecoding
+    ? prepareWithinDeadline(context, prepareCalls)
+    : Effect.flatMap(
+        Clock.currentTimeMillis,
+        (
+          now,
+        ): Effect.Effect<
+          Array<PreparedToolCall<Tools>>,
+          ModelProtocolError | AgentPolicyError,
+          Tool.HandlerServices<ToolUnion<Tools>>
+        > =>
+          context.durationDeadlineMillis - now <= 0
+            ? Effect.fail(context.durationFailure)
+            : prepareCalls,
+      );
 
   if (
     prepared.some((call) => Context.get(call.tool.annotations, ContextRolloverTool)) &&
@@ -2788,9 +2824,9 @@ const executeToolBatch = Effect.fnUntraced(function* <
       ),
   };
 
-  // One finite permit owner; a call's own fiber fully exits before the supervisor releases it.
-  // The extra scoped child is required even for a singleton group: it closes handler descendants
-  // before another group can enter and retains cleanup failures in that call's Cause.
+  // The permit covers the child's complete lifetime, including descendant cleanup. The call
+  // owns its resource Scope and its fiber belongs to the enclosing Turn Scope. The native bracket
+  // joins or interrupts it before releasing the permit, without another supervisor Scope.
   const permits = yield* Semaphore.make(concurrency);
 
   const handlers = Effect.gen(function* () {
@@ -2799,9 +2835,9 @@ const executeToolBatch = Effect.fnUntraced(function* <
         group,
         (call) =>
           permits.withPermit(
-            Effect.scoped(
-              Effect.gen(function* () {
-                const callBody = Effect.scoped(
+            Effect.acquireUseRelease(
+              Effect.forkScoped(
+                Effect.scoped(
                   Effect.gen(function* () {
                     yield* checkpointExecution(context, durability);
                     const subagentHost = yield* SubagentHost.forTool;
@@ -2827,6 +2863,11 @@ const executeToolBatch = Effect.fnUntraced(function* <
                       hookServices,
                     });
 
+                    const step = stepServiceFor(call);
+                    const subagent = subagentHost(source);
+                    const messaging = messagingHost(source);
+                    const catalog = { entries: context.toolCatalog };
+
                     return yield* executePreparedToolCall(
                       context,
                       turnId,
@@ -2838,23 +2879,31 @@ const executeToolBatch = Effect.fnUntraced(function* <
                         waitingByDeclaration.set(call.declarationIndex, waiting);
                       },
                     ).pipe(
-                      Effect.provideService(DurableStep, stepServiceFor(call)),
-                      Effect.provideService(SubagentHost, subagentHost(source)),
-                      Effect.provideService(MessagingHost, messagingHost(source)),
-                      Effect.provideService(ToolBroker, broker.service),
-                      Effect.provideService(CurrentToolCatalog, { entries: context.toolCatalog }),
+                      // Match the original providers' outer-to-inner order with one restoration.
+                      Effect.updateContext(
+                        (
+                          services: Context.Context<
+                            ToolSpanTelemetry | Tool.HandlerServices<ToolUnion<Tools>>
+                          >,
+                        ) =>
+                          services.pipe(
+                            Context.add(CurrentToolCatalog, catalog),
+                            Context.add(ToolBroker, broker.service),
+                            Context.add(MessagingHost, messaging),
+                            Context.add(SubagentHost, subagent),
+                            Context.add(DurableStep, step),
+                          ),
+                      ),
                       Effect.ensuring(Effect.sync(() => broker.close())),
                     );
                   }),
-                );
-
-                const fiber = yield* Effect.forkScoped(callBody);
-
-                return yield* Fiber.join(fiber);
-              }),
+                ),
+              ),
+              Fiber.join,
+              Fiber.interrupt,
             ),
           ),
-        { concurrency: "unbounded", discard: true },
+        { concurrency: group.length === 1 ? 1 : "unbounded", discard: true },
       );
       yield* checkpointExecution(context, durability);
     }
