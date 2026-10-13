@@ -146,6 +146,8 @@ const discoverClosedRoots = async (frame: Frame): Promise<boolean> => {
 
 /** One application-neutral controller over an existing scoped native attachment.
  * No allocation, model, provider choice, input retry, or arbitrary page JS is exposed.
+ * Observers also admit named, explicitly focusable elements and pointer-cursor boundaries
+ * without nested semantic controls. This evidence is rechecked before native input.
  * Reads re-authorize at most five times when page/frame URLs change during authorization.
  * References expire on inspection; outstanding native work retains the session's fencing.
  */

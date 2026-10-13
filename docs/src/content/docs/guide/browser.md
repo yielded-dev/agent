@@ -62,6 +62,9 @@ arguments cannot supply authority. A successful input call proves SDK completion
 website accepted an order, login, or upload; inspect the site's outcome separately.
 
 Native observations and input support controls and frames in open and closed shadow roots.
+Named elements with explicit keyboard focus or a pointer cursor can also receive refs, including
+clickable cards. Inherited cursors do not create refs for every child; containers with nested
+semantic controls are excluded. Input rechecks this evidence, visibility, and obstruction.
 Closed-root discovery reads the frame's DOM through CDP; output limits do not bound that transfer.
 Inspect again if a new closed root is attached after a condition wait starts.
 

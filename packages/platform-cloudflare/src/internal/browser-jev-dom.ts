@@ -163,19 +163,41 @@ export const inspectJevDom = pageFunction(
         node.readOnly) ||
       node.getAttribute("aria-readonly") === "true";
 
+    const interactiveEvidence = (node: HTMLElement) => {
+      if (node.matches("html,body")) return undefined;
+      // An independent nested control owns its input; do not offer its layout wrapper.
+      if (node.querySelector(controlSelector) !== null) return undefined;
+      if (node.hasAttribute("tabindex") && node.tabIndex >= 0) return "focus";
+      const root = node.getRootNode();
+      const parent = node.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
+
+      return getComputedStyle(node).cursor === "pointer" &&
+        (parent === null || getComputedStyle(parent).cursor !== "pointer")
+        ? "pointer"
+        : undefined;
+    };
+
     const closedRoots: ReadonlyMap<Element, ShadowRoot> | undefined = Reflect.get(
       globalThis,
       "@effect-agent/native-browser-closed-roots",
     );
 
-    const candidates = [document, ...(closedRoots?.values() ?? [])].flatMap((root) =>
-      Array.from(
-        root.querySelectorAll(
-          'a[href],button,input,textarea,select,summary,[contenteditable="true"],' +
-            roles.map((role) => `[role="${role}"]`).join(","),
-        ),
-      ),
-    );
+    const controlSelector =
+      'a[href],button,input,textarea,select,summary,[contenteditable="true"],' +
+      roles.map((role) => `[role="${role}"]`).join(",");
+
+    const candidates: Array<Element> = [];
+
+    for (const root of [document, ...(closedRoots?.values() ?? [])]) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+      let node = walker.nextNode();
+
+      while (node instanceof Element && candidates.length <= 10_000) {
+        candidates.push(node);
+        node = walker.nextNode();
+      }
+      if (candidates.length > 10_000) break;
+    }
 
     const controls: Array<typeof Control.Type> = [];
     let truncated = candidates.length > 10_000;
@@ -196,16 +218,29 @@ export const inspectJevDom = pageFunction(
         node.closest('[aria-disabled="true"]')
       )
         continue;
-      const kind = role(node);
+      const semantic = node.matches(controlSelector);
+      const evidence = semantic ? undefined : interactiveEvidence(node);
+
+      const kind = semantic
+        ? role(node)
+        : evidence === undefined
+          ? null
+          : node.tagName.toLowerCase();
 
       if (kind === null || (kind === "gridcell" && node.querySelector('button,[role="button"]')))
         continue;
+
+      const label =
+        evidence === undefined
+          ? name(node) || kind
+          : name(node).replace(/\s+/g, " ").trim().slice(0, 300);
+
+      if (label.length === 0) continue;
       if (controls.length >= maximum) {
         truncated = true;
         break;
       }
       const ref = `${prefix}-${controls.length}`;
-      const label = name(node) || kind;
       const currentValue = value(node);
       const readonly = readOnly(node);
       const allOptions = node instanceof HTMLSelectElement ? Array.from(node.options) : [];
@@ -235,8 +270,11 @@ export const inspectJevDom = pageFunction(
         kind,
         viewport: true,
         verify: () =>
-          role(node) === kind &&
-          (name(node) || kind) === label &&
+          (evidence === undefined
+            ? role(node) === kind && (name(node) || kind) === label
+            : !node.matches(controlSelector) &&
+              interactiveEvidence(node) === evidence &&
+              name(node).replace(/\s+/g, " ").trim().slice(0, 300) === label) &&
           value(node) === currentValue &&
           readOnly(node) === readonly &&
           node.closest('[aria-disabled="true"]') === null &&

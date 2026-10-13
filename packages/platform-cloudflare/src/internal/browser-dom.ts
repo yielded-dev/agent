@@ -122,12 +122,28 @@ export const inspectDom = pageFunction(
     const visited = new Set<Node>();
     let discoveredElements = 0;
     const candidates: Array<HTMLElement> = [];
+    const inferred = new Map<HTMLElement, string>();
     let scanned = 0;
     let truncated = false;
     let text = "";
 
     const controlSelector =
       'button,a[href],input,textarea,select,label,[contenteditable="true"],[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="switch"],[role="tab"],[role="option"],[role="combobox"],[role="textbox"],[role="menuitem"],[role="scrollbar"]';
+
+    // Cursor inheritance identifies one target boundary, not every span inside a card.
+    const interactiveEvidence = (node: HTMLElement) => {
+      if (node.matches("html,body")) return undefined;
+      // An independent nested control owns its input; do not offer its layout wrapper.
+      if (node.querySelector(controlSelector) !== null) return undefined;
+      if (node.hasAttribute("tabindex") && node.tabIndex >= 0) return "focus";
+      const root = node.getRootNode();
+      const parent = node.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
+
+      return getComputedStyle(node).cursor === "pointer" &&
+        (parent === null || getComputedStyle(parent).cursor !== "pointer")
+        ? "pointer"
+        : undefined;
+    };
 
     const filter: NodeFilter = {
       acceptNode(node) {
@@ -233,7 +249,12 @@ export const inspectDom = pageFunction(
           node.scrollHeight > node.clientHeight &&
           ["auto", "scroll"].includes(getComputedStyle(node).overflowY);
 
-        if (!node.matches(controlSelector) && !scrollable) continue;
+        if (!node.matches(controlSelector) && !scrollable) {
+          const evidence = interactiveEvidence(node);
+
+          if (evidence === undefined || readName(node).length === 0) continue;
+          inferred.set(node, evidence);
+        }
         if (
           !node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) ||
           node.closest('[inert],[aria-hidden="true"]') !== null
@@ -297,7 +318,7 @@ export const inspectDom = pageFunction(
       truncated ||= candidates.length > retained.length;
     }
 
-    const readName = (node: HTMLElement) => {
+    function readName(node: HTMLElement) {
       const associated = node instanceof HTMLLabelElement ? (node.control ?? node) : node;
 
       const nativeField =
@@ -335,7 +356,7 @@ export const inspectDom = pageFunction(
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 300);
-    };
+    }
 
     const controls = retained.map((node, index) => {
       const ref = `${prefix}-${index}`;
@@ -407,7 +428,9 @@ export const inspectDom = pageFunction(
       nameChecks.set(ref, {
         name,
         originalName: name,
-        verify: () => readName(node) === name,
+        verify: () =>
+          readName(node) === name &&
+          (!inferred.has(node) || interactiveEvidence(node) === inferred.get(node)),
       });
       const pointerEvents = getComputedStyle(node).pointerEvents?.slice(0, 64);
 
@@ -440,7 +463,7 @@ export const inspectDom = pageFunction(
             }
           : {}),
         disabled:
-          associated.matches(":disabled") || associated.getAttribute("aria-disabled") === "true",
+          associated.matches(":disabled") || associated.closest('[aria-disabled="true"]') !== null,
         editable:
           (node instanceof HTMLInputElement &&
             !node.readOnly &&
@@ -521,6 +544,7 @@ export const inspectDom = pageFunction(
           const originalName = control.name;
           const container = scope;
           const caption = source;
+          const verifyName = nameChecks.get(control.ref)?.verify;
 
           control.name = `${originalName} (${context})`.slice(0, 300);
           // Keep raw-name and contextual identity checks in the isolated realm.
@@ -529,7 +553,7 @@ export const inspectDom = pageFunction(
             name: control.name,
             originalName,
             verify: () =>
-              readName(node) === originalName &&
+              verifyName?.() === true &&
               container.isConnected &&
               container.contains(node) &&
               container.contains(caption) &&
@@ -665,7 +689,10 @@ export const checkDom = pageFunction(
     let ancestor: Node | null = node;
 
     while (ancestor !== null) {
-      if (ancestor instanceof Element && ancestor.matches('[inert],[aria-hidden="true"]'))
+      if (
+        ancestor instanceof Element &&
+        ancestor.matches('[inert],[aria-hidden="true"],[aria-disabled="true"]')
+      )
         return false;
       ancestors.add(ancestor);
       ancestor = ancestor instanceof ShadowRoot ? ancestor.host : ancestor.parentNode;
