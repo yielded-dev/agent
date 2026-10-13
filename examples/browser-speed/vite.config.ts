@@ -69,6 +69,9 @@ export default defineConfig({
             "!dist",
             "!dist/**",
             { pattern: "bun.lock", base: "workspace" },
+            // Another build writes this directory concurrently; it is not browser input.
+            { pattern: "!.context-continuity-eval", base: "workspace" },
+            { pattern: "!.context-continuity-eval/**", base: "workspace" },
             { pattern: "!**/node_modules", base: "workspace" },
             { pattern: "!**/node_modules/.vite*", base: "workspace" },
             { pattern: "!**/node_modules/.vite*/**", base: "workspace" },
