@@ -17,9 +17,13 @@ export const reviewReasoningEffort = Config.schema(ReviewReasoningEffort, "PR_RE
   Config.withDefault("medium"),
 );
 
-export const reviewPriority = Config.Literals(["", "default", "fast"], "PR_REVIEW_PRIORITY").pipe(
-  Config.withDefault(""),
-);
+export const ReviewServiceTier = Schema.Literals(["default", "fast", "ultrafast"]);
+export type ReviewServiceTier = typeof ReviewServiceTier.Type;
+
+export const reviewPriority = Config.schema(
+  Schema.Union([Schema.Literal(""), ReviewServiceTier]),
+  "PR_REVIEW_PRIORITY",
+).pipe(Config.withDefault(""));
 
 export const reviewWebSearch = Config.Boolean("PR_REVIEW_WEB_SEARCH").pipe(
   Config.withDefault(false),
@@ -67,10 +71,10 @@ const MAX_INPUT_TOKENS = 128_000;
 // https://developers.openai.com/api/docs/pricing
 const MAX_PRICED_INPUT_TOKENS = 272_000;
 const MAX_OUTPUT_TOKENS = 32_000;
-// Responses web search bills $0.01 per search, at either tier.
+// Responses web search bills $0.01 per search, at every tier.
 // https://developers.openai.com/api/docs/pricing#built-in-tools
 const WEB_SEARCH_COST_MICROUSD = 10_000;
-const PRICING_VERSION = "openai-2026-10-12";
+const PRICING_VERSION = "openai-2026-10-13";
 
 interface Pricing {
   readonly label: string;
@@ -118,18 +122,23 @@ const modelPricing: Readonly<Record<string, Pricing>> = {
   },
 };
 
-export const reviewModelPricing = (model: string, fast = false): Pricing | undefined => {
+export const reviewModelPricing = (
+  model: string,
+  tier: ReviewServiceTier = "default",
+): Pricing | undefined => {
   const standard = Object.hasOwn(modelPricing, model) ? modelPricing[model] : undefined;
 
-  if (standard === undefined || !fast) return standard;
+  if (standard === undefined || tier === "default") return standard;
+  if (tier === "ultrafast" && model !== "gpt-6-astra" && model !== "gpt-6.1-sol") return undefined;
+  // The pinned card prices Fast at 2x Standard and Ultrafast at 6x Standard.
+  const multiplier = tier === "ultrafast" ? 6 : 2;
 
-  // Every model in this pinned card has Fast rates exactly twice its Standard rates.
   return {
     ...standard,
-    input: standard.input * 2,
-    read: standard.read * 2,
-    write: standard.write * 2,
-    output: standard.output * 2,
+    input: standard.input * multiplier,
+    read: standard.read * multiplier,
+    write: standard.write * multiplier,
+    output: standard.output * multiplier,
   };
 };
 
@@ -310,7 +319,7 @@ const reservedCost = (state: Spending) =>
 /** Capture the provided client for one review's spending ledger. Never share it between attempts. */
 export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
   readonly model: string;
-  readonly serviceTier?: "default" | "fast" | "auto";
+  readonly serviceTier?: ReviewServiceTier | "auto";
   readonly cacheKey: string;
   readonly costLimitMicrousd: number;
 }) {
@@ -330,9 +339,10 @@ export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
     options.serviceTier === "auto" ? undefined : (options.serviceTier ?? "default");
 
   // Omitted API tiers inherit project settings, which may enable Fast mode.
-  const reserveFast = serviceTier !== "default";
+  const reservedServiceTier = serviceTier ?? "fast";
   const standardPricing = reviewModelPricing(options.model);
-  const pricing = reviewModelPricing(options.model, reserveFast);
+  const fastPricing = reviewModelPricing(options.model, "fast");
+  const pricing = reviewModelPricing(options.model, reservedServiceTier);
 
   if (pricing === undefined || standardPricing === undefined) {
     return yield* admissionError("The review model has no verified price for the selected tier.");
@@ -542,7 +552,7 @@ export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
       costLimitMicrousd,
       cacheMode: "explicit",
       serviceTier: serviceTier ?? "auto",
-      reservedServiceTier: reserveFast ? "fast" : "default",
+      reservedServiceTier,
       pricingVersion: PRICING_VERSION,
     });
 
@@ -559,14 +569,17 @@ export const makeReviewOpenAi = Effect.fnUntraced(function* (options: {
       ),
     );
 
-    // Fast can return its priority alias or fall back to Standard processing.
-    // Settle at the reported tier; keep the more expensive pre-dispatch reservation.
+    // Settle at the reported tier, allowing cheaper processing and the Fast alias.
+    // Keep the more expensive pre-dispatch reservation until usage is verified.
     const chargedPricing =
       response.service_tier === "default"
         ? standardPricing
-        : reserveFast && (response.service_tier === "fast" || response.service_tier === "priority")
-          ? pricing
-          : undefined;
+        : reservedServiceTier !== "default" &&
+            (response.service_tier === "fast" || response.service_tier === "priority")
+          ? fastPricing
+          : reservedServiceTier === "ultrafast" && response.service_tier === "ultrafast"
+            ? pricing
+            : undefined;
 
     const webCalls = response.output.filter((item) => item.type === "web_search_call");
 

@@ -1,4 +1,7 @@
-import { ReviewReasoningEffort } from "@yielded/agent-pr-review-action/review-openai";
+import {
+  ReviewReasoningEffort,
+  ReviewServiceTier,
+} from "@yielded/agent-pr-review-action/review-openai";
 import {
   ReviewCompaction,
   ReviewContextTokenLimit,
@@ -194,7 +197,7 @@ export class EvalSuite extends Schema.Class<EvalSuite>(
 export const EvalReasoningEffort = ReviewReasoningEffort;
 export type EvalReasoningEffort = typeof EvalReasoningEffort.Type;
 
-export const EvalServiceTier = Schema.Literals(["default", "fast"]);
+export const EvalServiceTier = ReviewServiceTier;
 export type EvalServiceTier = typeof EvalServiceTier.Type;
 
 export class EvalVariantConfiguration extends Schema.Class<EvalVariantConfiguration>(

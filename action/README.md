@@ -292,17 +292,21 @@ Every consumer must specify `model` (or local `PR_REVIEW_MODEL`); there is no fa
 Missing, blank, and unpriced models fail before paid inference. Reasoning effort defaults to
 `medium` and accepts `low`, `medium`, `high`, `xhigh`, or `max`.
 Omit `priority` to omit the API's `service_tier` parameter and inherit the OpenAI project setting.
-Set `priority: default` to force Standard processing, or `priority: fast` (local
-`PR_REVIEW_PRIORITY=fast`) to request [OpenAI Fast mode](https://developers.openai.com/api/docs/guides/fast-mode).
-Fast is supported for the listed models, subject to account and regional availability.
-Fast mode costs twice the standard token rates for the supported models and uses the same
-size-scaled spending cap, so the allowance buys fewer tokens. The @yielded/agent repository's
-workflow opts into Fast mode with `base-cost-usd: "20.00"` and `max-cost-usd: "25.00"`;
-its allowance still scales with PR size.
+Set `priority: default` to force Standard processing, `priority: fast` for
+[Fast mode](https://developers.openai.com/api/docs/guides/fast-mode), or
+`priority: ultrafast` for [Ultrafast mode](https://developers.openai.com/api/docs/guides/ultrafast-mode).
+Local runs use the same values in `PR_REVIEW_PRIORITY`. Fast supports all listed models;
+Ultrafast supports GPT-6 Astra and GPT-6.1 Sol. Unsupported model/tier combinations fail before
+paid inference. Availability depends on the account and region.
+Fast costs twice the Standard token rates; Ultrafast costs six times Standard. Every tier uses
+the same size-scaled spending cap, so faster tiers buy fewer tokens. The @yielded/agent
+repository's workflow uses GPT-6.1 Sol with Ultrafast, `base-cost-usd: "20.00"` and
+`max-cost-usd: "25.00"`; its allowance still scales with PR size.
 Requests with omitted priority reserve at Fast rates because the project setting can enable Fast.
 Explicit priorities reserve at the selected tier's rates, and settlement uses the tier reported by OpenAI,
-including standard-rate fallback from Fast mode. Both `fast` and `priority` response tags identify
-Fast pricing. Unknown response tiers retain their reservation and stop the attempt. Rejected
+including cheaper served tiers. Both `fast` and `priority` response tags identify Fast pricing;
+`ultrafast` identifies Ultrafast pricing. Unknown or more expensive response tiers retain their
+reservation and stop the attempt. Rejected
 requests are not retried at another tier; the selected model and effort stay unchanged.
 
 ```yaml
@@ -313,14 +317,14 @@ requests are not retried at another tier; the selected model and effort stay unc
     pull-request: ${{ github.event.pull_request.number }}
     model: gpt-6-astra
     effort: medium # Optional; this is the default.
-    priority: fast
+    priority: ultrafast
 ```
 
 **BEHAVIOR CHANGE:** Add an explicit `model`. Replace `fast: "true"` with `priority: fast`;
 use `priority: default` to retain explicitly Standard processing.
 
-It accepts GPT-6 Astra, Sol, and Luna. The Standard and Fast rate cards were verified on
-2026-09-22. See [OpenAI pricing](https://developers.openai.com/api/docs/pricing).
+It accepts GPT-6 Astra, GPT-6.1 Sol, GPT-6 Sol, and GPT-6 Luna. See
+[OpenAI pricing](https://developers.openai.com/api/docs/pricing) for the tier rates.
 
 Before each research, compaction, or completion request, the Action uses OpenAI's
 [input-token counting endpoint](https://developers.openai.com/api/docs/guides/token-counting) on the
