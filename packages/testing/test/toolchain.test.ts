@@ -132,7 +132,7 @@ layer(NodeServices.layer)("workspace toolchain", (it) => {
           continuity: true,
           dryRun: false,
           failure: "",
-          expected: ["publish"],
+          expected: ["publish", "dist-tag"],
         },
       ]) {
         const observed: Array<string> = [];
@@ -141,11 +141,18 @@ layer(NodeServices.layer)("workspace toolchain", (it) => {
           if (command._tag !== "StandardCommand") return Effect.die("Unexpected pipeline");
 
           const operation = command.args.find((arg) =>
-            ["build", "context-continuity-eval", "prove:live", "publish", "pack"].includes(arg),
+            [
+              "build",
+              "context-continuity-eval",
+              "prove:live",
+              "publish",
+              "dist-tag",
+              "pack",
+            ].includes(arg),
           );
 
           if (operation === undefined) return Effect.die("Unexpected release command");
-          if (operation === "publish") observed.push(operation);
+          if (operation === "publish" || operation === "dist-tag") observed.push(operation);
 
           // Exercise the real process exit boundary without building, deploying, or publishing.
           return spawner.spawn(

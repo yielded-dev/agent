@@ -440,6 +440,17 @@ export const publishRelease = Effect.fn("releasePublish.publishRelease")(functio
             ...(Option.isSome(otp) ? ["--otp", otp.value] : []),
           ]),
     );
+    // Every release is a beta, so `latest` follows the release just published.
+    if (!dryRun)
+      for (const { manifest } of yield* readWorkspacePackages(root))
+        if (manifest.private !== true)
+          yield* runCommand(root, "npm", [
+            "dist-tag",
+            "add",
+            manifest.name + "@" + manifest.version,
+            "latest",
+            ...(Option.isSome(otp) ? ["--otp", otp.value] : []),
+          ]);
   });
 
   if ((checkContinuity || checkCheckout) && !dryRun) {
