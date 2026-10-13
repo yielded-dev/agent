@@ -1,0 +1,20 @@
+--- a/src/SqliteClient.ts
++++ b/src/SqliteClient.ts
+@@ -297,6 +297,7 @@
+ 
+     const client = (yield* Client.make({
+       acquirer,
++      borrower: (f) => semaphore.withPermit(f(connection)),
+       compiler,
+       transactionService: SqliteTransaction,
+       spanAttributes: [
+--- a/dist/SqliteClient.js
++++ b/dist/SqliteClient.js
+@@ -168,6 +168,7 @@
+   }), connection);
+   const client = yield* Client.make({
+     acquirer,
++    borrower: (f) => semaphore.withPermit(f(connection)),
+     compiler,
+     transactionService: SqliteTransaction,
+     spanAttributes: [...(options.spanAttributes ? Object.entries(options.spanAttributes) : []), [ATTR_DB_SYSTEM_NAME, "sqlite"]],

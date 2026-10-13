@@ -236,14 +236,6 @@ export const prepareProgressAppend = (
   return Object.freeze(encodings.success.map((record) => record.progress));
 };
 
-const factUsageCharge = (facts: ReadonlyArray<RecordEnvelope>) =>
-  Effect.fromResult(Result.all(facts.map(recordEncoding))).pipe(
-    Effect.map((encodings) =>
-      encodings.reduce((bytes, record) => bytes + record.progress.terminalUsageBytes, 0),
-    ),
-    Effect.mapError((cause) => failure("Cannot account canonical progress facts", cause)),
-  );
-
 /** These values belong to the active Run, not its permanent conversation history. */
 export const isOperationalRecord = ({ payload }: RecordEnvelope): boolean =>
   payload._tag === "RunStarted" ||
@@ -717,9 +709,27 @@ const advanceFacts = Effect.fnUntraced(function* (
   let results = new Map(previous?.results);
   let childResults = new Map(previous?.childResults);
   let completionBytes = previous?.completionBytes;
+  let factBytes = 0;
+  let turn = previous?.continuation.turn ?? 1;
+  let usageCharge = 0;
+  let closingBytes = 0;
+  let closingCount = 0;
 
   for (const fact of facts) {
     const payload = fact.payload;
+    const captured = recordEncoding(fact);
+
+    if (Result.isFailure(captured))
+      return yield* failure("Cannot account canonical progress facts", captured.failure);
+    const encoded = captured.success;
+
+    factBytes += encoded.bytes;
+    if ("turn" in payload) turn = Math.max(turn, payload.turn);
+    usageCharge += encoded.progress.terminalUsageBytes;
+    if (encoded.progress.terminal) {
+      closingBytes += encoded.bytes;
+      closingCount++;
+    }
 
     switch (payload._tag) {
       case "RunStarted":
@@ -929,21 +939,12 @@ const advanceFacts = Effect.fnUntraced(function* (
   if (previous?.continuation.position === "settled") position = "settled";
   else if (previous?.continuation.position === "settling" && position !== "settled")
     position = "settling";
-  const factBytes = facts.reduce((bytes, fact) => bytes + canonicalRecordBytes(fact), 0);
-
-  const turn = facts.reduce(
-    (current, fact) => ("turn" in fact.payload ? Math.max(current, fact.payload.turn) : current),
-    previous?.continuation.turn ?? 1,
-  );
 
   const turnBase =
     (previous?.continuation.turn === turn ? previous.continuation.turnBytes : initialBytes) +
     factBytes;
 
-  const usageCharge = yield* factUsageCharge(facts);
   const terminalUsageBytes = (previous?.continuation.terminalUsageBytes ?? 0) + usageCharge;
-
-  const closing = facts.filter(isTerminalBudgetFact);
 
   return {
     accounting,
@@ -961,11 +962,9 @@ const advanceFacts = Effect.fnUntraced(function* (
     turnBase,
     usageCharge,
     terminalUsageBytes,
-    terminalBytes:
-      (previous?.continuation.terminalBytes ?? 0) +
-      closing.reduce((bytes, fact) => bytes + canonicalRecordBytes(fact), 0),
-    terminalRecords: (previous?.continuation.terminalRecords ?? 0) + closing.length,
-    closing: closing.length > 0,
+    terminalBytes: (previous?.continuation.terminalBytes ?? 0) + closingBytes,
+    terminalRecords: (previous?.continuation.terminalRecords ?? 0) + closingCount,
+    closing: closingCount > 0,
   };
 });
 
@@ -1316,12 +1315,9 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     if (batch.records.some((record) => record.payload._tag === "RunContinuation"))
       return yield* failure("A caller cannot supply interpreter progress to the progress writer");
 
-    const ownedRecords = yield* Effect.fromResult(
-      Result.all(batch.records.map(captureRecord)),
-    ).pipe(
-      Effect.map((encodings) => encodings.map((record) => record.canonical)),
-      Effect.mapError((cause) => failure("Cannot capture canonical progress facts", cause)),
-    );
+    // Every private caller passes captureFacts' owned snapshot. Keep a mutable
+    // list for settlement accounting without capturing that snapshot a second time.
+    const ownedRecords = [...batch.records];
 
     const groups = new Map<RunId, Array<RecordEnvelope>>();
 

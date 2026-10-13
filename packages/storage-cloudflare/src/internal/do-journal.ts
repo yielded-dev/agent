@@ -1,3 +1,4 @@
+import { SqliteClient } from "@effect/sql-sqlite-do";
 import {
   makeCanonicalStorage,
   recordBatchId,
@@ -28,9 +29,21 @@ import {
   ThreadStoreDiagnostic,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
-import { Cause, Clock, Effect, Option, Schema, Stream } from "effect";
+import {
+  Cause,
+  Clock,
+  Effect,
+  Option,
+  Predicate,
+  References,
+  Result,
+  Schema,
+  Stream,
+  Tracer,
+} from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
-import { SqlError } from "effect/sql/SqlError";
+import { classifySqliteError, SqlError } from "effect/sql/SqlError";
+import { CurrentTransformer, type Statement } from "effect/sql/Statement";
 
 import {
   type DoStorageFailpointError,
@@ -41,6 +54,7 @@ import {
   DoValueBoundExceeded,
   type DoStorageFailpointLocation,
 } from "../DoStorageError.ts";
+import { isDefaultDoStorageFailpoint } from "../DoStorageFailpoint.ts";
 import { ensureDoStorageLayout } from "./migrations.ts";
 import { ownedState, ownedRows, type OwnedState } from "./owned-state.ts";
 import {
@@ -67,6 +81,12 @@ const MAX_RECORD_CACHE_ENTRIES = 4_096;
 /** Durable Object SQL storage allows at most 100 bound parameters per statement. */
 const MAX_BOUND_PARAMETERS = 100;
 const isSqlError = Schema.is(SqlError);
+
+const isNativeClient = Schema.is(
+  Schema.declare<SqliteClient.SqliteClient>((value): value is SqliteClient.SqliteClient =>
+    Predicate.hasProperty(value, SqliteClient.TypeId),
+  ),
+);
 
 const storedTextBytes = (value: string): number => new TextEncoder().encode(value).byteLength;
 
@@ -366,6 +386,14 @@ const makeJournal = Effect.fnUntraced(function* (
   const owner = (yield* SqlStorageOwner) ?? state;
   const progress = yield* SqlStorageProgress;
 
+  const nativeDb =
+    isNativeClient(sql) &&
+    sql.config.transformQueryNames === undefined &&
+    sql.config.transformResultNames === undefined &&
+    isDefaultDoStorageFailpoint(failpoint)
+      ? sql.config.storage?.sql
+      : undefined;
+
   const work = yield* makeSqlThreadWork({
     read: (body) => state.read(body),
     write: (body) =>
@@ -620,6 +648,148 @@ const makeJournal = Effect.fnUntraced(function* (
     return request;
   });
 
+  // Replay and progress validation precede this body in the same owner transaction.
+  // A miss makes no native change; the ordinary path reuses any tentative batch.
+  // After advancing the frontier, failures must roll back rather than fall back.
+  const appendNativeBody = Effect.fnUntraced(function* (
+    request: RawAppendRequest,
+    first: CanonicalSequence,
+    last: CanonicalSequence,
+    batchInserted: boolean,
+  ) {
+    const db = nativeDb;
+
+    // Effectful statement transformers and exported SQL spans retain the ordinary path.
+    const ordinaryStatement = yield* Effect.withFiber((fiber) =>
+      Effect.succeed(
+        fiber.getRef(CurrentTransformer) !== undefined ||
+          (fiber.getRef(References.TracerEnabled) &&
+            fiber.getRef(Tracer.Tracer) !== Tracer.nativeTracer),
+      ),
+    );
+
+    if (ordinaryStatement) return false;
+    if (
+      db === undefined ||
+      request.executionWrites.length !== 1 ||
+      request.executionWrites[0]?.update.retire ||
+      request.executionWrites[0]?.update.facts.length !== 0
+    )
+      return false;
+
+    const workPlan = work.prepareClosedPair(
+      request.threadId,
+      first,
+      last,
+      request.records.map((record) => record.canonical),
+    );
+
+    if (workPlan === undefined) return false;
+
+    const native = yield* Effect.suspend(() => {
+      const query = (statement: Statement<object>, operation: string) =>
+        Result.try({
+          try: () => {
+            const [text, parameters] = statement.compile();
+
+            return db.exec(text, ...parameters).toArray();
+          },
+          catch: (cause) =>
+            storageError(operation)(
+              SqlError.make({
+                reason: classifySqliteError(cause, {
+                  operation,
+                  message: "Native canonical statement failed",
+                }),
+              }),
+            ),
+        });
+
+      return Effect.fromResult(
+        Result.gen(function* () {
+          const captured = physical.cachedRecords(request.threadId, first, request.records);
+
+          if (captured === undefined) return undefined;
+          const physicalRecords = yield* captured;
+          const rows = yield* query(workPlan.advance, "advance native work frontier");
+
+          // A zero-row predicate miss has made no change. A successful update
+          // must never fall back: every later refusal rolls back this transaction.
+          if (rows.length === 0) return undefined;
+          const closed = yield* workPlan.fold();
+          const executionPlans = executions.prepareCommit(request);
+
+          if (!batchInserted)
+            yield* query(
+              sql`INSERT INTO effect_agent_canonical_batches
+            (thread_id, batch_id, first_sequence, last_sequence, producer_id_json)
+            VALUES (${request.threadId}, ${JSON.stringify(request.batchId)}, ${first}, ${last}, ${request.producerIdJson})`,
+              "insert canonical batch",
+            );
+
+          const inserted = yield* query(
+            sql`INSERT INTO effect_agent_canonical_records ${sql.insert(physicalRecords.map((row) => row.columns))}
+            ON CONFLICT(thread_id, record_id) DO NOTHING RETURNING 1`,
+            "insert canonical records",
+          );
+
+          if (inserted.length !== request.records.length)
+            return yield* Result.fail(
+              DoAppendConflict.make({
+                message: "A canonical record ID already exists.",
+                reason: "record-identity",
+              }),
+            );
+          const memberships = physicalRecords.flatMap((row) => row.memberships);
+
+          for (const group of chunked(memberships, Math.floor(MAX_BOUND_PARAMETERS / 3)))
+            yield* query(
+              sql`INSERT INTO effect_agent_record_runs ${sql.insert(group)}`,
+              "index canonical Run membership",
+            );
+          for (const pointer of closed.pointers) yield* query(pointer, "index canonical pointers");
+
+          for (const plan of executionPlans) {
+            const changed = yield* query(plan.statement, "commit active execution");
+            const accepted = plan.accept(changed);
+
+            if (Result.isFailure(accepted))
+              return yield* Result.fail(
+                DoAppendConflict.make({
+                  reason: accepted.failure.reason,
+                  message: "Active execution conflicts with the captured commit",
+                  ...(accepted.failure.actualTailSequence === undefined
+                    ? {}
+                    : { actualTailSequence: accepted.failure.actualTailSequence }),
+                }),
+              );
+          }
+          for (let index = 0; index < request.records.length; index++) {
+            const record = request.records[index]!;
+
+            recordCache.put(
+              RecordRow.make({
+                ...physicalRecords[index]!.columns,
+                record_id: record.recordId,
+                batch_id: request.batchId,
+                record_json: record.recordJson,
+                sequence: CanonicalSequence.make(first + index),
+              }),
+              record.recordBytes,
+            );
+          }
+
+          return rows;
+        }),
+      );
+    });
+
+    if (native === undefined) return false;
+    yield* threads.write(Effect.succeed(native));
+
+    return true;
+  });
+
   const appendPrepared = Effect.fnUntraced(function* (
     request: RawAppendRequest,
   ): Effect.fn.Return<RawAppendResult, AppendError> {
@@ -634,30 +804,62 @@ const makeJournal = Effect.fnUntraced(function* (
         message: `Expected exactly one row but found ${threadRows.length}.`,
       });
 
-    const prefix = recordCache.prefix(request.threadId, thread.tail_sequence);
+    // A fresh canonical batch key and absence of an active receipt prove the two
+    // negative replay lookups in the same statement that retains the batch header.
+    // Keep the read-first path for stale/overflowed coordinates so exact retries
+    // still precede sequence and tail refusals.
+    const canInsert =
+      request.records.length > 0 &&
+      request.expectedTailSequence === thread.tail_sequence &&
+      Number.isSafeInteger(thread.tail_sequence + request.records.length);
 
-    const replay = yield* executionConflict(executions.replay(request));
+    const inserted = canInsert
+      ? yield* sql`INSERT INTO effect_agent_canonical_batches
+            (thread_id, batch_id, first_sequence, last_sequence, producer_id_json)
+            SELECT ${request.threadId}, ${JSON.stringify(request.batchId)},
+              ${thread.tail_sequence + 1}, ${thread.tail_sequence + request.records.length},
+              ${request.producerIdJson}
+            WHERE NOT EXISTS (
+              SELECT 1 FROM effect_agent_executions
+              WHERE thread_id=${request.threadId} AND last_commit_id=${request.batchId}
+            )
+            ON CONFLICT(thread_id, batch_id) DO NOTHING RETURNING 1`.pipe(
+          Effect.mapError(storageError("insert canonical batch")),
+        )
+      : [];
 
-    if (replay !== undefined) return RawAppendResult.make(replay);
+    if (inserted.length === 0) {
+      const replay = yield* executionConflict(executions.replay(request));
 
-    const existing =
-      prefix !== undefined && !prefix.some((row) => row.batch_id === request.batchId)
-        ? undefined
-        : yield* archives.replay(request.threadId, request.batchId);
+      if (replay !== undefined) return RawAppendResult.make(replay);
 
-    if (existing !== undefined) {
-      if (existing.batch_json !== request.batchJson) {
-        return yield* DoAppendConflict.make({
-          message: `Batch ${request.batchId} already exists with different canonical content.`,
-          reason: "batch-content",
+      const prefix = recordCache.prefix(request.threadId, thread.tail_sequence);
+
+      const existing =
+        prefix !== undefined && !prefix.some((row) => row.batch_id === request.batchId)
+          ? undefined
+          : yield* archives.replay(request.threadId, request.batchId);
+
+      if (existing !== undefined) {
+        if (existing.batch_json !== request.batchJson) {
+          return yield* DoAppendConflict.make({
+            message: `Batch ${request.batchId} already exists with different canonical content.`,
+            reason: "batch-content",
+          });
+        }
+
+        return RawAppendResult.make({
+          firstSequence: existing.first_sequence,
+          lastSequence: existing.last_sequence,
+          replayed: true,
         });
       }
-
-      return RawAppendResult.make({
-        firstSequence: existing.first_sequence,
-        lastSequence: existing.last_sequence,
-        replayed: true,
-      });
+      if (canInsert)
+        return yield* DoStorageCorruptionError.make({
+          table: "effect_agent_canonical_batches",
+          rowKey: request.threadId,
+          message: "Batch insertion conflicted without a durable replay receipt.",
+        });
     }
 
     yield* executionConflict(executions.rejectSuperseded(request));
@@ -703,7 +905,25 @@ const makeJournal = Effect.fnUntraced(function* (
       replayed: false,
     });
 
-    if (request.records.length > 0) {
+    if (yield* appendNativeBody(request, firstSequence, lastSequence, inserted.length > 0)) {
+      yield* progress.committed("canonical").pipe(
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(cause, (error) =>
+              DoStorageError.make({
+                operation: "enroll canonical progress",
+                message: error.message,
+                cause: error,
+              }),
+            ),
+          ),
+        ),
+      );
+
+      return result;
+    }
+
+    if (request.records.length > 0 && inserted.length === 0) {
       yield* sql`
           INSERT INTO effect_agent_canonical_batches (
             thread_id,
@@ -898,10 +1118,9 @@ const makeJournal = Effect.fnUntraced(function* (
         }
       }
 
-      return yield* withWriteTransaction(
-        "append transaction",
-        isAppendContention,
-      )(appendPrepared(request));
+      // Receipt arbitration may have tentatively inserted a batch. Even typed
+      // contention must roll back before leaving the owner mutation gate.
+      return yield* withWriteTransaction("append transaction")(appendPrepared(request));
     },
     withStorageSpan("DoJournal.append", isAppendContention),
   );
