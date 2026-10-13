@@ -101,15 +101,24 @@ const observedUrl = (url: string): string => {
 
 // CDP can resolve closed roots without modifying the page's realm or attachShadow.
 // Keep those nodes in the same isolated realm as native refs and discard old roots per read.
-// The command deadline bounds this full-frame read; the node/root caps below only bound
-// local adoption, not the CDP response size.
-const discoverClosedRoots = async (frame: Frame): Promise<boolean> => {
+// Reads inspect the frame; dispatch refreshes only an inferred target subtree.
+// The command deadline bounds CDP; node/root caps bound local adoption.
+const discoverClosedRoots = async (frame: Frame, ref?: string): Promise<boolean> => {
   const realm = frame.isolatedRealm();
 
-  await using document = await realm.evaluateHandle(() => globalThis.document);
+  await using rootHandle = await realm.evaluateHandle((ref) => {
+    if (ref === undefined) return globalThis.document;
+    const check = Reflect.get(globalThis, "@effect-agent/native-browser-name-checks")?.get(ref);
+
+    return check?.inferred === true
+      ? Reflect.get(globalThis, "@effect-agent/native-browser")?.get(ref)
+      : null;
+  }, ref);
+
+  if (ref !== undefined && rootHandle.asElement() === null) return false;
 
   const { node } = await frame.client.send("DOM.describeNode", {
-    objectId: document.remoteObject().objectId,
+    objectId: rootHandle.remoteObject().objectId,
     depth: -1,
     pierce: true,
   });
@@ -128,9 +137,10 @@ const discoverClosedRoots = async (frame: Frame): Promise<boolean> => {
       ...(current.shadowRoots ?? []).filter((root) => root.shadowRootType !== "user-agent"),
     );
   }
-  await realm.evaluate(() => {
-    Reflect.set(globalThis, "@effect-agent/native-browser-closed-roots", new Map());
-  });
+  if (ref === undefined)
+    await realm.evaluate(() => {
+      Reflect.set(globalThis, "@effect-agent/native-browser-closed-roots", new Map());
+    });
   for (const id of roots) {
     await using root = await realm.adoptBackendNode(id);
 
@@ -833,6 +843,8 @@ export const make = Effect.fnUntraced(function* <R>(
         const frame = resolveFrame(page, target.frame);
 
         if (frame === undefined) return "not-dispatched" as const;
+        // Inferred targets must still exclude controls in newly attached closed roots.
+        if (await discoverClosedRoots(frame, value.ref)) return "not-dispatched" as const;
         // Main-frame input works on the ref in place, without resolving and releasing a handle.
         // Focus and its check stay separate reads so focus handlers run before the check.
         if (frame.parentFrame() === null) {

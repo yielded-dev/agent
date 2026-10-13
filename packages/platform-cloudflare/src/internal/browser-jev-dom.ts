@@ -39,7 +39,14 @@ export const inspectJevDom = pageFunction(
 
     const checks = new Map<
       string,
-      { name: string; originalName: string; kind: string; viewport: boolean; verify: () => boolean }
+      {
+        name: string;
+        originalName: string;
+        kind: string;
+        viewport: boolean;
+        inferred: boolean;
+        verify: () => boolean;
+      }
     >();
 
     Reflect.set(globalThis, "@effect-agent/native-browser", registry);
@@ -165,16 +172,44 @@ export const inspectJevDom = pageFunction(
 
     const interactiveEvidence = (node: HTMLElement) => {
       if (node.matches("html,body")) return undefined;
-      // An independent nested control owns its input; do not offer its layout wrapper.
-      if (node.querySelector(controlSelector) !== null) return undefined;
-      if (node.hasAttribute("tabindex") && node.tabIndex >= 0) return "focus";
       const root = node.getRootNode();
       const parent = node.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
 
-      return getComputedStyle(node).cursor === "pointer" &&
-        (parent === null || getComputedStyle(parent).cursor !== "pointer")
-        ? "pointer"
-        : undefined;
+      const evidence =
+        node.hasAttribute("tabindex") && node.tabIndex >= 0
+          ? "focus"
+          : getComputedStyle(node).cursor === "pointer" &&
+              (parent === null || getComputedStyle(parent).cursor !== "pointer")
+            ? "pointer"
+            : undefined;
+
+      if (evidence === undefined) return undefined;
+
+      const closed: ReadonlyMap<Element, ShadowRoot> | undefined = Reflect.get(
+        globalThis,
+        "@effect-agent/native-browser-closed-roots",
+      );
+
+      const scopes: Array<Element | ShadowRoot> = [node];
+      let scanned = 0;
+
+      // A separate control owns its input, including across supported shadow roots.
+      // Re-read the root map because dispatch refreshes newly attached closed roots.
+      for (const scope of scopes) {
+        const walker = document.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT);
+        let child: Node | null = scope instanceof Element ? scope : walker.nextNode();
+
+        while (child instanceof Element) {
+          if (++scanned > 10_000 || (child !== node && child.matches(controlSelector)))
+            return undefined;
+          const shadow = child.shadowRoot ?? closed?.get(child);
+
+          if (shadow !== undefined && shadow !== null) scopes.push(shadow);
+          child = walker.nextNode();
+        }
+      }
+
+      return evidence;
     };
 
     const closedRoots: ReadonlyMap<Element, ShadowRoot> | undefined = Reflect.get(
@@ -187,27 +222,70 @@ export const inspectJevDom = pageFunction(
       roles.map((role) => `[role="${role}"]`).join(",");
 
     const candidates: Array<Element> = [];
+    const roots: Array<Document | ShadowRoot> = [document, ...(closedRoots?.values() ?? [])];
+    const visitedRoots = new Set<Node>();
+    const candidatesSeen = new Set<Node>();
 
-    for (const root of [document, ...(closedRoots?.values() ?? [])]) {
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
-      let node = walker.nextNode();
+    const filter: NodeFilter = {
+      acceptNode(node) {
+        return node instanceof Element &&
+          node.matches('script,style,template,option,optgroup,[inert],[aria-hidden="true"]')
+          ? NodeFilter.FILTER_REJECT
+          : NodeFilter.FILTER_ACCEPT;
+      },
+    };
 
-      while (node instanceof Element && candidates.length <= 10_000) {
-        candidates.push(node);
-        node = walker.nextNode();
+    let scanned = 0;
+    let discovered = 0;
+    let truncated = false;
+
+    for (const root of roots) {
+      if (visitedRoots.has(root)) continue;
+      visitedRoots.add(root);
+      const matches = selector === undefined ? [root] : Array.from(root.querySelectorAll(selector));
+
+      truncated ||= matches.length > 256;
+      for (const scope of matches.slice(0, 256)) {
+        if (filter.acceptNode(scope) === NodeFilter.FILTER_REJECT) continue;
+        const walker = document.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT, filter);
+        let node: Node | null = scope instanceof Element ? scope : walker.nextNode();
+
+        while (node instanceof Element && scanned < 10_000) {
+          if (!candidatesSeen.has(node)) {
+            candidatesSeen.add(node);
+            scanned++;
+            candidates.push(node);
+            const shadow = node.shadowRoot ?? closedRoots?.get(node);
+
+            if (selector === undefined && shadow !== undefined && shadow !== null)
+              roots.push(shadow);
+          }
+          node = walker.nextNode();
+        }
+        truncated ||= node !== null;
       }
-      if (candidates.length > 10_000) break;
+      if (selector !== undefined) {
+        // Discover shadow scopes separately; unrelated elements cannot consume the target's budget.
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, filter);
+        let node = walker.nextNode();
+
+        while (node instanceof Element && discovered < 10_000) {
+          discovered++;
+          const shadow = node.shadowRoot ?? closedRoots?.get(node);
+
+          if (shadow !== undefined && shadow !== null) roots.push(shadow);
+          node = walker.nextNode();
+        }
+        truncated ||= node !== null;
+      }
     }
 
     const controls: Array<typeof Control.Type> = [];
-    let truncated = candidates.length > 10_000;
     // A modal dialog blocks background input; offer only its controls, as default observations do.
     const modal = document.querySelector("dialog:modal");
 
     for (const node of Array.from(candidates).slice(0, 10_000)) {
       if (!(node instanceof HTMLElement)) continue;
-      if (selector !== undefined && !node.matches(selector) && node.closest(selector) === null)
-        continue;
       if (node instanceof HTMLInputElement && ["password", "file", "hidden"].includes(node.type))
         continue;
       if (
@@ -269,6 +347,7 @@ export const inspectJevDom = pageFunction(
         originalName: node.innerText.replace(/\s+/g, " ").trim().slice(0, 300),
         kind,
         viewport: true,
+        inferred: evidence !== undefined,
         verify: () =>
           (evidence === undefined
             ? role(node) === kind && (name(node) || kind) === label
@@ -344,7 +423,7 @@ export const inspectJevDom = pageFunction(
     const words: Array<string> = [];
     const range = document.createRange();
     let length = 0;
-    let scanned = 0;
+    let scannedText = 0;
 
     truncated ||= scopes.length > 256;
     for (const scope of scopes.slice(0, 256)) {
@@ -352,7 +431,7 @@ export const inspectJevDom = pageFunction(
       const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
       let node = walker.nextNode();
 
-      while (node !== null && length < 6_000 && scanned++ < 10_000) {
+      while (node !== null && length < 6_000 && scannedText++ < 10_000) {
         const text = node.textContent?.trim() ?? "";
         const parent = node.parentElement;
 
@@ -388,7 +467,7 @@ export const inspectJevDom = pageFunction(
       text: text.slice(0, 6_000),
       controls,
       readyState: document.readyState,
-      truncated: truncated || text.length > 6_000 || scanned >= 10_000,
+      truncated: truncated || text.length > 6_000 || scannedText >= 10_000,
       page: {
         title: document.title,
         scrollY,

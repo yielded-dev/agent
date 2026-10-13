@@ -70,6 +70,93 @@ export default {
           },
         );
 
+        const scenario = new URL(request.url).searchParams.get("scenario");
+
+        if (scenario === "shadow") {
+          const cases = [];
+
+          for (const mode of ["open", "closed"] as const) {
+            yield* native(() => page.setContent(html));
+            yield* native(() =>
+              page.evaluate((mode) => {
+                const card = document.getElementById("meal");
+
+                if (card === null) throw new Error("Missing fixture card");
+                const host = document.createElement("span");
+
+                card.style.position = "relative";
+                host.style.cssText = "position:absolute;inset:0";
+                const root = host.attachShadow({ mode });
+
+                root.innerHTML =
+                  '<button style="width:100%;height:100%">Independent action</button>';
+                const button = root.querySelector("button");
+
+                if (button === null) throw new Error("Missing fixture button");
+                button.addEventListener("click", (event) => {
+                  event.stopPropagation();
+                  const counter = document.getElementById("selections");
+
+                  if (counter === null) throw new Error("Missing fixture counter");
+                  counter.textContent = "1";
+                });
+                card.appendChild(host);
+              }, mode),
+            );
+            const observed = yield* controller.actions.observe;
+
+            const wrapper = observed.controls.find(
+              (control) => control.name === "Ginger Chicken Bowl",
+            );
+
+            const clicked =
+              wrapper === undefined
+                ? undefined
+                : yield* controller.actions.act([{ kind: "click", ref: wrapper.ref }]);
+
+            const count = yield* native(() =>
+              page.$eval("#selections", (node) => node.textContent),
+            );
+
+            cases.push({
+              mode,
+              wrapper: wrapper !== undefined,
+              completed: clicked?.completed ?? 0,
+              count,
+            });
+          }
+
+          return Response.json({ cases });
+        }
+        if (scenario === "options" || scenario === "filler") {
+          yield* native(() =>
+            page.setContent(
+              `<!doctype html>${
+                scenario === "options"
+                  ? `<select style="width:100px">${"<option>Unrelated option</option>".repeat(10_000)}</select>`
+                  : "<div></div>".repeat(10_000)
+              }<button id="save">Save</button><output id="selections">0</output><script>document.getElementById("save").onclick=()=>document.getElementById("selections").textContent="1";</script>`,
+            ),
+          );
+          const wide = yield* controller.actions.observe;
+          const targeted = yield* controller.control.inspect({ selector: "#save" });
+          const target = targeted.controls.find((control) => control.name === "Save");
+
+          const clicked =
+            target === undefined
+              ? undefined
+              : yield* controller.actions.act([{ kind: "click", ref: target.ref }]);
+
+          const count = yield* native(() => page.$eval("#selections", (node) => node.textContent));
+
+          return Response.json({
+            wideHasSave: wide.controls.some((control) => control.name === "Save"),
+            targetedHasSave: target !== undefined,
+            completed: clicked?.completed ?? 0,
+            count,
+          });
+        }
+
         const observation = yield* controller.actions.observe;
         const card = observation.controls.find((control) => control.name === "Ginger Chicken Bowl");
 
@@ -91,6 +178,8 @@ export default {
           "disabled",
           "covered",
           "nested-control",
+          "shadow-open",
+          "shadow-closed",
         ] as const) {
           yield* native(() => page.setContent(html));
           const before = yield* controller.actions.observe;
@@ -112,6 +201,30 @@ export default {
 
                 cover.style.cssText = "position:fixed;inset:0;background:white;z-index:10";
                 document.body.appendChild(cover);
+              }
+              if (mutation === "shadow-open" || mutation === "shadow-closed") {
+                const host = document.createElement("span");
+
+                node.style.position = "relative";
+                host.style.cssText = "position:absolute;inset:0";
+
+                const root = host.attachShadow({
+                  mode: mutation === "shadow-open" ? "open" : "closed",
+                });
+
+                root.innerHTML =
+                  '<button style="width:100%;height:100%">Independent action</button>';
+                const button = root.querySelector("button");
+
+                if (button === null) throw new Error("Missing fixture button");
+                button.addEventListener("click", (event) => {
+                  event.stopPropagation();
+                  const counter = document.getElementById("selections");
+
+                  if (counter === null) throw new Error("Missing fixture counter");
+                  counter.textContent = "1";
+                });
+                node.appendChild(host);
               }
               if (mutation === "nested-control") {
                 const button = document.createElement("button");

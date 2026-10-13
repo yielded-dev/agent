@@ -107,7 +107,7 @@ export const inspectDom = pageFunction(
 
     const nameChecks = new Map<
       string,
-      { name: string; originalName: string; verify: () => boolean }
+      { name: string; originalName: string; inferred: boolean; verify: () => boolean }
     >();
 
     Reflect.set(globalThis, "@effect-agent/native-browser", registry);
@@ -133,16 +133,44 @@ export const inspectDom = pageFunction(
     // Cursor inheritance identifies one target boundary, not every span inside a card.
     const interactiveEvidence = (node: HTMLElement) => {
       if (node.matches("html,body")) return undefined;
-      // An independent nested control owns its input; do not offer its layout wrapper.
-      if (node.querySelector(controlSelector) !== null) return undefined;
-      if (node.hasAttribute("tabindex") && node.tabIndex >= 0) return "focus";
       const root = node.getRootNode();
       const parent = node.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
 
-      return getComputedStyle(node).cursor === "pointer" &&
-        (parent === null || getComputedStyle(parent).cursor !== "pointer")
-        ? "pointer"
-        : undefined;
+      const evidence =
+        node.hasAttribute("tabindex") && node.tabIndex >= 0
+          ? "focus"
+          : getComputedStyle(node).cursor === "pointer" &&
+              (parent === null || getComputedStyle(parent).cursor !== "pointer")
+            ? "pointer"
+            : undefined;
+
+      if (evidence === undefined) return undefined;
+
+      const closed: ReadonlyMap<Element, ShadowRoot> | undefined = Reflect.get(
+        globalThis,
+        "@effect-agent/native-browser-closed-roots",
+      );
+
+      const scopes: Array<Element | ShadowRoot> = [node];
+      let scanned = 0;
+
+      // A separate control owns its input, including across supported shadow roots.
+      // Re-read the root map because dispatch refreshes newly attached closed roots.
+      for (const scope of scopes) {
+        const walker = document.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT);
+        let child: Node | null = scope instanceof Element ? scope : walker.nextNode();
+
+        while (child instanceof Element) {
+          if (++scanned > 10_000 || (child !== node && child.matches(controlSelector)))
+            return undefined;
+          const shadow = child.shadowRoot ?? closed?.get(child);
+
+          if (shadow !== undefined && shadow !== null) scopes.push(shadow);
+          child = walker.nextNode();
+        }
+      }
+
+      return evidence;
     };
 
     const filter: NodeFilter = {
@@ -428,6 +456,7 @@ export const inspectDom = pageFunction(
       nameChecks.set(ref, {
         name,
         originalName: name,
+        inferred: inferred.has(node),
         verify: () =>
           readName(node) === name &&
           (!inferred.has(node) || interactiveEvidence(node) === inferred.get(node)),
@@ -552,6 +581,7 @@ export const inspectDom = pageFunction(
           nameChecks.set(control.ref, {
             name: control.name,
             originalName,
+            inferred: inferred.has(node),
             verify: () =>
               verifyName?.() === true &&
               container.isConnected &&

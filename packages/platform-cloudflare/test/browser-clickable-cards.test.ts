@@ -75,15 +75,67 @@ it("discovers clickable cards and revalidates them through workerd and Chromium"
         },
         clicked: { completed: 1, dispatch: "acknowledged" },
         selections: "1",
-        guards: ["replaced", "renamed", "cursor", "disabled", "covered", "nested-control"].map(
-          (mutation) => ({
-            mutation,
-            result: { completed: 0, dispatch: "not-dispatched" },
-            count: "0",
-          }),
-        ),
+        guards: [
+          "replaced",
+          "renamed",
+          "cursor",
+          "disabled",
+          "covered",
+          "nested-control",
+          "shadow-open",
+          "shadow-closed",
+        ].map((mutation) => ({
+          mutation,
+          result: { completed: 0, dispatch: "not-dispatched" },
+          count: "0",
+        })),
       });
       expect.soft(result.observation.controls).toHaveLength(3);
+
+      // PR #901: independent shadow controls must never be invoked under a wrapper ref.
+      const shadowResponse = await runtime.dispatchFetch(
+        `http://probe/?mode=${mode}&scenario=shadow`,
+      );
+
+      const shadow = Schema.decodeUnknownSync(
+        Schema.Struct({
+          cases: Schema.Array(
+            Schema.Struct({
+              mode: Schema.Literals(["open", "closed"]),
+              wrapper: Schema.Boolean,
+              completed: Schema.Natural,
+              count: Schema.String,
+            }),
+          ),
+        }),
+      )(await shadowResponse.json());
+
+      expect
+        .soft(shadow.cases)
+        .toEqual(
+          ["open", "closed"].map((mode) => ({ mode, wrapper: false, completed: 0, count: "0" })),
+        );
+
+      // PR #901: unrelated descendants cannot consume a targeted control's scan budget.
+      for (const scenario of ["options", "filler"]) {
+        const response = await runtime.dispatchFetch(
+          `http://probe/?mode=${mode}&scenario=${scenario}`,
+        );
+
+        const targeted = Schema.decodeUnknownSync(
+          Schema.Struct({
+            wideHasSave: Schema.Boolean,
+            targetedHasSave: Schema.Boolean,
+            completed: Schema.Natural,
+            count: Schema.String,
+          }),
+        )(await response.json());
+
+        expect.soft(targeted.wideHasSave).toBe(scenario === "options");
+        expect.soft(targeted.targetedHasSave).toBe(true);
+        expect.soft(targeted.completed).toBe(1);
+        expect.soft(targeted.count).toBe("1");
+      }
     }
   } finally {
     try {
