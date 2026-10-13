@@ -1,3 +1,4 @@
+import { CurrentNativeSource } from "@yielded/agent-storage-cloudflare/port-routing";
 import { type ThreadId } from "@yielded/agent/identifiers";
 import { makeWakeSubscriptionHub, WakeScheduler } from "@yielded/agent/wake-scheduler";
 import { Effect, Layer, PubSub, Schema, Stream } from "effect";
@@ -31,7 +32,7 @@ class RemoteWakeDropped extends Schema.TaggedError<RemoteWakeDropped>()("RemoteW
  * - `notify(local)` wakes progress and settlement registrations, publishes a worker hint, and
  *   schedules the earliest alarm. Processing an owned Thread defers immediate alarms until
  *   processing exits; pre-armed recovery deadlines remain active. Progress hints skip settlement
- *   registrations only.
+ *   registrations; single-Thread native progress also omits the redundant worker hint.
  * - `notify(remote)` → fire-and-forget `wake()` on the owning Object's stub with every error
  *   swallowed and logged: hints are droppable, and the target's own alarm/scan pairing (the
  *   maintenance pass re-polls unsettled children) guarantees liveness without this call.
@@ -59,15 +60,17 @@ export const cloudflareWakeSchedulerLayer: Layer.Layer<
       ),
     );
 
-    const notifyLocal = (threadId: ThreadId, kind?: "progress") =>
-      (kind === "progress"
+    const notifyLocal = Effect.fnUntraced(function* (threadId: ThreadId, kind?: "progress") {
+      yield* kind === "progress"
         ? progress.notify(threadId)
-        : settlements.notify(threadId).pipe(Effect.andThen(progress.notify(threadId)))
-      ).pipe(
-        Effect.andThen(PubSub.publish(hints, threadId)),
-        Effect.andThen(scheduleLocal),
-        Effect.asVoid,
-      );
+        : settlements.notify(threadId).pipe(Effect.andThen(progress.notify(threadId)));
+
+      // Progress waiters still observe every hint. The single-Thread maintenance loop
+      // already awaits the running native fiber; its source commits enroll auxiliary work.
+      if (kind !== "progress" || placement.threadId === undefined || !(yield* CurrentNativeSource))
+        yield* PubSub.publish(hints, threadId);
+      yield* scheduleLocal;
+    });
 
     const notifyRemote = (threadId: ThreadId) =>
       callThreadObject(

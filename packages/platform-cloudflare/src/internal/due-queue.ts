@@ -139,10 +139,9 @@ export const make = (storage: DurableObjectStorage) => {
 
   // Nine bindings per lane stay below Durable Object SQLite's 100-parameter limit.
   const write = (changes: ReadonlyArray<Change>) => {
-    const rows = decode(
-      sql
-        .exec(
-          `WITH changes (id, revision, dueAt, stalls, progressKey, notBefore, state, reported, expected_revision) AS (
+    const rows = sql
+      .exec(
+        `WITH changes (id, revision, dueAt, stalls, progressKey, notBefore, state, reported, expected_revision) AS (
             VALUES ${changes.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ")}
           ) INSERT INTO platform_cloudflare_due_queue
             (id, revision, dueAt, stalls, progressKey, notBefore, state, reported)
@@ -152,21 +151,20 @@ export const make = (storage: DurableObjectStorage) => {
             notBefore = excluded.notBefore, state = excluded.state, reported = excluded.reported
           WHERE platform_cloudflare_due_queue.revision = (
             SELECT expected_revision FROM changes WHERE changes.id = excluded.id
-          ) RETURNING id, revision, dueAt, stalls, progressKey, notBefore, state, reported`,
-          ...changes.flatMap(({ before, after }) => [
-            after.id,
-            after.revision,
-            after.dueAt,
-            after.stalls,
-            after.progressKey,
-            after.notBefore,
-            after.state,
-            after.reported,
-            before?.revision ?? -1,
-          ]),
-        )
-        .toArray(),
-    );
+          ) RETURNING 1`,
+        ...changes.flatMap(({ before, after }) => [
+          after.id,
+          after.revision,
+          after.dueAt,
+          after.stalls,
+          after.progressKey,
+          after.notBefore,
+          after.state,
+          after.reported,
+          before?.revision ?? -1,
+        ]),
+      )
+      .toArray();
 
     // Partial revision acceptance must reject the enclosing source transaction.
     if (rows.length !== changes.length)
@@ -302,6 +300,24 @@ export const make = (storage: DurableObjectStorage) => {
     );
   };
 
+  /** Native checkpoints fence the generation, not each source commit. Once progress
+   * resets a claimed lane, further native commits owe the same recovery opportunity.
+   * A new claim, deadline, or retry budget makes the next commit advance it again. */
+  const progressNative = (dueAt: number) => {
+    const row = read().find((row) => row.id === Native);
+
+    if (
+      row?.state === "pending" &&
+      row.dueAt !== null &&
+      row.dueAt <= dueAt &&
+      row.stalls === 0 &&
+      row.notBefore === 0 &&
+      row.reported === 0
+    )
+      return;
+    dirty(Native, dueAt, true);
+  };
+
   /** A strictly increasing source cursor; old or repeated notices cannot renew a budget. */
   const progress = (id: string, dueAt: number, cursor: bigint) => {
     Schema.decodeSync(Schema.BigInt.check(Schema.isGreaterThanOrEqualToBigInt(0n)))(cursor);
@@ -416,6 +432,7 @@ export const make = (storage: DurableObjectStorage) => {
     transaction,
     read,
     dirty,
+    progressNative,
     progress,
     register,
     claim,

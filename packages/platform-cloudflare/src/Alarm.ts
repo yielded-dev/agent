@@ -47,7 +47,7 @@ import { DurableObjectAlarm, DurableObjectStorage } from "effect-cf";
 import { SqlClient } from "effect/sql/SqlClient";
 import { SqlError, UnknownError } from "effect/sql/SqlError";
 
-import { DurableObjectContext } from "./CloudflareBindings.ts";
+import { DurableObjectContext, ThreadObjectPlacement } from "./CloudflareBindings.ts";
 import { AuxiliaryDispatchMillis, CloudflareDurableRuntimeConfig } from "./CloudflareConfig.ts";
 import { safeCauseMessage } from "./internal/boundary.ts";
 import * as DueQueue from "./internal/due-queue.ts";
@@ -334,7 +334,9 @@ const makeAlarmOperation = Effect.gen(function* () {
     operation: string,
     execute: (transaction: MaintenanceStorage, checkpoint: CheckpointIntent) => Promise<A>,
   ) => {
-    const commit = Effect.flatMap(CurrentCheckpoint, (tx) => {
+    const commit = Effect.withFiber((fiber) => {
+      const tx = fiber.getRef(CurrentCheckpoint);
+
       if (tx === undefined)
         return Effect.die(new Error("Maintenance checkpoint transaction unavailable"));
 
@@ -366,14 +368,14 @@ const makeAlarmOperation = Effect.gen(function* () {
       );
     });
 
-    return Effect.gen(function* () {
-      const current = yield* CurrentCheckpoint;
+    return Effect.withFiber((fiber) => {
+      const current = fiber.getRef(CurrentCheckpoint);
 
-      if (current !== undefined) return yield* commit;
-      const ambient = yield* Effect.serviceOption(sql.transactionService);
+      if (current !== undefined) return commit;
+      const ambient = Context.getOption(fiber.context, sql.transactionService);
 
       // Preserve eager writes and invalidation for an unwrapped host SQL transaction.
-      return yield* ambient._tag === "Some" && !DueQueue.buffering(ctx.storage)
+      return ambient._tag === "Some" && !DueQueue.buffering(ctx.storage)
         ? transaction(commit).pipe(
             Effect.ensuring(Effect.sync(() => DueQueue.invalidate(ctx.storage))),
           )
@@ -909,6 +911,8 @@ export class ThreadMutationGate extends Context.Service<
       const { ctx } = yield* DurableObjectContext;
       const sql = yield* SqlClient;
       const dueQueue = DueQueue.make(ctx.storage);
+      const placement = yield* Effect.serviceOption(ThreadObjectPlacement);
+      const singleThread = Option.isSome(placement) && placement.value.threadId !== undefined;
 
       const config = yield* CloudflareDurableRuntimeConfig;
       const failpoint = yield* ThreadMaintenanceFailpoint;
@@ -1127,7 +1131,12 @@ export class ThreadMutationGate extends Context.Service<
         yield* runAlarmTransaction(
           "record maintenance producer progress",
           async (transaction, checkpoint) => {
-            for (const id of affected) dueQueue.dirty(id, now, true);
+            for (const id of affected) {
+              // Shared hosts need every revision to discover newly actionable sibling Threads.
+              if (singleThread && nativeSource && id === DueQueue.Native)
+                dueQueue.progressNative(now);
+              else dueQueue.dirty(id, now, true);
+            }
             if (affected.has(DueQueue.Native)) {
               const { state, initialized } = await readMaintenanceState(transaction);
 
@@ -1147,7 +1156,10 @@ export class ThreadMutationGate extends Context.Service<
             checkpoint.earlier(now + minimumAlarmDelay);
           },
         );
-        yield* notify;
+        // Maintenance already awaits this native fiber's completion. With one Thread,
+        // native-only progress cannot free another dispatch slot or enroll an auxiliary lane.
+        if (!(singleThread && nativeSource && affected.size === 1 && affected.has(DueQueue.Native)))
+          yield* notify;
       });
 
       return ThreadMutationGate.of({
@@ -1521,7 +1533,20 @@ export class ThreadMaintenance extends Context.Service<
         for (const report of result.reports) threads.set(report.threadId, undefined);
         for (const report of result.workReports ?? []) threads.set(report.threadId, undefined);
         for (const blocked of result.blocked) threads.set(blocked.threadId, blocked.failure);
-        if (threads.size === 0) return new Map<ThreadId, ThreadRecoveryFault>();
+
+        // This pass owns fault writes. Known absence needs no second transaction;
+        // blocked results and retained faults still commit their transitions.
+        if (
+          threads.size === 0 ||
+          [...threads].every(
+            ([threadId, failure]) =>
+              failure === undefined &&
+              recovery.loaded.has(threadId) &&
+              !recovery.faults.has(threadId),
+          )
+        )
+          return new Map<ThreadId, ThreadRecoveryFault>();
+
         const now = yield* Clock.currentTimeMillis;
 
         // Fault-only discovery uses control state even when retained payloads cannot decode.
@@ -1645,14 +1670,15 @@ export class ThreadMaintenance extends Context.Service<
           // Persist each bounded pass before a claim; eviction resumes past consumed metadata.
           const faults = yield* recordRecoveryFaults(result, recovery, undefined, threadId);
 
-          yield* runTransaction("checkpoint work recovery cursor", async () => {
-            if (result.cursor === undefined) await ctx.storage.delete(workCursorKey(threadId));
-            else
-              await ctx.storage.put(
-                workCursorKey(threadId),
-                Schema.encodeSync(NativeWorkCursor)({ threadId, cursor: result.cursor }),
-              );
-          });
+          if (cursor !== undefined || result.cursor !== undefined)
+            yield* runTransaction("checkpoint work recovery cursor", async () => {
+              if (result.cursor === undefined) await ctx.storage.delete(workCursorKey(threadId));
+              else
+                await ctx.storage.put(
+                  workCursorKey(threadId),
+                  Schema.encodeSync(NativeWorkCursor)({ threadId, cursor: result.cursor }),
+                );
+            });
           for (const report of result.reports) recovery.reports.set(report.submissionId, report);
           recovery.faults.delete(threadId);
           for (const [id, fault] of faults) recovery.faults.set(id, fault);
@@ -2277,7 +2303,7 @@ export class ThreadMaintenance extends Context.Service<
 
             const next = selected.at(-1);
 
-            if (next !== undefined) {
+            if (next !== undefined && next !== state.lastServedThreadId) {
               await transaction.put(
                 MAINTENANCE_STATE_KEY,
                 encodeMaintenanceState(
