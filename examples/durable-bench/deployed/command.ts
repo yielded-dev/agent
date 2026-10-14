@@ -66,7 +66,7 @@ export const command = Command.make(
     ),
     objects: positive("objects").pipe(
       Flag.optional,
-      Flag.withDescription("Objects per target/cell (quick: 12; full: 30; build-history: 3)"),
+      Flag.withDescription("Objects per target/cell (quick: 12; full: 30; build-history: 2)"),
     ),
     repeats: positive("repeats").pipe(
       Flag.optional,
@@ -190,7 +190,7 @@ export const command = Command.make(
     const profileAfter = Option.getOrUndefined(flags.profileAfter);
 
     const objects = Option.getOrElse(flags.objects, () =>
-      flags.buildHistory ? 3 : rigorous ? 30 : 12,
+      flags.buildHistory ? 2 : rigorous ? 30 : 12,
     );
 
     const concurrency = Option.getOrElse(flags.concurrency, () => (flags.buildHistory ? 6 : 12));

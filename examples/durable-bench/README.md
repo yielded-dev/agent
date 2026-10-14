@@ -60,7 +60,7 @@ Turns within an Object remain sequential.
 
 ```sh
 vp run deployed -- --preset full --baseline origin/main --candidate HEAD
-vp run deployed -- --sizes 1000,10000 --ttft 0,400
+vp run deployed -- --sizes 1000,10000 --ttft 0,400 --objects 8
 vp run deployed -- --targets yielded,pi --text-streaming --ttft 400
 vp run deployed -- --profile cpu
 vp run deployed -- --targets yielded,effect-ai-floor --text-streaming --cpu
@@ -86,10 +86,10 @@ fingerprint/build checks, cold setup attempts, failures and cleanup. No timing e
 building history, cold turn, warm turn and SQLite storage. It skips local fixtures entirely.
 
 ```sh
-vp run deployed -- --build-history --build-concurrency 36 --concurrency 3
+vp run deployed -- --build-history --build-concurrency 24 --concurrency 3
 ```
 
-Defaults are 50, 250, 1,000 and 3,500 historical turns, three independent Objects per
+Defaults are 50, 250, 1,000 and 3,500 historical turns, two independent Objects per
 target and size, zero provider TTFT, one cold turn and nine warm turns. All selected histories
 build concurrently by default; `--build-concurrency` limits that phase. Measurements default
 to six concurrent Objects, controlled separately by `--concurrency`. `--sizes`, `--objects`,

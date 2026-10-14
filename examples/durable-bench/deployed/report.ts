@@ -256,6 +256,7 @@ const historyTable = (result: Result): string => {
           "",
         ]
       : []),
+    ...polledRecoveryTable(result),
     "Independent Objects per size; real one-tool, one-tool, zero-tool turns in batches of 50 at zero provider TTFT, with runtime restarts between batches.",
     "Each logical sample has a dedicated Worker. Batch isolate tokens are checked for sharing across build cohorts; shared cohorts are rejected.",
     ...(result.resumeCount
