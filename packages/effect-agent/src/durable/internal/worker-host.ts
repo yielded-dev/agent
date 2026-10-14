@@ -3083,7 +3083,9 @@ export const makeWorkerRuntime = Effect.fnUntraced(function* (options: WorkerRun
                 ? "stopped"
                 : "stopping"
               : control.active !== null
-                ? "active"
+                ? control.active.state === "unknown"
+                  ? "unknown"
+                  : "active"
                 : delivery !== undefined
                   ? "starting"
                   : "idle"),

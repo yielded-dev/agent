@@ -85,6 +85,9 @@ budget. A host concurrency ceiling limits active workers separately from per-Run
 | `stop`                       | Permanently seals the worker; does not undo external actions                     |
 | Assignment lifecycle         | Typed completion seals only after latest accepted input is applied               |
 
+Worker summaries report `unknown` when unresolved operations park a Run. This state is not
+active progress; reconcile the original operations before retrying external effects.
+
 ## Completion report guarantees
 
 `reportToParent: true` sends standard completion messages. Optional pure `reportCompletion` and
@@ -97,3 +100,5 @@ parent context. Reports cannot target an attached child's nonexistent continuing
 An Agent's `updates` Schema defines `emit_update` findings independently of final output.
 `AgentUpdates.emit` uses a stable Run-scoped key; changed payloads conflict. `AgentUpdates.observe`
 decodes accepted updates. Acceptance retains the finding; it does not prove parent delivery.
+Native update recovery reuses that acceptance under the original call identity. A recovery
+sweep can also close an accepted update previously marked unknown without replaying it.

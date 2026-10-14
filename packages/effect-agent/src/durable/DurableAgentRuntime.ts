@@ -156,7 +156,7 @@ import {
   resolveWorkerBinding,
   CurrentBindingSelection,
 } from "./internal/agent-registration.ts";
-import { makeAgentUpdateRuntime } from "./internal/agent-updates.ts";
+import { makeAgentUpdateRuntime, nativeUpdateAccepted } from "./internal/agent-updates.ts";
 import { inspectForeignDiagnostic, safeUnknownString } from "./internal/foreign-diagnostic.ts";
 import { initialContext, type InitialContextInput } from "./internal/initial-context.ts";
 import {
@@ -3094,6 +3094,22 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         recovered += 1;
       });
 
+      // Retry permission cannot mask a recorded outcome or require a runnable old binding.
+      // Explicit factual resolutions and abort instructions retain their own handling below.
+      if (
+        (intent === undefined || intent.resolution._tag === "SafeToRetry") &&
+        declared !== undefined &&
+        nativeUpdateAccepted(submission, declared, records)
+      ) {
+        yield* appendClosedCall(ctx, submissionId, knownIds, call, {
+          result: { value: { emitted: true }, isFailure: false },
+          resolution: "completed-with-result",
+          author: RECONCILER_AUTHOR,
+          reason: "The exact native update was canonically accepted",
+        });
+        recovered += 1;
+        continue;
+      }
       if (intent !== undefined) {
         switch (intent.resolution._tag) {
           case "AbortSubmission":
@@ -9649,6 +9665,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     for (const intent of intents) {
       const original = declared.get(intent.toolCallId);
 
+      if (original !== undefined && nativeUpdateAccepted(submission, original, records)) continue;
+
       if (
         original === undefined ||
         (current !== undefined &&
@@ -9830,9 +9848,52 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         return yield* applyUnknownResolutionsForRecovery(snapshot, evidence, records);
       }
       case "AwaitUnknownResolution": {
-        // This Submission stays parked awaiting the authorized DUR-017 resolution path;
-        // the settlement obligation stays visible, nothing replays.
-        return "unknown";
+        // Older Attempts may already have marked a native update unknown. Its exact
+        // canonical acceptance is a factual resolution, never permission to retry an
+        // external operation. The ledger wakes only when every unknown call is covered;
+        // the next owner appends closure under the original call identity.
+        const declared = yield* declaredCallsFor(
+          records,
+          runId,
+          new Set(evidence.openToolCalls.map((call) => call.toolCallId)),
+        );
+
+        let repaired = false;
+
+        for (const call of declared.values()) {
+          if (
+            snapshot.unknownResolutions.some((intent) => intent.toolCallId === call.toolCallId) ||
+            !nativeUpdateAccepted(submission, call, records)
+          )
+            continue;
+          yield* ledger
+            .recordUnknownResolution(
+              UnknownResolutionCommand.make({
+                submissionId: submission.submissionId,
+                toolCallId: call.toolCallId,
+                author: RECONCILER_AUTHOR,
+                reason: "The exact native update was canonically accepted",
+                resolution: {
+                  _tag: "CompletedWithResult",
+                  result: { emitted: true },
+                  isFailure: false,
+                },
+              }),
+            )
+            .pipe(
+              Effect.catchTag("UnknownResolutionConflict", (cause) =>
+                LedgerError.make({
+                  operation: "recover native update",
+                  message: "Native acceptance conflicts with a retained resolution",
+                  cause,
+                }),
+              ),
+            );
+          repaired = true;
+        }
+        if (repaired) yield* wake.notify(submission.threadId);
+
+        return repaired ? "repaired" : "unknown";
       }
       case "AwaitApprovalDecision": {
         return yield* awaitApprovalForRecovery(snapshot, evidence, decision);
@@ -10486,8 +10547,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
     const factual = intent?.resolution;
 
+    const acceptedNative =
+      factual === undefined && (yield* updateRuntime.accepted(submission, selected.declared));
+
     const reconciliation =
-      factual === undefined && selected.declared.executionKind === "ordinary"
+      factual === undefined && !acceptedNative && selected.declared.executionKind === "ordinary"
         ? yield* reconciler
             .reconcile(
               DeclaredToolCallEvidence.make({
@@ -10505,9 +10569,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const completed =
       factual?._tag === "CompletedWithResult"
         ? factual
-        : Option.isSome(reconciliation) && reconciliation.value._tag === "CompletedWithResult"
-          ? reconciliation.value
-          : undefined;
+        : acceptedNative
+          ? { result: { emitted: true }, isFailure: false }
+          : Option.isSome(reconciliation) && reconciliation.value._tag === "CompletedWithResult"
+            ? reconciliation.value
+            : undefined;
 
     const neverStarted =
       factual?._tag === "NeverHappened" ||

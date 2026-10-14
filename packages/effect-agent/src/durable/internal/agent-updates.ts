@@ -2,6 +2,7 @@ import { Clock, Crypto, DateTime, Effect, Option, Schema, Stream } from "effect"
 
 import { Update, UpdateError } from "../../core/AgentUpdates.ts";
 import type { RunId, SubmissionId, ThreadId } from "../../core/Identifiers.ts";
+import { nativeUpdateId } from "../../core/internal/agent-updates.ts";
 import { utf8ByteLength } from "../../core/internal/utf8.ts";
 import { IdempotencyKey } from "../../core/Receipt.ts";
 import { digestJson } from "../Digest.ts";
@@ -16,6 +17,8 @@ import {
   BatchId,
   CanonicalBatch,
   DefinitionDigests,
+  type CanonicalRecordEnvelope,
+  type DeclaredToolCall,
   type DeploymentId,
   PersistedJson,
   type ProducerId,
@@ -26,7 +29,7 @@ import { CurrentRunWriter, readRunEvidenceSnapshot } from "../RunContinuation.ts
 import { runIdForSubmission } from "../RunJournal.ts";
 import { LedgerError, type SubmissionSnapshot } from "../SubmissionLedger.ts";
 import { PreparedInput } from "../Subscription.ts";
-import { ThreadReader, ThreadStore, ThreadTailRequest } from "../ThreadStore.ts";
+import { getRecord, ThreadReader, ThreadStore, ThreadTailRequest } from "../ThreadStore.ts";
 import {
   deliveryPredecessor,
   decodeWorkCursor,
@@ -44,6 +47,37 @@ const storage = () =>
 
 const rejected = (reason: UpdateError["reason"]) => UpdateError.make({ reason });
 
+const updateDigest = (threadId: ThreadId, runId: RunId, updateId: string) =>
+  digestJson([threadId, runId, updateId]);
+
+const nativeParameters = Schema.Struct({ value: Schema.Json });
+const isNativeParameters = Schema.is(nativeParameters);
+const definitionDigestsEqual = Schema.toEquivalence(DefinitionDigests);
+const updateValuesEqual = Schema.toEquivalence(Schema.Json);
+
+/** Canonical native acceptance proves only this exact update call, never an external effect.
+ * Its frozen delivery remains independently recoverable even when its Tool acknowledgement is lost.
+ */
+export const nativeUpdateAccepted = (
+  submission: SubmissionSnapshot,
+  call: DeclaredToolCall,
+  records: ReadonlyArray<CanonicalRecordEnvelope>,
+): boolean => {
+  if (call.toolName !== "emit_update" || !isNativeParameters(call.parameters)) return false;
+  const value = call.parameters.value;
+
+  return records.some(
+    ({ record: { payload } }) =>
+      payload._tag === "AgentUpdateEmitted" &&
+      payload.update.threadId === submission.threadId &&
+      payload.update.agentId === submission.agentId &&
+      payload.update.runId === call.runId &&
+      payload.update.updateId === nativeUpdateId(call.runId, call.toolCallId) &&
+      definitionDigestsEqual(payload.definitions, submission.agentDigests) &&
+      updateValuesEqual(payload.update.value, value),
+  );
+};
+
 /** Acceptance is fenced by the actual emitting Attempt; recovery only recreates frozen outbox rows. */
 export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
   readonly deploymentId: DeploymentId;
@@ -57,6 +91,28 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
   const failpoint = yield* DurableRuntimeFailpoint;
 
   const reader = ThreadReader.fromStore(store);
+
+  // Terminal operation evidence excludes updates; fetch the original acceptance by its
+  // stable identity instead of expanding every operation's recovery history.
+  const accepted = Effect.fnUntraced(function* (
+    submission: SubmissionSnapshot,
+    call: DeclaredToolCall,
+  ) {
+    if (call.toolName !== "emit_update") return false;
+
+    const digest = yield* updateDigest(
+      submission.threadId,
+      call.runId,
+      nativeUpdateId(call.runId, call.toolCallId),
+    ).pipe(Effect.provideService(Crypto.Crypto, crypto), Effect.mapError(storage));
+
+    const record = yield* getRecord({
+      threadId: submission.threadId,
+      recordId: RecordId.make(`agent-update:${digest}`),
+    }).pipe(Effect.provideService(ThreadReader, reader), Effect.mapError(storage));
+
+    return Option.isSome(record) && nativeUpdateAccepted(submission, call, [record.value]);
+  });
 
   const readRun = Effect.fnUntraced(function* (threadId: ThreadId, submissionId: SubmissionId) {
     const tail = yield* store
@@ -194,7 +250,7 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
         Effect.mapError(() => rejected("validation")),
       );
 
-      const digest = yield* digestJson([request.submission.threadId, request.runId, updateId]).pipe(
+      const digest = yield* updateDigest(request.submission.threadId, request.runId, updateId).pipe(
         Effect.provideService(Crypto.Crypto, crypto),
         Effect.mapError(storage),
       );
@@ -367,5 +423,5 @@ export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {
       ),
   );
 
-  return { emit, repair: insert, repairRun };
+  return { emit, accepted, repair: insert, repairRun };
 });

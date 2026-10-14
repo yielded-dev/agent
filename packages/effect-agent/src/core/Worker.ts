@@ -101,10 +101,12 @@ export const WorkerRun = Schema.Struct({
 export const WorkerSummary = Schema.Struct({
   worker: WorkerRef,
   latestReceipt: Schema.NullOr(Receipt),
-  /** stopping/stopped identify an owner-issued worker stop, never an ordinary Receipt abort. */
+  /** Unknown work awaits reconciliation and is not progressing. stopping/stopped identify
+   * an owner-issued worker stop, never an ordinary Receipt abort. */
   state: Schema.Literals([
     "starting",
     "active",
+    "unknown",
     "idle",
     "stopping",
     "stopped",
