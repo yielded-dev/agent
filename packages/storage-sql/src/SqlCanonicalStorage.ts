@@ -83,6 +83,29 @@ const failure = (operation: string, cause?: unknown) =>
 
 const decodeWire = Schema.decodeUnknownEffect(Schema.Record(Schema.String, RecordJson));
 const decodeText = Schema.decodeUnknownEffect(Schema.String);
+const decodeEnvelope = Schema.decodeEffect(EnvelopeFragments);
+
+const readKey = Schema.decodeUnknownEffect(
+  Schema.Array(Schema.Struct({ key: Key })).check(Schema.isMaxLength(1)),
+);
+
+const decodeEnvelopeRows = Schema.decodeUnknownEffect(
+  Schema.Array(
+    Schema.Struct({
+      key: Key,
+      ...EnvelopeFragments.fields,
+    }),
+  ).check(Schema.isMaxLength(1)),
+);
+
+const decodeDefinitionRows = Schema.decodeUnknownEffect(
+  Schema.Array(
+    Schema.Struct({
+      key: Key,
+      value_json: Text,
+    }),
+  ).check(Schema.isMaxLength(1)),
+);
 
 // Pure dictionary identity, independent of transaction state. Keep only one small success
 // per Crypto service; injected implementations never share cached results.
@@ -124,7 +147,7 @@ const captureValidatedStorage = Effect.fnUntraced(
     }
     fragments[at] += "}";
 
-    const envelope = yield* Schema.decodeEffect(EnvelopeFragments)({
+    const envelope = yield* decodeEnvelope({
       prefix: fragments[0],
       before_payload: fragments[1],
       before_record_id: fragments[2],
@@ -302,10 +325,6 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
       Effect.mapError((cause) => failure("write canonical dictionary", cause)),
     );
 
-  const readKey = Schema.decodeUnknownEffect(
-    Schema.Array(Schema.Struct({ key: Key })).check(Schema.isMaxLength(1)),
-  );
-
   const lookupKey = (statement: Statement<object>) =>
     query(statement).pipe(
       Effect.flatMap(readKey),
@@ -351,14 +370,7 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
       };
 
       const read = Effect.fnUntraced(function* () {
-        const [row] = yield* Schema.decodeUnknownEffect(
-          Schema.Array(
-            Schema.Struct({
-              key: Key,
-              ...EnvelopeFragments.fields,
-            }),
-          ).check(Schema.isMaxLength(1)),
-        )(
+        const [row] = yield* decodeEnvelopeRows(
           yield* query(sql`
           SELECT envelope_key AS key, prefix, before_payload, before_record_id, suffix
           FROM ${table("effect_agent_envelopes")} WHERE content_digest=${value.envelope_digest}`),
@@ -429,14 +441,7 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
       );
 
       const read = Effect.fnUntraced(function* () {
-        const [row] = yield* Schema.decodeUnknownEffect(
-          Schema.Array(
-            Schema.Struct({
-              key: Key,
-              value_json: Text,
-            }),
-          ).check(Schema.isMaxLength(1)),
-        )(
+        const [row] = yield* decodeDefinitionRows(
           yield* query(sql`
           SELECT definition_key AS key, value_json FROM ${table("effect_agent_definitions")}
           WHERE content_digest=${digest}`),

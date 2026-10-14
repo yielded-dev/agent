@@ -95,6 +95,18 @@ class CheckpointRow extends Schema.Class<CheckpointRow>("CheckpointRow")({
   through_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
 }) {}
 
+const decodeReceipt = Schema.decodeUnknownEffect(
+  Schema.Array(StoredExecution).check(Schema.isMaxLength(1)),
+);
+
+const ThreadRows = Schema.Array(ThreadRow);
+const BatchRows = Schema.Array(BatchRow);
+const RecordRows = Schema.Array(RecordRow);
+const CheckpointRows = Schema.Array(CheckpointRow);
+const decodeCanonicalSequence = Schema.decodeEffect(CanonicalSequence);
+
+const isLifecyclePublicationFact = Schema.is(Schema.toType(LifecyclePublicationFact));
+
 /**
  * Trusted adapter SPI produced by prepareSqlAppend, never a wire or caller-data boundary.
  * Canonical values, encoded strings and UTF-8 sizes remain paired; ThreadStore owns capture
@@ -227,10 +239,6 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
     execute(statement).pipe(
       Effect.mapError((cause) => failed("Active execution storage failed", cause)),
     );
-
-  const decodeReceipt = Schema.decodeUnknownEffect(
-    Schema.Array(StoredExecution).check(Schema.isMaxLength(1)),
-  );
 
   const conflict = (
     request: RawAppendRequest,
@@ -503,16 +511,13 @@ export const makeSqlJournalKernel = Effect.fnUntraced(function* <
     options.errors.storage({ operation: cause.operation, message: cause.message, cause });
 
   const { decodeRows, decodeSingleRow } = makeRowDecoder(options.errors.corruption);
-  const decodeThreadRows = decodeRows(Schema.Array(ThreadRow));
-  const decodeThreadRow = decodeSingleRow(Schema.Array(ThreadRow));
-  const decodeBatchRows = decodeRows(Schema.Array(BatchRow));
+  const decodeThreadRows = decodeRows(ThreadRows);
+  const decodeThreadRow = decodeSingleRow(ThreadRows);
+  const decodeBatchRows = decodeRows(BatchRows);
 
-  const decodeRecordRows = decodeRows(Schema.Array(RecordRow));
+  const decodeRecordRows = decodeRows(RecordRows);
 
-  const decodeCheckpointRows = decodeRows(Schema.Array(CheckpointRow));
-  const decodeCanonicalSequence = Schema.decodeEffect(CanonicalSequence);
-
-  const isLifecyclePublicationFact = Schema.is(Schema.toType(LifecyclePublicationFact));
+  const decodeCheckpointRows = decodeRows(CheckpointRows);
 
   const storageError =
     (operation: string) =>

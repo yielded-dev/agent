@@ -240,12 +240,14 @@ export const StoredExecution = Schema.Struct({
   last_commit_digest: Schema.NullOr(Digest),
 });
 
+const decodeCheckpoint = Schema.decodeEffect(Schema.fromJsonString(ExecutionCheckpoint));
+
 export const decodeStoredExecution = Effect.fnUntraced(function* (
   row: typeof StoredExecution.Type,
 ) {
-  const checkpoint = yield* Schema.decodeEffect(Schema.fromJsonString(ExecutionCheckpoint))(
-    row.checkpoint_json,
-  ).pipe(Effect.mapError((cause) => failure("decode active execution", cause)));
+  const checkpoint = yield* decodeCheckpoint(row.checkpoint_json).pipe(
+    Effect.mapError((cause) => failure("decode active execution", cause)),
+  );
 
   if (
     checkpoint.progress.runId !== row.run_id ||
@@ -322,20 +324,23 @@ export const upgradeExecutionCheckpoints = Effect.fnUntraced(
   Effect.mapError((cause) => failure("upgrade active execution", cause)),
 );
 
+const decodeExecutionRows = Schema.decodeUnknownEffect(
+  Schema.Array(StoredExecution).check(Schema.isMaxLength(1)),
+);
+
+const decodeExecutionRead = Schema.decodeEffect(ExecutionRead);
+const decodePromptRead = Schema.decodeEffect(ThreadPromptRead);
+
 /** This read never synthesizes canonical history. */
 export const makeExecutionRead = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
   const { table, execute } = yield* makeSqlQuery(namespace);
 
-  const decodeRows = Schema.decodeUnknownEffect(
-    Schema.Array(StoredExecution).check(Schema.isMaxLength(1)),
-  );
-
   return Effect.fnUntraced(
     function* (input: ExecutionRead) {
-      const request = yield* Schema.decodeEffect(ExecutionRead)(input);
+      const request = yield* decodeExecutionRead(input);
 
-      const [row] = yield* decodeRows(
+      const [row] = yield* decodeExecutionRows(
         yield* sql`SELECT thread_id, run_id, input_sequence, revision,
       checkpoint_json, last_commit_id, last_commit_digest FROM ${table("effect_agent_executions")}
       WHERE thread_id=${request.threadId} AND run_id=${JSON.stringify(request.runId)}`.pipe(
@@ -442,6 +447,29 @@ const PromptReadPlanRow = Schema.Struct({
 
 type PromptReadPage = [typeof PromptReadPlanRow.Type, ...Array<typeof PromptReadPlanRow.Type>];
 
+const decodeRows = Schema.decodeUnknownEffect(Schema.Array(Row));
+
+const decodePromptPlan = Schema.decodeUnknownEffect(Schema.Array(PromptReadPlanRow));
+
+const decodePromptRows = Schema.decodeUnknownEffect(
+  Schema.Array(
+    Schema.Struct({
+      thread_id: Row.fields.thread_id,
+      sequence: Row.fields.sequence,
+      record_id: Row.fields.record_id,
+      record_json: Schema.fromJsonString(PromptRecord),
+    }),
+  ),
+);
+
+const decodeTailRows = Schema.decodeUnknownEffect(
+  Schema.Array(
+    Schema.Struct({
+      tail_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
+    }),
+  ),
+);
+
 /** Exclusive-owner snapshot and header reuse for indexed canonical reads. */
 export interface SelectedReadOwner {
   readonly snapshot: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
@@ -468,33 +496,11 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
   const { table: relation, execute } = yield* makeSqlQuery(namespace);
   const recordJson = canonicalRecordJson(sql, namespace);
   const membershipJson = canonicalRecordJson(sql, namespace, "canonical");
-  const decodeRows = Schema.decodeUnknownEffect(Schema.Array(Row));
-
-  const decodePromptPlan = Schema.decodeUnknownEffect(Schema.Array(PromptReadPlanRow));
 
   const promptRecordBytes = sql.onDialectOrElse({
     pg: () => sql`octet_length(${recordJson})`,
     orElse: () => sql`length(CAST(${recordJson} AS BLOB))`,
   });
-
-  const decodePromptRows = Schema.decodeUnknownEffect(
-    Schema.Array(
-      Schema.Struct({
-        thread_id: Row.fields.thread_id,
-        sequence: Row.fields.sequence,
-        record_id: Row.fields.record_id,
-        record_json: Schema.fromJsonString(PromptRecord),
-      }),
-    ),
-  );
-
-  const decodeTailRows = Schema.decodeUnknownEffect(
-    Schema.Array(
-      Schema.Struct({
-        tail_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-      }),
-    ),
-  );
 
   const sqlSnapshot = sql.onDialectOrElse({
     orElse: () => sql.withTransaction,
@@ -1138,7 +1144,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
 
   const readPrompt = Effect.fnUntraced(
     function* (input: ThreadPromptRead) {
-      const request = yield* Schema.decodeEffect(ThreadPromptRead)(input);
+      const request = yield* decodePromptRead(input);
 
       return yield* snapshot(
         Effect.gen(function* () {
