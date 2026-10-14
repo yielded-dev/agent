@@ -35,7 +35,7 @@ const overheads = {
 };
 
 /**
- * Capture primitive text and reasoning encodings for the native Schema decoder.
+ * Capture complete primitive text and reasoning values for native Schema validation.
  * Descriptor checks select this optimization; they do not replace the native codec.
  * Extra fields, accessors, and nonempty metadata use the general ownership path.
  * No provider object survives, including an empty metadata object's hidden storage.
@@ -95,9 +95,8 @@ export const capturePrimitiveTextPart = (part: unknown, maxBytes: number) => {
     if (bytes + fixed.source > maxBytes || bytes + fixed.encoded > maxBytes) return undefined;
     // Never pass the provider's metadata object (or any other object) to the decoder.
     snapshot.metadata = {};
-    delete snapshot[brand];
 
-    return { encodedPart: snapshot, retainedBytes: bytes + fixed.encoded };
+    return { part: snapshot, retainedBytes: bytes + fixed.encoded };
   } catch {
     // Reflection may throw for proxies. The general path owns the typed failure.
     return undefined;
