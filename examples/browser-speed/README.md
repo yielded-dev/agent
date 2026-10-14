@@ -60,7 +60,7 @@ vp run -F @yielded/agent-example-browser-speed build
 
 Fill the ignored `.dev.vars` file with `CLOUDFLARE_ACCOUNT_ID`,
 `BROWSER_RENDERING_API_TOKEN` (Browser Run Write), and `OPENAI_API_KEY`.
-The project's Infisical `dev` folder `/browser-use` holds the REVE browser token and its
+The project's Infisical `dev` folder `/browser-use` holds the browser token and its
 matching account ID; the OpenAI key is in `/`. Use the same Cloudflare account for Wrangler's
 remote browser binding and the session credentials.
 
@@ -103,6 +103,8 @@ The owner has a twelve-minute overall deadline and a durable cleanup alarm.
 Demos prepare a fresh browser for each run and close it afterward. Chat retains the browser
 for up to one hour, with ten minutes of idle time between messages. Completed messages persist
 in the owner’s SQLite storage, so an idle Worker restart preserves the conversation and browser.
+Chat captures screenshots only when requested. An unavailable final screenshot ends the chat
+and closes the browser while keeping the completed reply.
 Reloading the page starts a new UI session. An expired chat refuses follow-up input; choose
 **New chat** to start again. A failed or interrupted message is never replayed after restart.
 

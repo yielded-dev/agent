@@ -3,12 +3,11 @@ import {
   OpenAiClient as CompletionsClient,
   OpenAiLanguageModel as CompletionsModel,
 } from "@effect/ai-openai-compat";
-import { Agent, AgentRuntime, InMemory } from "@yielded/agent";
+import { Agent, AgentRuntime } from "@yielded/agent";
 import { CompactionPolicy } from "@yielded/agent/agent-policy";
 import * as BrowserUse from "@yielded/agent/browser-use";
 import { CodeExecutionLimits, CodeExecutor } from "@yielded/agent/code-executor";
 import type { ThreadId } from "@yielded/agent/identifiers";
-import type { ThreadHistory } from "@yielded/agent/thread-history";
 import { Duration, Effect, Layer, Redacted, Schema } from "effect";
 import { Toolkit } from "effect/ai";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
@@ -112,10 +111,7 @@ export const executeTask = Effect.fnUntraced(function* (
   apiKey: string,
   apiUrl?: string,
   apiType: typeof ModelApi.Type = "responses",
-  conversation?: {
-    readonly threadId: ThreadId;
-    readonly history: Layer.Layer<ThreadHistory, LabError>;
-  },
+  threadId?: ThreadId,
 ) {
   const browser = yield* Browser;
   const trace = yield* Trace;
@@ -188,7 +184,7 @@ export const executeTask = Effect.fnUntraced(function* (
 
   const result = yield* traceModels(
     AgentRuntime.start(makeAgent(input.scenario === "chat" && apiType === "responses"), prompt, {
-      threadId: conversation?.threadId,
+      threadId,
     }).pipe(
       Effect.flatMap((handle) =>
         handle.await.pipe(
@@ -214,12 +210,7 @@ export const executeTask = Effect.fnUntraced(function* (
           ),
         ),
       ),
-      Effect.provide([
-        conversation?.history ?? InMemory.layer,
-        traceModelStream(modelLayer),
-        completionLayer,
-        codeLayer,
-      ]),
+      Effect.provide([traceModelStream(modelLayer), completionLayer, codeLayer]),
     ),
   ).pipe(
     Effect.mapError((error) => {

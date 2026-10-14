@@ -1,3 +1,4 @@
+import { InMemory } from "@yielded/agent";
 import {
   BrowserSessionReference,
   BrowserSessions,
@@ -322,6 +323,7 @@ export const makeOwner = (
       });
     trace = yield* makeTrace(input, selectedModel.model);
     const current = trace;
+    let retainChat = input.scenario === "chat";
 
     image = null;
     notice = null;
@@ -449,12 +451,22 @@ export const makeOwner = (
         modelKey,
         selectedModel.apiUrl,
         selectedModel.apiType,
-        input.scenario === "chat"
-          ? { threadId: ThreadId.make(input.chatId ?? input.id), history: config.history }
-          : undefined,
-      ).pipe(Effect.provideService(Browser, browser));
+        input.scenario === "chat" ? ThreadId.make(input.chatId ?? input.id) : undefined,
+      ).pipe(
+        Effect.provide(input.scenario === "chat" ? config.history : InMemory.layer),
+        Effect.provideService(Browser, browser),
+      );
       current.update({ finishedAt: current.now() });
-      yield* browser.capture(true).pipe(Effect.catch(() => Effect.void));
+      if (input.screenshots || input.scenario !== "chat")
+        yield* browser.capture(true).pipe(
+          Effect.catch(() =>
+            Effect.sync(() => {
+              retainChat = false;
+              if (input.scenario === "chat")
+                notice = "The final screenshot was unavailable. This chat has ended.";
+            }),
+          ),
+        );
     });
 
     const work = Effect.gen(function* () {
@@ -504,7 +516,7 @@ export const makeOwner = (
           }),
         );
 
-        if (Exit.isSuccess(exit) && input.scenario === "chat")
+        if (Exit.isSuccess(exit) && retainChat)
           return Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
 

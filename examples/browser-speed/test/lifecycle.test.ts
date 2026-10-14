@@ -6,6 +6,7 @@ import {
   BrowserSessions,
 } from "@yielded/agent-platform-cloudflare/browser-session";
 import { CodeExecutor } from "@yielded/agent/code-executor";
+import type { ThreadHistory } from "@yielded/agent/thread-history";
 import type { Scope } from "effect";
 import { Deferred, Effect, Exit, Fiber, Redacted, Schema } from "effect";
 import { TestClock } from "effect/testing";
@@ -21,7 +22,7 @@ import { makeTrace } from "../src/telemetry.ts";
 
 expectTypeOf<Effect.Error<ReturnType<typeof executeTask>>>().toEqualTypeOf<LabError>();
 expectTypeOf<Effect.Services<ReturnType<typeof executeTask>>>().toEqualTypeOf<
-  Browser | Trace | CodeExecutor
+  Browser | Trace | CodeExecutor | ThreadHistory
 >();
 expectTypeOf<Effect.Error<ReturnType<typeof connectKitesurf>>>().toEqualTypeOf<LabError>();
 expectTypeOf<Effect.Services<ReturnType<typeof connectKitesurf>>>().toEqualTypeOf<Scope.Scope>();
