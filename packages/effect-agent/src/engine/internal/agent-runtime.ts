@@ -2315,7 +2315,7 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
         context.toolSchemaTransformer,
       );
     }
-    const encodedResult = boundEncodedToolResult(result.encodedResult, resultBounds);
+    const encodedResult = yield* boundEncodedToolResult(result.encodedResult, resultBounds);
 
     // The ordinary JSON boundary remains required; only the public Class projection is optional.
     const successResult = result.isFailure
@@ -3155,13 +3155,17 @@ const toolResultForJson = (tool: Tool.Any, result: Tool.HandlerResult<Tool.Any>)
   return result.encodedResult;
 };
 
+const decodeBoundedToolResult = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
+
 /**
  * RUN-022: bound one application Tool result at the settle seam. The bounded
  * value is what official history, the settled record, and the success event
- * all carry, so every downstream surface agrees; a within-bounds result
- * passes through with its identity preserved.
+ * all carry, so every downstream surface agrees on the measured representation.
  */
-const boundEncodedToolResult = (encodedResult: unknown, bounds: ToolResultBounds): unknown => {
+const boundEncodedToolResult = (
+  encodedResult: unknown,
+  bounds: ToolResultBounds,
+): Effect.Effect<unknown> => {
   let text: string | undefined;
 
   try {
@@ -3169,10 +3173,10 @@ const boundEncodedToolResult = (encodedResult: unknown, bounds: ToolResultBounds
   } catch (cause) {
     // Fail closed (runtime spec §9): an unserializable result is unbounded by
     // construction, so the sentinel replaces it before history or records.
-    return unserializableToolResult(cause);
+    return Effect.succeed(unserializableToolResult(cause));
   }
   if (text === undefined) {
-    return unserializableToolResult("the encoded result is not a JSON value");
+    return Effect.succeed(unserializableToolResult("the encoded result is not a JSON value"));
   }
   const bounded = applyToolResultBounds(text, bounds);
 
@@ -3180,12 +3184,8 @@ const boundEncodedToolResult = (encodedResult: unknown, bounds: ToolResultBounds
   // truncated and unmodified cases: returning the original object would let a
   // stateful `toJSON` pass the byte check small and expand or throw on later
   // canonical serialization, carrying unchecked state past the boundary.
-  try {
-    return Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(bounded);
-  } catch (cause) {
-    // Defensive only: `applyToolResultBounds` always emits valid JSON.
-    return unserializableToolResult(cause);
-  }
+  // Stay in the caller's Effect; a synchronous decoder would start another runtime fiber.
+  return decodeBoundedToolResult(bounded).pipe(Effect.orElseSucceed(unserializableToolResult));
 };
 
 const durableResultBounds = <E, R>(
@@ -7953,7 +7953,7 @@ const makeResumeTurn = <
             id: call.id,
             isFailure: true,
             result: yield* decodeEventJson(
-              boundEncodedToolResult(
+              yield* boundEncodedToolResult(
                 rejection.error,
                 durableResultBounds(agent.definition.policy.toolResultBounds, options, turn),
               ),
