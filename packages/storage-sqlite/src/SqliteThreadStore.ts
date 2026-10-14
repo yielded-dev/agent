@@ -85,7 +85,7 @@ const DatabaseHeader = Schema.Tuple([
  * never change its locking mode or close it while host work is alive.
  *
  * This excludes ALL other database connections, including readers. After compatibility checks,
- * initialize fresh storage or atomically upgrade layouts 25 and 26, then recover from durable facts. Scope closure
+ * initialize fresh storage or atomically upgrade supported predecessor layouts, then recover from durable facts. Scope closure
  * retires local capabilities; no ownership is restored from the database. Only the exact
  * declared triggers on Thread storage tables are permitted before any initialization;
  * application and optional memory tables retain their own schema contracts.

@@ -17,7 +17,7 @@ import {
 } from "../PostgresStorageError.ts";
 import { matchesLayoutExpressions, type LayoutExpression } from "./layout-expression.ts";
 
-export const CurrentPostgresStorageVersion = 27;
+export const CurrentPostgresStorageVersion = 28;
 
 /** The released layout 25 already has observe_settlement; only these indexes are new. */
 const layout26IndexStatements = {
@@ -130,7 +130,6 @@ const layoutStatements = [
   'CREATE TABLE __NAMESPACE__.effect_agent_archive_batches (thread_id TEXT COLLATE "C" NOT NULL, batch_id TEXT COLLATE "C" NOT NULL, range_first_sequence BIGINT NOT NULL, batch_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id, batch_id) REFERENCES __NAMESPACE__.effect_agent_canonical_batches(thread_id, batch_id) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_batches_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES __NAMESPACE__.effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)',
   'CREATE TABLE __NAMESPACE__.effect_agent_archive_records (thread_id TEXT COLLATE "C" NOT NULL, sequence BIGINT NOT NULL, range_first_sequence BIGINT NOT NULL, record_json TEXT COLLATE "C" NOT NULL, PRIMARY KEY (thread_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES __NAMESPACE__.effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_records_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES __NAMESPACE__.effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)',
   "CREATE UNIQUE INDEX effect_agent_canonical_batches_sequence ON __NAMESPACE__.effect_agent_canonical_batches(thread_id, first_sequence)",
-  "CREATE INDEX effect_agent_canonical_batches_last ON __NAMESPACE__.effect_agent_canonical_batches(thread_id, last_sequence)",
   'CREATE TABLE __NAMESPACE__.effect_agent_live_child_reservations (reservation_id TEXT COLLATE "C" PRIMARY KEY NOT NULL, thread_id TEXT COLLATE "C" NOT NULL)',
   "CREATE INDEX effect_agent_live_child_reservations_thread ON __NAMESPACE__.effect_agent_live_child_reservations(thread_id, reservation_id)",
   // Compact native positions keep accepted identities out of bounded export cursors.
@@ -1113,7 +1112,10 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (
 
   if (
     legacy.version !== CurrentPostgresStorageVersion &&
-    !(allowReleasedUpgrade && (legacy.version === 25 || legacy.version === 26))
+    !(
+      allowReleasedUpgrade &&
+      (legacy.version === 25 || legacy.version === 26 || legacy.version === 27)
+    )
   )
     return yield* incompatible(legacy.version, `Unsupported storage version ${legacy.version}.`);
   if (schemaTable?.kind !== "r")
@@ -1318,6 +1320,14 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (
   }
   for (const [name, expected] of Object.entries(layoutIndexes)) {
     if (legacy.version === 25 && Object.hasOwn(layout26IndexStatements, name)) continue;
+    if (name === "effect_agent_canonical_batches_last" && legacy.version >= 28) {
+      if (indexes.some((row) => row.name === name))
+        return yield* incompatible(
+          legacy.version,
+          "Layout 28 contains the retired batch-end index.",
+        );
+      continue;
+    }
     if (
       !matchesIndex(
         indexes.find((row) => row.name === name),
@@ -1375,7 +1385,7 @@ export const inspectPostgresStorage = Effect.fnUntraced(function* (
     JOIN pg_proc p ON p.oid=t.tgfoid JOIN pg_namespace pn ON pn.oid=p.pronamespace
     WHERE n.nspname=${namespace} AND (
       starts_with(t.tgname, 'effect_agent_live_child_') OR (
-        ${legacy.version === 25 || legacy.version === 26} AND NOT t.tgisinternal
+        ${legacy.version < CurrentPostgresStorageVersion} AND NOT t.tgisinternal
         AND c.relname IN ${sql.in(Object.keys(expectedShape))}
       )
     )`),
@@ -1427,11 +1437,14 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
 
   if (header !== undefined) {
     if (header.layoutVersion === CurrentPostgresStorageVersion) return header;
-    if (header.layoutVersion !== 25 && header.layoutVersion !== 26)
+    if (header.layoutVersion !== 25 && header.layoutVersion !== 26 && header.layoutVersion !== 27)
       return yield* incompatible(header.layoutVersion, "Unsupported layout upgrade.");
 
     // READ COMMITTED must observe in-flight writers before reading checkpoints for conversion.
-    yield* execute(sql`LOCK TABLE ${table("effect_agent_executions")} IN SHARE ROW EXCLUSIVE MODE`);
+    if (header.layoutVersion < 27)
+      yield* execute(
+        sql`LOCK TABLE ${table("effect_agent_executions")} IN SHARE ROW EXCLUSIVE MODE`,
+      );
 
     if (header.layoutVersion === 25) {
       yield* execute(
@@ -1449,15 +1462,17 @@ export const applyPostgresLayout = Effect.fnUntraced(function* (
       for (const statement of Object.values(layout26IndexStatements))
         yield* sql.unsafe(qualify(statement, namespace)).withoutTransform;
     }
-    yield* upgradeExecutionCheckpoints(namespace).pipe(
-      Effect.catchTag("ThreadStoreError", (cause) =>
-        PostgresStorageCorruptionError.make({
-          table: "effect_agent_executions",
-          rowKey: "upgrade",
-          message: `Invalid retained execution; upgrade rolled back: ${cause.message}`,
-        }),
-      ),
-    );
+    if (header.layoutVersion < 27)
+      yield* upgradeExecutionCheckpoints(namespace).pipe(
+        Effect.catchTag("ThreadStoreError", (cause) =>
+          PostgresStorageCorruptionError.make({
+            table: "effect_agent_executions",
+            rowKey: "upgrade",
+            message: `Invalid retained execution; upgrade rolled back: ${cause.message}`,
+          }),
+        ),
+      );
+    yield* execute(sql`DROP INDEX ${table("effect_agent_canonical_batches_last")}`);
     yield* execute(
       sql`UPDATE ${table("effect_agent_storage_version")} SET version=${CurrentPostgresStorageVersion} WHERE id=TRUE`,
     );
