@@ -13,7 +13,7 @@ import { type ExhaustedLimit } from "../core/RunEvent.ts";
 import { RunPolicyUsage } from "../core/RunPolicyUsage.ts";
 import { type Selection, type Snapshot } from "../core/ToolExposure.ts";
 import type { ToolParameterRejection } from "../core/ToolResult.ts";
-import { ModelCallUsage, summarizeModelUsage, type RunUsageSummary } from "../core/Usage.ts";
+import { type ModelCallUsage, summarizeModelUsage, type RunUsageSummary } from "../core/Usage.ts";
 import type { WorkerRef } from "../core/Worker.ts";
 import {
   CLEARED_TOOL_RESULT,
@@ -1654,18 +1654,6 @@ export const promptFromCanonicalRecords = (
   );
 
 /** Everything one committed Turn contributes to its canonical batch. */
-/**
- * Staged usage is validated, never repaired: clamping negatives or truncating
- * fractions would under-record canonical usage, and NaN/Infinity must fail
- * typed instead of escaping as a record-construction defect (RUN-023).
- */
-const validStagedUsage = (label: string, value: number): Effect.Effect<number, RunJournalError> =>
-  Number.isSafeInteger(value) && value >= 0
-    ? Effect.succeed(value)
-    : Effect.fail(
-        journalError(`Staged ${label} must be a non-negative safe integer, got ${String(value)}`),
-      );
-
 export interface TurnCommitInput {
   readonly toolResultMaxBytes?: number | undefined;
   readonly toolSelectionMaxBytes?: number | undefined;
@@ -1710,8 +1698,9 @@ export interface TurnCommitInput {
 }
 
 const decodePersistedJson = Schema.decodeUnknownEffect(PersistedJson);
+const decodeModelResponse = Schema.decodeUnknownEffect(ModelResponseRecorded);
+const decodeToolSettled = Schema.decodeUnknownEffect(ToolCallSettled);
 const encodePrompt = Schema.encodeEffect(Prompt.Prompt);
-const decodeModelUsage = Schema.decodeUnknownEffect(Schema.Array(ModelCallUsage));
 
 const requireCanonicalTurn = (turn: number): Effect.Effect<void, RunJournalError> =>
   !Number.isInteger(turn) || turn <= 0
@@ -1757,30 +1746,60 @@ const modelResponseRecord = Effect.fnUntraced(function* (
     ),
   );
 
-  const modelUsage =
-    input.usage?.modelUsage === undefined
-      ? undefined
-      : yield* decodeModelUsage(input.usage.modelUsage).pipe(
-          Effect.mapError((cause) => journalError("Turn model usage failed to decode", cause)),
-        );
+  // Validate the detached messages and usage together; no mutable caller data is trusted.
+  const modelUsage = input.usage?.modelUsage;
 
-  if (modelUsage !== undefined) {
-    if (modelUsage.length === 0) {
+  const payload = yield* decodeModelResponse({
+    _tag: "ModelResponseRecorded",
+    toolResultMaxBytes: input.toolResultMaxBytes ?? MAX_PERSISTED_JSON_BYTES,
+    toolSelectionMaxBytes: input.toolSelectionMaxBytes ?? 0,
+    toolOperations: input.toolOperations ?? [],
+    ...(input.toolParameterRejections === undefined || input.toolParameterRejections.length === 0
+      ? {}
+      : { toolParameterRejections: input.toolParameterRejections }),
+    ...(input.toolExposure === undefined ? {} : { toolExposure: input.toolExposure }),
+    runId: input.runId,
+    turnId: input.turnId,
+    turn: input.turn,
+    messages,
+    ...(runScopedPrefixLength === undefined ? {} : { runScopedPrefixLength }),
+    ...(modelUsage === undefined ? {} : { modelUsage }),
+    ...(input.unobservedModelCalls === undefined || input.unobservedModelCalls === 0
+      ? {}
+      : {
+          unobservedModelCalls: input.unobservedModelCalls,
+        }),
+    ...(input.usage === undefined
+      ? {}
+      : {
+          inputTokens: input.usage.inputTokens,
+          outputTokens: input.usage.outputTokens,
+          // Written only when non-zero: absent re-seeds as zero, so the
+          // no-estimator case stays byte-identical to pre-cost histories.
+          ...(input.usage.costMicrousd === undefined || input.usage.costMicrousd === 0
+            ? {}
+            : {
+                costMicrousd: input.usage.costMicrousd,
+              }),
+        }),
+  }).pipe(
+    Effect.mapError((cause) => journalError("Invalid model response operation evidence", cause)),
+  );
+
+  if (payload.modelUsage !== undefined) {
+    if (payload.modelUsage.length === 0)
       return yield* journalError("Turn model usage must contain at least one completed call");
-    }
 
-    const summary = yield* continuationUsage(modelUsage).pipe(
+    const summary = yield* continuationUsage(payload.modelUsage).pipe(
       Effect.mapError((cause) => journalError("Turn model usage exceeds accounting bounds", cause)),
     );
 
     if (
-      input.usage === undefined ||
-      input.usage.inputTokens !== summary.inputTokens ||
-      input.usage.outputTokens !== summary.outputTokens ||
-      (input.usage.costMicrousd ?? 0) !== summary.costMicrousd
-    ) {
+      payload.inputTokens !== summary.inputTokens ||
+      payload.outputTokens !== summary.outputTokens ||
+      (payload.costMicrousd ?? 0) !== summary.costMicrousd
+    )
       return yield* journalError("Turn detailed and aggregate model usage disagree");
-    }
   }
 
   return RecordEnvelope.make({
@@ -1789,44 +1808,7 @@ const modelResponseRecord = Effect.fnUntraced(function* (
     schemaVersion: 1,
     createdAt: input.createdAt,
     deploymentId: input.deploymentId,
-    payload: yield* ModelResponseRecorded.makeEffect({
-      toolResultMaxBytes: input.toolResultMaxBytes ?? MAX_PERSISTED_JSON_BYTES,
-      toolSelectionMaxBytes: input.toolSelectionMaxBytes ?? 0,
-      toolOperations: input.toolOperations ?? [],
-      ...(input.toolParameterRejections === undefined || input.toolParameterRejections.length === 0
-        ? {}
-        : { toolParameterRejections: input.toolParameterRejections }),
-      ...(input.toolExposure === undefined ? {} : { toolExposure: input.toolExposure }),
-      runId: input.runId,
-      turnId: input.turnId,
-      turn: input.turn,
-      messages,
-      ...(runScopedPrefixLength === undefined ? {} : { runScopedPrefixLength }),
-      ...(modelUsage === undefined ? {} : { modelUsage }),
-      ...(input.unobservedModelCalls === undefined || input.unobservedModelCalls === 0
-        ? {}
-        : {
-            unobservedModelCalls: yield* validStagedUsage(
-              "unobservedModelCalls",
-              input.unobservedModelCalls,
-            ),
-          }),
-      ...(input.usage === undefined
-        ? {}
-        : {
-            inputTokens: yield* validStagedUsage("inputTokens", input.usage.inputTokens),
-            outputTokens: yield* validStagedUsage("outputTokens", input.usage.outputTokens),
-            // Written only when non-zero: absent re-seeds as zero, so the
-            // no-estimator case stays byte-identical to pre-cost histories.
-            ...(input.usage.costMicrousd === undefined || input.usage.costMicrousd === 0
-              ? {}
-              : {
-                  costMicrousd: yield* validStagedUsage("costMicrousd", input.usage.costMicrousd),
-                }),
-          }),
-    }).pipe(
-      Effect.mapError((cause) => journalError("Invalid model response operation evidence", cause)),
-    ),
+    payload,
   });
 });
 
@@ -1836,33 +1818,27 @@ const toolSettledRecords = Effect.fnUntraced(function* (
   const toolRecords: Array<RecordEnvelope> = [];
 
   for (const part of input.toolResults) {
-    const result = yield* decodePersistedJson(part.result).pipe(
-      Effect.mapError((cause) =>
-        journalError(`Tool result ${part.toolCallId} exceeds canonical persistence bounds`, cause),
-      ),
+    const payload = yield* decodeToolSettled({
+      _tag: "ToolCallSettled",
+      ...(part.toolSelection === undefined ? {} : { toolSelection: part.toolSelection }),
+      runId: input.runId,
+      toolCallId: part.toolCallId,
+      toolName: part.toolName,
+      result: part.result,
+      isFailure: part.isFailure,
+      ...(part.budgetRejected === true ? { budgetRejected: true } : {}),
+    }).pipe(
+      Effect.mapError((cause) => journalError(`Invalid Tool result ${part.toolCallId}`, cause)),
     );
-
-    const toolCallId = yield* Effect.try({
-      try: () => decodeToolCallId(part.toolCallId),
-      catch: (cause) => journalError(`Invalid Tool Call ID ${part.toolCallId}`, cause),
-    });
 
     toolRecords.push(
       RecordEnvelope.make({
-        recordId: toolCallSettledRecordId(input.runId, input.turn, toolCallId),
+        recordId: toolCallSettledRecordId(input.runId, input.turn, payload.toolCallId),
         family: "thread",
         schemaVersion: 1,
         createdAt: input.createdAt,
         deploymentId: input.deploymentId,
-        payload: ToolCallSettled.make({
-          ...(part.toolSelection === undefined ? {} : { toolSelection: part.toolSelection }),
-          runId: input.runId,
-          toolCallId,
-          toolName: part.toolName,
-          result,
-          isFailure: part.isFailure,
-          ...(part.budgetRejected === true ? { budgetRejected: true } : {}),
-        }),
+        payload,
       }),
     );
   }
@@ -1870,7 +1846,7 @@ const toolSettledRecords = Effect.fnUntraced(function* (
   return toolRecords;
 });
 
-const runCompletionRecord = Effect.fnUntraced(function* (input: TurnCommitInput) {
+const runCompletionRecord = (input: TurnCommitInput) => {
   if (input.runCompletion === undefined) return undefined;
   const completion = { runId: input.runId, ...input.runCompletion };
 
@@ -1884,7 +1860,7 @@ const runCompletionRecord = Effect.fnUntraced(function* (input: TurnCommitInput)
       ...completion,
     }),
   });
-});
+};
 
 /**
  * Build a canonical batch from interpreter-validated Turn facts: one
@@ -1902,7 +1878,7 @@ export const turnCanonicalBatch = Effect.fnUntraced(function* (
   yield* requireCanonicalTurn(input.turn);
   const modelResponse = yield* modelResponseRecord(input);
   const toolRecords = yield* toolSettledRecords(input);
-  const completionRecord = yield* runCompletionRecord(input);
+  const completionRecord = runCompletionRecord(input);
 
   return CanonicalBatch.make({
     batchId: turnBatchId(input.runId, input.turn),
@@ -1946,7 +1922,7 @@ export const turnResultsBatch = Effect.fnUntraced(function* (
   yield* requireCanonicalTurn(input.turn);
   const toolRecords = yield* toolSettledRecords(input);
   const first = toolRecords[0];
-  const completionRecord = yield* runCompletionRecord(input);
+  const completionRecord = runCompletionRecord(input);
 
   if (first === undefined) {
     if (completionRecord === undefined) {

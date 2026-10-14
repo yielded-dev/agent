@@ -5,7 +5,7 @@ import { AgentPersistenceCapacityError } from "../core/AgentError.ts";
 import type { RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";
 import { ToolCallId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
-import { reference, resolveEvidence } from "./internal/evidence.ts";
+import { resolveEvidence } from "./internal/evidence.ts";
 import { continuationUsage } from "./internal/usage-totals.ts";
 export { reference, resolveEvidence } from "./internal/evidence.ts";
 import {
@@ -738,7 +738,7 @@ const advanceFacts = Effect.fnUntraced(function* (
       case "RunContextRecorded":
         if (savedContext !== undefined)
           return yield* failure("A Run's original context cannot be replaced");
-        savedContext = yield* reference(fact);
+        savedContext = EvidenceReference.make({ recordId: fact.recordId });
         position = "awaiting-model";
         break;
       case "ModelResponseRecorded": {
@@ -792,7 +792,7 @@ const advanceFacts = Effect.fnUntraced(function* (
         accounting.lastInputTokens = summary?.inputTokens ?? payload.inputTokens ?? 0;
         accounting.lastOutputTokens = summary?.outputTokens ?? payload.outputTokens ?? 0;
         accounting.unobservedModelCalls += payload.unobservedModelCalls ?? 0;
-        latestResponse = yield* reference(fact);
+        latestResponse = EvidenceReference.make({ recordId: fact.recordId });
         response = payload;
         results = new Map();
         childResults = new Map();
@@ -876,12 +876,12 @@ const advanceFacts = Effect.fnUntraced(function* (
                 ? 0
                 : utf8ByteLength(JSON.stringify(payload.runDisposition)))
             : undefined;
-        terminal = yield* reference(fact);
+        terminal = EvidenceReference.make({ recordId: fact.recordId });
         position = "settling";
         break;
       case "SubmissionSettled":
         if (payload.submissionId !== submissionId) break;
-        terminal = yield* reference(fact);
+        terminal = EvidenceReference.make({ recordId: fact.recordId });
         position = "settled";
         if (payload.usageSummary !== undefined) {
           accounting.modelCalls = payload.usageSummary.modelCalls;
@@ -1187,13 +1187,6 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     };
   });
 
-  const loadState = (runId: RunId, after: CanonicalSequence) =>
-    Effect.suspend(() => {
-      const retained = cached.get(runId);
-
-      return retained === undefined ? loadUncachedState(runId, after) : Effect.succeed(retained);
-    });
-
   const checkFutureShapes = (
     state: ProgressState,
     cursorBytes?: number,
@@ -1349,7 +1342,9 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         verifiedEmpty.writer ===
           Option.getOrUndefined(yield* Effect.serviceOption(CurrentRunWriter));
 
-      const previous = empty ? undefined : yield* loadState(runId, after);
+      const previous = empty
+        ? undefined
+        : (cached.get(runId) ?? (yield* loadUncachedState(runId, after)));
 
       let original = facts.find(
         (record) =>
@@ -1471,7 +1466,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
           ? previous.continuation.originalInput
           : original === undefined
             ? yield* failure("Run progress has no original input")
-            : yield* reference(original);
+            : EvidenceReference.make({ recordId: original.recordId });
 
       const next = yield* advanceFacts(previous, facts, submissionId, initialBytes);
 
@@ -1509,7 +1504,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         ...(savedContext === undefined ? {} : { savedContext }),
         ...(latestResponse === undefined ? {} : { latestResponse }),
         ...(terminal === undefined ? {} : { terminal }),
-        lastFact: yield* reference(last),
+        lastFact: EvidenceReference.make({ recordId: last.recordId }),
         position,
         accounting,
       }).pipe(
@@ -1835,7 +1830,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
 
         yield* prepare(yield* captureFacts(probe), after);
         const recordId = probe.records[0].recordId;
-        const state = yield* loadState(runId, after);
+        const state = cached.get(runId) ?? (yield* loadUncachedState(runId, after));
 
         if (state === undefined) return yield* failure("Dispatch has no canonical Run progress");
         if (reservations.has(recordId))
@@ -1870,7 +1865,10 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
 
         if (response === undefined || response.payload._tag !== "ModelResponseRecorded")
           return yield* failure("Deferred dispatch has no response");
-        const progress = yield* loadState(response.payload.runId, after);
+
+        const progress =
+          cached.get(response.payload.runId) ??
+          (yield* loadUncachedState(response.payload.runId, after));
 
         if (progress === undefined) return yield* failure("Deferred dispatch has no Run progress");
 

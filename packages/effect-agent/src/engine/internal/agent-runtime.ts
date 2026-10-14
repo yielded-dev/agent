@@ -2886,9 +2886,22 @@ const executeToolBatch = Effect.fnUntraced(function* <
       // after the final group, its cleanup, and the optional budget guard.
     }
   }).pipe(
-    Effect.provideService(RunEventSink, batchSink),
-    Effect.provideService(Emitter, updateEmitter),
-    Effect.provideService(SubagentDurability, batchSubagentDurability),
+    Effect.updateContext(
+      (
+        services: Context.Context<
+          | HookRequirements
+          | ToolSpanTelemetry
+          | ProgrammaticToolAuthorization
+          | Scope.Scope
+          | Tool.HandlerServices<ToolUnion<Tools>>
+        >,
+      ) =>
+        services.pipe(
+          Context.add(SubagentDurability, batchSubagentDurability),
+          Context.add(Emitter, updateEmitter),
+          Context.add(RunEventSink, batchSink),
+        ),
+    ),
     Effect.ensuring(
       Effect.sync(() => {
         updatesOpen = false;
@@ -6520,40 +6533,42 @@ const makeTurn = <
                           activeProvisionalText = provisionalText;
                         }),
                       ),
-                      Stream.runForEach((part) =>
+                      Stream.runForEachArray((parts) =>
                         Effect.gen(function* () {
-                          const owned = yield* ownModelResponsePart(
-                            part,
-                            agent.definition.toolkit,
-                            trace,
-                            context.bufferLimits,
-                            trace.finished,
-                          );
+                          for (const part of parts) {
+                            const owned = yield* ownModelResponsePart(
+                              part,
+                              agent.definition.toolkit,
+                              trace,
+                              context.bufferLimits,
+                              trace.finished,
+                            );
 
-                          const events = context.publish === undefined ? undefined : [];
+                            const events = context.publish === undefined ? undefined : [];
 
-                          yield* processModelPart(
-                            context,
-                            turnId,
-                            turn,
-                            agent.definition.toolkit.tools,
-                            trace,
-                            owned.ownedPart,
-                            owned.retainedBytes,
-                            events,
-                          );
-                          if (provisionalText !== undefined) {
-                            const part = owned.ownedPart;
+                            yield* processModelPart(
+                              context,
+                              turnId,
+                              turn,
+                              agent.definition.toolkit.tools,
+                              trace,
+                              owned.ownedPart,
+                              owned.retainedBytes,
+                              events,
+                            );
+                            if (provisionalText !== undefined) {
+                              const part = owned.ownedPart;
 
-                            if (
-                              part.type === "text-start" ||
-                              part.type === "text-delta" ||
-                              part.type === "text-end"
-                            )
-                              provisionalText.offerUnsafe(part);
+                              if (
+                                part.type === "text-start" ||
+                                part.type === "text-delta" ||
+                                part.type === "text-end"
+                              )
+                                provisionalText.offerUnsafe(part);
+                            }
+                            // Publish before accepting the next part. Backpressure stays interruptible.
+                            if (events !== undefined) yield* publishEvents(context, events);
                           }
-                          // Publish before accepting the next part. Backpressure stays interruptible.
-                          if (events !== undefined) yield* publishEvents(context, events);
                         }),
                       ),
                       <Value, Error, Requirements>(
@@ -6576,64 +6591,67 @@ const makeTurn = <
       // Retry the closed native provider operation. Admitted content makes the response
       // ineligible for retry; canonical acceptance belongs to the continuation below.
       const attemptWithRetries = Effect.suspend(() => attempt(compactedOutgoing())).pipe(
-        Effect.retry(($) =>
-          $(Schedule.exponential(MODEL_RETRY_BASE)).pipe(
-            Schedule.upTo({ times: policy.modelRetries ?? 0 }),
-            Schedule.while(({ input: error }) => {
-              const lastPart = trace.parts.at(-1);
-              const providerError: unknown = error;
+        (operation) =>
+          (policy.modelRetries ?? 0) === 0
+            ? operation
+            : Effect.retry(operation, ($) =>
+                $(Schedule.exponential(MODEL_RETRY_BASE)).pipe(
+                  Schedule.upTo({ times: policy.modelRetries ?? 0 }),
+                  Schedule.while(({ input: error }) => {
+                    const lastPart = trace.parts.at(-1);
+                    const providerError: unknown = error;
 
-              return (
-                canRepeatModelCall &&
-                !hasStreamedContent(trace) &&
-                ((lastPart?.type === "error" && isTransientErrorPayload(lastPart.error)) ||
-                  (AiError.isAiError(providerError) && providerError.isRetryable))
-              );
-            }),
-            Schedule.modifyDelay(({ input: error, duration }) =>
-              Effect.gen(function* () {
-                const backoff = Duration.min(duration, MODEL_RETRY_MAX_DELAY);
-                const providerError: unknown = error;
-
-                const retryAfter = AiError.isAiError(providerError)
-                  ? providerError.retryAfter
-                  : undefined;
-
-                const requested =
-                  retryAfter === undefined ? backoff : Duration.max(backoff, retryAfter);
-
-                // Expiration is rejected by the next native attempt. Capping only this delay
-                // keeps failed-attempt accounting and canonical hooks outside interruption timers.
-                const remaining = Math.max(
-                  0,
-                  context.durationDeadlineMillis - (yield* Clock.currentTimeMillis),
-                );
-
-                return Duration.min(requested, Duration.millis(remaining));
-              }),
-            ),
-            Schedule.tap(({ input: error, attempt: retry, duration }) =>
-              Effect.gen(function* () {
-                trace.parts.length = 0;
-                trace.responsePartCount = 0;
-                trace.responsePartBytes = 0;
-                // The failed attempt's usage was already retained on exit.
-                trace.usage = undefined;
-                delete trace.response;
-                delete trace.finishMetadata;
-                yield* Effect.logWarning("agent model call retrying").pipe(
-                  Effect.annotateLogs({
-                    runId: context.runId,
-                    turnId,
-                    retry,
-                    delayMillis: Duration.toMillis(duration),
-                    error: errorMessage(error),
+                    return (
+                      canRepeatModelCall &&
+                      !hasStreamedContent(trace) &&
+                      ((lastPart?.type === "error" && isTransientErrorPayload(lastPart.error)) ||
+                        (AiError.isAiError(providerError) && providerError.isRetryable))
+                    );
                   }),
-                );
-              }),
-            ),
-          ),
-        ),
+                  Schedule.modifyDelay(({ input: error, duration }) =>
+                    Effect.gen(function* () {
+                      const backoff = Duration.min(duration, MODEL_RETRY_MAX_DELAY);
+                      const providerError: unknown = error;
+
+                      const retryAfter = AiError.isAiError(providerError)
+                        ? providerError.retryAfter
+                        : undefined;
+
+                      const requested =
+                        retryAfter === undefined ? backoff : Duration.max(backoff, retryAfter);
+
+                      // Expiration is rejected by the next native attempt. Capping only this delay
+                      // keeps failed-attempt accounting and canonical hooks outside interruption timers.
+                      const remaining = Math.max(
+                        0,
+                        context.durationDeadlineMillis - (yield* Clock.currentTimeMillis),
+                      );
+
+                      return Duration.min(requested, Duration.millis(remaining));
+                    }),
+                  ),
+                  Schedule.tap(({ input: error, attempt: retry, duration }) =>
+                    Effect.gen(function* () {
+                      trace.parts.length = 0;
+                      trace.responsePartCount = 0;
+                      trace.responsePartBytes = 0;
+                      // The failed attempt's usage was already retained on exit.
+                      trace.usage = undefined;
+                      delete trace.response;
+                      delete trace.finishMetadata;
+                      yield* Effect.logWarning("agent model call retrying").pipe(
+                        Effect.annotateLogs({
+                          runId: context.runId,
+                          turnId,
+                          retry,
+                          delayMillis: Duration.toMillis(duration),
+                          error: errorMessage(error),
+                        }),
+                      );
+                    }),
+                  ),
+                ),
+              ),
       );
 
       // RUN-027: one summarize-and-retry for a classified provider context
