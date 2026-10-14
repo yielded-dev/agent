@@ -4785,9 +4785,9 @@ const promptFromTurnParts = (trace: TurnTrace): Prompt.Prompt => {
   return Prompt.fromMessages(messages);
 };
 
-// Called inside the executing stream consumer. Resolve synchronous lifecycle checks
-// together; native eager composition still suspends for application codecs and events.
-// The enclosing model request owns the span, not each TextDelta/ReasoningDelta.
+// Yield the returned Effect immediately and exactly once from the executing stream
+// consumer: construction runs the synchronous prefix, mutating trace counters and maps.
+// Application codecs and events still suspend. The enclosing model request owns the span.
 const processModelPart = Effect.fnUntracedEager(function* <Tools extends Record<string, Tool.Any>>(
   context: RunContext,
   turnId: TurnId,
