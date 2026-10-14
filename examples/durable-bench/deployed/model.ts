@@ -2,6 +2,7 @@ import { Schema } from "effect";
 
 import {
   Counts,
+  Failure,
   MetricsResult,
   ObjectPhases,
   ProviderCall,
@@ -13,6 +14,15 @@ import {
   SeedResult,
   Target,
 } from "./worker/protocol.ts";
+
+export const DriverRequestId = Schema.NonEmptyString.check(Schema.isMaxLength(512));
+
+export const DriverRecovery = Schema.Struct({
+  requestId: DriverRequestId,
+  polls: Schema.Natural,
+  resubmissions: Schema.Natural,
+  error: Schema.String,
+});
 
 export const ProfileType = Schema.Literals(["cpu", "memory"]);
 
@@ -73,6 +83,13 @@ export const Invocation = Schema.Struct({
   invocationMethod: Schema.optionalKey(Schema.String),
   dispatches: Schema.optionalKey(Schema.Array(Dispatch)),
   outcome: Schema.String,
+  colo: Schema.optionalKey(Schema.String),
+  scriptVersion: Schema.optionalKey(Schema.String),
+  exceptions: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({ name: Schema.String, message: Schema.String, timestamp: Schema.Number }),
+    ),
+  ),
   cpuMs: Schema.NullOr(Schema.Number),
   wallMs: Schema.NullOr(Schema.Number),
   target: Schema.optionalKey(Target),
@@ -96,6 +113,7 @@ export type WorkerBuild = typeof WorkerBuild.Type;
 
 export const Sample = Schema.Struct({
   ...Query.fields,
+  driverRequestId: Schema.optionalKey(DriverRequestId),
   build: Schema.Literals(["working", "baseline", "candidate"]),
   epoch: Schema.Natural,
   order: Schema.optionalKey(Schema.Literals(["AB", "BA"])),
@@ -211,6 +229,7 @@ export const Result = Schema.Struct({
         epoch: Schema.optionalKey(Schema.Natural),
         build: Schema.optionalKey(Schema.String),
         requests: Schema.Int,
+        attempts: Schema.optionalKey(Schema.Natural),
         ms: Schema.Number,
       }),
     ),
@@ -229,6 +248,35 @@ export const Result = Schema.Struct({
     }),
   ),
   samples: Schema.Array(Sample),
+  retirements: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        target: Target,
+        object: Schema.String,
+        history: History,
+        ttftMs: Query.fields.ttftMs,
+        build: Sample.fields.build,
+        epoch: Schema.Natural,
+        sample: Schema.String,
+        error: Schema.String,
+      }),
+    ),
+  ),
+  polledRecoveries: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        ...DriverRecovery.fields,
+        target: Target,
+        object: Schema.String,
+        history: History,
+        ttftMs: Query.fields.ttftMs,
+        build: Sample.fields.build,
+        epoch: Schema.Natural,
+        sample: Schema.String,
+        outcome: Schema.Literals(["completed", "failed"]),
+      }),
+    ),
+  ),
   recoveries: Schema.optionalKey(
     Schema.Array(
       Schema.Struct({
@@ -287,6 +335,7 @@ export const HistoryCheckpoint = Schema.Struct({
 });
 
 export const MeasureRequest = Schema.Struct({
+  requestId: DriverRequestId,
   expectedDriverBuild: Schema.String,
   ...DriverRequest.fields,
   observeText: Schema.Boolean,
@@ -294,6 +343,8 @@ export const MeasureRequest = Schema.Struct({
   quiescent: Schema.Boolean,
   resetBeforeMetrics: Schema.optionalKey(Schema.Boolean),
 });
+
+export type MeasureRequest = typeof MeasureRequest.Type;
 
 export const MeasureResponse = Schema.Struct({
   metrics: MetricsResult,
@@ -313,5 +364,32 @@ export const MeasureResponse = Schema.Struct({
   admissionMs: Schema.optionalKey(Schema.Number),
   colo: Schema.NullOr(Schema.String),
 });
+
+export const StoredMeasureResponse = Schema.Struct({
+  status: Schema.Int,
+  body: Schema.Union([MeasureResponse, Failure]),
+});
+
+export type StoredMeasureResponse = typeof StoredMeasureResponse.Type;
+
+export const StoredMeasurement = Schema.Struct({
+  request: MeasureRequest,
+  outcome: Schema.optionalKey(StoredMeasureResponse),
+});
+
+export type StoredMeasurement = typeof StoredMeasurement.Type;
+
+const measurementIdentity = { requestId: DriverRequestId, build: Schema.String };
+
+export const MeasureOutcome = Schema.Union([
+  Schema.TaggedStruct("NotReceived", measurementIdentity),
+  Schema.TaggedStruct("Running", measurementIdentity),
+  Schema.TaggedStruct("Complete", {
+    ...measurementIdentity,
+    outcome: StoredMeasureResponse,
+  }),
+]);
+
+export type MeasureOutcome = typeof MeasureOutcome.Type;
 
 export const Health = Schema.Struct({ ok: Schema.Literal(true), build: Schema.String });

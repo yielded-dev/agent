@@ -322,11 +322,17 @@ export const transientObjectTransport = (cause: unknown): TransientObjectTranspo
   return undefined;
 };
 
+/** Transport ended without an acknowledgement of the submitted input. Never replay it. */
+export class UnknownOutcome extends Schema.TaggedError<UnknownOutcome>()("UnknownOutcome", {
+  message: Schema.String,
+}) {}
+
 export const Failure = Schema.Struct({
   ok: Schema.Literal(false),
   error: Schema.String,
   sample: Schema.NullOr(Schema.String),
   transport: Schema.optionalKey(TransientObjectTransport),
+  unknownOutcome: Schema.optionalKey(UnknownOutcome),
 });
 
 export type Failure = typeof Failure.Type;

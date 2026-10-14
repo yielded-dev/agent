@@ -96,6 +96,22 @@ export default {
                   ],
             ),
             outcome: event.outcome,
+            ...(event.event &&
+            "request" in event.event &&
+            typeof event.event.request.cf?.colo === "string"
+              ? { colo: event.event.request.cf.colo }
+              : {}),
+            ...(event.scriptVersion?.id === undefined
+              ? {}
+              : { scriptVersion: event.scriptVersion.id }),
+            exceptions: event.exceptions.map((exception) => ({
+              name: exception.name,
+              message: exception.message
+                .replaceAll(env.BENCH_TOKEN, "[redacted]")
+                .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[redacted-email]")
+                .replace(/\b[0-9a-f]{32,64}\b/gi, "[redacted-id]"),
+              timestamp: exception.timestamp,
+            })),
             cpuMs:
               valid && Number.isFinite(event.cpuTime) && event.cpuTime >= 0 ? event.cpuTime : null,
             wallMs: event.wallTime,

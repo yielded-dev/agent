@@ -25,23 +25,22 @@ import {
   type Turn,
 } from "../src/plan.ts";
 import { build, ensureVendor } from "./build.ts";
-import { Cloudflare, request, requestEvents } from "./cloudflare.ts";
+import {
+  Cloudflare,
+  measureRequest,
+  measureResult,
+  request,
+  requestEvents,
+  retryRequest,
+} from "./cloudflare.ts";
 import { deployments } from "./deploy.ts";
 import { fixtureFormat, prepareFixtures } from "./fixtures.ts";
-import {
-  BuildEvent,
-  HistoryCheckpoint,
-  MeasureResponse,
-  Options,
-  Result,
-  type Sample,
-} from "./model.ts";
+import { BuildEvent, HistoryCheckpoint, Options, Result, type Sample } from "./model.ts";
 import {
   BenchError,
   git,
   hash,
   nonce,
-  prefixLock,
   read,
   redact,
   save,
@@ -49,7 +48,7 @@ import {
   workspace,
 } from "./platform.ts";
 import { prepareProfile, profileBatches } from "./profile.ts";
-import { median, sampleCpu, table } from "./report.ts";
+import { median, retirementFailures, sampleCpu, table } from "./report.ts";
 import { tailCpu } from "./tail-cpu.ts";
 import { PREAMBLE, responseText } from "./text.ts";
 import {
@@ -116,7 +115,6 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
   const started = yield* Clock.currentTimeMillis;
   const cloud = yield* Cloudflare;
 
-  yield* prefixLock(cloud.prefix);
   const deploy = yield* deployments;
   const fs = yield* FileSystem.FileSystem;
   const privateDirectory = stateDirectory(cloud.prefix);
@@ -295,6 +293,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           ],
         };
     }
+    result = { ...result, failures: [...result.failures, ...retirementFailures(result)] };
     yield* phase("teardown");
     if (!options.keep && !preserved && !persistent) {
       yield* Console.error("Destroying target stack and verifying cleanup…");
@@ -762,201 +761,210 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
       // Worker health does not establish the Object's build. Poll read-only identity
       // before acknowledged setup resets; imports and inputs always get one attempt.
-      const resetForBuild = Effect.fnUntraced(function* (cohort: Omit<Query, "expectedBuild">) {
-        const expectedBuild = yield* expectedFor(cohort);
-        const started = yield* Clock.currentTimeMillis;
-        const probeUrl = new URL("/measure", deploy.driver);
+      const resetForBuild = Effect.fnUntraced(
+        function* (cohort: Omit<Query, "expectedBuild">) {
+          const expectedBuild = yield* expectedFor(cohort);
+          const started = yield* Clock.currentTimeMillis;
+          const probeUrl = new URL("/measure", deploy.driver);
 
-        probeUrl.searchParams.set(
-          "readiness",
-          JSON.stringify({
-            query: { ...cohort, expectedBuild },
-            targetUrl: yield* endpointFor(cohort),
-          }),
-        );
-        let healthySince: number | undefined;
-
-        for (let attempt = 1; ; attempt++) {
-          const remaining = 180_000 - ((yield* Clock.currentTimeMillis) - started);
-
-          if (remaining <= 0)
-            return yield* BenchError.make({
-              message: "Timed routes did not propagate before the cold reset; no input was sent.",
-            });
-
-          const probe = yield* request(
-            probeUrl,
-            deploy.token,
-            RouteReadiness,
-            undefined,
-            Math.min(15_000, remaining),
-          ).pipe(
-            Effect.map(({ value }) => ({ value, error: undefined })),
-            Effect.catchCause((cause) =>
-              Effect.succeed({ value: undefined, error: message(cause) }),
-            ),
+          probeUrl.searchParams.set(
+            "readiness",
+            JSON.stringify({
+              query: { ...cohort, expectedBuild },
+              targetUrl: yield* endpointFor(cohort),
+            }),
           );
+          let healthySince: number | undefined;
 
-          const now = yield* Clock.currentTimeMillis;
-          const routes = probe.value?.routes ?? [];
-          const paths = measurementPaths(cohort.target);
+          for (let attempt = 1; ; attempt++) {
+            const remaining = 180_000 - ((yield* Clock.currentTimeMillis) - started);
 
-          const ready =
-            probe.value?.build === result.infrastructureBuild &&
-            routes.length === paths.length &&
-            paths.every((path) =>
-              routes.some(
-                (route) =>
-                  route.path === path && route.status === 200 && route.build === expectedBuild,
+            if (remaining <= 0)
+              return yield* BenchError.make({
+                message: "Timed routes did not propagate before the cold reset; no input was sent.",
+              });
+
+            const probe = yield* request(
+              probeUrl,
+              deploy.token,
+              RouteReadiness,
+              undefined,
+              Math.min(15_000, remaining),
+            ).pipe(
+              Effect.map(({ value }) => ({ value, error: undefined })),
+              Effect.catchCause((cause) =>
+                Effect.succeed({ value: undefined, error: message(cause) }),
               ),
             );
 
-          healthySince = ready ? (healthySince ?? now) : undefined;
-          yield* update((value) => ({
-            ...value,
-            readiness: [
-              ...value.readiness,
-              {
-                target: cohort.target,
-                object: cohort.object,
-                epoch,
-                expectedBuild,
-                phase: "routes",
-                outcome: ready
-                  ? "ready"
-                  : probe.value === undefined
-                    ? "unavailable"
-                    : "wrong-build",
-                ...(probe.value === undefined ? {} : { driverBuild: probe.value.build, routes }),
-                ...(probe.error === undefined ? {} : { error: probe.error }),
-                attempt,
-                waitMs: now - started,
-              },
-            ],
-          }));
-          if (healthySince !== undefined && now - healthySince >= 5000) break;
-          if (!ready)
-            yield* Console.error(
-              `Timed routes pending: ${cohort.target}/${cohort.object}, attempt ${attempt}, ${now - started} ms`,
-            );
-          yield* Effect.sleep("2 seconds");
-        }
+            const now = yield* Clock.currentTimeMillis;
+            const routes = probe.value?.routes ?? [];
+            const paths = measurementPaths(cohort.target);
 
-        for (let attempt = 1; attempt <= 90; attempt++) {
-          const remaining = 180_000 - ((yield* Clock.currentTimeMillis) - started);
+            const ready =
+              probe.value?.build === result.infrastructureBuild &&
+              routes.length === paths.length &&
+              paths.every((path) =>
+                routes.some(
+                  (route) =>
+                    route.path === path && route.status === 200 && route.build === expectedBuild,
+                ),
+              );
 
-          if (remaining <= 0) break;
-
-          // Alchemy's fresh-pool placeholder has no Object fetch handler even after
-          // the Worker router is healthy. Probe without resetting or importing state.
-          const probe = yield* request(
-            yield* url("/identity", cohort),
-            deploy.token,
-            ObjectIdentity,
-            undefined,
-            remaining,
-          ).pipe(
-            Effect.catchTag("BenchError", (error) =>
-              error.message.startsWith("Worker /identity returned HTTP 500;") &&
-              error.message.includes('"error":"Handler does not export a fetch() function."')
-                ? Effect.succeed(undefined)
-                : Effect.fail(error),
-            ),
-          );
-
-          const identity = probe?.value;
-
-          const outcome =
-            identity === undefined
-              ? "placeholder"
-              : identity.identity.build === expectedBuild &&
-                  (identity.directory === undefined || identity.directory.build === expectedBuild)
-                ? "ready"
-                : "wrong-build";
-
-          const probeWaitMs = (yield* Clock.currentTimeMillis) - started;
-
-          yield* update((value) => ({
-            ...value,
-            readiness: [
-              ...value.readiness,
-              {
-                target: cohort.target,
-                object: cohort.object,
-                epoch,
-                expectedBuild,
-                ...(identity === undefined ? {} : { objectBuild: identity.identity.build }),
-                ...(identity?.directory === undefined
-                  ? {}
-                  : { directoryBuild: identity.directory.build }),
-                phase: "identity",
-                outcome,
-                attempt,
-                waitMs: probeWaitMs,
-              },
-            ],
-          }));
-          if (outcome !== "ready") {
-            yield* Console.error(
-              `Object identity pending: ${cohort.target}/${cohort.object}, attempt ${attempt}, ${outcome}, ${probeWaitMs} ms`,
-            );
-            if (outcome === "placeholder") {
-              yield* Effect.sleep("2 seconds");
-              continue;
-            }
-            // A live old incarnation may retain its build indefinitely. Once fetch
-            // exists, use the existing acknowledged cold reset to retire it, then
-            // probe the replacement. Never reset a placeholder or retry an error.
+            healthySince = ready ? (healthySince ?? now) : undefined;
+            yield* update((value) => ({
+              ...value,
+              readiness: [
+                ...value.readiness,
+                {
+                  target: cohort.target,
+                  object: cohort.object,
+                  epoch,
+                  expectedBuild,
+                  phase: "routes",
+                  outcome: ready
+                    ? "ready"
+                    : probe.value === undefined
+                      ? "unavailable"
+                      : "wrong-build",
+                  ...(probe.value === undefined ? {} : { driverBuild: probe.value.build, routes }),
+                  ...(probe.error === undefined ? {} : { error: probe.error }),
+                  attempt,
+                  waitMs: now - started,
+                },
+              ],
+            }));
+            if (healthySince !== undefined && now - healthySince >= 5000) break;
+            if (!ready)
+              yield* Console.error(
+                `Timed routes pending: ${cohort.target}/${cohort.object}, attempt ${attempt}, ${now - started} ms`,
+              );
+            yield* Effect.sleep("2 seconds");
           }
-          const resetRemaining = 180_000 - probeWaitMs;
 
-          if (resetRemaining <= 0) break;
+          for (let attempt = 1; attempt <= 90; attempt++) {
+            const remaining = 180_000 - ((yield* Clock.currentTimeMillis) - started);
 
-          const reset = (yield* request(
-            yield* url("/cold", cohort),
-            deploy.token,
-            ColdResult,
-            {},
-            resetRemaining,
-          )).value;
+            if (remaining <= 0) break;
 
-          if (!reset.ok || !reset.threadAborted || reset.directoryAborted === false)
-            return yield* BenchError.make({ message: "Cold abort was not acknowledged." });
-          const waitMs = (yield* Clock.currentTimeMillis) - started;
+            // Alchemy's fresh-pool placeholder has no Object fetch handler even after
+            // the Worker router is healthy. Probe without resetting or importing state.
+            const probe = yield* request(
+              yield* url("/identity", cohort),
+              deploy.token,
+              ObjectIdentity,
+              undefined,
+              remaining,
+            ).pipe(
+              Effect.catchTag("RequestError", (error) =>
+                error.message.startsWith("Worker /identity returned HTTP 500;") &&
+                error.message.includes('"error":"Handler does not export a fetch() function."')
+                  ? Effect.succeed(undefined)
+                  : Effect.fail(error),
+              ),
+            );
 
-          yield* update((value) => ({
-            ...value,
-            readiness: [
-              ...value.readiness,
-              {
-                target: cohort.target,
-                object: cohort.object,
-                epoch,
-                expectedBuild,
-                objectBuild: reset.before.build,
-                phase: "reset",
-                ...(reset.directoryBefore === undefined
-                  ? {}
-                  : { directoryBuild: reset.directoryBefore.build }),
-                attempt,
-                waitMs,
-              },
-            ],
-          }));
-          if (
-            outcome === "ready" &&
-            reset.before.build === expectedBuild &&
-            (reset.directoryBefore === undefined || reset.directoryBefore.build === expectedBuild)
-          )
-            // Observation attaches to the new incarnation before the submission timer starts.
-            return reset;
-          yield* Effect.sleep("2 seconds");
-        }
+            const identity = probe?.value;
 
-        return yield* BenchError.make({
-          message: "Object build did not propagate before measurement; no input was sent.",
-        });
-      });
+            const outcome =
+              identity === undefined
+                ? "placeholder"
+                : identity.identity.build === expectedBuild &&
+                    (identity.directory === undefined || identity.directory.build === expectedBuild)
+                  ? "ready"
+                  : "wrong-build";
+
+            const probeWaitMs = (yield* Clock.currentTimeMillis) - started;
+
+            yield* update((value) => ({
+              ...value,
+              readiness: [
+                ...value.readiness,
+                {
+                  target: cohort.target,
+                  object: cohort.object,
+                  epoch,
+                  expectedBuild,
+                  ...(identity === undefined ? {} : { objectBuild: identity.identity.build }),
+                  ...(identity?.directory === undefined
+                    ? {}
+                    : { directoryBuild: identity.directory.build }),
+                  phase: "identity",
+                  outcome,
+                  attempt,
+                  waitMs: probeWaitMs,
+                },
+              ],
+            }));
+            if (outcome !== "ready") {
+              yield* Console.error(
+                `Object identity pending: ${cohort.target}/${cohort.object}, attempt ${attempt}, ${outcome}, ${probeWaitMs} ms`,
+              );
+              if (outcome === "placeholder") {
+                yield* Effect.sleep("2 seconds");
+                continue;
+              }
+              // A live old incarnation may retain its build indefinitely. Once fetch
+              // exists, use the existing acknowledged cold reset to retire it, then
+              // probe the replacement. Never reset a placeholder or retry an error.
+            }
+            const resetRemaining = 180_000 - probeWaitMs;
+
+            if (resetRemaining <= 0) break;
+
+            const reset = (yield* request(
+              yield* url("/cold", cohort),
+              deploy.token,
+              ColdResult,
+              {},
+              resetRemaining,
+            ).pipe(retryRequest)).value;
+
+            if (!reset.ok || !reset.threadAborted || reset.directoryAborted === false)
+              return yield* BenchError.make({ message: "Cold abort was not acknowledged." });
+            const waitMs = (yield* Clock.currentTimeMillis) - started;
+
+            yield* update((value) => ({
+              ...value,
+              readiness: [
+                ...value.readiness,
+                {
+                  target: cohort.target,
+                  object: cohort.object,
+                  epoch,
+                  expectedBuild,
+                  objectBuild: reset.before.build,
+                  phase: "reset",
+                  ...(reset.directoryBefore === undefined
+                    ? {}
+                    : { directoryBuild: reset.directoryBefore.build }),
+                  attempt,
+                  waitMs,
+                },
+              ],
+            }));
+            if (
+              outcome === "ready" &&
+              reset.before.build === expectedBuild &&
+              (reset.directoryBefore === undefined || reset.directoryBefore.build === expectedBuild)
+            )
+              // Observation attaches to the new incarnation before the submission timer starts.
+              return reset;
+            yield* Effect.sleep("2 seconds");
+          }
+
+          return yield* BenchError.make({
+            message: "Object build did not propagate before measurement; no input was sent.",
+          });
+        },
+        Effect.timeoutOrElse({
+          duration: "3 minutes",
+          orElse: () =>
+            BenchError.make({
+              message: "Cold setup timed out before measurement; no input was sent.",
+            }),
+        }),
+      );
 
       yield* phase("deployed seed");
       // Seeding and its count scans must not contend with timed turns, including the first A/B pass.
@@ -1231,38 +1239,78 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
               const restoreStarted = yield* Clock.currentTimeMillis;
 
-              if (clearBeforeRestore) {
-                yield* resetForBuild(cohort);
-                yield* request(yield* url("/restore/clear", cohort), deploy.token, RestoreAck, {});
-              }
+              let restoreAttempt = 0;
+              let restoreRequests = 0;
 
-              const start = yield* request(
-                yield* url("/restore/start", cohort),
-                deploy.token,
-                RestoreAck,
-                fixture,
-              );
+              yield* Effect.gen(function* () {
+                const clear = clearBeforeRestore || restoreAttempt > 0;
 
-              if (
-                fixture.actor &&
-                !equalCounts(
-                  start.value.directoryTables ?? {},
-                  Object.fromEntries(
-                    fixture.actor.tables.map((table) => [table.name, table.rows.length]),
-                  ),
-                )
-              )
-                return yield* BenchError.make({
-                  message: "Restored Actor table counts differ from source",
-                });
-              for (const path of chunks.get(`${cohort.target}-${cohort.history}`) ?? []) {
-                yield* request(
-                  yield* url("/restore/rows", cohort),
+                restoreAttempt++;
+                if (clear) {
+                  yield* resetForBuild(cohort);
+                  restoreRequests++;
+                  yield* request(
+                    yield* url("/restore/clear", cohort),
+                    deploy.token,
+                    RestoreAck,
+                    {},
+                  );
+                }
+
+                restoreRequests++;
+
+                const start = yield* request(
+                  yield* url("/restore/start", cohort),
                   deploy.token,
                   RestoreAck,
-                  yield* read(path, RestoreChunk),
+                  fixture,
                 );
-              }
+
+                if (
+                  fixture.actor &&
+                  !equalCounts(
+                    start.value.directoryTables ?? {},
+                    Object.fromEntries(
+                      fixture.actor.tables.map((table) => [table.name, table.rows.length]),
+                    ),
+                  )
+                )
+                  return yield* BenchError.make({
+                    message: "Restored Actor table counts differ from source",
+                  });
+                for (const path of chunks.get(`${cohort.target}-${cohort.history}`) ?? []) {
+                  restoreRequests++;
+                  yield* request(
+                    yield* url("/restore/rows", cohort),
+                    deploy.token,
+                    RestoreAck,
+                    yield* read(path, RestoreChunk),
+                  );
+                }
+
+                restoreRequests++;
+
+                const seeded = (yield* request(
+                  yield* url("/restore/finalize", cohort),
+                  deploy.token,
+                  ImportResult,
+                  {},
+                  "10 minutes",
+                )).value;
+
+                if (seeded.identity.build !== expectedBuild)
+                  return yield* BenchError.make({
+                    message: "Seeded Object reported the wrong build.",
+                  });
+                if (
+                  seeded.fingerprint !== fixture.fingerprint ||
+                  !equalCounts(seeded.tables, fixture.tables)
+                )
+                  return yield* BenchError.make({
+                    message:
+                      "Deployed seed fingerprint or complete table counts differ from the local fixture.",
+                  });
+              }).pipe(retryRequest);
 
               const restoreMs = (yield* Clock.currentTimeMillis) - restoreStarted;
 
@@ -1276,9 +1324,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                     history: cohort.history,
                     epoch,
                     build: label,
-                    requests:
-                      (clearBeforeRestore ? 2 : 1) +
-                      (chunks.get(`${cohort.target}-${cohort.history}`)?.length ?? 0),
+                    requests: restoreRequests,
+                    attempts: restoreAttempt,
                     ms: restoreMs,
                   },
                 ],
@@ -1310,45 +1357,6 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                 }),
               ),
             ),
-          { concurrency: options.buildConcurrency, discard: true },
-        );
-      }
-
-      if (restorePass) {
-        yield* phase("verify");
-        yield* Effect.forEach(
-          cohorts,
-          Effect.fnUntraced(function* (cohort) {
-            const { fixtures } = yield* assignment(cohort);
-            const expectedBuild = yield* expectedFor(cohort);
-
-            const fixture = fixtures.find(
-              (item) => item.target === cohort.target && item.history === cohort.history,
-            );
-
-            if (!fixture) return yield* BenchError.make({ message: "Missing restore fixture" });
-
-            const seeded = (yield* request(
-              yield* url("/restore/finalize", cohort),
-              deploy.token,
-              ImportResult,
-              {},
-              "10 minutes",
-            )).value;
-
-            if (seeded.identity.build !== expectedBuild)
-              return yield* BenchError.make({
-                message: "Seeded Object reported the wrong build.",
-              });
-            if (
-              seeded.fingerprint !== fixture.fingerprint ||
-              !equalCounts(seeded.tables, fixture.tables)
-            )
-              return yield* BenchError.make({
-                message:
-                  "Deployed seed fingerprint or complete table counts differ from the local fixture.",
-              });
-          }),
           { concurrency: options.buildConcurrency, discard: true },
         );
       }
@@ -1569,8 +1577,11 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                       ? "cold"
                       : "warm";
 
+              const driverRequestId = `${query.target}/${query.object}/${epoch}/${query.sample}`;
+
               const sample: Sample = {
                 ...query,
+                driverRequestId,
                 build: label,
                 ...(counterbalanced
                   ? {
@@ -1597,27 +1608,55 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
               yield* Effect.gen(function* () {
                 const before = yield* Clock.currentTimeMillis;
 
-                const measured = yield* request(
-                  deploy.driver + "/measure",
-                  deploy.token,
-                  MeasureResponse,
-                  {
-                    query,
-                    targetUrl: yield* endpointFor(cohort),
-                    observeText: !options.buildHistory,
-                    expectedDriverBuild: result.infrastructureBuild,
-                    cold: options.buildHistory && index === 0,
-                    quiescent: state === "preparation" || index === turnsPerEpoch - 1,
-                    resetBeforeMetrics:
-                      options.verifyIncarnationRecovery === true &&
-                      attempt === 0 &&
-                      epoch === 0 &&
-                      index === 2 &&
-                      cohort === poolCohorts.find((item) => item.target === cohort.target),
-                  },
-                );
+                const expectedDriverBuild = result.infrastructureBuild;
+
+                if (expectedDriverBuild === undefined)
+                  return yield* BenchError.make({ message: "Driver build was not recorded." });
+
+                const received = yield* measureRequest(deploy.driver + "/measure", deploy.token, {
+                  requestId: driverRequestId,
+                  query,
+                  targetUrl: yield* endpointFor(cohort),
+                  observeText: !options.buildHistory,
+                  expectedDriverBuild,
+                  cold: options.buildHistory && index === 0,
+                  quiescent: state === "preparation" || index === turnsPerEpoch - 1,
+                  resetBeforeMetrics:
+                    options.verifyIncarnationRecovery === true &&
+                    attempt === 0 &&
+                    epoch === 0 &&
+                    index === 2 &&
+                    cohort === poolCohorts.find((item) => item.target === cohort.target),
+                });
 
                 const after = yield* Clock.currentTimeMillis;
+
+                const recovery = received.recovery;
+
+                if (recovery !== undefined)
+                  yield* update((value) => ({
+                    ...value,
+                    polledRecoveries: [
+                      ...(value.polledRecoveries ?? []),
+                      {
+                        ...recovery,
+                        target: query.target,
+                        object: query.object,
+                        history: query.history,
+                        ttftMs: query.ttftMs,
+                        build: label,
+                        epoch,
+                        sample: query.sample,
+                        outcome: received.outcome.body.ok ? "completed" : "failed",
+                      },
+                    ],
+                  }));
+
+                const measured = {
+                  value: yield* measureResult(received.outcome, query.sample),
+                  colo: received.colo,
+                };
+
                 const firstText = measured.value.firstText;
 
                 const expectedText = [
@@ -1856,6 +1895,33 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             (batch) => (profiled ? withProfileBatch(batch) : batch),
             Effect.catchTag("IncarnationLost", recover),
             Effect.catchTag("TransientObjectTransport", recover),
+            Effect.catchTag("UnknownOutcome", (error) =>
+              Effect.gen(function* () {
+                const sample = currentSample;
+
+                if (!sample || options.buildHistory) return yield* error;
+                failedObjects.add(objectKey(cohort));
+                yield* update((value) => ({
+                  ...value,
+                  retirements: [
+                    ...(value.retirements ?? []),
+                    {
+                      target: cohort.target,
+                      object: cohort.object,
+                      history: cohort.history,
+                      ttftMs: cohort.ttftMs,
+                      build: sample.build,
+                      epoch,
+                      sample: sample.sample,
+                      error: message(Cause.fail(error)),
+                    },
+                  ],
+                }));
+                yield* Console.error(
+                  `${cohort.target}/${cohort.history}/${cohort.ttftMs}/${sample.build}/epoch${epoch}: retiring the complete Object pair after an unknown input outcome; no resubmission.`,
+                );
+              }),
+            ),
             Effect.catchCause((cause) =>
               Effect.gen(function* () {
                 if (Cause.hasInterrupts(cause)) return yield* Effect.failCause(cause);
@@ -1878,7 +1944,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     });
 
     for (const [epoch, defaultLabel] of epochs.entries()) {
-      let pending = poolCohorts;
+      let pending = poolCohorts.filter((cohort) => !failedObjects.has(objectKey(cohort)));
       let from: ReadonlyMap<string, number> = new Map();
 
       for (let attempt = 0; pending.length > 0; attempt++) {
@@ -1916,7 +1982,6 @@ export const resume = Effect.fnUntraced(function* (name: string) {
 export const teardown = Effect.gen(function* () {
   const cloud = yield* Cloudflare;
 
-  yield* prefixLock(cloud.prefix);
   const deploy = yield* deployments;
   const cleanup = yield* deploy.teardown;
 

@@ -91,6 +91,9 @@ export default Alchemy.Stack(
         placement: { region: "aws:us-west-1" },
         env: {
           ...env,
+          MEASUREMENTS: Cloudflare.DurableObject("durable-bench-measurements", {
+            className: "DriverMeasurement",
+          }),
           BENCH_PREFIX: resourcePrefix,
           WORKERS_SUBDOMAIN: yield* Config.NonEmptyString("DURABLE_BENCH_SUBDOMAIN"),
         },
