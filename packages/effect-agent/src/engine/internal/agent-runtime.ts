@@ -763,8 +763,8 @@ const acceptTurnCommit = <E, R>(
       Effect.andThen(() => durability?.commitTurn(commit) ?? Effect.succeed("committed" as const)),
     );
 
-    return accepted.pipe(
-      Effect.flatMap((receipt) => {
+    return Effect.onExitPrimitive(
+      Effect.flatMap(accepted, (receipt) => {
         if (receipt === "deferred")
           return commit._tag === "Response" && commit.defer === true
             ? Effect.void
@@ -774,21 +774,19 @@ const acceptTurnCommit = <E, R>(
                 }),
               );
 
-        return Effect.sync(() => {
-          if (commit._tag !== "Partial") {
-            if (commit.response !== undefined) {
-              context.pendingCommitInputs.splice(0, trace.commitInputCount ?? 0);
-              trace.responseCommitted = true;
-            }
-            if (commit._tag === "Settled") trace.resultsCommitted = true;
+        if (commit._tag !== "Partial") {
+          if (commit.response !== undefined) {
+            context.pendingCommitInputs.splice(0, trace.commitInputCount ?? 0);
+            trace.responseCommitted = true;
           }
-        });
+          if (commit._tag === "Settled") trace.resultsCommitted = true;
+        }
+
+        return Effect.void;
       }),
-      Effect.onExit((exit) =>
-        Effect.sync(() => {
-          if (Exit.isFailure(exit)) trace.commitFailed = true;
-        }),
-      ),
+      (exit) => {
+        if (Exit.isFailure(exit)) trace.commitFailed = true;
+      },
     );
   });
 
@@ -6409,7 +6407,7 @@ const makeTurn = <
             policy,
             context,
             prepareModelPrompt(
-              Prompt.fromMessages([...basis.content, ...transientContext.content]),
+              Prompt.concat(basis, transientContext),
               outputContract._tag === "rendered" ? outputContract.part : undefined,
               systemMessagesInHistory,
               staticInstructions,

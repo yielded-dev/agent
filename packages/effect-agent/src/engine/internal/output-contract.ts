@@ -169,6 +169,7 @@ export const prepareModelPrompt = (
 ): Prompt.Prompt => {
   if (systemMessagesInHistory) {
     const content: Array<Prompt.Message> = [];
+    let pendingContract = contract;
     let lastSystem: Prompt.SystemMessage | undefined;
     let ordered = prompt.content;
 
@@ -212,29 +213,25 @@ export const prepareModelPrompt = (
         if (lastSystem !== undefined && sameSystemMessage(lastSystem, message)) continue;
         lastSystem = message;
       }
+      if (message.role !== "system" && pendingContract !== undefined) {
+        content.push(pendingContract);
+        pendingContract = undefined;
+      }
       content.push(message);
     }
-    if (contract !== undefined) {
-      const firstConversation = content.findIndex((message) => message.role !== "system");
-
-      content.splice(firstConversation === -1 ? content.length : firstConversation, 0, contract);
-    }
+    if (pendingContract !== undefined) content.push(pendingContract);
 
     return Prompt.fromMessages(content);
   }
 
   const systems: Array<Prompt.SystemMessage> = [];
-  const conversation: Array<Prompt.Message> = [];
   const seen = new Map<string, Array<Prompt.SystemMessage>>();
 
   for (let index = prompt.content.length - 1; index >= 0; index -= 1) {
     const message = prompt.content[index];
 
     if (message === undefined) continue;
-    if (message.role !== "system") {
-      conversation.push(message);
-      continue;
-    }
+    if (message.role !== "system") continue;
     const variants = seen.get(message.content);
 
     if (variants?.some((previous) => sameSystemMessage(previous, message))) continue;
@@ -243,9 +240,12 @@ export const prepareModelPrompt = (
     systems.push(message);
   }
 
-  return Prompt.fromMessages([
-    ...systems.reverse(),
-    ...(contract === undefined ? [] : [contract]),
-    ...conversation.reverse(),
-  ]);
+  const content: Array<Prompt.Message> = systems.reverse();
+
+  if (contract !== undefined) content.push(contract);
+  for (const message of prompt.content) {
+    if (message !== undefined && message.role !== "system") content.push(message);
+  }
+
+  return Prompt.fromMessages(content);
 };
