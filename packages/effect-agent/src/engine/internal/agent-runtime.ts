@@ -2166,6 +2166,7 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
     | AiError.AiError
     | Tool.HandlerError<ToolUnion<Tools>>;
   const call = prepared.call;
+  const toolCallId = prepared.toolCallId;
   const observer = context.toolFailureObserver;
   const telemetryToolCallId = isTelemetryToolCallId(call.id) ? call.id : undefined;
   const executionClass = getToolExecutionClass(prepared.tool);
@@ -2205,8 +2206,6 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
   const started = Result.isFailure(prepared.validation)
     ? Effect.void
     : Effect.gen(function* () {
-        const toolCallId = yield* decodeToolCallId(call.id);
-
         yield* Effect.logDebug("agent tool handler started").pipe(
           Effect.annotateLogs({
             agentId: context.agentId,
@@ -2265,7 +2264,6 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
           return yield* ModelProtocolError.make({
             message: `Tool Call ${call.id} produced more than one terminal result`,
           });
-        const toolCallId = yield* decodeToolCallId(call.id);
         const encodedResult = toolResultForJson(prepared.tool, result);
 
         if (result.preliminary) {
@@ -2302,7 +2300,6 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
         message: `Tool Call ${call.id} completed without a terminal result`,
       });
     const result = terminalResult;
-    const toolCallId = yield* decodeToolCallId(call.id);
     let toolSelection: Selection | undefined;
 
     if (!result.isFailure && Context.get(prepared.tool.annotations, DiscoveryTool)) {
@@ -3377,7 +3374,7 @@ const consumeUsage = <AgentValue extends Agent.Any, HookError, HookRequirements>
     // them separately. Separate that overlap before constructing the canonical,
     // additive input components, but retain the raw provider usage for pricing.
     const reportedInputTotal = providerUsage.inputTokens.total;
-    const reportedInputWithoutWrite = yield* decodeProviderUsageTotal(reportedUncached + cacheRead);
+    const reportedInputWithoutWrite = reportedUncached + cacheRead;
 
     const cacheWriteOverlapsUncached =
       reportedInputTotal !== undefined &&
@@ -3390,9 +3387,7 @@ const consumeUsage = <AgentValue extends Agent.Any, HookError, HookRequirements>
     const disjointReportedUncached =
       reportedUncached - (cacheWriteOverlapsUncached ? cacheWrite : 0);
 
-    const reportedInputComponents = yield* decodeProviderUsageTotal(
-      disjointReportedUncached + cacheRead + cacheWrite,
-    );
+    const reportedInputComponents = disjointReportedUncached + cacheRead + cacheWrite;
 
     const allInputComponentsReported =
       providerUsage.inputTokens.uncached !== undefined &&
@@ -3407,7 +3402,7 @@ const consumeUsage = <AgentValue extends Agent.Any, HookError, HookRequirements>
       return yield* invalidProviderUsage();
     }
     const inputTokens = reportedInputTotal ?? reportedInputComponents;
-    const reportedOutputComponents = yield* decodeProviderUsageTotal(reportedText + reasoning);
+    const reportedOutputComponents = reportedText + reasoning;
     const reportedOutputTotal = providerUsage.outputTokens.total;
 
     const allOutputComponentsReported =
@@ -3457,6 +3452,20 @@ const consumeUsage = <AgentValue extends Agent.Any, HookError, HookRequirements>
       providerUsage.outputTokens.reasoning === undefined
         ? outputRemainder
         : 0);
+
+    // Validate the complete additive components before pricing or staging usage.
+    const inputUsage = yield* InputTokenUsage.makeEffect({
+      total: inputTokens,
+      uncached,
+      cacheRead: normalizedCacheRead,
+      cacheWrite: normalizedCacheWrite,
+    }).pipe(Effect.mapError(() => invalidProviderUsage()));
+
+    const outputUsage = yield* OutputTokenUsage.makeEffect({
+      total: outputTokens,
+      text,
+      reasoning: normalizedReasoning,
+    }).pipe(Effect.mapError(() => invalidProviderUsage()));
 
     const totalTokens = yield* decodeProviderUsageTotal(inputTokens + outputTokens);
     const provider = yield* Model.ProviderName;
@@ -3525,17 +3534,8 @@ const consumeUsage = <AgentValue extends Agent.Any, HookError, HookRequirements>
       pricingStatus,
       ...(serviceTier === undefined ? {} : { serviceTier }),
       ...(pricingVersion === undefined ? {} : { pricingVersion }),
-      inputTokens: InputTokenUsage.make({
-        total: inputTokens,
-        uncached,
-        cacheRead: normalizedCacheRead,
-        cacheWrite: normalizedCacheWrite,
-      }),
-      outputTokens: OutputTokenUsage.make({
-        total: outputTokens,
-        text,
-        reasoning: normalizedReasoning,
-      }),
+      inputTokens: inputUsage,
+      outputTokens: outputUsage,
       costMicrousd,
     });
 
