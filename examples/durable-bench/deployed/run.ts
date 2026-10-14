@@ -2238,6 +2238,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
               const receipt = yield* Deferred.await(issued);
 
               yield* updateDiagnostic(receipt);
+              // The API has no attachment acknowledgement; allow transit, then
+              // require reconstruction frames before claiming capture coverage.
+              yield* Effect.sleep("1 second");
             });
 
             yield* Effect.gen(function* () {

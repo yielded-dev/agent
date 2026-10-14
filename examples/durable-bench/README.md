@@ -41,6 +41,9 @@ measurement receipts. Immediately before each deploy, a live
 account inventory requires at least 100 spare namespace slots, waiting 60 seconds between
 checks for up to 30 minutes. Each prefix is limited to 40 namespaces; split larger cell grids
 into separate runs with a single target (for example, `--targets pi`).
+For parallel runs, set `DURABLE_BENCH_OWNER_PREFIX` to their shared parent prefix
+to enforce the 40-namespace cap across all of them. Cleanup still uses only
+the individual `DURABLE_BENCH_PREFIX`.
 Every run clears and restores
 its Objects before every pass, so both revisions start
 from identical saved state on those same Objects; earlier samples are never reused.
