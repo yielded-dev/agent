@@ -84,7 +84,8 @@ route commands to a frame's session. `Page.createIsolatedWorld` supplies an exec
 for evaluating JavaScript in that frame.
 
 Successful responses retain the CDP shape: `Runtime.evaluate` with `returnByValue: true`
-returns the value at `response.result.value`. Page exceptions reject `cdp.send` with
+returns the value at `response.result.value`, and `Runtime.getExceptionDetails` returns its
+diagnostic metadata unchanged. Page execution exceptions reject `cdp.send` with
 `BrowserUseError` code `evaluation`, carrying the page diagnostic into Code Mode's failure
 report unless the program catches it. An evaluation may have changed the page before throwing;
 inspect current state before further actions. The default tool guidance asks the model to correct

@@ -52,13 +52,16 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
   // User-requested red/green at the model boundary: a CDP page exception must not
   // disappear when generated code reads only result.value. A preceding write
   // makes the no-replay requirement observable without mutating a live store.
+  // Regression in 2cc267f9: successful Runtime.getExceptionDetails must remain
+  // available to a corrective program despite returning exception metadata.
   it.effect(
     "surfaces page exceptions to the next model turn without replaying a partial write",
     () =>
       Effect.gen(function* () {
         const browser = BrowserUse.make();
-        const expressions: Array<Schema.Json | undefined> = [];
+        const sends: Array<typeof BrowserUse.SendRequest.Type> = [];
         const diagnostic = "TypeError: Cannot read properties of null (reading 'innerText')";
+        const lookup = { exceptionDetails: { text: "Error: diagnostic" } };
 
         const code = [
           `async () => {
@@ -67,8 +70,10 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
           return {value: r.result.value ?? null};
         }`,
           `async () => {
+          const error = await cdp.send({method: "Runtime.evaluate", params: {expression: "new Error('diagnostic')"}});
+          const details = await cdp.send({method: "Runtime.getExceptionDetails", params: {errorObjectId: error.result.objectId}});
           const r = await cdp.send({method: "Runtime.evaluate", params: {expression: "readCart()"}});
-          return r.result.value;
+          return {cart: r.result.value, details};
         }`,
         ];
 
@@ -117,11 +122,19 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
             BrowserUse.layer.pipe(
               Layer.provide(
                 Layer.succeed(BrowserUse.BrowserCdp, {
-                  send: ({ params }) =>
+                  send: (request) =>
                     Effect.sync((): Schema.Json => {
-                      expressions.push(params?.expression);
+                      sends.push(request);
 
-                      return params?.expression === "document.querySelector('#missing').innerText"
+                      if (request.method === "Runtime.getExceptionDetails") return lookup;
+
+                      if (request.params?.expression === "new Error('diagnostic')")
+                        return {
+                          result: { type: "object", subtype: "error", objectId: "error-1" },
+                        };
+
+                      return request.params?.expression ===
+                        "document.querySelector('#missing').innerText"
                         ? {
                             result: { type: "object", subtype: "error" },
                             exceptionDetails: {
@@ -166,16 +179,24 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
             },
           });
           expect(result.output).toBe("Cart contains one bag");
-          expect(expressions).toEqual([
-            "addToCart()",
-            "document.querySelector('#missing').innerText",
-            "readCart()",
-          ]);
           expect(
             requests[2]?.options.prompt.content
               .flatMap((message) => (message.role === "tool" ? message.content : []))
               .at(-1),
-          ).toMatchObject({ isFailure: false, result: { result: { quantity: 1 } } });
+          ).toMatchObject({
+            isFailure: false,
+            result: { result: { cart: { quantity: 1 }, details: lookup } },
+          });
+          expect(sends).toEqual([
+            { method: "Runtime.evaluate", params: { expression: "addToCart()" } },
+            {
+              method: "Runtime.evaluate",
+              params: { expression: "document.querySelector('#missing').innerText" },
+            },
+            { method: "Runtime.evaluate", params: { expression: "new Error('diagnostic')" } },
+            { method: "Runtime.getExceptionDetails", params: { errorObjectId: "error-1" } },
+            { method: "Runtime.evaluate", params: { expression: "readCart()" } },
+          ]);
         }).pipe(Effect.provide(model));
       }),
   );
