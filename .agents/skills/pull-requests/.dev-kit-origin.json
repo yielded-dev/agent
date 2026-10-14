@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "selector": "pull-requests",
+  "name": "pull-requests",
+  "baseDigest": "sha256:1d0d5802f719553abc2421d1b8bb8d049ce3b2ea8a88a0df60f515f7d6174217",
+  "source": {
+    "type": "bundled",
+    "version": "2.1.1"
+  }
+}

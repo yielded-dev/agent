@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pull Requests"
+  short_description: "Open, review, and update PRs with terse, visual explanations"
+  default_prompt: "Use $pull-requests to prepare this PR with a brief summary, architecture diagrams or API examples where useful, and visual evidence for UI changes."

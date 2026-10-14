@@ -107,7 +107,7 @@ match tests inside `.worktrees`; scope the runner to its package when worktrees 
 For removed source greps, exercise the executable or dry-run that owns the contract.
 Run applicable formatting and `git diff --check`, then the required `vp run ready` handoff
 gate. Preserve blocked proof explicitly. Report production/tooling separately from tests
-and test support using the final diff. For PRs, use [open-pull-request](../open-pull-request/SKILL.md).
+and test support using the final diff. For PRs, use [pull-requests](../pull-requests/SKILL.md).
 
 ## Handoff
 

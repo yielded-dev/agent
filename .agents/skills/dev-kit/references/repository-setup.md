@@ -38,6 +38,12 @@ For an established repository, preserve working conventions and integrate the
 requested capability at their natural seams. For an empty repository, create
 the smallest runnable vertical slice before filling out auxiliary tooling.
 
+When adding Effect, use the repository's command authority and dependency
+version policy. Declare it in packages that import it; add a root dependency
+only when root tooling needs one. Keep the installed `node_modules/effect/src`
+and its complete `AGENTS.md` available for API guidance, and put that reading
+requirement in the repository's agent instructions.
+
 Generate agent instructions from live project evidence. Record command authority,
 Effect documentation routing when applicable, and non-obvious boundaries; leave
 discoverable script names and directory listings to the repository itself.

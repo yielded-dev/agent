@@ -171,6 +171,10 @@ packages.
   asking for a personal Infisical login; otherwise use provider keys already in the environment.
 - For lockfile-only PR fixes, push after `vp install --frozen-lockfile` passes; finish full validation afterward.
 
+Keep shared Dev Kit skills identical to their published source. Put
+repository-specific commands, gates, and constraints in this file or linked
+guidance. Keep contributor skills committed so fresh checkouts are self-contained.
+
 ## Change discipline
 
 - This library is a v0 beta. Prefer simpler machinery and measured performance gains over
@@ -218,9 +222,15 @@ matrices and implementation mirrors. The final `vp run ready` gate still applies
 For audits of existing tests, use [test-audit](.agents/skills/test-audit/SKILL.md)
 for read-only discovery, candidate evidence, and retention checks before cleanup.
 
-Use [open-pull-request](.agents/skills/open-pull-request/SKILL.md) for concise
+Use [pull-requests](.agents/skills/pull-requests/SKILL.md) for concise
 PR descriptions. Add diagrams only for meaningful architecture changes and code
 examples only when they clarify the change.
+
+This is a public library. Keep PR descriptions self-contained and follow any
+required PR template. Omit private tracker links and issue IDs, including Linear
+references; link to public code or guides when useful. Keep company/customer
+names, account identifiers, and private workspace links out of PR text and linked
+evidence unless the user explicitly requests them.
 
 When a bot review blocks a PR, verify its findings against the current code before
 changing anything. Authorized agents can clear a fully fixed, refuted, or explicitly
