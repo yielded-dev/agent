@@ -56,7 +56,6 @@ export class Host {
       run?: (input: { id: string; text: string }, query: Query) => Promise<void>;
       close?: () => Promise<void>;
       restored?: () => Promise<void>;
-      openFixture?: Effect.Effect<void, FixtureError>;
       directoryUsed?: boolean;
     },
   ): Promise<Response> {
@@ -110,13 +109,11 @@ export class Host {
           restore(request, query).pipe(
             Effect.provideService(RestoreStorage, this.ctx.storage),
             Effect.provideService(FixtureExport, {
-              open:
-                handlers.openFixture ??
-                Effect.fail(
-                  FixtureError.make({
-                    message: "Yielded restore requires the native storage opener",
-                  }),
-                ),
+              open: Effect.fail(
+                FixtureError.make({
+                  message: "Yielded restore requires its native restore entrypoint",
+                }),
+              ),
               page: (input) => exportThread({ storage: this.ctx.storage }, input),
             }),
             Effect.scoped,
