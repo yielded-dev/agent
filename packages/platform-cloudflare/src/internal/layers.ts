@@ -625,10 +625,14 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
         verifyOnOpen: config.verifyOnOpen,
       };
 
-      const infrastructure = Layer.mergeAll(
-        options.lifecyclePublication === undefined ? Layer.empty : lifecyclePublicationLayer,
-        storageConfigLayer(storageOptions),
-        Layer.effect(SqlClient)(SqlClient),
+      // Memoize these shared compositions within this Object's build, so repeated
+      // consumers reuse their contexts as well as the scoped leaf services.
+      const infrastructure = Layer.suspend(() =>
+        Layer.mergeAll(
+          options.lifecyclePublication === undefined ? Layer.empty : lifecyclePublicationLayer,
+          storageConfigLayer(storageOptions),
+          Layer.effect(SqlClient)(SqlClient),
+        ),
       );
 
       // Preserve the database owner's reader gate and rollback invalidators, while
@@ -661,7 +665,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
         }),
       ).pipe(Layer.provide(sqlOwnerLayer));
 
-      const localInfrastructure = Layer.mergeAll(infrastructure, sourceOwner);
+      const localInfrastructure = Layer.suspend(() => Layer.mergeAll(infrastructure, sourceOwner));
 
       const sourceProgress = Layer.effect(SqlStorageProgress)(
         Effect.gen(function* () {
@@ -709,12 +713,14 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
 
       // The same local ports serve routed decorators and owner-side RPC execution.
       // The RPC executor must never receive routed ports and bounce requests between Objects.
-      const rawLocalPorts = Layer.mergeAll(threadStoreLayer, submissionLedgerLayer).pipe(
-        Layer.provide(localInfrastructure),
-        Layer.provide(sourceProgress),
+      const rawLocalPorts = Layer.suspend(() =>
+        Layer.mergeAll(threadStoreLayer, submissionLedgerLayer),
+      ).pipe(Layer.provide(localInfrastructure), Layer.provide(sourceProgress));
+
+      const base = Layer.suspend(() =>
+        Layer.mergeAll(DurableAlarmService.layer, ProgressWaitRegistry.layer),
       );
 
-      const base = Layer.mergeAll(DurableAlarmService.layer, ProgressWaitRegistry.layer);
       const wakes = cloudflareWakeSchedulerLayer.pipe(Layer.provide(base));
 
       const messageStore = guardedMessageDeliveryStoreLayer.pipe(
