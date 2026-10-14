@@ -1187,30 +1187,24 @@ const effectCfPlatformLayer = (
   DurableObjectContext | ThreadObjectNamespace,
   CloudflareBindingError,
   EffectCfDurableObjectState.DurableObjectState | WorkerEnvironment
-> => {
-  const context = Layer.effect(DurableObjectContext)(
+> =>
+  Layer.effectContext(
     Effect.gen(function* () {
       const state = yield* EffectCfDurableObjectState.DurableObjectState;
       const env = yield* WorkerEnvironment;
-
-      return DurableObjectContext.of({ ctx: state.raw, env });
-    }),
-  );
-
-  const namespace = Layer.effect(ThreadObjectNamespace)(
-    Effect.gen(function* () {
-      const env = yield* WorkerEnvironment;
       const binding = yield* threadNamespaceFromEnv(env, namespaceBinding);
 
-      return ThreadObjectNamespace.of({
-        get: (threadId) => binding.get(binding.idFromName(threadId)),
-        ...(rpcTracing === true ? { rpcTracing: namespaceBinding } : {}),
-      });
+      return Context.make(DurableObjectContext, { ctx: state.raw, env }).pipe(
+        Context.add(
+          ThreadObjectNamespace,
+          ThreadObjectNamespace.of({
+            get: (threadId) => binding.get(binding.idFromName(threadId)),
+            ...(rpcTracing === true ? { rpcTracing: namespaceBinding } : {}),
+          }),
+        ),
+      );
     }),
   );
-
-  return Layer.merge(context, namespace);
-};
 
 /** The public endpoints and effect-cf invocation hook of one Thread Object instance. */
 export interface Instance<EventServices = never> extends InstanceType<

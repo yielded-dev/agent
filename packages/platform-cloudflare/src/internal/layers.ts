@@ -751,13 +751,19 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
         ).pipe(Layer.provide(messageStore)),
       );
 
-      const publication = (options.publication ?? ThreadPublication.layer).pipe(
-        Layer.provide(Layer.mergeAll(rawLocalPorts, Layer.effect(SqlClient)(SqlClient))),
-      );
+      const publication =
+        options.publication === undefined
+          ? ThreadPublication.layer
+          : options.publication.pipe(
+              Layer.provide(Layer.mergeAll(rawLocalPorts, Layer.effect(SqlClient)(SqlClient))),
+            );
 
-      const projection = (options.projection ?? ThreadProjectionMaintenance.layer).pipe(
-        Layer.provide(Layer.mergeAll(rawLocalPorts, Layer.effect(SqlClient)(SqlClient))),
-      );
+      const projection =
+        options.projection === undefined
+          ? ThreadProjectionMaintenance.layer
+          : options.projection.pipe(
+              Layer.provide(Layer.mergeAll(rawLocalPorts, Layer.effect(SqlClient)(SqlClient))),
+            );
 
       const localPorts =
         options.publication === undefined &&
