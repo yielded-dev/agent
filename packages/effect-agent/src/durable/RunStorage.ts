@@ -178,8 +178,10 @@ const makeWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
     }),
   );
 
-  const makeAppend = (publish: ThreadStore["Service"]["append"]): RunWriter["append"] =>
-    Effect.fnUntraced(function* (batch, executions) {
+  const makeAppend = Effect.gen(function* () {
+    const publisher = yield* ThreadStore;
+
+    const append: RunWriter["append"] = Effect.fnUntraced(function* (batch, executions) {
       const captured = yield* PreparedAppend.capture(
         AppendRequest.make({
           threadId,
@@ -203,27 +205,29 @@ const makeWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
           Effect.gen(function* () {
             yield* checkActive;
             for (let retries = 0; ; retries++) {
-              const result = yield* publish(
-                captured.expectedTailSequence === tail.sequence
-                  ? captured
-                  : AppendRequest.make({
-                      ...captured,
-                      expectedTailSequence: tail.sequence,
-                    }),
-              ).pipe(
-                Effect.catchTag("AppendConflict", (conflict) => {
-                  if (
-                    conflict.reason !== "tail" ||
-                    conflict.actualTailSequence === undefined ||
-                    retries >= 8
-                  )
-                    return Effect.fail(conflict);
-                  tail = { sequence: conflict.actualTailSequence };
-                  if (captured.executions !== undefined) return Effect.fail(conflict);
+              const result = yield* publisher
+                .append(
+                  captured.expectedTailSequence === tail.sequence
+                    ? captured
+                    : AppendRequest.make({
+                        ...captured,
+                        expectedTailSequence: tail.sequence,
+                      }),
+                )
+                .pipe(
+                  Effect.catchTag("AppendConflict", (conflict) => {
+                    if (
+                      conflict.reason !== "tail" ||
+                      conflict.actualTailSequence === undefined ||
+                      retries >= 8
+                    )
+                      return Effect.fail(conflict);
+                    tail = { sequence: conflict.actualTailSequence };
+                    if (captured.executions !== undefined) return Effect.fail(conflict);
 
-                  return Effect.succeed(undefined);
-                }),
-              );
+                    return Effect.succeed(undefined);
+                  }),
+                );
 
               if (result === undefined) continue;
               // A historical replay returns its original coordinates, not today's canonical tail.
@@ -242,13 +246,16 @@ const makeWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
       );
     });
 
+    return append;
+  });
+
   const writer = {
     threadId,
     generation: ownership.identity,
     withProgress: <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       owner.withProgress(threadId, Effect.andThen(checkActive, effect)),
     tail: Effect.sync(() => tail),
-    append: makeAppend(store.append),
+    append: yield* makeAppend,
     checkActive: owner.withMutation(checkActive),
     refresh,
   };
@@ -320,16 +327,22 @@ export const make = Effect.gen(function* () {
 
             const owned = <A, E>(effect: Effect.Effect<A, E>) => generation.use(effect);
 
+            const inputPublisher = ledger.appendInput;
+
+            const appendInput =
+              inputPublisher === undefined
+                ? undefined
+                : yield* makeAppend.pipe(
+                    Effect.provideService(ThreadStore, {
+                      ...store,
+                      append: (request) => inputPublisher(claimed.submissionId, request),
+                    }),
+                  );
+
             const session: RunStorageSession = {
               ...writer,
               claim: claimed,
-              ...(ledger.appendInput === undefined
-                ? {}
-                : {
-                    appendInput: makeAppend((append) =>
-                      ledger.appendInput!(claimed.submissionId, append),
-                    ),
-                  }),
+              ...(appendInput === undefined ? {} : { appendInput }),
               withInitialization: (effect) =>
                 owner.withProgress(request.threadId, generation.use(effect)),
               release: generation.release,
