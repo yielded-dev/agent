@@ -34,7 +34,8 @@ import {
   retryRequest,
 } from "./cloudflare.ts";
 import { deployments } from "./deploy.ts";
-import { fixtureFormat, prepareFixtures } from "./fixtures.ts";
+import { checkFixture } from "./fixture-check.ts";
+import { prepareFixtures } from "./fixtures.ts";
 import { BuildEvent, HistoryCheckpoint, Options, Result, type Sample } from "./model.ts";
 import {
   BenchError,
@@ -506,37 +507,23 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
     yield* phase("local fixture");
     const preparedByBuild = new Map<Label, Effect.Success<ReturnType<typeof prepareFixtures>>>();
-    const preparedByFormat = new Map<string, Effect.Success<ReturnType<typeof prepareFixtures>>>();
     const restoreBuilds = new Map<string, Effect.Success<ReturnType<typeof build>>>();
 
     if (!options.buildHistory) {
-      const formats = yield* Effect.forEach([...refs.values()], fixtureFormat);
-
-      if (new Set(formats).size !== 1)
-        return yield* BenchError.make({
-          message:
-            "Comparison requires shared fixture provenance compatible with both revisions; prepare equivalent formats separately.",
-        });
       if (options.fixtureDirectory === undefined)
         return yield* BenchError.make({
           message:
             "Comparison requires --fixture-directory with pre-existing shared fixtures; no arm may generate the other's history.",
         });
-      for (const label of yield* ordered(labels, "fixture-validation", (label) => label)) {
-        const ref = refs.get(label);
-        const formatKey = yield* fixtureFormat(ref);
 
-        const prepared = yield* prepareFixtures({
-          targets: options.targets,
-          sizes: options.sizes,
-          ref,
-          ...(options.restoreBytes === undefined ? {} : { requestBytes: options.restoreBytes }),
-          directory: options.fixtureDirectory,
-        });
+      const prepared = yield* prepareFixtures({
+        targets: options.targets,
+        sizes: options.sizes,
+        ...(options.restoreBytes === undefined ? {} : { requestBytes: options.restoreBytes }),
+        directory: options.fixtureDirectory,
+      });
 
-        preparedByFormat.set(formatKey, prepared);
-        preparedByBuild.set(label, prepared);
-      }
+      for (const label of labels) preparedByBuild.set(label, prepared);
       for (const job of yield* ordered(jobs, "build-restore", jobKey))
         restoreBuilds.set(
           jobKey(job),
@@ -548,6 +535,38 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           ),
         );
       yield* requireIdenticalControl(restoreBuilds);
+      // No source-code equality heuristic: execute each arm's own supported opener.
+      for (const job of yield* ordered(
+        jobs.filter((job) => job.target === "yielded"),
+        "fixture-validation",
+        jobKey,
+      )) {
+        const compiled = restoreBuilds.get(jobKey(job));
+
+        if (!compiled)
+          return yield* BenchError.make({ message: "Missing native fixture preflight build." });
+        for (const fixture of prepared.fixtures.filter((fixture) => fixture.target === "yielded")) {
+          const compatibility = yield* checkFixture(
+            compiled,
+            fixture,
+            prepared.chunks.get(`yielded-${fixture.history}`) ?? [],
+          );
+
+          yield* update((value) => ({
+            ...value,
+            fixtureChecks: [
+              ...(value.fixtureChecks ?? []),
+              {
+                label: job.label,
+                history: fixture.history,
+                formatKey: prepared.formatKey,
+                build: compiled.sha256,
+                ...compatibility,
+              },
+            ],
+          }));
+        }
+      }
     }
     const firstFixtures = preparedByBuild.values().next().value?.fixtures ?? [];
 
@@ -631,10 +650,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       seededTranscripts.set(size, seededMessages);
 
       for (let epoch = 0; epoch < epochs.length; epoch++) {
-        if (
-          !options.buildHistory &&
-          (preparedByFormat.size > 1 || options.restoreEachPass === true)
-        )
+        if (!options.buildHistory && options.restoreEachPass === true)
           messages = [...seededMessages];
         for (let index = 0; index < turnsPerEpoch; index++) {
           const sample = sampleName(epoch, index);
@@ -769,16 +785,12 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           }
         }
 
-      // Different formats cannot share persisted state; matching formats can opt into identical pass inputs.
+      // Every comparison pass restores the same source bytes before its arm opens them.
       const restorePass =
-        !options.buildHistory &&
-        (epoch === 0 || preparedByFormat.size > 1 || options.restoreEachPass === true);
+        !options.buildHistory && (epoch === 0 || options.restoreEachPass === true);
 
       const recoveryAvailable =
-        restorePass &&
-        (epoch === epochs.length - 1 ||
-          preparedByFormat.size > 1 ||
-          options.restoreEachPass === true);
+        restorePass && (epoch === epochs.length - 1 || options.restoreEachPass === true);
 
       const clearBeforeRestore = persistent || epoch > 0 || attempt > 0;
 

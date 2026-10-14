@@ -373,9 +373,12 @@ isolated Effect startup or an additive cost of durability.
 ## Fixtures
 
 Comparison requires `--fixture-directory <path>` naming pre-existing saved fixtures.
-Their storage-format key is checked against both frozen Yielded revisions before either
-arm restores them. Missing fixtures fail without generation or mutation. Incompatible
-formats need a separately prepared equivalent-fixture experiment.
+Their key describes the stored layout, record format and SQLite schema. Before deployment,
+each frozen Yielded arm restores a disposable copy and opens it through its native adapter,
+including supported atomic upgrades, then verifies its transcript and table counts. Unknown
+or malformed formats fail closed. Missing fixtures fail without generation or mutation.
+Each comparison pass starts from the original saved bytes; an arm never inherits another
+arm’s upgraded layout.
 
 For 1,000-turn Yielded and pi comparisons, use the natural history fixtures with
 50-character Thread IDs, the networked mock provider and the historical tool cycle.

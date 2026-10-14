@@ -20,7 +20,7 @@ import {
   type SqlDump,
 } from "./protocol.ts";
 import { restore } from "./restore.ts";
-import { FixtureExport, importRows, RestoreStorage } from "./storage.ts";
+import { FixtureError, FixtureExport, importRows, RestoreStorage } from "./storage.ts";
 
 export const COLD_ABORT = "durable-bench explicit cold";
 
@@ -56,6 +56,7 @@ export class Host {
       run?: (input: { id: string; text: string }, query: Query) => Promise<void>;
       close?: () => Promise<void>;
       restored?: () => Promise<void>;
+      openFixture?: Effect.Effect<void, FixtureError>;
       directoryUsed?: boolean;
     },
   ): Promise<Response> {
@@ -109,6 +110,13 @@ export class Host {
           restore(request, query).pipe(
             Effect.provideService(RestoreStorage, this.ctx.storage),
             Effect.provideService(FixtureExport, {
+              open:
+                handlers.openFixture ??
+                Effect.fail(
+                  FixtureError.make({
+                    message: "Yielded restore requires the native storage opener",
+                  }),
+                ),
               page: (input) => exportThread({ storage: this.ctx.storage }, input),
             }),
             Effect.scoped,

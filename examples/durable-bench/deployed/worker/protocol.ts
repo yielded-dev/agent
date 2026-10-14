@@ -109,6 +109,16 @@ export type SqlDump = typeof SqlDump.Type;
 
 export const FixtureMode = Schema.Literal("import");
 
+export const StorageFormat = Schema.Struct({
+  layoutVersion: Schema.Natural,
+  recordFormat: Schema.NonEmptyString,
+});
+
+export const FixtureCompatibility = Schema.Struct({
+  stored: StorageFormat,
+  opened: StorageFormat,
+});
+
 export const BulkFixture = Schema.Struct({
   version: Schema.Literal(1),
   target: Target,
@@ -118,6 +128,7 @@ export const BulkFixture = Schema.Struct({
   sourceVersion: Schema.NonEmptyString,
   tables: Counts,
   mode: FixtureMode,
+  storageFormat: Schema.optionalKey(StorageFormat),
   thread: Schema.optionalKey(SqlDump),
   actor: Schema.optionalKey(SqlDump),
 });
@@ -177,6 +188,7 @@ export const ImportResult = Schema.Struct({
   fingerprint: Schema.String,
   tables: Counts,
   mode: FixtureMode,
+  compatibility: Schema.optionalKey(FixtureCompatibility),
   directoryTables: Schema.optionalKey(Counts),
   identity: Identity,
 });

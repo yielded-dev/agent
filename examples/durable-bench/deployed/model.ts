@@ -3,6 +3,7 @@ import { Schema } from "effect";
 import {
   Counts,
   Failure,
+  FixtureCompatibility,
   MetricsResult,
   ObjectPhases,
   ProviderCall,
@@ -281,6 +282,17 @@ export const Result = Schema.Struct({
     ),
   ),
   histories: Schema.Array(HistoryBuild),
+  fixtureChecks: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        label: Schema.Literals(["working", "baseline", "candidate"]),
+        history: Schema.Natural,
+        formatKey: Schema.String,
+        build: Schema.String,
+        ...FixtureCompatibility.fields,
+      }),
+    ),
+  ),
   fixtures: Schema.Array(
     Schema.Struct({
       target: Target,
