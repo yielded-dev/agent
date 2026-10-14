@@ -1,5 +1,13 @@
 # @yielded/agent
 
+## 0.1.0-beta.177
+
+### Patch Changes
+
+- [#954](https://github.com/yielded-dev/agent/pull/954) [`6a77744`](https://github.com/yielded-dev/agent/commit/6a77744c006df578203285778ed38c06fce18b21) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Recover accepted native updates after interrupted tool batches without duplicating their findings or delivery.
+
+  BEHAVIOR CHANGE: Update exhaustive handlers of `WorkerSummary.state` to handle `unknown`, now returned for unresolved workers previously reported as `active`.
+
 ## 0.1.0-beta.176
 
 ### Patch Changes
