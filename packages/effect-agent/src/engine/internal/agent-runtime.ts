@@ -1190,53 +1190,67 @@ const captureModelResponsePartGeneral = Effect.fnUntraced(function* <
   return { encodedPart: ownedEncoded, retainedBytes };
 });
 
-const captureModelResponsePart = <Tools extends Record<string, Tool.Any>>(
-  part: unknown,
-  toolkit: Toolkit.Toolkit<Tools>,
-  usage: ModelResponseBufferUsage,
-  limits: EffectiveRunBufferLimits,
-): ReturnType<typeof captureModelResponsePartGeneral> =>
-  Effect.suspend((): ReturnType<typeof captureModelResponsePartGeneral> => {
-    const primitive =
-      usage.responsePartCount < limits.maxModelResponseParts
-        ? capturePrimitiveTextPart(part, limits.maxModelResponseBytes - usage.responsePartBytes)
-        : undefined;
-
-    return primitive === undefined
-      ? captureModelResponsePartGeneral(part, toolkit, usage, limits)
-      : Effect.succeed(primitive);
-  });
-
 interface OwnedModelResponsePart {
   readonly ownedPart: Response.AnyPart;
   readonly retainedBytes: number;
 }
 
+const decodePrimitiveModelResponsePart = Schema.decodeUnknownEffect(
+  Schema.toType(
+    Schema.Union([
+      Response.TextStartPart,
+      Response.TextDeltaPart,
+      Response.TextEndPart,
+      Response.ReasoningStartPart,
+      Response.ReasoningDeltaPart,
+      Response.ReasoningEndPart,
+    ]),
+  ),
+);
+
 /** Reject trailing content before its capture can run an application codec or suspend. */
-const ownModelResponsePart = Effect.fnUntraced(function* <Tools extends Record<string, Tool.Any>>(
+const ownModelResponsePart = <Tools extends Record<string, Tool.Any>>(
   part: unknown,
   toolkit: Toolkit.Toolkit<Tools>,
   usage: ModelResponseBufferUsage,
   limits: EffectiveRunBufferLimits,
   finished: boolean,
-): Effect.fn.Return<OwnedModelResponsePart, ModelProtocolError> {
-  if (finished) {
-    return yield* ModelProtocolError.make({
-      message: "Model response emitted content after its finish part",
-    });
-  }
-  const captured = yield* captureModelResponsePart(part, toolkit, usage, limits);
+): Effect.Effect<OwnedModelResponsePart, ModelProtocolError> =>
+  Effect.suspend((): Effect.Effect<OwnedModelResponsePart, ModelProtocolError> => {
+    if (finished) {
+      return Effect.fail(
+        ModelProtocolError.make({
+          message: "Model response emitted content after its finish part",
+        }),
+      );
+    }
 
-  const ownedPart = yield* modelResponseParsersFor(toolkit)
-    .decode(captured.encodedPart)
-    .pipe(
-      Effect.mapError(() =>
-        ModelProtocolError.make({ message: "Model response part failed canonical decoding" }),
-      ),
+    const primitive =
+      usage.responsePartCount < limits.maxModelResponseParts
+        ? capturePrimitiveTextPart(part, limits.maxModelResponseBytes - usage.responsePartBytes)
+        : undefined;
+
+    // Complete primitive snapshots need validation, but no defaults or transformation.
+    // Schema.toType retains every constraint from the native Response part schemas.
+    if (primitive !== undefined) {
+      return Effect.mapBothEager(decodePrimitiveModelResponsePart(primitive.part), {
+        onFailure: () =>
+          ModelProtocolError.make({ message: "Model response part failed canonical decoding" }),
+        onSuccess: (ownedPart) => ({ ownedPart, retainedBytes: primitive.retainedBytes }),
+      });
+    }
+
+    // Pending application codecs keep normal Effect execution in this same consumer fiber.
+    return Effect.flatMapEager(
+      captureModelResponsePartGeneral(part, toolkit, usage, limits),
+      (captured) =>
+        Effect.mapBothEager(modelResponseParsersFor(toolkit).decode(captured.encodedPart), {
+          onFailure: () =>
+            ModelProtocolError.make({ message: "Model response part failed canonical decoding" }),
+          onSuccess: (ownedPart) => ({ ownedPart, retainedBytes: captured.retainedBytes }),
+        }),
     );
-
-  return { ownedPart, retainedBytes: captured.retainedBytes };
-});
+  });
 
 type PartLifecycle = "open" | "closed";
 
@@ -4619,30 +4633,26 @@ const decodeToolCallId = (id: string) =>
   );
 
 const decodeProviderToolCallId = (id: string) =>
-  Effect.suspend(() =>
-    decodeProviderToolCallIdValue(id).pipe(
-      Effect.mapError(() =>
-        ModelProtocolError.make({
-          message:
-            "Model supplied an invalid Tool Call ID; expected 1-128 ASCII letters, digits, dots, underscores, colons, or hyphens",
-        }),
-      ),
+  decodeProviderToolCallIdValue(id).pipe(
+    Effect.mapErrorEager(() =>
+      ModelProtocolError.make({
+        message:
+          "Model supplied an invalid Tool Call ID; expected 1-128 ASCII letters, digits, dots, underscores, colons, or hyphens",
+      }),
     ),
   );
 
 const decodeProviderResponsePartId = (id: string) =>
-  Effect.suspend(() =>
-    decodeProviderResponsePartIdValue(id).pipe(
-      Effect.mapError(() =>
-        ModelProtocolError.make({
-          message:
-            "Model supplied an invalid response part ID; expected 1-128 ASCII letters, digits, dots, underscores, colons, or hyphens",
-        }),
-      ),
+  decodeProviderResponsePartIdValue(id).pipe(
+    Effect.mapErrorEager(() =>
+      ModelProtocolError.make({
+        message:
+          "Model supplied an invalid response part ID; expected 1-128 ASCII letters, digits, dots, underscores, colons, or hyphens",
+      }),
     ),
   );
 
-const validateProviderPartIdentifiers = Effect.fnUntraced(function* (part: Response.AnyPart) {
+const validateProviderPartIdentifiers = Effect.fnUntracedEager(function* (part: Response.AnyPart) {
   switch (part.type) {
     case "text-start":
     case "text-delta":
@@ -4775,10 +4785,10 @@ const promptFromTurnParts = (trace: TurnTrace): Prompt.Prompt => {
   return Prompt.fromMessages(messages);
 };
 
-// `Effect.fnUntraced`: this dispatcher runs for every streamed Response Part,
-// so a named span here would emit one span per TextDelta/ReasoningDelta. The
-// enclosing model request keeps its `AgentRuntime.model` stream span.
-const processModelPart = Effect.fnUntraced(function* <Tools extends Record<string, Tool.Any>>(
+// Called inside the executing stream consumer. Resolve synchronous lifecycle checks
+// together; native eager composition still suspends for application codecs and events.
+// The enclosing model request owns the span, not each TextDelta/ReasoningDelta.
+const processModelPart = Effect.fnUntracedEager(function* <Tools extends Record<string, Tool.Any>>(
   context: RunContext,
   turnId: TurnId,
   turn: number,
