@@ -144,12 +144,6 @@ const decodeReplayPlan = Schema.decodeUnknownEffect(
   ).check(Schema.isMaxLength(1)),
 );
 
-const decodeReplayPayload = Schema.decodeUnknownEffect(
-  Schema.Tuple([Schema.Struct({ batch_json: Schema.String })]),
-);
-
-const decodeExportBatchJson = Schema.decodeEffect(Schema.fromJsonString(ExportBatch));
-
 export interface SqlArchiveTransactions {
   readonly read: <A, E, R>(
     body: Effect.Effect<A, E, R>,
@@ -186,16 +180,18 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
     )
       return yield* failure("replay batch span");
 
-    const [payload] = yield* decodeReplayPayload(
+    const [payload] = yield* Schema.decodeUnknownEffect(
+      Schema.Tuple([Schema.Struct({ batch_json: Schema.String })]),
+    )(
       yield* query(sql`SELECT ${canonicalBatchJson(sql, namespace)} AS batch_json
       FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${threadId} AND batch_id=${JSON.stringify(batchId)}`),
     ).pipe(Effect.mapError((cause) => failure("replay batch payload", cause)));
 
     if (bytes(payload.batch_json) !== plan.byte_count) return yield* failure("replay batch size");
 
-    const batch = yield* decodeExportBatchJson(payload.batch_json).pipe(
-      Effect.mapError((cause) => failure("replay batch wire", cause)),
-    );
+    const batch = yield* Schema.decodeEffect(Schema.fromJsonString(ExportBatch))(
+      payload.batch_json,
+    ).pipe(Effect.mapError((cause) => failure("replay batch wire", cause)));
 
     if (
       batch.batchId !== batchId ||
@@ -427,9 +423,9 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
       if (bytes(payload.batch_json) !== batch.byte_count || batch.first_sequence !== sequence)
         return yield* failure("archive batch frontier");
 
-      const decoded = yield* decodeExportBatchJson(payload.batch_json).pipe(
-        Effect.mapError((cause) => failure("archive batch decode", cause)),
-      );
+      const decoded = yield* Schema.decodeEffect(Schema.fromJsonString(ExportBatch))(
+        payload.batch_json,
+      ).pipe(Effect.mapError((cause) => failure("archive batch decode", cause)));
 
       if (
         decoded.batchId !== batch.batch_id ||

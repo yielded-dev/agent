@@ -105,14 +105,7 @@ const decodeCanonicalRecord = decodeExportRecordJson;
 
 const decodeThreadMaterializationType = Schema.decodeEffect(Schema.toType(ThreadMaterialization));
 const decodeThreadReadRequestType = Schema.decodeEffect(Schema.toType(ThreadReadRequest));
-const decodeThreadObservationType = Schema.decodeEffect(Schema.toType(ThreadObservation));
 const decodeThreadTailRequestType = Schema.decodeEffect(Schema.toType(ThreadTailRequest));
-const decodeSaveCheckpointRequestType = Schema.decodeEffect(Schema.toType(SaveCheckpointRequest));
-const decodeLoadCheckpointRequestType = Schema.decodeEffect(Schema.toType(LoadCheckpointRequest));
-const decodeOffsetText = Schema.decodeEffect(OffsetText);
-const decodeCanonicalSequence = Schema.decodeEffect(CanonicalSequence);
-const encodeCheckpointJson = Schema.encodeEffect(ThreadCheckpointJson);
-const decodeCheckpointJson = Schema.decodeEffect(ThreadCheckpointJson);
 const decodeStorageConfig = Schema.decodeEffect(DoStorageConfigValue);
 
 const storeError = (
@@ -143,7 +136,7 @@ const parseOffset = Effect.fnUntraced(function* (
 ): Effect.fn.Return<CanonicalSequence, ThreadStoreError> {
   if (offset === undefined) return ZERO_CANONICAL_SEQUENCE;
 
-  const text = yield* decodeOffsetText(offset).pipe(
+  const text = yield* Schema.decodeEffect(OffsetText)(offset).pipe(
     Effect.mapError((error) => schemaStoreError("decode observation offset", error)),
   );
 
@@ -164,13 +157,13 @@ const parseOffset = Effect.fnUntraced(function* (
     });
   }
 
-  return yield* decodeCanonicalSequence(Number(sequenceText)).pipe(
+  return yield* Schema.decodeEffect(CanonicalSequence)(Number(sequenceText)).pipe(
     Effect.mapError((error) => schemaStoreError("decode observation offset", error)),
   );
 });
 
 const encodeCheckpoint = (checkpoint: ThreadCheckpoint): Effect.Effect<string, ThreadStoreError> =>
-  encodeCheckpointJson(checkpoint).pipe(
+  Schema.encodeEffect(ThreadCheckpointJson)(checkpoint).pipe(
     Effect.mapError((error) => schemaStoreError("encode checkpoint", error)),
   );
 
@@ -230,7 +223,7 @@ const decodeEnvelope = Effect.fnUntraced(function* (row: {
 const decodeCheckpoint = (
   checkpointJson: string,
 ): Effect.Effect<ThreadCheckpoint, ThreadStoreError> =>
-  decodeCheckpointJson(checkpointJson).pipe(
+  Schema.decodeEffect(Schema.fromJsonString(ThreadCheckpoint))(checkpointJson).pipe(
     Effect.mapError((error) => schemaStoreError("decode checkpoint", error)),
   );
 
@@ -401,7 +394,7 @@ const makeServices = Effect.fnUntraced(function* () {
   const read: ThreadStore["Service"]["read"] = (request) => Stream.unwrap(readEffect(request));
 
   const observeEffect = Effect.fnUntraced(function* (request: ThreadObservation) {
-    const validated = yield* decodeThreadObservationType(request).pipe(
+    const validated = yield* Schema.decodeEffect(Schema.toType(ThreadObservation))(request).pipe(
       Effect.mapError((error) => schemaStoreError("validate thread observation", error)),
     );
 
@@ -507,9 +500,9 @@ const makeServices = Effect.fnUntraced(function* () {
   const saveCheckpoint: ThreadCheckpoints["save"] = Effect.fnUntraced(function* (
     request: SaveCheckpointRequest,
   ) {
-    const validated = yield* decodeSaveCheckpointRequestType(request).pipe(
-      Effect.mapError((error) => schemaStoreError("validate checkpoint", error)),
-    );
+    const validated = yield* Schema.decodeEffect(Schema.toType(SaveCheckpointRequest))(
+      request,
+    ).pipe(Effect.mapError((error) => schemaStoreError("validate checkpoint", error)));
 
     const thread = yield* requireThread(journal, validated.checkpoint.threadId);
 
@@ -550,9 +543,9 @@ const makeServices = Effect.fnUntraced(function* () {
   const loadCheckpoint: ThreadCheckpoints["load"] = Effect.fnUntraced(function* (
     request: LoadCheckpointRequest,
   ) {
-    const validated = yield* decodeLoadCheckpointRequestType(request).pipe(
-      Effect.mapError((error) => schemaStoreError("validate checkpoint lookup", error)),
-    );
+    const validated = yield* Schema.decodeEffect(Schema.toType(LoadCheckpointRequest))(
+      request,
+    ).pipe(Effect.mapError((error) => schemaStoreError("validate checkpoint lookup", error)));
 
     const thread = yield* requireThread(journal, validated.threadId);
 
