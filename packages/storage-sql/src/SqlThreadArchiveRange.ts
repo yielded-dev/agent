@@ -699,7 +699,8 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
               sequence === 0 ||
               (yield* query(sql`
                 SELECT 1 FROM ${table("effect_agent_canonical_batches")}
-                WHERE thread_id=${threadId} AND last_sequence=${sequence} LIMIT 2
+                WHERE thread_id=${threadId} AND first_sequence BETWEEN ${Math.max(1, sequence - 255)} AND ${sequence}
+                  AND last_sequence=${sequence} LIMIT 2
               `)).length === 1;
 
             if (

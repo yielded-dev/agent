@@ -545,6 +545,8 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           yield* options.afterThreadRead.pipe(
             Effect.mapError((e) => failure("capture transfer snapshot", e)),
           );
+        // The persisted 256-record batch bound makes the first-sequence index sufficient
+        // to detect every batch extending beyond this tail, including overlapping batches.
         if (
           (yield* query(
             sql`SELECT sequence FROM ${table("effect_agent_canonical_records")} WHERE thread_id=${threadId} AND sequence>${header.tail_sequence} LIMIT 1`,
@@ -554,8 +556,9 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           WHERE thread_id=${threadId} AND first_sequence<1 LIMIT 1`,
           )).length > 0 ||
           (yield* query(
-            sql`SELECT batch_id FROM ${table("effect_agent_canonical_batches")} ${seekIndex("effect_agent_canonical_batches_last")}
-          WHERE thread_id=${threadId} AND last_sequence>${header.tail_sequence} LIMIT 1`,
+            sql`SELECT batch_id FROM ${table("effect_agent_canonical_batches")} ${seekIndex("effect_agent_canonical_batches_sequence")}
+          WHERE thread_id=${threadId} AND first_sequence>${header.tail_sequence - 255}
+            AND last_sequence>${header.tail_sequence} LIMIT 1`,
           )).length > 0
         )
           return yield* failure(

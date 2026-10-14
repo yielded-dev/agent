@@ -16,7 +16,7 @@ import {
   DoStorageError,
 } from "../DoStorageError.ts";
 
-export const CurrentDoStorageVersion = 27;
+export const CurrentDoStorageVersion = 28;
 
 /** Fresh layout only. Unsupported stores are rejected before these statements execute. */
 const layoutStatements = [
@@ -70,7 +70,6 @@ const layoutStatements = [
   "CREATE TABLE effect_agent_archive_batches (thread_id TEXT NOT NULL, batch_id TEXT NOT NULL, range_first_sequence INTEGER NOT NULL, batch_json TEXT NOT NULL, PRIMARY KEY (thread_id, batch_id), FOREIGN KEY (thread_id, batch_id) REFERENCES effect_agent_canonical_batches(thread_id, batch_id) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_batches_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)",
   "CREATE TABLE effect_agent_archive_records (thread_id TEXT NOT NULL, sequence INTEGER NOT NULL, range_first_sequence INTEGER NOT NULL, record_json TEXT NOT NULL, PRIMARY KEY (thread_id, sequence), FOREIGN KEY (thread_id, sequence) REFERENCES effect_agent_canonical_records(thread_id, sequence) ON DELETE RESTRICT, CONSTRAINT effect_agent_archive_records_range_fkey FOREIGN KEY (thread_id, range_first_sequence) REFERENCES effect_agent_journal_ranges(thread_id, first_sequence) ON DELETE RESTRICT)",
   "CREATE UNIQUE INDEX effect_agent_canonical_batches_sequence ON effect_agent_canonical_batches(thread_id, first_sequence)",
-  "CREATE INDEX effect_agent_canonical_batches_last ON effect_agent_canonical_batches(thread_id, last_sequence)",
   "CREATE TABLE effect_agent_live_child_reservations (reservation_id TEXT PRIMARY KEY NOT NULL, thread_id TEXT NOT NULL)",
   "CREATE INDEX effect_agent_live_child_reservations_thread ON effect_agent_live_child_reservations(thread_id, reservation_id)",
   // Compact native positions keep accepted identities out of bounded export cursors.
@@ -141,10 +140,15 @@ const inspection = (version: number, statements: ReadonlyArray<string>) =>
 // Released predecessors retain the same record format and canonical tables.
 const addedIndexes = new Set(["effect_agent_message_deliveries_peer_retained"]);
 
-const layout25Statements = layoutObjects(layoutStatements)
+const layout27Statements = [
+  ...layoutStatements,
+  "CREATE INDEX effect_agent_canonical_batches_last ON effect_agent_canonical_batches(thread_id, last_sequence)",
+];
+
+const layout25Statements = layoutObjects(layout27Statements)
   .filter(([, name]) => !addedIndexes.has(name))
   .map(([, , index]) =>
-    layoutStatements[index]
+    layout27Statements[index]
       .replace(", peer_retained_until_millis INTEGER", "")
       .replace(
         "'$.envelope.messageAdmission.peerName') IS NOT NULL",
@@ -154,7 +158,8 @@ const layout25Statements = layoutObjects(layoutStatements)
 
 const { decode, readObjects, readHeader } = inspection(CurrentDoStorageVersion, layoutStatements);
 const layout25 = inspection(25, layout25Statements);
-const layout26 = inspection(26, layoutStatements);
+const layout26 = inspection(26, layout27Statements);
+const layout27 = inspection(27, layout27Statements);
 
 const inspectStorage = Effect.fnUntraced(function* (
   allowUpgrade = false,
@@ -185,10 +190,10 @@ const inspectStorage = Effect.fnUntraced(function* (
 
   const version = legacy.value;
 
-  if (allowUpgrade && (version === 25 || version === 26)) {
+  if (allowUpgrade && (version === 25 || version === 26 || version === 27)) {
     if (version === 25 && objects.some(({ name }) => addedIndexes.has(name)))
       return yield* incompatible(version, "Mixed layout 25 and 26 objects.");
-    const predecessor = version === 25 ? layout25 : layout26;
+    const predecessor = version === 25 ? layout25 : version === 26 ? layout26 : layout27;
     const header = yield* predecessor.readHeader(objects, version);
 
     yield* predecessor.readManagedTriggers(true);
@@ -209,7 +214,7 @@ export const readDoStorageHeader = Effect.fnUntraced(function* () {
   return header;
 });
 
-/** Initialize fresh storage or atomically upgrade the exact released layouts 25 and 26. */
+/** Initialize fresh storage or atomically upgrade the exact released layouts 25–27. */
 export const ensureDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
@@ -244,6 +249,9 @@ export const ensureDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(fun
               }),
             ),
           );
+        }
+        if (header !== undefined && header.layoutVersion < CurrentDoStorageVersion) {
+          yield* sql`DROP INDEX effect_agent_canonical_batches_last`;
           yield* sql`UPDATE effect_agent_schema SET layout_version=${CurrentDoStorageVersion} WHERE singleton=1`;
           yield* sql`UPDATE effect_agent_meta SET value=${String(CurrentDoStorageVersion)} WHERE key='storage_version'`;
 
