@@ -157,15 +157,12 @@ const isFrozenJsonData = (input: Schema.Json): boolean => {
   return true;
 };
 
-const validateBatchHeader = Schema.decodeSync(
+const validateBatchShape = Schema.decodeUnknownSync(
   Schema.Struct({
     batchId: CanonicalBatch.fields.batchId,
     producerId: CanonicalBatch.fields.producerId,
+    records: Schema.NonEmptyArray(Schema.Unknown).check(Schema.isMaxLength(256)),
   }),
-);
-
-const validateBatchCount = Schema.decodeUnknownSync(
-  Schema.NonEmptyArray(Schema.Unknown).check(Schema.isMaxLength(256)),
 );
 
 const ContinuationBytes = Schema.Struct({
@@ -185,15 +182,20 @@ const captureFacts = (batch: CommitBatch) =>
   Effect.try({
     try: () =>
       Result.gen(function* () {
-        const header = validateBatchHeader(batch);
+        const inputs = batch.records;
 
-        validateBatchCount(batch.records);
-        const encodings = yield* Result.all(batch.records.map(captureRecord));
+        const { batchId, producerId } = validateBatchShape({
+          batchId: batch.batchId,
+          producerId: batch.producerId,
+          records: inputs,
+        });
+
+        const encodings = yield* Result.all(inputs.map(captureRecord));
         const records = encodings.map((record) => record.canonical);
 
         return Object.freeze(
           CanonicalBatch.make(
-            { ...header, records: [records[0]!, ...records.slice(1)] },
+            { batchId, producerId, records: [records[0]!, ...records.slice(1)] },
             { disableChecks: true },
           ),
         );
