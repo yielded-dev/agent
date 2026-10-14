@@ -277,6 +277,14 @@ export const ownedRows = <A, I>(
           return rows;
         });
 
-    return { by, byFields, matching, seed, write: apply(false), remove: apply(true) };
+    return {
+      by,
+      byFields,
+      matching,
+      seed,
+      seedMatching: retain,
+      write: apply(false),
+      remove: apply(true),
+    };
   };
 };

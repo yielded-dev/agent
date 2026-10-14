@@ -144,6 +144,10 @@ export const ThreadWorkCursor = Schema.Struct({
 
 export type ThreadWorkCursor = typeof ThreadWorkCursor.Type;
 
+/** Local snapshot request; it grants no claim or dispatch authority. */
+export const FreshAdmissionWork = Schema.Struct({ threadId: ThreadId, submissionId: SubmissionId });
+export type FreshAdmissionWork = typeof FreshAdmissionWork.Type;
+
 export const WorkThreadsRequest = Schema.Struct({
   afterThreadId: Schema.optionalKey(ThreadId),
   limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 32 })),
@@ -192,6 +196,12 @@ export class WorkDiscoveryUnavailable extends Schema.TaggedError<WorkDiscoveryUn
 
 /** Native owner pages and canonical-index maintenance, implemented at the storage owner. */
 export interface ThreadWorkStorage {
+  /** Native proof that this untouched root admission has no other recovery obligations.
+   * A caller must still claim and validate current controls before dispatch. */
+  readonly isOnlyFreshAdmission?: (
+    request: FreshAdmissionWork,
+  ) => Effect.Effect<boolean, ThreadStoreError>;
+
   readonly threads: (
     request: WorkThreadsRequest,
   ) => Effect.Effect<WorkThreadsPage, ThreadStoreError>;

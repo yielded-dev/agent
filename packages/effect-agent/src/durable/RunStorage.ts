@@ -113,6 +113,11 @@ export interface RunWriter {
 
 export interface RunStorageSession extends RunWriter, RunOwnership {
   readonly claim: Claim;
+  /** Library-only initialization, before application/model IO. Hold progress before mutation
+   * so the captured controls and this owner's acknowledged input remain one read view. */
+  readonly withInitialization?: <A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | OwnershipLost, R>;
   readonly refresh: Effect.Effect<void, ThreadStoreFailure>;
   readonly publishSettlement: (
     batch: CanonicalBatch,
@@ -316,6 +321,8 @@ export const make = Effect.gen(function* () {
             const session: RunStorageSession = {
               ...writer,
               claim: claimed,
+              withInitialization: (effect) =>
+                owner.withProgress(request.threadId, generation.use(effect)),
               release: generation.release,
               refresh: writer.refresh,
               markInputApplied: (marker) =>

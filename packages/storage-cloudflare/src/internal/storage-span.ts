@@ -1,4 +1,4 @@
-import { Effect, Predicate, Result } from "effect";
+import { Effect, Predicate, References, Result, Tracer } from "effect";
 
 type Tagged = { readonly _tag: string; readonly reason?: unknown };
 
@@ -33,14 +33,18 @@ export const withStorageSpan = (
   const span = Effect.withSpan(name);
 
   return <A, E extends Tagged, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
-    storageResult(effect, expected).pipe(
-      Effect.tap((result) =>
-        Result.isFailure(result)
-          ? Effect.annotateCurrentSpan({ "storage.outcome": result.failure._tag })
-          : Effect.void,
-      ),
-      Effect.tapError(annotateStorageError),
-      span,
-      Effect.flatMap(Effect.fromResult),
+    Effect.withFiber((fiber) =>
+      !fiber.getRef(References.TracerEnabled) || fiber.getRef(Tracer.Tracer) === Tracer.nativeTracer
+        ? effect
+        : storageResult(effect, expected).pipe(
+            Effect.tap((result) =>
+              Result.isFailure(result)
+                ? Effect.annotateCurrentSpan({ "storage.outcome": result.failure._tag })
+                : Effect.void,
+            ),
+            Effect.tapError(annotateStorageError),
+            span,
+            Effect.flatMap(Effect.fromResult),
+          ),
     );
 };

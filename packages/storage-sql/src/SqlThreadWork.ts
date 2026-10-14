@@ -18,6 +18,7 @@ import {
   MAX_WORK_REBUILD_RECORDS,
   CanonicalWorkEntry,
   ThreadWorkRequest,
+  FreshAdmissionWork,
   WorkThreadsRequest,
   WorkIndexRebuildRequest,
   WorkIndexProgress,
@@ -830,21 +831,52 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
   });
 
   const storage: ThreadWorkStorage = {
+    isOnlyFreshAdmission: (input) =>
+      read(
+        Effect.gen(function* () {
+          const request = yield* decode(FreshAdmissionWork, input);
+
+          if (!(yield* present())) return false;
+
+          const rows = yield* decode(
+            Schema.Array(Schema.Struct({ verified: SqlInteger })),
+            yield* query(sql`SELECT 1 AS verified
+          FROM ${table("effect_agent_threads")} AS t
+          JOIN ${table("effect_agent_submissions")} AS s ON s.thread_id=t.thread_id
+          WHERE t.thread_id=${request.threadId} AND s.submission_id=${request.submissionId}
+            AND t.work_version=${WORK_INDEX_VERSION} AND t.work_state='ready'
+            AND t.work_through_sequence=t.tail_sequence AND t.work_reporting=0 AND t.work_entry_count=0
+            AND s.state='ready' AND s.input_applied_record_id IS NULL AND s.input_applied_sequence IS NULL
+            AND s.parent_submission_id IS NULL AND s.parent_tool_call_id IS NULL
+            AND s.worker_admission_json IS NULL AND s.message_admission_json IS NULL
+            AND NOT EXISTS (SELECT 1 FROM ${table("effect_agent_work_entries")} WHERE thread_id=t.thread_id)
+            AND NOT EXISTS (SELECT 1 FROM ${table("effect_agent_executions")} WHERE thread_id=t.thread_id)
+            AND NOT EXISTS (SELECT 1 FROM ${table("effect_agent_message_deliveries")} WHERE owner_thread_id=t.thread_id AND state NOT IN ('processed','refused'))
+            AND NOT EXISTS (SELECT 1 FROM ${table("effect_agent_submissions")} WHERE thread_id=t.thread_id AND state<>'settled' AND submission_id<>s.submission_id)
+            AND NOT EXISTS (SELECT 1 FROM ${table("effect_agent_abort_intents")} WHERE submission_id=s.submission_id)`),
+          );
+
+          return rows.length === 1 && rows[0]?.verified === 1;
+        }),
+      ),
+
     page: Effect.fnUntraced(function* (input) {
       const request = yield* decode(ThreadWorkRequest, input);
 
       return yield* read(
         Effect.gen(function* () {
-          yield* requireReady(request.threadId);
+          const current = yield* requireReady(request.threadId);
 
           const cursor = yield* decodeWorkCursor(request).pipe(
             Effect.provideService(Crypto.Crypto, crypto),
           );
 
+          const pageEntries: Array<ThreadWorkEntry> = [];
           let source = cursor.source;
           let after = cursor.after;
 
           while (true) {
+            const remaining = request.limit - pageEntries.length;
             let entries: ReadonlyArray<ThreadWorkEntry>;
             let next: string | undefined;
 
@@ -869,17 +901,18 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
                 yield* query(sql`SELECT submission_id AS "submissionId", thread_id AS "threadId", queue_sequence AS "queueSequence",
             principal, idempotency_key AS "idempotencyKey", deployment_id AS "deploymentId", receipt_id AS "receiptId", state
             FROM ${table("effect_agent_submissions")} ${admissionIndex} WHERE thread_id=${request.threadId} AND state <> 'settled'
-              AND queue_sequence>${sequence} ORDER BY queue_sequence LIMIT ${request.limit + 1}`),
+              AND queue_sequence>${sequence} ORDER BY queue_sequence LIMIT ${remaining + 1}`),
               );
 
-              if (rows.length === 0) {
+              const more = rows.length > remaining ? rows[remaining - 1] : undefined;
+
+              entries = rows.slice(0, remaining).map(admissionWork);
+              if (rows.length < remaining) {
+                pageEntries.push(...entries);
                 source = "canonical";
                 after = undefined;
                 continue;
               }
-              const more = rows.length > request.limit ? rows[request.limit - 1] : undefined;
-
-              entries = rows.slice(0, request.limit).map(admissionWork);
               next = encodeWorkCursor({
                 version: WORK_INDEX_VERSION,
                 threadDigest: cursor.threadDigest,
@@ -887,20 +920,26 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
                 ...(more === undefined ? {} : { after: String(more.queueSequence) }),
               });
             } else if (source === "canonical") {
-              const rows = yield* decode(
-                Schema.Array(EntryRow),
-                yield* query(sql`SELECT id, ${boundedEntryJson} FROM ${table("effect_agent_work_entries")}
-            WHERE thread_id=${request.threadId} ${after === undefined ? sql`` : sql`AND id>${after}`} ORDER BY id LIMIT ${request.limit + 1}`),
-              );
+              // The header counted entries in this same owner snapshot. An empty
+              // catalogue cannot add a canonical owner to the bounded page.
+              const rows =
+                current.actual_count === 0
+                  ? []
+                  : yield* decode(
+                      Schema.Array(EntryRow),
+                      yield* query(sql`SELECT id, ${boundedEntryJson} FROM ${table("effect_agent_work_entries")}
+            WHERE thread_id=${request.threadId} ${after === undefined ? sql`` : sql`AND id>${after}`} ORDER BY id LIMIT ${remaining + 1}`),
+                    );
 
-              if (rows.length === 0) {
+              const more = rows.length > remaining ? rows[remaining - 1] : undefined;
+
+              entries = yield* Effect.forEach(rows.slice(0, remaining), decodeEntry);
+              if (rows.length < remaining) {
+                pageEntries.push(...entries);
                 source = "deliveries";
                 after = undefined;
                 continue;
               }
-              const more = rows.length > request.limit ? rows[request.limit - 1] : undefined;
-
-              entries = yield* Effect.forEach(rows.slice(0, request.limit), decodeEntry);
               next = encodeWorkCursor({
                 version: WORK_INDEX_VERSION,
                 threadDigest: cursor.threadDigest,
@@ -918,12 +957,12 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
                   sql`CASE WHEN ${sqliteJsonText(sql, "record_json", ["envelope", "messageAdmission", "_tag"])} = 'WorkerUpdate' THEN 'update' ELSE 'ordinary' END`,
               })} AS partition
             FROM ${table("effect_agent_message_deliveries")} ${deliveryIndex} WHERE owner_thread_id=${request.threadId} AND state NOT IN ('processed', 'refused')
-            ${after === undefined ? sql`` : sql`AND message_id>${after}`} ORDER BY message_id LIMIT ${request.limit + 1}`),
+            ${after === undefined ? sql`` : sql`AND message_id>${after}`} ORDER BY message_id LIMIT ${remaining + 1}`),
               );
 
-              const more = rows.length > request.limit ? rows[request.limit - 1] : undefined;
+              const more = rows.length > remaining ? rows[remaining - 1] : undefined;
 
-              entries = rows.slice(0, request.limit).map((row): ThreadWorkEntry => ({
+              entries = rows.slice(0, remaining).map((row): ThreadWorkEntry => ({
                 id: workId("delivery", row.message_id),
                 owner: { _tag: "Delivery", messageId: row.message_id },
                 stateReference: {
@@ -951,8 +990,10 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
                 });
             }
 
+            pageEntries.push(...entries);
+
             return yield* validateWorkPage(
-              { entries, ...(next === undefined ? {} : { cursor: next }) },
+              { entries: pageEntries, ...(next === undefined ? {} : { cursor: next }) },
               request.limit,
             );
           }

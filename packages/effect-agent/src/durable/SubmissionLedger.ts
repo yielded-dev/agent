@@ -1173,6 +1173,8 @@ export class SubmissionLedger extends Context.Service<
       request: ReleaseChildBudgetRequest,
     ) => Effect.Effect<ChildBudgetReservationSnapshot, ChildReservationConflict | LedgerError>;
     readonly scanNonterminal: Stream.Stream<SubmissionWorkItem, LedgerError>;
+    /** Optional native snapshot for hosts that need the complete control worklist. */
+    readonly listNonterminal?: Effect.Effect<ReadonlyArray<SubmissionWorkItem>, LedgerError>;
     readonly loadRecoverySnapshot: (
       request: RecoverySnapshotRequest,
     ) => Effect.Effect<RecoverySnapshot, LedgerError>;

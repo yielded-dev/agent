@@ -734,17 +734,24 @@ interface NativeDispatch {
   scanRevision?: number;
 }
 
-/** Observe already-owned waves; detach on success, failure and interruption. */
-const awaitAnyCompletion = (fibers: ReadonlyArray<Fiber.Fiber<unknown, MaintenancePassFailure>>) =>
-  Effect.acquireUseRelease(
+/** Observe already-owned waves without creating one waiter fiber for each wave. */
+const awaitAnyCompletion = Effect.fnUntraced(function* (
+  fibers: ReadonlyArray<Fiber.Fiber<unknown, MaintenancePassFailure>>,
+  revision: number,
+) {
+  const mutations = yield* ThreadMutationGate;
+
+  return yield* Effect.acquireUseRelease(
     Effect.sync<Array<() => void>>(() => []),
     (observers) =>
-      Effect.callback<"completed">((resume) => {
+      Effect.callback<"completed" | "scan">((resume) => {
+        observers.push(mutations.observeChange(revision, () => resume(Effect.succeed("scan"))));
         for (const fiber of fibers)
           observers.push(fiber.addObserver(() => resume(Effect.succeed("completed"))));
       }),
     (observers) => Effect.sync(() => observers.forEach((remove) => remove())),
   );
+});
 
 /** Post-native delivery shares a finite connection budget across independent host lanes. */
 const afterNativeDispatchConcurrency = 2;
@@ -926,6 +933,8 @@ export class ThreadMutationGate extends Context.Service<
     readonly activeLanes: Effect.Effect<ReadonlySet<string>>;
     readonly revision: Effect.Effect<number>;
     readonly awaitChange: (revision: number) => Effect.Effect<void>;
+    /** Register an incarnation-local observer; its caller must detach it on completion. */
+    readonly observeChange: (revision: number, notify: () => void) => () => void;
     readonly withSnapshot: <A, E, R>(
       body: (active: number) => Effect.Effect<A, E, R>,
     ) => Effect.Effect<A, E, R>;
@@ -946,14 +955,27 @@ export class ThreadMutationGate extends Context.Service<
       const activeLanes = new Map<string, number>();
       const generationGate = yield* Semaphore.make(1);
       let revision = 0;
-      let changed = yield* Deferred.make<void>();
+      const listeners = new Set<() => void>();
 
-      const notify = Effect.gen(function* () {
-        const previous = changed;
+      const observeChange = (observed: number, listener: () => void): (() => void) => {
+        if (observed !== revision) {
+          listener();
 
-        changed = yield* Deferred.make<void>();
+          return () => {};
+        }
+        listeners.add(listener);
+
+        return () => {
+          listeners.delete(listener);
+        };
+      };
+
+      const notify = Effect.sync(() => {
         revision++;
-        yield* Deferred.succeed(previous, undefined);
+        const pending = [...listeners];
+
+        listeners.clear();
+        for (const listener of pending) listener();
       });
 
       const minimumAlarmDelay = Math.max(1, Math.ceil(config.alarmBackoffBase / 2));
@@ -1194,8 +1216,13 @@ export class ThreadMutationGate extends Context.Service<
         recordProgress,
         activeLanes: Effect.sync(() => new Set(activeLanes.keys())),
         revision: Effect.sync(() => revision),
+        observeChange,
         awaitChange: (observed) =>
-          Effect.suspend(() => (observed === revision ? Deferred.await(changed) : Effect.void)),
+          Effect.callback((resume) => {
+            const remove = observeChange(observed, () => resume(Effect.void));
+
+            return Effect.sync(remove);
+          }),
         withSnapshot: (body) =>
           generationGate.withPermit(Effect.flatMap(Ref.get(activeMutations), body)),
       });
@@ -1271,6 +1298,7 @@ export class ThreadMaintenance extends Context.Service<
       const runtime = yield* DurableAgentRuntime;
       const recoveryConfig = yield* DurableRuntimeConfig;
       const ledger = yield* SubmissionLedger;
+      const listNonterminal = ledger.listNonterminal ?? Stream.runCollect(ledger.scanNonterminal);
       const wakes = yield* WakeScheduler;
       const hints = yield* DurableAlarmService;
       const alarms = yield* ThreadMaintenanceAlarm;
@@ -1292,6 +1320,8 @@ export class ThreadMaintenance extends Context.Service<
       const messages = yield* ThreadMessageDelivery;
       const host = yield* ThreadHostMaintenance;
       const framework = yield* ThreadNativeMaintenance;
+      const placement = yield* Effect.serviceOption(ThreadObjectPlacement);
+      const nativeThread = Option.isSome(placement) ? placement.value.threadId : undefined;
 
       const nativeDispatchConcurrency = () => (framework.singleThreadRuntime === runtime ? 1 : 2);
 
@@ -1576,9 +1606,7 @@ export class ThreadMaintenance extends Context.Service<
         const now = yield* Clock.currentTimeMillis;
 
         // Fault-only discovery uses control state even when retained payloads cannot decode.
-        const submissions =
-          current ??
-          (result.blocked.length === 0 ? [] : yield* Stream.runCollect(ledger.scanNonterminal));
+        const submissions = current ?? (result.blocked.length === 0 ? [] : yield* listNonterminal);
 
         yield* failpoint.hit("maintenance:recovery-status:before");
 
@@ -1693,7 +1721,11 @@ export class ThreadMaintenance extends Context.Service<
 
         do {
           const result = yield* runtime
-            .runRecovery({ threadId, ...(cursor === undefined ? {} : { cursor }) })
+            .runRecovery({
+              threadId,
+              deferUnclaimedAdmissions: true,
+              ...(cursor === undefined ? {} : { cursor }),
+            })
             .pipe(Effect.provideService(CurrentNativeSource, true));
 
           // Persist each bounded pass before a claim; eviction resumes past consumed metadata.
@@ -2141,14 +2173,21 @@ export class ThreadMaintenance extends Context.Service<
           },
         );
 
-        const current = yield* Stream.runCollect(ledger.scanNonterminal);
+        const current = yield* listNonterminal;
 
-        let workOwners = yield* runtime
-          .discoverWorkThreads({
-            limit: 32,
-            ...(afterWorkThread === undefined ? {} : { afterThreadId: afterWorkThread }),
-          })
-          .pipe(Effect.provideService(CurrentNativeSource, true));
+        // A current admission proves this native placement is materialized. Empty Objects
+        // still discover retained canonical obligations without inventing a recovery owner.
+        let workOwners =
+          framework.singleThreadRuntime === runtime &&
+          nativeThread !== undefined &&
+          current.some((submission) => submission.threadId === nativeThread)
+            ? { threadIds: [nativeThread], afterThreadId: undefined }
+            : yield* runtime
+                .discoverWorkThreads({
+                  limit: 32,
+                  ...(afterWorkThread === undefined ? {} : { afterThreadId: afterWorkThread }),
+                })
+                .pipe(Effect.provideService(CurrentNativeSource, true));
 
         if (workOwners.threadIds.length === 0 && afterWorkThread !== undefined)
           workOwners = yield* runtime
@@ -2410,7 +2449,7 @@ export class ThreadMaintenance extends Context.Service<
           };
         }
 
-        const remaining = yield* Stream.runCollect(ledger.scanNonterminal);
+        const remaining = yield* listNonterminal;
         const waitingHeads = new Map<ThreadId, boolean>();
 
         // Selected recovery must finish before its generation can be acknowledged: terminal
@@ -2577,12 +2616,22 @@ export class ThreadMaintenance extends Context.Service<
         dispatchUntil: DateTime.Utc,
         observed: MaintenanceObservation,
       ) {
+        const leanSelection =
+          framework.singleThreadRuntime === runtime &&
+          publication === emptyPublication &&
+          host.lanes.length === 0 &&
+          framework.lanes.length === 0;
+
         // Subscribe before the first snapshot. Durable enrollment recovers eviction;
         // producer completion and wake hints make work visible during this incarnation.
-        const notified = (yield* Stream.toPull(wakes.wakes)).pipe(
-          Effect.asVoid,
-          Effect.catch(() => Effect.never),
-        );
+        // Native source mutations already notify the revision waiter below. A replacement
+        // or shared runtime keeps the generic wake stream; hints confer no authority.
+        const notified = leanSelection
+          ? Effect.never
+          : (yield* Stream.toPull(wakes.wakes)).pipe(
+              Effect.asVoid,
+              Effect.catch(() => Effect.never),
+            );
 
         // A wake may observe temporary backoff while this event's recovery is still running.
         // Its completion must retain the original actionable observation for acknowledgement.
@@ -2634,49 +2683,8 @@ export class ThreadMaintenance extends Context.Service<
           discoveryPending: false,
         };
 
-        let recoveryFiber: Fiber.Fiber<void, MaintenancePassFailure> | undefined = yield* fork(
-          Effect.gen(function* () {
-            for (const threadId of yield* Deferred.await(recovery.queue)) {
-              yield* failpoint.hit("maintenance:select:before");
-              yield* runTransaction("select old recovery lane", () =>
-                dueQueue.transaction(async (transaction) => {
-                  const { state } = await readMaintenanceState(transaction);
-
-                  await transaction.put(
-                    MAINTENANCE_STATE_KEY,
-                    encodeMaintenanceState(
-                      ThreadMaintenanceState.make({
-                        ...state,
-                        lastRecoveredThreadId: threadId,
-                      }),
-                    ),
-                  );
-                }),
-              );
-              yield* failpoint.hit("maintenance:select:after");
-              yield* recoverThread(threadId, recovery);
-              recovery.pending.delete(threadId);
-              if (!recovery.faults.has(threadId)) yield* wakes.notify(threadId);
-            }
-          }),
-        );
-
-        const projectionRow = (yield* queueSnapshot).find((row) => row.id === DueQueue.Projection);
+        let recoveryFiber: Fiber.Fiber<void, MaintenancePassFailure> | undefined;
         let backfill: Fiber.Fiber<void, DurableAlarmError | ThreadProjectionError> | undefined;
-
-        if (
-          projectionRow !== undefined &&
-          projectionRow.dueAt !== null &&
-          projectionRow.dueAt <= (yield* Clock.currentTimeMillis) &&
-          !(yield* mutations.activeLanes).has(DueQueue.Projection)
-        )
-          backfill = yield* fork(
-            runQueued(
-              projectionRow,
-              projection.drain.pipe(Effect.andThen(projection.pendingDeadline)),
-              observed,
-            ).pipe(Effect.timeoutOption(config.projectionDispatchTimeoutMillis), Effect.asVoid),
-          );
 
         const dispatch: NativeDispatch = {
           scope: auxiliaryScope,
@@ -2688,18 +2696,79 @@ export class ThreadMaintenance extends Context.Service<
           needsCheckpoint: false,
         };
 
-        let native: Fiber.Fiber<NativePassResult, MaintenancePassFailure> | undefined = yield* fork(
-          advance(started, yieldAfter, observed, recovery, dispatch),
-        );
+        // Selection is bounded local work, not an independently owned wave. It opens
+        // actual Attempt scopes, then returns; empty lanes create no fibers.
+        let native: Fiber.Fiber<NativePassResult, MaintenancePassFailure> | undefined;
+        let result: NativePassResult;
+        let backlog: ReadonlyArray<ThreadId> | undefined;
 
-        let result: NativePassResult = {
-          phase: "caught-up",
-          nonterminal: started.nonterminal,
-          nextAttemptAt: undefined,
-        };
+        if (leanSelection) {
+          result = yield* advance(started, yieldAfter, observed, recovery, dispatch);
+          recovery.started = true;
+          yield* Deferred.succeed(recovery.queue, []);
+          backlog = yield* Deferred.await(recovery.queue);
+        } else {
+          // Required publication and arbitrary host lanes keep independent opportunities
+          // while selection is suspended in an application callback.
+          native = yield* fork(advance(started, yieldAfter, observed, recovery, dispatch));
+          result = {
+            phase: "caught-up",
+            nonterminal: started.nonterminal,
+            nextAttemptAt: undefined,
+          };
+        }
+
+        if (backlog === undefined || backlog.length > 0) {
+          recoveryFiber = yield* fork(
+            Effect.gen(function* () {
+              for (const threadId of backlog ?? (yield* Deferred.await(recovery.queue))) {
+                yield* failpoint.hit("maintenance:select:before");
+                yield* runTransaction("select old recovery lane", () =>
+                  dueQueue.transaction(async (transaction) => {
+                    const { state } = await readMaintenanceState(transaction);
+
+                    await transaction.put(
+                      MAINTENANCE_STATE_KEY,
+                      encodeMaintenanceState(
+                        ThreadMaintenanceState.make({
+                          ...state,
+                          lastRecoveredThreadId: threadId,
+                        }),
+                      ),
+                    );
+                  }),
+                );
+                yield* failpoint.hit("maintenance:select:after");
+                yield* recoverThread(threadId, recovery);
+                recovery.pending.delete(threadId);
+                if (!recovery.faults.has(threadId)) yield* wakes.notify(threadId);
+              }
+            }),
+          );
+        }
+        const projectionRow = (yield* queueSnapshot).find((row) => row.id === DueQueue.Projection);
+
+        if (
+          projectionRow !== undefined &&
+          projectionRow.dueAt !== null &&
+          projectionRow.dueAt <= (yield* Clock.currentTimeMillis) &&
+          !(yield* mutations.activeLanes).has(DueQueue.Projection)
+        ) {
+          backfill = yield* fork(
+            runQueued(
+              projectionRow,
+              projection.drain.pipe(Effect.andThen(projection.pendingDeadline)),
+              observed,
+            ).pipe(Effect.timeoutOption(config.projectionDispatchTimeoutMillis), Effect.asVoid),
+          );
+        }
 
         let phase = result.phase;
-        let nativeCheck = false;
+
+        let nativeCheck =
+          result.dispatched === true && dispatch.active.size < nativeDispatchConcurrency();
+
+        observed.nativeOnly = dispatch.active.size > 0;
         const until = DateTime.toEpochMillis(yieldAfter);
         const dispatchEnd = DateTime.toEpochMillis(dispatchUntil);
 
@@ -2907,12 +2976,31 @@ export class ThreadMaintenance extends Context.Service<
             ...lanes.map((lane) => lane.fiber),
           ].filter((fiber) => fiber !== undefined);
 
-          const ready = yield* Effect.raceAllFirst([
-            awaitAnyCompletion(completing),
-            notified.pipe(Effect.as("scan" as const)),
-            mutations.awaitChange(queueRevision).pipe(Effect.as("scan" as const)),
-            Effect.sleep(Math.max(0, next - now)).pipe(Effect.as("scan" as const)),
-          ]);
+          const changed = awaitAnyCompletion(completing, queueRevision);
+
+          // An occupied native-only slot cannot admit another Attempt. With no auxiliary
+          // wake before yield, the timer would only switch to joining that same Attempt.
+          // Incoming work still wakes this callback; all new waves recheck the deadline.
+          const joiningNative =
+            leanSelection &&
+            native === undefined &&
+            dispatch.active.size === 1 &&
+            completing.length === 1 &&
+            !queued.some(
+              (row) =>
+                row.id !== DueQueue.Native &&
+                row.dueAt !== null &&
+                row.dueAt > now &&
+                row.dueAt < until,
+            );
+
+          const ready = yield* joiningNative
+            ? changed
+            : Effect.raceAllFirst([
+                changed,
+                ...(leanSelection ? [] : [notified.pipe(Effect.as("scan" as const))]),
+                Effect.sleep(Math.max(0, next - now)).pipe(Effect.as("scan" as const)),
+              ]);
 
           if (ready === "scan") {
             nativeCheck = true;
@@ -2964,7 +3052,9 @@ export class ThreadMaintenance extends Context.Service<
         observed: MaintenanceObservation,
       ): Effect.fn.Return<MaintenancePassReport, MaintenancePassFailure, Scope.Scope> {
         const concurrent = yield* Effect.exit(
-          Effect.scoped(dispatch(yieldAfter, dispatchUntil, observed)),
+          Effect.scoped(dispatch(yieldAfter, dispatchUntil, observed)).pipe(
+            Effect.provideService(ThreadMutationGate, mutations),
+          ),
         );
 
         // Closing the concurrent scope first releases every native Attempt and its resources.

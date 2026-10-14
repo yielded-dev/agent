@@ -1045,6 +1045,14 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
   const gate = yield* Semaphore.make(1);
   const cached = new Map<RunId, ProgressState>();
 
+  let verifiedEmpty:
+    | {
+        readonly runId: RunId;
+        readonly through: CanonicalSequence;
+        readonly writer: CurrentRunWriter["Service"];
+      }
+    | undefined;
+
   const reservations = new Map<
     RecordId,
     {
@@ -1334,7 +1342,14 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     let executionCount = 0;
 
     for (const [runId, facts] of groups) {
-      const previous = yield* loadState(runId, after);
+      const empty =
+        verifiedEmpty?.runId === runId &&
+        verifiedEmpty.through === after &&
+        // Settlement preparation need not have a Run writer; absence disables reuse.
+        verifiedEmpty.writer ===
+          Option.getOrUndefined(yield* Effect.serviceOption(CurrentRunWriter));
+
+      const previous = empty ? undefined : yield* loadState(runId, after);
 
       let original = facts.find(
         (record) =>
@@ -1375,7 +1390,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
       if (previous === undefined && original === undefined)
         return yield* failure("Run has no accepted original input");
 
-      if (previous === undefined) {
+      if (previous === undefined && !empty) {
         const settled = yield* provide(
           getRecord({
             threadId,
@@ -1925,6 +1940,29 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     reserve,
     defer,
     check,
+    /** Internal read view immediately after this writer's acknowledged commit, while
+     * holding its initialization gates. Never authority across ownership or writes. */
+    acceptedCheckpoint: (runId: RunId) => cached.get(runId)?.checkpoint,
+    /** Scope a verified empty execution/evidence view to one owned initialization body.
+     * The caller holds progress+mutation gates; a changed writer or tail never reuses it. */
+    withVerifiedEmptyRun: <A, E, R>(
+      runId: RunId,
+      through: CanonicalSequence,
+      body: Effect.Effect<A, E, R>,
+    ): Effect.Effect<A, E, R | CurrentRunWriter> =>
+      Effect.flatMap(CurrentRunWriter, (writer) => {
+        const view = { runId, through, writer };
+
+        verifiedEmpty = view;
+
+        return body.pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              if (verifiedEmpty === view) verifiedEmpty = undefined;
+            }),
+          ),
+        );
+      }),
     stageUsage: (runId: RunId, bytes: number) => {
       if (bytes === 0) stagedUsage.delete(runId);
       else stagedUsage.set(runId, bytes);

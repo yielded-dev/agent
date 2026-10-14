@@ -510,13 +510,29 @@ const makeJournal = Effect.fnUntraced(function* (
     <A, E extends { readonly _tag: string }>(
       effect: Effect.Effect<A, E>,
     ): Effect.Effect<A, E | DoStorageError> =>
-      state.owner.withMutation(owner.transaction(storageResult(effect, expected))).pipe(
-        Effect.provideService(SqlClient.SqlClient, sql),
-        Effect.mapError((error) => (isSqlError(error) ? storageError(operation)(error) : error)),
-        Effect.tapError(annotateStorageError),
-        Effect.withSpan("DoJournal.withWriteTransaction", { attributes: { operation } }),
-        Effect.flatMap(Effect.fromResult),
-      );
+      Effect.withFiber((fiber) => {
+        const body = state.owner
+          .withMutation(owner.transaction(storageResult(effect, expected)))
+          .pipe(
+            Effect.provideService(SqlClient.SqlClient, sql),
+            Effect.mapError((error) =>
+              isSqlError(error) ? storageError(operation)(error) : error,
+            ),
+          );
+
+        const traced =
+          fiber.getRef(References.TracerEnabled) &&
+          fiber.getRef(Tracer.Tracer) !== Tracer.nativeTracer;
+
+        return (
+          traced
+            ? body.pipe(
+                Effect.tapError(annotateStorageError),
+                Effect.withSpan("DoJournal.withWriteTransaction", { attributes: { operation } }),
+              )
+            : body
+        ).pipe(Effect.flatMap(Effect.fromResult));
+      });
 
   const materialize = Effect.fnUntraced(function* (
     threadId: string,

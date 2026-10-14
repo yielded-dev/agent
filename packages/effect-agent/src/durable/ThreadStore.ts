@@ -446,7 +446,13 @@ const captureExecution = (input: ExecutionUpdate) => {
   const json = `{"previousRevision":${update.previousRevision},"checkpoint":${checkpointJson},"facts":[${facts.map(({ json }) => json).join(",")}],"retire":${update.retire}}`;
 
   return Result.succeed(
-    Object.freeze({ update, json, checkpointJson, bytes: utf8ByteLength(json) }),
+    Object.freeze({
+      update,
+      json,
+      checkpointJson,
+      factsJson: JSON.stringify(facts.map(({ wire }) => wire)),
+      bytes: utf8ByteLength(json),
+    }),
   );
 };
 
@@ -497,6 +503,8 @@ export interface PreparedAppend extends AppendRequest {
     readonly json: string;
     /** Checkpoint wire from the same detached, validated execution capture. */
     readonly checkpointJson: string;
+    /** Schema-encoded fact array from this same capture, for the stable retry digest. */
+    readonly factsJson: string;
     readonly bytes: number;
   }>;
   readonly records: ReadonlyArray<{

@@ -824,6 +824,7 @@ const makeRoutedLedgerServices = Effect.fnUntraced(function* (options: RoutedPor
 
     // The local scan IS the whole worklist: one Thread per Object (durability §5).
     scanNonterminal: local.scanNonterminal,
+    ...(local.listNonterminal === undefined ? {} : { listNonterminal: local.listNonterminal }),
 
     readAbortIntent: (request) =>
       submissionTarget("ledger read abort intent", request.submissionId).pipe(
@@ -1046,6 +1047,13 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
             ).pipe(Effect.map((reply) => reply.range)),
     },
     work: {
+      isOnlyFreshAdmission: (request) => {
+        const prove = local.work?.isOnlyFreshAdmission;
+
+        return prove !== undefined && options.ownsThread(request.threadId)
+          ? prove(request)
+          : Effect.succeed(false);
+      },
       threads: (request) =>
         Effect.flatMap(CurrentNativeSource, (nativeSource) =>
           nativeSource && local.work !== undefined

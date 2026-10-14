@@ -1355,6 +1355,14 @@ const makeServices = Effect.fnUntraced(function* () {
 
         // The INSERT (never replay or hydration) proves these new submission-owned sets
         // empty. Gated writes update them; rollback/invalidation discards that proof.
+        // MAX(queue_sequence) and this insert share the transaction: no later row exists.
+        // Every matching admission invalidates this complete empty suffix before readiness.
+        submissionViews.seedMatching(
+          JSON.stringify(["joining-suffix", validated.threadId, queueSequence]),
+          (row) => row.thread_id === validated.threadId && row.queue_sequence > queueSequence,
+          [],
+          0,
+        );
         rows.aborts.seed("submission_id", mintedSubmissionId, []);
         rows.submissions.seed("joined_host_submission_id", mintedSubmissionId, []);
         rows.approvals.seed("submission_id", mintedSubmissionId, []);
@@ -1574,7 +1582,28 @@ const makeServices = Effect.fnUntraced(function* () {
       Effect.gen(function* () {
         if (owner.hasOwner(validated.threadId)) return Option.none<Claim>();
 
-        const headRows = yield* sql<Record<string, unknown>>`
+        const active = yield* activeNonterminal;
+        const heads: Array<SubmissionRow> = [];
+
+        const limit =
+          validated.handoff === undefined ? 1 : validated.handoff.deferredSubmissionIds.length + 1;
+
+        if (active.length <= 128) {
+          const candidates = active
+            .filter((row) => row.thread_id === validated.threadId)
+            .sort((left, right) => left.queue_sequence - right.queue_sequence);
+
+          for (const candidate of candidates) {
+            if (
+              candidate.state === "unknown" &&
+              Option.isNone(yield* readAbortIntent(operation, candidate.submission_id))
+            )
+              continue;
+            heads.push(yield* requireSubmission(operation, candidate.submission_id));
+            if (heads.length === limit) break;
+          }
+        } else {
+          const headRows = yield* sql<Record<string, unknown>>`
             SELECT ${submissionColumns}
             FROM effect_agent_submissions
             WHERE thread_id = ${validated.threadId}
@@ -1589,7 +1618,8 @@ const makeServices = Effect.fnUntraced(function* () {
             LIMIT ${validated.handoff === undefined ? 1 : validated.handoff.deferredSubmissionIds.length + 1}
           `.pipe(Effect.mapError(sqlFailure(operation)));
 
-        const heads = yield* decodeSubmissionRows(operation, validated.threadId, headRows);
+          heads.push(...(yield* decodeSubmissionRows(operation, validated.threadId, headRows)));
+        }
 
         if (heads.length === 0) return Option.none<Claim>();
         let head = heads[0];
@@ -2239,8 +2269,7 @@ const makeServices = Effect.fnUntraced(function* () {
 
     yield* hitFailpoint("ledger:claim-joining:before", operation);
 
-    const claims = yield* inWriteTransaction(
-      operation,
+    const claims = yield* owner.withMutation(
       Effect.gen(function* () {
         const host = yield* requireSubmission(operation, validated.hostSubmissionId);
 
@@ -2260,68 +2289,92 @@ const makeServices = Effect.fnUntraced(function* () {
 
         if (stopped.length > 0) return [];
 
-        const laterRows = yield* sql<Record<string, unknown>>`
-          SELECT ${submissionColumns}
-          FROM effect_agent_submissions
-          WHERE thread_id = ${validated.threadId}
-            AND queue_sequence > ${host.queue_sequence}
-          ORDER BY queue_sequence ASC
-        `.pipe(Effect.mapError(sqlFailure(operation)));
+        // Retain only an empty complete suffix. Any later admission invalidates this view;
+        // nonempty rows keep their SQL ordering, and rollback discards the empty proof.
+        const later = yield* submissionViews
+          .matching(
+            JSON.stringify(["joining-suffix", validated.threadId, host.queue_sequence]),
+            (row) =>
+              row.thread_id === validated.threadId && row.queue_sequence > host.queue_sequence,
+            sql`
+              SELECT ${submissionColumns}
+              FROM effect_agent_submissions
+              WHERE thread_id = ${validated.threadId}
+                AND queue_sequence > ${host.queue_sequence}
+              ORDER BY queue_sequence ASC
+            `,
+            0,
+          )
+          .pipe(
+            Effect.mapError((error) =>
+              error._tag === "SqlError"
+                ? sqlFailure(operation)(error)
+                : internalFailure(operation)(error),
+            ),
+          );
 
-        const later = yield* decodeSubmissionRows(operation, validated.threadId, laterRows);
-        const claimed: Array<JoiningClaim> = [];
+        if (later.length === 0) return [];
 
-        for (const row of later) {
-          if (claimed.length >= validated.maxCount) break;
-          // Rows already claimed by THIS host extend its contiguous prefix and are skipped;
-          // the coordinator re-delivers already-joined input through the coverage rule.
-          if (
-            (row.state === "joining" || row.state === "joined") &&
-            row.joined_host_submission_id === validated.hostSubmissionId
-          ) {
-            continue;
-          }
-          // P7 §7(c): an aborted-settled row is a CLOSED obligation, not a gap — recovery
-          // settles aborted never-claimed queued work immediately, and settlement order of
-          // never-run work is not execution order (DUR-004 bounds execution).
-          if (row.state === "settled" && row.settled_outcome === "aborted") continue;
-          // Any other non-ready row — an admitted-not-ready gap in particular — breaks the
-          // contiguous ready prefix (plan §2.5); later ready work stays queued (DUR-004).
-          if (row.state !== "ready") break;
-          const canonical = yield* readCanonicalSettlement(operation, row);
+        // The reader gate stays held through promotion. Nonempty candidates retain
+        // their native transaction, live-owner checks and contiguous-prefix rules.
+        return yield* inWriteTransaction(
+          operation,
+          Effect.gen(function* () {
+            const claimed: Array<JoiningClaim> = [];
 
-          if (canonical?.settlement.outcome === "aborted") continue;
-          if (canonical !== undefined) break;
-          yield* sql`
+            for (const row of later) {
+              if (claimed.length >= validated.maxCount) break;
+              // Rows already claimed by THIS host extend its contiguous prefix and are skipped;
+              // the coordinator re-delivers already-joined input through the coverage rule.
+              if (
+                (row.state === "joining" || row.state === "joined") &&
+                row.joined_host_submission_id === validated.hostSubmissionId
+              ) {
+                continue;
+              }
+              // P7 §7(c): an aborted-settled row is a CLOSED obligation, not a gap — recovery
+              // settles aborted never-claimed queued work immediately, and settlement order of
+              // never-run work is not execution order (DUR-004 bounds execution).
+              if (row.state === "settled" && row.settled_outcome === "aborted") continue;
+              // Any other non-ready row — an admitted-not-ready gap in particular — breaks the
+              // contiguous ready prefix (plan §2.5); later ready work stays queued (DUR-004).
+              if (row.state !== "ready") break;
+              const canonical = yield* readCanonicalSettlement(operation, row);
+
+              if (canonical?.settlement.outcome === "aborted") continue;
+              if (canonical !== undefined) break;
+              yield* sql`
             UPDATE effect_agent_submissions
             SET state = 'joining', joined_host_submission_id = ${validated.hostSubmissionId}
             WHERE submission_id = ${row.submission_id}
            RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
-            rows.submissions.write,
-            Effect.mapError(internalFailure(operation)),
-          );
+                rows.submissions.write,
+                Effect.mapError(internalFailure(operation)),
+              );
 
-          const inputPayload = yield* parseStoredJsonText(row.input_json).pipe(
-            Effect.mapError((error) =>
-              corruptionFailure(
-                operation,
-                "effect_agent_submissions",
-                row.submission_id,
-                error.message,
-              ),
-            ),
-          );
+              const inputPayload = yield* parseStoredJsonText(row.input_json).pipe(
+                Effect.mapError((error) =>
+                  corruptionFailure(
+                    operation,
+                    "effect_agent_submissions",
+                    row.submission_id,
+                    error.message,
+                  ),
+                ),
+              );
 
-          claimed.push(
-            yield* decodeJoiningClaim({
-              submissionId: row.submission_id,
-              queueSequence: row.queue_sequence,
-              inputPayload,
-            }).pipe(Effect.mapError(internalFailure(operation))),
-          );
-        }
+              claimed.push(
+                yield* decodeJoiningClaim({
+                  submissionId: row.submission_id,
+                  queueSequence: row.queue_sequence,
+                  inputPayload,
+                }).pipe(Effect.mapError(internalFailure(operation))),
+              );
+            }
 
-        return claimed;
+            return claimed;
+          }),
+        );
       }),
     );
 
@@ -3493,52 +3546,67 @@ const makeServices = Effect.fnUntraced(function* () {
     return [decoded, next] as const;
   });
 
-  const scanNonterminal: Stream.Stream<SubmissionWorkItem, LedgerError> = Stream.unwrap(
-    state.read(
-      Effect.gen(function* () {
-        // Cache only a complete bounded active set. Large hosts keep the paged scan.
-        const active = yield* cached(
-          workRows.matching(
-            "nonterminal",
-            (row) => row.state !== "settled",
-            sql`SELECT submission_id, thread_id, queue_sequence, principal, idempotency_key,
-              deployment_id, receipt_id, state
-              FROM effect_agent_submissions WHERE state <> 'settled' LIMIT 129`,
-            128,
-          ),
-          "ledger scan nonterminal",
-        );
-
-        if (active.length > 128)
-          return Stream.paginate<ScanCursor | undefined, SubmissionWorkItem, LedgerError>(
-            undefined,
-            scanPage,
-          );
-
-        const sorted = [...active].sort((left, right) =>
-          left.thread_id < right.thread_id
-            ? -1
-            : left.thread_id > right.thread_id
-              ? 1
-              : left.queue_sequence - right.queue_sequence,
-        );
-
-        const work = yield* Schema.decodeEffect(Schema.Array(SubmissionWorkItem))(
-          sorted.map((row) => ({
-            submissionId: row.submission_id,
-            threadId: row.thread_id,
-            queueSequence: row.queue_sequence,
-            principal: row.principal,
-            idempotencyKey: row.idempotency_key,
-            deploymentId: row.deployment_id,
-            receiptId: row.receipt_id,
-            state: row.state,
-          })),
-        ).pipe(Effect.mapError(internalFailure("ledger scan nonterminal")));
-
-        return Stream.fromIterable(work);
-      }),
+  // Both discovery and head selection use this same complete, owner-invalidated bounded view.
+  const activeNonterminal = cached(
+    workRows.matching(
+      "nonterminal",
+      (row) => row.state !== "settled",
+      sql`SELECT submission_id, thread_id, queue_sequence, principal, idempotency_key,
+          deployment_id, receipt_id, state
+          FROM effect_agent_submissions WHERE state <> 'settled' LIMIT 129`,
+      128,
     ),
+    "ledger scan nonterminal",
+  );
+
+  const boundedNonterminal = state.read(
+    Effect.gen(function* () {
+      // Cache only a complete bounded active set. Large hosts keep the paged scan.
+      const active = yield* activeNonterminal;
+
+      if (active.length > 128) return undefined;
+
+      const sorted = [...active].sort((left, right) =>
+        left.thread_id < right.thread_id
+          ? -1
+          : left.thread_id > right.thread_id
+            ? 1
+            : left.queue_sequence - right.queue_sequence,
+      );
+
+      const work = yield* Schema.decodeEffect(Schema.Array(SubmissionWorkItem))(
+        sorted.map((row) => ({
+          submissionId: row.submission_id,
+          threadId: row.thread_id,
+          queueSequence: row.queue_sequence,
+          principal: row.principal,
+          idempotencyKey: row.idempotency_key,
+          deploymentId: row.deployment_id,
+          receiptId: row.receipt_id,
+          state: row.state,
+        })),
+      ).pipe(Effect.mapError(internalFailure("ledger scan nonterminal")));
+
+      return work;
+    }),
+  );
+
+  const pagedNonterminal = Stream.paginate<ScanCursor | undefined, SubmissionWorkItem, LedgerError>(
+    undefined,
+    scanPage,
+  );
+
+  // Large scans keep their bounded page lifetime and streaming backpressure.
+  const scanNonterminal = Stream.unwrap(
+    Effect.map(boundedNonterminal, (work) =>
+      work === undefined ? pagedNonterminal : Stream.fromIterable(work),
+    ),
+  );
+
+  const listNonterminal = Effect.filterOrElse(
+    boundedNonterminal,
+    (work) => work !== undefined,
+    () => Stream.runCollect(pagedNonterminal),
   );
 
   const readAbortIntentForSubmission: SubmissionLedger["Service"]["readAbortIntent"] =
@@ -3790,6 +3858,7 @@ const makeServices = Effect.fnUntraced(function* () {
       beginChildBudgetRelease,
       releaseChildBudget,
       scanNonterminal,
+      listNonterminal,
       loadRecoverySnapshot,
       readAbortIntent: readAbortIntentForSubmission,
     }),

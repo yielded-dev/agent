@@ -436,6 +436,36 @@ export interface RunJournalProjection {
   readonly pendingContextToolCallId?: string | undefined;
 }
 
+const initialPolicyUsage = () => ({
+  committedTurns: 0,
+  toolCalls: 0,
+  programmaticToolCalls: 0,
+  consecutiveToolFailures: 0,
+  finalizationUsed: false,
+  modelRestarts: 0,
+});
+
+const initialUsage = (modelUsage: Array<ModelCallUsage>) => ({
+  modelCalls: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+  lastInputTokens: 0,
+  lastOutputTokens: 0,
+  costMicrousd: 0,
+  modelUsage,
+});
+
+/** Internal first-Run projection after exact input/checkpoint-absence verification. The
+ * new UserInputRecorded contributes no model message; the engine evaluates it later. */
+export const initialRunJournal = (history: Prompt.Prompt): RunJournalProjection => ({
+  policyUsage: RunPolicyUsage.make(initialPolicyUsage()),
+  usage: initialUsage([]),
+  prompt: history,
+  historyBefore: history,
+  historyFrom: CanonicalSequence.make(1),
+  committedTurns: 0,
+});
+
 interface ProjectedResponseUsage {
   readonly modelCalls: number;
   readonly inputTokens: number;
@@ -1050,15 +1080,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
   const modelUsage: Array<ModelCallUsage> = [];
   let unobservedModelCalls = 0;
 
-  const usage = {
-    modelCalls: 0,
-    inputTokens: 0,
-    outputTokens: 0,
-    lastInputTokens: 0,
-    lastOutputTokens: 0,
-    costMicrousd: 0,
-    modelUsage,
-  };
+  const usage = initialUsage(modelUsage);
 
   let toolSelection: Selection | undefined;
   let usageTurn = 0;
@@ -1080,14 +1102,7 @@ export const projectRunJournalStream = Effect.fnUntraced(function* <
   let pendingContextToolCallId: string | undefined;
   let ownerTerminated = false;
 
-  const policyUsage = {
-    committedTurns: 0,
-    toolCalls: 0,
-    programmaticToolCalls: 0,
-    consecutiveToolFailures: 0,
-    finalizationUsed: false,
-    modelRestarts: 0,
-  };
+  const policyUsage = initialPolicyUsage();
 
   const accountResponse = Effect.fnUntraced(function* (
     envelope: JournalRecordEnvelope,
