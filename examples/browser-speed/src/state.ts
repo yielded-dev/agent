@@ -4,6 +4,7 @@ import { AsyncResult, Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 
 import {
   LabApi,
+  LabError,
   Report,
   VisitorKey,
   requiresReasoning,
@@ -279,15 +280,21 @@ export const sendChatAtom = LabClient.runtime.fn<
         ].slice(-100),
       );
     }).pipe(
-      Effect.tapError(() =>
+      Effect.tapCause((cause) =>
         Effect.sync(() => {
+          const error = Option.flatMap(
+            Cause.findErrorOption(cause),
+            Schema.decodeUnknownOption(LabError),
+          );
+
+          if (Option.isSome(error) && error.value.code === "expired") get.set(chatIdAtom, null);
           get.set(
             chatTurnsAtom,
             get(chatTurnsAtom).map((turn) =>
               turn.id === id
                 ? {
                     ...turn,
-                    response: "Message failed. Check the browser status below before trying again.",
+                    response: failureMessage(cause),
                   }
                 : turn,
             ),
@@ -321,11 +328,9 @@ export const exportAtom = Atom.fn<void>()(
   }),
 );
 
-export const errorMessage = <A, E>(result: AsyncResult.AsyncResult<A, E>) => {
-  if (!AsyncResult.isFailure(result)) return null;
-
+const failureMessage = <E>(cause: Cause.Cause<E>) => {
   const error = Option.flatMap(
-    Cause.findErrorOption(result.cause),
+    Cause.findErrorOption(cause),
     Schema.decodeUnknownOption(Schema.Struct({ message: Schema.String })),
   );
 
@@ -333,6 +338,9 @@ export const errorMessage = <A, E>(result: AsyncResult.AsyncResult<A, E>) => {
 
   return "The connection to the Worker was interrupted. Check the browser status before running again.";
 };
+
+export const errorMessage = <A, E>(result: AsyncResult.AsyncResult<A, E>) =>
+  AsyncResult.isFailure(result) ? failureMessage(result.cause) : null;
 
 /** Durations use the page-ready boundary on the same Worker clock. */
 export const fromReady = (report: Report, at: number | null | undefined): number | null =>

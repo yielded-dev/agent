@@ -1,4 +1,5 @@
 import { assert, expectTypeOf, it } from "@effect/vitest";
+import { InMemory } from "@yielded/agent";
 import {
   BrowserSessionError,
   BrowserSessionReference,
@@ -69,6 +70,7 @@ it.effect(
           {
             model: "unused",
             apiKey: "fixture-key",
+            history: InMemory.layer,
             kitesurf: Effect.fnUntraced(function* (retainClose) {
               opened++;
               retainClose(
@@ -143,7 +145,7 @@ it.effect(
             },
             alarm: () => Effect.void,
           },
-          { model: "unused", apiKey: "fixture-key" },
+          { model: "unused", apiKey: "fixture-key", history: InMemory.layer },
         );
 
         const services = BrowserSessions.of({
@@ -224,7 +226,7 @@ it.effect(
           },
           alarm: () => Effect.void,
         },
-        { model: "unused", apiKey: "fixture-key" },
+        { model: "unused", apiKey: "fixture-key", history: InMemory.layer },
       );
 
       const unused = () => Effect.die("Lost work must not acquire or attach a browser");
@@ -346,7 +348,11 @@ it.effect(
               }),
           };
 
-          const owner = makeOwner(store, { model: "unused", apiKey: "fixture-key" });
+          const owner = makeOwner(store, {
+            model: "unused",
+            apiKey: "fixture-key",
+            history: InMemory.layer,
+          });
 
           const services = BrowserSessions.of({
             createAttached: () => Effect.die("The lab creates and attaches separately"),
@@ -387,7 +393,12 @@ it.effect(
             assert.isTrue(reached.has(location), `Unreached failpoint: ${location}`);
             const admitted = store.read().admitted.includes(input.id);
             const acquiredBeforeRecovery = acquisitions;
-            const recovered = makeOwner(store, { model: "unused", apiKey: "fixture-key" });
+
+            const recovered = makeOwner(store, {
+              model: "unused",
+              apiKey: "fixture-key",
+              history: InMemory.layer,
+            });
 
             yield* recovered.close();
             assert.isFalse(alive, location);

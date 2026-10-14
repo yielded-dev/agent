@@ -1,10 +1,10 @@
-import { InMemory } from "@yielded/agent";
 import {
   BrowserSessionReference,
   BrowserSessions,
 } from "@yielded/agent-platform-cloudflare/browser-session";
 import { ThreadId } from "@yielded/agent/identifiers";
-import { Cause, Clock, Effect, Exit, Fiber, Layer, Option, Redacted, Schema, Scope } from "effect";
+import type { ThreadHistory } from "@yielded/agent/thread-history";
+import { Cause, Clock, Effect, Exit, Fiber, type Layer, Option, Redacted, Schema } from "effect";
 
 import { Browser, makeBrowser } from "./browser.ts";
 import {
@@ -31,7 +31,8 @@ export interface VisitorKeys {
 }
 
 export const Control = Schema.Struct({
-  version: Schema.Literal(3),
+  version: Schema.Literal(4),
+  chatId: Schema.NullOr(Schema.String),
   reference: Schema.NullOr(Schema.toCodecJson(BrowserSessionReference)),
   active: Schema.NullOr(Schema.String),
   lastRun: Schema.NullOr(Schema.String),
@@ -42,7 +43,8 @@ export const Control = Schema.Struct({
 export type Control = typeof Control.Type;
 
 export const emptyControl: Control = {
-  version: 3,
+  version: 4,
+  chatId: null,
   reference: null,
   active: null,
   lastRun: null,
@@ -63,6 +65,8 @@ export const makeOwner = (
   config: {
     model: string;
     apiKey: string;
+    /** Completed messages are retained by the host; each request owns its storage Scope. */
+    history: Layer.Layer<ThreadHistory, LabError>;
     apiUrl?: string;
     apiType?: typeof ModelApi.Type;
     browserConfigured?: boolean;
@@ -86,9 +90,6 @@ export const makeOwner = (
   let image: string | null = null;
   let notice: string | null = null;
   let closeKitesurf: Effect.Effect<void, LabError> | undefined;
-  // Only history outlives a request Scope. Browser attachments and provider keys never do.
-  let chat: { readonly id: string; readonly history: typeof InMemory.layer } | undefined;
-  let chatScope: Scope.Closeable | undefined;
 
   const patch = (change: Partial<Control>, transition: string) =>
     store.write({ ...store.read(), ...change }, transition);
@@ -135,11 +136,7 @@ export const makeOwner = (
   });
 
   const closeReference = Effect.fnUntraced(function* () {
-    chat = undefined;
-    if (chatScope !== undefined) {
-      yield* Scope.close(chatScope, Exit.void);
-      chatScope = undefined;
-    }
+    patch({ chatId: null }, "chat-ended");
     if (closeKitesurf !== undefined) {
       yield* closeKitesurf;
       closeKitesurf = undefined;
@@ -288,14 +285,13 @@ export const makeOwner = (
 
     if (
       continuing &&
-      (chat?.id !== input.chatId ||
+      (state.chatId !== input.chatId ||
         state.reference === null ||
         state.reference.expiresAt <= (yield* Clock.currentTimeMillis))
     )
       return yield* LabError.make({
         code: "expired",
-        message:
-          "This chat has ended or its owner restarted. Start a new chat; previous actions will not be replayed.",
+        message: "This chat has ended. Start a new chat; previous actions will not be replayed.",
       });
 
     if (input.engine === "kitesurf" && config.kitesurf === undefined)
@@ -446,21 +442,16 @@ export const makeOwner = (
       else if (input.liveView)
         notice =
           "Kitesurf has no persistent Live View. Enable screenshots to see action snapshots.";
-      if (input.scenario === "chat" && chat === undefined) {
-        chatScope = yield* Scope.make();
-        const services = yield* Layer.buildWithScope(InMemory.layer, chatScope);
-
-        chat = { id: input.id, history: Layer.succeedContext(services) };
-      }
+      if (input.scenario === "chat" && !continuing) patch({ chatId: input.id }, "chat-started");
       yield* executeTask(
         input,
         selectedModel.model,
         modelKey,
         selectedModel.apiUrl,
         selectedModel.apiType,
-        chat === undefined
-          ? undefined
-          : { threadId: ThreadId.make(chat.id), history: chat.history },
+        input.scenario === "chat"
+          ? { threadId: ThreadId.make(input.chatId ?? input.id), history: config.history }
+          : undefined,
       ).pipe(Effect.provideService(Browser, browser));
       current.update({ finishedAt: current.now() });
       yield* browser.capture(true).pipe(Effect.catch(() => Effect.void));

@@ -7,7 +7,7 @@ browser, follow up in chat, and expand run details to inspect timing or download
 
 **Chat with the agent** accepts an optional starting URL and messages up to 8,000 characters.
 The agent can choose where to browse, answer questions, and ask for clarification. Follow-up
-messages share the same Chromium browser and in-memory Thread history. Press Enter to send,
+messages share the same Chromium browser and persisted Thread history. Press Enter to send,
 Shift+Enter for a new line, and **New chat** to close the browser and clear the conversation.
 Chat runs one message at a time; model and browser comparisons remain in the demos.
 
@@ -82,9 +82,10 @@ with its own source, host-call and output limits.
 The owner has a twelve-minute overall deadline and a durable cleanup alarm.
 
 Demos prepare a fresh browser for each run and close it afterward. Chat retains the browser
-for up to one hour, with ten minutes of idle time between messages. Thread history lasts only
-while this owner is alive; reloading the page or losing the owner ends the conversation.
-An expired or lost chat refuses follow-up input; choose **New chat** to start again.
+for up to one hour, with ten minutes of idle time between messages. Completed messages persist
+in the owner’s SQLite storage, so an idle Worker restart preserves the conversation and browser.
+Reloading the page starts a new UI session. An expired chat refuses follow-up input; choose
+**New chat** to start again. A failed or interrupted message is never replayed after restart.
 
 Fresh browser preparation may retry once after confirmed cleanup. Follow-up attachment,
 model calls and browser actions are not replayed. **Stop run** interrupts active work and
@@ -98,7 +99,8 @@ browser session, or on the device when explicitly selected. Live View URLs and s
 are transient and excluded from exports. Goals and model output may still contain sensitive
 website data; review exports before sharing them.
 
-Run history and comparisons stay in the tab; the Durable Object keeps its latest report and admission state.
+Run history and comparisons stay in the tab; the Durable Object keeps completed chat history,
+its latest report and admission state.
 Export before reloading. The report's timestamps use one admission-relative Worker clock;
 work time starts after the initial page is loaded. CDP timing includes reads as well as writes.
 These reports do not establish a comparative performance claim.
