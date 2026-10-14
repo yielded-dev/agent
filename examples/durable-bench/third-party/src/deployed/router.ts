@@ -44,7 +44,7 @@ export const router = <E extends Env>(target: Target, routes: {
       if (query.target !== target) return new Response("target mismatch", { status: 400 });
       if (request.method === "GET" && url.searchParams.get("readiness") === "1" && measurementPaths(query.target).includes(url.pathname))
         return Response.json({ ok: true, build: env.BUILD });
-      if (["/prime", "/seed", "/seed-progress", "/submit", "/await", "/result", "/run", "/text", "/metrics", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
+      if (["/prime", "/seed", "/seed-progress", "/submit", "/await", "/result", "/run", "/text", "/metrics", "/profile-target", "/maintenance-status"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
         return Response.json(
           {
             ok: false,
@@ -55,7 +55,7 @@ export const router = <E extends Env>(target: Target, routes: {
         );
       const mutating = url.pathname.startsWith("/restore/") || ["/prime", "/seed", "/cold", "/submit", "/await", "/result", "/run"].includes(url.pathname);
 
-      if (url.pathname === "/profile-target") return routes.stub(env, query).fetch(request);
+      if (url.pathname === "/profile-target" || url.pathname === "/maintenance-status") return routes.stub(env, query).fetch(request);
 
       if (mutating && request.method !== "POST")
         return new Response("POST required", { status: 405 });

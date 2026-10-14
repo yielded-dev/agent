@@ -112,7 +112,7 @@ export const command = Command.make(
       ),
       Flag.atLeast(0),
       Flag.withDescription(
-        "Capture cpu or memory profiles of one Object per cell; repeat or comma-separate",
+        "Snapshot: one diagnostic cpu capture at first cold open; history: cpu or memory with --profile-after",
       ),
     ),
     profileAfter: positive("profile-after").pipe(
@@ -220,19 +220,34 @@ export const command = Command.make(
           "--isolate-cold requires an unprofiled Yielded/pi snapshot comparison without recovery diagnostics.",
       });
 
-    if (
-      !flags.buildHistory &&
-      (profiles.length > 0 || Option.getOrElse(flags.restoreEachPass, () => true) === false)
-    )
+    if (!flags.buildHistory && Option.getOrElse(flags.restoreEachPass, () => true) === false)
       return yield* BenchError.make({
-        message:
-          "Comparison requires identical restored histories and no profiling; profile a separate --build-history run.",
+        message: "Snapshot runs require identical restored histories.",
       });
     const profileAfter = Option.getOrUndefined(flags.profileAfter);
 
     const objects = Option.getOrElse(flags.objects, () =>
       flags.buildHistory ? 2 : rigorous ? 30 : 12,
     );
+
+    if (
+      !flags.buildHistory &&
+      profiles.length > 0 &&
+      (profiles.length !== 1 ||
+        profiles[0] !== "cpu" ||
+        targets.length !== 1 ||
+        !["yielded", "pi"].includes(targets[0]) ||
+        sizes.length !== 1 ||
+        ttft.length !== 1 ||
+        objects !== 2 ||
+        rigorous ||
+        flags.cpu ||
+        profileAfter !== undefined)
+    )
+      return yield* BenchError.make({
+        message:
+          "Snapshot --profile cpu requires one Yielded/pi target, size and TTFT, --objects 2, quick mode, no --cpu and no --profile-after; it stops after the selected candidate Object's first cold turn.",
+      });
 
     if (!flags.buildHistory && objects % 2 !== 0)
       return yield* BenchError.make({

@@ -36,7 +36,11 @@ export const Profile = Schema.Struct({
   history: Query.fields.history,
   ttftMs: Query.fields.ttftMs,
   build: Query.fields.expectedBuild,
+  sample: Schema.optionalKey(Query.fields.sample),
   durationMs: Schema.Int,
+  versionId: Schema.optionalKey(Schema.String),
+  requestedMs: Schema.optionalKey(Schema.Number),
+  receivedMs: Schema.optionalKey(Schema.Number),
   afterHistoryTurns: Schema.optionalKey(Schema.Natural),
   completedAtEnd: Schema.optionalKey(Schema.Natural),
   file: Schema.String,
@@ -391,6 +395,25 @@ export const Result = Schema.Struct({
   kept: Schema.Boolean,
   workerPool: Schema.optionalKey(Schema.String),
   complete: Schema.Boolean,
+  diagnostic: Schema.optionalKey(
+    Schema.Struct({
+      kind: Schema.Literal("snapshot-cpu"),
+      epoch: Schema.Literal(0),
+      complete: Schema.Boolean,
+      query: Schema.optionalKey(Query),
+      before: Schema.optionalKey(Identity),
+      after: Schema.optionalKey(Identity),
+      versionId: Schema.optionalKey(Schema.String),
+      requestedMs: Schema.optionalKey(Schema.Number),
+      resetCompletedMs: Schema.optionalKey(Schema.Number),
+      turnCompletedMs: Schema.optionalKey(Schema.Number),
+      coverage: Schema.Literals([
+        "unverified",
+        "same-isolate-unverified",
+        "cold-work-not-captured",
+      ]),
+    }),
+  ),
 });
 
 export type Result = typeof Result.Type;

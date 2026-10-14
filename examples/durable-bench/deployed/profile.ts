@@ -67,6 +67,8 @@ export const prepareProfile = Effect.fnUntraced(function* (options: {
   readonly query: Query;
   readonly output: string;
   readonly sourceMap: string;
+  /** Called synchronously after fetch is issued, not an acknowledgement of profiler attachment. */
+  readonly onIssued?: (request: { versionId: string; requestedMs: number }) => void;
 }) {
   const cloud = yield* Cloudflare;
   const fs = yield* FileSystem.FileSystem;
@@ -95,13 +97,15 @@ export const prepareProfile = Effect.fnUntraced(function* (options: {
     const transportError = (cause: unknown) =>
       BenchError.make({ message: `Cloudflare ${type} profile request failed.`, cause });
 
+    const requestedMs = yield* Clock.currentTimeMillis;
+
     const bytes = yield* Effect.acquireUseRelease(
       Effect.sync(() => new AbortController()),
       (controller) =>
         Effect.gen(function* () {
           const response = yield* Effect.tryPromise({
-            try: () =>
-              fetch(
+            try: () => {
+              const pending = fetch(
                 `https://api.cloudflare.com/client/v4/accounts/${cloud.accountId}/workers/workers/${worker}/versions/${encodeURIComponent(target.versionId)}/profile`,
                 {
                   method: "POST",
@@ -112,7 +116,12 @@ export const prepareProfile = Effect.fnUntraced(function* (options: {
                   },
                   body,
                 },
-              ),
+              );
+
+              options.onIssued?.({ versionId: target.versionId, requestedMs });
+
+              return pending;
+            },
             catch: transportError,
           });
 
@@ -141,6 +150,7 @@ export const prepareProfile = Effect.fnUntraced(function* (options: {
 
     if (bytes.length === 0)
       return yield* BenchError.make({ message: `Cloudflare returned an empty ${type} profile.` });
+    const receivedMs = yield* Clock.currentTimeMillis;
     const query = options.query;
 
     const file = join(
@@ -158,7 +168,11 @@ export const prepareProfile = Effect.fnUntraced(function* (options: {
       history: query.history,
       ttftMs: query.ttftMs,
       build: query.expectedBuild,
+      sample: query.sample,
       durationMs,
+      versionId: target.versionId,
+      requestedMs,
+      receivedMs,
       file,
       sourceMap: options.sourceMap,
     } satisfies Profile;

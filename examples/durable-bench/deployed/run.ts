@@ -36,7 +36,14 @@ import {
 import { deployments } from "./deploy.ts";
 import { checkFixture } from "./fixture-check.ts";
 import { prepareFixtures } from "./fixtures.ts";
-import { BuildEvent, HistoryCheckpoint, Options, Result, type Sample } from "./model.ts";
+import {
+  BuildEvent,
+  HistoryCheckpoint,
+  Options,
+  Result,
+  type Profile,
+  type Sample,
+} from "./model.ts";
 import {
   BenchError,
   git,
@@ -59,6 +66,7 @@ import {
   ImportResult,
   Identity,
   ObjectIdentity,
+  MaintenanceStatus,
   RouteReadiness,
   measurementPaths,
   RestoreAck,
@@ -109,6 +117,14 @@ const append = (
 };
 
 export const run = Effect.fnUntraced(function* (options: Options, resumed?: Result) {
+  const snapshotProfile = !options.buildHistory && options.profiles.length > 0;
+
+  if (snapshotProfile && (!options.baseline?.trim() || !options.candidate?.trim()))
+    return yield* BenchError.make({
+      message:
+        "Snapshot profiling requires baseline and candidate refs (CLI defaults: origin/main and HEAD).",
+    });
+
   const started = yield* Clock.currentTimeMillis;
   const seed = options.seed ?? nonce();
 
@@ -173,6 +189,16 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         kept: options.keep,
         ...(persistent ? { workerPool: targetStack } : {}),
         complete: false,
+        ...(snapshotProfile
+          ? {
+              diagnostic: {
+                kind: "snapshot-cpu",
+                epoch: 0,
+                complete: false,
+                coverage: "unverified",
+              } as const,
+            }
+          : {}),
       };
 
   const message = (cause: Cause.Cause<unknown>) =>
@@ -189,6 +215,11 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         result = change(result);
         yield* save(output + ".json", result);
       }),
+    );
+
+  const updateDiagnostic = (fields: Partial<NonNullable<Result["diagnostic"]>>) =>
+    update((value) =>
+      value.diagnostic ? { ...value, diagnostic: { ...value.diagnostic, ...fields } } : value,
     );
 
   let phaseStarted = started;
@@ -299,7 +330,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           ],
         };
     }
-    result = { ...result, failures: [...result.failures, ...retirementFailures(result)] };
+    if (!snapshotProfile)
+      result = { ...result, failures: [...result.failures, ...retirementFailures(result)] };
     yield* phase("teardown");
     if (!options.keep && !preserved && !persistent) {
       yield* Console.error("Destroying target stack and verifying cleanup…");
@@ -317,18 +349,35 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       );
     }
     yield* phase("report");
+
+    const completed =
+      Exit.isSuccess(exit) &&
+      result.failures.length === 0 &&
+      (options.keep || persistent || result.cleanup?.verified === true);
+
     result = {
       ...result,
       kept: options.keep || preserved || persistent,
       wallMs: (yield* Clock.currentTimeMillis) - Date.parse(result.startedAt),
-      complete:
-        Exit.isSuccess(exit) &&
-        result.failures.length === 0 &&
-        (options.keep || persistent || result.cleanup?.verified === true),
+      complete: !snapshotProfile && completed,
+      ...(result.diagnostic
+        ? {
+            diagnostic: {
+              ...result.diagnostic,
+              complete:
+                completed && result.profiles.length === 1 && result.diagnostic.after !== undefined,
+            },
+          }
+        : {}),
     };
     yield* save(output + ".json", result);
-    yield* fs.writeFileString(output + ".md", table(result));
-    yield* Console.log(table(result));
+
+    const report = result.diagnostic
+      ? `Snapshot CPU diagnostic: ${result.diagnostic.complete ? "complete" : "incomplete"}.\nSelected Object: ${result.diagnostic.query?.object ?? "not selected"}; sample: ${result.diagnostic.query?.sample ?? "not started"}.\nCoverage: ${result.diagnostic.coverage}. Matching module tokens do not prove profiler attachment survived Object abort; inspect constructor frames.\nNo timing comparison or inferential tables.\n`
+      : table(result);
+
+    yield* fs.writeFileString(output + ".md", report);
+    yield* Console.log(report);
     yield* Console.error(
       `Wall time ${(result.wallMs / 1000).toFixed(1)} s; infrastructure ${result.infrastructureReused ? "reused" : "deployed"}. Results: results/${runName}.json`,
     );
@@ -341,7 +390,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       yield* Console.error(
         `Build retained. Resume with --resume ${runName}; unknown in-flight batches will be retired.`,
       );
-    if (!result.complete)
+    if (!result.complete && !result.diagnostic?.complete)
       return yield* BenchError.make({
         message: "Run incomplete; failures and cleanup status are recorded in the result JSON.",
       });
@@ -795,7 +844,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         !options.buildHistory && (epoch === 0 || options.restoreEachPass === true);
 
       const recoveryAvailable =
-        restorePass && (epoch === epochs.length - 1 || options.restoreEachPass === true);
+        !snapshotProfile &&
+        restorePass &&
+        (epoch === epochs.length - 1 || options.restoreEachPass === true);
 
       const clearBeforeRestore = persistent || epoch > 0 || attempt > 0;
 
@@ -910,7 +961,10 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       // Worker health does not establish the Object's build. Poll read-only identity
       // before acknowledged setup resets; imports and inputs always get one attempt.
       const resetForBuild = Effect.fnUntraced(
-        function* (cohort: Omit<Query, "expectedBuild">) {
+        function* <E = never, R = never>(
+          cohort: Omit<Query, "expectedBuild">,
+          beforeReset?: Effect.Effect<void, E, R>,
+        ) {
           const expectedBuild = yield* expectedFor(cohort);
           const started = yield* Clock.currentTimeMillis;
           const probeUrl = new URL("/measure", deploy.driver);
@@ -1067,13 +1121,21 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
             if (resetRemaining <= 0) break;
 
+            if (beforeReset) {
+              if (outcome !== "ready")
+                return yield* BenchError.make({
+                  message: "Profiling requires the prepared Object's expected build.",
+                });
+              yield* beforeReset;
+            }
+
             const reset = (yield* request(
               yield* url("/cold", cohort),
               deploy.token,
               ColdResult,
               {},
               resetRemaining,
-            ).pipe(retryRequest)).value;
+            ).pipe((operation) => (beforeReset ? operation : retryRequest(operation)))).value;
 
             if (!reset.ok || !reset.threadAborted || reset.directoryAborted === false)
               return yield* BenchError.make({ message: "Cold abort was not acknowledged." });
@@ -1110,6 +1172,10 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             )
               // Observation attaches to the new incarnation before the submission timer starts.
               return reset;
+            if (beforeReset)
+              return yield* BenchError.make({
+                message: "Profiled cold reset changed builds; capture will not be retried.",
+              });
             yield* Effect.sleep("2 seconds");
           }
 
@@ -1569,7 +1635,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       }
 
       yield* Console.error(
-        `Measuring ${counterbalanced ? "counterbalanced AB/BA" : defaultLabel}, pass ${epoch + 1}/${epochs.length}: ${cohorts.length} Objects, concurrency ${options.concurrency}…`,
+        snapshotProfile
+          ? "Preparing snapshot CPU diagnostic; only the selected candidate Object's first cold turn will run."
+          : `Measuring ${counterbalanced ? "counterbalanced AB/BA" : defaultLabel}, pass ${epoch + 1}/${epochs.length}: ${cohorts.length} Objects, concurrency ${options.concurrency}…`,
       );
 
       const measurements = yield* Effect.forEach(
@@ -1646,8 +1714,11 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             index === 0 ||
             (!options.buildHistory && cohort.target !== "effect-ai-floor" && coldPosition(index));
 
-          const prepare = Effect.fnUntraced(function* (index: number) {
-            if (firstAfterReset(index)) reset = yield* resetForBuild(cohort);
+          const prepare = Effect.fnUntraced(function* <E = never, R = never>(
+            index: number,
+            beforeReset?: Effect.Effect<void, E, R>,
+          ) {
+            if (firstAfterReset(index)) reset = yield* resetForBuild(cohort, beforeReset);
           });
 
           const measure = (index: number, wave: number, peers: readonly string[]) =>
@@ -1724,7 +1795,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   expectedDriverBuild,
                   cold: options.buildHistory && index === 0,
                   isolateCold: options.isolateCold === true && state === "cold",
-                  quiescent: state === "preparation" || index === turnsPerEpoch - 1,
+                  quiescent:
+                    snapshotProfile || state === "preparation" || index === turnsPerEpoch - 1,
                   resetBeforeMetrics:
                     options.verifyIncarnationRecovery === true &&
                     attempt === 0 &&
@@ -1895,6 +1967,21 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                 incarnation = metrics.identity.incarnation;
                 directoryIncarnation = metrics.directory?.incarnation;
 
+                if (snapshotProfile && index === 1) {
+                  const turnCompletedMs = yield* Clock.currentTimeMillis;
+
+                  yield* updateDiagnostic({
+                    after: metrics.identity,
+                    turnCompletedMs,
+                    coverage:
+                      result.diagnostic?.before?.isolate === metrics.identity.isolate &&
+                      result.diagnostic?.before?.incarnation ===
+                        acknowledgedReset.before.incarnation
+                        ? "same-isolate-unverified"
+                        : "cold-work-not-captured",
+                  });
+                }
+
                 const gaps = metrics.calls
                   .slice(1)
                   .map((call, i) => call.startMs - (metrics.calls[i]?.endMs ?? NaN));
@@ -2017,7 +2104,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                 Effect.gen(function* () {
                   const sample = currentSample;
 
-                  if (!sample || options.buildHistory) return yield* error;
+                  if (!sample || options.buildHistory || snapshotProfile) return yield* error;
                   failedObjects.add(objectKey(cohort));
                   yield* update((value) => ({
                     ...value,
@@ -2064,6 +2151,106 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       // Readiness completes for the whole wave before any input; all turns finish
       // before the next wave, so completion speed cannot choose the next peer mix.
       for (let index = 0; index < turnsPerEpoch; index++) {
+        if (snapshotProfile && index === 1) {
+          const selected = measurements.find((item) => item.label === "candidate");
+
+          if (!selected)
+            return yield* BenchError.make({
+              message: "Snapshot profiling requires a prepared candidate Object.",
+            });
+          const { cohort, label } = selected;
+
+          const query = {
+            ...cohort,
+            sample: sampleName(epoch, index),
+            expectedBuild: yield* expectedFor(cohort),
+          };
+
+          yield* update((value) => ({
+            ...value,
+            ...(value.diagnostic ? { diagnostic: { ...value.diagnostic, query } } : {}),
+            orders: [
+              ...(value.orders ?? []),
+              { phase: `measure/${epoch}/${attempt}/${index}`, items: [objectKey(cohort)] },
+            ],
+          }));
+
+          yield* Effect.gen(function* () {
+            const issued = yield* Deferred.make<
+              { versionId: string; requestedMs: number },
+              BenchError
+            >();
+
+            let profiling: Fiber.Fiber<Profile, BenchError> | undefined;
+
+            const beforeReset = Effect.gen(function* () {
+              for (;;) {
+                const status = (yield* request(
+                  yield* url("/maintenance-status", cohort),
+                  deploy.token,
+                  MaintenanceStatus,
+                )).value;
+
+                if (status.logical === null && status.native === null) break;
+                yield* Effect.sleep("100 millis");
+              }
+
+              const before = (yield* request(
+                yield* url("/identity", cohort),
+                deploy.token,
+                ObjectIdentity,
+              )).value.identity;
+
+              if (before.build !== query.expectedBuild)
+                return yield* BenchError.make({
+                  message: "Profiling Object changed builds before capture.",
+                });
+              yield* updateDiagnostic({ before });
+
+              const capture = yield* prepareProfile({
+                worker: workerName(cohort),
+                endpoint: yield* url("/profile-target", query),
+                token: deploy.token,
+                query,
+                output,
+                sourceMap: join(output, label, cohort.target, "target.mjs.map"),
+                onIssued: (value) => {
+                  Deferred.doneUnsafe(issued, Effect.succeed(value));
+                },
+              });
+
+              profiling = yield* capture("cpu", 50_000).pipe(
+                Effect.timeout("90 seconds"),
+                Effect.tap((profile) =>
+                  update((value) => ({ ...value, profiles: [...value.profiles, profile] })),
+                ),
+                Effect.mapError((error) =>
+                  BenchError.make({
+                    message: `Snapshot CPU capture failed: ${message(Cause.fail(error))}`,
+                    cause: error,
+                  }),
+                ),
+                Effect.tapCause((cause) =>
+                  Deferred.fail(issued, BenchError.make({ message: message(cause) })),
+                ),
+                Effect.forkScoped,
+              );
+              const receipt = yield* Deferred.await(issued);
+
+              yield* updateDiagnostic(receipt);
+            });
+
+            yield* Effect.gen(function* () {
+              yield* selected.prepare(index, beforeReset);
+              const resetCompletedMs = yield* Clock.currentTimeMillis;
+
+              yield* updateDiagnostic({ resetCompletedMs });
+              yield* selected.measure(index, 0, [objectKey(cohort)]);
+            }).pipe(Effect.onExit(() => (profiling ? Fiber.join(profiling) : Effect.void)));
+          }).pipe(Effect.scoped, withProfileBatch);
+          break;
+        }
+
         const activeMeasurements = measurements.filter(
           ({ cohort }) =>
             !failedObjects.has(objectKey(cohort)) && !retryFrom.has(objectKey(cohort)),
@@ -2186,6 +2373,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         from = yield* measureEpoch(epoch, defaultLabel, pending, attempt, from);
         pending = pending.filter((cohort) => from.has(objectKey(cohort)));
       }
+      if (snapshotProfile) break;
     }
   }).pipe(Effect.onExit(finish));
 }, Effect.scoped);

@@ -156,7 +156,30 @@ The mode excludes text observation and A/B redeployment; use the original mode f
 workflows. Deployed absolute times include network hops and cannot be
 compared with Miniflare timings; compare ratios within a matched deployment.
 
-Profiling is separate from comparison cohorts. Use `--build-history --profile cpu|memory`
+Profiling is diagnostic and separate from timing comparisons. With saved snapshots,
+`--profile cpu` requires one Yielded/pi target, size and TTFT, `--objects 2`, and quick mode.
+It excludes `--isolate-cold`, `--cpu`, `--profile-after` and recovery diagnostics.
+Both Objects run their preparation turn; only the epoch-zero candidate Object then runs
+its first cold turn. After native maintenance becomes quiescent, the controller issues one
+50-second capture against that Object's loaded isolate immediately before resetting it.
+It waits for capture completion after the turn and stops, without warm turns, another pass,
+native sample recovery or another capture request.
+
+```sh
+vp run deployed -- --targets yielded --sizes 1000 --ttft 0 --objects 2 --profile cpu --candidate HEAD --fixture-directory /path/to/saved-fixtures
+```
+
+The issuance hook confirms only that the capture POST was issued, not profiler attachment.
+JSON's `diagnostic` records the selected query, epoch, pre-capture and reopened identities,
+request, reset and turn chronology; the profile retains its version, sample, request/response
+times and source map. Changed module identity is labeled `cold-work-not-captured`.
+Matching identity is `same-isolate-unverified`: `ctx.abort()` may detach profiling, and
+sampling may miss construction. Inspect constructor/opening frames before claiming coverage.
+This cannot capture earlier module evaluation. The report has no inferential tables;
+`diagnostic.complete` means the diagnostic finished, while comparison `complete` stays false.
+All recorded timings are diagnostic only.
+
+Use `--build-history --profile cpu|memory`
 with `--profile-after <turns>` to start a ten-second capture
 after a verified checkpoint while subsequent batches continue. This requires one target,
 size, TTFT and Object, with both concurrency limits set to one. The checkpoint must be a
@@ -169,8 +192,9 @@ vp run deployed -- --build-history --targets pi --sizes 3500 --objects 1 --concu
 
 Profile requests, downloads and file writes are outside the turn timers, but profiling adds
 runtime overhead and can extend the run. Use unprofiled runs for timing comparisons.
-Profiled Object batches are serialized and paced to five captures per five minutes;
-quota waits happen before warmup. Other account activity can still cause HTTP 429; wait
+Profiled Object batches are serialized with five minutes between captures;
+quota waits happen before warmup. The snapshot diagnostic makes only one capture request.
+Other account activity can still cause HTTP 429; wait
 for the reported `Retry-After` before rerunning.
 The token needs Workers Scripts Read permission and the account must support profiling.
 Saved `.pprof` paths are printed at completion; filenames and result JSON identify
