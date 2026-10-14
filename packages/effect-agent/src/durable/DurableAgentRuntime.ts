@@ -3094,6 +3094,22 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         recovered += 1;
       });
 
+      // Retry permission cannot mask a recorded outcome or require a runnable old binding.
+      // Explicit factual resolutions and abort instructions retain their own handling below.
+      if (
+        (intent === undefined || intent.resolution._tag === "SafeToRetry") &&
+        declared !== undefined &&
+        nativeUpdateAccepted(submission, declared, records)
+      ) {
+        yield* appendClosedCall(ctx, submissionId, knownIds, call, {
+          result: { value: { emitted: true }, isFailure: false },
+          resolution: "completed-with-result",
+          author: RECONCILER_AUTHOR,
+          reason: "The exact native update was canonically accepted",
+        });
+        recovered += 1;
+        continue;
+      }
       if (intent !== undefined) {
         switch (intent.resolution._tag) {
           case "AbortSubmission":
@@ -3122,16 +3138,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             continue;
           }
         }
-      }
-      if (declared !== undefined && nativeUpdateAccepted(submission, declared, records)) {
-        yield* appendClosedCall(ctx, submissionId, knownIds, call, {
-          result: { value: { emitted: true }, isFailure: false },
-          resolution: "completed-with-result",
-          author: RECONCILER_AUTHOR,
-          reason: "The exact native update was canonically accepted",
-        });
-        recovered += 1;
-        continue;
       }
       const tool = current?.definition.toolkit.tools[call.toolName];
 
@@ -9659,6 +9665,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     for (const intent of intents) {
       const original = declared.get(intent.toolCallId);
 
+      if (original !== undefined && nativeUpdateAccepted(submission, original, records)) continue;
+
       if (
         original === undefined ||
         (current !== undefined &&
@@ -10539,8 +10547,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
     const factual = intent?.resolution;
 
+    const acceptedNative =
+      factual === undefined && (yield* updateRuntime.accepted(submission, selected.declared));
+
     const reconciliation =
-      factual === undefined && selected.declared.executionKind === "ordinary"
+      factual === undefined && !acceptedNative && selected.declared.executionKind === "ordinary"
         ? yield* reconciler
             .reconcile(
               DeclaredToolCallEvidence.make({
@@ -10558,9 +10569,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const completed =
       factual?._tag === "CompletedWithResult"
         ? factual
-        : Option.isSome(reconciliation) && reconciliation.value._tag === "CompletedWithResult"
-          ? reconciliation.value
-          : undefined;
+        : acceptedNative
+          ? { result: { emitted: true }, isFailure: false }
+          : Option.isSome(reconciliation) && reconciliation.value._tag === "CompletedWithResult"
+            ? reconciliation.value
+            : undefined;
 
     const neverStarted =
       factual?._tag === "NeverHappened" ||

@@ -73,12 +73,13 @@ const authority = Layer.succeed(WorkerHostAuthorizer, {
       : WorkerError.make({ operation: request.operation, reason: "denied" }),
 });
 
-for (const [parentState, failpoint] of [
-  ["completed", "update:after-canonical-append"],
-  ["aborted", "update:after-delivery-insert"],
+for (const [parentState, failpoint, abortChild] of [
+  ["completed", "update:after-canonical-append", false],
+  ["aborted", "update:after-delivery-insert", false],
+  ["completed", "update:after-canonical-append", true],
 ] as const) {
   it.live(
-    `retains delivered updates after lost acknowledgement at ${failpoint}, restart, and a ${parentState} parent`,
+    `retains delivered updates after lost acknowledgement at ${failpoint}, restart, and a ${parentState} parent${abortChild ? ", with child abort before recovery" : ""}`,
     () =>
       Effect.scoped(
         Effect.gen(function* () {
@@ -217,6 +218,15 @@ for (const [parentState, failpoint] of [
           expect(
             before.records.filter(({ record }) => record.payload._tag === "ToolCallSettled"),
           ).toHaveLength(0);
+          if (abortChild) {
+            yield* runtime.abort(
+              AbortCommand.make({
+                submissionId: started.delivery.receipt!.submissionId,
+                author: principal,
+                reason: "Stop before recovering the accepted update",
+              }),
+            );
+          }
           yield* Scope.close(firstScope, Exit.void);
           selected = false;
 
@@ -233,6 +243,44 @@ for (const [parentState, failpoint] of [
           const read = (id: ThreadId) =>
             readTestThread(store, ThreadExportRequest.make({ threadId: id }));
 
+          if (abortChild) {
+            expect((yield* reopened.awaitSettlement(started.delivery.receipt!)).outcome).toBe(
+              "aborted",
+            );
+            yield* reopened.runRecovery({ threadId: started.worker.threadId });
+            const recoveredChild = yield* read(started.worker.threadId);
+
+            expect(
+              recoveredChild.records.flatMap(({ record }) =>
+                record.payload._tag === "ToolCallSettled" ? [record.payload] : [],
+              ),
+            ).toMatchObject([
+              {
+                toolCallId: "emit_update-0-call",
+                toolName: "emit_update",
+                result: { emitted: true },
+                isFailure: false,
+              },
+            ]);
+            expect(
+              recoveredChild.records.flatMap(({ record }) =>
+                record.payload._tag === "WorkerInputCompleted" &&
+                record.payload.submissionId === started.delivery.receipt!.submissionId &&
+                record.payload.effectsResolved
+                  ? [record.payload]
+                  : [],
+              ),
+            ).toHaveLength(1);
+            expect(
+              recoveredChild.records.flatMap(({ record }) =>
+                record.payload._tag === "AgentUpdateEmitted" ? [record.payload.update] : [],
+              ),
+            ).toEqual(accepted);
+            expect((yield* reopened.awaitSettlement(started.delivery.receipt!)).outcome).toBe(
+              "aborted",
+            );
+            expect(childModelCalls).toBe(1);
+          }
           yield* Effect.gen(function* () {
             for (;;) {
               const rows = yield* deliveries.list({
@@ -241,11 +289,10 @@ for (const [parentState, failpoint] of [
               });
 
               if (
-                rows.items.length === 1 &&
-                rows.items[0]?.receipt !== null &&
-                rows.items[0]?.receipt !== undefined
+                rows.items.length > 0 &&
+                rows.items.every((row) => row.receipt !== null && row.receipt !== undefined)
               ) {
-                yield* reopened.awaitSettlement(rows.items[0].receipt);
+                for (const row of rows.items) yield* reopened.awaitSettlement(row.receipt!);
 
                 return;
               }
@@ -264,6 +311,7 @@ for (const [parentState, failpoint] of [
           expect(messages).toHaveLength(1);
           expect(messages[0]).toMatchObject({ worker: started.worker, update: accepted[0] });
           expect(selections).toBe(1);
+          if (abortChild) return;
           // Human-requested regression: canonical acceptance must also recover the native call.
           const recovered = yield* read(started.worker.threadId);
 

@@ -27,6 +27,8 @@ import {
   IdempotencyKey,
   Principal,
   RecoverySnapshotRequest,
+  ResolutionSafeToRetry,
+  UnknownResolutionCommand,
   SubmissionLedger,
 } from "@yielded/agent/submission-ledger";
 import { ThreadRead, ThreadReader, ThreadStore } from "@yielded/agent/thread-store";
@@ -94,7 +96,14 @@ for (const scenario of [
     concurrency: 4,
     update: true,
     defect: true,
-    parked: true,
+    parked: "unknown",
+  },
+  {
+    name: "recovers an accepted legacy native update with retained retry permission",
+    concurrency: 4,
+    update: true,
+    defect: true,
+    parked: "retry",
   },
 ]) {
   it.effect(scenario.name, () =>
@@ -203,22 +212,44 @@ for (const scenario of [
         model,
       );
 
-      const binding = yield* DurableWorkerBinding.make(agent, definitions).pipe(
-        Effect.provide(handlers),
-      );
+      const makeRuntime = Effect.fnUntraced(function* (selected: typeof agent) {
+        const binding = yield* DurableWorkerBinding.make(selected, definitions).pipe(
+          Effect.provide(handlers),
+        );
 
-      const runtime = yield* DurableAgentRuntime.pipe(
-        Effect.provide(
-          DurableAgentRuntime.layerWithBindings([binding]).pipe(
-            Layer.provide(runStorageLayer()),
-            Layer.provide(
-              Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
+        return yield* DurableAgentRuntime.pipe(
+          Effect.provide(
+            DurableAgentRuntime.layerWithBindings([binding]).pipe(
+              Layer.provide(runStorageLayer()),
+              Layer.provide(
+                Layer.mergeAll(RunToolAuthorization.allowAll, ContextCompactor.layerRollover),
+              ),
             ),
           ),
-        ),
-      );
+        );
+      });
 
-      const receipt = yield* runtime.submit(agent, "read", {
+      // The retained declaration predates the native idempotent annotation.
+      const originalAgent =
+        scenario.parked === "retry"
+          ? Agent.withModel(
+              {
+                ...agent.definition,
+                toolkit: Toolkit.make(
+                  tools.tools.read_page,
+                  agent.definition.toolkit.tools.emit_update.annotate(
+                    ToolExecutionClass,
+                    "uncertain",
+                  ),
+                ),
+              },
+              model,
+            )
+          : agent;
+
+      let runtime = yield* makeRuntime(originalAgent);
+
+      const receipt = yield* runtime.submit(originalAgent, "read", {
         threadId: ThreadId.make("repro"),
         principal: Principal.make("test"),
         idempotencyKey: IdempotencyKey.make("first"),
@@ -288,6 +319,18 @@ for (const scenario of [
           ),
         );
       }
+      if (scenario.parked === "retry") {
+        yield* runtime.resolveUnknown(
+          UnknownResolutionCommand.make({
+            submissionId: receipt.submissionId,
+            toolCallId: ToolCallId.make("update"),
+            author: "operator",
+            reason: "Synthetic retained retry permission",
+            resolution: ResolutionSafeToRetry.make({}),
+          }),
+        );
+        runtime = yield* makeRuntime(agent);
+      }
       if (scenario.parked) yield* runtime.runRecovery({ threadId: receipt.threadId });
 
       const retrying = yield* runtime
@@ -313,6 +356,14 @@ for (const scenario of [
         scenario.concurrency === 1 ? "completed" : "failed",
       );
       expect(snapshot.hasOwner).toBe(false);
+      if (scenario.parked === "retry") {
+        expect(snapshot.unknownResolutions).toMatchObject([
+          {
+            toolCallId: "update",
+            resolution: { _tag: "SafeToRetry" },
+          },
+        ]);
+      }
       expect(payloads.filter((record) => record._tag === "ToolCallUnknown")).toHaveLength(
         scenario.parked ? 1 : 0,
       );
