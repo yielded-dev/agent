@@ -35,6 +35,8 @@ const PostgresText = Schema.String.check(
   }),
 );
 
+const decodePostgresText = Schema.decodeEffect(PostgresText);
+
 /**
  * Qualify storage relations and execute native statements without application name transforms.
  * PostgreSQL validates text parameters after compilation; escaped canonical JSON stays intact.
@@ -42,7 +44,6 @@ const PostgresText = Schema.String.check(
 export const makeSqlQuery = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient;
   const postgres = sql.onDialectOrElse({ pg: () => true, orElse: () => false });
-  const decodePostgresText = Schema.decodeEffect(PostgresText);
 
   const executePostgres = Effect.fnUntraced(function* <A extends object>(statement: Statement<A>) {
     if (postgres) {
