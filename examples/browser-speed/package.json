@@ -13,6 +13,7 @@
     "@fontsource/ibm-plex-mono": "catalog:",
     "@yielded/agent": "workspace:*",
     "@yielded/agent-platform-cloudflare": "workspace:*",
+    "@yielded/agent-storage-cloudflare": "workspace:*",
     "effect": "catalog:",
     "effect-cf": "catalog:",
     "lucide-react": "catalog:",

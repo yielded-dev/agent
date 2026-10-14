@@ -1,7 +1,10 @@
 import { BrowserSessions } from "@yielded/agent-platform-cloudflare/browser-session";
 import { dynamicWorkerCodeExecutorLayer } from "@yielded/agent-platform-cloudflare/cloudflare-code-mode";
+import * as DoThreadStore from "@yielded/agent-storage-cloudflare/do-thread-store";
+import * as PersistentHistory from "@yielded/agent/persistent-history";
+import { ThreadHistory } from "@yielded/agent/thread-history";
 import { DurableObject } from "cloudflare:workers";
-import { Context, Effect, Layer, Redacted, Schema } from "effect";
+import { Context, Effect, Layer, Redacted, Schema, Struct } from "effect";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 
@@ -103,12 +106,12 @@ export class BrowserLab extends DurableObject<Env> {
         Schema.fromJsonString(Schema.Struct({ version: Schema.Int })),
       )(row.value).version;
 
-      if (version === 1 || version === 2) {
+      if (version === 1 || version === 2 || version === 3) {
         const previous = Schema.decodeSync(
           Schema.fromJsonString(
             Schema.Struct({
-              ...Control.fields,
-              version: Schema.Literals([1, 2]),
+              ...Control.mapFields(Struct.omit(["chatId"])).fields,
+              version: Schema.Literals([1, 2, 3]),
               report: Schema.NullOr(Schema.Json),
             }),
           ),
@@ -118,8 +121,12 @@ export class BrowserLab extends DurableObject<Env> {
           "UPDATE browser_lab SET value=? WHERE id=1",
           Schema.encodeSync(codec)({
             ...previous,
-            version: 3,
-            report: null,
+            version: 4,
+            chatId: null,
+            report:
+              version === 3
+                ? Schema.decodeUnknownSync(Control.fields.report)(previous.report)
+                : null,
           }),
         );
       } else {
@@ -159,6 +166,17 @@ export class BrowserLab extends DurableObject<Env> {
       {
         model: env.OPENAI_MODEL || "gpt-6-luna",
         apiKey: env.OPENAI_API_KEY ?? "",
+        history: PersistentHistory.layer.pipe(
+          Layer.provide(DoThreadStore.layer({ storage: ctx.storage })),
+          Layer.catch(() =>
+            Layer.effect(
+              ThreadHistory,
+              Effect.fail(
+                LabError.make({ code: "storage", message: "Could not open conversation history." }),
+              ),
+            ),
+          ),
+        ),
         ...(env.OPENAI_API_URL ? { apiUrl: env.OPENAI_API_URL } : {}),
         apiType: Schema.decodeUnknownSync(ModelApi)(env.OPENAI_API_TYPE || "responses"),
         browserConfigured: Boolean(env.CLOUDFLARE_ACCOUNT_ID && env.BROWSER_RENDERING_API_TOKEN),
