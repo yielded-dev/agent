@@ -35,6 +35,7 @@ const EncodedMemoryChange = Schema.Struct({
 
 const makeEquivalentContent = () =>
   Schema.toEquivalence(Schema.toEncoded(MemoryWrite.Wire.members[0].fields.content));
+
 let equivalentContent: ReturnType<typeof makeEquivalentContent> | undefined;
 
 const makeEquivalentScopes = () => Schema.toEquivalence(MemoryWrite.Wire.members[0].fields.scopes);
