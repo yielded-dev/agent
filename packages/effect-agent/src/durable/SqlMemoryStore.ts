@@ -33,11 +33,12 @@ const EncodedMemoryChange = Schema.Struct({
   resultJson: StoredJson,
 });
 
-const equivalentContent = Schema.toEquivalence(
-  Schema.toEncoded(MemoryWrite.Wire.members[0].fields.content),
-);
+const makeEquivalentContent = () =>
+  Schema.toEquivalence(Schema.toEncoded(MemoryWrite.Wire.members[0].fields.content));
+let equivalentContent: ReturnType<typeof makeEquivalentContent> | undefined;
 
-const equivalentScopes = Schema.toEquivalence(MemoryWrite.Wire.members[0].fields.scopes);
+const makeEquivalentScopes = () => Schema.toEquivalence(MemoryWrite.Wire.members[0].fields.scopes);
+let equivalentScopes: ReturnType<typeof makeEquivalentScopes> | undefined;
 
 /** Ordered commands committed atomically by the SQL memory adapter. */
 export const SqlMemoryWriteBatch = Schema.Array(MemoryWrite.Wire).check(Schema.isMaxLength(128));
@@ -388,8 +389,8 @@ const validateReceiptResult = Effect.fnUntraced(function* (
       return yield* storageError(operation, "corrupt");
     }
     if (
-      !equivalentContent(command.content, result.content) ||
-      !equivalentScopes(command.scopes, result.scopes)
+      !(equivalentContent ??= makeEquivalentContent())(command.content, result.content) ||
+      !(equivalentScopes ??= makeEquivalentScopes())(command.scopes, result.scopes)
     ) {
       return yield* storageError(operation, "corrupt");
     }

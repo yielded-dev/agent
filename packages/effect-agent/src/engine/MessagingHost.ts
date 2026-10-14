@@ -1,4 +1,4 @@
-import type { Effect } from "effect";
+import { Effect } from "effect";
 import * as Context from "effect/Context";
 
 import type { AnyDefinition } from "../core/Agent.ts";
@@ -47,7 +47,9 @@ export class MessagingHost extends Context.Service<
   }
 >()("@effect-agent/engine/MessagingHost") {
   static readonly unavailable: MessagingHost["Service"] = {
-    context: MessagingError.make({ operation: "context", reason: "unavailable" }),
+    context: Effect.suspend(() =>
+      MessagingError.make({ operation: "context", reason: "unavailable" }),
+    ),
     send: () => MessagingError.make({ operation: "send", reason: "unavailable" }),
     reply: () => MessagingError.make({ operation: "reply", reason: "unavailable" }),
     inbox: () => MessagingError.make({ operation: "inbox", reason: "unavailable" }),
