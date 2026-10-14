@@ -114,8 +114,8 @@ describe("DC alarm semantics", () => {
 
           yield* sql`CREATE TABLE alarm_isolation_probe (value INTEGER)`;
 
-          const raceRollback = <A, E>(operation: Effect.Effect<A, E>) =>
-            Effect.gen(function* () {
+          const raceRollback = Effect.fnUntraced(
+            function* <A, E>(operation: Effect.Effect<A, E>) {
               const entered = yield* Deferred.make<void>();
 
               const transaction = yield* sql
@@ -142,9 +142,12 @@ describe("DC alarm semantics", () => {
               yield* Fiber.interrupt(transaction);
 
               return yield* Fiber.join(update);
-            }).pipe(
-              Effect.provideService(Scheduler.Scheduler, new Scheduler.MixedScheduler("sync")),
-            );
+            },
+            (effect) =>
+              effect.pipe(
+                Effect.provideService(Scheduler.Scheduler, new Scheduler.MixedScheduler("sync")),
+              ),
+          );
 
           const later = Date.now() + 172_800_000;
           const earlier = later - 86_400_000;

@@ -46,7 +46,7 @@ const StoredRequests = Schema.Struct({
 });
 
 const unavailable = () =>
-  new VoiceError({
+  VoiceError.make({
     message:
       "Voice needs this tab's session storage to retain request identities. Enable it and try again.",
   });
@@ -165,22 +165,20 @@ export const startVoiceAtom = PlannerClient.runtime
               submit: (request) =>
                 Reactivity.mutation(client("SendMessage", request), ["planner"]).pipe(
                   Effect.provideService(Reactivity.Reactivity, reactivity),
-                  Effect.mapError(
-                    () =>
-                      new PlannerError({
-                        code: "unavailable",
-                        message: "Voice admission is uncertain.",
-                      }),
+                  Effect.mapError(() =>
+                    PlannerError.make({
+                      code: "unavailable",
+                      message: "Voice admission is uncertain.",
+                    }),
                   ),
                 ),
               read: (request) =>
                 client("GetVoiceWork", request).pipe(
-                  Effect.mapError(
-                    () =>
-                      new PlannerError({
-                        code: "unavailable",
-                        message: "Voice work status is unavailable.",
-                      }),
+                  Effect.mapError(() =>
+                    PlannerError.make({
+                      code: "unavailable",
+                      message: "Voice work status is unavailable.",
+                    }),
                   ),
                 ),
               progress: () => Option.getOrNull(AsyncResult.value(get(progressAtom))),

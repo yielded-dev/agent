@@ -102,7 +102,7 @@ const layer = (
   admission: PreparedInputAdmission["Service"] = {
     submit: (envelope) => Effect.succeed(receipt(envelope)),
     submissionStatus: (receipt) =>
-      Effect.succeed(new SettledSubmission({ settlement: settlement(receipt) })),
+      Effect.succeed(SettledSubmission.make({ settlement: settlement(receipt) })),
   },
   limits?: MessageDeliveryStoreLimits,
 ) => MessageDeliveryDriver.layer().pipe(Layer.provideMerge(dependencies(admission, limits)));
@@ -182,16 +182,15 @@ describe("direct message delivery", () => {
 
         const blockedCrypto: Crypto.Crypto = {
           ...crypto,
-          digest: (algorithm, bytes) =>
-            Effect.gen(function* () {
-              calls += 1;
-              if (calls === 1) {
-                yield* Deferred.succeed(entered, undefined);
-                yield* Deferred.await(release);
-              }
+          digest: Effect.fnUntraced(function* (algorithm, bytes) {
+            calls += 1;
+            if (calls === 1) {
+              yield* Deferred.succeed(entered, undefined);
+              yield* Deferred.await(release);
+            }
 
-              return yield* crypto.digest(algorithm, bytes);
-            }),
+            return yield* crypto.digest(algorithm, bytes);
+          }),
         };
 
         const preparing = yield* Effect.forkChild(

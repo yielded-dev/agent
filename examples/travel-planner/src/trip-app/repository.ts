@@ -27,18 +27,18 @@ const Rows = Schema.Array(
 );
 
 const storageError = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "storage",
     message: "Trip app storage is unavailable or contains unsupported data.",
   });
 
 const conflict = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "conflict",
     message: "This trip app changed. Refresh it before saving.",
   });
 
-const invalid = () => new PlannerError({ code: "invalid", message: "Invalid trip app." });
+const invalid = () => PlannerError.make({ code: "invalid", message: "Invalid trip app." });
 
 /** One host-owned account partition. Revisions are append-only; exact retries never restore an older head. */
 export const AppRepositoryLive = Layer.effect(

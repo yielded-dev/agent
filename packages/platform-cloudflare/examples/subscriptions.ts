@@ -40,8 +40,8 @@ export const verifiedEventAlarms = Layer.effect(
       message: Schema.String.check(Schema.isMaxLength(4_096)),
     }),
     timeoutMillis: 30_000,
-    handle: ({ payload }) =>
-      Effect.gen(function* () {
+    handle: Effect.fnUntraced(
+      function* ({ payload }) {
         const intake = yield* SubscriptionIntake;
 
         yield* intake.accept(
@@ -49,9 +49,9 @@ export const verifiedEventAlarms = Layer.effect(
           { name: "application-event", version: "1" },
           payload,
         );
-      }).pipe(
-        Effect.mapError(() => SubscriptionAlarmExtensionError.make({ code: "verified-intake" })),
-      ),
+      },
+      Effect.mapError(() => SubscriptionAlarmExtensionError.make({ code: "verified-intake" })),
+    ),
   }).pipe(Effect.map((handler) => ({ handlers: [handler] }))),
 );
 

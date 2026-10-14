@@ -84,15 +84,14 @@ export const schedulingCrashWorker = Effect.gen(function* () {
   });
 
   const failpoint = {
-    hit: (point: string) =>
-      Effect.gen(function* () {
-        if (yield* Ref.get(latched)) return yield* Effect.never;
-        if (point !== config.boundary) return;
-        yield* Ref.set(latched, true);
-        yield* Console.log(encodedMarker);
+    hit: Effect.fnUntraced(function* (point: string) {
+      if (yield* Ref.get(latched)) return yield* Effect.never;
+      if (point !== config.boundary) return;
+      yield* Ref.set(latched, true);
+      yield* Console.log(encodedMarker);
 
-        return yield* Effect.never;
-      }),
+      return yield* Effect.never;
+    }),
   };
 
   const host = NodeDurableHost.layerStack({

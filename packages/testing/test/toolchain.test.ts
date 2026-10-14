@@ -62,19 +62,17 @@ type WorkflowFile = typeof WorkflowFile.Type;
 // silently audits the wrong tree.
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url)).replace(/\/$/, "");
 
-const readRepositoryFile = (path: string) =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
+const readRepositoryFile = Effect.fnUntraced(function* (path: string) {
+  const fs = yield* FileSystem.FileSystem;
 
-    return yield* fs.readFileString(`${repositoryRoot}/${path}`);
-  });
+  return yield* fs.readFileString(`${repositoryRoot}/${path}`);
+});
 
-const readWorkflow = (path: string) =>
-  Effect.gen(function* () {
-    const contents = yield* readRepositoryFile(path);
+const readWorkflow = Effect.fnUntraced(function* (path: string) {
+  const contents = yield* readRepositoryFile(path);
 
-    return yield* Schema.decodeUnknownEffect(WorkflowFile)(Yaml.parse(contents));
-  });
+  return yield* Schema.decodeUnknownEffect(WorkflowFile)(Yaml.parse(contents));
+});
 
 const workflowStep = (workflow: WorkflowFile, jobName: string, stepName: string) => {
   const step = workflow.jobs[jobName]?.steps?.find((candidate) => candidate.name === stepName);
@@ -134,7 +132,7 @@ layer(NodeServices.layer)("workspace toolchain", (it) => {
           continuity: true,
           dryRun: false,
           failure: "",
-          expected: ["publish"],
+          expected: ["publish", "dist-tag"],
         },
       ]) {
         const observed: Array<string> = [];
@@ -143,11 +141,18 @@ layer(NodeServices.layer)("workspace toolchain", (it) => {
           if (command._tag !== "StandardCommand") return Effect.die("Unexpected pipeline");
 
           const operation = command.args.find((arg) =>
-            ["build", "context-continuity-eval", "prove:live", "publish", "pack"].includes(arg),
+            [
+              "build",
+              "context-continuity-eval",
+              "prove:live",
+              "publish",
+              "dist-tag",
+              "pack",
+            ].includes(arg),
           );
 
           if (operation === undefined) return Effect.die("Unexpected release command");
-          if (operation === "publish") observed.push(operation);
+          if (operation === "publish" || operation === "dist-tag") observed.push(operation);
 
           // Exercise the real process exit boundary without building, deploying, or publishing.
           return spawner.spawn(

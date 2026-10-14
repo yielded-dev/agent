@@ -1,4 +1,4 @@
-import { Array, type Schema } from "effect";
+import { Array, Predicate, Result, Schema } from "effect";
 
 interface JsonLimits {
   readonly depth: number;
@@ -7,19 +7,36 @@ interface JsonLimits {
   readonly textUnits: number;
 }
 
+export class CanonicalJsonLimitError extends Schema.TaggedError<CanonicalJsonLimitError>()(
+  "CanonicalJsonLimitError",
+  { message: Schema.String },
+) {}
+
+// Only this codec's private synchronous aborts become typed bounds failures.
+const boundsFailures = new WeakMap<object, string>();
+
+const exceeded = (bound: "text" | "traversal" | "collection"): never => {
+  const message = `Canonical JSON exceeds its ${bound} bound`;
+  // oxlint-disable-next-line effect/no-native-error -- Private synchronous codec abort; the Result boundary translates only errors owned here.
+  const error = new RangeError(message);
+
+  boundsFailures.set(error, message);
+  // oxlint-disable-next-line effect/no-untyped-throw -- Abort synchronous JSON traversal at the first exceeded bound; the Result boundary catches this owned error.
+  throw error;
+};
+
 /** Values have already crossed their Schema boundary; visit each serialized occurrence. */
-export const canonicalJson = (value: Schema.Json, limits?: JsonLimits): string => {
+const serialize = (value: Schema.Json, limits?: JsonLimits): string => {
   let nodes = 0;
   let textUnits = 0;
 
   const charge = (length: number) => {
-    if (limits !== undefined && (textUnits += length) > limits.textUnits)
-      throw new RangeError("Canonical JSON exceeds its text bound");
+    if (limits !== undefined && (textUnits += length) > limits.textUnits) return exceeded("text");
   };
 
   const visit = (value: Schema.Json, depth: number): string => {
     if (limits !== undefined && (depth > limits.depth || ++nodes > limits.nodes))
-      throw new RangeError("Canonical JSON exceeds its traversal bound");
+      return exceeded("traversal");
     if (
       value === null ||
       typeof value === "boolean" ||
@@ -34,7 +51,7 @@ export const canonicalJson = (value: Schema.Json, limits?: JsonLimits): string =
     }
     if (Array.isArray<Schema.Json>(value)) {
       if (limits !== undefined && value.length > limits.collectionLength)
-        throw new RangeError("Canonical JSON exceeds its collection bound");
+        return exceeded("collection");
       charge(2 + Math.max(0, value.length - 1));
 
       let json = "[";
@@ -50,7 +67,7 @@ export const canonicalJson = (value: Schema.Json, limits?: JsonLimits): string =
     const keys = Object.keys(value).sort();
 
     if (limits !== undefined && keys.length > limits.collectionLength)
-      throw new RangeError("Canonical JSON exceeds its collection bound");
+      return exceeded("collection");
     charge(2 + Math.max(0, keys.length - 1));
     let json = "{";
 
@@ -67,4 +84,21 @@ export const canonicalJson = (value: Schema.Json, limits?: JsonLimits): string =
   };
 
   return visit(value, 0);
+};
+
+export const canonicalJson = (value: Schema.Json): string => serialize(value);
+
+export const boundedCanonicalJson = (
+  value: Schema.Json,
+  limits: JsonLimits,
+): Result.Result<string, CanonicalJsonLimitError> => {
+  try {
+    return Result.succeed(serialize(value, limits));
+  } catch (cause) {
+    const message = Predicate.isObjectKeyword(cause) ? boundsFailures.get(cause) : undefined;
+
+    if (message !== undefined) return Result.fail(CanonicalJsonLimitError.make({ message }));
+    // oxlint-disable-next-line effect/no-untyped-throw -- Foreign JSON/getter errors retain their identity for the caller's typed capture boundary.
+    throw cause;
+  }
 };

@@ -21,7 +21,7 @@ export const naturalFixture = Effect.fnUntraced(function* (
 
   if (yield* fs.exists(output + ".json")) return;
   if (yield* fs.exists(output))
-    return yield* new BenchError({
+    return yield* BenchError.make({
       message: "Fixture directory exists without metadata; preserve it and choose a new directory.",
     });
   const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "durable-bench-natural-" });
@@ -77,7 +77,7 @@ export const naturalFixture = Effect.fnUntraced(function* (
             }),
           ),
         catch: (cause) =>
-          new BenchError({
+          BenchError.make({
             message: `Could not start the natural fixture builder: ${cause instanceof Error ? cause.message : "unknown error"}`,
           }),
       }),
@@ -87,54 +87,50 @@ export const naturalFixture = Effect.fnUntraced(function* (
     yield* Effect.tryPromise({
       try: () => mf.ready,
       catch: (cause) =>
-        new BenchError({
+        BenchError.make({
           message: `Natural fixture startup failed: ${cause instanceof Error ? cause.message : "unknown error"}`,
         }),
     });
 
-    const invoke = <S extends Schema.Top & { readonly DecodingServices: never }>(
-      path: string,
-      schema: S,
-      body?: unknown,
-      sample = "import",
-    ) =>
-      Effect.gen(function* () {
-        const url = new URL(path, "https://bench");
+    const invoke = Effect.fnUntraced(function* <
+      S extends Schema.Top & { readonly DecodingServices: never },
+    >(path: string, schema: S, body?: unknown, sample = "import") {
+      const url = new URL(path, "https://bench");
 
-        for (const [key, value] of Object.entries({
-          target,
-          object: NATURAL_THREAD,
-          history: 1000,
-          sample,
-          expectedBuild: revision,
-          ttftMs: 0,
-          chunkDelayMs: 0,
-          textStreaming: false,
-        }))
-          url.searchParams.set(key, String(value));
+      for (const [key, value] of Object.entries({
+        target,
+        object: NATURAL_THREAD,
+        history: 1000,
+        sample,
+        expectedBuild: revision,
+        ttftMs: 0,
+        chunkDelayMs: 0,
+        textStreaming: false,
+      }))
+        url.searchParams.set(key, String(value));
 
-        const response = yield* Effect.tryPromise({
-          try: () =>
-            mf.dispatchFetch(url.toString(), {
-              method: body === undefined ? "GET" : "POST",
-              headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-              ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-            }),
-          catch: () => new BenchError({ message: `Natural fixture ${path} failed.` }),
-        });
-
-        const text = yield* Effect.tryPromise({
-          try: () => response.text(),
-          catch: () => new BenchError({ message: "Cannot read natural fixture response." }),
-        });
-
-        if (!response.ok)
-          return yield* new BenchError({
-            message: `Natural fixture ${path}: ${text.slice(0, 2000)}`,
-          });
-
-        return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(text);
+      const response = yield* Effect.tryPromise({
+        try: () =>
+          mf.dispatchFetch(url.toString(), {
+            method: body === undefined ? "GET" : "POST",
+            headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+          }),
+        catch: () => BenchError.make({ message: `Natural fixture ${path} failed.` }),
       });
+
+      const text = yield* Effect.tryPromise({
+        try: () => response.text(),
+        catch: () => BenchError.make({ message: "Cannot read natural fixture response." }),
+      });
+
+      if (!response.ok)
+        return yield* BenchError.make({
+          message: `Natural fixture ${path}: ${text.slice(0, 2000)}`,
+        });
+
+      return yield* Schema.decodeEffect(Schema.fromJsonString(schema))(text);
+    });
 
     let fingerprint = "";
 
@@ -152,7 +148,7 @@ export const naturalFixture = Effect.fnUntraced(function* (
 
   const metadata =
     target === "yielded" && ref
-      ? yield* Schema.decodeUnknownEffect(
+      ? yield* Schema.decodeEffect(
           Schema.fromJsonString(Schema.Struct({ version: Schema.String })),
         )(yield* git(["show", `${ref}:packages/effect-agent/package.json`]))
       : yield* read(
@@ -177,7 +173,7 @@ export const naturalFixture = Effect.fnUntraced(function* (
   ]);
 
   if (copied.code !== 0)
-    return yield* new BenchError({ message: "Cannot save the natural fixture." });
+    return yield* BenchError.make({ message: "Cannot save the natural fixture." });
   yield* save(output + ".json", {
     target,
     version: metadata.version,

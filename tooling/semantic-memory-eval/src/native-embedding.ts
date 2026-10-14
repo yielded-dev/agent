@@ -92,52 +92,51 @@ export const makeNativeEmbeddingLayer = Effect.fn("makeNativeEmbeddingLayer")(fu
     ).pipe(
       Effect.flatMap((extractor) =>
         EmbeddingModel.make({
-          embedMany: ({ inputs }) =>
-            Effect.gen(function* () {
-              if ((options.delayMillis ?? 0) > 0) yield* Effect.sleep(options.delayMillis!);
-              if (options.fail === true) return yield* aiError("embedMany", "injected failure");
-              yield* Ref.update(telemetry, (current) => ({
-                ...current,
-                calls: current.calls + 1,
-                inputs: current.inputs + inputs.length,
-                textBytes:
-                  current.textBytes + inputs.reduce((total, input) => total + byteLength(input), 0),
-              }));
+          embedMany: Effect.fnUntraced(function* ({ inputs }) {
+            if ((options.delayMillis ?? 0) > 0) yield* Effect.sleep(options.delayMillis!);
+            if (options.fail === true) return yield* aiError("embedMany", "injected failure");
+            yield* Ref.update(telemetry, (current) => ({
+              ...current,
+              calls: current.calls + 1,
+              inputs: current.inputs + inputs.length,
+              textBytes:
+                current.textBytes + inputs.reduce((total, input) => total + byteLength(input), 0),
+            }));
 
-              const results = yield* semaphore.withPermits(1)(
-                Effect.acquireUseRelease(
-                  Effect.uninterruptible(
-                    Effect.tryPromise({
-                      try: () => extractor([...inputs], { pooling: "mean", normalize: true }),
-                      catch: (cause) => aiError("embedMany", cause),
-                    }),
-                  ),
-                  (tensor) =>
-                    Effect.gen(function* () {
-                      if (
-                        tensor.type !== "float32" ||
-                        tensor.dims.length !== 2 ||
-                        tensor.dims[0] !== inputs.length ||
-                        tensor.dims[1] !== 384 ||
-                        !(tensor.data instanceof Float32Array)
-                      ) {
-                        return yield* aiError(
-                          "embedMany",
-                          `unexpected tensor ${tensor.type} [${tensor.dims.join(",")}]`,
-                        );
-                      }
-                      const data = tensor.data;
-
-                      return Array.from({ length: inputs.length }, (_, row) =>
-                        Array.from(data.subarray(row * 384, (row + 1) * 384)),
-                      );
-                    }),
-                  (tensor) => Effect.sync(() => tensor.dispose()).pipe(Effect.orDie),
+            const results = yield* semaphore.withPermits(1)(
+              Effect.acquireUseRelease(
+                Effect.uninterruptible(
+                  Effect.tryPromise({
+                    try: () => extractor([...inputs], { pooling: "mean", normalize: true }),
+                    catch: (cause) => aiError("embedMany", cause),
+                  }),
                 ),
-              );
+                (tensor) =>
+                  Effect.gen(function* () {
+                    if (
+                      tensor.type !== "float32" ||
+                      tensor.dims.length !== 2 ||
+                      tensor.dims[0] !== inputs.length ||
+                      tensor.dims[1] !== 384 ||
+                      !(tensor.data instanceof Float32Array)
+                    ) {
+                      return yield* aiError(
+                        "embedMany",
+                        `unexpected tensor ${tensor.type} [${tensor.dims.join(",")}]`,
+                      );
+                    }
+                    const data = tensor.data;
 
-              return { results, usage: { inputTokens: undefined } };
-            }),
+                    return Array.from({ length: inputs.length }, (_, row) =>
+                      Array.from(data.subarray(row * 384, (row + 1) * 384)),
+                    );
+                  }),
+                (tensor) => Effect.sync(() => tensor.dispose()).pipe(Effect.orDie),
+              ),
+            );
+
+            return { results, usage: { inputTokens: undefined } };
+          }),
         }),
       ),
     ),

@@ -20,7 +20,8 @@ model, `medium` reasoning by default, explicit prompt caching, and a separate sp
 each trial. Set `PR_REVIEW_MODEL` (for example, `gpt-6-astra`); there is no model fallback.
 Set `PR_REVIEW_EFFORT` to compare reasoning configurations. Effort accepts
 `low`, `medium`, `high`, `xhigh`, or `max`; model IDs must have a supported rate card.
-Set `PR_REVIEW_PRIORITY=fast` for the Fast service tier; the default is `default`.
+Set `PR_REVIEW_PRIORITY=fast` for Fast or `ultrafast` for GPT-6 Astra and GPT-6.1 Sol;
+the default is `default`.
 The selected tier is recorded in the observation and used by the provider cost ledger.
 Each observation records the effective settings. Use distinct variant IDs for comparisons.
 Set `PR_REVIEW_WEB_SEARCH=true` to expose the Action's native hosted search tool;

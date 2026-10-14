@@ -109,6 +109,7 @@ it("runs the same pressure and evidence gate through the public Cloudflare host 
           {
             model: "gpt-6-astra",
             reasoningEffort: "low",
+            serviceTier: "default",
             seed: 17,
             outputDirectory,
             sourceCommit: "a".repeat(40),

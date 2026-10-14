@@ -247,25 +247,24 @@ layer(testLayer)("resolved model context", (it) => {
         script: [],
         searchResults: ["retained search evidence ".repeat(800), "small result"],
         context: {
-          prepare: (request) =>
-            Effect.gen(function* () {
-              const route = yield* Ref.get(selected);
+          prepare: Effect.fnUntraced(function* (request) {
+            const route = yield* Ref.get(selected);
 
-              resolved.push(route);
+            resolved.push(route);
 
-              return {
-                prompt: request.source,
-                modelCall: {
-                  model: route === "large" ? large.model : small.model,
-                  context: ModelCallContext.make({
-                    contextCapacity: route === "large" ? 20_000 : 4_000,
-                    maxInputTokens: route === "large" ? 15_000 : 2_000,
-                    outputReserveTokens: 400,
-                    uncountedOverheadTokens: 100,
-                  }),
-                },
-              };
-            }),
+            return {
+              prompt: request.source,
+              modelCall: {
+                model: route === "large" ? large.model : small.model,
+                context: ModelCallContext.make({
+                  contextCapacity: route === "large" ? 20_000 : 4_000,
+                  maxInputTokens: route === "large" ? 15_000 : 2_000,
+                  outputReserveTokens: 400,
+                  uncountedOverheadTokens: 100,
+                }),
+              },
+            };
+          }),
         },
         transientContext: {
           load: () => Ref.set(selected, "small").pipe(Effect.as(Prompt.empty)),

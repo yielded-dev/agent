@@ -194,25 +194,29 @@ export const exposureSnapshot = Effect.fnUntraced(function* (
     if (names.length > limits.maxTools)
       return yield* invalid("Tool exposure exceeds the configured Tool count bound");
 
+    const declarations: Array<unknown> = [];
+
+    for (const name of names) {
+      const tool = definition.toolkit.tools[name];
+
+      if (tool === undefined) return yield* invalid("A selected Tool schema cannot be rendered");
+      declarations.push(
+        yield* Effect.try({
+          try: () =>
+            Tool.isProviderDefined(tool)
+              ? { type: tool.providerName, args: tool.args }
+              : {
+                  name,
+                  description: Tool.getDescription(tool),
+                  parameters: Tool.getJsonSchema(tool, { transformer }),
+                },
+          catch: () => invalid("A selected Tool schema cannot be rendered"),
+        }),
+      );
+    }
+
     const bytes = yield* Effect.try({
-      try: () =>
-        utf8ByteLength(
-          JSON.stringify(
-            names.map((name) => {
-              const tool = definition.toolkit.tools[name];
-
-              if (tool === undefined) throw new Error("Selected Tool is unavailable");
-
-              return Tool.isProviderDefined(tool)
-                ? { type: tool.providerName, args: tool.args }
-                : {
-                    name,
-                    description: Tool.getDescription(tool),
-                    parameters: Tool.getJsonSchema(tool, { transformer }),
-                  };
-            }),
-          ),
-        ),
+      try: () => utf8ByteLength(JSON.stringify(declarations)),
       catch: () => invalid("A selected Tool schema cannot be rendered"),
     });
 

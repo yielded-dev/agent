@@ -136,34 +136,35 @@ const toolTurn = (
 ];
 
 /** Scripted model whose call counter and captured prompts survive Layer rebuilds across Attempts. */
-const makeScriptedModel = (script: (call: number) => ReadonlyArray<Response.StreamPartEncoded>) =>
-  Effect.gen(function* () {
-    const calls = yield* Ref.make(0);
-    const prompts: Array<Prompt.Prompt> = [];
+const makeScriptedModel = Effect.fnUntraced(function* (
+  script: (call: number) => ReadonlyArray<Response.StreamPartEncoded>,
+) {
+  const calls = yield* Ref.make(0);
+  const prompts: Array<Prompt.Prompt> = [];
 
-    const model = Model.make(
-      "scripted",
-      "durable-subagents-test",
-      Layer.effect(
-        LanguageModel.LanguageModel,
-        LanguageModel.make({
-          generateText: () => Effect.succeed([]),
-          streamText: (request) =>
-            Stream.unwrap(
-              Ref.getAndUpdate(calls, (call) => call + 1).pipe(
-                Effect.map((call) => {
-                  prompts.push(request.prompt);
+  const model = Model.make(
+    "scripted",
+    "durable-subagents-test",
+    Layer.effect(
+      LanguageModel.LanguageModel,
+      LanguageModel.make({
+        generateText: () => Effect.succeed([]),
+        streamText: (request) =>
+          Stream.unwrap(
+            Ref.getAndUpdate(calls, (call) => call + 1).pipe(
+              Effect.map((call) => {
+                prompts.push(request.prompt);
 
-                  return Stream.fromIterable(script(call));
-                }),
-              ),
+                return Stream.fromIterable(script(call));
+              }),
             ),
-        }),
-      ),
-    );
+          ),
+      }),
+    ),
+  );
 
-    return { model, prompts, calls: Ref.get(calls) };
-  });
+  return { model, prompts, calls: Ref.get(calls) };
+});
 
 const ChildInput = Schema.Struct({ question: Schema.String });
 const ChildOutput = Schema.Struct({ answer: Schema.String });
@@ -360,146 +361,145 @@ const submitParentWith =
  * binding array under their exact digests. The capability derives child digests
  * from registration without repeating durable setup in its handler Layer.
  */
-const makeHarness = (options?: {
+const makeHarness = Effect.fnUntraced(function* (options?: {
   readonly registration?: "missing" | "ambiguous" | "different-definition";
   readonly declaredDigests?: DefinitionDigests;
-}) =>
-  Effect.gen(function* () {
-    const { childScripted, childBinding } = yield* makeChildFixture;
+}) {
+  const { childScripted, childBinding } = yield* makeChildFixture;
 
-    const parentScripted = yield* makeScriptedModel((call) =>
-      call === 0
-        ? toolTurn(toolCall("delegate-1", "delegate_research", { topic: "paris" }))
-        : finalParts('{"report":"done"}'),
-    );
+  const parentScripted = yield* makeScriptedModel((call) =>
+    call === 0
+      ? toolTurn(toolCall("delegate-1", "delegate_research", { topic: "paris" }))
+      : finalParts('{"report":"done"}'),
+  );
 
-    const parentBinding = Agent.withModel(coordinatorDefinition, parentScripted.model);
+  const parentBinding = Agent.withModel(coordinatorDefinition, parentScripted.model);
 
-    const delegationLayer = Subagent.layer(researchDelegation, childBinding, {
-      mapChildFailure,
-      ...(options?.declaredDigests === undefined
-        ? {}
-        : { durable: { targetDigests: options.declaredDigests } }),
-    }).pipe(Layer.provide(delegationSupport));
+  const delegationLayer = Subagent.layer(researchDelegation, childBinding, {
+    mapChildFailure,
+    ...(options?.declaredDigests === undefined
+      ? {}
+      : { durable: { targetDigests: options.declaredDigests } }),
+  }).pipe(Layer.provide(delegationSupport));
 
-    const parentResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
-      parentBinding,
-      PARENT_DIGESTS,
-    ).pipe(Effect.provide(delegationLayer));
+  const parentResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
+    parentBinding,
+    PARENT_DIGESTS,
+  ).pipe(Effect.provide(delegationLayer));
 
-    const childResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
-      childBinding,
-      CHILD_DIGESTS,
-    );
+  const childResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
+    childBinding,
+    CHILD_DIGESTS,
+  );
 
-    const bindings = [
-      parentResolved,
-      ...(options?.registration === "missing"
-        ? []
-        : options?.registration === "ambiguous"
-          ? [childResolved, childResolved]
-          : options?.registration === "different-definition"
-            ? [
-                {
-                  ...childResolved,
-                  definition: Agent.make(childDefinition.id, {
-                    input: childDefinition.input,
-                    output: childDefinition.output,
-                    instructions: childDefinition.instructions,
-                    toolkit: childDefinition.toolkit,
-                    policy: childDefinition.policy,
-                  }),
-                },
-              ]
-            : [childResolved]),
-    ];
+  const bindings = [
+    parentResolved,
+    ...(options?.registration === "missing"
+      ? []
+      : options?.registration === "ambiguous"
+        ? [childResolved, childResolved]
+        : options?.registration === "different-definition"
+          ? [
+              {
+                ...childResolved,
+                definition: Agent.make(childDefinition.id, {
+                  input: childDefinition.input,
+                  output: childDefinition.output,
+                  instructions: childDefinition.instructions,
+                  toolkit: childDefinition.toolkit,
+                  policy: childDefinition.policy,
+                }),
+              },
+            ]
+          : [childResolved]),
+  ];
 
-    return {
-      bindings,
-      runtime: yield* DurableAgentRuntime.pipe(
-        Effect.provide(
-          DurableAgentRuntime.layerWithBindings(bindings)
-            .pipe(Layer.provide(runStorageLayer()))
-            .pipe(Layer.provide(RunToolAuthorization.allowAll)),
-        ),
+  return {
+    bindings,
+    runtime: yield* DurableAgentRuntime.pipe(
+      Effect.provide(
+        DurableAgentRuntime.layerWithBindings(bindings)
+          .pipe(Layer.provide(runStorageLayer()))
+          .pipe(Layer.provide(RunToolAuthorization.allowAll)),
       ),
-      childInvocations: childScripted.calls,
-      parentPrompts: parentScripted.prompts,
-      submitParent: submitParentWith(coordinatorDefinition),
-      lookupInvocations: Effect.succeed(0),
-    };
-  });
+    ),
+    childInvocations: childScripted.calls,
+    parentPrompts: parentScripted.prompts,
+    submitParent: submitParentWith(coordinatorDefinition),
+    lookupInvocations: Effect.succeed(0),
+  };
+});
 
 /** The mixed fixture: the delegation call plus an ordinary uncertain sibling in one batch. */
-const makeSiblingHarnessWith = (pendingSibling = false, retryableSibling = true) =>
-  Effect.gen(function* () {
-    const { childScripted, childBinding } = yield* makeChildFixture;
+const makeSiblingHarnessWith = Effect.fnUntraced(function* (
+  pendingSibling = false,
+  retryableSibling = true,
+) {
+  const { childScripted, childBinding } = yield* makeChildFixture;
 
-    const parentScripted = yield* makeScriptedModel((call) =>
-      call === 0
-        ? toolTurn(
-            toolCall("delegate-1", "delegate_research", { topic: "paris" }),
-            toolCall("lookup-1", "lookup", { key: "hotels" }),
-          )
-        : finalParts('{"report":"done"}'),
-    );
+  const parentScripted = yield* makeScriptedModel((call) =>
+    call === 0
+      ? toolTurn(
+          toolCall("delegate-1", "delegate_research", { topic: "paris" }),
+          toolCall("lookup-1", "lookup", { key: "hotels" }),
+        )
+      : finalParts('{"report":"done"}'),
+  );
 
-    const lookupTool =
-      pendingSibling && retryableSibling
-        ? Lookup.annotate(ToolExecutionClass, "idempotent")
-        : Lookup;
+  const lookupTool =
+    pendingSibling && retryableSibling ? Lookup.annotate(ToolExecutionClass, "idempotent") : Lookup;
 
-    const definition = Agent.make(mixedCoordinatorDefinition.id, {
-      input: mixedCoordinatorDefinition.input,
-      output: mixedCoordinatorDefinition.output,
-      instructions: mixedCoordinatorDefinition.instructions,
-      toolkit: Toolkit.make(researchDelegation.tool, lookupTool),
-      policy: mixedCoordinatorDefinition.policy,
-    });
-
-    const parentBinding = Agent.withModel(definition, parentScripted.model);
-    const lookupInvocations = yield* Ref.make(0);
-    const lookupFinalizers = yield* Ref.make(0);
-
-    const delegationLayer = Subagent.layer(researchDelegation, childBinding, {
-      mapChildFailure,
-      durable: { targetDigests: CHILD_DIGEST_STRINGS },
-    }).pipe(Layer.provide(delegationSupport));
-
-    const lookupLayer = Toolkit.make(lookupTool).toLayer({
-      lookup: ({ key }) =>
-        Ref.update(lookupInvocations, (count) => count + 1).pipe(
-          Effect.andThen(pendingSibling ? Effect.never : Effect.succeed({ value: `found-${key}` })),
-          Effect.ensuring(Ref.update(lookupFinalizers, (count) => count + 1)),
-        ),
-    });
-
-    const parentResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
-      parentBinding,
-      PARENT_DIGESTS,
-    ).pipe(Effect.provide(Layer.mergeAll(delegationLayer, lookupLayer)));
-
-    const childResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
-      childBinding,
-      CHILD_DIGESTS,
-    );
-
-    return {
-      bindings: [parentResolved, childResolved],
-      runtime: yield* DurableAgentRuntime.pipe(
-        Effect.provide(
-          DurableAgentRuntime.layerWithBindings([parentResolved, childResolved])
-            .pipe(Layer.provide(runStorageLayer()))
-            .pipe(Layer.provide(RunToolAuthorization.allowAll)),
-        ),
-      ),
-      childInvocations: childScripted.calls,
-      parentPrompts: parentScripted.prompts,
-      submitParent: submitParentWith(mixedCoordinatorDefinition),
-      lookupInvocations: Ref.get(lookupInvocations),
-      lookupFinalizers: Ref.get(lookupFinalizers),
-    };
+  const definition = Agent.make(mixedCoordinatorDefinition.id, {
+    input: mixedCoordinatorDefinition.input,
+    output: mixedCoordinatorDefinition.output,
+    instructions: mixedCoordinatorDefinition.instructions,
+    toolkit: Toolkit.make(researchDelegation.tool, lookupTool),
+    policy: mixedCoordinatorDefinition.policy,
   });
+
+  const parentBinding = Agent.withModel(definition, parentScripted.model);
+  const lookupInvocations = yield* Ref.make(0);
+  const lookupFinalizers = yield* Ref.make(0);
+
+  const delegationLayer = Subagent.layer(researchDelegation, childBinding, {
+    mapChildFailure,
+    durable: { targetDigests: CHILD_DIGEST_STRINGS },
+  }).pipe(Layer.provide(delegationSupport));
+
+  const lookupLayer = Toolkit.make(lookupTool).toLayer({
+    lookup: ({ key }) =>
+      Ref.update(lookupInvocations, (count) => count + 1).pipe(
+        Effect.andThen(pendingSibling ? Effect.never : Effect.succeed({ value: `found-${key}` })),
+        Effect.ensuring(Ref.update(lookupFinalizers, (count) => count + 1)),
+      ),
+  });
+
+  const parentResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
+    parentBinding,
+    PARENT_DIGESTS,
+  ).pipe(Effect.provide(Layer.mergeAll(delegationLayer, lookupLayer)));
+
+  const childResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
+    childBinding,
+    CHILD_DIGESTS,
+  );
+
+  return {
+    bindings: [parentResolved, childResolved],
+    runtime: yield* DurableAgentRuntime.pipe(
+      Effect.provide(
+        DurableAgentRuntime.layerWithBindings([parentResolved, childResolved])
+          .pipe(Layer.provide(runStorageLayer()))
+          .pipe(Layer.provide(RunToolAuthorization.allowAll)),
+      ),
+    ),
+    childInvocations: childScripted.calls,
+    parentPrompts: parentScripted.prompts,
+    submitParent: submitParentWith(mixedCoordinatorDefinition),
+    lookupInvocations: Ref.get(lookupInvocations),
+    lookupFinalizers: Ref.get(lookupFinalizers),
+  };
+});
 
 const DELEGATE_CALL = decodeToolCallId("delegate-1");
 
@@ -507,45 +507,41 @@ const drive =
   (harness: { readonly runtime: DurableAgentRuntime["Service"] }) => (threadId: ThreadId) =>
     harness.runtime.processThreadResolved(threadId);
 
-const readLog = (threadId: ThreadId) =>
-  Effect.gen(function* () {
-    const store = yield* ThreadStore;
+const readLog = Effect.fnUntraced(function* (threadId: ThreadId) {
+  const store = yield* ThreadStore;
 
-    return yield* Stream.runCollect(store.read(ThreadRead.make({ threadId, limit: 1_024 })));
-  });
+  return yield* Stream.runCollect(store.read(ThreadRead.make({ threadId, limit: 1_024 })));
+});
 
-const parentState = (submissionId: SubmissionId) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
-    const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
+const parentState = Effect.fnUntraced(function* (submissionId: SubmissionId) {
+  const ledger = yield* SubmissionLedger;
+  const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
 
-    expect(Option.isSome(snapshot)).toBe(true);
-    if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
+  expect(Option.isSome(snapshot)).toBe(true);
+  if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
 
-    return snapshot.value;
-  });
+  return snapshot.value;
+});
 
-const parentReservations = (submissionId: SubmissionId) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
+const parentReservations = Effect.fnUntraced(function* (submissionId: SubmissionId) {
+  const ledger = yield* SubmissionLedger;
 
-    const snapshot = yield* ledger.loadRecoverySnapshot(
-      RecoverySnapshotRequest.make({ submissionId }),
-    );
+  const snapshot = yield* ledger.loadRecoverySnapshot(
+    RecoverySnapshotRequest.make({ submissionId }),
+  );
 
-    return snapshot.childReservations;
-  });
+  return snapshot.childReservations;
+});
 
-const armFailpoint = (location: DurableRuntimeFailpointLocation) =>
-  Effect.gen(function* () {
-    const control = yield* DurableRuntimeFailpointTestControl;
+const armFailpoint = Effect.fnUntraced(function* (location: DurableRuntimeFailpointLocation) {
+  const control = yield* DurableRuntimeFailpointTestControl;
 
-    yield* control.setHandler((hitLocation) =>
-      hitLocation === location
-        ? Effect.fail(DurableRuntimeFailpointError.make({ location: hitLocation }))
-        : Effect.void,
-    );
-  });
+  yield* control.setHandler((hitLocation) =>
+    hitLocation === location
+      ? Effect.fail(DurableRuntimeFailpointError.make({ location: hitLocation }))
+      : Effect.void,
+  );
+});
 
 const clearFailpoint = Effect.gen(function* () {
   const control = yield* DurableRuntimeFailpointTestControl;
@@ -1324,37 +1320,32 @@ layer(testLayer)("S2 durable attached Subagents (WP4 coordinator)", (it) => {
 
         const racingLedger = SubmissionLedger.of({
           ...ledger,
-          admit: (value) =>
-            Effect.gen(function* () {
-              if (
-                value.threadId === request.childThreadId &&
-                !(yield* Ref.getAndSet(raced, true))
-              ) {
-                expect(yield* Ref.get(sawNotAdmitted)).toBe(true);
-                expect(
-                  (yield* ledger.loadRecoverySnapshot(
-                    RecoverySnapshotRequest.make({ submissionId: parent.submissionId }),
-                  )).childReservations.map((reservation) => reservation.status),
-                ).toEqual(["reserved"]);
-                // The stale owner's request lands after recovery observed authoritative absence,
-                // immediately before recovery completes that same idempotent admission.
-                admissions.push(admission);
-                yield* Deferred.succeed(staleReceipt, yield* ledger.admit(admission));
-              }
-              admissions.push(value);
+          admit: Effect.fnUntraced(function* (value) {
+            if (value.threadId === request.childThreadId && !(yield* Ref.getAndSet(raced, true))) {
+              expect(yield* Ref.get(sawNotAdmitted)).toBe(true);
+              expect(
+                (yield* ledger.loadRecoverySnapshot(
+                  RecoverySnapshotRequest.make({ submissionId: parent.submissionId }),
+                )).childReservations.map((reservation) => reservation.status),
+              ).toEqual(["reserved"]);
+              // The stale owner's request lands after recovery observed authoritative absence,
+              // immediately before recovery completes that same idempotent admission.
+              admissions.push(admission);
+              yield* Deferred.succeed(staleReceipt, yield* ledger.admit(admission));
+            }
+            admissions.push(value);
 
-              return yield* ledger.admit(value);
-            }),
-          resolveAdmission: (lookup) =>
-            Effect.gen(function* () {
-              const observed = yield* ledger.resolveAdmission(lookup);
+            return yield* ledger.admit(value);
+          }),
+          resolveAdmission: Effect.fnUntraced(function* (lookup) {
+            const observed = yield* ledger.resolveAdmission(lookup);
 
-              if (lookup.threadId === request.childThreadId && observed._tag === "NotAdmitted") {
-                yield* Ref.set(sawNotAdmitted, true);
-              }
+            if (lookup.threadId === request.childThreadId && observed._tag === "NotAdmitted") {
+              yield* Ref.set(sawNotAdmitted, true);
+            }
 
-              return observed;
-            }),
+            return observed;
+          }),
         });
 
         const currentModel = yield* makeScriptedModel(() =>

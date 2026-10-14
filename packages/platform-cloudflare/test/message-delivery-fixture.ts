@@ -88,48 +88,46 @@ export const messageDeliveryHolds = new Map<
 
 export const messageDeliveryResources = new Map<string, { acquired: number; released: number }>();
 
-const holdDelivery = (thread: string, point: string) =>
-  Effect.gen(function* () {
-    const hold = messageDeliveryHolds.get(thread);
+const holdDelivery = Effect.fnUntraced(function* (thread: string, point: string) {
+  const hold = messageDeliveryHolds.get(thread);
 
-    if (hold?.point !== point) return;
-    const resources = messageDeliveryResources.get(thread) ?? { acquired: 0, released: 0 };
+  if (hold?.point !== point) return;
+  const resources = messageDeliveryResources.get(thread) ?? { acquired: 0, released: 0 };
 
-    messageDeliveryResources.set(thread, resources);
-    yield* Effect.acquireUseRelease(
+  messageDeliveryResources.set(thread, resources);
+  yield* Effect.acquireUseRelease(
+    Effect.sync(() => {
+      resources.acquired++;
+      hold.entered();
+    }),
+    () => Effect.promise(() => hold.release),
+    () =>
       Effect.sync(() => {
-        resources.acquired++;
-        hold.entered();
+        resources.released++;
       }),
-      () => Effect.promise(() => hold.release),
-      () =>
-        Effect.sync(() => {
-          resources.released++;
-        }),
-    );
-  });
+  );
+});
 
 export const messageDeliveryFaultLayer = Layer.effectContext(
   Effect.gen(function* () {
     const state = yield* DurableObjectState.DurableObjectState;
 
     return Context.make(MessageDeliveryFailpoint, {
-      hit: (point) =>
-        Effect.gen(function* () {
-          const thread = state.raw.id.name ?? "";
+      hit: Effect.fnUntraced(function* (point) {
+        const thread = state.raw.id.name ?? "";
 
-          yield* observeWorkerInputDelivery(thread, point);
+        yield* observeWorkerInputDelivery(thread, point);
 
-          if (point === "message-delivery:admission:after" && messageInterruptions.delete(thread)) {
-            return yield* Effect.interrupt;
-          }
-          if (messageEvictions.get(thread) === point) {
-            messageEvictions.delete(thread);
-            state.raw.abort("message delivery eviction");
-          }
+        if (point === "message-delivery:admission:after" && messageInterruptions.delete(thread)) {
+          return yield* Effect.interrupt;
+        }
+        if (messageEvictions.get(thread) === point) {
+          messageEvictions.delete(thread);
+          state.raw.abort("message delivery eviction");
+        }
 
-          yield* holdDelivery(thread, point);
-        }),
+        yield* holdDelivery(thread, point);
+      }),
     });
   }),
 );

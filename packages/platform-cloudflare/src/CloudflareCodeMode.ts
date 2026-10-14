@@ -556,9 +556,11 @@ const makeExecute = (
           }),
           Effect.flatMap((outcome) => deliverHostOutcome(queued, outcome)),
           Effect.tapError(() =>
+            // oxlint-disable-next-line effect/no-native-error -- Native Worker RPC rejection settles the sandbox program Promise; typed host failure is tracked separately.
             Effect.sync(() => queued.reject(new Error("Code Mode host call failed"))),
           ),
           Effect.onInterrupt(() =>
+            // oxlint-disable-next-line effect/no-native-error -- Native Worker RPC rejection settles the sandbox program Promise; typed host failure is tracked separately.
             Effect.sync(() => queued.reject(new Error("Code Mode pass is closing"))),
           ),
         );
@@ -574,6 +576,7 @@ const makeExecute = (
 
     const dispatch = (hostCall: unknown): Promise<unknown> => {
       if (!passOpen) {
+        // oxlint-disable-next-line effect/no-native-error -- Native Worker RPC rejection settles the sandbox program Promise; typed host failure is tracked separately.
         return Promise.reject(new Error("Code Mode pass is closing"));
       }
       issuedHostCalls += 1;
@@ -587,11 +590,13 @@ const makeExecute = (
         failPass(error);
         Queue.offerUnsafe(queue, { _tag: "limit" });
 
+        // oxlint-disable-next-line effect/no-native-error -- Native Worker RPC rejection settles the sandbox program Promise; typed host failure is tracked separately.
         return Promise.reject(new Error("host-call limit exceeded"));
       }
       const decoded = decodeHostCall(hostCall);
 
       if (Option.isNone(decoded)) {
+        // oxlint-disable-next-line effect/no-native-error -- Native sandbox RPC rejects invalid input through its Promise; the Effect host classifies the result.
         return Promise.reject(new TypeError("host calls must match the CodeHostCall schema"));
       }
 
@@ -605,6 +610,7 @@ const makeExecute = (
 
     const closeAdmission = Effect.sync(() => {
       passOpen = false;
+      // oxlint-disable-next-line effect/no-native-error -- Native Worker RPC rejection settles the sandbox program Promise; typed host failure is tracked separately.
       rejectQueuedHostCalls(new Error("Code Mode pass is closing"));
     });
 

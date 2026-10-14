@@ -82,6 +82,7 @@ const makeRequest = (
 const unusedHost: CodeExecutionHost["Service"] = {
   call: () =>
     Effect.die(
+      // oxlint-disable-next-line effect/no-native-error -- Conformance assertion preserves its native defect when an unexpected host call escapes.
       new Error("this conformance case expected no host call to reach the CodeExecutionHost"),
     ),
 };

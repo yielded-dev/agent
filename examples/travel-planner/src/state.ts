@@ -139,7 +139,7 @@ export const changeOpenAiConnectionAtom = PlannerClient.runtime.fn<
     const session = get(sessionAtom);
 
     if (!AsyncResult.isSuccess(session) || session.waiting)
-      return yield* new PlannerError({
+      return yield* PlannerError.make({
         code: "unavailable",
         message: "Wait for sign-in to finish before changing your OpenAI key.",
       });
@@ -268,7 +268,7 @@ export const changeSettingsAtom = PlannerClient.runtime.fn<
     const session = get(sessionAtom);
 
     if (!AsyncResult.isSuccess(session) || session.waiting)
-      return yield* new AccountError({
+      return yield* AccountError.make({
         code: "unauthorized",
         message: "Sign in before choosing model settings.",
       });
@@ -837,7 +837,7 @@ export const sendMessageAtom = PlannerClient.runtime.fn<string | void>()(
       const liveSession = get(sessionAtom);
 
       if (!AsyncResult.isSuccess(liveSession) || liveSession.value.subjectId !== session.subjectId)
-        return yield* new AccountError({
+        return yield* AccountError.make({
           code: "unauthorized",
           message: "Sign in to the same account before retrying this message.",
         });

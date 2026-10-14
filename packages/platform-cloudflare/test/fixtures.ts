@@ -827,16 +827,15 @@ export const bookToolHolds = new Map<
 >();
 
 export const bookToolLayer = bookTools.toLayer({
-  book: ({ ref }) =>
-    Effect.gen(function* () {
-      yield* bookToolHolds.get(ref) ?? Effect.void;
-      const confirmation = `confirmed-${ref}`;
+  book: Effect.fnUntraced(function* ({ ref }) {
+    yield* bookToolHolds.get(ref) ?? Effect.void;
+    const confirmation = `confirmed-${ref}`;
 
-      recordSupplierCall("book", ref, confirmation);
-      if (lostBookReplies.delete(ref)) return yield* Effect.die("external reply lost");
+    recordSupplierCall("book", ref, confirmation);
+    if (lostBookReplies.delete(ref)) return yield* Effect.die("external reply lost");
 
-      return { confirmation };
-    }),
+    return { confirmation };
+  }),
 });
 
 export const bookDefinition = Agent.make("cf-book", {

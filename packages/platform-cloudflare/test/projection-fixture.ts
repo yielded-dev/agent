@@ -147,15 +147,14 @@ export const projectionLayer = Layer.effectContext(
 
     return Context.make(ProjectionIndex, { lookup, watermark, ownerSql: sql }).pipe(
       Context.add(ThreadProjectionMaintenance, {
-        applyCommitted: (request, result) =>
-          Effect.gen(function* () {
-            if (
-              projectionControls.get(threadId)?.skipLive ||
-              (yield* watermark) < result.firstSequence - 1
-            )
-              return;
-            yield* batch(result.lastSequence, request.batch.records.length, "live");
-          }),
+        applyCommitted: Effect.fnUntraced(function* (request, result) {
+          if (
+            projectionControls.get(threadId)?.skipLive ||
+            (yield* watermark) < result.firstSequence - 1
+          )
+            return;
+          yield* batch(result.lastSequence, request.batch.records.length, "live");
+        }),
         drain: Effect.gen(function* () {
           yield* batch(yield* tail, 4, "drain");
         }),

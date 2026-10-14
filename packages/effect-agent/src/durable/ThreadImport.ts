@@ -701,28 +701,27 @@ export const prepareImportPage = Effect.fnUntraced(function* (
   return { archive, records, batches: prepared } satisfies PreparedImportPage;
 });
 
-export const finishThreadImport = (state: ThreadImportProgress) =>
-  Effect.gen(function* () {
-    const page = state.manifest;
+export const finishThreadImport = Effect.fnUntraced(function* (state: ThreadImportProgress) {
+  const page = state.manifest;
 
-    if (
-      page === undefined ||
-      !state.ended ||
-      state.sequence !== page.tailSequence ||
-      transferSections.some((section) => state.counts[section] !== page.snapshot[section])
-    )
-      return yield* invalid(
-        "Transfer stream ended before its complete canonical sequence and fact sections",
-      );
+  if (
+    page === undefined ||
+    !state.ended ||
+    state.sequence !== page.tailSequence ||
+    transferSections.some((section) => state.counts[section] !== page.snapshot[section])
+  )
+    return yield* invalid(
+      "Transfer stream ended before its complete canonical sequence and fact sections",
+    );
 
-    return ThreadImportResult.make({
-      threadId: page.threadId,
-      format: page.format,
-      tailSequence: page.tailSequence,
-      recordCount: state.sequence,
-      submissionCount: state.counts.admissions,
-    });
+  return ThreadImportResult.make({
+    threadId: page.threadId,
+    format: page.format,
+    tailSequence: page.tailSequence,
+    recordCount: state.sequence,
+    submissionCount: state.counts.admissions,
   });
+});
 
 /** An executed receipt must settle strictly after its own input. FIFO inputs are checked in one pass. */
 export const verifyImportedInputOrder = Effect.fnUntraced(function* (

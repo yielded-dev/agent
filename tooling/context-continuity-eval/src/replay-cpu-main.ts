@@ -261,7 +261,7 @@ const command = Command.make(
             if (attempt < 14) yield* Effect.sleep("2 seconds");
           }
           if (identity === undefined)
-            return yield* new ReplayCpuError({ message: "New Worker route did not become ready" });
+            return yield* ReplayCpuError.make({ message: "New Worker route did not become ready" });
 
           const expected = builds[role === "candidate" ? "candidate" : "baseline"];
 
@@ -292,7 +292,7 @@ const command = Command.make(
             const target = targets.get(role);
 
             if (target === undefined)
-              return yield* new ReplayCpuError({ message: "Missing deployed role" });
+              return yield* ReplayCpuError.make({ message: "Missing deployed role" });
             const object = `${size}-${cohort.cohort}`;
 
             const directory = path.join(
@@ -409,7 +409,7 @@ const command = Command.make(
           const target = targets.get(role);
 
           if (target === undefined)
-            return yield* new ReplayCpuError({ message: "Missing deployed role" });
+            return yield* ReplayCpuError.make({ message: "Missing deployed role" });
           const expected = completed.filter((item) => item.role === role);
           let events: ReplayCpuTelemetry = [];
           let complete = false;
@@ -465,7 +465,7 @@ const command = Command.make(
               const event = telemetryFor(events, proof.objectId, operation.method)[0];
 
               if (event === undefined)
-                return yield* new ReplayCpuError({ message: "Missing invocation" });
+                return yield* ReplayCpuError.make({ message: "Missing invocation" });
 
               const ingress = events.find(
                 (candidate) =>
@@ -473,7 +473,7 @@ const command = Command.make(
               );
 
               if (ingress === undefined)
-                return yield* new ReplayCpuError({ message: "Missing ingress invocation" });
+                return yield* ReplayCpuError.make({ message: "Missing ingress invocation" });
 
               yield* requireReplayCpu(
                 event.scriptVersion?.id === target.identity.deploymentVersion &&

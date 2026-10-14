@@ -41,7 +41,7 @@ export const verifyPackedFiles = (manifest: typeof Manifest.Type, packs: typeof 
     required.every((path) => pack.files.some((file) => file.path === path))
     ? Effect.void
     : Effect.fail(
-        new ProofUnavailable({
+        ProofUnavailable.make({
           message: "npm package identity or exported files do not match the candidate",
         }),
       );

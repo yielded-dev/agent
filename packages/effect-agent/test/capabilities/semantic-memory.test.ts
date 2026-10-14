@@ -121,12 +121,11 @@ const probe = () => {
 
   const index = SemanticMemoryIndex.fromAdapter({
     profile,
-    replace: ({ chunks }) =>
-      Effect.gen(function* () {
-        yield* state.beforePublish;
-        state.chunks = chunks;
-        state.published += 1;
-      }),
+    replace: Effect.fnUntraced(function* ({ chunks }) {
+      yield* state.beforePublish;
+      state.chunks = chunks;
+      state.published += 1;
+    }),
     withdraw: () => Effect.void,
     search: () =>
       Effect.sync(() => ({ candidates: state.candidates, scannedChunks: state.candidates.length })),

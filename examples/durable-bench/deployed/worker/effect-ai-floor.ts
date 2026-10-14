@@ -101,6 +101,7 @@ export class EffectAiFloorDO extends DurableObject<Env> {
 
   private initialize(size: number) {
     if (this.initialized === size) return;
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native floor fetch handler must reject a history change before mutating its existing prompt.
     if (this.initialized !== undefined) throw new Error("Reset the floor before changing history");
     this.prompt = initialHistory(size).prompt;
     this.initialized = size;
@@ -138,7 +139,7 @@ export class EffectAiFloorDO extends DurableObject<Env> {
       if (toolCalls === 0) return;
     }
 
-    return yield* new FloorError({ message: "Native AI tool loop exceeded 40 model calls" });
+    return yield* FloorError.make({ message: "Native AI tool loop exceeded 40 model calls" });
   });
 
   override async fetch(request: Request): Promise<Response> {
@@ -146,6 +147,7 @@ export class EffectAiFloorDO extends DurableObject<Env> {
     const query = readQuery(url);
 
     this.host.meter.assertBuild(query);
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native Object fetch entrypoint rejects routing to the wrong benchmark target.
     if (query.target !== "effect-ai-floor") throw new Error("Target mismatch");
     if (["/seed", "/seed-progress"].includes(url.pathname))
       return new Response("The floor does not persist history", { status: 400 });

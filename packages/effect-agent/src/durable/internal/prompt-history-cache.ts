@@ -1,4 +1,4 @@
-import { Effect, Option, Schema, Stream } from "effect";
+import { Effect, Option, Result, Schema, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
 import type { RunId, ThreadId } from "../../core/Identifiers.ts";
@@ -87,7 +87,8 @@ function hydratePart(part: Prompt.PartEncoded): Prompt.Part {
     case "tool-approval-response":
       return Prompt.toolApprovalResponsePart(part);
   }
-  throw new Error(`Unhandled Prompt part: ${part satisfies never}`);
+
+  return part satisfies never;
 }
 
 const hydrateMessage = (message: Prompt.MessageEncoded): Prompt.Message => {
@@ -116,7 +117,8 @@ const hydrateMessage = (message: Prompt.MessageEncoded): Prompt.Message => {
         content: message.content.map((p) => hydratePart(p)),
       });
   }
-  throw new Error(`Unhandled Prompt message: ${message satisfies never}`);
+
+  return message satisfies never;
 };
 
 export interface PromptHistory {
@@ -291,7 +293,14 @@ export const makeCommittedPromptSuffix = (original: CanonicalRecordEnvelope) => 
     // as readPrompt, never raw provider values. Failure invalidates this derivative, not the commit.
     try {
       for (const fact of facts) {
-        const owned = captureRecord(fact);
+        const captured = captureRecord(fact);
+
+        if (Result.isFailure(captured)) {
+          discard();
+
+          return;
+        }
+        const owned = captured.success;
         const payload = owned.canonical.payload;
 
         if (

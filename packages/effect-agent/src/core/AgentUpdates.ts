@@ -59,20 +59,20 @@ export const emit = Effect.fnUntraced(function* <S extends Schema.Top>(
 ): Effect.fn.Return<Update, UpdateError, Emitter | S["EncodingServices"]> {
   const target = "definition" in agent ? agent.definition : agent;
 
-  if (target.updates === undefined) return yield* new UpdateError({ reason: "unavailable" });
+  if (target.updates === undefined) return yield* UpdateError.make({ reason: "unavailable" });
 
   const updateId = yield* Schema.decodeEffect(IdempotencyKey)(options.idempotencyKey).pipe(
-    Effect.mapError(() => new UpdateError({ reason: "validation" })),
+    Effect.mapError(() => UpdateError.make({ reason: "validation" })),
   );
 
   const encoded = yield* Schema.encodeEffect(target.updates)(value).pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(Schema.Json)),
-    Effect.mapError(() => new UpdateError({ reason: "validation" })),
+    Effect.mapError(() => UpdateError.make({ reason: "validation" })),
   );
 
   const emitter = yield* Effect.serviceOption(Emitter);
 
-  if (Option.isNone(emitter)) return yield* new UpdateError({ reason: "unavailable" });
+  if (Option.isNone(emitter)) return yield* UpdateError.make({ reason: "unavailable" });
 
   return yield* emitter.value.emit({ target, updateId, value: encoded });
 });
@@ -84,16 +84,16 @@ export const decode = Effect.fnUntraced(function* <S extends Schema.Top>(
 ): Effect.fn.Return<S["Type"], UpdateError, S["DecodingServices"]> {
   const definition = "definition" in agent ? agent.definition : agent;
 
-  if (definition.updates === undefined) return yield* new UpdateError({ reason: "unavailable" });
+  if (definition.updates === undefined) return yield* UpdateError.make({ reason: "unavailable" });
 
   const decoded = yield* Schema.decodeEffect(Update)(update).pipe(
-    Effect.mapError(() => new UpdateError({ reason: "validation" })),
+    Effect.mapError(() => UpdateError.make({ reason: "validation" })),
   );
 
-  if (decoded.agentId !== definition.id) return yield* new UpdateError({ reason: "identity" });
+  if (decoded.agentId !== definition.id) return yield* UpdateError.make({ reason: "identity" });
 
   return yield* Schema.decodeEffect(definition.updates)(decoded.value).pipe(
-    Effect.mapError(() => new UpdateError({ reason: "validation" })),
+    Effect.mapError(() => UpdateError.make({ reason: "validation" })),
   );
 });
 

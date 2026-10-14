@@ -115,6 +115,9 @@ export const ModelUsage = Schema.Struct({
 
 export type ModelUsage = typeof ModelUsage.Type;
 
+export const ServiceTier = Schema.Literals(["default", "ultrafast"]);
+export type ServiceTier = typeof ServiceTier.Type;
+
 export const EvaluationReport = Schema.Struct({
   version: Schema.Literal(3),
   status: Schema.Literals(["running", "passed", "failed"]),
@@ -125,8 +128,8 @@ export const EvaluationReport = Schema.Struct({
   provider: Schema.Literal("openai"),
   model: Schema.String,
   reasoningEffort: Schema.String,
-  serviceTier: Schema.Literal("default"),
-  pricingVersion: Schema.Literal("openai-2026-09-08-conservative"),
+  serviceTier: ServiceTier,
+  pricingVersion: Schema.Literal("openai-2026-10-13-conservative"),
   contextTokenLimit: Schema.Natural,
   maxOutputTokens: Schema.Natural,
   maxCostMicrousd: Schema.Natural,

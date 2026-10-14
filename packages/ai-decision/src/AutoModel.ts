@@ -138,10 +138,10 @@ export interface AutoModel<Requirements> extends Model.Model<
 }
 
 const invalidRequest = (method: string, description: string) =>
-  new AiError.AiError({
+  AiError.AiError.make({
     module: "AutoModel",
     method,
-    reason: new AiError.InvalidRequestError({ description }),
+    reason: AiError.InvalidRequestError.make({ description }),
   });
 
 /**
@@ -177,48 +177,45 @@ export const layerMemory = (options?: { readonly capacity?: number }) =>
       >();
 
       return SelectionStore.of({
-        getOrCreate: <Requirements>(
+        getOrCreate: Effect.fnUntraced(function* <Requirements>(
           threadId: string,
           select: Effect.Effect<SelectionRecord, AiError.AiError, Requirements>,
-        ) =>
-          Effect.gen(function* () {
-            yield* Schema.decodeEffect(Schema.NonEmptyString)(threadId).pipe(
-              Effect.mapError(() => invalidRequest("resolve", "Thread ID must be nonempty")),
-            );
-            let entry = entries.get(threadId);
+        ) {
+          yield* Schema.decodeEffect(Schema.NonEmptyString)(threadId).pipe(
+            Effect.mapError(() => invalidRequest("resolve", "Thread ID must be nonempty")),
+          );
+          let entry = entries.get(threadId);
 
-            if (entry === undefined) {
-              if (entries.size >= capacity) {
-                return yield* invalidRequest("resolve", "Model selection store capacity exceeded");
-              }
-              entry = { semaphore: Semaphore.makeUnsafe(1) };
-              entries.set(threadId, entry);
+          if (entry === undefined) {
+            if (entries.size >= capacity) {
+              return yield* invalidRequest("resolve", "Model selection store capacity exceeded");
             }
-            const current = entry;
+            entry = { semaphore: Semaphore.makeUnsafe(1) };
+            entries.set(threadId, entry);
+          }
+          const current = entry;
 
-            return yield* current.semaphore.withPermit(
-              Effect.gen(function* () {
-                if (current.record !== undefined) return current.record;
-                const selected = yield* select;
+          return yield* current.semaphore.withPermit(
+            Effect.gen(function* () {
+              if (current.record !== undefined) return current.record;
+              const selected = yield* select;
 
-                const record = yield* Schema.decodeEffect(SelectionRecord)(selected).pipe(
-                  Effect.mapError(() =>
-                    invalidRequest("resolve", "Invalid model selection record"),
-                  ),
+              const record = yield* Schema.decodeEffect(SelectionRecord)(selected).pipe(
+                Effect.mapError(() => invalidRequest("resolve", "Invalid model selection record")),
+              );
+
+              if (record.threadId !== threadId) {
+                return yield* invalidRequest(
+                  "resolve",
+                  "Model selection belongs to another thread",
                 );
+              }
+              current.record = record;
 
-                if (record.threadId !== threadId) {
-                  return yield* invalidRequest(
-                    "resolve",
-                    "Model selection belongs to another thread",
-                  );
-                }
-                current.record = record;
-
-                return record;
-              }),
-            );
-          }),
+              return record;
+            }),
+          );
+        }),
       });
     }),
   );
@@ -336,10 +333,10 @@ export const make = <const Requirements extends Readonly<Record<string, unknown>
     const selected = models.get(profileId);
 
     if (selected === undefined) {
-      return yield* new AiError.AiError({
+      return yield* AiError.AiError.make({
         module: "AutoModel",
         method: "select",
-        reason: new AiError.InvalidOutputError({ description: "Unknown model profile" }),
+        reason: AiError.InvalidOutputError.make({ description: "Unknown model profile" }),
       });
     }
     yield* Effect.annotateCurrentSpan("auto_model.profile", profileId);
@@ -361,15 +358,14 @@ export const make = <const Requirements extends Readonly<Record<string, unknown>
         },
       },
     }).pipe(
-      Effect.mapError(
-        () =>
-          new AiError.AiError({
-            module: "AutoModel",
-            method: "select",
-            reason: new AiError.InvalidOutputError({
-              description: "Invalid model selection evidence",
-            }),
+      Effect.mapError(() =>
+        AiError.AiError.make({
+          module: "AutoModel",
+          method: "select",
+          reason: AiError.InvalidOutputError.make({
+            description: "Invalid model selection evidence",
           }),
+        }),
       ),
     );
 

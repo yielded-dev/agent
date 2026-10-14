@@ -35,28 +35,67 @@ interface RedactionCounter {
   nodes: number;
 }
 
-const redactValue = (value: unknown, depth: number, counter: RedactionCounter): Schema.Json => {
+const encodingFailure = () =>
+  RedactionError.make({
+    reason: "encoding-failed",
+    message: "Could not encode the structurally redacted preview",
+  });
+
+const redactValue = Effect.fnUntraced(function* (
+  value: unknown,
+  depth: number,
+  counter: RedactionCounter,
+): Effect.fn.Return<Schema.Json, RedactionError> {
   if (depth > MAX_REDACTION_DEPTH) {
-    throw RedactionError.make({
+    return yield* RedactionError.make({
       reason: "input-too-deep",
       message: `Decoded value exceeds redaction depth ${MAX_REDACTION_DEPTH}`,
     });
   }
   counter.nodes += 1;
   if (counter.nodes > MAX_REDACTION_NODES) {
-    throw RedactionError.make({
+    return yield* RedactionError.make({
       reason: "input-too-large",
       message: `Decoded value exceeds redaction node count ${MAX_REDACTION_NODES}`,
     });
   }
-  if (Array.isArray(value)) {
-    return value.map((item) => redactValue(item, depth + 1, counter));
+
+  const collection = yield* Effect.try({
+    try: () => {
+      if (Array.isArray(value)) {
+        const redacted: Array<Schema.Json> = [];
+
+        redacted.length = value.length;
+
+        return { _tag: "Array" as const, values: value, redacted };
+      }
+
+      return value !== null && typeof value === "object"
+        ? { _tag: "Object" as const, entries: Object.entries(value) }
+        : undefined;
+    },
+    catch: encodingFailure,
+  });
+
+  if (collection?._tag === "Array") {
+    const { redacted } = collection;
+
+    for (let index = 0; index < redacted.length; index += 1) {
+      const item = yield* Effect.try({
+        try: () => (index in collection.values ? { value: collection.values[index] } : undefined),
+        catch: encodingFailure,
+      });
+
+      if (item !== undefined) redacted[index] = yield* redactValue(item.value, depth + 1, counter);
+    }
+
+    return redacted;
   }
-  if (value !== null && typeof value === "object") {
+  if (collection?._tag === "Object") {
     const redacted: Record<string, Schema.Json> = {};
 
-    for (const [key, item] of Object.entries(value)) {
-      redacted[key] = redactValue(item, depth + 1, counter);
+    for (const [key, item] of collection.entries) {
+      redacted[key] = yield* redactValue(item, depth + 1, counter);
     }
 
     return redacted;
@@ -72,7 +111,7 @@ const redactValue = (value: unknown, depth: number, counter: RedactionCounter): 
   if (typeof value === "boolean") return "[REDACTED:boolean]";
 
   return "[REDACTED:unsupported]";
-};
+});
 
 const truncateUtf8 = (value: string, maxBytes: number): string => {
   if (utf8ByteLength(value) <= maxBytes) {
@@ -128,30 +167,21 @@ export const redactedTranscript = (
  * Tool-specific Layers may expose explicitly reviewed fields instead.
  */
 export const StructuralRedactorLive = Layer.succeed(Redactor)({
-  redact: (decodedValue) =>
-    Effect.try({
-      try: () => {
-        const structurallyRedacted = redactValue(decodedValue, 0, { nodes: 0 });
+  redact: Effect.fnUntraced(function* (decodedValue) {
+    const structurallyRedacted = yield* redactValue(decodedValue, 0, { nodes: 0 });
 
-        return truncateUtf8(JSON.stringify(structurallyRedacted), MAX_REDACTED_PREVIEW_BYTES);
-      },
-      catch: (cause) =>
-        Schema.is(RedactionError)(cause)
-          ? cause
-          : RedactionError.make({
-              reason: "encoding-failed",
-              message: "Could not encode the structurally redacted preview",
-            }),
-    }).pipe(
-      Effect.flatMap((preview) =>
-        Schema.decodeEffect(RedactedPreview)(preview).pipe(
-          Effect.mapError(() =>
-            RedactionError.make({
-              reason: "encoding-failed",
-              message: "Redacted preview did not satisfy its bounded schema",
-            }),
-          ),
-        ),
+    const preview = yield* Effect.try({
+      try: () => truncateUtf8(JSON.stringify(structurallyRedacted), MAX_REDACTED_PREVIEW_BYTES),
+      catch: encodingFailure,
+    });
+
+    return yield* Schema.decodeEffect(RedactedPreview)(preview).pipe(
+      Effect.mapError(() =>
+        RedactionError.make({
+          reason: "encoding-failed",
+          message: "Redacted preview did not satisfy its bounded schema",
+        }),
       ),
-    ),
+    );
+  }),
 });

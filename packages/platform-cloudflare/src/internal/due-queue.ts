@@ -168,6 +168,7 @@ export const make = (storage: DurableObjectStorage) => {
 
     // Partial revision acceptance must reject the enclosing source transaction.
     if (rows.length !== changes.length)
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Native storage transaction must roll back partial revision acceptance; its Effect adapter maps the cause.
       throw new Error("Maintenance due revision changed during transaction");
   };
 
@@ -202,6 +203,7 @@ export const make = (storage: DurableObjectStorage) => {
       return result;
     } catch (cause) {
       if (frame !== undefined) finish(frame, false);
+      // oxlint-disable-next-line effect/no-untyped-throw -- Native transaction Promise must reject with the original failure after invalidating speculative state.
       throw cause;
     }
   };

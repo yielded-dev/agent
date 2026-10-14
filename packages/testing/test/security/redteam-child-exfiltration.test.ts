@@ -76,30 +76,27 @@ const withTemporaryDirectory = <A, E>(
     }),
   ).pipe(Effect.provide(NodeFileSystem.layer));
 
-const submitMission = (thread: string, key: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
+const submitMission = Effect.fnUntraced(function* (thread: string, key: string) {
+  const runtime = yield* DurableAgentRuntime;
 
-    return yield* runtime.submit(
-      docsResearcherSubmitAgent,
-      researchMissionRequest,
-      docsResearcherSubmitOptions(decodeThreadId(thread), decodeIdempotencyKey(key)),
-    );
-  });
+  return yield* runtime.submit(
+    docsResearcherSubmitAgent,
+    researchMissionRequest,
+    docsResearcherSubmitOptions(decodeThreadId(thread), decodeIdempotencyKey(key)),
+  );
+});
 
-const drive = (threadId: ThreadId) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
+const drive = Effect.fnUntraced(function* (threadId: ThreadId) {
+  const runtime = yield* DurableAgentRuntime;
 
-    return yield* runtime.processThreadResolved(threadId);
-  });
+  return yield* runtime.processThreadResolved(threadId);
+});
 
-const readLog = (threadId: ThreadId) =>
-  Effect.gen(function* () {
-    const store = yield* ThreadStore;
+const readLog = Effect.fnUntraced(function* (threadId: ThreadId) {
+  const store = yield* ThreadStore;
 
-    return yield* Stream.runCollect(store.read(ThreadRead.make({ threadId, limit: 1_024 })));
-  });
+  return yield* Stream.runCollect(store.read(ThreadRead.make({ threadId, limit: 1_024 })));
+});
 
 const payloadsOf = (
   records: ReadonlyArray<CanonicalRecordEnvelope>,

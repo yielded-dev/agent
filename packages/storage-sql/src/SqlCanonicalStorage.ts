@@ -2,7 +2,7 @@ import { canonicalJson, digestCanonicalJson } from "@yielded/agent/digest";
 import { Digest, RecordJson, type CanonicalRecordPayload } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import { PreparedAppend, ThreadStoreError, type AppendRequest } from "@yielded/agent/thread-store";
-import { Crypto, Effect, Schema } from "effect";
+import { Crypto, Effect, Result, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { Fragment, Statement } from "effect/sql/Statement";
 
@@ -459,8 +459,64 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
     }),
   };
 
+  const cachedRecords = (
+    threadId: string,
+    first: number,
+    records: ReadonlyArray<{
+      readonly storage: CapturedRecordStorage;
+      readonly readMetadata: CanonicalRecordMetadata;
+    }>,
+  ) => {
+    const retainedEnvelope = keys?.envelope;
+    const retainedRun = keys?.run;
+
+    // The mutation owner keeps these dictionary identities stable until commit.
+    // A warm batch needs only a synchronous mapping of privately captured rows.
+    // Misses retain the full dictionary lookup/validation path below.
+    if (
+      retainedEnvelope !== undefined &&
+      retainedEnvelope.namespace === namespace &&
+      retainedRun !== undefined &&
+      retainedRun.namespace === namespace &&
+      retainedRun.threadId === threadId &&
+      records.every(
+        (record) =>
+          record.storage.envelope_digest === retainedEnvelope.digest &&
+          record.readMetadata.columns.run_id === retainedRun.runId &&
+          record.readMetadata.runIds.every((run) => run === retainedRun.runId),
+      )
+    ) {
+      for (const record of records)
+        if (!sameEnvelope(retainedEnvelope.value, record.storage.envelope))
+          return Result.fail(failure("envelope dictionary collision"));
+
+      return Result.succeed(
+        records.map((record, index) => ({
+          columns: {
+            ...record.readMetadata.columns,
+            thread_id: threadId,
+            sequence: first + index,
+            record_id: record.storage.record_id_json,
+            created_at_json: record.storage.created_at_json,
+            payload_json: record.storage.payload_json,
+            envelope_key: retainedEnvelope.key,
+            run_id: retainedRun.key,
+          },
+          memberships: record.readMetadata.runIds.map(() => ({
+            thread_id: threadId,
+            sequence: first + index,
+            run_id: retainedRun.key,
+          })),
+        })),
+      );
+    }
+
+    return undefined;
+  };
+
   return {
     ...storage,
+    cachedRecords,
     records: Effect.fnUntraced(function* (
       threadId: string,
       first: number,

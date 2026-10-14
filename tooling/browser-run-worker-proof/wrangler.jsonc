@@ -12,6 +12,7 @@
   "browser": {
     "binding": "BROWSER",
   },
+  "worker_loaders": [{ "binding": "LOADER" }],
   "durable_objects": {
     "bindings": [
       {

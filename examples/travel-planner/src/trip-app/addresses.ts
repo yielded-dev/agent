@@ -5,7 +5,7 @@ import { TripFailpoint } from "../server/trips.ts";
 import { AppBuildBucket } from "./bucket.ts";
 
 const unavailable = () =>
-  new PlannerError({ code: "unavailable", message: "The trip app address is unavailable." });
+  PlannerError.make({ code: "unavailable", message: "The trip app address is unavailable." });
 
 /** This prefix is host-only metadata, never an asset path or generated Worker binding. */
 export const appAddressKey = (hostname: string) => `app-addresses/auth-v1/${hostname}.json`;
@@ -118,7 +118,7 @@ export const publishTripAppAddress = Effect.fn("publishTripAppAddress")(
         registered.appId !== app.id ||
         registered.tripId !== app.tripId
       )
-        return yield* new PlannerError({
+        return yield* PlannerError.make({
           code: "conflict",
           message: "This trip app address is already reserved. Its owner has not changed.",
         });

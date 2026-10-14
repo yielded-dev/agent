@@ -2627,50 +2627,49 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   // also covers a destination handoff written before dispatch or after Run settlement.
   const progressStore = ThreadStore.of({
     ...store,
-    append: (request) =>
-      Effect.gen(function* () {
-        const active = activeProgress.get(request.threadId);
+    append: Effect.fnUntraced(function* (request) {
+      const active = activeProgress.get(request.threadId);
 
-        const progress =
-          active?.writer ??
-          (yield* makeProgressWriter(request.threadId, config.deploymentId).pipe(
-            Effect.provideService(ThreadReader, reader),
-            Effect.provideService(Crypto.Crypto, crypto),
-          ));
+      const progress =
+        active?.writer ??
+        (yield* makeProgressWriter(request.threadId, config.deploymentId).pipe(
+          Effect.provideService(ThreadReader, reader),
+          Effect.provideService(Crypto.Crypto, crypto),
+        ));
 
-        let tail = {
-          sequence: request.expectedTailSequence,
-        };
+      let tail = {
+        sequence: request.expectedTailSequence,
+      };
 
-        return yield* progress.commit(request.batch).pipe(
-          Effect.provideService(CurrentRunWriter, {
-            threadId: request.threadId,
-            tail: Effect.sync(() => tail),
-            withProgress: (effect) => storageOwner.withProgress(request.threadId, effect),
-            append: (batch, executions) =>
-              store
-                .append(
-                  AppendRequest.make({
-                    ...request,
-                    expectedTailSequence: tail.sequence,
+      return yield* progress.commit(request.batch).pipe(
+        Effect.provideService(CurrentRunWriter, {
+          threadId: request.threadId,
+          tail: Effect.sync(() => tail),
+          withProgress: (effect) => storageOwner.withProgress(request.threadId, effect),
+          append: (batch, executions) =>
+            store
+              .append(
+                AppendRequest.make({
+                  ...request,
+                  expectedTailSequence: tail.sequence,
 
-                    batch,
-                    executions,
+                  batch,
+                  executions,
+                }),
+              )
+              .pipe(
+                Effect.tapErrorTag("AppendConflict", (conflict) =>
+                  Effect.sync(() => {
+                    if (conflict.reason === "tail" && conflict.actualTailSequence !== undefined)
+                      tail = {
+                        sequence: conflict.actualTailSequence,
+                      };
                   }),
-                )
-                .pipe(
-                  Effect.tapErrorTag("AppendConflict", (conflict) =>
-                    Effect.sync(() => {
-                      if (conflict.reason === "tail" && conflict.actualTailSequence !== undefined)
-                        tail = {
-                          sequence: conflict.actualTailSequence,
-                        };
-                    }),
-                  ),
                 ),
-          }),
-        );
-      }),
+              ),
+        }),
+      );
+    }),
   });
 
   const appendBatch = (ctx: Pick<RunWriter, "threadId" | "append">, batch: CanonicalBatch) =>
@@ -2699,51 +2698,49 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             threadId: ctx.threadId,
             tail: ctx.tail,
             withProgress: ctx.withProgress,
-            publishSettlement: (prepared, executions) =>
-              Effect.gen(function* () {
-                let tail = yield* ctx.tail;
+            publishSettlement: Effect.fnUntraced(function* (prepared, executions) {
+              let tail = yield* ctx.tail;
 
-                for (let retries = 0; ; retries++) {
-                  const result = yield* runStorage
-                    .publishSettlement(
-                      SettlementPublication.make({
-                        submissionId,
-                        authority,
-                        append: AppendRequest.make({
-                          threadId: ctx.threadId,
-                          expectedTailSequence: tail.sequence,
+              for (let retries = 0; ; retries++) {
+                const result = yield* runStorage
+                  .publishSettlement(
+                    SettlementPublication.make({
+                      submissionId,
+                      authority,
+                      append: AppendRequest.make({
+                        threadId: ctx.threadId,
+                        expectedTailSequence: tail.sequence,
 
-                          batch: prepared,
-                          executions,
-                        }),
+                        batch: prepared,
+                        executions,
                       }),
-                    )
-                    .pipe(
-                      (effect) =>
-                        storageOwner.withMutation(Effect.andThen(ctx.checkActive, effect)),
-                      Effect.catchTag("AppendConflict", (conflict) => {
-                        if (
-                          conflict.reason !== "tail" ||
-                          conflict.actualTailSequence === undefined ||
-                          retries >= 8
-                        )
-                          return Effect.fail(conflict);
-                        tail = {
-                          sequence: conflict.actualTailSequence,
-                        };
+                    }),
+                  )
+                  .pipe(
+                    (effect) => storageOwner.withMutation(Effect.andThen(ctx.checkActive, effect)),
+                    Effect.catchTag("AppendConflict", (conflict) => {
+                      if (
+                        conflict.reason !== "tail" ||
+                        conflict.actualTailSequence === undefined ||
+                        retries >= 8
+                      )
+                        return Effect.fail(conflict);
+                      tail = {
+                        sequence: conflict.actualTailSequence,
+                      };
 
-                        if (executions !== undefined && executions.length > 0)
-                          return ctx.refresh.pipe(Effect.andThen(Effect.fail(conflict)));
+                      if (executions !== undefined && executions.length > 0)
+                        return ctx.refresh.pipe(Effect.andThen(Effect.fail(conflict)));
 
-                        return Effect.succeed(undefined);
-                      }),
-                    );
+                      return Effect.succeed(undefined);
+                    }),
+                  );
 
-                  if (result === undefined) continue;
+                if (result === undefined) continue;
 
-                  return result;
-                }
-              }),
+                return result;
+              }
+            }),
           }),
         );
       });
@@ -4769,70 +4766,71 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     knownIds.add(recordId);
   });
 
-  /**
-   * Drive the shared interpreter Effect with history rebuilt by the run journal, commit
-   * each Turn under the local owner, and watch for durable abort intent. Engine Run failures settle `failed`; coordinator failures abort the
-   * Attempt cleanly with the obligation still owed.
-   *
-   * The interpreter supplies validated response, closed Tool-result, and completion facts.
-   * Responses precede approval and effectful dispatch; readonly responses may join their closed
-   * results. Tool results precede input drains and the next Turn. A no-tool response and Run
-   * completion share one batch. A completion Tool's result
-   * precedes its terminal-only completion batch, so recovery can repeat a pure output projection
-   * without replaying the handler. Pending batches resume from their canonical declarations.
-   */
-  const runModel = <
-    InputSchema extends Schema.Top,
-    OutputSchema extends Schema.Top,
-    Instructions,
-    Tools extends Record<string, Tool.Any>,
-    Provider,
-    ModelProvides,
-    ModelRequires,
-    InstructionError = InstructionErrorOf<Instructions, InputSchema["Type"]>,
-    InstructionRequirements = InstructionRequirementsOf<Instructions, InputSchema["Type"]>,
-    RunDispositionValue extends
-      | RunDispositionDeclaration<OutputSchema["Type"], Schema.Top>
-      | undefined = undefined,
-    InputPromptValue extends InputPromptSource<InputSchema["Type"], unknown, unknown> | undefined =
-      undefined,
-    UpdatesSchema extends Schema.Top | undefined = undefined,
-  >(
-    agent: RuntimeBinding<
-      InputSchema,
-      OutputSchema,
+  const runModel = Effect.fnUntraced(
+    /**
+     * Drive the shared interpreter Effect with history rebuilt by the run journal, commit
+     * each Turn under the local owner, and watch for durable abort intent. Engine Run failures settle `failed`; coordinator failures abort the
+     * Attempt cleanly with the obligation still owed.
+     *
+     * The interpreter supplies validated response, closed Tool-result, and completion facts.
+     * Responses precede approval and effectful dispatch; readonly responses may join their closed
+     * results. Tool results precede input drains and the next Turn. A no-tool response and Run
+     * completion share one batch. A completion Tool's result
+     * precedes its terminal-only completion batch, so recovery can repeat a pure output projection
+     * without replaying the handler. Pending batches resume from their canonical declarations.
+     */
+    function* <
+      InputSchema extends Schema.Top,
+      OutputSchema extends Schema.Top,
       Instructions,
-      Tools,
+      Tools extends Record<string, Tool.Any>,
       Provider,
       ModelProvides,
       ModelRequires,
-      InstructionError,
-      InstructionRequirements,
-      RunDispositionValue,
-      InputPromptValue,
-      UpdatesSchema
-    >,
-    ctx: AttemptAppendContext,
-    submission: SubmissionSnapshot,
-    session: RunStorageSession,
-    records: ReadonlyArray<CanonicalRecordEnvelope>,
-    canonical: Stream.Stream<
-      JournalRecordEnvelope,
-      ThreadStoreError | ThreadNotMaterialized | RunJournalError
-    >,
-    initialJournal: InitialJournalSource | undefined,
-    canonicalThrough: CanonicalSequence,
-    progressThrough: CanonicalSequence | undefined,
-    continuation: RunContinuation | undefined,
-    priorContext: RunJournalContext | undefined,
-    journalMetadata: JournalMetadata | undefined,
-    lineage: AttemptLineage,
-    approvalDecisions: ReadonlyArray<ApprovalDecisionIntent>,
-    currentContracts: Readonly<Record<string, Digest>>,
-    runTiming: RunTiming,
-    yieldAfter?: DateTime.Utc,
-  ) =>
-    Effect.gen(function* () {
+      InstructionError = InstructionErrorOf<Instructions, InputSchema["Type"]>,
+      InstructionRequirements = InstructionRequirementsOf<Instructions, InputSchema["Type"]>,
+      RunDispositionValue extends
+        | RunDispositionDeclaration<OutputSchema["Type"], Schema.Top>
+        | undefined = undefined,
+      InputPromptValue extends
+        | InputPromptSource<InputSchema["Type"], unknown, unknown>
+        | undefined = undefined,
+      UpdatesSchema extends Schema.Top | undefined = undefined,
+    >(
+      agent: RuntimeBinding<
+        InputSchema,
+        OutputSchema,
+        Instructions,
+        Tools,
+        Provider,
+        ModelProvides,
+        ModelRequires,
+        InstructionError,
+        InstructionRequirements,
+        RunDispositionValue,
+        InputPromptValue,
+        UpdatesSchema
+      >,
+      ctx: AttemptAppendContext,
+      submission: SubmissionSnapshot,
+      session: RunStorageSession,
+      records: ReadonlyArray<CanonicalRecordEnvelope>,
+      canonical: Stream.Stream<
+        JournalRecordEnvelope,
+        ThreadStoreError | ThreadNotMaterialized | RunJournalError
+      >,
+      initialJournal: InitialJournalSource | undefined,
+      canonicalThrough: CanonicalSequence,
+      progressThrough: CanonicalSequence | undefined,
+      continuation: RunContinuation | undefined,
+      priorContext: RunJournalContext | undefined,
+      journalMetadata: JournalMetadata | undefined,
+      lineage: AttemptLineage,
+      approvalDecisions: ReadonlyArray<ApprovalDecisionIntent>,
+      currentContracts: Readonly<Record<string, Digest>>,
+      runTiming: RunTiming,
+      yieldAfter?: DateTime.Utc,
+    ) {
       const submissionId = submission.submissionId;
 
       const runId = runIdForSubmission(submissionId);
@@ -6348,214 +6346,208 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               .get(ctx)
               ?.stageUsage(runId, terminalUsageCharge(uncommittedModelUsage()));
           }),
-        commitCompaction: (commit) =>
-          Effect.gen(function* () {
-            const canonicalTurn = commit.turn;
-            const recordId = compactionRecordId(runId, canonicalTurn, commit.kind);
+        commitCompaction: Effect.fnUntraced(function* (commit) {
+          const canonicalTurn = commit.turn;
+          const recordId = compactionRecordId(runId, canonicalTurn, commit.kind);
 
-            if (knownIds.has(recordId)) {
-              return yield* CompactionError.make({
-                message: "Compaction is already committed for this Turn and kind",
-              });
-            }
+          if (knownIds.has(recordId)) {
+            return yield* CompactionError.make({
+              message: "Compaction is already committed for this Turn and kind",
+            });
+          }
 
-            let sourceJournal = journal;
-            let sourceBoundaries = boundaries;
+          let sourceJournal = journal;
+          let sourceBoundaries = boundaries;
 
-            if (initialJournal !== undefined) {
-              initialJournal.cacheable = false;
-              initialJournal.history = undefined;
-            }
-            if (commit.kind !== "summarize" || initialJournal?.prefix !== undefined) {
-              // Results must be canonical before pruning or rollover can cover them. Newly committed
-              // compactions remain overlays on this Attempt's append-only source, so omit those
-              // overlays while reconstructing the exact source-to-record mapping.
-              const tail = yield* ctx.tail;
+          if (initialJournal !== undefined) {
+            initialJournal.cacheable = false;
+            initialJournal.history = undefined;
+          }
+          if (commit.kind !== "summarize" || initialJournal?.prefix !== undefined) {
+            // Results must be canonical before pruning or rollover can cover them. Newly committed
+            // compactions remain overlays on this Attempt's append-only source, so omit those
+            // overlays while reconstructing the exact source-to-record mapping.
+            const tail = yield* ctx.tail;
 
-              const source =
-                initialJournal === undefined
-                  ? canonical
-                  : Stream.fromIterable(
-                      yield* recordHalt(
-                        readInitialJournal(initialJournal.original, initialJournal.suffix),
-                      ),
-                    );
-
-              sourceBoundaries = [];
-              sourceJournal = yield* recordHalt(
-                projectRunJournalStream(
-                  Stream.concat(
-                    source,
-                    Stream.fromIterable(
-                      yield* recordHalt(
-                        selectedRange(
-                          ctx.threadId,
-                          [submissionId],
-                          tail.sequence,
-                          canonicalThrough,
-                        ),
-                      ),
+            const source =
+              initialJournal === undefined
+                ? canonical
+                : Stream.fromIterable(
+                    yield* recordHalt(
+                      readInitialJournal(initialJournal.original, initialJournal.suffix),
                     ),
-                  ).pipe(
-                    Stream.filter(
-                      (envelope) =>
-                        envelope.record.payload._tag !== "CompactionCreated" ||
-                        envelope.sequence <= canonicalThrough,
+                  );
+
+            sourceBoundaries = [];
+            sourceJournal = yield* recordHalt(
+              projectRunJournalStream(
+                Stream.concat(
+                  source,
+                  Stream.fromIterable(
+                    yield* recordHalt(
+                      selectedRange(ctx.threadId, [submissionId], tail.sequence, canonicalThrough),
                     ),
                   ),
-                  runId,
-                  (boundary) => sourceBoundaries.push(boundary),
-                  priorContext,
+                ).pipe(
+                  Stream.filter(
+                    (envelope) =>
+                      envelope.record.payload._tag !== "CompactionCreated" ||
+                      envelope.sequence <= canonicalThrough,
+                  ),
                 ),
-              );
-            }
-
-            // Summaries use the initial prior-Run boundaries; pruning and rollover also admit
-            // complete current-Run boundaries from the fresh canonical source above.
-            const coverable = sourceBoundaries.filter(
-              (boundary) =>
-                commit.kind !== "summarize" ||
-                ownerFirstSequence === undefined ||
-                boundary.sequence < ownerFirstSequence,
+                runId,
+                (boundary) => sourceBoundaries.push(boundary),
+                priorContext,
+              ),
             );
+          }
 
-            if (coverable.length === 0) {
-              return yield* CompactionError.make({
-                message:
-                  commit.kind === "rollover"
-                    ? "Durable rollover requires complete canonical records"
-                    : "Durable compaction requires eligible canonical records",
-              });
-            }
+          // Summaries use the initial prior-Run boundaries; pruning and rollover also admit
+          // complete current-Run boundaries from the fresh canonical source above.
+          const coverable = sourceBoundaries.filter(
+            (boundary) =>
+              commit.kind !== "summarize" ||
+              ownerFirstSequence === undefined ||
+              boundary.sequence < ownerFirstSequence,
+          );
 
-            const comparisonView = instructionView(
-              sourceJournal.prompt.content,
-              initialInstructions,
-              false,
-              sourceJournal.historyBefore.content.length,
-            );
+          if (coverable.length === 0) {
+            return yield* CompactionError.make({
+              message:
+                commit.kind === "rollover"
+                  ? "Durable rollover requires complete canonical records"
+                  : "Durable compaction requires eligible canonical records",
+            });
+          }
 
-            // Compare each visible message once. A transformed source can authorize only its
-            // exact canonical prefix; no per-candidate rereads or full encoded Prompt copies.
-            let matchingPrefix = 0;
-            let requiredThrough = 0;
-            const comparisonLimit = Math.min(comparisonView.messages.length, commit.through);
+          const comparisonView = instructionView(
+            sourceJournal.prompt.content,
+            initialInstructions,
+            false,
+            sourceJournal.historyBefore.content.length,
+          );
 
-            for (let index = 0; index < commit.through; index += 1) {
-              const message = commit.source.content[index];
+          // Compare each visible message once. A transformed source can authorize only its
+          // exact canonical prefix; no per-candidate rereads or full encoded Prompt copies.
+          let matchingPrefix = 0;
+          let requiredThrough = 0;
+          const comparisonLimit = Math.min(comparisonView.messages.length, commit.through);
 
-              if (
-                message !== undefined &&
-                (commit.kind === "clear-tool-results"
-                  ? message.role === "tool"
-                  : message.role !== "system")
-              )
-                requiredThrough = index + 1;
-              if (index >= comparisonLimit || index !== matchingPrefix || message === undefined)
-                continue;
-              const canonicalMessage = comparisonView.messages[index];
-
-              if (canonicalMessage === undefined) continue;
-
-              // Preserve Prompt's JSON projection while ignoring persisted object-key order.
-              const encode = (entry: Prompt.Message) =>
-                encodeCompactionMessageJson(entry).pipe(
-                  Effect.flatMap(decodeCompactionMessageJson),
-                  Effect.map(canonicalJson),
-                  Effect.mapError((cause) =>
-                    CompactionError.make({
-                      message: "Could not encode the canonical compaction prefix",
-                      cause,
-                    }),
-                  ),
-                );
-
-              const left = yield* encode(canonicalMessage);
-              const right = yield* encode(message);
-
-              if (left === right) matchingPrefix += 1;
-            }
-
-            let lastCovered: JournalBoundary | undefined;
-
-            for (let index = 0; index < coverable.length; index += 1) {
-              const candidate = coverable[index];
-
-              if (candidate === undefined) continue;
-              const following = coverable[index + 1];
-
-              if (following?.tag === "ToolCallSettled") continue;
-
-              const length = comparisonView.prefixLength(candidate.promptLength);
-
-              if (length === 0 || length > commit.through) continue;
-              if (length < requiredThrough || length > matchingPrefix) continue;
-              lastCovered = candidate;
-            }
-            if (lastCovered === undefined) {
-              return yield* CompactionError.make({
-                message:
-                  commit.kind === "rollover"
-                    ? "Rollover coverage cannot be mapped to complete canonical records"
-                    : "Compaction coverage cannot be mapped to complete canonical records",
-              });
-            }
-            const coveredSequence = lastCovered.sequence;
+          for (let index = 0; index < commit.through; index += 1) {
+            const message = commit.source.content[index];
 
             if (
-              commit.kind !== "summarize" &&
-              sourceBoundaries.some(
-                (boundary) =>
-                  boundary.incomplete === true &&
-                  boundary.terminalPriorRun !== true &&
-                  boundary.sequence <= coveredSequence,
-              )
-            ) {
-              return yield* CompactionError.make({
-                message: "Compaction cannot cover an incomplete Tool batch",
-              });
-            }
-            if (commit.kind === "summarize" && (commit.summary ?? "").trim().length === 0) {
-              return yield* CompactionError.make({
-                message: "A summarize compaction commit carried no summary",
-              });
-            }
+              message !== undefined &&
+              (commit.kind === "clear-tool-results"
+                ? message.role === "tool"
+                : message.role !== "system")
+            )
+              requiredThrough = index + 1;
+            if (index >= comparisonLimit || index !== matchingPrefix || message === undefined)
+              continue;
+            const canonicalMessage = comparisonView.messages[index];
 
-            const payload = yield* Schema.decodeEffect(CompactionCreated)({
-              _tag: "CompactionCreated",
-              runId,
-              turn: canonicalTurn,
-              kind: commit.kind,
-              coversThrough: lastCovered.sequence,
-              ...(commit.kind === "summarize" ? { summary: commit.summary } : {}),
-              ...(commit.kind === "rollover" && commit.handoff !== undefined
-                ? { handoff: commit.handoff }
-                : {}),
-            }).pipe(
-              Effect.mapError((cause) =>
-                CompactionError.make({
-                  message: "Compaction decision exceeds canonical persistence bounds",
-                  cause,
-                }),
-              ),
-            );
+            if (canonicalMessage === undefined) continue;
 
-            const envelope = yield* recordHalt(makeEnvelope(recordId, payload));
+            // Preserve Prompt's JSON projection while ignoring persisted object-key order.
+            const encode = (entry: Prompt.Message) =>
+              encodeCompactionMessageJson(entry).pipe(
+                Effect.flatMap(decodeCompactionMessageJson),
+                Effect.map(canonicalJson),
+                Effect.mapError((cause) =>
+                  CompactionError.make({
+                    message: "Could not encode the canonical compaction prefix",
+                    cause,
+                  }),
+                ),
+              );
 
-            yield* recordHalt(hit("compaction:before-canonical-append"));
-            yield* recordHalt(
-              appendBatch(
-                ctx,
-                CanonicalBatch.make({
-                  batchId: compactionBatchId(runId, canonicalTurn, commit.kind),
-                  producerId: config.producerId,
-                  records: [envelope],
-                }),
-              ),
-            );
-            knownIds.add(recordId);
-            yield* recordHalt(hit("compaction:after-canonical-append"));
-          }),
+            const left = yield* encode(canonicalMessage);
+            const right = yield* encode(message);
+
+            if (left === right) matchingPrefix += 1;
+          }
+
+          let lastCovered: JournalBoundary | undefined;
+
+          for (let index = 0; index < coverable.length; index += 1) {
+            const candidate = coverable[index];
+
+            if (candidate === undefined) continue;
+            const following = coverable[index + 1];
+
+            if (following?.tag === "ToolCallSettled") continue;
+
+            const length = comparisonView.prefixLength(candidate.promptLength);
+
+            if (length === 0 || length > commit.through) continue;
+            if (length < requiredThrough || length > matchingPrefix) continue;
+            lastCovered = candidate;
+          }
+          if (lastCovered === undefined) {
+            return yield* CompactionError.make({
+              message:
+                commit.kind === "rollover"
+                  ? "Rollover coverage cannot be mapped to complete canonical records"
+                  : "Compaction coverage cannot be mapped to complete canonical records",
+            });
+          }
+          const coveredSequence = lastCovered.sequence;
+
+          if (
+            commit.kind !== "summarize" &&
+            sourceBoundaries.some(
+              (boundary) =>
+                boundary.incomplete === true &&
+                boundary.terminalPriorRun !== true &&
+                boundary.sequence <= coveredSequence,
+            )
+          ) {
+            return yield* CompactionError.make({
+              message: "Compaction cannot cover an incomplete Tool batch",
+            });
+          }
+          if (commit.kind === "summarize" && (commit.summary ?? "").trim().length === 0) {
+            return yield* CompactionError.make({
+              message: "A summarize compaction commit carried no summary",
+            });
+          }
+
+          const payload = yield* Schema.decodeEffect(CompactionCreated)({
+            _tag: "CompactionCreated",
+            runId,
+            turn: canonicalTurn,
+            kind: commit.kind,
+            coversThrough: lastCovered.sequence,
+            ...(commit.kind === "summarize" ? { summary: commit.summary } : {}),
+            ...(commit.kind === "rollover" && commit.handoff !== undefined
+              ? { handoff: commit.handoff }
+              : {}),
+          }).pipe(
+            Effect.mapError((cause) =>
+              CompactionError.make({
+                message: "Compaction decision exceeds canonical persistence bounds",
+                cause,
+              }),
+            ),
+          );
+
+          const envelope = yield* recordHalt(makeEnvelope(recordId, payload));
+
+          yield* recordHalt(hit("compaction:before-canonical-append"));
+          yield* recordHalt(
+            appendBatch(
+              ctx,
+              CanonicalBatch.make({
+                batchId: compactionBatchId(runId, canonicalTurn, commit.kind),
+                producerId: config.producerId,
+                records: [envelope],
+              }),
+            ),
+          );
+          knownIds.add(recordId);
+          yield* recordHalt(hit("compaction:after-canonical-append"));
+        }),
       };
 
       /** Digest of one declared call's canonical encoded parameters (the original normalized wire). */
@@ -6804,37 +6796,34 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
        * so the next Turn's response commit makes it model-visible canonically — exactly the
        * prompt-coverage rule recovery relies on.
        */
-      const renderJoinedInput = ({
-        input: encodedInput,
-        messageAdmission,
-      }: Pick<UserInputRecorded, "input" | "messageAdmission">) =>
-        Effect.gen(function* () {
-          if (Schema.is(FrameworkMessage)(messageAdmission))
-            return yield* Schema.encodeEffect(Schema.fromJsonString(FrameworkMessage))(
-              messageAdmission,
-            ).pipe(
-              Effect.mapError(() =>
-                AgentInputError.make({ message: "Invalid worker completion message" }),
-              ),
-            );
-          const inputPrompt = agent.definition.inputPrompt;
-
-          if (inputPrompt === undefined) {
-            return yield* renderInputPrompt(undefined, encodedInput, encodedInput);
-          }
-
-          const decodedInput = yield* Schema.decodeEffect(agent.definition.input)(
-            encodedInput,
+      const renderJoinedInput = Effect.fnUntraced(function* (
+        encodedInput: UserInputRecorded["input"],
+        messageAdmission: UserInputRecorded["messageAdmission"],
+      ) {
+        if (Schema.is(FrameworkMessage)(messageAdmission))
+          return yield* Schema.encodeEffect(Schema.fromJsonString(FrameworkMessage))(
+            messageAdmission,
           ).pipe(
-            Effect.mapError((cause) =>
-              AgentInputDecodeError.make({
-                message: cause.message,
-              }),
+            Effect.mapError(() =>
+              AgentInputError.make({ message: "Invalid worker completion message" }),
             ),
           );
+        const inputPrompt = agent.definition.inputPrompt;
 
-          return yield* renderInputPrompt(inputPrompt, decodedInput, encodedInput);
-        });
+        if (inputPrompt === undefined) {
+          return yield* renderInputPrompt(undefined, encodedInput, encodedInput);
+        }
+
+        const decodedInput = yield* Schema.decodeEffect(agent.definition.input)(encodedInput).pipe(
+          Effect.mapError((cause) =>
+            AgentInputDecodeError.make({
+              message: cause.message,
+            }),
+          ),
+        );
+
+        return yield* renderInputPrompt(inputPrompt, decodedInput, encodedInput);
+      });
 
       // Claims are authority, wakes are hints. A cancelled waiter retains every claim
       // for the seam drain; it never appends input while an old response can still commit.
@@ -6893,7 +6882,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 : { messageAdmission: snapshot.submission.messageAdmission }),
             };
 
-            const rendered = yield* Effect.result(renderJoinedInput(input));
+            const rendered = yield* Effect.result(
+              renderJoinedInput(input.input, input.messageAdmission),
+            );
 
             if (Result.isFailure(rendered)) {
               // A rejected prompt and its suffix retain their own Runs in queue order.
@@ -6933,118 +6924,117 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         Agent.DefinitionRequirements<(typeof agent)["definition"]>
       > = {
         awaitJoin,
-        drain: (policy) =>
-          Effect.gen(function* () {
-            const joinedInputs = yield* recordHalt(
-              Effect.gen(function* () {
-                const limit = policy === "one" ? 1 : MAX_JOIN_DRAIN;
+        drain: Effect.fnUntraced(function* (policy) {
+          const joinedInputs = yield* recordHalt(
+            Effect.gen(function* () {
+              const limit = policy === "one" ? 1 : MAX_JOIN_DRAIN;
 
-                const joinedInputs: Array<
-                  Pick<UserInputRecorded, "input" | "messageAdmission"> & {
-                    readonly rendered?: Prompt.RawInput;
-                  }
-                > = [];
-
-                if (joinBacklog === undefined) {
-                  const hostSnapshot = yield* ledger.loadRecoverySnapshot(
-                    RecoverySnapshotRequest.make({ submissionId }),
-                  );
-
-                  joinBacklog = hostSnapshot.joins;
+              const joinedInputs: Array<
+                Pick<UserInputRecorded, "input" | "messageAdmission"> & {
+                  readonly rendered?: Prompt.RawInput;
                 }
-                // These inputs were already consumed by an earlier attempt. Restore the
-                // entire uncovered prompt; only fresh claims are subject to the drain bound.
-                for (const join of joinBacklog) {
-                  const joinId = join.submissionId;
+              > = [];
 
-                  if (deliveredJoinInputs.has(joinId)) continue;
-                  if (join.state !== "joining" && join.state !== "joined") continue;
-                  const existing = joinedInputEnvelopes.get(joinId);
+              if (joinBacklog === undefined) {
+                const hostSnapshot = yield* ledger.loadRecoverySnapshot(
+                  RecoverySnapshotRequest.make({ submissionId }),
+                );
 
-                  if (existing === undefined) continue;
-                  if (join.state === "joining") {
-                    // Canonical input without its joined marker (crash between the append and
-                    // `markJoined`): repair the marker from history before reattaching.
-                    yield* session.markJoined(joinId, {
-                      recordId: existing.record.recordId,
-                      sequence: existing.sequence,
-                    });
-                  }
-                  deliveredJoinInputs.add(joinId);
-                  if (
-                    lastHostResponseSequence !== undefined &&
-                    lastHostResponseSequence > existing.sequence
-                  ) {
-                    continue;
-                  }
-                  const payload = existing.record.payload;
+                joinBacklog = hostSnapshot.joins;
+              }
+              // These inputs were already consumed by an earlier attempt. Restore the
+              // entire uncovered prompt; only fresh claims are subject to the drain bound.
+              for (const join of joinBacklog) {
+                const joinId = join.submissionId;
 
-                  if (payload._tag !== "UserInputRecorded") continue;
-                  joinedInputs.push(payload);
-                }
-                const claims = yield* prepareInputs(limit);
+                if (deliveredJoinInputs.has(joinId)) continue;
+                if (join.state !== "joining" && join.state !== "joined") continue;
+                const existing = joinedInputEnvelopes.get(joinId);
 
-                pendingJoinClaims.splice(0, claims.length);
-                for (const { claim, input: payload, rendered } of claims) {
-                  const recordId = submissionInputRecordId(claim.submissionId);
-                  let sequence: CanonicalSequence;
-                  const existing = joinedInputEnvelopes.get(claim.submissionId);
-
-                  if (existing !== undefined) {
-                    // Defensive reattach: the exact record is already canonical, so only the
-                    // marker and the delivery remain (DUR-016 — never a duplicate append).
-                    sequence = existing.sequence;
-                  } else {
-                    const envelope = yield* makeEnvelope(
-                      recordId,
-                      UserInputRecorded.make({
-                        submissionId: claim.submissionId,
-                        kind: "steering",
-                        runId,
-                        input: claim.inputPayload,
-                        ...(payload.messageAdmission === undefined
-                          ? {}
-                          : { messageAdmission: payload.messageAdmission }),
-                      }),
-                    );
-
-                    const result = yield* appendBatch(
-                      ctx,
-                      CanonicalBatch.make({
-                        batchId: submissionInputBatchId(claim.submissionId),
-                        producerId: config.producerId,
-                        records: [envelope],
-                      }),
-                    );
-
-                    sequence = result.firstSequence;
-                    knownIds.add(recordId);
-                    yield* hit("join:after-canonical-append");
-                  }
-                  yield* session.markJoined(claim.submissionId, { recordId, sequence });
-                  deliveredJoinInputs.add(claim.submissionId);
-                  joinedInputs.push({
-                    ...payload,
-                    rendered,
+                if (existing === undefined) continue;
+                if (join.state === "joining") {
+                  // Canonical input without its joined marker (crash between the append and
+                  // `markJoined`): repair the marker from history before reattaching.
+                  yield* session.markJoined(joinId, {
+                    recordId: existing.record.recordId,
+                    sequence: existing.sequence,
                   });
                 }
+                deliveredJoinInputs.add(joinId);
+                if (
+                  lastHostResponseSequence !== undefined &&
+                  lastHostResponseSequence > existing.sequence
+                ) {
+                  continue;
+                }
+                const payload = existing.record.payload;
 
-                return joinedInputs;
-              }),
-            );
+                if (payload._tag !== "UserInputRecorded") continue;
+                joinedInputs.push(payload);
+              }
+              const claims = yield* prepareInputs(limit);
 
-            return yield* Effect.forEach(joinedInputs, (joinedInput) =>
-              (joinedInput.rendered === undefined
-                ? renderJoinedInput(joinedInput)
-                : Effect.succeed(joinedInput.rendered)
-              ).pipe(
-                Effect.map((input): RunInputCommand => ({
-                  kind: "steering",
-                  input,
-                })),
-              ),
-            );
-          }),
+              pendingJoinClaims.splice(0, claims.length);
+              for (const { claim, input: payload, rendered } of claims) {
+                const recordId = submissionInputRecordId(claim.submissionId);
+                let sequence: CanonicalSequence;
+                const existing = joinedInputEnvelopes.get(claim.submissionId);
+
+                if (existing !== undefined) {
+                  // Defensive reattach: the exact record is already canonical, so only the
+                  // marker and the delivery remain (DUR-016 — never a duplicate append).
+                  sequence = existing.sequence;
+                } else {
+                  const envelope = yield* makeEnvelope(
+                    recordId,
+                    UserInputRecorded.make({
+                      submissionId: claim.submissionId,
+                      kind: "steering",
+                      runId,
+                      input: claim.inputPayload,
+                      ...(payload.messageAdmission === undefined
+                        ? {}
+                        : { messageAdmission: payload.messageAdmission }),
+                    }),
+                  );
+
+                  const result = yield* appendBatch(
+                    ctx,
+                    CanonicalBatch.make({
+                      batchId: submissionInputBatchId(claim.submissionId),
+                      producerId: config.producerId,
+                      records: [envelope],
+                    }),
+                  );
+
+                  sequence = result.firstSequence;
+                  knownIds.add(recordId);
+                  yield* hit("join:after-canonical-append");
+                }
+                yield* session.markJoined(claim.submissionId, { recordId, sequence });
+                deliveredJoinInputs.add(claim.submissionId);
+                joinedInputs.push({
+                  ...payload,
+                  rendered,
+                });
+              }
+
+              return joinedInputs;
+            }),
+          );
+
+          return yield* Effect.forEach(joinedInputs, (joinedInput) =>
+            (joinedInput.rendered === undefined
+              ? renderJoinedInput(joinedInput.input, joinedInput.messageAdmission)
+              : Effect.succeed(joinedInput.rendered)
+            ).pipe(
+              Effect.map((input): RunInputCommand => ({
+                kind: "steering",
+                input,
+              })),
+            ),
+          );
+        }),
       };
 
       /**
@@ -7727,50 +7717,49 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               },
             }),
         ...(preparedContext === undefined ? {} : { context: preparedContext }),
-        beforeTurn: () =>
-          Effect.gen(function* () {
-            if (
-              yieldAfter !== undefined &&
-              (yield* Clock.currentTimeMillis) >= DateTime.toEpochMillis(yieldAfter)
-            ) {
-              yield* Deferred.succeed(yieldSignal, undefined);
+        beforeTurn: Effect.fnUntraced(function* () {
+          if (
+            yieldAfter !== undefined &&
+            (yield* Clock.currentTimeMillis) >= DateTime.toEpochMillis(yieldAfter)
+          ) {
+            yield* Deferred.succeed(yieldSignal, undefined);
 
-              // The successful signal wins the outer race and closes the execution Scope;
-              // no synthetic engine RunFailed event or terminal Settlement is produced.
-              return yield* Effect.never;
-            }
-            if (submissionScheduling.yieldTo !== undefined && (yield* Ref.get(turnCounter)) > 0) {
-              const candidate = yield* recordHalt(
-                eligibleThreadHead(submission.threadId, submission.queueSequence),
+            // The successful signal wins the outer race and closes the execution Scope;
+            // no synthetic engine RunFailed event or terminal Settlement is produced.
+            return yield* Effect.never;
+          }
+          if (submissionScheduling.yieldTo !== undefined && (yield* Ref.get(turnCounter)) > 0) {
+            const candidate = yield* recordHalt(
+              eligibleThreadHead(submission.threadId, submission.queueSequence),
+            );
+
+            if (
+              Option.isSome(candidate) &&
+              (candidate.value.state === "ready" || candidate.value.state === "input-applied")
+            ) {
+              const next = yield* recordHalt(
+                ledger.lookup(
+                  SubmissionLookupById.make({
+                    submissionId: candidate.value.submissionId,
+                  }),
+                ),
               );
 
               if (
-                Option.isSome(candidate) &&
-                (candidate.value.state === "ready" || candidate.value.state === "input-applied")
+                Option.isSome(next) &&
+                next.value.agentId === submission.agentId &&
+                (next.value.state === "ready" || next.value.state === "input-applied") &&
+                (yield* recordHalt(
+                  submissionScheduling.yieldTo({ active: submission, next: next.value }),
+                ))
               ) {
-                const next = yield* recordHalt(
-                  ledger.lookup(
-                    SubmissionLookupById.make({
-                      submissionId: candidate.value.submissionId,
-                    }),
-                  ),
-                );
+                yield* Deferred.succeed(yieldSignal, next.value.submissionId);
 
-                if (
-                  Option.isSome(next) &&
-                  next.value.agentId === submission.agentId &&
-                  (next.value.state === "ready" || next.value.state === "input-applied") &&
-                  (yield* recordHalt(
-                    submissionScheduling.yieldTo({ active: submission, next: next.value }),
-                  ))
-                ) {
-                  yield* Deferred.succeed(yieldSignal, next.value.submissionId);
-
-                  return yield* Effect.never;
-                }
+                return yield* Effect.never;
               }
             }
-          }),
+          }
+        }),
         ...(runContextPreparation.transientContext === undefined
           ? {}
           : { transientContext: runContextPreparation.transientContext }),
@@ -8113,7 +8102,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       };
 
       return completed;
-    });
+    },
+  );
 
   /**
    * One ownership period over the claimed lane head. The step order mirrors the pure recovery
@@ -8122,43 +8112,44 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
    * (Unknown Outcomes, or a durable approval suspension) — no settlement occurs and the
    * obligation stays owed.
    */
-  const runAttempt = <
-    InputSchema extends Schema.Top,
-    OutputSchema extends Schema.Top,
-    Instructions,
-    Tools extends Record<string, Tool.Any>,
-    Provider,
-    ModelProvides,
-    ModelRequires,
-    InstructionError = InstructionErrorOf<Instructions, InputSchema["Type"]>,
-    InstructionRequirements = InstructionRequirementsOf<Instructions, InputSchema["Type"]>,
-    RunDispositionValue extends
-      | RunDispositionDeclaration<OutputSchema["Type"], Schema.Top>
-      | undefined = undefined,
-    InputPromptValue extends InputPromptSource<InputSchema["Type"], unknown, unknown> | undefined =
-      undefined,
-    UpdatesSchema extends Schema.Top | undefined = undefined,
-  >(
-    registeredAgent: RuntimeBinding<
-      InputSchema,
-      OutputSchema,
+  const runAttempt = Effect.fnUntraced(
+    function* <
+      InputSchema extends Schema.Top,
+      OutputSchema extends Schema.Top,
       Instructions,
-      Tools,
+      Tools extends Record<string, Tool.Any>,
       Provider,
       ModelProvides,
       ModelRequires,
-      InstructionError,
-      InstructionRequirements,
-      RunDispositionValue,
-      InputPromptValue,
-      UpdatesSchema
-    >,
-    session: RunStorageSession,
-    resumeAfterRetention: () => void,
-    onHandoff: (nextSubmissionId: SubmissionId) => void,
-    yieldAfter?: DateTime.Utc,
-  ) =>
-    Effect.gen(function* () {
+      InstructionError = InstructionErrorOf<Instructions, InputSchema["Type"]>,
+      InstructionRequirements = InstructionRequirementsOf<Instructions, InputSchema["Type"]>,
+      RunDispositionValue extends
+        | RunDispositionDeclaration<OutputSchema["Type"], Schema.Top>
+        | undefined = undefined,
+      InputPromptValue extends
+        | InputPromptSource<InputSchema["Type"], unknown, unknown>
+        | undefined = undefined,
+      UpdatesSchema extends Schema.Top | undefined = undefined,
+    >(
+      registeredAgent: RuntimeBinding<
+        InputSchema,
+        OutputSchema,
+        Instructions,
+        Tools,
+        Provider,
+        ModelProvides,
+        ModelRequires,
+        InstructionError,
+        InstructionRequirements,
+        RunDispositionValue,
+        InputPromptValue,
+        UpdatesSchema
+      >,
+      session: RunStorageSession,
+      resumeAfterRetention: () => void,
+      onHandoff: (nextSubmissionId: SubmissionId) => void,
+      yieldAfter?: DateTime.Utc,
+    ) {
       // Recheck ownership outside the disposable cache's failure recovery.
       yield* session.checkActive;
 
@@ -8887,7 +8878,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
         return Option.some(settlement);
       }
-    }).pipe(Effect.scoped);
+    },
+    (effect) => effect.pipe(Effect.scoped),
+  );
 
   /** A missing current binding leaves both roots and children owed, with their claims released. */
   type CapturedWorkerBinding = Effect.Success<ReturnType<typeof makeLegacyWorkerBinding>>;
@@ -9096,7 +9089,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       }
     }).pipe((body) => withProcessing(threadId, body));
 
-  const processThreadImpl = <
+  const processThreadImpl = Effect.fnUntraced(function* <
     InputSchema extends Schema.Top,
     OutputSchema extends Schema.Top,
     Instructions,
@@ -9128,26 +9121,25 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       UpdatesSchema
     >,
     threadId: ThreadId,
-  ) =>
-    Effect.gen(function* () {
-      // The legacy single-binding worker is a singleton resolver (plan §1.7): identity-exact —
-      // a claimed head with a different Agent never runs against this binding (the latent P4
-      // gap) — and digest-transparent, because this call site registers no digest authority.
-      const binding = yield* makeLegacyWorkerBinding(agent);
+  ) {
+    // The legacy single-binding worker is a singleton resolver (plan §1.7): identity-exact —
+    // a claimed head with a different Agent never runs against this binding (the latent P4
+    // gap) — and digest-transparent, because this call site registers no digest authority.
+    const binding = yield* makeLegacyWorkerBinding(agent);
 
-      return yield* drainThread(
-        (submission) =>
-          submission.agentId === binding.agentId
-            ? Effect.succeed(binding)
-            : Effect.fail(
-                BindingUnavailable.make({
-                  agentId: submission.agentId,
-                  message: `This worker is bound to Agent ${binding.agentId}; the claimed head belongs to Agent ${submission.agentId} (SUB-023)`,
-                }),
-              ),
-        threadId,
-      );
-    });
+    return yield* drainThread(
+      (submission) =>
+        submission.agentId === binding.agentId
+          ? Effect.succeed(binding)
+          : Effect.fail(
+              BindingUnavailable.make({
+                agentId: submission.agentId,
+                message: `This worker is bound to Agent ${binding.agentId}; the claimed head belongs to Agent ${submission.agentId} (SUB-023)`,
+              }),
+            ),
+      threadId,
+    );
+  });
 
   const processThreadResolvedImpl = (
     threadId: ThreadId,

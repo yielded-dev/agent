@@ -9,7 +9,7 @@ import { callAppRepository } from "./remote.ts";
 const TripScope = Schema.Struct({ owner: Schema.String, tripId: TripId });
 
 const unavailable = () =>
-  new PlannerError({ code: "unavailable", message: "The trip app is temporarily unavailable." });
+  PlannerError.make({ code: "unavailable", message: "The trip app is temporarily unavailable." });
 
 /** Generated Workers get this fixed service binding, never the owner's namespace. */
 export class TripData extends Worker.make(Layer.empty, {
@@ -111,22 +111,33 @@ export const serveTripApp = Effect.fn("serveTripApp")(function* (
 
     const response = yield* Effect.tryPromise({
       try: async () => {
-        const worker = loader.get(`${app.id}:${commit}`, async () => {
-          const bundle = await bucket.get(`${prefix}server/index.js`);
+        const worker = loader.get(`${app.id}:${commit}`, () =>
+          Effect.runPromise(
+            Effect.gen(function* () {
+              const bundle = yield* Effect.tryPromise({
+                try: () => bucket.get(`${prefix}server/index.js`),
+                catch: unavailable,
+              });
 
-          if (bundle === null || bundle.size > 4 * 1024 * 1024)
-            throw new Error("App server is missing.");
+              if (bundle === null || bundle.size > 4 * 1024 * 1024) return yield* unavailable();
 
-          return {
-            compatibilityDate: "2026-07-01",
-            compatibilityFlags: ["nodejs_compat"],
-            mainModule: "worker.js",
-            modules: { "worker.js": await bundle.text() },
-            env: { TRIP_DATA: binding },
-            globalOutbound: null,
-            limits: { cpuMs: 100, subRequests: 10 },
-          };
-        });
+              return {
+                compatibilityDate: "2026-07-01",
+                compatibilityFlags: ["nodejs_compat"],
+                mainModule: "worker.js",
+                modules: {
+                  "worker.js": yield* Effect.tryPromise({
+                    try: () => bundle.text(),
+                    catch: unavailable,
+                  }),
+                },
+                env: { TRIP_DATA: binding },
+                globalOutbound: null,
+                limits: { cpuMs: 100, subRequests: 10 },
+              };
+            }),
+          ),
+        );
 
         // In particular, do not forward authentication cookies, or caller-supplied service headers.
         return worker.getEntrypoint().fetch(

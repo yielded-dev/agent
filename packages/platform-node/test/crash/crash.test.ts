@@ -101,93 +101,101 @@ import {
  * with `excludeTestServices` like the sandbox-local process tests.
  */
 
-const resubmit = (thread: string, key: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
+const resubmit = Effect.fnUntraced(function* (thread: string, key: string) {
+  const runtime = yield* DurableAgentRuntime;
 
-    return yield* runtime.submit(
-      { definition: plannerDefinition },
-      { question: CRASH_QUESTION },
-      crashSubmitOptions(thread, key),
-    );
-  });
+  return yield* runtime.submit(
+    { definition: plannerDefinition },
+    { question: CRASH_QUESTION },
+    crashSubmitOptions(thread, key),
+  );
+});
 
-const drainPlanner = (thread: string, answer: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
-    const model = yield* makeScriptedModel(() => finalParts(answer));
-    const agent = Agent.withModel(plannerDefinition, model);
+const drainPlanner = Effect.fnUntraced(function* (thread: string, answer: string) {
+  const runtime = yield* DurableAgentRuntime;
+  const model = yield* makeScriptedModel(() => finalParts(answer));
+  const agent = Agent.withModel(plannerDefinition, model);
 
-    return yield* runtime.processThread(agent, decodeThreadId(thread));
-  });
+  return yield* runtime.processThread(agent, decodeThreadId(thread));
+});
 
-const drainSearch = (thread: string, answer: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
-    const model = yield* makeScriptedModel(() => finalParts(answer));
-    const agent = Agent.withModel(searchDefinition, model);
+const drainSearch = Effect.fnUntraced(function* (thread: string, answer: string) {
+  const runtime = yield* DurableAgentRuntime;
+  const model = yield* makeScriptedModel(() => finalParts(answer));
+  const agent = Agent.withModel(searchDefinition, model);
 
-    return yield* runtime
-      .processThread(agent, decodeThreadId(thread))
-      .pipe(Effect.provide(searchToolLayer));
-  });
+  return yield* runtime
+    .processThread(agent, decodeThreadId(thread))
+    .pipe(Effect.provide(searchToolLayer));
+});
 
-const drainUncertainBook = (site: CrashSite, thread: string, answer: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
-    const model = yield* makeScriptedModel(() => finalParts(answer));
-    const agent = Agent.withModel(bookDefinition, model);
+const drainUncertainBook = Effect.fnUntraced(function* (
+  site: CrashSite,
+  thread: string,
+  answer: string,
+) {
+  const runtime = yield* DurableAgentRuntime;
+  const model = yield* makeScriptedModel(() => finalParts(answer));
+  const agent = Agent.withModel(bookDefinition, model);
 
-    return yield* runtime
-      .processThread(agent, decodeThreadId(thread))
-      .pipe(Effect.provide(makeBookToolLayer(site.supplier, bookTools)));
-  });
+  return yield* runtime
+    .processThread(agent, decodeThreadId(thread))
+    .pipe(Effect.provide(makeBookToolLayer(site.supplier, bookTools)));
+});
 
-const drainIdempotentBook = (site: CrashSite, thread: string, answer: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
-    const model = yield* makeScriptedModel(() => finalParts(answer));
-    const agent = Agent.withModel(bookIdempotentDefinition, model);
+const drainIdempotentBook = Effect.fnUntraced(function* (
+  site: CrashSite,
+  thread: string,
+  answer: string,
+) {
+  const runtime = yield* DurableAgentRuntime;
+  const model = yield* makeScriptedModel(() => finalParts(answer));
+  const agent = Agent.withModel(bookIdempotentDefinition, model);
 
-    return yield* runtime
-      .processThread(agent, decodeThreadId(thread))
-      .pipe(Effect.provide(makeBookToolLayer(site.supplier, bookIdempotentTools)));
-  });
+  return yield* runtime
+    .processThread(agent, decodeThreadId(thread))
+    .pipe(Effect.provide(makeBookToolLayer(site.supplier, bookIdempotentTools)));
+});
 
-const drainApprovalBook = (site: CrashSite, thread: string, answer: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
-    const model = yield* makeScriptedModel(() => finalParts(answer));
-    const agent = Agent.withModel(approvalDefinition, model);
+const drainApprovalBook = Effect.fnUntraced(function* (
+  site: CrashSite,
+  thread: string,
+  answer: string,
+) {
+  const runtime = yield* DurableAgentRuntime;
+  const model = yield* makeScriptedModel(() => finalParts(answer));
+  const agent = Agent.withModel(approvalDefinition, model);
 
-    return yield* runtime
-      .processThread(agent, decodeThreadId(thread))
-      .pipe(Effect.provide(makeBookToolLayer(site.supplier, approvalTools)));
-  });
+  return yield* runtime
+    .processThread(agent, decodeThreadId(thread))
+    .pipe(Effect.provide(makeBookToolLayer(site.supplier, approvalTools)));
+});
 
-const drainItinerary = (site: CrashSite, thread: string, answer: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
-    const model = yield* makeScriptedModel(() => finalParts(answer));
-    const agent = Agent.withModel(itineraryDefinition, model);
+const drainItinerary = Effect.fnUntraced(function* (
+  site: CrashSite,
+  thread: string,
+  answer: string,
+) {
+  const runtime = yield* DurableAgentRuntime;
+  const model = yield* makeScriptedModel(() => finalParts(answer));
+  const agent = Agent.withModel(itineraryDefinition, model);
 
-    return yield* runtime
-      .processThread(agent, decodeThreadId(thread))
-      .pipe(Effect.provide(makeItineraryToolLayer(site.supplier)));
-  });
+  return yield* runtime
+    .processThread(agent, decodeThreadId(thread))
+    .pipe(Effect.provide(makeItineraryToolLayer(site.supplier)));
+});
 
 /** Spawn a second-process resolution driver against the shared file and require success. */
-const runResolver = (options: ChildOptions) =>
-  Effect.gen(function* () {
-    const result = yield* runWorkerToExit(options);
+const runResolver = Effect.fnUntraced(function* (options: ChildOptions) {
+  const result = yield* runWorkerToExit(options);
 
-    expect(result.exit.code, `resolver stderr: ${result.stderr}`).toBe(0);
-    const resolved = childMessages(result.stdout).find((message) => message.kind === "resolved");
+  expect(result.exit.code, `resolver stderr: ${result.stderr}`).toBe(0);
+  const resolved = childMessages(result.stdout).find((message) => message.kind === "resolved");
 
-    expect(resolved).toBeDefined();
+  expect(resolved).toBeDefined();
 
-    return resolved;
-  });
+  return resolved;
+});
 
 /** Occurrences of `needle` inside the committed model-response messages (coverage evidence). */
 const responseOccurrences = (

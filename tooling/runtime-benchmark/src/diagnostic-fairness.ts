@@ -161,8 +161,8 @@ export const runFairnessCase = Effect.fn("diagnostic.fairness")(
             _tag: "Stream" as const,
             parts,
             termination: { _tag: "Complete" as const },
-            assertRequest: (request) =>
-              Effect.gen(function* () {
+            assertRequest: Effect.fnUntraced(
+              function* (request) {
                 const at = yield* stamp(`provider.${lane.label}.${turn}`);
 
                 if (lane.providerAt < 0) lane.providerAt = at;
@@ -190,15 +190,18 @@ export const runFairnessCase = Effect.fn("diagnostic.fairness")(
                     ),
                   "Fairness provider lost, reordered, or duplicated input/tool results",
                 );
-              }).pipe(
-                Effect.mapError((cause) =>
-                  AiError.AiError.make({
-                    module: "fairness-diagnostic",
-                    method: "assertRequest",
-                    reason: AiError.UnknownError.make({ description: cause.message }),
-                  }),
+              },
+              (effect) =>
+                effect.pipe(
+                  Effect.mapError((cause) =>
+                    AiError.AiError.make({
+                      module: "fairness-diagnostic",
+                      method: "assertRequest",
+                      reason: AiError.UnknownError.make({ description: cause.message }),
+                    }),
+                  ),
                 ),
-              ),
+            ),
             onStreamFinalize: Effect.sync(() => {
               streamsClosed++;
             }),

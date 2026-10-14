@@ -246,6 +246,7 @@ const HOST_PATTERN = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]
 
 const compileUrlPolicy = (patterns: ReadonlyArray<string>): ReadonlyArray<string> => {
   if (patterns.length === 0) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- WebCapture constructors synchronously require an explicit host allowlist.
     throw new Error(
       "Web capture requires at least one allowed host pattern; capture is deny-by-default",
     );
@@ -256,6 +257,7 @@ const compileUrlPolicy = (patterns: ReadonlyArray<string>): ReadonlyArray<string
       const pattern = raw.trim().toLowerCase();
 
       if (!HOST_PATTERN.test(pattern)) {
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- WebCapture constructors synchronously reject malformed host allowlist patterns.
         throw new Error(
           `Web capture host pattern ${JSON.stringify(raw)} must be a bare host name such as docs.example.com or *.example.com — no scheme, path, port, or credentials`,
         );
@@ -282,6 +284,7 @@ const validateMaxResponseBytes = (value: number | undefined): number => {
 
   // Fail closed on an invalid budget: NaN would make every comparison false.
   if (!Number.isSafeInteger(bytes) || bytes < 1_024 || bytes > 1024 * 1024) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- WebCapture constructors synchronously reject invalid response-size bounds.
     throw new Error(
       `Web capture maxResponseBytes must be an integer between 1024 and ${1024 * 1024}; received ${String(value)}`,
     );
@@ -396,6 +399,7 @@ const make = <const Name extends string>(
   const actions = Object.freeze([...new Set(options.actions ?? allActions)]);
 
   if (actions.length === 0) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- WebCapture.make synchronously requires at least one model-selectable action.
     throw new Error("Web capture requires at least one model-selectable action");
   }
 
@@ -519,6 +523,7 @@ const makeExtract = <const Name extends string, S extends Schema.Top>(
   const prompt = options.prompt;
 
   if (prompt !== undefined && (prompt.length === 0 || prompt.length > 8_192)) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- WebCapture.extract synchronously validates its fixed extraction prompt length.
     throw new Error("Web capture extraction prompt must be between 1 and 8192 characters");
   }
 
@@ -530,6 +535,7 @@ const makeExtract = <const Name extends string, S extends Schema.Top>(
     const decoded = Schema.decodeUnknownOption(PageCaptureResponseFormat)(jsonSchema);
 
     if (Option.isNone(decoded)) {
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- WebCapture.extract synchronously requires a bounded object response schema.
       throw new Error(
         `Web capture cannot derive a bounded object JSON response format from the extraction Schema for ${name}`,
       );

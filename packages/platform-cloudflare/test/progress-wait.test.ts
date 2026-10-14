@@ -73,12 +73,14 @@ const approve = (thread: string, receipt: Receipt) =>
     }),
   );
 
-const awaitProgressEffect = (thread: string, afterSequence: CanonicalSequence) =>
-  Effect.gen(function* () {
-    const client = yield* CloudflareThreadClient;
+const awaitProgressEffect = Effect.fnUntraced(function* (
+  thread: string,
+  afterSequence: CanonicalSequence,
+) {
+  const client = yield* CloudflareThreadClient;
 
-    yield* client.awaitProgress(decodeThreadId(thread), afterSequence);
-  });
+  yield* client.awaitProgress(decodeThreadId(thread), afterSequence);
+});
 
 const runTrackedClientFiber = <A, E>(effect: Effect.Effect<A, E, CloudflareThreadClient>) => {
   const fiber = runClientFiber(effect);

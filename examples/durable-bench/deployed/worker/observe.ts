@@ -38,6 +38,7 @@ let isolate: string | undefined;
 export const observation = (storage: DurableObjectStorage): Observation => {
   const meter = meters.get(storage);
 
+  // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Native SDK fetch adapters synchronously require the observation attached by the Object constructor.
   if (!meter) throw new Error("Missing benchmark observation");
 
   return meter;
@@ -106,6 +107,7 @@ export class Observation {
   }
   assertBuild(query: Query) {
     if (query.expectedBuild !== this.env.BUILD)
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Native Object RPC hooks reject mismatched builds before admitting input.
       throw new Error("Benchmark Object build mismatch; input was not admitted");
   }
   begin(query: Query) {
@@ -155,6 +157,7 @@ export class Observation {
   readonly fetch: typeof globalThis.fetch = async (input, init) => {
     const query = this.query;
 
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The injected native Fetch must reject requests outside an active benchmark sample.
     if (!query) throw new Error("Provider request without a benchmark sample");
     this.assertBuild(query);
     const objectBuild = this.env.BUILD;
@@ -166,6 +169,7 @@ export class Observation {
       url.origin !== base.origin ||
       url.pathname !== `${base.pathname.replace(/\/$/, "")}/chat/completions`
     )
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The injected native Fetch must reject destinations outside the benchmark provider allowlist.
       throw new Error("Unexpected provider destination");
     const startMs = Date.now();
 
@@ -188,6 +192,7 @@ export class Observation {
       const response = await globalThis.fetch(new Request(url, new Request(original, { headers })));
 
       call.status = response.status;
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The injected native Fetch rejects a response that cannot supply the promised SSE stream.
       if (!response.body) throw new Error("Provider response has no body");
       const requestId = response.headers.get("x-rebench-request");
       const reader = response.body.getReader();
@@ -235,6 +240,7 @@ export class Observation {
             }
             if (line === "data: [DONE]") done = true;
             if (line.startsWith(": rebench-receipt ")) {
+              // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native metrics RPC rejects duplicate captured SSE receipts instead of publishing ambiguous evidence.
               if (call.receipt) throw new Error("Duplicate provider receipt");
               call.receipt = Schema.decodeUnknownSync(ProviderReceipt)(
                 JSON.parse(line.slice(": rebench-receipt ".length)),
@@ -248,6 +254,7 @@ export class Observation {
                 call.receipt.expectedBuild !== query.expectedBuild ||
                 call.receipt.objectBuild !== objectBuild
               )
+                // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native metrics RPC rejects captured receipts for a different measured request.
                 throw new Error("Provider receipt mismatch");
               call.fingerprint = call.receipt.fingerprint;
             }
@@ -274,6 +281,7 @@ export class Observation {
               }
               responseBytes += item.value.byteLength;
               if (responseBytes > 4 * 1024 * 1024)
+                // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native ReadableStream pull callback errors the stream on overflow; its catch forwards this same cause.
                 throw new Error("Benchmark provider response exceeded 4 MiB");
               chunks.push({ bytes: item.value, receivedMs: Date.now() });
               controller.enqueue(item.value);
@@ -299,6 +307,7 @@ export class Observation {
     } catch (cause) {
       call.endMs = Date.now();
       call.error = errorText(cause);
+      // oxlint-disable-next-line effect/no-untyped-throw -- The injected native Fetch must rethrow the original rejection after recording diagnostics.
       throw cause;
     }
   };

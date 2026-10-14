@@ -131,6 +131,7 @@ const application = Layer.unwrap(
     // Native boundary clock: workerd freezes time between I/O. These are wall marks,
     // not CPU measurements, and cannot measure synchronous preparation below that resolution.
     const mark = (kind: string, request: number | null = null) => {
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Synchronous performance observer rejects evidence beyond its fixed capacity.
       if (index >= 2_048) throw new Error("Performance evidence bound exceeded");
 
       const event = {
@@ -154,6 +155,7 @@ const application = Layer.unwrap(
     let requestNumber = state.usage.calls + 1;
 
     const auditedFetch: typeof globalThis.fetch = (input, init) => {
+      // oxlint-disable-next-line effect/no-native-error -- Native benchmark host Promise reports closure to its external caller.
       if (state.closed) return Promise.reject(new Error("Performance host closed"));
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
 
@@ -164,6 +166,7 @@ const application = Layer.unwrap(
 
     const live = yield* makeLiveClient({
       model: identity.model,
+      serviceTier: "default",
       maxCostMicrousd: PERFORMANCE_BUDGET,
       maxModelCalls: 18,
       maxInputTokens: 8_192,
@@ -178,8 +181,8 @@ const application = Layer.unwrap(
       Effect.provide(
         Layer.merge(
           Layer.succeed(RequestAuditSink, {
-            write: (event) =>
-              Effect.gen(function* () {
+            write: Effect.fnUntraced(
+              function* (event) {
                 put(
                   `audit-${event.request.toString().padStart(3, "0")}-${event.kind}`,
                   yield* Schema.encodeEffect(Schema.fromJsonString(RequestAudit))(event),
@@ -190,14 +193,17 @@ const application = Layer.unwrap(
                   event.kind === "request" ? "reservation-persisted" : "provider-completed",
                   event.request,
                 );
-              }).pipe(
-                Effect.mapError(() =>
-                  EvaluationError.make({
-                    stage: "evidence",
-                    message: "Cannot persist request accounting",
-                  }),
+              },
+              (effect) =>
+                effect.pipe(
+                  Effect.mapError(() =>
+                    EvaluationError.make({
+                      stage: "evidence",
+                      message: "Cannot persist request accounting",
+                    }),
+                  ),
                 ),
-              ),
+            ),
           }),
           OpenAiClient.layer({ apiKey: Redacted.make(env.OPENAI_API_KEY) }).pipe(
             Layer.provide(
@@ -213,22 +219,20 @@ const application = Layer.unwrap(
     usage = live.snapshot;
 
     const tools = performanceToolkit.toLayer({
-      read_price: () =>
-        Effect.gen(function* () {
-          mark("tool:read_price:start");
-          yield* Effect.sleep("20 millis");
-          mark("tool:read_price:end");
+      read_price: Effect.fnUntraced(function* () {
+        mark("tool:read_price:start");
+        yield* Effect.sleep("20 millis");
+        mark("tool:read_price:end");
 
-          return { unitPriceCents: 3_700, evidence: `price-${state.phase}-q7` };
-        }),
-      read_stock: () =>
-        Effect.gen(function* () {
-          mark("tool:read_stock:start");
-          yield* Effect.sleep("20 millis");
-          mark("tool:read_stock:end");
+        return { unitPriceCents: 3_700, evidence: `price-${state.phase}-q7` };
+      }),
+      read_stock: Effect.fnUntraced(function* () {
+        mark("tool:read_stock:start");
+        yield* Effect.sleep("20 millis");
+        mark("tool:read_stock:end");
 
-          return { availableUnits: 12, evidence: `stock-${state.phase}-m9` };
-        }),
+        return { availableUnits: 12, evidence: `stock-${state.phase}-m9` };
+      }),
     });
 
     const host = ThreadObject.layer([
@@ -252,23 +256,22 @@ const application = Layer.unwrap(
       Effect.gen(function* () {
         const services = yield* Effect.context<ThreadObject.Services>();
 
-        const hit = (kind: string) =>
-          Effect.gen(function* () {
-            mark(kind);
-            if (kind === "turn:after-results-append" && state.phase === 2 && !state.aborted) {
-              state = { ...state, aborted: true, usage: yield* usage };
-              persist();
-              mark("planned-abort-after-tool-commit");
-              yield* Effect.promise(() => ctx.storage.sync());
-              ctx.abort("performance fixture: committed tool batch recovery");
-            }
-          });
+        const hit = Effect.fnUntraced(function* (kind: string) {
+          mark(kind);
+          if (kind === "turn:after-results-append" && state.phase === 2 && !state.aborted) {
+            state = { ...state, aborted: true, usage: yield* usage };
+            persist();
+            mark("planned-abort-after-tool-commit");
+            yield* Effect.promise(() => ctx.storage.sync());
+            ctx.abort("performance fixture: committed tool batch recovery");
+          }
+        });
 
         callbacks.set(ctx, hit);
 
         return Context.add(services, PerformanceHost, {
-          prepare: (next) =>
-            Effect.gen(function* () {
+          prepare: Effect.fnUntraced(
+            function* (next) {
               if (state.closed || next < state.phase || next > state.phase + 1)
                 return yield* EvaluationError.make({
                   stage: "phase",
@@ -294,7 +297,9 @@ const application = Layer.unwrap(
               yield* Ref.set(phase, next);
               persist();
               mark("submission-ingress");
-            }).pipe(Effect.provide(services)),
+            },
+            (effect) => effect.pipe(Effect.provide(services)),
+          ),
           snapshot: Effect.gen(function* () {
             const records = yield* readLog(threadId).pipe(
               Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed([])),

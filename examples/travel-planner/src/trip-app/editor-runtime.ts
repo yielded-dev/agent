@@ -34,7 +34,7 @@ import {
 import { AppTools } from "./tools.ts";
 
 const unavailable = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "unavailable",
     message: "The app editor's admitted task could not be verified.",
   });
@@ -91,7 +91,7 @@ export const editorAttemptLayer = (context: {
           Effect.flatMap((captured) => {
             if (tripId !== captured.tripId)
               return Effect.fail(
-                new PlannerError({
+                PlannerError.make({
                   code: "invalid",
                   message: "This editor can change only its assigned trip.",
                 }),

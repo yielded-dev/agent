@@ -90,29 +90,30 @@ const toolTurn = (
 ];
 
 /** Scripted model whose state survives Layer rebuilds across Attempts. */
-const makeScriptedModel = (script: (call: number) => ReadonlyArray<Response.StreamPartEncoded>) =>
-  Effect.gen(function* () {
-    const calls = yield* Ref.make(0);
+const makeScriptedModel = Effect.fnUntraced(function* (
+  script: (call: number) => ReadonlyArray<Response.StreamPartEncoded>,
+) {
+  const calls = yield* Ref.make(0);
 
-    const model = Model.make(
-      "scripted",
-      "admin-operations-test",
-      Layer.effect(
-        LanguageModel.LanguageModel,
-        LanguageModel.make({
-          generateText: () => Effect.succeed([]),
-          streamText: () =>
-            Stream.unwrap(
-              Ref.getAndUpdate(calls, (call) => call + 1).pipe(
-                Effect.map((call) => Stream.fromIterable(script(call))),
-              ),
+  const model = Model.make(
+    "scripted",
+    "admin-operations-test",
+    Layer.effect(
+      LanguageModel.LanguageModel,
+      LanguageModel.make({
+        generateText: () => Effect.succeed([]),
+        streamText: () =>
+          Stream.unwrap(
+            Ref.getAndUpdate(calls, (call) => call + 1).pipe(
+              Effect.map((call) => Stream.fromIterable(script(call))),
             ),
-        }),
-      ),
-    );
+          ),
+      }),
+    ),
+  );
 
-    return { model };
-  });
+  return { model };
+});
 
 const policy = AgentPolicy.make({
   maxTurns: 3,
@@ -194,20 +195,19 @@ const authorizerLayer = Layer.effectContext(
     const seen = yield* Ref.make<ReadonlyArray<OperationAuthorizationRequest>>([]);
 
     const service: OperationAuthorizerService = {
-      authorize: (request) =>
-        Effect.gen(function* () {
-          yield* Ref.update(seen, (all) => [...all, request]);
-          const deniedOperations = yield* Ref.get(denied);
+      authorize: Effect.fnUntraced(function* (request) {
+        yield* Ref.update(seen, (all) => [...all, request]);
+        const deniedOperations = yield* Ref.get(denied);
 
-          if (deniedOperations.has(request.operation)) {
-            return yield* OperationDenied.make({
-              operation: request.operation,
-              reason: "denied by the test authorization policy",
-              ...(request.threadId === undefined ? {} : { threadId: request.threadId }),
-              ...(request.submissionId === undefined ? {} : { submissionId: request.submissionId }),
-            });
-          }
-        }),
+        if (deniedOperations.has(request.operation)) {
+          return yield* OperationDenied.make({
+            operation: request.operation,
+            reason: "denied by the test authorization policy",
+            ...(request.threadId === undefined ? {} : { threadId: request.threadId }),
+            ...(request.submissionId === undefined ? {} : { submissionId: request.submissionId }),
+          });
+        }
+      }),
     };
 
     return Context.make(OperationAuthorizer, service).pipe(
@@ -238,30 +238,28 @@ const testLayer = DurableAgentRuntime.layer
   .pipe(Layer.provide(runStorageLayer()))
   .pipe(Layer.provideMerge(baseLayer));
 
-const readLog = (threadId: string) =>
-  Effect.gen(function* () {
-    const store = yield* ThreadStore;
+const readLog = Effect.fnUntraced(function* (threadId: string) {
+  const store = yield* ThreadStore;
 
-    return yield* Stream.runCollect(
-      store.read(
-        ThreadRead.make({
-          threadId: decodeThreadId(threadId),
-          limit: 1_024,
-        }),
-      ),
-    );
-  });
+  return yield* Stream.runCollect(
+    store.read(
+      ThreadRead.make({
+        threadId: decodeThreadId(threadId),
+        limit: 1_024,
+      }),
+    ),
+  );
+});
 
-const armFailpoint = (location: DurableRuntimeFailpointLocation) =>
-  Effect.gen(function* () {
-    const control = yield* DurableRuntimeFailpointTestControl;
+const armFailpoint = Effect.fnUntraced(function* (location: DurableRuntimeFailpointLocation) {
+  const control = yield* DurableRuntimeFailpointTestControl;
 
-    yield* control.setHandler((hitLocation) =>
-      hitLocation === location
-        ? Effect.fail(DurableRuntimeFailpointError.make({ location: hitLocation }))
-        : Effect.void,
-    );
-  });
+  yield* control.setHandler((hitLocation) =>
+    hitLocation === location
+      ? Effect.fail(DurableRuntimeFailpointError.make({ location: hitLocation }))
+      : Effect.void,
+  );
+});
 
 const clearFailpoint = Effect.gen(function* () {
   const control = yield* DurableRuntimeFailpointTestControl;
@@ -302,109 +300,93 @@ const encodeSnapshots = Schema.encodeEffect(Schema.Array(RecoverySnapshot));
 const encodeEnvelopes = Schema.encodeEffect(Schema.Array(CanonicalRecordEnvelope));
 
 /** Byte-exact durable-state fingerprint: the full canonical log + every recovery snapshot. */
-const durableStateFingerprint = (threadId: string) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
-    const records = yield* readLog(threadId);
-    const nonterminal = yield* Stream.runCollect(ledger.scanNonterminal);
-    const snapshots: Array<RecoverySnapshot> = [];
+const durableStateFingerprint = Effect.fnUntraced(function* (threadId: string) {
+  const ledger = yield* SubmissionLedger;
+  const records = yield* readLog(threadId);
+  const nonterminal = yield* Stream.runCollect(ledger.scanNonterminal);
+  const snapshots: Array<RecoverySnapshot> = [];
 
-    for (const submission of nonterminal) {
-      if (submission.threadId !== threadId) continue;
-      snapshots.push(
-        yield* ledger.loadRecoverySnapshot(
-          RecoverySnapshotRequest.make({ submissionId: submission.submissionId }),
-        ),
-      );
-    }
-    const encodedRecords = yield* encodeEnvelopes([...records]).pipe(Effect.orDie);
-    const encodedSnapshots = yield* encodeSnapshots(snapshots).pipe(Effect.orDie);
+  for (const submission of nonterminal) {
+    if (submission.threadId !== threadId) continue;
+    snapshots.push(
+      yield* ledger.loadRecoverySnapshot(
+        RecoverySnapshotRequest.make({ submissionId: submission.submissionId }),
+      ),
+    );
+  }
+  const encodedRecords = yield* encodeEnvelopes([...records]).pipe(Effect.orDie);
+  const encodedSnapshots = yield* encodeSnapshots(snapshots).pipe(Effect.orDie);
 
-    return JSON.stringify({ records: encodedRecords, snapshots: encodedSnapshots });
-  });
+  return JSON.stringify({ records: encodedRecords, snapshots: encodedSnapshots });
+});
 
 /** Drive one lane into the durable `unknown` state (prepared call, no outcome, recovery). */
-const makeUnknownLane = (thread: string, key: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
+const makeUnknownLane = Effect.fnUntraced(function* (thread: string, key: string) {
+  const runtime = yield* DurableAgentRuntime;
 
-    const scripted = yield* makeScriptedModel((call) =>
-      call === 0
-        ? toolTurn(toolCall("book-1", "book", { ref: "r-unknown" }))
-        : finalParts('{"answer":"never"}'),
-    );
+  const scripted = yield* makeScriptedModel((call) =>
+    call === 0
+      ? toolTurn(toolCall("book-1", "book", { ref: "r-unknown" }))
+      : finalParts('{"answer":"never"}'),
+  );
 
-    const agent = Agent.withModel(bookDefinition, scripted.model);
+  const agent = Agent.withModel(bookDefinition, scripted.model);
 
-    const receipt = yield* runtime.submit(
-      agent,
-      { question: "book it" },
-      submitOptions(thread, key),
-    );
+  const receipt = yield* runtime.submit(agent, { question: "book it" }, submitOptions(thread, key));
 
-    yield* armFailpoint("tools:after-dispatch-fence");
+  yield* armFailpoint("tools:after-dispatch-fence");
 
-    const killed = yield* Effect.exit(
-      runtime.processThread(agent, decodeThreadId(thread)).pipe(Effect.provide(bookToolLayer)),
-    );
+  const killed = yield* Effect.exit(
+    runtime.processThread(agent, decodeThreadId(thread)).pipe(Effect.provide(bookToolLayer)),
+  );
 
-    expect(failureTag(killed)).toBe("DurableRuntimeFailpointError");
-    yield* clearFailpoint;
-    const reports = (yield* runtime.runRecovery()).reports;
-    const report = reports.find((entry) => entry.submissionId === receipt.submissionId);
+  expect(failureTag(killed)).toBe("DurableRuntimeFailpointError");
+  yield* clearFailpoint;
+  const reports = (yield* runtime.runRecovery()).reports;
+  const report = reports.find((entry) => entry.submissionId === receipt.submissionId);
 
-    expect(report?.disposition).toBe("unknown");
+  expect(report?.disposition).toBe("unknown");
 
-    return receipt;
-  });
+  return receipt;
+});
 
 /** Drive one lane into the durable `suspended(ApprovalPending)` state. */
-const makeApprovalSuspendedLane = (thread: string, key: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
+const makeApprovalSuspendedLane = Effect.fnUntraced(function* (thread: string, key: string) {
+  const runtime = yield* DurableAgentRuntime;
 
-    const scripted = yield* makeScriptedModel((call) =>
-      call === 0
-        ? toolTurn(toolCall("book-1", "book", { ref: "r-approval" }))
-        : finalParts('{"answer":"approved"}'),
-    );
+  const scripted = yield* makeScriptedModel((call) =>
+    call === 0
+      ? toolTurn(toolCall("book-1", "book", { ref: "r-approval" }))
+      : finalParts('{"answer":"approved"}'),
+  );
 
-    const agent = Agent.withModel(approvalDefinition, scripted.model);
+  const agent = Agent.withModel(approvalDefinition, scripted.model);
 
-    const receipt = yield* runtime.submit(
-      agent,
-      { question: "book it" },
-      submitOptions(thread, key),
-    );
+  const receipt = yield* runtime.submit(agent, { question: "book it" }, submitOptions(thread, key));
 
-    const settlements = yield* runtime
-      .processThread(agent, decodeThreadId(thread))
-      .pipe(Effect.provide(approvalToolLayer));
+  const settlements = yield* runtime
+    .processThread(agent, decodeThreadId(thread))
+    .pipe(Effect.provide(approvalToolLayer));
 
-    expect(settlements).toEqual([]);
+  expect(settlements).toEqual([]);
 
-    return receipt;
-  });
+  return receipt;
+});
 
 /** Run one plain lane to a completed settlement. */
-const makeSettledLane = (thread: string, key: string) =>
-  Effect.gen(function* () {
-    const runtime = yield* DurableAgentRuntime;
-    const scripted = yield* makeScriptedModel(() => finalParts('{"answer":"done"}'));
-    const agent = Agent.withModel(plainDefinition, scripted.model);
+const makeSettledLane = Effect.fnUntraced(function* (thread: string, key: string) {
+  const runtime = yield* DurableAgentRuntime;
+  const scripted = yield* makeScriptedModel(() => finalParts('{"answer":"done"}'));
+  const agent = Agent.withModel(plainDefinition, scripted.model);
 
-    const receipt = yield* runtime.submit(
-      agent,
-      { question: "answer" },
-      submitOptions(thread, key),
-    );
+  const receipt = yield* runtime.submit(agent, { question: "answer" }, submitOptions(thread, key));
 
-    const settlements = yield* runtime.processThread(agent, decodeThreadId(thread));
+  const settlements = yield* runtime.processThread(agent, decodeThreadId(thread));
 
-    expect(settlements[0]?.outcome).toBe("completed");
+  expect(settlements[0]?.outcome).toBe("completed");
 
-    return receipt;
-  });
+  return receipt;
+});
 
 layer(testLayer)("DUR-017/SEC-011 P7 administrative operations", (it) => {
   it.effect(

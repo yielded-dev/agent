@@ -104,7 +104,7 @@ export class YieldedDO extends YieldedDOBase {
         principal: Principal.make("bench"),
         idempotencyKey: IdempotencyKey.make(input.id),
         definitions: await Effect.runPromise(definitionDigests),
-        inputPayload: Schema.decodeUnknownSync(PersistedJson)(input.text),
+        inputPayload: Schema.decodeSync(PersistedJson)(input.text),
       }),
     );
 
@@ -112,6 +112,7 @@ export class YieldedDO extends YieldedDOBase {
     const submitted = Schema.decodeUnknownSync(HostResponse)(await super.submitEncoded(encoded));
 
     if (submitted._tag !== "SubmitSucceeded")
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native history callback must reject a failed admission so Host keeps this batch in flight.
       throw new Error(`History admission failed: ${JSON.stringify(submitted)}`);
 
     const settled = Schema.decodeUnknownSync(HostResponse)(
@@ -119,6 +120,7 @@ export class YieldedDO extends YieldedDOBase {
     );
 
     if (settled._tag !== "SettlementReached" || settled.settlement.outcome !== "completed")
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native history callback must reject a failed settlement so Host cannot acknowledge the batch.
       throw new Error(`History settlement failed: ${JSON.stringify(settled)}`);
   }
   async benchSubmit(encoded: unknown, query: Query): Promise<unknown> {

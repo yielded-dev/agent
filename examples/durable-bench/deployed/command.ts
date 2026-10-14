@@ -165,7 +165,7 @@ export const command = Command.make(
     );
 
     if (!flags.buildHistory && !targets.includes("yielded"))
-      return yield* new BenchError({ message: "Paired A/B requires the yielded target." });
+      return yield* BenchError.make({ message: "Paired A/B requires the yielded target." });
 
     if (
       targets.includes("effect-ai-floor") &&
@@ -173,7 +173,7 @@ export const command = Command.make(
         flags.verifyIncarnationRecovery ||
         !Option.getOrElse(flags.restoreEachPass, () => sizes.every((size) => size <= 1000)))
     )
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message:
           "effect-ai-floor requires snapshot comparison with --restore-each-pass and cannot build or recover durable history.",
       });
@@ -184,7 +184,7 @@ export const command = Command.make(
         flags.profile.flat().length > 0 ||
         !Option.getOrElse(flags.restoreEachPass, () => sizes.every((size) => size <= 1000)))
     )
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message:
           "Recovery diagnostics require unprofiled, snapshot-backed passes with --restore-each-pass.",
       });
@@ -205,7 +205,7 @@ export const command = Command.make(
     );
 
     if (flags.buildHistory && (rigorous || flags.textStreaming))
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message: "--build-history measures completion without observers or A/B redeploys.",
       });
 
@@ -222,12 +222,12 @@ export const command = Command.make(
         concurrency !== 1 ||
         buildConcurrency !== 1)
     )
-      return yield* new BenchError({
+      return yield* BenchError.make({
         message:
           "--profile-after requires --build-history, --profile, one target/size/TTFT/Object, concurrency and build-concurrency 1, and a checkpoint divisible by 50 before the final turn.",
       });
     if (flags.buildHistory && profiles.length > 0 && profileAfter === undefined)
-      return yield* new BenchError({ message: "History profiling requires --profile-after." });
+      return yield* BenchError.make({ message: "History profiling requires --profile-after." });
 
     return yield* run({
       ...(Option.isSome(flags.fixtureDirectory)

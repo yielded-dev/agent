@@ -907,78 +907,76 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
           // in a successful canonical Tool result, not an incarnation-local Ref.
           const preparation = RunContextPreparation.of({
             hook: {
-              prepare: (request) =>
-                Effect.gen(function* () {
-                  const records = yield* store
-                    .read(ThreadRead.make({ threadId: request.threadId, limit: 128 }))
-                    .pipe(
-                      Stream.runCollect,
-                      Effect.mapError((cause) =>
-                        CompactionError.make({ message: "Profile receipt is unavailable", cause }),
-                      ),
-                    );
+              prepare: Effect.fnUntraced(function* (request) {
+                const records = yield* store
+                  .read(ThreadRead.make({ threadId: request.threadId, limit: 128 }))
+                  .pipe(
+                    Stream.runCollect,
+                    Effect.mapError((cause) =>
+                      CompactionError.make({ message: "Profile receipt is unavailable", cause }),
+                    ),
+                  );
 
-                  const receipt = records.findLast(
-                    (entry) =>
-                      entry.record.payload._tag === "ToolCallSettled" &&
-                      entry.record.payload.runId === request.runId &&
-                      entry.record.payload.toolName === "select_model" &&
-                      !entry.record.payload.isFailure,
-                  )?.record.payload;
+                const receipt = records.findLast(
+                  (entry) =>
+                    entry.record.payload._tag === "ToolCallSettled" &&
+                    entry.record.payload.runId === request.runId &&
+                    entry.record.payload.toolName === "select_model" &&
+                    !entry.record.payload.isFailure,
+                )?.record.payload;
 
-                  const profile =
-                    receipt?._tag === "ToolCallSettled"
-                      ? (yield* Schema.decodeUnknownEffect(profileReceipt)(receipt.result).pipe(
-                          Effect.mapError((cause) =>
-                            CompactionError.make({ message: "Invalid profile receipt", cause }),
-                          ),
-                        )).profile
-                      : "large";
+                const profile =
+                  receipt?._tag === "ToolCallSettled"
+                    ? (yield* Schema.decodeUnknownEffect(profileReceipt)(receipt.result).pipe(
+                        Effect.mapError((cause) =>
+                          CompactionError.make({ message: "Invalid profile receipt", cause }),
+                        ),
+                      )).profile
+                    : "large";
 
-                  preparations.push(profile);
+                preparations.push(profile);
 
-                  return {
-                    prompt: request.source,
-                    modelCall: {
-                      model: nativeModel(profile),
-                      context: ModelCallContext.make({
-                        contextCapacity: profile === "large" ? 12_000 : 4_000,
-                        maxInputTokens: profile === "large" ? 9_000 : 2_000,
-                        outputReserveTokens: 400,
-                        uncountedOverheadTokens: 100,
-                      }),
-                    },
-                  };
-                }),
+                return {
+                  prompt: request.source,
+                  modelCall: {
+                    model: nativeModel(profile),
+                    context: ModelCallContext.make({
+                      contextCapacity: profile === "large" ? 12_000 : 4_000,
+                      maxInputTokens: profile === "large" ? 9_000 : 2_000,
+                      outputReserveTokens: 400,
+                      uncountedOverheadTokens: 100,
+                    }),
+                  },
+                };
+              }),
             },
           });
 
           const binding = yield* DurableWorkerBinding.make(agent, digests).pipe(
             Effect.provide(
               tools.toLayer({
-                select_model: () =>
-                  Effect.gen(function* () {
-                    const steps = yield* DurableStep;
+                select_model: Effect.fnUntraced(function* () {
+                  const steps = yield* DurableStep;
 
-                    const selected = yield* steps.do(
-                      "select-profile",
-                      profileReceipt,
-                      Effect.sync(() => {
-                        handlerCalls += 1;
+                  const selected = yield* steps.do(
+                    "select-profile",
+                    profileReceipt,
+                    Effect.sync(() => {
+                      handlerCalls += 1;
 
-                        return {
-                          profile: "small" as const,
-                          evidence: "completed action evidence ".repeat(600),
-                        };
-                      }),
-                    );
+                      return {
+                        profile: "small" as const,
+                        evidence: "completed action evidence ".repeat(600),
+                      };
+                    }),
+                  );
 
-                    if (scenario === "failed-tool") {
-                      return yield* Effect.fail({ message: "Profile selection was rejected" });
-                    }
+                  if (scenario === "failed-tool") {
+                    return yield* Effect.fail({ message: "Profile selection was rejected" });
+                  }
 
-                    return selected;
-                  }),
+                  return selected;
+                }),
               }),
             ),
           );
@@ -1273,15 +1271,14 @@ layer(baseLayer)("bounded durable Thread processing", (it) => {
       const runtime = yield* makeRuntime([binding]).pipe(
         Effect.provideService(CurrentBindingSelection, {
           key: "slow-selection",
-          select: () =>
-            Effect.gen(function* () {
-              if (!(yield* Ref.getAndSet(selected, true))) {
-                yield* Deferred.succeed(selecting, undefined);
-                yield* Effect.sleep("25 seconds");
-              }
+          select: Effect.fnUntraced(function* () {
+            if (!(yield* Ref.getAndSet(selected, true))) {
+              yield* Deferred.succeed(selecting, undefined);
+              yield* Effect.sleep("25 seconds");
+            }
 
-              return definition;
-            }),
+            return definition;
+          }),
         }),
       );
 

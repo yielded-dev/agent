@@ -150,41 +150,40 @@ it.effect(
         let accountingChecks = 0;
 
         const handlers = toolkit.toLayer({
-          coordinate: ({ action }) =>
-            Effect.gen(function* () {
-              if (action === "launch") {
-                independent = (yield* Subagent.start(
-                  research,
-                  { note: "initial" },
-                  {
-                    idempotencyKey: key("independent"),
-                    budgetScope: "worker-run",
-                  },
-                )).worker;
-                conserved = (yield* Subagent.start(
-                  research,
-                  { note: "initial" },
-                  {
-                    idempotencyKey: key("conserved"),
-                  },
-                )).worker;
-              } else {
-                if (independent === undefined) return yield* Effect.die("Worker not launched");
+          coordinate: Effect.fnUntraced(function* ({ action }) {
+            if (action === "launch") {
+              independent = (yield* Subagent.start(
+                research,
+                { note: "initial" },
+                {
+                  idempotencyKey: key("independent"),
+                  budgetScope: "worker-run",
+                },
+              )).worker;
+              conserved = (yield* Subagent.start(
+                research,
+                { note: "initial" },
+                {
+                  idempotencyKey: key("conserved"),
+                },
+              )).worker;
+            } else {
+              if (independent === undefined) return yield* Effect.die("Worker not launched");
 
-                const delivery = yield* Subagent.followUp(
-                  research,
-                  independent,
-                  { note: "Run B" },
-                  {
-                    idempotencyKey: key("run-b"),
-                  },
-                );
+              const delivery = yield* Subagent.followUp(
+                research,
+                independent,
+                { note: "Run B" },
+                {
+                  idempotencyKey: key("run-b"),
+                },
+              );
 
-                expect(delivery.receipt).not.toBeNull();
-              }
+              expect(delivery.receipt).not.toBeNull();
+            }
 
-              return "accepted";
-            }),
+            return "accepted";
+          }),
         });
 
         const parent = Agent.withModel(
@@ -480,28 +479,27 @@ for (const completion of ["interrupted"] as const) {
               Layer.provide(authority),
               Layer.provide(
                 Layer.succeed(MessageDeliveryFailpoint, {
-                  hit: (point) =>
-                    Effect.gen(function* () {
-                      // The parked commit owns acceptance without a periodic status retry.
-                      if (point === "message-delivery:park:after")
-                        yield* Deferred.succeed(accepted, undefined);
-                      if (
-                        point === "message-delivery:process:after" ||
-                        point === "message-delivery:complete:after"
-                      )
-                        yield* Deferred.succeed(processed, undefined);
-                      if (point !== "message-delivery:claim:after") return;
-                      claims++;
-                      if (claims !== 1) return;
-                      yield* Deferred.succeed(claimed, undefined).pipe(
-                        Effect.andThen(Deferred.await(release)),
-                        Effect.ensuring(
-                          Effect.sync(() => {
-                            finalized++;
-                          }),
-                        ),
-                      );
-                    }),
+                  hit: Effect.fnUntraced(function* (point) {
+                    // The parked commit owns acceptance without a periodic status retry.
+                    if (point === "message-delivery:park:after")
+                      yield* Deferred.succeed(accepted, undefined);
+                    if (
+                      point === "message-delivery:process:after" ||
+                      point === "message-delivery:complete:after"
+                    )
+                      yield* Deferred.succeed(processed, undefined);
+                    if (point !== "message-delivery:claim:after") return;
+                    claims++;
+                    if (claims !== 1) return;
+                    yield* Deferred.succeed(claimed, undefined).pipe(
+                      Effect.andThen(Deferred.await(release)),
+                      Effect.ensuring(
+                        Effect.sync(() => {
+                          finalized++;
+                        }),
+                      ),
+                    );
+                  }),
                 }),
               ),
             ),
@@ -678,20 +676,23 @@ it.effect(
         );
 
         const handlers = toolkit.toLayer({
-          pay: () =>
-            Effect.gen(function* () {
+          pay: Effect.fnUntraced(
+            function* () {
               yield* Deferred.succeed(entered, undefined);
               yield* Deferred.await(pay);
               payments++;
 
               return { answer: "paid" };
-            }).pipe(
-              Effect.ensuring(
-                Effect.sync(() => {
-                  finalized++;
-                }),
+            },
+            (effect) =>
+              effect.pipe(
+                Effect.ensuring(
+                  Effect.sync(() => {
+                    finalized++;
+                  }),
+                ),
               ),
-            ),
+          ),
         });
 
         const research = Subagent.make("research", {
@@ -1143,15 +1144,14 @@ it.effect(
               deploymentId: "approval-input-v1",
               producerId: "approval-input-node",
               toolAuthorization: Layer.succeed(RunToolAuthorization, {
-                authorize: ({ call }) =>
-                  Effect.gen(function* () {
-                    if (call.toolName === "consent") return { _tag: "allowed" as const };
-                    const snapshot = yield* latest;
+                authorize: Effect.fnUntraced(function* ({ call }) {
+                  if (call.toolName === "consent") return { _tag: "allowed" as const };
+                  const snapshot = yield* latest;
 
-                    return snapshot.acceptedInput?.messageId === snapshot.appliedInput?.messageId
-                      ? { _tag: "allowed" as const }
-                      : { _tag: "denied" as const, reason: "Newer worker input is pending" };
-                  }),
+                  return snapshot.acceptedInput?.messageId === snapshot.appliedInput?.messageId
+                    ? { _tag: "allowed" as const }
+                    : { _tag: "denied" as const, reason: "Newer worker input is pending" };
+                }),
               }),
             },
           ).pipe(Layer.provide([authority, handlers])),
@@ -1344,17 +1344,16 @@ it.effect.each(["same", "revoked"] as const)(
         const research = Subagent.make("research", {
           target: target.definition,
           policy: declaration.policy,
-          prepareInput: ({ question }) =>
-            Effect.gen(function* () {
-              const capture = ++preparations;
+          prepareInput: Effect.fnUntraced(function* ({ question }) {
+            const capture = ++preparations;
 
-              if (capture === 1) {
-                yield* Deferred.succeed(preparing, undefined);
-                yield* Deferred.await(release);
-              }
+            if (capture === 1) {
+              yield* Deferred.succeed(preparing, undefined);
+              yield* Deferred.await(release);
+            }
 
-              return { question: `${question}:${capture}` };
-            }),
+            return { question: `${question}:${capture}` };
+          }),
         });
 
         const context = yield* Layer.build(

@@ -122,12 +122,11 @@ const readProductionEntryPoints = Effect.fn("packagePurity.readProductionEntryPo
   const packagesRoot = path.join(repositoryRoot, "packages");
 
   const packageDirectories = yield* fs.readDirectory(packagesRoot).pipe(
-    Effect.mapError(
-      (cause) =>
-        new PackagePurityInfrastructureError({
-          operation: `list ${packagesRoot}`,
-          cause,
-        }),
+    Effect.mapError((cause) =>
+      PackagePurityInfrastructureError.make({
+        operation: `list ${packagesRoot}`,
+        cause,
+      }),
     ),
   );
 
@@ -140,22 +139,20 @@ const readProductionEntryPoints = Effect.fn("packagePurity.readProductionEntryPo
     const manifestPath = path.join(repositoryRoot, relativeDirectory, "package.json");
 
     const manifestText = yield* fs.readFileString(manifestPath).pipe(
-      Effect.mapError(
-        (cause) =>
-          new PackagePurityInfrastructureError({
-            operation: `read ${relativeDirectory}/package.json`,
-            cause,
-          }),
+      Effect.mapError((cause) =>
+        PackagePurityInfrastructureError.make({
+          operation: `read ${relativeDirectory}/package.json`,
+          cause,
+        }),
       ),
     );
 
     const manifest = yield* decodeManifest(manifestText).pipe(
-      Effect.mapError(
-        (cause) =>
-          new PackagePurityInfrastructureError({
-            operation: `decode ${relativeDirectory}/package.json`,
-            cause,
-          }),
+      Effect.mapError((cause) =>
+        PackagePurityInfrastructureError.make({
+          operation: `decode ${relativeDirectory}/package.json`,
+          cause,
+        }),
       ),
     );
 
@@ -188,7 +185,7 @@ const readProductionEntryPoints = Effect.fn("packagePurity.readProductionEntryPo
   }
 
   if (manifestViolations.length > 0) {
-    return yield* new PackagePurityViolation({ details: manifestViolations });
+    return yield* PackagePurityViolation.make({ details: manifestViolations });
   }
 
   return { entries, testingModules };
@@ -224,14 +221,14 @@ const auditEntryPoint = Effect.fn("packagePurity.auditEntryPoint")(function* (
         write: false,
       }),
     catch: (cause) =>
-      new PackagePurityInfrastructureError({
+      PackagePurityInfrastructureError.make({
         operation: `bundle ${entryPoint.displayName} from ${entryPoint.sourcePath}`,
         cause,
       }),
   });
 
   if (result.metafile === undefined) {
-    return yield* new PackagePurityInfrastructureError({
+    return yield* PackagePurityInfrastructureError.make({
       operation: `inspect ${entryPoint.displayName}'s bundle metadata`,
       cause: "esbuild returned no metafile",
     });
@@ -332,7 +329,7 @@ export const verifyPackagePurity = Effect.fn("verifyPackagePurity")(function* (
   );
 
   if (violationDetails.length > 0) {
-    return yield* new PackagePurityViolation({ details: violationDetails });
+    return yield* PackagePurityViolation.make({ details: violationDetails });
   }
 
   const moduleCount = audits.reduce((total, audit) => total + audit.moduleCount, 0);

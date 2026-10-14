@@ -79,13 +79,15 @@ export const publicationLayer = Layer.effect(ThreadPublication)(
       invalidate: Effect.gen(function* () {
         yield* save({ ...(yield* read), dirty: true });
       }).pipe(Effect.mapError(failure)),
-      prepareGeneration: (generation) =>
-        Effect.gen(function* () {
+      prepareGeneration: Effect.fnUntraced(
+        function* (generation) {
           const cursor = yield* read;
 
           if (cursor.generation === String(generation)) return;
           yield* save({ ...cursor, generation: String(generation), dirty: true });
-        }).pipe(Effect.mapError(failure)),
+        },
+        (effect) => effect.pipe(Effect.mapError(failure)),
+      ),
       drain: Effect.gen(function* () {
         const resources = publicationResources.get(threadId) ?? { acquired: 0, released: 0 };
 
@@ -139,20 +141,19 @@ export const lifecycleBatches = new Map<string, Array<ReadonlyArray<LifecyclePub
 export const lifecyclePublicationControls = new Map<string, PublicationControl>();
 
 export const lifecyclePublicationTestLayer = Layer.succeed(LifecyclePublicationHandler)({
-  publish: (publications) =>
-    Effect.gen(function* () {
-      const owner = publications[0].ownerThreadId;
+  publish: Effect.fnUntraced(function* (publications) {
+    const owner = publications[0].ownerThreadId;
 
-      const batches = lifecycleBatches.get(owner) ?? [];
+    const batches = lifecycleBatches.get(owner) ?? [];
 
-      batches.push(publications);
-      lifecycleBatches.set(owner, batches);
-      const control = lifecyclePublicationControls.get(owner);
-      const release = control?.release;
+    batches.push(publications);
+    lifecycleBatches.set(owner, batches);
+    const control = lifecyclePublicationControls.get(owner);
+    const release = control?.release;
 
-      control?.entered?.();
-      if (release !== undefined) yield* Effect.promise(() => release);
-      if (failedLifecycleThreads.has(owner))
-        return yield* LifecyclePublicationError.make({ reason: "unavailable" });
-    }),
+    control?.entered?.();
+    if (release !== undefined) yield* Effect.promise(() => release);
+    if (failedLifecycleThreads.has(owner))
+      return yield* LifecyclePublicationError.make({ reason: "unavailable" });
+  }),
 });

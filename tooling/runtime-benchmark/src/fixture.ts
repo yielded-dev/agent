@@ -471,74 +471,72 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
     _tag: "Stream",
     parts,
     termination: { _tag: "Complete" },
-    assertRequest: (request) =>
-      Effect.gen(function* () {
-        entered ??= yield* Clock.monotonicTimeNanos;
+    assertRequest: Effect.fnUntraced(function* (request) {
+      entered ??= yield* Clock.monotonicTimeNanos;
 
-        const userTexts = request.prompt.content
-          .filter((message) => message.role === "user")
+      const userTexts = request.prompt.content
+        .filter((message) => message.role === "user")
+        .flatMap((message) => message.content)
+        .filter((part) => part.type === "text")
+        .map((part) => part.text);
+
+      const assistantTexts = request.prompt.content
+        .filter((message) => message.role === "assistant")
+        .flatMap((message) => message.content)
+        .filter((part) => part.type === "text")
+        .map((part) => part.text);
+
+      const retainedUsers = userTexts.filter((text) => text.startsWith('"retained input '));
+
+      const retainedAssistants = assistantTexts.filter((text) =>
+        text.startsWith('{"answer":"retained-'),
+      );
+
+      retainedPromptMessages = retainedUsers.length + retainedAssistants.length;
+
+      const historyMatches =
+        workload.historyBytes === 0 || userTexts.filter((text) => text === priorText).length === 1;
+
+      const retainedMatches = recovering
+        ? retainedPromptMessages === 0 &&
+          userTexts.some((text) => text.includes("Benchmark continuation"))
+        : retainedUsers.length === expectedUsers.size &&
+          new Set(retainedUsers).size === expectedUsers.size &&
+          retainedUsers.every((text) => expectedUsers.has(text)) &&
+          retainedAssistants.length === expectedAssistants.size &&
+          new Set(retainedAssistants).size === expectedAssistants.size &&
+          retainedAssistants.every((text) => expectedAssistants.has(text));
+
+      if (!historyMatches || !retainedMatches || !userTexts.includes('"Answer"'))
+        return yield* AiError.AiError.make({
+          module: "runtime-benchmark",
+          method: "assertRequest",
+          reason: AiError.UnknownError.make({
+            description: `Provider prompt lost or duplicated required history/input (history=${historyMatches}, retained=${retainedMatches}, retainedMessages=${retainedPromptMessages}, recovering=${recovering})`,
+          }),
+        });
+      if (calls > 0 && workload.kind === "tools") {
+        const results = request.prompt.content
+          .filter((message) => message.role === "tool")
           .flatMap((message) => message.content)
-          .filter((part) => part.type === "text")
-          .map((part) => part.text);
+          .filter((part) => part.type === "tool-result");
 
-        const assistantTexts = request.prompt.content
-          .filter((message) => message.role === "assistant")
-          .flatMap((message) => message.content)
-          .filter((part) => part.type === "text")
-          .map((part) => part.text);
-
-        const retainedUsers = userTexts.filter((text) => text.startsWith('"retained input '));
-
-        const retainedAssistants = assistantTexts.filter((text) =>
-          text.startsWith('{"answer":"retained-'),
-        );
-
-        retainedPromptMessages = retainedUsers.length + retainedAssistants.length;
-
-        const historyMatches =
-          workload.historyBytes === 0 ||
-          userTexts.filter((text) => text === priorText).length === 1;
-
-        const retainedMatches = recovering
-          ? retainedPromptMessages === 0 &&
-            userTexts.some((text) => text.includes("Benchmark continuation"))
-          : retainedUsers.length === expectedUsers.size &&
-            new Set(retainedUsers).size === expectedUsers.size &&
-            retainedUsers.every((text) => expectedUsers.has(text)) &&
-            retainedAssistants.length === expectedAssistants.size &&
-            new Set(retainedAssistants).size === expectedAssistants.size &&
-            retainedAssistants.every((text) => expectedAssistants.has(text));
-
-        if (!historyMatches || !retainedMatches || !userTexts.includes('"Answer"'))
+        if (
+          results.length !== calls * 8 ||
+          results.some(
+            (part) => part.isFailure || part.result !== Number(part.id.split("-").at(-1)),
+          )
+        )
           return yield* AiError.AiError.make({
             module: "runtime-benchmark",
             method: "assertRequest",
             reason: AiError.UnknownError.make({
-              description: `Provider prompt lost or duplicated required history/input (history=${historyMatches}, retained=${retainedMatches}, retainedMessages=${retainedPromptMessages}, recovering=${recovering})`,
+              description: "Scripted provider did not receive successful previous tool results",
             }),
           });
-        if (calls > 0 && workload.kind === "tools") {
-          const results = request.prompt.content
-            .filter((message) => message.role === "tool")
-            .flatMap((message) => message.content)
-            .filter((part) => part.type === "tool-result");
-
-          if (
-            results.length !== calls * 8 ||
-            results.some(
-              (part) => part.isFailure || part.result !== Number(part.id.split("-").at(-1)),
-            )
-          )
-            return yield* AiError.AiError.make({
-              module: "runtime-benchmark",
-              method: "assertRequest",
-              reason: AiError.UnknownError.make({
-                description: "Scripted provider did not receive successful previous tool results",
-              }),
-            });
-        }
-        calls++;
-      }),
+      }
+      calls++;
+    }),
     onStreamFinalize: Effect.sync(() => {
       finalized++;
     }),
@@ -677,18 +675,17 @@ export const runSample = Effect.fn("benchmark.runSample")(function* (
                 }),
               }
             : {}),
-          runtimeFailpoint: (location) =>
-            Effect.gen(function* () {
-              if (location === "terminalize:before-publication") yield* atSettlement;
-              if (location === "compaction:before-canonical-append")
-                compactionStarted = yield* Clock.monotonicTimeNanos;
-              if (location === "compaction:after-canonical-append") {
-                if (compactionStarted !== undefined)
-                  compactionCommitMs ??=
-                    Number((yield* Clock.monotonicTimeNanos) - compactionStarted) / 1e6;
-                if (crash) return yield* DurableRuntimeFailpointError.make({ location });
-              }
-            }),
+          runtimeFailpoint: Effect.fnUntraced(function* (location) {
+            if (location === "terminalize:before-publication") yield* atSettlement;
+            if (location === "compaction:before-canonical-append")
+              compactionStarted = yield* Clock.monotonicTimeNanos;
+            if (location === "compaction:after-canonical-append") {
+              if (compactionStarted !== undefined)
+                compactionCommitMs ??=
+                  Number((yield* Clock.monotonicTimeNanos) - compactionStarted) / 1e6;
+              if (crash) return yield* DurableRuntimeFailpointError.make({ location });
+            }
+          }),
         }).pipe(Layer.provide(ContextCompactor.layerRollover));
 
       const completionHost = (ThreadStorage.ThreadExportSource?.layer() ?? Layer.empty).pipe(

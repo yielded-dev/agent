@@ -1,5 +1,5 @@
 import { exportThread } from "@yielded/agent-storage-cloudflare/do-thread-store";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Schema } from "effect";
 
 import { CYCLE, history, MEASURED_TOOLS, turn } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";
@@ -26,14 +26,17 @@ export const COLD_ABORT = "durable-bench explicit cold";
 
 export class Host {
   static async importTardie(storage: DurableObjectStorage, dump: SqlDump, object: string) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native Tardie import RPC rejects an identity change before any storage mutation.
     if (object !== "main") throw new Error("Snapshot identity must remain main");
     importRows(storage, dump);
     const actual = tables(storage.sql);
 
     for (const table of dump.tables)
       if (actual[table.name] !== table.rows.length)
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native Tardie import RPC rejects mismatched counts instead of acknowledging an invalid fixture.
         throw new Error(`Tardie ${table.name} import count mismatch`);
     if (Object.keys(actual).length !== dump.tables.length)
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native Tardie import RPC rejects an unexpected table inventory before acknowledging the fixture.
       throw new Error("Tardie table inventory mismatch");
 
     return actual;
@@ -59,6 +62,7 @@ export class Host {
     const url = new URL(request.url);
     const query = readQuery(url);
 
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native Object fetch entrypoint rejects routing to the wrong benchmark target.
     if (query.target !== this.target) throw new Error("Target mismatch");
     if (url.pathname === "/identity") return Response.json(this.meter.identity());
     if (url.pathname === "/profile-target") {
@@ -85,11 +89,14 @@ export class Host {
       await this.ctx.storage.sync();
       this.ctx.abort(COLD_ABORT);
     }
+    let classifyRunFailure = false;
+
     try {
       if (url.pathname.startsWith("/restore/")) {
         this.meter.assertBuild(query);
 
         if (url.pathname === "/restore/clear") {
+          // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native Object fetch handler maps this rejection to its existing 500 response before destructive reset.
           if (request.method !== "POST") throw new Error("Restore reset requires POST");
           await handlers.close?.();
           await this.ctx.storage.deleteAll();
@@ -101,11 +108,9 @@ export class Host {
         const restored = await Effect.runPromise(
           restore(request, query).pipe(
             Effect.provideService(RestoreStorage, this.ctx.storage),
-            Effect.provide(
-              Layer.succeed(FixtureExport, {
-                page: (input) => exportThread({ storage: this.ctx.storage }, input),
-              }),
-            ),
+            Effect.provideService(FixtureExport, {
+              page: (input) => exportThread({ storage: this.ctx.storage }, input),
+            }),
             Effect.scoped,
           ),
         );
@@ -135,6 +140,7 @@ export class Host {
           signal: AbortSignal.timeout(30_000),
         });
 
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native Object fetch handler rejects an unsuccessful constructor clock probe instead of returning timing evidence.
         if (!probe.ok) throw new Error(`Constructor clock probe returned HTTP ${probe.status}`);
         await probe.arrayBuffer();
 
@@ -146,10 +152,12 @@ export class Host {
       }
       if (url.pathname === "/seed") {
         this.meter.assertBuild(query);
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native Object fetch handler rejects unsupported history building before admitting a batch.
         if (!handlers.run) throw new Error("Target has no native history builder");
         const { from, to, startedMs } = Schema.decodeUnknownSync(SeedBatch)(await request.json());
 
         if (to <= from || to - from > 50 || to > query.history)
+          // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native Object fetch handler rejects invalid batch bounds before entering the admission gate.
           throw new Error("History batches must contain 1–50 turns within the requested history");
         const key = "durable-bench/history";
 
@@ -162,10 +170,12 @@ export class Host {
               : Schema.decodeUnknownSync(SeedProgress)(stored);
 
           if (progress.inFlight || progress.completed !== from)
+            // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Cloudflare blockConcurrencyWhile must reject to close the admission gate on an uncertain or repeated batch.
             throw new Error(
               "History batch is repeated, out of order, or has an uncertain predecessor",
             );
           if (progress.batch && progress.batch.startedMs !== startedMs)
+            // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Reject this native blockConcurrencyWhile callback before it mutates the persisted batch clock.
             throw new Error("History build clock changed");
           await this.ctx.storage.put(key, { ...progress, inFlight: true });
         });
@@ -195,12 +205,14 @@ export class Host {
                 call.receipt.objectBuild !== this.env.BUILD,
             )
           )
+            // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native history HTTP handler rejects incomplete provider evidence and leaves the batch marked in flight.
             throw new Error(`History ${input.id} did not complete its scripted model calls`);
           for (const call of this.meter.calls)
             if (call.receipt?.colo) providerColos.add(call.receipt.colo);
         }
         const fingerprint = this.meter.calls.at(-1)?.fingerprint;
 
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native history HTTP handler rejects missing evidence before persisting a completed batch.
         if (!fingerprint) throw new Error("History batch has no final model fingerprint");
 
         const batch = SeedResult.make({
@@ -219,12 +231,13 @@ export class Host {
         return Response.json(batch);
       }
       if (url.pathname === "/run") {
+        // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native Object fetch handler rejects this unsupported RPC path before invoking a target.
         if (!handlers.run) throw new Error("Yielded uses submit and await");
         this.meter.begin(query);
         this.meter.marker("run");
-        await handlers.run(turn(query.sample, MEASURED_TOOLS), query).catch((cause: unknown) => {
-          throw transientObjectTransport(cause) ?? cause;
-        });
+        classifyRunFailure = true;
+        await handlers.run(turn(query.sample, MEASURED_TOOLS), query);
+        classifyRunFailure = false;
         this.meter.settled();
 
         return Response.json({ ok: true, outcome: "completed", identity: this.meter.entry });
@@ -263,12 +276,16 @@ export class Host {
 
       return new Response("not found", { status: 404 });
     } catch (cause) {
-      const transport = Schema.is(TransientObjectTransport)(cause) ? cause : undefined;
+      const transport = Schema.is(TransientObjectTransport)(cause)
+        ? cause
+        : classifyRunFailure
+          ? transientObjectTransport(cause)
+          : undefined;
 
       return Response.json(
         Schema.encodeSync(Failure)({
           ok: false,
-          error: errorText(cause),
+          error: errorText(transport ?? cause),
           sample: query.sample,
           ...(transport === undefined ? {} : { transport }),
         }),

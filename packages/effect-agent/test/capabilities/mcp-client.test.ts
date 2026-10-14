@@ -26,17 +26,18 @@ const httpTransport = (trustToolAnnotations: boolean) =>
   });
 
 /** Runs one Tool through the connection's Toolkit and returns its final handler result. */
-const callHandler = (
+const callHandler = Effect.fnUntraced(function* (
   connection: { readonly toolkit: Toolkit.Any },
   name: string,
   params: unknown,
-) =>
-  Effect.gen(function* () {
-    const withHandler = yield* Toolkit.make(...Object.values(connection.toolkit.tools));
-    const results = yield* Stream.runCollect(yield* withHandler.handle(name, params));
+) {
+  const withHandler = yield* Toolkit.make(...Object.values(connection.toolkit.tools));
+  // MCP exposes existential handler services; the connector's Layer supplies this fixture's remote handlers.
+  // @effect-diagnostics-next-line anyUnknownInErrorContext:off
+  const results = yield* Stream.runCollect(yield* withHandler.handle(name, params));
 
-    return results[results.length - 1]!;
-  });
+  return results[results.length - 1]!;
+});
 
 // ---------------------------------------------------------------------------
 // A scripted server that answers every request as `text/event-stream`, mints
@@ -209,6 +210,8 @@ describe("MCP client over server-sent events", () => {
 
               expect(connection.discovery.identity.implementation.name).toBe("scripted-sse");
 
+              // The dynamically discovered Toolkit's handler requirements are supplied by this connection.
+              // @effect-diagnostics-next-line anyUnknownInErrorContext:off
               const echoed = yield* callHandler(connection, "echo", { message: "x" }).pipe(
                 Effect.provide(connection.handlers!),
               );
@@ -217,6 +220,8 @@ describe("MCP client over server-sent events", () => {
 
               // An exchange that ends without a response for the request fails
               // that call promptly instead of waiting for an outer timeout.
+              // The same connection Layer supplies the opaque remote handler requirement.
+              // @effect-diagnostics-next-line anyUnknownInErrorContext:off
               const silent = yield* callHandler(connection, "silent", {}).pipe(
                 Effect.provide(connection.handlers!),
               );

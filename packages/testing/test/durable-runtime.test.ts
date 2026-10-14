@@ -118,34 +118,35 @@ const toolCallParts: ReadonlyArray<Response.StreamPartEncoded> = [
  * Scripted model whose call counter and captured request prompts live OUTSIDE the Model Layer,
  * so they survive Layer rebuilds across Attempts (each Attempt provides the Model afresh).
  */
-const makeScriptedModel = (script: (call: number) => ReadonlyArray<Response.StreamPartEncoded>) =>
-  Effect.gen(function* () {
-    const calls = yield* Ref.make(0);
-    const prompts: Array<Prompt.Prompt> = [];
+const makeScriptedModel = Effect.fnUntraced(function* (
+  script: (call: number) => ReadonlyArray<Response.StreamPartEncoded>,
+) {
+  const calls = yield* Ref.make(0);
+  const prompts: Array<Prompt.Prompt> = [];
 
-    const model = Model.make(
-      "scripted",
-      "durable-test",
-      Layer.effect(
-        LanguageModel.LanguageModel,
-        LanguageModel.make({
-          generateText: () => Effect.succeed([]),
-          streamText: (request) =>
-            Stream.unwrap(
-              Ref.getAndUpdate(calls, (call) => call + 1).pipe(
-                Effect.map((call) => {
-                  prompts.push(request.prompt);
+  const model = Model.make(
+    "scripted",
+    "durable-test",
+    Layer.effect(
+      LanguageModel.LanguageModel,
+      LanguageModel.make({
+        generateText: () => Effect.succeed([]),
+        streamText: (request) =>
+          Stream.unwrap(
+            Ref.getAndUpdate(calls, (call) => call + 1).pipe(
+              Effect.map((call) => {
+                prompts.push(request.prompt);
 
-                  return Stream.fromIterable(script(call));
-                }),
-              ),
+                return Stream.fromIterable(script(call));
+              }),
             ),
-        }),
-      ),
-    );
+          ),
+      }),
+    ),
+  );
 
-    return { model, prompts };
-  });
+  return { model, prompts };
+});
 
 const plannerDefinition = Agent.make("durable-planner", {
   input: Schema.Struct({ question: Schema.String }),
@@ -288,8 +289,8 @@ const progressWaitControlLayer = Layer.effect(
     const scheduler = WakeScheduler.of({
       notify: hub.notify,
       wakes: Stream.never,
-      subscribe: (threadId) =>
-        Effect.gen(function* () {
+      subscribe: Effect.fnUntraced(
+        function* (threadId) {
           const wait = yield* hub.subscribe(threadId);
 
           yield* Ref.update(active, (count) => count + 1);
@@ -299,17 +300,20 @@ const progressWaitControlLayer = Layer.effect(
           if (Option.isSome(beforeCheck)) yield* Deferred.await(beforeCheck.value);
 
           return wait;
-        }).pipe(
-          Effect.map((wait) =>
-            Effect.gen(function* () {
-              yield* Ref.update(parking, (count) => count + 1);
-              const beforePark = yield* Ref.get(parkGate);
+        },
+        (effect) =>
+          effect.pipe(
+            Effect.map((wait) =>
+              Effect.gen(function* () {
+                yield* Ref.update(parking, (count) => count + 1);
+                const beforePark = yield* Ref.get(parkGate);
 
-              if (Option.isSome(beforePark)) yield* Deferred.await(beforePark.value);
-              yield* wait;
-            }),
+                if (Option.isSome(beforePark)) yield* Deferred.await(beforePark.value);
+                yield* wait;
+              }),
+            ),
           ),
-        ),
+      ),
     });
 
     return ProgressWaitTestControl.of({
@@ -348,41 +352,38 @@ const waitForAtLeast = (ref: Ref.Ref<number>, expected: number): Effect.Effect<v
     while ((yield* Ref.get(ref)) < expected) yield* Effect.yieldNow;
   });
 
-const readLog = (threadId: string) =>
-  Effect.gen(function* () {
-    const store = yield* ThreadStore;
+const readLog = Effect.fnUntraced(function* (threadId: string) {
+  const store = yield* ThreadStore;
 
-    return yield* Stream.runCollect(
-      store.read(
-        ThreadRead.make({
-          threadId: decodeThreadId(threadId),
-          limit: 1_024,
-        }),
-      ),
-    );
-  });
+  return yield* Stream.runCollect(
+    store.read(
+      ThreadRead.make({
+        threadId: decodeThreadId(threadId),
+        limit: 1_024,
+      }),
+    ),
+  );
+});
 
-const lookupState = (submissionId: SubmissionId) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
-    const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
+const lookupState = Effect.fnUntraced(function* (submissionId: SubmissionId) {
+  const ledger = yield* SubmissionLedger;
+  const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
 
-    expect(Option.isSome(snapshot)).toBe(true);
-    if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
+  expect(Option.isSome(snapshot)).toBe(true);
+  if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
 
-    return snapshot.value.state;
-  });
+  return snapshot.value.state;
+});
 
-const armFailpoint = (location: DurableRuntimeFailpointLocation) =>
-  Effect.gen(function* () {
-    const control = yield* DurableRuntimeFailpointTestControl;
+const armFailpoint = Effect.fnUntraced(function* (location: DurableRuntimeFailpointLocation) {
+  const control = yield* DurableRuntimeFailpointTestControl;
 
-    yield* control.setHandler((hitLocation) =>
-      hitLocation === location
-        ? Effect.fail(DurableRuntimeFailpointError.make({ location: hitLocation }))
-        : Effect.void,
-    );
-  });
+  yield* control.setHandler((hitLocation) =>
+    hitLocation === location
+      ? Effect.fail(DurableRuntimeFailpointError.make({ location: hitLocation }))
+      : Effect.void,
+  );
+});
 
 const clearFailpoint = Effect.gen(function* () {
   const control = yield* DurableRuntimeFailpointTestControl;
@@ -1288,18 +1289,17 @@ layer(testLayer)("RUN-026 durable compaction and usage re-seed", (it) => {
               const innerTools = yield* inner;
 
               return {
-                orchestrate: () =>
-                  Effect.gen(function* () {
-                    const broker = yield* ToolBroker;
+                orchestrate: Effect.fnUntraced(function* () {
+                  const broker = yield* ToolBroker;
 
-                    const pass = yield* broker
-                      .openPass(innerTools, { maxResultBytes: 1024 })
-                      .pipe(Effect.orDie);
+                  const pass = yield* broker
+                    .openPass(innerTools, { maxResultBytes: 1024 })
+                    .pipe(Effect.orDie);
 
-                    yield* pass.invoke({ toolName: "query", encodedArguments: {} });
+                  yield* pass.invoke({ toolName: "query", encodedArguments: {} });
 
-                    return "done";
-                  }),
+                  return "done";
+                }),
               };
             }),
           )
@@ -1576,17 +1576,16 @@ layer(testLayer)("RUN-026 durable compaction and usage re-seed", (it) => {
         const windowEstimates: Array<number> = [];
 
         const handlers = toolkit.toLayer({
-          large_result: () =>
-            Effect.gen(function* () {
-              yield* Ref.update(executions, (count) => count + 1);
-              const window = yield* ContextWindow;
+          large_result: Effect.fnUntraced(function* () {
+            yield* Ref.update(executions, (count) => count + 1);
+            const window = yield* ContextWindow;
 
-              windowEstimates.push((yield* window.status).estimatedTokens);
-              yield* Deferred.succeed(entered, undefined);
-              yield* Deferred.await(released);
+            windowEstimates.push((yield* window.status).estimatedTokens);
+            yield* Deferred.succeed(entered, undefined);
+            yield* Deferred.await(released);
 
-              return evidence;
-            }),
+            return evidence;
+          }),
         });
 
         const receipt = yield* runtime.submit(
@@ -2634,17 +2633,16 @@ layer(testLayer)("independent input scheduling", (it) => {
           const binding = yield* DurableWorkerBinding.make(agent, DIGESTS).pipe(
             Effect.provide(
               searchTools.toLayer({
-                search: () =>
-                  Effect.gen(function* () {
-                    inspections++;
-                    if (inspections === 1) {
-                      yield* Deferred.succeed(entered, undefined);
-                      yield* Deferred.await(release);
-                    }
-                    yield* TestClock.adjust(100);
+                search: Effect.fnUntraced(function* () {
+                  inspections++;
+                  if (inspections === 1) {
+                    yield* Deferred.succeed(entered, undefined);
+                    yield* Deferred.await(release);
+                  }
+                  yield* TestClock.adjust(100);
 
-                    return { available: true };
-                  }),
+                  return { available: true };
+                }),
               }),
             ),
           );

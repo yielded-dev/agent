@@ -269,8 +269,9 @@ it.effect("checks packed identity and every export for both supported npm output
 );
 
 // Regression: https://github.com/yielded-dev/agent/actions/runs/36727368970
-// Attempts 1/2 failed with an unidentified gate; attempt 3 passed the same CI evidence.
-it.effect("refetches exact-attempt jobs without combining incomplete gate evidence", () =>
+// Regression: https://github.com/yielded-dev/agent/actions/runs/38468779667
+// GitHub returned no steps for a successful Build that validated and uploaded beta.174.
+it.effect("requires exact-attempt Build success without depending on step telemetry", () =>
   Effect.gen(function* () {
     const sha = "8a2b8a698495eb2d1230f0b61b3dcca2c951f910";
     const mainRun = { ...run, id: 36727102746, head_sha: sha };
@@ -284,32 +285,19 @@ it.effect("refetches exact-attempt jobs without combining incomplete gate eviden
           head_sha: sha,
           status: "completed",
           conclusion: "success",
-          steps: [
-            {
-              name: "Build packages, examples, and docs",
-              status: "completed",
-              conclusion: "skipped",
-            },
-            {
-              name: "Validate versioned release packages",
-              status: "completed",
-              conclusion: "success",
-            },
-            { name: "Upload release build", status: "completed", conclusion: "success" },
-          ],
+          steps: [],
         },
       ],
     };
 
-    const incomplete = (command: string): typeof Jobs.Type => ({
+    const incomplete: typeof Jobs.Type = {
       ...complete,
       jobs: complete.jobs.map((job) => ({
         ...job,
-        steps: job.steps.map((step) =>
-          step.name === command ? { ...step, status: "in_progress", conclusion: null } : step,
-        ),
+        status: "in_progress",
+        conclusion: null,
       })),
-    });
+    };
 
     let scenario = "transient";
     let listings = 0;
@@ -331,16 +319,7 @@ it.effect("refetches exact-attempt jobs without combining incomplete gate eviden
           break;
         case `/repos/${repository}/actions/runs/${mainRun.id}/attempts/1/jobs`:
           listings += 1;
-          body =
-            scenario === "persistent"
-              ? incomplete(
-                  listings % 2 === 1
-                    ? "Upload release build"
-                    : "Validate versioned release packages",
-                )
-              : listings === 1
-                ? incomplete("Upload release build")
-                : complete;
+          body = scenario === "persistent" || listings === 1 ? incomplete : complete;
           break;
         case `/repos/${repository}/git/ref/heads/main`:
           body = { object: { sha } };
@@ -384,7 +363,7 @@ it.effect("refetches exact-attempt jobs without combining incomplete gate eviden
       _tag: "Failure",
       failure: {
         _tag: "ProofUnavailable",
-        message: expect.stringContaining('gate "Build" / "Upload release build"'),
+        message: expect.stringContaining('gate "Build"'),
       },
     });
     expect(JSON.stringify(failure)).toContain(sha);

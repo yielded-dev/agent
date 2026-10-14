@@ -1,1591 +1,374 @@
 import {
-  type ActOptions,
-  type ActionResult,
-  type NavigateRequest,
-  Action,
-  BrowserActions,
-  BrowserControl,
+  BrowserCdp,
   BrowserUseError,
-  InspectRequest,
-  Observation,
-  ScrollRequest,
-  WaitRequest,
-  type Control,
-  DialogRequest,
-  PressRequest,
-  TabRequest,
+  CloseTabRequest,
+  FrameInfo,
+  FramesRequest,
+  SendRequest,
+  Tab,
 } from "@yielded/agent/browser-use";
-import { InteractiveBrowserTargetUrl } from "@yielded/agent/interactive-browser";
-import { Deferred, Effect, Fiber, Layer, Schema, Semaphore } from "effect";
-import {
-  ElementHandle,
-  TimeoutError,
-  type Frame,
-  type Page,
-  type Dialog,
+import { Effect, Layer, Schema, Semaphore } from "effect";
+import type {
+  CDPSession,
+  Frame,
+  Page,
 } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
-import type { BrowserSession } from "./BrowserSession.ts";
-import {
-  checkDom,
-  checkFrameDom,
-  inspectDom,
-  settleDom,
-  settleInputDom,
-  waitDom,
-} from "./internal/browser-dom.ts";
-import { inspectJevDom } from "./internal/browser-jev-dom.ts";
+import type { BrowserSession, BrowserSessionError } from "./BrowserSession.ts";
 
 export type Command =
-  | { readonly kind: "observe" | "screenshot" }
-  | { readonly kind: "inspect"; readonly request: typeof InspectRequest.Type }
-  | { readonly kind: "navigate"; readonly request: typeof NavigateRequest.Type }
-  | { readonly kind: "scroll"; readonly request: typeof ScrollRequest.Type }
-  | { readonly kind: "wait"; readonly request: typeof WaitRequest.Type }
-  | { readonly kind: "select-tab"; readonly request: typeof TabRequest.Type }
-  | { readonly kind: "respond-dialog"; readonly request: typeof DialogRequest.Type }
-  | {
-      readonly kind: "act";
-      readonly action: Action | ({ readonly kind: "press" } & typeof PressRequest.Type);
-    };
+  | { readonly kind: "connect" | "tabs" | "new-tab" }
+  | { readonly kind: "send"; readonly request: typeof SendRequest.Type }
+  | { readonly kind: "frames"; readonly request: typeof FramesRequest.Type }
+  | { readonly kind: "close-tab"; readonly request: typeof CloseTabRequest.Type };
+
+/** Current SDK metadata, never a grant supplied by page content or generated code. */
+export interface AuthorizationContext {
+  /** Absent during initial attachment. */
+  readonly pageUrl?: string;
+  readonly targetId?: string;
+  readonly targetUrl?: string;
+  readonly frameUrl?: string;
+}
 
 export interface Options<R = never> {
-  /** Rechecked under the native session lock. The host owns origins, identity and consent. */
+  /**
+   * Runs under the BrowserSession lock before every command. Arbitrary CDP/page JavaScript
+   * is a broad capability: URL checks cannot prove that code is read-only or constrain egress.
+   * The host must authorize that capability and enforce network policy outside page code.
+   */
   readonly authorize: (
     command: Command,
     context: AuthorizationContext,
   ) => Effect.Effect<void, BrowserUseError, R>;
-  readonly maxActions: number;
+  /** Total native operations for this attachment, including authorization refusals. */
+  readonly maxCommands: number;
+  /** Per-result UTF-8 JSON limit; does not bound the upstream CDP transfer. */
   readonly maxReturnedBytes: number;
-  /** Prefer viewport controls; retain off-screen popups only if none of their controls are in view. Defaults to false. */
-  readonly viewportOnly?: boolean;
-  /** Jev reads enabled controls centered in the viewport with accessible names and at most 6,000 visible text characters. Defaults to "default". */
-  readonly observationMode?: "default" | "jev";
-  /** True waits for 100 ms of DOM quiet (at most 1 s). "input" waits two frames/50 ms, or visible combobox options/200 ms. Defaults to false. */
-  readonly settleAfterAction?: boolean | "input";
-  /** Cap condition waits and return a fresh observation on a condition timeout. Omit to retain timeout errors. */
-  readonly maxWaitMillis?: number;
-}
-
-/** Host-only current SDK metadata. Opaque refs never replace origin or target authority. */
-export interface AuthorizationContext {
-  /** Absent only before the initial attachment read; the host authorizes that attachment. */
-  readonly pageUrl?: string;
-  readonly frameUrl?: string;
-  /** Destination of an observed select-tab command, checked again before selection. */
-  readonly tabUrl?: string;
-  readonly target?: typeof Control.Type;
+  /** Maximum pages discoverable through this attachment. Defaults to 8. */
+  readonly maxTabs?: number;
 }
 
 const Limits = Schema.Struct({
-  maxActions: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1_000 })),
+  maxCommands: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 10_000 })),
   maxReturnedBytes: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 8 * 1024 * 1024 })),
-  viewportOnly: Schema.Boolean,
-  observationMode: Schema.Literals(["default", "jev"]),
-  settleAfterAction: Schema.Union([Schema.Boolean, Schema.Literal("input")]),
-  maxWaitMillis: Schema.NullOr(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 15_000 }))),
+  maxTabs: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 64 })),
 });
 
 const invalid = (message: string) =>
-  new BrowserUseError({ code: "invalid", message, dispatch: "not-dispatched" });
+  BrowserUseError.make({ code: "invalid", message, dispatch: "not-dispatched" });
 
-// URL evidence identifies pages; opaque document payloads are not page observations.
-// Authorization and navigation fencing always use the complete native SDK URL.
-const observedUrl = (url: string): string => {
-  const payload = url.startsWith("data:") ? url.indexOf(",") : -1;
+const decode = <A>(schema: Schema.Codec<A>, input: unknown) =>
+  Schema.decodeUnknownEffect(schema)(input).pipe(
+    Effect.mapError(() => invalid("Invalid browser command or limits")),
+  );
 
-  return payload < 0
-    ? url.slice(0, 8_192)
-    : `${url.slice(0, Math.min(payload, 256))},[payload omitted]`;
-};
+interface AttachedPage {
+  readonly page: Page;
+  readonly cdp: CDPSession;
+  readonly targetId: string;
+}
 
-// CDP can resolve closed roots without modifying the page's realm or attachShadow.
-// Keep those nodes in the same isolated realm as native refs and discard old roots per read.
-// The command deadline bounds this full-frame read; the node/root caps below only bound
-// local adoption, not the CDP response size.
-const discoverClosedRoots = async (frame: Frame): Promise<boolean> => {
-  const realm = frame.isolatedRealm();
-
-  await using document = await realm.evaluateHandle(() => globalThis.document);
-
-  const { node } = await frame.client.send("DOM.describeNode", {
-    objectId: document.remoteObject().objectId,
-    depth: -1,
-    pierce: true,
-  });
-
-  const pending = [node];
-  const roots: Array<number> = [];
-  let scanned = 0;
-
-  while (pending.length > 0 && scanned++ < 10_000 && roots.length < 256) {
-    const current = pending.pop();
-
-    if (current === undefined) break;
-    if (current.shadowRootType === "closed") roots.push(current.backendNodeId);
-    pending.push(...(current.children ?? []));
-    pending.push(
-      ...(current.shadowRoots ?? []).filter((root) => root.shadowRootType !== "user-agent"),
-    );
-  }
-  await realm.evaluate(() => {
-    Reflect.set(globalThis, "@effect-agent/native-browser-closed-roots", new Map());
-  });
-  for (const id of roots) {
-    await using root = await realm.adoptBackendNode(id);
-
-    await realm.evaluate((node) => {
-      if (!(node instanceof ShadowRoot) || node.mode !== "closed")
-        throw new Error("Closed shadow root is unavailable");
-      Reflect.get(globalThis, "@effect-agent/native-browser-closed-roots").set(node.host, node);
-    }, root);
-  }
-
-  return pending.length > 0;
-};
-
-/** One application-neutral controller over an existing scoped native attachment.
- * No allocation, model, provider choice, input retry, or arbitrary page JS is exposed.
- * Reads re-authorize at most five times when page/frame URLs change during authorization.
- * References expire on inspection; outstanding native work retains the session's fencing.
+/**
+ * A scoped CDP bridge over an existing BrowserSession. No DOM classifier, selectors,
+ * implicit waits, input retries, or generated-code execution live in this adapter.
+ * CDP connections persist within the attachment (including remote object IDs); pages persist
+ * for the host-owned session. Scope release detaches connections without closing pages.
  */
 export const make = Effect.fnUntraced(function* <R>(
   session: Pick<BrowserSession, "run">,
   options: Options<R>,
 ) {
-  const authorityServices = yield* Effect.context<R>();
+  const limits = yield* decode(Limits, { ...options, maxTabs: options.maxTabs ?? 8 });
+  const authority = yield* Effect.context<R>();
+  // Code Mode permits concurrent host calls; this native attachment admits one at a time.
+  const serial = yield* Semaphore.make(1);
 
   const authorize = (command: Command, context: AuthorizationContext) =>
-    options.authorize(command, context).pipe(Effect.provideContext(authorityServices));
+    Effect.provideContext(options.authorize(command, context), authority);
 
-  const limits = yield* Schema.decodeEffect(Limits)({
-    maxActions: options.maxActions,
-    maxReturnedBytes: options.maxReturnedBytes,
-    viewportOnly: options.viewportOnly ?? false,
-    observationMode: options.observationMode ?? "default",
-    settleAfterAction: options.settleAfterAction ?? false,
-    maxWaitMillis: options.maxWaitMillis ?? null,
-  }).pipe(Effect.mapError(() => invalid("Invalid browser controller limits.")));
-
-  const lock = yield* Semaphore.make(1);
-  const ownerScope = yield* Effect.scope;
-
-  type Dispatch = NonNullable<(typeof ActionResult.Type)["dispatch"]>;
-  let pendingInput: { ref: string; fiber: Fiber.Fiber<Dispatch, BrowserUseError> } | undefined;
-  let inputPage: Page | undefined;
-  let dialogSignal: Deferred.Deferred<void> | undefined;
-  let nextInput = 0;
-  let lastTabs: NonNullable<(typeof Observation.Type)["tabs"]> = [];
-
-  const clearInput = () => {
-    pendingInput = undefined;
-    dialogSignal = undefined;
-    inputPage = undefined;
-  };
-
-  const targets = new Map<string, { frame: string; control: typeof Control.Type }>();
-  const frames = new Set<string>();
-  const frameIds = new WeakMap<Frame, string>();
-  const tabIds = new WeakMap<Page, string>();
-  const tabs = new Map<string, Page>();
-  const pendingDialogs = new Map<Page, { ref: string; dialog: Dialog }>();
-
-  const listeners = new Map<
-    Page,
-    { dialog: (dialog: Dialog) => void; popup: (page: Page | null) => void }
-  >();
-
-  let activePage: Page | undefined;
-  let lastNativePage: Page | undefined;
-  let nextTab = 0;
-  let nextDialog = 0;
-
-  const tabId = (page: Page) => {
-    let id = tabIds.get(page);
-
-    if (id === undefined) {
-      id = `t${scopeId}-${nextTab++}`;
-      tabIds.set(page, id);
-    }
-
-    return id;
-  };
-
-  const attach = (page: Page) => {
-    if (listeners.has(page) || listeners.size >= 32) return;
-
-    const dialog = (dialog: Dialog) => {
-      pendingDialogs.set(page, { ref: `dialog-${scopeId}-${nextDialog++}`, dialog });
-      if (page === inputPage && dialogSignal !== undefined)
-        Deferred.doneUnsafe(dialogSignal, Effect.void);
-    };
-
-    const popup = (page: Page | null) => {
-      if (page !== null) attach(page);
-    };
-
-    listeners.set(page, { dialog, popup });
-    page.on("dialog", dialog);
-    page.on("popup", popup);
-  };
-
-  yield* Effect.addFinalizer(() =>
-    session
-      .run(Effect.void, async () => {
-        for (const { dialog } of pendingDialogs.values()) {
-          try {
-            await dialog.dismiss();
-          } catch {
-            /* The session owner retains cleanup authority. */
-          }
-        }
-      })
-      .pipe(
-        Effect.ignore,
-        Effect.andThen(
-          Effect.sync(() => {
-            for (const [page, listener] of listeners) {
-              page.off("dialog", listener.dialog);
-              page.off("popup", listener.popup);
-            }
-            listeners.clear();
-            pendingDialogs.clear();
-            tabs.clear();
-            activePage = undefined;
-            targets.clear();
-            frames.clear();
-          }),
-        ),
-      ),
-  );
-  const scopeId = crypto.getRandomValues(new Uint32Array(2)).join("-");
-  let nextFrame = 0;
-
-  const frameId = (frame: Frame) => {
-    let id = frameIds.get(frame);
-
-    if (id === undefined) {
-      id = `f${scopeId}-${nextFrame++}`;
-      frameIds.set(frame, id);
-    }
-
-    return id;
-  };
-
-  const resolveFrame = (page: Page, ref: string) =>
-    page.frames().find((frame) => frameIds.get(frame) === ref);
-
-  let generation = 0;
-  let consumed = 0;
-
-  const native = <A>(
-    command: Command,
-    action: (page: Page, stage: (name: string) => void) => Promise<A>,
-    timeoutMillis?: number,
-    phase?: "prepare" | "input" | "settle",
-  ) =>
-    Effect.gen(function* () {
-      if (pendingInput !== undefined && phase !== "input" && command.kind !== "respond-dialog")
-        return yield* invalid(
-          "Native input is pending. Inspect and respond to its dialog before another browser operation.",
-        );
-      const span = yield* Effect.currentSpan.pipe(Effect.orDie);
-      let authorizedUrl: string | undefined;
-      let authorizedTabUrl: string | undefined;
-      let authorizedFrame: { ref: string; url: string | undefined } | undefined;
-      const read = ["observe", "inspect", "wait", "screenshot"].includes(command.kind);
-
-      for (let attempt = 0; ; attempt++) {
-        let authorizationChanged = false;
-        let lostDocument = false;
-
-        const result = yield* session
-          .run(
-            Effect.suspend(() => {
-              const page = activePage ?? lastNativePage;
-
-              const target =
-                command.kind === "act"
-                  ? targets.get(command.action.ref)
-                  : command.kind === "scroll" && command.request.ref !== undefined
-                    ? targets.get(command.request.ref)
-                    : undefined;
-
-              authorizedUrl = page?.url();
-              authorizedTabUrl =
-                command.kind === "select-tab" ? tabs.get(command.request.ref)?.url() : undefined;
-
-              const frameRef =
-                target?.frame ??
-                (command.kind === "inspect" || command.kind === "wait"
-                  ? command.request.frame
-                  : undefined);
-
-              authorizedFrame =
-                frameRef === undefined
-                  ? undefined
-                  : {
-                      ref: frameRef,
-                      url: page === undefined ? undefined : resolveFrame(page, frameRef)?.url(),
-                    };
-
-              return authorize(command, {
-                ...(authorizedUrl === undefined ? {} : { pageUrl: authorizedUrl }),
-                ...(authorizedTabUrl === undefined ? {} : { tabUrl: authorizedTabUrl }),
-                ...(authorizedFrame === undefined ? {} : { frameUrl: authorizedFrame.url }),
-                ...(target === undefined
-                  ? {}
-                  : {
-                      target: target.control,
-                    }),
-              });
-            }).pipe(
-              Effect.mapError(
-                (error) =>
-                  new BrowserUseError({
-                    code: error.code,
-                    message: error.message,
-                    dispatch: "not-dispatched",
-                  }),
-              ),
-            ),
-            async (page) => {
-              attach(page);
-              const selected = activePage ?? page;
-
-              lastNativePage = page;
-
-              if (selected.isClosed() || selected.browserContext() !== page.browserContext())
-                throw new Error("Observed tab is unavailable");
-              if (authorizedUrl !== undefined && selected.url() !== authorizedUrl) {
-                authorizationChanged = true;
-                throw new Error("Page changed during authorization");
-              }
-              if (
-                authorizedFrame !== undefined &&
-                resolveFrame(selected, authorizedFrame.ref)?.url() !== authorizedFrame.url
-              ) {
-                authorizationChanged = true;
-                throw new Error("Frame changed during authorization");
-              }
-              if (
-                command.kind === "select-tab" &&
-                tabs.get(command.request.ref)?.url() !== authorizedTabUrl
-              )
-                throw new Error("Tab changed during authorization");
-              attach(selected);
-
-              try {
-                return await action(selected, (name) =>
-                  span.attribute("browser.native.stage", name),
-                );
-              } catch (error) {
-                // A read that loses its document to a navigation retries with fresh authorization.
-                // The context can be destroyed before the page reports its new URL.
-                lostDocument =
-                  error instanceof Error &&
-                  /Execution context was destroyed|Cannot find context with specified id/.test(
-                    error.message,
-                  );
-                // The first read of a fresh controller has no page URL yet; a lost document
-                // still retries, and the retry authorizes the page it then finds.
-                if (
-                  read &&
-                  (lostDocument ||
-                    (authorizedUrl !== undefined && selected.url() !== authorizedUrl))
-                )
-                  authorizationChanged = true;
-                throw error;
-              }
-            },
-            timeoutMillis === undefined ? undefined : { timeoutMillis },
-          )
-          .pipe(Effect.result);
-
-        if (result._tag === "Success") return result.success;
-        if (
-          !read ||
-          !authorizationChanged ||
-          attempt >= 4 ||
-          result.failure._tag !== "BrowserSessionError" ||
-          result.failure.reason !== "provider" ||
-          result.failure.cleanup !== "not-requested"
-        )
-          return yield* result.failure;
-
-        span.attribute("browser.read.authorization_retries", attempt + 1);
-        // A destroyed context means the next document has not committed yet; give it time.
-        yield* Effect.sleep(lostDocument ? "250 millis" : "20 millis");
-      }
-    }).pipe(
-      Effect.mapError((error) => {
-        if (error._tag === "BrowserUseError") return error;
-        const read = ["observe", "inspect", "wait", "screenshot"].includes(command.kind);
-
-        return new BrowserUseError({
+  const mapSessionError = (error: BrowserSessionError | BrowserUseError) =>
+    error._tag === "BrowserUseError"
+      ? error
+      : BrowserUseError.make({
           code: "browser",
-          message: read
-            ? `Browser ${command.kind} failed (${error.reason}); cleanup ${error.cleanup}. No new input was dispatched.`
-            : `Browser ${error.reason}; native outcome ${error.dispatch}; cleanup ${error.cleanup}. Input is never replayed.`,
-          dispatch: read || error.dispatch === "not-dispatched" ? "not-dispatched" : "unknown",
+          message: "Browser command failed; inspect the current state before further input",
+          dispatch: error.dispatch,
         });
-      }),
-      Effect.withSpan(`BrowserUse.${command.kind}${phase === undefined ? "" : `.${phase}`}`),
-    );
 
-  const bounded = <A>(value: A) =>
-    Effect.gen(function* () {
-      const bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  let released = false;
 
-      if (bytes > limits.maxReturnedBytes)
-        return yield* invalid(
-          "Browser result exceeds the host byte budget. Narrow inspection before acting.",
-        );
-
-      return value;
-    });
-
-  const inspect = Effect.fnUntraced(function* (
-    request: typeof InspectRequest.Type,
-    command: Command = { kind: "inspect", request },
-  ) {
-    yield* Schema.decodeEffect(InspectRequest)(request).pipe(
-      Effect.mapError(() => invalid("Invalid inspection request.")),
-    );
-    const selectedFrame = request.frame;
-
-    if (request.frame !== undefined && !frames.has(request.frame))
-      return yield* invalid("Frame was not observed. Inspect the page first.");
-    targets.clear();
-    generation++;
-
-    if (pendingInput?.fiber.pollUnsafe()?._tag === "Failure") {
-      const failed = pendingInput.fiber;
-
-      clearInput();
-      yield* Fiber.join(failed);
-    }
-    const blocked = inputPage === undefined ? undefined : pendingDialogs.get(inputPage);
-
-    if (pendingInput !== undefined && blocked !== undefined) {
-      yield* authorize(command, { pageUrl: inputPage?.url() });
-
-      const observation = yield* bounded({
-        text: "Native input is awaiting this JavaScript dialog. Respond before further page operations; never replay the input.",
-        controls: [],
-        tabs: lastTabs,
-        dialogs: [
-          {
-            ref: blocked.ref,
-            type: blocked.dialog.type(),
-            message: blocked.dialog.message().slice(0, 4096),
-            defaultValue: blocked.dialog.defaultValue().slice(0, 4096),
-          },
-        ],
-      });
-
-      return observation;
-    }
-
-    const value = yield* native(command, async (page) => {
-      const currentTabs = await page.browserContext().pages();
-
-      tabs.clear();
-      currentTabs.slice(0, 32).forEach((tab) => {
-        tabs.set(tabId(tab), tab);
-        attach(tab);
-      });
-
-      const tabObservation = currentTabs
-        .slice(0, 32)
-        .map((tab) => ({ ref: tabId(tab), url: observedUrl(tab.url()), active: tab === page }));
-
-      const pending = pendingDialogs.get(page);
-
-      lastTabs = tabObservation;
-
-      if (pending !== undefined)
-        return {
-          text: "A native JavaScript dialog blocks page interaction. Respond to its observed reference before continuing.",
-          controls: [],
-          tabs: tabObservation,
-          truncated: currentTabs.length > 32,
-          dialogs: [
-            {
-              ref: pending.ref,
-              type: pending.dialog.type(),
-              message: pending.dialog.message().slice(0, 4096),
-              defaultValue: pending.dialog.defaultValue().slice(0, 4096),
-            },
-          ],
-        };
-      const currentFrames = page.frames();
-
-      if (
-        selectedFrame !== undefined &&
-        command.kind !== "observe" &&
-        !currentFrames.some((frame) => frameId(frame) === selectedFrame)
-      )
-        throw new Error("Observed frame is detached");
-      frames.clear();
-      currentFrames.slice(0, 32).forEach((frame) => frames.add(frameId(frame)));
-
-      const inspected =
-        selectedFrame === undefined
-          ? [page.mainFrame()]
-          : currentFrames.filter((frame) => frameId(frame) === selectedFrame);
-
-      if (inspected.length === 0) inspected.push(page.mainFrame());
-
-      let text = "";
-      let readyState: (typeof Observation.Type)["readyState"];
-      let truncated = currentFrames.length > 32 || currentTabs.length > 32;
-      let metrics: (typeof Observation.Type)["page"];
-      const controls: Array<typeof Control.Type> = [];
-
-      for (const frame of inspected) {
-        if (controls.length >= 256) {
-          truncated = true;
-          break;
+  // Register cleanup before creating any native connection, including a partially failed attachment.
+  const connections = yield* Effect.acquireRelease(
+    Effect.sync(() => new Map<Page | CDPSession, CDPSession>()),
+    (connections) =>
+      Effect.promise(async (signal) => {
+        released = true;
+        for (const cdp of connections.values()) {
+          if (signal.aborted) break;
+          try {
+            await cdp.detach();
+          } catch {
+            // The session may already have terminated on timeout or interruption.
+          }
         }
-        const ref = frameId(frame);
+        connections.clear();
+      }).pipe(Effect.interruptible, Effect.timeoutOption("1 second"), Effect.asVoid),
+  );
 
-        if (ref === undefined) continue;
+  const pages = new Map<string, AttachedPage>();
 
-        const read = async (): Promise<unknown> => {
-          const rootsTruncated = await discoverClosedRoots(frame);
+  const attach = async (page: Page): Promise<AttachedPage> => {
+    let cdp = connections.get(page);
 
-          truncated ||= rootsTruncated;
-
-          return limits.observationMode === "jev"
-            ? frame
-                .isolatedRealm()
-                .evaluate(
-                  inspectJevDom,
-                  request.selector,
-                  `r${scopeId}-${generation}-${controls.length}`,
-                  256 - controls.length,
-                  request.optionFilter,
-                )
-            : frame
-                .isolatedRealm()
-                .evaluate(
-                  inspectDom,
-                  request.selector,
-                  `r${scopeId}-${generation}-${controls.length}`,
-                  256 - controls.length,
-                  request.optionFilter,
-                  limits.viewportOnly,
-                );
-        };
-
-        let result = Schema.decodeUnknownSync(Observation)(await read());
-
-        // Native click acknowledgement can precede document parsing. Settle this
-        // explicit readiness condition before returning an empty loading document. A document
-        // still parsing after 2 s is observed as it stands, reporting readyState "loading".
-        if (result.readyState === "loading") {
-          const ready = await frame
-            .isolatedRealm()
-            .waitForFunction(() => document.readyState !== "loading", {
-              timeout: 2_000,
-              polling: "raf",
-            })
-            .catch((error: unknown) => {
-              if (error instanceof TimeoutError) return undefined;
-              throw error;
-            });
-
-          await ready?.dispose();
-          result = Schema.decodeUnknownSync(Observation)(await read());
-        }
-        readyState = result.readyState;
-        if (frame === page.mainFrame()) metrics = result.page;
-
-        text += limits.observationMode === "jev" ? result.text : `\n[${ref}]${result.text}`;
-        truncated ||= result.truncated ?? false;
-        for (const control of result.controls) {
-          const current = { ...control, frame: ref };
-
-          targets.set(control.ref, { frame: ref, control: current });
-          controls.push(current);
-        }
-      }
-
-      const textLimit = limits.observationMode === "jev" ? 6_000 : 24_000;
-
-      return {
-        text: text.slice(0, textLimit),
-        controls,
-        ...(readyState === undefined ? {} : { readyState }),
-        ...(metrics === undefined ? {} : { page: metrics }),
-        truncated: truncated || text.length > textLimit,
-        frames: currentFrames.slice(0, 32).map((frame) => ({
-          ref: frameId(frame),
-          name: frame.name().slice(0, 300),
-          // Fragments are client-side state; payment frames put kilobytes of parameters there.
-          url: observedUrl(
-            frame.url().startsWith("data:") ? frame.url() : frame.url().split("#", 1)[0],
-          ),
-          inspected: inspected.includes(frame),
-        })),
-        tabs: tabObservation,
-        dialogs: [],
-      };
-    }).pipe(Effect.tapError(() => Effect.sync(() => targets.clear())));
-
-    const observation = yield* bounded(value).pipe(
-      Effect.tapError(() => Effect.sync(() => targets.clear())),
-    );
-
-    return observation;
-  });
-
-  const charge = Effect.fnUntraced(function* () {
-    if (consumed >= limits.maxActions) return yield* invalid("Browser action budget exhausted.");
-    consumed++;
-  });
-
-  const checkedPoint = async (
-    element: ElementHandle<Element>,
-    frame: Frame,
-    expected: typeof Control.Type,
-    scroll: boolean,
-    pointer = true,
-  ) => {
-    let point = await element.evaluate(checkDom, expected, scroll, pointer);
-
-    if (point === false) return false;
-    let current = frame;
-    let parent = current.parentFrame();
-
-    while (parent !== null) {
-      await discoverClosedRoots(parent);
-      await using owner = await current.frameElement();
-
-      if (owner === null) return false;
-      await using isolatedOwner = await parent.isolatedRealm().adoptHandle(owner);
-
-      point = await isolatedOwner.evaluate(checkFrameDom, point, scroll);
-      if (point === false) return false;
-      current = parent;
-      parent = current.parentFrame();
+    if (cdp === undefined) {
+      cdp = await page.createCDPSession();
+      connections.set(page, cdp);
     }
+    const { targetInfo } = await cdp.send("Target.getTargetInfo");
+    const attached = { page, cdp, targetId: targetInfo.targetId };
 
-    return point;
+    pages.set(attached.targetId, attached);
+
+    return attached;
   };
 
-  // Separate settling from the following read's authorization snapshot.
-  const settle = (input?: { readonly frame: string; readonly ref: string }) =>
-    Effect.suspend(() =>
-      limits.settleAfterAction
-        ? native(
-            { kind: "observe" },
-            async (page) => {
-              const frame =
-                limits.settleAfterAction === "input" && input !== undefined
-                  ? resolveFrame(page, input.frame)
-                  : page.mainFrame();
-
-              if (frame === undefined) return;
-
-              if (limits.settleAfterAction === "input")
-                await frame.isolatedRealm().evaluate(settleInputDom, input?.ref);
-              else await frame.isolatedRealm().evaluate(settleDom);
-            },
-            undefined,
-            "settle",
-          ).pipe(Effect.asVoid)
-        : Effect.void,
-    );
-
-  const after = Effect.fnUntraced(function* (
-    completed: number,
-    error: string | null,
-    dispatch: NonNullable<(typeof ActionResult.Type)["dispatch"]>,
-    frame?: string,
-    alreadySettled = false,
-    observe = true,
-  ) {
-    if (dispatch === "acknowledged" && !alreadySettled)
-      yield* settle().pipe(
-        Effect.catch((failure) =>
-          Effect.sync(() => {
-            error ??= failure.message;
-          }),
-        ),
-      );
-    // Without an observation, refs from before the input can no longer be authorized.
-    if (!observe) targets.clear();
-
-    const observation = !observe
-      ? null
-      : yield* inspect(frame === undefined ? {} : { frame }, {
-          kind: "observe",
-        }).pipe(
-          Effect.catch((failure) => {
-            error ??= `Input receipt retained; observation failed. Inspect before continuing. ${failure.message}`;
-
-            return Effect.succeed(null);
-          }),
-        );
-
-    return {
-      completed,
-      error,
-      observation,
-      dispatch,
-      ...(pendingInput === undefined
-        ? {}
-        : { pendingInput: { ref: pendingInput.ref, reason: "dialog" as const } }),
-    };
-  });
-
-  const action = Effect.fnUntraced(function* (
-    value: Action | ({ readonly kind: "press" } & typeof PressRequest.Type),
-  ) {
-    if (pendingInput !== undefined)
-      return yield* invalid("Native input is pending; respond to its dialog without replaying it.");
-    const target = targets.get(value.ref);
-
-    if (target === undefined)
-      return yield* invalid("Target was not observed. Inspect before acting.");
-    if (value.kind === "select" && !target.control.options.includes(value.value))
-      return yield* invalid("Select option was not observed. Inspect with optionFilter first.");
-    yield* charge();
-    const command: Command = { kind: "act", action: value };
-
-    // Preparation has its own budget: 2 s, or 8 s inside a frame, where each frame level adds
-    // owner checks and a newly mounted frame first creates its isolated world. It never waits
-    // for a missing selector; an actually pending CDP request is terminated by BrowserSession,
-    // not abandoned.
-    const inFrame = ![...tabs.values()].some(
-      (tab) => frameIds.get(tab.mainFrame()) === target.frame,
-    );
-
-    let dispatch: NonNullable<(typeof ActionResult.Type)["dispatch"]> = "not-dispatched";
-    let refusal: string | undefined;
-
-    const ready = yield* native(
-      command,
-      async (page, stage) => {
-        const frame = resolveFrame(page, target.frame);
-
-        if (frame === undefined) return false;
-        // Main-frame refs are checked in place, without resolving and releasing a handle.
-        if (frame.parentFrame() === null) {
-          stage("validate-and-scroll");
-
-          const checked = await frame
-            .isolatedRealm()
-            .evaluate(checkDom, value.ref, target.control, true, value.kind !== "press");
-
-          return checked !== false;
-        }
-        stage("resolve-reference");
-
-        const handle = await frame
-          .isolatedRealm()
-          .evaluateHandle(
-            (ref) => Reflect.get(globalThis, "@effect-agent/native-browser")?.get(ref) ?? null,
-            value.ref,
-          );
-
-        try {
-          const element = handle.asElement();
-
-          stage("validate-and-scroll");
-
-          return (
-            element !== null &&
-            (await checkedPoint(element, frame, target.control, true, value.kind !== "press")) !==
-              false
-          );
-        } finally {
-          stage("release-reference");
-          await handle.dispose();
-        }
-      },
-      inFrame ? 8_000 : 2_000,
-      "prepare",
-    ).pipe(
-      Effect.mapError(
-        (error) =>
-          new BrowserUseError({
-            code: error.code,
-            message: error.message,
-            dispatch: "not-dispatched",
-          }),
-      ),
-    );
-
-    if (!ready)
-      return yield* invalid(
-        "Observed target is stale, disabled or obstructed. No input dispatched. Inspect for a current target.",
-      );
-
-    const input = native(
-      command,
-      async (page, stage) => {
-        inputPage = page;
-        const frame = resolveFrame(page, target.frame);
-
-        if (frame === undefined) return "not-dispatched" as const;
-        // Main-frame input works on the ref in place, without resolving and releasing a handle.
-        // Focus and its check stay separate reads so focus handlers run before the check.
-        if (frame.parentFrame() === null) {
-          const realm = frame.isolatedRealm();
-
-          const point = await realm.evaluate(
-            checkDom,
-            value.ref,
-            target.control,
-            false,
-            value.kind !== "press",
-          );
-
-          if (point === false) return "not-dispatched" as const;
-          stage("dispatch-input");
-          if (value.kind === "click") {
-            dispatch = "unknown";
-            await page.mouse.click(point.x, point.y);
-          } else if (value.kind === "select") {
-            dispatch = "unknown";
-
-            // Puppeteer's select: an enabled matching option, then input and change events.
-            const selected = await realm.evaluate(
-              (ref, value) => {
-                const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
-                  ref,
-                );
-
-                if (
-                  !(node instanceof HTMLSelectElement) ||
-                  !Array.from(node.options).some(
-                    (option) =>
-                      !option.disabled &&
-                      !(
-                        option.parentElement instanceof HTMLOptGroupElement &&
-                        option.parentElement.disabled
-                      ) &&
-                      option.value === value,
-                  )
-                )
-                  return false;
-                if (node.multiple)
-                  for (const option of Array.from(node.options))
-                    option.selected = option.value === value;
-                else {
-                  for (const option of Array.from(node.options)) option.selected = false;
-                  const match = Array.from(node.options).find((option) => option.value === value);
-
-                  if (match !== undefined) match.selected = true;
-                }
-                node.dispatchEvent(new Event("input", { bubbles: true }));
-                node.dispatchEvent(new Event("change", { bubbles: true }));
-
-                return true;
-              },
-              value.ref,
-              value.value,
-            );
-
-            if (!selected) {
-              dispatch = "not-dispatched";
-
-              return "not-dispatched" as const;
-            }
-          } else if (value.kind === "press") {
-            const focused =
-              (await realm.evaluate((ref) => {
-                const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
-                  ref,
-                );
-
-                if (!(node instanceof HTMLElement)) return false;
-                node.focus();
-
-                return true;
-              }, value.ref)) &&
-              (await realm.evaluate((ref) => {
-                const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
-                  ref,
-                );
-
-                return (
-                  node instanceof Node &&
-                  node.isConnected &&
-                  Reflect.get(node.getRootNode(), "activeElement") === node
-                );
-              }, value.ref));
-
-            if (!focused) return "not-dispatched" as const;
-            dispatch = "unknown";
-            await page.keyboard.press(value.key);
-          } else {
-            const focused = await realm.evaluate((ref) => {
-              const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
-                ref,
-              );
-
-              if (
-                !(
-                  (node instanceof HTMLInputElement &&
-                    ![
-                      "password",
-                      "file",
-                      "checkbox",
-                      "radio",
-                      "hidden",
-                      "submit",
-                      "button",
-                    ].includes(node.type) &&
-                    !node.readOnly) ||
-                  (node instanceof HTMLTextAreaElement && !node.readOnly) ||
-                  (node instanceof HTMLElement &&
-                    node.isContentEditable &&
-                    node.getAttribute("aria-readonly") !== "true")
-                )
-              )
-                return false;
-              node.focus();
-
-              return true;
-            }, value.ref);
-
-            if (!focused) return "not-dispatched" as const;
-
-            // Focus handlers can replace a field. Never transfer input to the new focus.
-            const selected = await realm.evaluate((ref) => {
-              const node: unknown = Reflect.get(globalThis, "@effect-agent/native-browser")?.get(
-                ref,
-              );
-
-              if (
-                !(node instanceof HTMLElement) ||
-                !node.isConnected ||
-                !(
-                  node.getRootNode() instanceof Document || node.getRootNode() instanceof ShadowRoot
-                ) ||
-                Reflect.get(node.getRootNode(), "activeElement") !== node
-              )
-                return false;
-              let selected = false;
-
-              if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
-                node.select();
-                selected =
-                  node.value.length === 0 ||
-                  (node.selectionStart === 0 && node.selectionEnd === node.value.length) ||
-                  globalThis.getSelection()?.toString() === node.value;
-              } else {
-                const selection = globalThis.getSelection();
-
-                if (selection === null) return false;
-                const range = document.createRange();
-
-                range.selectNodeContents(node);
-                selection.removeAllRanges();
-                selection.addRange(range);
-                selected =
-                  selection.rangeCount === 1 &&
-                  selection.getRangeAt(0).compareBoundaryPoints(Range.START_TO_START, range) ===
-                    0 &&
-                  selection.getRangeAt(0).compareBoundaryPoints(Range.END_TO_END, range) === 0;
-              }
-
-              return (
-                selected &&
-                node.isConnected &&
-                Reflect.get(node.getRootNode(), "activeElement") === node
-              );
-            }, value.ref);
-
-            if (!selected) {
-              refusal =
-                "Native selection could not prepare this field for replacement. No input dispatched.";
-
-              return "not-dispatched" as const;
-            }
-            dispatch = "unknown";
-            await page.keyboard.sendCharacter(value.value);
-          }
-          dispatch = "acknowledged";
-
-          return "acknowledged" as const;
-        }
-
-        const handle = await frame
-          .isolatedRealm()
-          .evaluateHandle(
-            (ref) => Reflect.get(globalThis, "@effect-agent/native-browser")?.get(ref) ?? null,
-            value.ref,
-          );
-
-        try {
-          const element = handle.asElement();
-
-          if (element === null || !(element instanceof ElementHandle))
-            return "not-dispatched" as const;
-
-          const point = await checkedPoint(
-            element,
-            frame,
-            target.control,
-            false,
-            value.kind !== "press",
-          );
-
-          if (point === false) return "not-dispatched" as const;
-          stage("dispatch-input");
-          if (value.kind === "click") {
-            dispatch = "unknown";
-            await page.mouse.click(point.x, point.y);
-          } else if (value.kind === "select") {
-            const valid = await element.evaluate(
-              (node, value) =>
-                node instanceof HTMLSelectElement &&
-                Array.from(node.options).some(
-                  (option) =>
-                    !option.disabled &&
-                    !(
-                      option.parentElement instanceof HTMLOptGroupElement &&
-                      option.parentElement.disabled
-                    ) &&
-                    option.value === value,
-                ),
-              value.value,
-            );
-
-            if (!valid) return "not-dispatched" as const;
-            dispatch = "unknown";
-            await element.select(value.value);
-          } else if (value.kind === "press") {
-            await element.focus();
-
-            const focused = await element.evaluate(
-              (node) =>
-                node.isConnected && Reflect.get(node.getRootNode(), "activeElement") === node,
-            );
-
-            if (!focused) return "not-dispatched" as const;
-            dispatch = "unknown";
-            await page.keyboard.press(value.key);
-          } else {
-            const fillable = await element.evaluate(
-              (node) =>
-                (node instanceof HTMLInputElement &&
-                  !["password", "file", "checkbox", "radio", "hidden", "submit", "button"].includes(
-                    node.type,
-                  ) &&
-                  !node.readOnly) ||
-                (node instanceof HTMLTextAreaElement && !node.readOnly) ||
-                (node instanceof HTMLElement &&
-                  node.isContentEditable &&
-                  node.getAttribute("aria-readonly") !== "true"),
-            );
-
-            if (!fillable) return "not-dispatched" as const;
-            await element.focus();
-            // Focus handlers can replace a field. Never transfer input to the new focus.
-            if (
-              !(await element.evaluate(
-                (node) =>
-                  node.isConnected &&
-                  (node.getRootNode() instanceof Document ||
-                    node.getRootNode() instanceof ShadowRoot) &&
-                  Reflect.get(node.getRootNode(), "activeElement") === node,
-              ))
-            )
-              return "not-dispatched" as const;
-
-            const selected = await element.evaluate((node) => {
-              let selected = false;
-
-              if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
-                node.select();
-                selected =
-                  node.value.length === 0 ||
-                  (node.selectionStart === 0 && node.selectionEnd === node.value.length) ||
-                  globalThis.getSelection()?.toString() === node.value;
-              } else {
-                const selection = globalThis.getSelection();
-
-                if (selection === null) return false;
-                const range = document.createRange();
-
-                range.selectNodeContents(node);
-                selection.removeAllRanges();
-                selection.addRange(range);
-                selected =
-                  selection.rangeCount === 1 &&
-                  selection.getRangeAt(0).compareBoundaryPoints(Range.START_TO_START, range) ===
-                    0 &&
-                  selection.getRangeAt(0).compareBoundaryPoints(Range.END_TO_END, range) === 0;
-              }
-
-              return (
-                selected &&
-                node.isConnected &&
-                Reflect.get(node.getRootNode(), "activeElement") === node
-              );
-            });
-
-            if (!selected) {
-              refusal =
-                "Native selection could not prepare this field for replacement. No input dispatched.";
-
-              return "not-dispatched" as const;
-            }
-
-            dispatch = "unknown";
-            await page.keyboard.sendCharacter(value.value);
-          }
-
-          dispatch = "acknowledged";
-
-          return "acknowledged" as const;
-        } finally {
-          await handle.dispose();
-        }
-      },
-      undefined,
-      "input",
-    ).pipe(
-      Effect.mapError(
-        (error) => new BrowserUseError({ code: error.code, message: error.message, dispatch }),
-      ),
-    );
-
-    // The session lock and native deadline remain owned by a controller-scoped fiber.
-    // A dialog suspends input without abandoning SDK work or acknowledging it early.
-    const start = yield* Deferred.make<void>();
-    const dialogReady = yield* Deferred.make<void>();
-    const ref = `op${scopeId}-${nextInput++}`;
-
-    const fiber = yield* Deferred.await(start).pipe(
-      Effect.andThen(input),
-      Effect.forkIn(ownerScope),
-    );
-
-    pendingInput = { ref, fiber };
-    dialogSignal = dialogReady;
-    yield* Deferred.succeed(start, undefined);
-
-    const result = yield* Effect.raceFirst(
-      Fiber.join(fiber),
-      Deferred.await(dialogReady).pipe(Effect.as("unknown" as const)),
-    ).pipe(
-      Effect.onInterrupt(() => Fiber.interrupt(fiber)),
-      Effect.result,
-    );
-
-    if (result._tag === "Failure") {
-      clearInput();
-
-      return yield* result.failure;
-    }
-    if (result.success !== "unknown") clearInput();
-    if (result.success === "not-dispatched" && refusal !== undefined)
-      return yield* invalid(refusal);
-    if (result.success === "acknowledged")
-      yield* settle(
-        value.kind === "fill" ? { frame: target.frame, ref: value.ref } : undefined,
-      ).pipe(
-        Effect.mapError(
-          (failure) =>
-            new BrowserUseError({
-              code: failure.code,
-              message: failure.message,
-              dispatch: "acknowledged",
-            }),
-        ),
-      );
-
-    return result.success;
-  });
-
-  const act = Effect.fnUntraced(function* (
-    values: ReadonlyArray<Action>,
-    options: ActOptions = {},
-  ) {
-    yield* Schema.decodeEffect(
-      Schema.Array(Action).check(Schema.isMinLength(1), Schema.isMaxLength(8)),
-    )(values).pipe(Effect.mapError(() => invalid("Expected 1–8 valid actions.")));
-    let completed = 0;
-    let error: string | null = null;
-    let dispatch: NonNullable<(typeof ActionResult.Type)["dispatch"]> = "not-dispatched";
-    let frame: string | undefined;
-
-    for (const value of values) {
-      frame = targets.get(value.ref)?.frame ?? frame;
-      const outcome = yield* action(value).pipe(Effect.result);
-
-      if (outcome._tag === "Failure") {
-        error = outcome.failure.message;
-        if (outcome.failure.dispatch === "acknowledged") completed++;
-        if (outcome.failure.dispatch === "unknown") dispatch = "unknown";
-        else if (completed > 0) dispatch = "acknowledged";
-        break;
-      }
-      if (outcome.success === "not-dispatched") {
-        error = "Observed target changed before input. Inspect before continuing.";
-        break;
-      }
-      if (outcome.success === "unknown") {
-        dispatch = "unknown";
-        error =
-          "Native input is awaiting a JavaScript dialog. Respond to it; do not replay this input.";
-        break;
-      }
-      dispatch = "acknowledged";
-      completed++;
-    }
-
-    yield* Effect.annotateCurrentSpan({
-      "browser.completed": completed,
-      "browser.dispatch": dispatch,
+  const primary = yield* session
+    .run(authorize({ kind: "connect" }, {}), attach)
+    .pipe(Effect.mapError(mapSessionError));
+
+  const context = primary.page.browserContext();
+  let calls = 0;
+
+  const tab = async (attached: AttachedPage): Promise<typeof Tab.Type> => {
+    const { targetInfo } = await attached.cdp.send("Target.getTargetInfo");
+
+    return Schema.decodeSync(Tab)({
+      targetId: targetInfo.targetId,
+      url: targetInfo.url,
+      title: targetInfo.title,
     });
+  };
 
-    return yield* after(completed, error, dispatch, frame, true, options.observe !== false);
-  });
+  const run = Effect.fnUntraced(function* <A>(
+    command: Command,
+    action: (selected: AttachedPage, frame?: Frame) => Promise<A | BrowserUseError>,
+    targetId?: string,
+    frameId?: string,
+  ) {
+    let selected = primary;
+    let pageUrl = "";
+    let targetUrl = "";
+    let frame: Frame | undefined;
+    let frameUrl: string | undefined;
 
-  const navigate = Effect.fnUntraced(function* (request: typeof NavigateRequest.Type) {
-    yield* Schema.decodeEffect(InteractiveBrowserTargetUrl)(request.url).pipe(
-      Effect.mapError(() => invalid("Navigation requires a credential-free HTTP(S) URL.")),
-    );
-    yield* charge();
-    targets.clear();
+    const result = yield* session
+      .run(
+        Effect.gen(function* () {
+          if (released) return yield* Effect.fail(invalid("Browser attachment scope is closed"));
+          if (calls++ >= limits.maxCommands)
+            return yield* Effect.fail(invalid("Browser command limit reached"));
+          selected = targetId === undefined ? primary : (pages.get(targetId) ?? primary);
+          if (targetId !== undefined && !pages.has(targetId))
+            return yield* Effect.fail(
+              invalid("Unknown page; call cdp.tabs({}) to discover current targets"),
+            );
+          if (selected.page.isClosed())
+            return yield* Effect.fail(invalid("The selected page is closed"));
+          pageUrl = primary.page.url();
+          targetUrl = selected.page.url();
+          frame =
+            frameId === undefined
+              ? undefined
+              : selected.page.frames().find((candidate) => candidate._id === frameId);
+          if (frameId !== undefined && frame === undefined)
+            return yield* Effect.fail(invalid("Unknown frame; call cdp.frames({}) again"));
+          frameUrl = frame?.url();
+          yield* authorize(command, {
+            pageUrl,
+            targetId: selected.targetId,
+            targetUrl,
+            ...(frameUrl === undefined ? {} : { frameUrl }),
+          });
+        }),
+        async () => {
+          if (
+            primary.page.url() !== pageUrl ||
+            selected.page.url() !== targetUrl ||
+            selected.page.isClosed() ||
+            (frame !== undefined && (frame.detached || frame.url() !== frameUrl))
+          )
+            return {
+              ok: false as const,
+              error: invalid("Page changed during authorization; inspect it again"),
+            };
 
-    const outcome = yield* native({ kind: "navigate", request }, (page) =>
-      page.goto(request.url, { waitUntil: "domcontentloaded" }),
-    ).pipe(Effect.result);
-
-    return yield* after(
-      outcome._tag === "Success" ? 1 : 0,
-      outcome._tag === "Failure" ? outcome.failure.message : null,
-      outcome._tag === "Success" ? "acknowledged" : (outcome.failure.dispatch ?? "unknown"),
-    );
-  });
-
-  const scroll = Effect.fnUntraced(function* (request: typeof ScrollRequest.Type) {
-    yield* Schema.decodeEffect(ScrollRequest)(request).pipe(
-      Effect.mapError(() => invalid("Invalid scroll request.")),
-    );
-    yield* charge();
-    const target = request.ref === undefined ? undefined : targets.get(request.ref);
-
-    if (request.ref !== undefined && target === undefined)
-      return yield* invalid("Scroll target was not observed.");
-
-    const outcome = yield* native(
-      { kind: "scroll", request },
-      async (page) => {
-        if (target === undefined) {
-          const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
-
-          await page.mouse.move(viewport.width / 2, viewport.height / 2);
-          await page.mouse.wheel({ deltaX: request.deltaX, deltaY: request.deltaY });
-
-          return true;
-        }
-
-        const frame = resolveFrame(page, target.frame);
-
-        if (frame === undefined) return false;
-
-        const handle = await frame
-          .isolatedRealm()
-          .evaluateHandle(
-            (ref) => Reflect.get(globalThis, "@effect-agent/native-browser")?.get(ref) ?? null,
-            request.ref ?? "",
-          );
-
-        try {
-          return await handle.evaluate(
-            (node, x, y) => {
-              if (!(node instanceof HTMLElement) || !node.isConnected) return false;
-              node.scrollBy({ left: x, top: y, behavior: "instant" });
-
-              return true;
-            },
-            request.deltaX,
-            request.deltaY,
-          );
-        } finally {
-          await handle.dispose();
-        }
-      },
-      2_000,
-    ).pipe(Effect.result);
-
-    return yield* after(
-      outcome._tag === "Success" && outcome.success ? 1 : 0,
-      outcome._tag === "Failure"
-        ? outcome.failure.message
-        : outcome.success
-          ? null
-          : "Scroll target is stale.",
-      outcome._tag === "Failure"
-        ? (outcome.failure.dispatch ?? "unknown")
-        : outcome.success
-          ? "acknowledged"
-          : "not-dispatched",
-    );
-  });
-
-  const wait = Effect.fnUntraced(function* (request: typeof WaitRequest.Type) {
-    yield* Schema.decodeEffect(WaitRequest)(request).pipe(
-      Effect.mapError(() => invalid("Invalid condition wait.")),
-    );
-    const frameRef = request.frame;
-
-    if (request.state === "text" && request.text === undefined)
-      return yield* invalid("A text wait requires expected text.");
-
-    if (frameRef !== undefined && !frames.has(frameRef))
-      return yield* invalid("Frame was not observed.");
-    yield* native({ kind: "wait", request }, async (page) => {
-      const frame = frameRef === undefined ? page.mainFrame() : resolveFrame(page, frameRef);
-
-      if (frame === undefined) throw new Error("Frame detached");
-      await discoverClosedRoots(frame);
-
-      try {
-        const handle = await frame.isolatedRealm().waitForFunction(
-          waitDom,
-          {
-            timeout: Math.min(request.timeoutMillis, limits.maxWaitMillis ?? request.timeoutMillis),
-            polling: "raf",
-          },
-          request.selector,
-          request.state,
-          request.text,
-        );
-
-        await handle.dispose();
-      } catch (error) {
-        if (
-          limits.maxWaitMillis === null ||
-          !(error instanceof Error) ||
-          error.name !== "TimeoutError"
-        )
-          throw error;
-      }
-    });
-
-    return yield* inspect(frameRef === undefined ? {} : { frame: frameRef });
-  });
-
-  const screenshot = native({ kind: "screenshot" }, async (page) => {
-    return {
-      mediaType: "image/png" as const,
-      base64: await page.screenshot({ type: "png", encoding: "base64" }),
-    };
-  }).pipe(Effect.flatMap(bounded));
-
-  const press = Effect.fnUntraced(function* (request: typeof PressRequest.Type) {
-    yield* Schema.decodeEffect(PressRequest)(request).pipe(
-      Effect.mapError(() => invalid("Invalid native key request.")),
-    );
-    const frame = targets.get(request.ref)?.frame;
-    const result = yield* action({ kind: "press", ...request }).pipe(Effect.result);
-
-    const dispatch =
-      result._tag === "Success" ? result.success : (result.failure.dispatch ?? "not-dispatched");
-
-    return yield* after(
-      dispatch === "acknowledged" ? 1 : 0,
-      result._tag === "Failure"
-        ? result.failure.message
-        : result.success === "not-dispatched"
-          ? "Target changed before keyboard input."
-          : null,
-      dispatch,
-      frame,
-      true,
-    );
-  });
-
-  const selectTab = Effect.fnUntraced(function* (request: typeof TabRequest.Type) {
-    yield* Schema.decodeEffect(TabRequest)(request).pipe(
-      Effect.mapError(() => invalid("Invalid tab request.")),
-    );
-    const tab = tabs.get(request.ref);
-
-    if (tab === undefined)
-      return yield* invalid("Tab was not observed. Inspect before selecting it.");
-    yield* native({ kind: "select-tab", request }, async (page) => {
-      if (tab.isClosed() || tab.browserContext() !== page.browserContext())
-        throw new Error("Observed tab is unavailable");
-      await tab.bringToFront();
-      activePage = tab;
-      targets.clear();
-      frames.clear();
-    });
-
-    return yield* inspect({});
-  });
-
-  const respondDialog = Effect.fnUntraced(function* (request: typeof DialogRequest.Type) {
-    yield* Schema.decodeEffect(DialogRequest)(request).pipe(
-      Effect.mapError(() => invalid("Invalid dialog response.")),
-    );
-    yield* charge();
-    const outstanding = pendingInput;
-
-    if (outstanding !== undefined && inputPage !== undefined) {
-      const page = inputPage;
-      const pending = pendingDialogs.get(page);
-
-      if (
-        pending === undefined ||
-        pending.ref !== request.ref ||
-        (request.text !== undefined && pending.dialog.type() !== "prompt")
-      )
-        return yield* invalid("Observed dialog is no longer current.");
-      if (outstanding.fiber.pollUnsafe()?._tag === "Failure") {
-        clearInput();
-        const settled = yield* Fiber.join(outstanding.fiber).pipe(Effect.result);
-
-        return {
-          ...(yield* after(
-            0,
-            "Pending native input failed. No dialog response dispatched.",
-            "not-dispatched",
-          )),
-          settledInput: {
-            ref: outstanding.ref,
-            dispatch:
-              settled._tag === "Success"
-                ? settled.success
-                : (settled.failure.dispatch ?? "unknown"),
-          },
-        };
-      }
-
-      const dialogReady = yield* Deferred.make<void>();
-
-      // Re-arm before answering: the handler may open another dialog before
-      // this response settles. The original input keeps its fiber and deadline.
-      dialogSignal = dialogReady;
-
-      const response =
-        outstanding.fiber.pollUnsafe() === undefined
-          ? // Suspended input owns the session lock. This is its only allowed interleaving;
-            // host authority is checked immediately before responding on that exact connection.
-            authorize({ kind: "respond-dialog", request }, { pageUrl: page.url() }).pipe(
-              Effect.andThen(
-                Effect.tryPromise({
-                  try: () =>
-                    request.accept ? pending.dialog.accept(request.text) : pending.dialog.dismiss(),
-                  catch: () =>
-                    new BrowserUseError({
-                      code: "browser",
-                      message: "Native dialog response failed. Do not replay it.",
-                      dispatch: "unknown",
-                    }),
-                }),
-              ),
-            )
-          : native({ kind: "respond-dialog", request }, async () => {
-              if (request.accept) await pending.dialog.accept(request.text);
-              else await pending.dialog.dismiss();
-            });
-
-      const result = yield* response.pipe(
-        Effect.withSpan("BrowserUse.respond-dialog.input"),
-        Effect.result,
-      );
-
-      if (result._tag === "Failure")
-        return yield* after(0, result.failure.message, result.failure.dispatch ?? "not-dispatched");
-      if (pendingDialogs.get(page) === pending) pendingDialogs.delete(page);
-
-      const settled = yield* Effect.raceFirst(
-        Fiber.join(outstanding.fiber),
-        Deferred.await(dialogReady).pipe(Effect.as("unknown" as const)),
-      ).pipe(
-        Effect.onInterrupt(() => Fiber.interrupt(outstanding.fiber)),
-        Effect.result,
-      );
-
-      if (settled._tag === "Success" && settled.success === "unknown")
-        return yield* after(1, null, "acknowledged", undefined, true);
-
-      clearInput();
-
-      return {
-        ...(yield* after(
-          1,
-          settled._tag === "Failure" ? settled.failure.message : null,
-          "acknowledged",
-        )),
-        settledInput: {
-          ref: outstanding.ref,
-          dispatch:
-            settled._tag === "Success" ? settled.success : (settled.failure.dispatch ?? "unknown"),
+          return { ok: true as const, value: await action(selected, frame) };
         },
-      };
-    }
+      )
+      .pipe(serial.withPermits(1), Effect.mapError(mapSessionError));
 
-    const receipt: { dispatch: NonNullable<(typeof ActionResult.Type)["dispatch"]> } = {
-      dispatch: "not-dispatched",
-    };
+    if (!result.ok) return yield* Effect.fail(result.error);
+    // Only host-created failures belong in E; a protocol response with similar fields is data.
+    if (result.value instanceof BrowserUseError) return yield* Effect.fail(result.value);
 
-    const result = yield* native({ kind: "respond-dialog", request }, async (page) => {
-      const pending = pendingDialogs.get(page);
+    const encoded = yield* Effect.try({
+      try: () => JSON.stringify(result.value),
+      catch: () =>
+        BrowserUseError.make({
+          code: "browser",
+          message: "Browser returned a non-JSON result",
+          dispatch: "possibly-dispatched",
+        }),
+    });
+
+    if (
+      encoded === undefined ||
+      new TextEncoder().encode(encoded).byteLength > limits.maxReturnedBytes
+    )
+      return yield* Effect.fail(
+        BrowserUseError.make({
+          code: "browser",
+          message:
+            "Browser result exceeded its byte limit; request a smaller result without repeating mutations",
+          dispatch: "possibly-dispatched",
+        }),
+      );
+
+    return result.value;
+  });
+
+  const client: BrowserCdp["Service"] = {
+    send: Effect.fnUntraced(function* (request) {
+      const value = yield* decode(SendRequest, request);
 
       if (
-        pending === undefined ||
-        pending.ref !== request.ref ||
-        (request.text !== undefined && pending.dialog.type() !== "prompt")
+        value.method.startsWith("Browser.") ||
+        value.method.startsWith("Target.") ||
+        value.method === "Page.close" ||
+        value.method === "Page.crash"
       )
-        return false;
-      receipt.dispatch = "unknown";
-      if (request.accept) await pending.dialog.accept(request.text);
-      else await pending.dialog.dismiss();
-      receipt.dispatch = "acknowledged";
-      if (pendingDialogs.get(page) === pending) pendingDialogs.delete(page);
+        return yield* Effect.fail(
+          invalid("Browser lifecycle commands belong to the host; use the tab helpers"),
+        );
 
-      return true;
-    }).pipe(Effect.result);
+      const result: unknown = yield* run(
+        { kind: "send", request: value },
+        async ({ cdp, page }, frame): Promise<unknown> => {
+          let target = cdp;
 
-    return yield* after(
-      receipt.dispatch === "acknowledged" ? 1 : 0,
-      result._tag === "Failure"
-        ? result.failure.message
-        : result.success
-          ? null
-          : "Observed dialog is no longer current.",
-      receipt.dispatch,
-    );
-  });
+          if (frame !== undefined) {
+            const source = frame.client;
+            const originalUrl = primary.page.url();
+            const pageUrl = page.url();
+            const frameUrl = frame.url();
+            const existing = connections.get(source);
 
-  const actions = BrowserActions.of({
-    observe: lock.withPermit(inspect({}, { kind: "observe" })),
-    act: (values, options) =>
-      lock.withPermit(act(values, options)).pipe(Effect.withSpan("BrowserUse.act")),
-  });
+            if (existing !== undefined) target = existing;
+            else {
+              const connection = source.connection();
 
-  const control = BrowserControl.of({
-    inspect: (request) => lock.withPermit(inspect(request)),
-    navigate: (request) => lock.withPermit(navigate(request)),
-    scroll: (request) => lock.withPermit(scroll(request)),
-    wait: (request) => lock.withPermit(wait(request)),
-    screenshot: lock.withPermit(screenshot),
-    press: (request) => lock.withPermit(press(request)),
-    selectTab: (request) => lock.withPermit(selectTab(request)),
-    respondDialog: (request) =>
-      lock.withPermit(respondDialog(request)).pipe(Effect.withSpan("BrowserUse.respond-dialog")),
-  });
+              if (connection === undefined) return invalid("Frame connection is closed");
+              const { targetInfo } = await source.send("Target.getTargetInfo");
 
-  return {
-    actions,
-    control,
-    layer: Layer.merge(
-      Layer.succeed(BrowserActions, actions),
-      Layer.succeed(BrowserControl, control),
-    ),
+              // Keep arbitrary commands off Puppeteer's own event-tracking session.
+              target = await connection.createSession(targetInfo);
+              connections.set(source, target);
+            }
+            if (
+              primary.page.url() !== originalUrl ||
+              page.url() !== pageUrl ||
+              frame.detached ||
+              frame.url() !== frameUrl ||
+              frame.client !== source
+            )
+              return invalid("Frame changed during attachment; inspect it again");
+          }
+
+          // Bind the native receiver explicitly; decode the foreign response below.
+          return Reflect.apply(target.send.bind(target), undefined, [value.method, value.params]);
+        },
+        value.targetId,
+        value.frameId,
+      );
+
+      return yield* Schema.decodeUnknownEffect(Schema.Json)(result).pipe(
+        Effect.mapError(() =>
+          BrowserUseError.make({
+            code: "browser",
+            message: "Browser returned a non-JSON result",
+            dispatch: "possibly-dispatched",
+          }),
+        ),
+      );
+    }),
+    tabs: Effect.gen(function* () {
+      const result = yield* run({ kind: "tabs" }, async () => {
+        const current = await context.pages();
+
+        if (current.length > limits.maxTabs) return null;
+        const result: Array<typeof Tab.Type> = [];
+
+        for (const page of current) result.push(await tab(await attach(page)));
+        for (const [id, attached] of pages) {
+          if (attached.page.isClosed()) {
+            pages.delete(id);
+            connections.delete(attached.page);
+          }
+        }
+
+        return result;
+      });
+
+      if (result === null) return yield* Effect.fail(invalid("Browser tab limit exceeded"));
+
+      return result;
+    }),
+    frames: Effect.fnUntraced(function* (request) {
+      const value = yield* decode(FramesRequest, request);
+
+      const frames = yield* run(
+        { kind: "frames", request: value },
+        async ({ page }) =>
+          page.frames().map((frame) => ({
+            frameId: frame._id,
+            parentFrameId: frame.parentFrame()?._id ?? null,
+            url: frame.url(),
+          })),
+        value.targetId,
+      );
+
+      return yield* decode(Schema.Array(FrameInfo), frames);
+    }),
+    newTab: Effect.gen(function* () {
+      const result = yield* run({ kind: "new-tab" }, async () => {
+        if ((await context.pages()).length >= limits.maxTabs) return null;
+
+        return tab(await attach(await context.newPage()));
+      });
+
+      if (result === null) return yield* Effect.fail(invalid("Browser tab limit reached"));
+
+      return result;
+    }),
+    closeTab: Effect.fnUntraced(function* (request) {
+      const value = yield* decode(CloseTabRequest, request);
+
+      if (value.targetId === primary.targetId)
+        return yield* Effect.fail(invalid("The original page belongs to the host"));
+      yield* run(
+        { kind: "close-tab", request: value },
+        async ({ page }) => {
+          await page.close();
+          pages.delete(value.targetId);
+          connections.delete(page);
+
+          return null;
+        },
+        value.targetId,
+      );
+    }),
   };
+
+  return { client, layer: Layer.succeed(BrowserCdp, client) };
 });

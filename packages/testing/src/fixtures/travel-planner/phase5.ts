@@ -225,74 +225,71 @@ export const TravelPlannerPhase5ToolkitLayer = TravelPlannerPhase5Toolkit.toLaye
     Effect.flatMap(LodgingCatalog, (catalog) => catalog.search(LodgingQuery.make(query))),
   search_activities: (query) =>
     Effect.flatMap(ActivityCatalog, (catalog) => catalog.search(ActivityQuery.make(query))),
-  book_flight: (request, context) =>
-    Effect.gen(function* () {
-      const desk = yield* SupplierBookingDesk;
-      const toolCallId = yield* requireToolCallId("book_flight", context.toolCallId);
+  book_flight: Effect.fnUntraced(function* (request, context) {
+    const desk = yield* SupplierBookingDesk;
+    const toolCallId = yield* requireToolCallId("book_flight", context.toolCallId);
 
-      const record = yield* desk.book({
-        operation: "book-flight",
-        idempotencyKey: bookFlightIdempotencyKey(toolCallId),
-        detail: `flight ${request.quoteId} for ${request.travelerRef} on ${request.departOn}`,
-      });
+    const record = yield* desk.book({
+      operation: "book-flight",
+      idempotencyKey: bookFlightIdempotencyKey(toolCallId),
+      detail: `flight ${request.quoteId} for ${request.travelerRef} on ${request.departOn}`,
+    });
 
-      return SupplierBookingConfirmation.make({
-        bookingRef: record.bookingRef,
-        status: "confirmed",
-        detail: record.detail,
-      });
-    }),
-  cancel_booking: (request) =>
-    Effect.gen(function* () {
-      const desk = yield* SupplierBookingDesk;
-      const record = yield* desk.cancel(request.bookingRef);
+    return SupplierBookingConfirmation.make({
+      bookingRef: record.bookingRef,
+      status: "confirmed",
+      detail: record.detail,
+    });
+  }),
+  cancel_booking: Effect.fnUntraced(function* (request) {
+    const desk = yield* SupplierBookingDesk;
+    const record = yield* desk.cancel(request.bookingRef);
 
-      return CancellationConfirmation.make({
-        bookingRef: record.bookingRef,
-        status: "cancelled",
-      });
-    }),
-  book_itinerary: (request, context) =>
-    Effect.gen(function* () {
-      const desk = yield* SupplierBookingDesk;
-      const step = yield* DurableStep;
-      const toolCallId = yield* requireToolCallId("book_itinerary", context.toolCallId);
+    return CancellationConfirmation.make({
+      bookingRef: record.bookingRef,
+      status: "cancelled",
+    });
+  }),
+  book_itinerary: Effect.fnUntraced(function* (request, context) {
+    const desk = yield* SupplierBookingDesk;
+    const step = yield* DurableStep;
+    const toolCallId = yield* requireToolCallId("book_itinerary", context.toolCallId);
 
-      const bookStep = (
-        stepName: "reserve-flight" | "reserve-lodging" | "issue-confirmation",
-        detail: string,
-      ) =>
-        step.do(
-          stepName,
-          SupplierBookingRecord,
-          desk.book({
-            operation: stepName,
-            idempotencyKey: itineraryStepIdempotencyKey(toolCallId, stepName),
-            detail,
-          }),
-        );
-
-      const flight = yield* bookStep(
-        "reserve-flight",
-        `flight ${request.quoteId} for ${request.travelerRef}`,
+    const bookStep = (
+      stepName: "reserve-flight" | "reserve-lodging" | "issue-confirmation",
+      detail: string,
+    ) =>
+      step.do(
+        stepName,
+        SupplierBookingRecord,
+        desk.book({
+          operation: stepName,
+          idempotencyKey: itineraryStepIdempotencyKey(toolCallId, stepName),
+          detail,
+        }),
       );
 
-      const lodging = yield* bookStep(
-        "reserve-lodging",
-        `lodging ${request.destination} for ${request.nights} nights (${request.travelerRef})`,
-      );
+    const flight = yield* bookStep(
+      "reserve-flight",
+      `flight ${request.quoteId} for ${request.travelerRef}`,
+    );
 
-      const confirmation = yield* bookStep(
-        "issue-confirmation",
-        `itinerary confirmation for ${request.travelerRef}`,
-      );
+    const lodging = yield* bookStep(
+      "reserve-lodging",
+      `lodging ${request.destination} for ${request.nights} nights (${request.travelerRef})`,
+    );
 
-      return ItineraryConfirmation.make({
-        flightBookingRef: flight.bookingRef,
-        lodgingBookingRef: lodging.bookingRef,
-        confirmationCode: confirmation.bookingRef,
-      });
-    }),
+    const confirmation = yield* bookStep(
+      "issue-confirmation",
+      `itinerary confirmation for ${request.travelerRef}`,
+    );
+
+    return ItineraryConfirmation.make({
+      flightBookingRef: flight.bookingRef,
+      lodgingBookingRef: lodging.bookingRef,
+      confirmationCode: confirmation.bookingRef,
+    });
+  }),
 });
 
 const decodePersistedJson = Schema.decodeUnknownEffect(PersistedJson);

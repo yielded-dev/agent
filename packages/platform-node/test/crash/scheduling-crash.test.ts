@@ -170,15 +170,17 @@ const awaitMarker = (
     ),
   );
 
-const waitForCompletion = (scheduling: Scheduling["Service"]) =>
-  Effect.gen(function* () {
+const waitForCompletion = Effect.fnUntraced(
+  function* (scheduling: Scheduling["Service"]) {
     while (true) {
       const snapshot = yield* scheduling.get(schedulingCrashScope, schedulingCrashScheduleId);
 
       if (snapshot.pending === null && snapshot.lastReceipt !== null) return snapshot;
       yield* Effect.yieldNow;
     }
-  }).pipe(Effect.timeoutOption(Duration.seconds(10)));
+  },
+  (effect) => effect.pipe(Effect.timeoutOption(Duration.seconds(10))),
+);
 
 it.live(
   "recovers scheduling commit boundaries after a real SIGKILL",

@@ -16,7 +16,7 @@ const Manifest = Schema.Struct({
 const packages = ["effect-agent", "platform-cloudflare", "storage-cloudflare", "storage-sql"];
 
 export const requireReplayCpu = (valid: boolean, message: string) =>
-  valid ? Effect.void : Effect.fail(new ReplayCpuError({ message }));
+  valid ? Effect.void : Effect.fail(ReplayCpuError.make({ message }));
 
 export const sha256 = Effect.fnUntraced(function* (value: string | Uint8Array) {
   const crypto = yield* Crypto.Crypto;
@@ -154,7 +154,8 @@ export const buildReplayCpu = Effect.fn("ReplayCpu.build")(function* (
           BENCH_PACKAGE_VERSIONS: JSON.stringify(JSON.stringify(versions)),
         },
       }),
-    catch: () => new ReplayCpuError({ message: "Worker bundle failed; inspect build diagnostics" }),
+    catch: () =>
+      ReplayCpuError.make({ message: "Worker bundle failed; inspect build diagnostics" }),
   });
 
   const inputs = Object.keys(result.metafile.inputs);

@@ -24,7 +24,7 @@ const worker = makeWorker(
     const env = yield* WorkerEnvironment;
 
     if (!fixtureAuthorized(request, env))
-      return yield* new AccountError({
+      return yield* AccountError.make({
         code: "unauthorized",
         message: "Missing fixture authentication.",
       });
@@ -32,8 +32,8 @@ const worker = makeWorker(
     const email = yield* Schema.decodeEffect(Email)(
       request.headers.get("x-test-email") ?? ownerEmail,
     ).pipe(
-      Effect.mapError(
-        () => new AccountError({ code: "unauthorized", message: "Invalid fixture identity." }),
+      Effect.mapError(() =>
+        AccountError.make({ code: "unauthorized", message: "Invalid fixture identity." }),
       ),
     );
 
@@ -65,7 +65,7 @@ const sites = Layer.succeed(TripSiteStore, {
           if (failureMode === "interruption") return Effect.interrupt;
 
           return Effect.fail(
-            new PlannerError({ code: "storage", message: "Injected storage failure." }),
+            PlannerError.make({ code: "storage", message: "Injected storage failure." }),
           );
         }),
     }),

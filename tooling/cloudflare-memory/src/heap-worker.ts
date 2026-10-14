@@ -49,24 +49,22 @@ const Summarize = Tool.make("summarize", {
 const tools = Toolkit.make(Lookup, Summarize);
 
 const toolLayer = tools.toLayer({
-  lookup: () =>
-    Effect.gen(function* () {
-      const gate = yield* Gate;
+  lookup: Effect.fnUntraced(function* () {
+    const gate = yield* Gate;
 
-      yield* Ref.update(gate.toolCalls, (n) => n + 1);
-      yield* Ref.set(gate.entered, true);
-      yield* Deferred.await(gate.released);
+    yield* Ref.update(gate.toolCalls, (n) => n + 1);
+    yield* Ref.set(gate.entered, true);
+    yield* Deferred.await(gate.released);
 
-      return { text: "lookup ".padEnd(16_384, "x") };
-    }),
-  summarize: () =>
-    Effect.gen(function* () {
-      const gate = yield* Gate;
+    return { text: "lookup ".padEnd(16_384, "x") };
+  }),
+  summarize: Effect.fnUntraced(function* () {
+    const gate = yield* Gate;
 
-      yield* Ref.update(gate.toolCalls, (n) => n + 1);
+    yield* Ref.update(gate.toolCalls, (n) => n + 1);
 
-      return { text: "summary ".padEnd(16_384, "y") };
-    }),
+    return { text: "summary ".padEnd(16_384, "y") };
+  }),
 });
 
 const usage = { inputTokens: {}, outputTokens: {} };

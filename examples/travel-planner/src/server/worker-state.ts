@@ -35,12 +35,12 @@ export const WorkerStatusRequest = Schema.Struct({
 });
 
 const unavailable = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "unavailable",
     message: "Worker updates are temporarily unavailable.",
   });
 
-const notFound = () => new PlannerError({ code: "not-found", message: "Worker not found." });
+const notFound = () => PlannerError.make({ code: "not-found", message: "Worker not found." });
 
 /**
  * Authenticate at the conversation object, then read exactly the source record named by the

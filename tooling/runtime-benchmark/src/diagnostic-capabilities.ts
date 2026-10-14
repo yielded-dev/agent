@@ -65,6 +65,7 @@ const selectSubagentLayer = <BuildLayer>(module: {
 }): BuildLayer => {
   const layer = module.layer ?? module.SubagentRuntime?.layer;
 
+  // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Synchronous module initialization rejects an unsupported historical release before benchmark execution.
   if (layer === undefined) throw new Error("Compared release has no supported Subagent Layer");
 
   return layer;
@@ -1003,15 +1004,14 @@ const rememberingCase = Effect.fn("diagnostic.remembering")(function* (workload:
   });
 
   const writer = MemoryWriter.fromAdapter({
-    change: (command) =>
-      Effect.gen(function* () {
-        const next = yield* applyMemoryWrite(document, command, 100);
+    change: Effect.fnUntraced(function* (command) {
+      const next = yield* applyMemoryWrite(document, command, 100);
 
-        document = next;
-        writes++;
+      document = next;
+      writes++;
 
-        return next;
-      }),
+      return next;
+    }),
   });
 
   const processor = Remembering.make({
@@ -1387,32 +1387,30 @@ const subagentCase = Effect.fn("diagnostic.subagent")(function* (workload: Diagn
     parameters: Schema.Struct({ topic: Schema.String }),
     success: Schema.Struct({ summary: Schema.String }),
     failure: BenchmarkError,
-    prepareInput: ({ topic }) =>
-      Effect.gen(function* () {
-        prepared++;
-        yield* progress.mark({
-          name: `subagent.prepare.begin.${topic}`,
-          elapsedMs: yield* elapsed(start),
-        });
-        const value = { question: topic };
+    prepareInput: Effect.fnUntraced(function* ({ topic }) {
+      prepared++;
+      yield* progress.mark({
+        name: `subagent.prepare.begin.${topic}`,
+        elapsedMs: yield* elapsed(start),
+      });
+      const value = { question: topic };
 
-        yield* progress.mark({
-          name: `subagent.prepare.end.${topic}`,
-          elapsedMs: yield* elapsed(start),
-        });
+      yield* progress.mark({
+        name: `subagent.prepare.end.${topic}`,
+        elapsedMs: yield* elapsed(start),
+      });
 
-        return value;
-      }),
-    projectResult: (output, _context, parameters) =>
-      Effect.gen(function* () {
-        projected++;
-        yield* progress.mark({
-          name: `subagent.project.${parameters.topic}`,
-          elapsedMs: yield* elapsed(start),
-        });
+      return value;
+    }),
+    projectResult: Effect.fnUntraced(function* (output, _context, parameters) {
+      projected++;
+      yield* progress.mark({
+        name: `subagent.project.${parameters.topic}`,
+        elapsedMs: yield* elapsed(start),
+      });
 
-        return { summary: `${parameters.topic}:${output.answer}` };
-      }),
+      return { summary: `${parameters.topic}:${output.answer}` };
+    }),
     policy: Subagent.SubagentPolicy.make({
       maxChildren: 2,
       maxConcurrency: 1,

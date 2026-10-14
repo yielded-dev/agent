@@ -33,6 +33,7 @@ export const connectKitesurf = Effect.fnUntraced(function* (
 
   const transport: ConnectionTransport = {
     send: (message) => {
+      // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Puppeteer requires synchronous transport.send exceptions to reject CDP commands.
       if (fenced || socket === undefined) throw new Error("Kitesurf connection is closed");
       socket.send(message);
     },
@@ -70,7 +71,7 @@ export const connectKitesurf = Effect.fnUntraced(function* (
       if (connected === undefined || connected.readyState === WebSocket.CLOSED) finish();
     } catch {
       resume(
-        Effect.fail(new LabError({ code: "browser", message: "Kitesurf socket cleanup failed." })),
+        Effect.fail(LabError.make({ code: "browser", message: "Kitesurf socket cleanup failed." })),
       );
     }
 
@@ -80,7 +81,7 @@ export const connectKitesurf = Effect.fnUntraced(function* (
       duration: "5 seconds",
       orElse: () =>
         Effect.fail(
-          new LabError({ code: "browser", message: "Kitesurf socket closure was not confirmed." }),
+          LabError.make({ code: "browser", message: "Kitesurf socket closure was not confirmed." }),
         ),
     }),
   );
@@ -90,84 +91,96 @@ export const connectKitesurf = Effect.fnUntraced(function* (
   retainClose(close);
   yield* Effect.addFinalizer(() => close.pipe(Effect.ignore));
 
-  const connected = yield* Effect.tryPromise({
-    try: async (signal) => {
-      const response = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/browser-run/devtools/browser?browser=kitesurf`,
-        {
-          headers: {
-            Upgrade: "websocket",
-            Authorization: `Bearer ${Redacted.value(config.apiToken)}`,
+  const connectionFailed = () =>
+    LabError.make({ code: "browser", message: "Kitesurf CDP connection failed." });
+
+  const connected = yield* Effect.gen(function* () {
+    const connectedSocket = yield* Effect.tryPromise({
+      try: async (signal) => {
+        const response = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/browser-run/devtools/browser?browser=kitesurf`,
+          {
+            headers: {
+              Upgrade: "websocket",
+              Authorization: `Bearer ${Redacted.value(config.apiToken)}`,
+            },
+            signal,
           },
-          signal,
-        },
-      );
+        );
 
-      if (response.status !== 101 || response.webSocket === null) {
-        await response.body?.cancel();
-        throw new Error("Kitesurf upgrade rejected");
-      }
-      socket = response.webSocket;
-      socket.accept();
-      if (fenced || signal.aborted) {
-        fence();
-        throw new Error("Kitesurf acquisition cancelled");
-      }
-      socket.addEventListener("message", onMessage);
-      socket.addEventListener("close", fence, { once: true });
-      socket.addEventListener("error", fence, { once: true });
+        if (response.status !== 101 || response.webSocket === null) {
+          await response.body?.cancel();
 
-      // Read identity on the root socket before Puppeteer owns command IDs. Kitesurf's
-      // secondary page sessions are unnecessary for this browser-level CDP command.
-      const connectedSocket = socket;
+          return null;
+        }
+        // fetch can complete after interruption. Retain and fence even a late socket.
+        socket = response.webSocket;
+        socket.accept();
+        if (fenced || signal.aborted) {
+          fence();
 
-      const identity = await new Promise<typeof Identity.Type>((resolve, reject) => {
-        const release = () => {
-          connectedSocket.removeEventListener("message", receive);
-          connectedSocket.removeEventListener("close", rejectClosed);
-        };
+          return null;
+        }
+        socket.addEventListener("message", onMessage);
+        socket.addEventListener("close", fence, { once: true });
+        socket.addEventListener("error", fence, { once: true });
 
-        const rejectClosed = () => {
-          release();
-          reject(new Error("Kitesurf closed before identity verification"));
-        };
+        return socket;
+      },
+      catch: connectionFailed,
+    });
 
-        const receive = (event: MessageEvent) => {
-          const reply = Schema.decodeUnknownOption(IdentityReply)(event.data);
+    if (connectedSocket === null) return yield* connectionFailed();
 
-          if (Option.isSome(reply)) {
-            release();
-            resolve(reply.value.result);
-          }
-        };
+    // Read identity on the root socket before Puppeteer owns command IDs. Kitesurf's
+    // secondary page sessions are unnecessary for this browser-level CDP command.
+    const identity = yield* Effect.callback<typeof Identity.Type, LabError>((resume) => {
+      const rejectClosed = () => resume(Effect.fail(connectionFailed()));
 
-        connectedSocket.addEventListener("message", receive);
-        connectedSocket.addEventListener("close", rejectClosed, { once: true });
+      const receive = (event: MessageEvent) => {
+        const reply = Schema.decodeUnknownOption(IdentityReply)(event.data);
+
+        if (Option.isSome(reply)) resume(Effect.succeed(reply.value.result));
+      };
+
+      connectedSocket.addEventListener("message", receive);
+      connectedSocket.addEventListener("close", rejectClosed, { once: true });
+      try {
         connectedSocket.send(JSON.stringify({ id: 0, method: "Browser.getVersion" }));
-      });
+      } catch {
+        rejectClosed();
+      }
 
-      const browser = await puppeteer.connect({
-        transport,
-        defaultViewport: null,
-        protocolTimeout: browserCommandTimeoutMillis + 5_000,
+      return Effect.sync(() => {
+        connectedSocket.removeEventListener("message", receive);
+        connectedSocket.removeEventListener("close", rejectClosed);
       });
+    });
 
-      return { browser, identity };
-    },
-    catch: () => new LabError({ code: "browser", message: "Kitesurf CDP connection failed." }),
+    const browser = yield* Effect.tryPromise({
+      try: () =>
+        puppeteer.connect({
+          transport,
+          defaultViewport: null,
+          protocolTimeout: browserCommandTimeoutMillis + 5_000,
+        }),
+      catch: connectionFailed,
+    });
+
+    return { browser, identity };
   }).pipe(
     Effect.timeoutOrElse({
       duration: "25 seconds",
       orElse: () =>
         Effect.fail(
-          new LabError({ code: "browser", message: "Kitesurf CDP connection timed out." }),
+          LabError.make({ code: "browser", message: "Kitesurf CDP connection timed out." }),
         ),
     }),
   );
 
   const page = yield* Effect.tryPromise({
     try: () => connected.browser.newPage(),
-    catch: () => new LabError({ code: "browser", message: "Kitesurf page creation failed." }),
+    catch: () => LabError.make({ code: "browser", message: "Kitesurf page creation failed." }),
   });
 
   const lock = yield* Semaphore.make(1);
@@ -179,7 +192,7 @@ export const connectKitesurf = Effect.fnUntraced(function* (
         Effect.gen(function* () {
           yield* authorize;
           if (fenced)
-            return yield* new BrowserSessionError({
+            return yield* BrowserSessionError.make({
               reason: "expired",
               dispatch: "not-dispatched",
               cleanup: "not-requested",
@@ -188,7 +201,7 @@ export const connectKitesurf = Effect.fnUntraced(function* (
           return yield* Effect.tryPromise({
             try: () => action(page),
             catch: () =>
-              new BrowserSessionError({
+              BrowserSessionError.make({
                 reason: "provider",
                 dispatch: "possibly-dispatched",
                 cleanup: "not-requested",
@@ -204,7 +217,7 @@ export const connectKitesurf = Effect.fnUntraced(function* (
                   Effect.ignore,
                   Effect.andThen(
                     Effect.fail(
-                      new BrowserSessionError({
+                      BrowserSessionError.make({
                         reason: "timeout",
                         dispatch: "possibly-dispatched",
                         cleanup: "unconfirmed",

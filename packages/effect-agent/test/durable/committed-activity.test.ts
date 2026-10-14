@@ -96,59 +96,58 @@ const probe = (initial: ReadonlyArray<CanonicalRecordEnvelope> = [record(1)]) =>
 
   const store = ActivityProcessorStore.of({
     inspect: () => Effect.die("The processor must use its session, not a separate progress read"),
-    acquire: () =>
-      Effect.gen(function* () {
-        let active = true;
+    acquire: Effect.fnUntraced(function* () {
+      let active = true;
 
-        const checkActive = Effect.suspend(() =>
-          active ? Effect.void : Effect.fail(ActivityOwnershipLost.make({ key })),
-        );
+      const checkActive = Effect.suspend(() =>
+        active ? Effect.void : Effect.fail(ActivityOwnershipLost.make({ key })),
+      );
 
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => {
-            active = false;
-            state.released += 1;
-          }),
-        );
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          active = false;
+          state.released += 1;
+        }),
+      );
 
-        return {
-          progress: progress(),
-          checkActive,
-          prepare: (work) =>
-            checkActive.pipe(
-              Effect.andThen(
-                Effect.gen(function* () {
-                  state.pending = work;
-                  state.prepared.push(work);
-                  if (state.prepareLostAck) {
-                    state.prepareLostAck = false;
+      return {
+        progress: progress(),
+        checkActive,
+        prepare: (work) =>
+          checkActive.pipe(
+            Effect.andThen(
+              Effect.gen(function* () {
+                state.pending = work;
+                state.prepared.push(work);
+                if (state.prepareLostAck) {
+                  state.prepareLostAck = false;
 
-                    return yield* ActivityMutationFailure.make({ point: "activity:prepare:after" });
-                  }
+                  return yield* ActivityMutationFailure.make({ point: "activity:prepare:after" });
+                }
 
-                  return work;
-                }),
-              ),
+                return work;
+              }),
             ),
-          advance: () =>
-            checkActive.pipe(
-              Effect.andThen(
-                Effect.gen(function* () {
-                  state.through = sequence(state.through + 1);
-                  state.pending = null;
-                  state.advancedAt = yield* Clock.currentTimeMillis;
-                  if (state.advanceLostAck) {
-                    state.advanceLostAck = false;
+          ),
+        advance: () =>
+          checkActive.pipe(
+            Effect.andThen(
+              Effect.gen(function* () {
+                state.through = sequence(state.through + 1);
+                state.pending = null;
+                state.advancedAt = yield* Clock.currentTimeMillis;
+                if (state.advanceLostAck) {
+                  state.advanceLostAck = false;
 
-                    return yield* ActivityMutationFailure.make({ point: "activity:advance:after" });
-                  }
+                  return yield* ActivityMutationFailure.make({ point: "activity:advance:after" });
+                }
 
-                  return progress();
-                }),
-              ),
+                return progress();
+              }),
             ),
-        };
-      }),
+          ),
+      };
+    }),
   });
 
   const threads = ThreadStore.of({
@@ -245,17 +244,16 @@ describe("finite committed activity processing", () => {
 
             return "pinned";
           }),
-        apply: (work: PreparedActivity) =>
-          Effect.gen(function* () {
-            attempts += 1;
-            receipts.set(work.workId, work);
-            if (attempts === 1) return yield* new ExtractionUnavailable();
-          }),
+        apply: Effect.fnUntraced(function* (work: PreparedActivity) {
+          attempts += 1;
+          receipts.set(work.workId, work);
+          if (attempts === 1) return yield* ExtractionUnavailable.make();
+        }),
       };
 
       return Effect.gen(function* () {
         expect(yield* processCommittedActivity(options).pipe(Effect.flip)).toEqual(
-          new ExtractionUnavailable(),
+          ExtractionUnavailable.make(),
         );
         expect(p.state.through).toBe(0);
         p.state.advanceLostAck = true;

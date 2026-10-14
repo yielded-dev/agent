@@ -139,7 +139,7 @@ const run = <A, E>(effect: Effect.Effect<A, E, AppSourceStore>) =>
             point = "";
 
             return Effect.fail(
-              new PlannerError({ code: "storage", message: "Injected lost acknowledgement" }),
+              PlannerError.make({ code: "storage", message: "Injected lost acknowledgement" }),
             );
           }),
       }),

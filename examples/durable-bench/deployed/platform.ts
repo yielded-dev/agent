@@ -8,6 +8,7 @@ import { ChildProcess } from "effect/process";
 
 export class BenchError extends Schema.TaggedError<BenchError>()("BenchError", {
   message: Schema.String,
+  cause: Schema.optionalKey(Schema.Defect()),
 }) {}
 
 export const directory = dirname(fileURLToPath(import.meta.url));
@@ -44,7 +45,7 @@ export const prefixLock = Effect.fnUntraced(function* (prefix: string) {
       }));
 
     if (!dead)
-      return yield* new BenchError({ message: `Another controller owns the ${prefix} prefix.` });
+      return yield* BenchError.make({ message: `Another controller owns the ${prefix} prefix.` });
   }
 });
 
@@ -90,7 +91,9 @@ export const git = Effect.fnUntraced(function* (args: readonly string[]) {
   const result = yield* execute(["exec", "git", ...args], repository);
 
   if (result.code !== 0)
-    return yield* new BenchError({ message: "Git command failed; check the requested reference." });
+    return yield* BenchError.make({
+      message: "Git command failed; check the requested reference.",
+    });
 
   return result.output.trim();
 });
@@ -103,20 +106,17 @@ export const save = Effect.fnUntraced(function* (file: string, value: unknown) {
   yield* fs.rename(file + ".tmp", file);
 });
 
-export const read = <S extends Schema.Top & { readonly DecodingServices: never }>(
-  file: string,
-  schema: S,
-) =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const raw = yield* fs.readFileString(file);
+export const read = Effect.fnUntraced(function* <
+  S extends Schema.Top & { readonly DecodingServices: never },
+>(file: string, schema: S) {
+  const fs = yield* FileSystem.FileSystem;
+  const raw = yield* fs.readFileString(file);
 
-    return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(raw).pipe(
-      Effect.mapError(
-        () =>
-          new BenchError({
-            message: `Invalid ${file.endsWith("state.json") ? "private deployment state" : "benchmark data"}.`,
-          }),
-      ),
-    );
-  });
+  return yield* Schema.decodeEffect(Schema.fromJsonString(schema))(raw).pipe(
+    Effect.mapError(() =>
+      BenchError.make({
+        message: `Invalid ${file.endsWith("state.json") ? "private deployment state" : "benchmark data"}.`,
+      }),
+    ),
+  );
+});

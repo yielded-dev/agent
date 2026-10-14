@@ -7,7 +7,7 @@ import { credentialForOwner } from "./credentials.ts";
 import { plannerOwner } from "./tenancy.ts";
 
 const unavailable = () =>
-  new VoiceError({
+  VoiceError.make({
     message: "Voice could not connect. Check GPT-Live access for your OpenAI key and try again.",
   });
 

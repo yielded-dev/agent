@@ -150,40 +150,39 @@ export const encodedDestinationFacts = (destination: string): unknown => {
 const scriptedUsage = { inputTokens: { total: 96 }, outputTokens: { total: 64 } };
 
 /** One scripted model whose behavior is keyed by the global invocation index. */
-export const makeInvocationCountingModel = (
+export const makeInvocationCountingModel = Effect.fnUntraced(function* (
   name: string,
   script: (call: number) => ReadonlyArray<Response.StreamPartEncoded>,
-) =>
-  Effect.gen(function* () {
-    const calls = yield* Ref.make(0);
-    const prompts = yield* Ref.make<ReadonlyArray<string>>([]);
+) {
+  const calls = yield* Ref.make(0);
+  const prompts = yield* Ref.make<ReadonlyArray<string>>([]);
 
-    const model = Model.make(
-      "scripted",
-      name,
-      Layer.effect(
-        LanguageModel.LanguageModel,
-        LanguageModel.make({
-          generateText: () => Effect.succeed([]),
-          streamText: (request) =>
-            Stream.unwrap(
-              Effect.gen(function* () {
-                const call = yield* Ref.getAndUpdate(calls, (value) => value + 1);
+  const model = Model.make(
+    "scripted",
+    name,
+    Layer.effect(
+      LanguageModel.LanguageModel,
+      LanguageModel.make({
+        generateText: () => Effect.succeed([]),
+        streamText: (request) =>
+          Stream.unwrap(
+            Effect.gen(function* () {
+              const call = yield* Ref.getAndUpdate(calls, (value) => value + 1);
 
-                yield* Ref.update(prompts, (previous) => [
-                  ...previous,
-                  JSON.stringify(request.prompt.content),
-                ]);
+              yield* Ref.update(prompts, (previous) => [
+                ...previous,
+                JSON.stringify(request.prompt.content),
+              ]);
 
-                return Stream.fromIterable(script(call));
-              }),
-            ),
-        }),
-      ),
-    );
+              return Stream.fromIterable(script(call));
+            }),
+          ),
+      }),
+    ),
+  );
 
-    return { model, calls: Ref.get(calls), prompts: Ref.get(prompts) };
-  });
+  return { model, calls: Ref.get(calls), prompts: Ref.get(prompts) };
+});
 
 const delegationTurnParts = (
   toolCallId: string,
@@ -296,70 +295,69 @@ export interface DurableResearchHarness {
  * registered with several `NodeDurableAgentRuntime` stacks over the same SQLite
  * file while the counters keep counting across all of them.
  */
-export const makeDurableResearchHarness = (options?: DurableResearchHarnessOptions) =>
-  Effect.gen(function* () {
-    const destination = options?.destination ?? "LHR";
-    const focus = options?.focus ?? "museums";
+export const makeDurableResearchHarness = Effect.fnUntraced(function* (
+  options?: DurableResearchHarnessOptions,
+) {
+  const destination = options?.destination ?? "LHR";
+  const focus = options?.focus ?? "museums";
 
-    const guideInvocations = yield* Ref.make(0);
+  const guideInvocations = yield* Ref.make(0);
 
-    const guideLayer = Layer.succeed(
-      DestinationGuide,
-      DestinationGuide.of({
-        lookup: (query) =>
-          Ref.update(guideInvocations, (count) => count + 1).pipe(
-            Effect.andThen(destinationLookup(query)),
-          ),
-      }),
-    );
-
-    const childToolkitLayer = DestinationResearcherToolkitLayer.pipe(
-      Layer.provideMerge(guideLayer),
-    );
-
-    const childModel = yield* makeInvocationCountingModel("destination-researcher-s2", (call) =>
-      call === 0 ? researcherLookupParts(destination) : researcherReportParts(destination),
-    );
-
-    const childBinding = Agent.withModel(DestinationResearcher, childModel.model);
-
-    const parentModel = yield* makeInvocationCountingModel("travel-coordinator-s2", (call) =>
-      call === 0
-        ? delegationTurnParts(durableResearchCallId, destination, focus)
-        : shortlistParts(durableResearchShortlist(destination)),
-    );
-
-    const parentBinding = Agent.withModel(TravelCoordinator, parentModel.model);
-
-    const delegationLayer = durableDestinationResearchHandlersLayer(childBinding).pipe(
-      Layer.provide(
-        Layer.mergeAll(
-          childToolkitLayer,
-          SubagentReservationsMemoryLive,
-          DeterministicIdGeneratorLayer,
-          ResearchDispatchGate.layerOpen,
+  const guideLayer = Layer.succeed(
+    DestinationGuide,
+    DestinationGuide.of({
+      lookup: (query) =>
+        Ref.update(guideInvocations, (count) => count + 1).pipe(
+          Effect.andThen(destinationLookup(query)),
         ),
+    }),
+  );
+
+  const childToolkitLayer = DestinationResearcherToolkitLayer.pipe(Layer.provideMerge(guideLayer));
+
+  const childModel = yield* makeInvocationCountingModel("destination-researcher-s2", (call) =>
+    call === 0 ? researcherLookupParts(destination) : researcherReportParts(destination),
+  );
+
+  const childBinding = Agent.withModel(DestinationResearcher, childModel.model);
+
+  const parentModel = yield* makeInvocationCountingModel("travel-coordinator-s2", (call) =>
+    call === 0
+      ? delegationTurnParts(durableResearchCallId, destination, focus)
+      : shortlistParts(durableResearchShortlist(destination)),
+  );
+
+  const parentBinding = Agent.withModel(TravelCoordinator, parentModel.model);
+
+  const delegationLayer = durableDestinationResearchHandlersLayer(childBinding).pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        childToolkitLayer,
+        SubagentReservationsMemoryLive,
+        DeterministicIdGeneratorLayer,
+        ResearchDispatchGate.layerOpen,
       ),
-    );
+    ),
+  );
 
-    const parentResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
-      parentBinding,
-      s2CoordinatorDigests,
-    ).pipe(Effect.provide(delegationLayer));
+  const parentResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
+    parentBinding,
+    s2CoordinatorDigests,
+  ).pipe(Effect.provide(delegationLayer));
 
-    const childResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
-      childBinding,
-      options?.childRegistrationDigests ?? s2ResearcherDigests,
-    ).pipe(Effect.provide(childToolkitLayer));
+  const childResolved: ResolvedBinding = yield* DurableWorkerBinding.make(
+    childBinding,
+    options?.childRegistrationDigests ?? s2ResearcherDigests,
+  ).pipe(Effect.provide(childToolkitLayer));
 
-    const harness: DurableResearchHarness = {
-      bindings: [parentResolved, childResolved],
-      parentModelCalls: parentModel.calls,
-      parentPrompts: parentModel.prompts,
-      childModelCalls: childModel.calls,
-      childPrompts: childModel.prompts,
-      guideInvocations: Ref.get(guideInvocations),
-    };
+  const harness: DurableResearchHarness = {
+    bindings: [parentResolved, childResolved],
+    parentModelCalls: parentModel.calls,
+    parentPrompts: parentModel.prompts,
+    childModelCalls: childModel.calls,
+    childPrompts: childModel.prompts,
+    guideInvocations: Ref.get(guideInvocations),
+  };
 
-    return harness;
-  });
+  return harness;
+});

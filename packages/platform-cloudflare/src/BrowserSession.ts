@@ -95,7 +95,8 @@ export class BrowserSessionError extends Schema.TaggedError<BrowserSessionError>
  * One local attachment to an application-owned browser. Scope release disconnects; it never
  * transfers ownership or closes a healthy remote session. The owner serializes attachments,
  * fences old attempts, authorizes human access, and calls BrowserSessions.close on expiry/stop.
- * Native callbacks are trusted host code: never retain SDK handles or start unawaited work.
+ * Native callbacks are trusted host code: never start unawaited work. Adapters retaining SDK
+ * handles must scope their release and use run for every operation on the retained page.
  */
 export interface BrowserSession {
   readonly reference: BrowserSessionReference;
@@ -147,7 +148,7 @@ const failure = (
   reason: BrowserSessionError["reason"],
   dispatch: BrowserSessionError["dispatch"] = "not-dispatched",
   cleanup: BrowserSessionError["cleanup"] = "not-requested",
-) => new BrowserSessionError({ reason, dispatch, cleanup });
+) => BrowserSessionError.make({ reason, dispatch, cleanup });
 
 const decode = <A>(schema: Schema.Codec<A>, input: unknown) =>
   Schema.decodeUnknownEffect(schema, { onExcessProperty: "error" })(input).pipe(

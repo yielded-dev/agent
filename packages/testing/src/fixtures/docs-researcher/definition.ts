@@ -132,6 +132,7 @@ const requireCorpusEntry = (documentId: string): CorpusEntry => {
   const entry = corpusEntries.get(documentId);
 
   if (entry === undefined) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Synchronous deterministic fixture lookup rejects programmer-supplied corpus configuration.
     throw new Error(`No deterministic corpus entry exists for document ${documentId}`);
   }
 

@@ -327,6 +327,14 @@ type TransitionResult<A, E> =
 const ok = <A>(value: A): TransitionResult<A, never> => ({ _tag: "ok", value });
 const fail = <E>(error: E): TransitionResult<never, E> => ({ _tag: "error", error });
 
+/** Corrupt internal accounting is a defect, never an expected reservation failure. */
+class ReservationLedgerCorrupt extends Schema.TaggedError<ReservationLedgerCorrupt>()(
+  "ReservationLedgerCorrupt",
+  {
+    message: Schema.String,
+  },
+) {}
+
 const resolve = <A, E>(result: TransitionResult<A, E>): Effect.Effect<A, E> => {
   switch (result._tag) {
     case "ok":
@@ -334,7 +342,7 @@ const resolve = <A, E>(result: TransitionResult<A, E>): Effect.Effect<A, E> => {
     case "error":
       return Effect.fail(result.error);
     case "corrupt":
-      return Effect.die(new Error(result.message));
+      return Effect.die(ReservationLedgerCorrupt.make({ message: result.message }));
   }
 };
 

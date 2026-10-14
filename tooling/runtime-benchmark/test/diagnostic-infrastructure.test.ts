@@ -89,8 +89,8 @@ it("retains interrupted sample evidence and closes resources", async () => {
       const fiber = yield* Effect.forkChild(
         runDiagnosticWorker(options).pipe(
           Effect.provideService(DiagnosticRunner, {
-            run: () =>
-              Effect.gen(function* () {
+            run: Effect.fnUntraced(
+              function* () {
                 const progress = yield* DiagnosticProgress;
 
                 yield* progress.phase("operation");
@@ -103,7 +103,9 @@ it("retains interrupted sample evidence and closes resources", async () => {
                 yield* Deferred.succeed(entered, undefined);
 
                 return yield* Effect.never;
-              }).pipe(Effect.scoped),
+              },
+              (effect) => effect.pipe(Effect.scoped),
+            ),
           }),
         ),
       );

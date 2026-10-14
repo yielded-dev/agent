@@ -178,13 +178,12 @@ const layer = BrowserSessions.layerNoDeps.pipe(
   ),
   Layer.provide(
     Layer.succeed(BrowserRunSessionLifecycle, {
-      close: (sessionId) =>
-        Effect.gen(function* () {
-          provider.closed.push(Redacted.value(sessionId));
-          if (provider.cleanupPending)
-            return yield* new BrowserRunCleanupError({ reason: "pending" });
-          provider.alive = false;
-        }),
+      close: Effect.fnUntraced(function* (sessionId) {
+        provider.closed.push(Redacted.value(sessionId));
+        if (provider.cleanupPending)
+          return yield* BrowserRunCleanupError.make({ reason: "pending" });
+        provider.alive = false;
+      }),
     }),
   ),
 );

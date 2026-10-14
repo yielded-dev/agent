@@ -65,19 +65,18 @@ for (const outcome of ["timeout"] as const) {
               tag: event.tag,
               payload,
               timeoutMillis: 100,
-              handle: () =>
-                Effect.gen(function* () {
-                  expect(yield* Host).toBe("host");
-                  expect(yield* SubscriptionDriver).toBe(nativeDriver);
-                  yield* Effect.addFinalizer(() =>
-                    Effect.sync(() => {
-                      finalized++;
-                    }),
-                  );
-                  yield* Deferred.succeed(started, undefined);
+              handle: Effect.fnUntraced(function* () {
+                expect(yield* Host).toBe("host");
+                expect(yield* SubscriptionDriver).toBe(nativeDriver);
+                yield* Effect.addFinalizer(() =>
+                  Effect.sync(() => {
+                    finalized++;
+                  }),
+                );
+                yield* Deferred.succeed(started, undefined);
 
-                  return yield* Effect.never;
-                }),
+                return yield* Effect.never;
+              }),
             });
 
             const handler = yield* made.pipe(Effect.provideService(SubscriptionDriver, hostDriver));

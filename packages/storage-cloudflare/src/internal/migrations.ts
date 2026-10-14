@@ -91,6 +91,7 @@ const layoutObjects = (statements: ReadonlyArray<string>) =>
   statements.map((statement, index) => {
     const name = /^CREATE (TABLE|(?:UNIQUE )?INDEX|TRIGGER) "?([a-z_][a-z_0-9]*)"?/.exec(statement);
 
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The synchronous SQL layout parser rejects malformed developer-authored declarations before storage mutation.
     if (name === null) throw new Error("Invalid fresh layout statement");
 
     return [name[1].replace("UNIQUE ", "").toLowerCase(), name[2], index] as const;

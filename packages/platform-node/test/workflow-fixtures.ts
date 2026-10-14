@@ -169,13 +169,13 @@ export const temporaryDirectory = Effect.gen(function* () {
 export const readLog = Effect.fn("WorkflowTest.readLog")(function* (thread: ThreadId) {
   const store = yield* ThreadStore;
 
-  return yield* Stream.runCollect(store.read(new ThreadRead({ threadId: thread, limit: 1024 })));
+  return yield* Stream.runCollect(store.read(ThreadRead.make({ threadId: thread, limit: 1024 })));
 });
 
 export const pendingIntents = Effect.gen(function* () {
   const store = yield* WorkflowDispatchStore;
 
-  return yield* store.scan(new WorkflowDispatchScan({ deploymentId, workflowName, limit: 1000 }));
+  return yield* store.scan(WorkflowDispatchScan.make({ deploymentId, workflowName, limit: 1000 }));
 });
 
 export const until = Effect.fn("WorkflowTest.until")(function* <A, E, R>(

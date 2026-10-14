@@ -10,7 +10,7 @@ export const StorageOwner = Schema.String.check(
 export const plannerOwner = (subjectId: string) =>
   Schema.decodeEffect(AccountId)(subjectId).pipe(
     Effect.map((id) => `account-${id}`),
-    Effect.mapError(() => new PlannerError({ code: "invalid", message: "Invalid account." })),
+    Effect.mapError(() => PlannerError.make({ code: "invalid", message: "Invalid account." })),
   );
 
 /** Internal object addresses must have a server-assigned owner; corrupt addresses fail closed. */
@@ -24,7 +24,7 @@ export const privateConversation = (owner: string, conversationId: string) =>
         conversationId,
       ).pipe(Effect.map((id) => `${owner}--${id}`)),
     ),
-    Effect.mapError(() => new PlannerError({ code: "invalid", message: "Invalid conversation." })),
+    Effect.mapError(() => PlannerError.make({ code: "invalid", message: "Invalid conversation." })),
   );
 
 /** Namespace addresses stay server-owned; the browser sees only its original conversation IDs. */

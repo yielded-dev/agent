@@ -1,4 +1,4 @@
-import { Context, DateTime, Effect, Option, Schema, Semaphore, Stream } from "effect";
+import { Context, DateTime, Effect, Option, Result, Schema, Semaphore, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
 import { AgentPersistenceCapacityError } from "../core/AgentError.ts";
@@ -183,36 +183,58 @@ const decodeExecutionFrontier = Schema.decodeUnknownEffect(
 /** One private snapshot for every retry; callers cannot change facts while awaiting the gate. */
 const captureFacts = (batch: CommitBatch) =>
   Effect.try({
-    try: () => {
-      const header = validateBatchHeader(batch);
+    try: () =>
+      Result.gen(function* () {
+        const header = validateBatchHeader(batch);
 
-      validateBatchCount(batch.records);
-      const records = batch.records.map((record) => captureRecord(record).canonical);
+        validateBatchCount(batch.records);
+        const encodings = yield* Result.all(batch.records.map(captureRecord));
+        const records = encodings.map((record) => record.canonical);
 
-      return Object.freeze(
-        new CanonicalBatch(
-          { ...header, records: [records[0]!, ...records.slice(1)] },
-          { disableChecks: true },
-        ),
-      );
-    },
+        return Object.freeze(
+          CanonicalBatch.make(
+            { ...header, records: [records[0]!, ...records.slice(1)] },
+            { disableChecks: true },
+          ),
+        );
+      }),
     catch: (cause) => failure("Cannot capture canonical progress facts", cause),
-  });
+  }).pipe(
+    Effect.flatMap(Effect.fromResult),
+    Effect.mapError((cause) =>
+      Schema.is(ThreadStoreError)(cause)
+        ? cause
+        : failure("Cannot capture canonical progress facts", cause),
+    ),
+  );
 
 /** Exact UTF-8 wire accounting reuses the append's privately captured Schema encoding. */
-export const canonicalRecordBytes = (record: RecordEnvelope): number =>
-  recordEncoding(record).bytes;
+export const canonicalRecordBytes = (record: RecordEnvelope): number => {
+  const encoded = recordEncoding(record);
+
+  if (Result.isFailure(encoded)) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Public synchronous byte-accounting validation must reject malformed records before returning a number.
+    throw encoded.failure.cause ?? new RangeError(encoded.failure.message);
+  }
+
+  return encoded.success.bytes;
+};
 
 export type { ProgressAppendRecord } from "./internal/record-encoding.ts";
 
 /** Capture before acquiring the mutation owner; summaries never cross a wire boundary. */
 export const prepareProgressAppend = (
   records: ReadonlyArray<RecordEnvelope>,
-): ReadonlyArray<ProgressAppendRecord> =>
-  Object.freeze(records.map((record) => captureRecord(record).progress));
+): ReadonlyArray<ProgressAppendRecord> => {
+  const encodings = Result.all(records.map(captureRecord));
 
-const factUsageCharge = (facts: ReadonlyArray<RecordEnvelope>): number =>
-  facts.reduce((bytes, record) => bytes + recordEncoding(record).progress.terminalUsageBytes, 0);
+  if (Result.isFailure(encodings)) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Public synchronous progress construction must reject malformed records before acquiring a mutation owner.
+    throw encodings.failure.cause ?? new RangeError(encodings.failure.message);
+  }
+
+  return Object.freeze(encodings.success.map((record) => record.progress));
+};
 
 /** These values belong to the active Run, not its permanent conversation history. */
 export const isOperationalRecord = ({ payload }: RecordEnvelope): boolean =>
@@ -687,9 +709,27 @@ const advanceFacts = Effect.fnUntraced(function* (
   let results = new Map(previous?.results);
   let childResults = new Map(previous?.childResults);
   let completionBytes = previous?.completionBytes;
+  let factBytes = 0;
+  let turn = previous?.continuation.turn ?? 1;
+  let usageCharge = 0;
+  let closingBytes = 0;
+  let closingCount = 0;
 
   for (const fact of facts) {
     const payload = fact.payload;
+    const captured = recordEncoding(fact);
+
+    if (Result.isFailure(captured))
+      return yield* failure("Cannot account canonical progress facts", captured.failure);
+    const encoded = captured.success;
+
+    factBytes += encoded.bytes;
+    if ("turn" in payload) turn = Math.max(turn, payload.turn);
+    usageCharge += encoded.progress.terminalUsageBytes;
+    if (encoded.progress.terminal) {
+      closingBytes += encoded.bytes;
+      closingCount++;
+    }
 
     switch (payload._tag) {
       case "RunStarted":
@@ -899,21 +939,12 @@ const advanceFacts = Effect.fnUntraced(function* (
   if (previous?.continuation.position === "settled") position = "settled";
   else if (previous?.continuation.position === "settling" && position !== "settled")
     position = "settling";
-  const factBytes = facts.reduce((bytes, fact) => bytes + canonicalRecordBytes(fact), 0);
-
-  const turn = facts.reduce(
-    (current, fact) => ("turn" in fact.payload ? Math.max(current, fact.payload.turn) : current),
-    previous?.continuation.turn ?? 1,
-  );
 
   const turnBase =
     (previous?.continuation.turn === turn ? previous.continuation.turnBytes : initialBytes) +
     factBytes;
 
-  const usageCharge = factUsageCharge(facts);
   const terminalUsageBytes = (previous?.continuation.terminalUsageBytes ?? 0) + usageCharge;
-
-  const closing = facts.filter(isTerminalBudgetFact);
 
   return {
     accounting,
@@ -931,11 +962,9 @@ const advanceFacts = Effect.fnUntraced(function* (
     turnBase,
     usageCharge,
     terminalUsageBytes,
-    terminalBytes:
-      (previous?.continuation.terminalBytes ?? 0) +
-      closing.reduce((bytes, fact) => bytes + canonicalRecordBytes(fact), 0),
-    terminalRecords: (previous?.continuation.terminalRecords ?? 0) + closing.length,
-    closing: closing.length > 0,
+    terminalBytes: (previous?.continuation.terminalBytes ?? 0) + closingBytes,
+    terminalRecords: (previous?.continuation.terminalRecords ?? 0) + closingCount,
+    closing: closingCount > 0,
   };
 });
 
@@ -1286,10 +1315,9 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     if (batch.records.some((record) => record.payload._tag === "RunContinuation"))
       return yield* failure("A caller cannot supply interpreter progress to the progress writer");
 
-    const ownedRecords = yield* Effect.try({
-      try: () => batch.records.map((record) => captureRecord(record).canonical),
-      catch: (cause) => failure("Cannot capture canonical progress facts", cause),
-    });
+    // Every private caller passes captureFacts' owned snapshot. Keep a mutable
+    // list for settlement accounting without capturing that snapshot a second time.
+    const ownedRecords = [...batch.records];
 
     const groups = new Map<RunId, Array<RecordEnvelope>>();
 
@@ -1407,12 +1435,17 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
 
         if (payload._tag !== "SubmissionSettled" || payload.runId !== runId) continue;
 
-        const retained = captureRecord(
-          RecordEnvelope.make({
-            ...fact,
-            payload: { ...payload, historyRecordCount: canonicalRecords },
-          }),
-        ).canonical;
+        const retained = yield* Effect.fromResult(
+          captureRecord(
+            RecordEnvelope.make({
+              ...fact,
+              payload: { ...payload, historyRecordCount: canonicalRecords },
+            }),
+          ),
+        ).pipe(
+          Effect.map((record) => record.canonical),
+          Effect.mapError((cause) => failure("Cannot capture canonical progress facts", cause)),
+        );
 
         facts[index] = retained;
         ownedRecords[ownedRecords.indexOf(fact)] = retained;
@@ -1521,12 +1554,12 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
       );
 
       // Every other field was checked above; byte accounting changes only these counters.
-      continuation = new RunContinuation(
+      continuation = RunContinuation.make(
         { ...continuation, ...checkedBytes },
         { disableChecks: true },
       );
 
-      const proposedRecord = new RecordEnvelope(
+      const proposedRecord = RecordEnvelope.make(
         { ...header, payload: continuation },
         { disableChecks: true },
       );
@@ -1568,7 +1601,11 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         yield* checkFutureShapes(state, cursorBytes);
         continue;
       }
-      const record = captureRecord(proposedRecord).canonical;
+
+      const record = yield* Effect.fromResult(captureRecord(proposedRecord)).pipe(
+        Effect.map((record) => record.canonical),
+        Effect.mapError((cause) => failure("Cannot capture canonical progress facts", cause)),
+      );
 
       if (!isExecutionProgressRecord(record))
         return yield* failure("Captured execution has no Run continuation");
@@ -1584,7 +1621,15 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
       for (const fact of changed) {
         const prior = operational.get(fact.recordId);
 
-        if (prior !== undefined && recordEncoding(prior).json !== recordEncoding(fact).json)
+        if (
+          prior !== undefined &&
+          (yield* Effect.fromResult(recordEncoding(prior)).pipe(
+            Effect.mapError((cause) => failure("Cannot encode active Run fact", cause)),
+          )).json !==
+            (yield* Effect.fromResult(recordEncoding(fact)).pipe(
+              Effect.mapError((cause) => failure("Cannot encode active Run fact", cause)),
+            )).json
+        )
           return yield* failure("An active Run fact cannot change after becoming durable");
         operational.set(fact.recordId, fact);
       }
@@ -1644,7 +1689,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     if (ownedRecords.length + executionCount > 256)
       return yield* failure("Progress and facts exceed the atomic batch bound");
 
-    const prepared = new CommitBatch(
+    const prepared = CommitBatch.make(
       {
         ...batch,
         records: ownedRecords.filter((fact) => !isOperationalRecord(fact)),

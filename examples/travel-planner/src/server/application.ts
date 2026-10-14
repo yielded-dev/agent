@@ -53,7 +53,7 @@ export class PlannerModel extends Context.Service<PlannerModel, { readonly model
 ) {}
 
 const unavailable = () =>
-  new PlannerError({
+  PlannerError.make({
     code: "unavailable",
     message: "The planner is unavailable. Your saved trips are retained.",
   });
@@ -124,8 +124,8 @@ export const sendMessage = Effect.fn("sendMessage")(function* (request: SendMess
   const settings = yield* Schema.decodeEffect(PlannerSettings)(
     request.settings ?? defaultPlannerSettings,
   ).pipe(
-    Effect.mapError(
-      () => new PlannerError({ code: "invalid", message: "Invalid model settings." }),
+    Effect.mapError(() =>
+      PlannerError.make({ code: "invalid", message: "Invalid model settings." }),
     ),
   );
 
@@ -138,8 +138,8 @@ export const sendMessage = Effect.fn("sendMessage")(function* (request: SendMess
   );
 
   const idempotencyKey = yield* Schema.decodeEffect(IdempotencyKey)(request.requestId).pipe(
-    Effect.mapError(
-      () => new PlannerError({ code: "invalid", message: "Invalid request identifier." }),
+    Effect.mapError(() =>
+      PlannerError.make({ code: "invalid", message: "Invalid request identifier." }),
     ),
   );
 
@@ -164,7 +164,7 @@ export const sendMessage = Effect.fn("sendMessage")(function* (request: SendMess
       priorSettings.reasoningEffort !== settings.reasoningEffort ||
       priorSettings.fast !== settings.fast
     )
-      return yield* new PlannerError({
+      return yield* PlannerError.make({
         code: "conflict",
         message: "This message was already submitted with different details.",
       });
@@ -186,7 +186,7 @@ export const sendMessage = Effect.fn("sendMessage")(function* (request: SendMess
     selectedTrip !== null &&
     (yield* repository.conversationId(selectedTrip.id)) !== request.conversationId
   )
-    return yield* new PlannerError({
+    return yield* PlannerError.make({
       code: "invalid",
       message: "Open this trip's conversation before sending a message.",
     });

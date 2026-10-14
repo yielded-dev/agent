@@ -516,37 +516,36 @@ export const makeBlockedBookToolLayer = (dir: string, tools: BookToolkit, marker
 /** Durable-Step handler: entry and each Step invocation are observable supplier calls. */
 export const makeItineraryToolLayer = (dir: string) =>
   itineraryTools.toLayer({
-    itinerary: ({ ref }) =>
-      Effect.gen(function* () {
-        yield* Effect.sync(() => recordSupplierCall(dir, "itinerary-enter", ref, `enter-${ref}`));
-        const step = yield* DurableStep;
+    itinerary: Effect.fnUntraced(function* ({ ref }) {
+      yield* Effect.sync(() => recordSupplierCall(dir, "itinerary-enter", ref, `enter-${ref}`));
+      const step = yield* DurableStep;
 
-        const flight = yield* step.do(
-          "reserve-flight",
-          Schema.String,
-          Effect.sync(() => {
-            const value = `flight-${ref}`;
+      const flight = yield* step.do(
+        "reserve-flight",
+        Schema.String,
+        Effect.sync(() => {
+          const value = `flight-${ref}`;
 
-            recordSupplierCall(dir, "reserve-flight", ref, value);
+          recordSupplierCall(dir, "reserve-flight", ref, value);
 
-            return value;
-          }),
-        );
+          return value;
+        }),
+      );
 
-        const lodging = yield* step.do(
-          "reserve-lodging",
-          Schema.String,
-          Effect.sync(() => {
-            const value = `lodging-${ref}`;
+      const lodging = yield* step.do(
+        "reserve-lodging",
+        Schema.String,
+        Effect.sync(() => {
+          const value = `lodging-${ref}`;
 
-            recordSupplierCall(dir, "reserve-lodging", ref, value);
+          recordSupplierCall(dir, "reserve-lodging", ref, value);
 
-            return value;
-          }),
-        );
+          return value;
+        }),
+      );
 
-        return { state: `${flight}+${lodging}` };
-      }),
+      return { state: `${flight}+${lodging}` };
+    }),
   });
 
 const BookParameters = Schema.Struct({ ref: Schema.String });

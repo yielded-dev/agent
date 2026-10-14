@@ -249,15 +249,14 @@ export class ScriptedModel extends Context.Service<
         });
 
         const languageModel = yield* LanguageModel.make({
-          generateText: (options) =>
-            Effect.gen(function* () {
-              const turn = yield* takeTurn(state, "generate", options);
+          generateText: Effect.fnUntraced(function* (options) {
+            const turn = yield* takeTurn(state, "generate", options);
 
-              yield* runAssertion(turn.assertRequest, options);
-              const generateTurn = yield* requireGenerateTurn(turn);
+            yield* runAssertion(turn.assertRequest, options);
+            const generateTurn = yield* requireGenerateTurn(turn);
 
-              return [...generateTurn.parts];
-            }),
+            return [...generateTurn.parts];
+          }),
           streamText: (options) =>
             Stream.unwrap(
               Effect.gen(function* () {

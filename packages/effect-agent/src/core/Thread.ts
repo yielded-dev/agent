@@ -433,16 +433,15 @@ export const layerMemory = Layer.effect(
         SynchronizedRef.get(state).pipe(
           Effect.flatMap((all) => findSnapshot(all, owner, threadId)),
         ),
-      export: (threadId) =>
-        Effect.gen(function* () {
-          const snapshot = yield* findSnapshot(yield* SynchronizedRef.get(state), owner, threadId);
+      export: Effect.fnUntraced(function* (threadId) {
+        const snapshot = yield* findSnapshot(yield* SynchronizedRef.get(state), owner, threadId);
 
-          return ThreadExport.make({
-            format: "effect-agent/ephemeral-thread@1",
-            exportedAt: DateTime.toUtc(DateTime.makeUnsafe(yield* Clock.currentTimeMillis)),
-            snapshot,
-          });
-        }),
+        return ThreadExport.make({
+          format: "effect-agent/ephemeral-thread@1",
+          exportedAt: DateTime.toUtc(DateTime.makeUnsafe(yield* Clock.currentTimeMillis)),
+          snapshot,
+        });
+      }),
     });
 
     return view(root);

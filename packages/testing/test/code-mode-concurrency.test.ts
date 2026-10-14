@@ -151,7 +151,7 @@ layer(Layer.mergeAll(ThreadHistory.layer, RunContextPreparationPassthrough), {
                     }),
                   ),
                 )
-              : Deferred.await(started).pipe(Effect.andThen(Effect.fail(new WriteFailure({})))),
+              : Deferred.await(started).pipe(Effect.andThen(Effect.fail(WriteFailure.make({})))),
       );
 
       yield* test.run;

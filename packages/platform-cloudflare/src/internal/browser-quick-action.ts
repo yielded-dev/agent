@@ -290,6 +290,7 @@ const navigationError = (message: string, cause?: unknown): PageCaptureNavigatio
 
 /** Preserve bounded remote diagnostics for the host without exposing their text to a model. */
 const privateResponseCause = (bodyText: string, response: Response): Error =>
+  // oxlint-disable-next-line effect/no-native-error -- Bounded foreign response diagnostic retains host metadata as cause, never as the Effect failure.
   new Error(boundedDiagnostic(bodyText), {
     cause: {
       provider: "cloudflare-browser-run",

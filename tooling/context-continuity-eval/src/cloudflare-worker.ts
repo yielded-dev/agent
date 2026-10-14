@@ -216,26 +216,30 @@ const application = Layer.unwrap(
     let snapshotUsage: Effect.Effect<ModelUsage> = Effect.succeed(state.usage);
 
     const auditSink = RequestAuditSink.of({
-      write: (event) =>
-        Effect.gen(function* () {
+      write: Effect.fnUntraced(
+        function* (event) {
           put(
             `audit-${event.request.toString().padStart(4, "0")}-${event.kind}`,
             yield* Schema.encodeEffect(Schema.fromJsonString(RequestAudit))(event),
           );
           state = { ...state, usage: yield* snapshotUsage };
           persist();
-        }).pipe(
-          Effect.mapError(() =>
-            EvaluationError.make({
-              stage: "evidence",
-              message: "Cannot persist Cloudflare request accounting",
-            }),
+        },
+        (effect) =>
+          effect.pipe(
+            Effect.mapError(() =>
+              EvaluationError.make({
+                stage: "evidence",
+                message: "Cannot persist Cloudflare request accounting",
+              }),
+            ),
           ),
-        ),
+      ),
     });
 
     const live = yield* makeLiveClient({
       model: identity.model,
+      serviceTier: "default",
       maxCostMicrousd: identity.maxCostMicrousd,
       initialUsage: state.usage,
       phase,
@@ -346,17 +350,16 @@ const application = Layer.unwrap(
         }
 
         const evalState = EvalState.of({
-          prepare: (index) =>
-            Effect.gen(function* () {
-              if (index > 12 || index < state.phase || index > state.phase + 1)
-                return yield* EvaluationError.make({
-                  stage: "phase",
-                  message: "Out-of-order Cloudflare phase",
-                });
-              state = { ...state, phase: index, activeBeforeSettlement: null };
-              yield* Ref.set(phase, index);
-              persist();
-            }),
+          prepare: Effect.fnUntraced(function* (index) {
+            if (index > 12 || index < state.phase || index > state.phase + 1)
+              return yield* EvaluationError.make({
+                stage: "phase",
+                message: "Out-of-order Cloudflare phase",
+              });
+            state = { ...state, phase: index, activeBeforeSettlement: null };
+            yield* Ref.set(phase, index);
+            persist();
+          }),
           snapshot: Effect.gen(function* () {
             const records = yield* readLog(threadId);
             const notes = yield* currentNotes;
@@ -398,8 +401,8 @@ const application = Layer.unwrap(
               }),
             ),
           ),
-          hit: (location) =>
-            Effect.gen(function* () {
+          hit: Effect.fnUntraced(
+            function* (location) {
               const boundary = RESTARTS.find(
                 (r) => r.phase === state.phase && r.location === location,
               );
@@ -463,7 +466,9 @@ const application = Layer.unwrap(
                   }),
               });
               ctx.abort("context continuity: planned native eviction");
-            }).pipe(Effect.provide(services), Effect.orDie),
+            },
+            (effect) => effect.pipe(Effect.provide(services), Effect.orDie),
+          ),
         });
 
         hitByContext.set(ctx, evalState.hit);

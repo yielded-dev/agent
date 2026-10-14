@@ -403,21 +403,20 @@ export class SupplierBookingDesk extends Context.Service<
         bookings: Ref.get(state).pipe(Effect.map((current) => [...current.bookings.values()])),
         callCount: (idempotencyKey) =>
           Ref.get(state).pipe(Effect.map((current) => current.counts.get(idempotencyKey) ?? 0)),
-        holdAfterWrite: (idempotencyKey) =>
-          Effect.gen(function* () {
-            const held = yield* Deferred.make<void>();
-            const release = yield* Deferred.make<void>();
+        holdAfterWrite: Effect.fnUntraced(function* (idempotencyKey) {
+          const held = yield* Deferred.make<void>();
+          const release = yield* Deferred.make<void>();
 
-            yield* Ref.update(state, (current) => ({
-              ...current,
-              holds: new Map(current.holds).set(idempotencyKey, { held, release }),
-            }));
+          yield* Ref.update(state, (current) => ({
+            ...current,
+            holds: new Map(current.holds).set(idempotencyKey, { held, release }),
+          }));
 
-            return {
-              held: Deferred.await(held),
-              release: Deferred.succeed(release, undefined).pipe(Effect.asVoid),
-            };
-          }),
+          return {
+            held: Deferred.await(held),
+            release: Deferred.succeed(release, undefined).pipe(Effect.asVoid),
+          };
+        }),
       });
     }),
   );

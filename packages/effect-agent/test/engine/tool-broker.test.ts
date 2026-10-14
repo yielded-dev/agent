@@ -108,7 +108,7 @@ const orchestrateCall = (id: string): ReadonlyArray<Response.StreamPartEncoded> 
  * outcomes as its Tool success so the test observes exactly what generated
  * code would.
  */
-const runOrchestrated = <
+const runOrchestrated = Effect.fnUntraced(function* <
   InnerTools extends Record<string, Tool.Any>,
   HookError = never,
   HookRequirements = never,
@@ -119,56 +119,54 @@ const runOrchestrated = <
   readonly passOptions?: ToolBrokerPassOptions;
   readonly agentPolicy?: AgentPolicy;
   readonly runOptions?: RunOptions<HookError, HookRequirements>;
-}) =>
-  Effect.gen(function* () {
-    const Orchestrate = Tool.make("orchestrate", {
-      parameters: Schema.Struct({ plan: Schema.String }),
-      success: Schema.Any,
-    }).addDependency(ToolBroker);
+}) {
+  const Orchestrate = Tool.make("orchestrate", {
+    parameters: Schema.Struct({ plan: Schema.String }),
+    success: Schema.Any,
+  }).addDependency(ToolBroker);
 
-    const outerToolkit = Toolkit.make(Orchestrate);
+  const outerToolkit = Toolkit.make(Orchestrate);
 
-    const definition = Agent.make("broker-host", {
-      input: Schema.Struct({ question: Schema.String }),
-      output: Schema.Struct({ answer: Schema.String }),
-      instructions: "Orchestrate.",
-      toolkit: outerToolkit,
-      policy: options.agentPolicy ?? policy(),
-    });
-
-    const model = scriptedModel(orchestrateCall("orchestrate-1"), '{"answer":"done"}');
-
-    const toolLayer = outerToolkit
-      .toLayer(
-        Effect.gen(function* () {
-          const inner = yield* options.innerToolkit;
-
-          return {
-            orchestrate: () =>
-              Effect.gen(function* () {
-                const broker = yield* ToolBroker;
-
-                // Inside a live Tool batch the broker is always bound; an
-                // unavailable broker here is a harness defect, not a test case.
-                const pass = yield* broker
-                  .openPass(inner, options.passOptions ?? { maxResultBytes: 1024 * 1024 })
-                  .pipe(Effect.orDie);
-
-                return yield* options.program(pass);
-              }),
-          };
-        }),
-      )
-      .pipe(Layer.provide(options.innerHandlers));
-
-    const result = yield* AgentRuntime.run(
-      Agent.withModel(definition, model),
-      { question: "go" },
-      options.runOptions ?? {},
-    ).pipe(Effect.provide(toolLayer), Effect.scoped);
-
-    return result;
+  const definition = Agent.make("broker-host", {
+    input: Schema.Struct({ question: Schema.String }),
+    output: Schema.Struct({ answer: Schema.String }),
+    instructions: "Orchestrate.",
+    toolkit: outerToolkit,
+    policy: options.agentPolicy ?? policy(),
   });
+
+  const model = scriptedModel(orchestrateCall("orchestrate-1"), '{"answer":"done"}');
+
+  const toolLayer = outerToolkit
+    .toLayer(
+      Effect.gen(function* () {
+        const inner = yield* options.innerToolkit;
+
+        return {
+          orchestrate: Effect.fnUntraced(function* () {
+            const broker = yield* ToolBroker;
+
+            // Inside a live Tool batch the broker is always bound; an
+            // unavailable broker here is a harness defect, not a test case.
+            const pass = yield* broker
+              .openPass(inner, options.passOptions ?? { maxResultBytes: 1024 * 1024 })
+              .pipe(Effect.orDie);
+
+            return yield* options.program(pass);
+          }),
+        };
+      }),
+    )
+    .pipe(Layer.provide(options.innerHandlers));
+
+  const result = yield* AgentRuntime.run(
+    Agent.withModel(definition, model),
+    { question: "go" },
+    options.runOptions ?? {},
+  ).pipe(Effect.provide(toolLayer), Effect.scoped);
+
+  return result;
+});
 
 const testLayer = Layer.mergeAll(
   identifiers,
@@ -212,21 +210,20 @@ layer(testLayer)("RUN-016 programmatic Tool broker", (it) => {
             const toolkit = yield* inner;
 
             return {
-              orchestrate: () =>
-                Effect.gen(function* () {
-                  entered += 1;
-                  if (entered === 2) yield* Deferred.succeed(bothEntered, undefined);
-                  const broker = yield* ToolBroker;
+              orchestrate: Effect.fnUntraced(function* () {
+                entered += 1;
+                if (entered === 2) yield* Deferred.succeed(bothEntered, undefined);
+                const broker = yield* ToolBroker;
 
-                  const pass = yield* broker
-                    .openPass(toolkit, { maxResultBytes: 1024 })
-                    .pipe(Effect.orDie);
+                const pass = yield* broker
+                  .openPass(toolkit, { maxResultBytes: 1024 })
+                  .pipe(Effect.orDie);
 
-                  return yield* pass.invoke({
-                    toolName: "query",
-                    encodedArguments: { sql: "select" },
-                  });
-                }),
+                return yield* pass.invoke({
+                  toolName: "query",
+                  encodedArguments: { sql: "select" },
+                });
+              }),
             };
           }),
         )
@@ -257,15 +254,14 @@ layer(testLayer)("RUN-016 programmatic Tool broker", (it) => {
             reserve: () => Effect.succeed(Effect.void),
             commit: () => Effect.void,
           },
-          reservePolicyUsage: (usage) =>
-            Effect.gen(function* () {
-              activeReservations += 1;
-              maxActiveReservations = Math.max(maxActiveReservations, activeReservations);
-              yield* Deferred.await(bothEntered);
-              yield* Effect.yieldNow;
-              reservations.push(usage.programmaticToolCalls);
-              activeReservations -= 1;
-            }),
+          reservePolicyUsage: Effect.fnUntraced(function* (usage) {
+            activeReservations += 1;
+            maxActiveReservations = Math.max(maxActiveReservations, activeReservations);
+            yield* Deferred.await(bothEntered);
+            yield* Effect.yieldNow;
+            reservations.push(usage.programmaticToolCalls);
+            activeReservations -= 1;
+          }),
         },
       }).pipe(Effect.provide(handlers));
       expect(reservations).toEqual([1, 2]);
@@ -368,42 +364,44 @@ layer(testLayer)("RUN-016 programmatic Tool broker", (it) => {
         innerToolkit,
         passOptions: { maxResultBytes: 1024, concurrency: 1 },
         innerHandlers: innerToolkit.toLayer({
-          query: () =>
-            Effect.gen(function* () {
+          query: Effect.fnUntraced(
+            function* () {
               starts++;
               yield* Deferred.succeed(started, undefined);
 
               return yield* Effect.never;
-            }).pipe(
-              Effect.ensuring(
-                Effect.sync(() => {
-                  finalized++;
-                }),
+            },
+            (effect) =>
+              effect.pipe(
+                Effect.ensuring(
+                  Effect.sync(() => {
+                    finalized++;
+                  }),
+                ),
               ),
-            ),
+          ),
         }),
-        program: (pass) =>
-          Effect.gen(function* () {
-            const first = yield* pass
-              .invoke({ toolName: "query", encodedArguments: { sql: "a" } })
-              .pipe(Effect.forkChild);
+        program: Effect.fnUntraced(function* (pass) {
+          const first = yield* pass
+            .invoke({ toolName: "query", encodedArguments: { sql: "a" } })
+            .pipe(Effect.forkChild);
 
-            yield* Deferred.await(started);
+          yield* Deferred.await(started);
 
-            const queued = yield* pass
-              .invoke({ toolName: "query", encodedArguments: { sql: "b" } })
-              .pipe(Effect.forkChild);
+          const queued = yield* pass
+            .invoke({ toolName: "query", encodedArguments: { sql: "b" } })
+            .pipe(Effect.forkChild);
 
-            yield* Effect.yieldNow;
-            yield* Fiber.interrupt(queued);
-            yield* Fiber.interrupt(first);
-            expect(yield* pass.snapshot).toEqual([
-              { sequenceIndex: 0, toolName: "query", status: "uncertain" },
-              { sequenceIndex: 1, toolName: "query", status: "not-started" },
-            ]);
+          yield* Effect.yieldNow;
+          yield* Fiber.interrupt(queued);
+          yield* Fiber.interrupt(first);
+          expect(yield* pass.snapshot).toEqual([
+            { sequenceIndex: 0, toolName: "query", status: "uncertain" },
+            { sequenceIndex: 1, toolName: "query", status: "not-started" },
+          ]);
 
-            return null;
-          }),
+          return null;
+        }),
       });
       expect(starts).toBe(1);
       expect(finalized).toBe(1);
@@ -435,37 +433,36 @@ layer(testLayer)("RUN-016 programmatic Tool broker", (it) => {
           maxResultBytes,
           redactResult: () => Effect.sync(() => values[nextResult++]),
         },
-        program: (pass) =>
-          Effect.gen(function* () {
-            const dynamicOutcome = yield* pass.invoke({
-              toolName: "loose",
-              encodedArguments: { key: "dynamic" },
-            });
+        program: Effect.fnUntraced(function* (pass) {
+          const dynamicOutcome = yield* pass.invoke({
+            toolName: "loose",
+            encodedArguments: { key: "dynamic" },
+          });
 
-            const retainedOutcome = yield* pass.invoke({
-              toolName: "loose",
-              encodedArguments: { key: "retained" },
-            });
+          const retainedOutcome = yield* pass.invoke({
+            toolName: "loose",
+            encodedArguments: { key: "retained" },
+          });
 
-            expanded = true;
-            retained.nested.value = "x".repeat(1_048_576);
-            for (const outcome of [dynamicOutcome, retainedOutcome]) {
-              expect(outcome._tag).toBe("ProgrammaticCallSuccess");
-              if (outcome._tag !== "ProgrammaticCallSuccess") {
-                throw new Error("Expected a JSON result within the broker limit");
-              }
-              // Every character in these fixtures is ASCII, so string length is UTF-8 bytes.
-              expect(JSON.stringify(outcome.encodedResult).length).toBeLessThanOrEqual(
-                maxResultBytes,
-              );
+          expanded = true;
+          retained.nested.value = "x".repeat(1_048_576);
+          for (const outcome of [dynamicOutcome, retainedOutcome]) {
+            expect(outcome._tag).toBe("ProgrammaticCallSuccess");
+            if (outcome._tag !== "ProgrammaticCallSuccess") {
+              throw new Error("Expected a JSON result within the broker limit");
             }
-            expect(dynamicOutcome).toMatchObject({ encodedResult: { value: "small" } });
-            expect(retainedOutcome).toMatchObject({
-              encodedResult: { nested: { value: "small" } },
-            });
+            // Every character in these fixtures is ASCII, so string length is UTF-8 bytes.
+            expect(JSON.stringify(outcome.encodedResult).length).toBeLessThanOrEqual(
+              maxResultBytes,
+            );
+          }
+          expect(dynamicOutcome).toMatchObject({ encodedResult: { value: "small" } });
+          expect(retainedOutcome).toMatchObject({
+            encodedResult: { nested: { value: "small" } },
+          });
 
-            return null;
-          }),
+          return null;
+        }),
       });
     }),
   );

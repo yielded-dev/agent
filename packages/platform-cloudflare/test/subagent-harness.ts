@@ -137,9 +137,9 @@ const withAbortedInstanceRetry = async <A>(probe: () => Promise<A>): Promise<A> 
   throw lastError;
 };
 
-const sqlProbe = <Row extends object>(
+const sqlProbe = <Row extends object, E>(
   thread: string,
-  query: (sql: SqlClientService.SqlClient) => Effect.Effect<ReadonlyArray<Row>, unknown>,
+  query: (sql: SqlClientService.SqlClient) => Effect.Effect<ReadonlyArray<Row>, E>,
 ): Promise<ReadonlyArray<Row>> =>
   withAbortedInstanceRetry(() =>
     runInDurableObject(stubFor(thread, SUBAGENTS), (_instance, state) =>

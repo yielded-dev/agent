@@ -21,7 +21,7 @@ const reply = <A, I>(schema: Schema.Codec<A, I>) =>
   ]);
 
 const unavailable = () =>
-  new PlannerError({ code: "storage", message: "Trip app data is unavailable. Please retry." });
+  PlannerError.make({ code: "storage", message: "Trip app data is unavailable. Please retry." });
 
 /** An owner-only native RPC, never exposed as an app-controlled service binding. */
 export const serveAppRepository = Effect.fn("serveAppRepository")(function* (encoded: string) {
@@ -108,7 +108,10 @@ export const OwnerAppRepositoryLive = Layer.unwrap(
 
     if (identity.threadId.startsWith("worker:")) {
       const denied = Effect.fail(
-        new PlannerError({ code: "invalid", message: "An authorized parent account is required." }),
+        PlannerError.make({
+          code: "invalid",
+          message: "An authorized parent account is required.",
+        }),
       );
 
       return Layer.succeed(AppRepository, {

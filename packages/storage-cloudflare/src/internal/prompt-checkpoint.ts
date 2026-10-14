@@ -107,8 +107,8 @@ export const makePromptCheckpoints = (
         }),
       )
       .pipe(Effect.orElseSucceed(() => Option.none())),
-  save: (input) =>
-    Effect.gen(function* () {
+  save: Effect.fnUntraced(
+    function* (input) {
       const checkpoint = yield* decodeWrite(input);
 
       if (
@@ -146,13 +146,16 @@ export const makePromptCheckpoints = (
           }),
         )
         .pipe(Effect.provideService(SqlClient, sql));
-    }).pipe(
-      Effect.mapError((cause) =>
-        ThreadStoreError.make({
-          operation: "save prompt checkpoint",
-          message: "Unable to retain a disposable prompt checkpoint",
-          cause,
-        }),
+    },
+    (effect) =>
+      effect.pipe(
+        Effect.mapError((cause) =>
+          ThreadStoreError.make({
+            operation: "save prompt checkpoint",
+            message: "Unable to retain a disposable prompt checkpoint",
+            cause,
+          }),
+        ),
       ),
-    ),
+  ),
 });

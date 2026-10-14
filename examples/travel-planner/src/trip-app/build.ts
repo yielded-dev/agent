@@ -22,7 +22,7 @@ import { AppSourceStore, appSourceLayer } from "./source.ts";
 
 const MAX_FILE = 4 * 1024 * 1024;
 const MAX_BUILD = 24 * 1024 * 1024;
-const failed = (message: string) => new PlannerError({ code: "unavailable", message });
+const failed = (message: string) => PlannerError.make({ code: "unavailable", message });
 const badManifest = () => failed("Invalid app build manifest.");
 
 // The Sandbox SDK currently exposes container capacity through its wrapped cause,
@@ -432,7 +432,7 @@ export const recordBuildProgress = Effect.fn("recordTripAppBuildProgress")(funct
     if (saved.failure.code !== "conflict") return yield* saved.failure;
   }
 
-  return yield* new PlannerError({
+  return yield* PlannerError.make({
     code: "conflict",
     message: "The app changed while recording build progress.",
   });
@@ -581,7 +581,7 @@ export const settleBuild = Effect.fn("settleTripAppBuild")(function* (
     if (saved.failure.code !== "conflict") return yield* saved.failure;
   }
 
-  return yield* new PlannerError({
+  return yield* PlannerError.make({
     code: "conflict",
     message: "The app changed repeatedly while recording its build. Retry the build.",
   });
@@ -617,8 +617,8 @@ export const runSiteBuild = Effect.fn("runSiteBuild")(function* (request: AppBui
 });
 
 export class SiteBuild extends SiteBuildBinding.make(BuildHostLive, {
-  run: (request) =>
-    Effect.gen(function* () {
+  run: Effect.fnUntraced(
+    function* (request) {
       const env = yield* WorkerEnvironment;
 
       if (!env.APP_BUILDS || !env.APP_DOMAIN)
@@ -638,5 +638,7 @@ export class SiteBuild extends SiteBuildBinding.make(BuildHostLive, {
       return yield* runSiteBuild(request).pipe(
         Effect.provide(Layer.merge(apps, appSourceLayer(env.ARTIFACTS, env.ARTIFACTS_GIT_BASE))),
       );
-    }).pipe(Effect.provide(CloudflareTracer.layer)),
+    },
+    (effect) => effect.pipe(Effect.provide(CloudflareTracer.layer)),
+  ),
 }) {}

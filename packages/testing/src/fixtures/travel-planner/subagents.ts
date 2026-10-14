@@ -129,6 +129,7 @@ const requireDestinationFacts = (destination: string): DestinationFacts => {
   const facts = guideFacts.get(destination);
 
   if (facts === undefined) {
+    // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Synchronous deterministic fixture lookup rejects programmer-supplied destination configuration.
     throw new Error(`No deterministic guide entry exists for destination ${destination}`);
   }
 
@@ -229,17 +230,16 @@ export const destinationResearchDelegation = Subagent.make("delegate_destination
   parameters: DestinationResearchRequest,
   success: DestinationResearchFindings,
   failure: DestinationResearchFailed,
-  prepareInput: (request) =>
-    Effect.gen(function* () {
-      const gate = yield* ResearchDispatchGate;
+  prepareInput: Effect.fnUntraced(function* (request) {
+    const gate = yield* ResearchDispatchGate;
 
-      yield* gate.awaitDispatch(request.destination);
+    yield* gate.awaitDispatch(request.destination);
 
-      return DestinationBrief.make({
-        destination: request.destination,
-        focus: `research:${request.focus}`,
-      });
-    }),
+    return DestinationBrief.make({
+      destination: request.destination,
+      focus: `research:${request.focus}`,
+    });
+  }),
   // The explicit declassification boundary (SUB-015): only the advisory
   // crosses to the parent; guide highlights stay in the child Thread.
   projectResult: (report) =>
@@ -466,82 +466,85 @@ const researcherReportParts = (destination: string): ReadonlyArray<Response.Stre
  * finalization is observed per child — the same acquire/release counting the
  * catalog Layers use to prove interruption reaches every finalizer.
  */
-export const makeDestinationResearcherModel = (destinations: ReadonlyArray<string>) =>
-  Effect.gen(function* () {
-    const lifecycle = yield* CatalogLifecycle;
-    const prompts = yield* Ref.make<ReadonlyArray<string>>([]);
-    const gates = new Map<string, ResearcherGates>();
+export const makeDestinationResearcherModel = Effect.fnUntraced(function* (
+  destinations: ReadonlyArray<string>,
+) {
+  const lifecycle = yield* CatalogLifecycle;
+  const prompts = yield* Ref.make<ReadonlyArray<string>>([]);
+  const gates = new Map<string, ResearcherGates>();
 
-    for (const destination of destinations) {
-      gates.set(destination, {
-        started: yield* Deferred.make<void>(),
-        release: yield* Deferred.make<void>(),
-      });
-    }
+  for (const destination of destinations) {
+    gates.set(destination, {
+      started: yield* Deferred.make<void>(),
+      release: yield* Deferred.make<void>(),
+    });
+  }
 
-    const gatesFor = (destination: string): Effect.Effect<ResearcherGates> =>
-      Effect.suspend(() => {
-        const entry = gates.get(destination);
+  const gatesFor = (destination: string): Effect.Effect<ResearcherGates> =>
+    Effect.suspend(() => {
+      const entry = gates.get(destination);
 
-        return entry === undefined
-          ? Effect.die(new Error(`No researcher gates exist for destination ${destination}`))
-          : Effect.succeed(entry);
-      });
+      return entry === undefined
+        ? // oxlint-disable-next-line effect/no-native-error -- Missing fixture gate is a native test assertion defect.
+          Effect.die(new Error(`No researcher gates exist for destination ${destination}`))
+        : Effect.succeed(entry);
+    });
 
-    const controls: DestinationResearcherControls = {
-      awaitStarted: (destination) =>
-        gatesFor(destination).pipe(Effect.flatMap((entry) => Deferred.await(entry.started))),
-      release: (destination) =>
-        gatesFor(destination).pipe(
-          Effect.flatMap((entry) => Deferred.succeed(entry.release, undefined)),
-          Effect.asVoid,
-        ),
-      prompts: Ref.get(prompts),
-    };
-
-    const model = Model.make(
-      "scripted",
-      "destination-researcher-scripted",
-      Layer.effect(
-        LanguageModel.LanguageModel,
-        Effect.gen(function* () {
-          yield* Effect.acquireRelease(lifecycle.markAcquired, () => lifecycle.markFinalized);
-          const turn = yield* Ref.make(0);
-
-          return yield* LanguageModel.make({
-            generateText: () => Effect.succeed([]),
-            streamText: (options) =>
-              Stream.unwrap(
-                Effect.gen(function* () {
-                  const promptJson = JSON.stringify(options.prompt.content);
-
-                  const destination = destinations.find((candidate) =>
-                    promptJson.includes(candidate),
-                  );
-
-                  if (destination === undefined) {
-                    return yield* Effect.die(
-                      new Error("The researcher prompt names no scripted destination"),
-                    );
-                  }
-                  const entry = yield* gatesFor(destination);
-                  const index = yield* Ref.getAndUpdate(turn, (value) => value + 1);
-
-                  if (index === 0) {
-                    yield* Ref.update(prompts, (previous) => [...previous, promptJson]);
-                    yield* Deferred.succeed(entry.started, undefined);
-
-                    return Stream.fromIterable(researcherLookupParts(destination));
-                  }
-                  yield* Deferred.await(entry.release);
-
-                  return Stream.fromIterable(researcherReportParts(destination));
-                }),
-              ),
-          });
-        }),
+  const controls: DestinationResearcherControls = {
+    awaitStarted: (destination) =>
+      gatesFor(destination).pipe(Effect.flatMap((entry) => Deferred.await(entry.started))),
+    release: (destination) =>
+      gatesFor(destination).pipe(
+        Effect.flatMap((entry) => Deferred.succeed(entry.release, undefined)),
+        Effect.asVoid,
       ),
-    );
+    prompts: Ref.get(prompts),
+  };
 
-    return { controls, model };
-  });
+  const model = Model.make(
+    "scripted",
+    "destination-researcher-scripted",
+    Layer.effect(
+      LanguageModel.LanguageModel,
+      Effect.gen(function* () {
+        yield* Effect.acquireRelease(lifecycle.markAcquired, () => lifecycle.markFinalized);
+        const turn = yield* Ref.make(0);
+
+        return yield* LanguageModel.make({
+          generateText: () => Effect.succeed([]),
+          streamText: (options) =>
+            Stream.unwrap(
+              Effect.gen(function* () {
+                const promptJson = JSON.stringify(options.prompt.content);
+
+                const destination = destinations.find((candidate) =>
+                  promptJson.includes(candidate),
+                );
+
+                if (destination === undefined) {
+                  return yield* Effect.die(
+                    // oxlint-disable-next-line effect/no-native-error -- Deterministic model fixture assertion remains a native defect.
+                    new Error("The researcher prompt names no scripted destination"),
+                  );
+                }
+                const entry = yield* gatesFor(destination);
+                const index = yield* Ref.getAndUpdate(turn, (value) => value + 1);
+
+                if (index === 0) {
+                  yield* Ref.update(prompts, (previous) => [...previous, promptJson]);
+                  yield* Deferred.succeed(entry.started, undefined);
+
+                  return Stream.fromIterable(researcherLookupParts(destination));
+                }
+                yield* Deferred.await(entry.release);
+
+                return Stream.fromIterable(researcherReportParts(destination));
+              }),
+            ),
+        });
+      }),
+    ),
+  );
+
+  return { controls, model };
+});

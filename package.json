@@ -10,8 +10,7 @@
   ],
   "type": "module",
   "scripts": {
-    "prepare": "effect-tsgo patch --typescript && vp config --no-agent --hooks-dir .vite-hooks",
-    "patch:tsgo": "effect-tsgo patch --typescript",
+    "prepare": "vp run patch:tsgo && vp config --no-agent --hooks-dir .vite-hooks",
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "ci:version": "changeset version && vp install --ignore-scripts",
@@ -20,12 +19,15 @@
     "docs:dev": "vp run -F @yielded/agent-docs dev",
     "docs:build": "vp run -F @yielded/agent-docs build",
     "docs:preview": "vp run -F @yielded/agent-docs preview",
-    "check": "vp check && vp run -r --concurrency-limit 1 check && tsc --noEmit -p scripts/tsconfig.json && vp run check:exports && vp run check:record-format && vp run check:deploy && bun scripts/verify-package-purity.ts",
+    "check": "vp check && vp run typecheck && vp run check:exports && vp run check:record-format && vp run check:deploy && bun scripts/verify-package-purity.ts",
     "check:exports": "bun scripts/verify-package-exports.ts",
     "test": "vp run -r --parallel --concurrency-limit 4 test",
     "build": "vp run -r build && vp run action:build",
     "ready": "vp run check && vp run test && vp run build",
-    "check:record-format": "bun scripts/verify-record-format.ts"
+    "check:record-format": "bun scripts/verify-record-format.ts",
+    "typecheck": "vp run patch:tsgo && vp run -F './packages/*' -F './examples/*' -F './tooling/*' -F './docs' --concurrency-limit 1 check && vp run check:scripts",
+    "check:scripts": "tsc --noEmit -p scripts/tsconfig.json",
+    "check:docs": "tsc --noEmit -p docs/tsconfig.json"
   },
   "devDependencies": {
     "@changesets/changelog-github": "1.0.1",
@@ -97,7 +99,7 @@
     "@effect/sql-pg": "4.0.3",
     "@effect/sql-sqlite-do": "4.0.3",
     "@effect/sql-sqlite-node": "4.0.3",
-    "@effect/tsgo": "0.48.1",
+    "@effect/tsgo": "0.51.1",
     "@effect/vitest": "4.0.3",
     "@fontsource-variable/ibm-plex-sans": "5.3.0",
     "@fontsource/ibm-plex-mono": "5.3.0",
@@ -153,7 +155,8 @@
     }
   },
   "patchedDependencies": {
-    "effect@4.0.3": "patches/effect@4.0.3-stream-decoder.patch"
+    "effect@4.0.3": "patches/effect@4.0.3-stream-decoder.patch",
+    "@effect/sql-sqlite-do@4.0.3": "patches/effect-sql-sqlite-do@4.0.3-borrower.patch"
   },
   "trustedDependencies": [
     "@effect/tsgo-darwin-arm64",

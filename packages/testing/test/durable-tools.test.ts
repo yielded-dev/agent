@@ -120,34 +120,35 @@ const toolTurn = (
  * Scripted model whose call counter and captured request prompts live OUTSIDE the Model Layer,
  * so they survive Layer rebuilds across Attempts (each Attempt provides the Model afresh).
  */
-const makeScriptedModel = (script: (call: number) => ReadonlyArray<Response.StreamPartEncoded>) =>
-  Effect.gen(function* () {
-    const calls = yield* Ref.make(0);
-    const prompts: Array<Prompt.Prompt> = [];
+const makeScriptedModel = Effect.fnUntraced(function* (
+  script: (call: number) => ReadonlyArray<Response.StreamPartEncoded>,
+) {
+  const calls = yield* Ref.make(0);
+  const prompts: Array<Prompt.Prompt> = [];
 
-    const model = Model.make(
-      "scripted",
-      "durable-tools-test",
-      Layer.effect(
-        LanguageModel.LanguageModel,
-        LanguageModel.make({
-          generateText: () => Effect.succeed([]),
-          streamText: (request) =>
-            Stream.unwrap(
-              Ref.getAndUpdate(calls, (call) => call + 1).pipe(
-                Effect.map((call) => {
-                  prompts.push(request.prompt);
+  const model = Model.make(
+    "scripted",
+    "durable-tools-test",
+    Layer.effect(
+      LanguageModel.LanguageModel,
+      LanguageModel.make({
+        generateText: () => Effect.succeed([]),
+        streamText: (request) =>
+          Stream.unwrap(
+            Ref.getAndUpdate(calls, (call) => call + 1).pipe(
+              Effect.map((call) => {
+                prompts.push(request.prompt);
 
-                  return Stream.fromIterable(script(call));
-                }),
-              ),
+                return Stream.fromIterable(script(call));
+              }),
             ),
-        }),
-      ),
-    );
+          ),
+      }),
+    ),
+  );
 
-    return { model, prompts };
-  });
+  return { model, prompts };
+});
 
 const policy = AgentPolicy.make({
   maxTurns: 3,
@@ -199,21 +200,22 @@ const itineraryDefinition = Agent.make("durable-itinerary", {
 });
 
 /** Per-ref supplier call counters that survive Tool-Layer rebuilds across Attempts. */
-const makeBookDesk = (tools: typeof bookTools | typeof bookIdempotentTools) =>
-  Effect.gen(function* () {
-    const calls = yield* Ref.make<ReadonlyMap<string, number>>(new Map());
+const makeBookDesk = Effect.fnUntraced(function* (
+  tools: typeof bookTools | typeof bookIdempotentTools,
+) {
+  const calls = yield* Ref.make<ReadonlyMap<string, number>>(new Map());
 
-    const toolLayer = tools.toLayer({
-      book: ({ ref }) =>
-        Ref.update(calls, (current) => new Map(current).set(ref, (current.get(ref) ?? 0) + 1)).pipe(
-          Effect.as({ confirmation: `confirmed-${ref}` }),
-        ),
-    });
-
-    const count = (ref: string) => Ref.get(calls).pipe(Effect.map((m) => m.get(ref) ?? 0));
-
-    return { toolLayer, count };
+  const toolLayer = tools.toLayer({
+    book: ({ ref }) =>
+      Ref.update(calls, (current) => new Map(current).set(ref, (current.get(ref) ?? 0) + 1)).pipe(
+        Effect.as({ confirmation: `confirmed-${ref}` }),
+      ),
   });
+
+  const count = (ref: string) => Ref.get(calls).pipe(Effect.map((m) => m.get(ref) ?? 0));
+
+  return { toolLayer, count };
+});
 
 /** Test control replacing the reconciliation policy per test (default: fail-closed Uncertain). */
 class ReconcilerTestControl extends Context.Service<
@@ -327,41 +329,38 @@ const testLayer = DurableAgentRuntime.layerWithServices
   .pipe(Layer.provide(runStorageLayer()))
   .pipe(Layer.provideMerge(baseLayer));
 
-const readLog = (threadId: string) =>
-  Effect.gen(function* () {
-    const store = yield* ThreadStore;
+const readLog = Effect.fnUntraced(function* (threadId: string) {
+  const store = yield* ThreadStore;
 
-    return yield* Stream.runCollect(
-      store.read(
-        ThreadRead.make({
-          threadId: decodeThreadId(threadId),
-          limit: 1_024,
-        }),
-      ),
-    );
-  });
+  return yield* Stream.runCollect(
+    store.read(
+      ThreadRead.make({
+        threadId: decodeThreadId(threadId),
+        limit: 1_024,
+      }),
+    ),
+  );
+});
 
-const lookupState = (submissionId: SubmissionId) =>
-  Effect.gen(function* () {
-    const ledger = yield* SubmissionLedger;
-    const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
+const lookupState = Effect.fnUntraced(function* (submissionId: SubmissionId) {
+  const ledger = yield* SubmissionLedger;
+  const snapshot = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
 
-    expect(Option.isSome(snapshot)).toBe(true);
-    if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
+  expect(Option.isSome(snapshot)).toBe(true);
+  if (Option.isNone(snapshot)) throw new Error("Expected the Submission to exist");
 
-    return snapshot.value.state;
-  });
+  return snapshot.value.state;
+});
 
-const armFailpoint = (location: DurableRuntimeFailpointLocation) =>
-  Effect.gen(function* () {
-    const control = yield* DurableRuntimeFailpointTestControl;
+const armFailpoint = Effect.fnUntraced(function* (location: DurableRuntimeFailpointLocation) {
+  const control = yield* DurableRuntimeFailpointTestControl;
 
-    yield* control.setHandler((hitLocation) =>
-      hitLocation === location
-        ? Effect.fail(DurableRuntimeFailpointError.make({ location: hitLocation }))
-        : Effect.void,
-    );
-  });
+  yield* control.setHandler((hitLocation) =>
+    hitLocation === location
+      ? Effect.fail(DurableRuntimeFailpointError.make({ location: hitLocation }))
+      : Effect.void,
+  );
+});
 
 const clearFailpoint = Effect.gen(function* () {
   const control = yield* DurableRuntimeFailpointTestControl;
@@ -1982,22 +1981,21 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
           const tools = Toolkit.make(Itinerary.annotate(ToolExecutionClass, "readonly"));
 
           const toolLayer = tools.toLayer({
-            itinerary: () =>
-              Effect.gen(function* () {
-                const step = yield* DurableStep;
+            itinerary: Effect.fnUntraced(function* () {
+              const step = yield* DurableStep;
 
-                for (let index = 0; index < (calls === 1 ? 5 : 3); index++) {
-                  yield* step.do(
-                    `large-${index}`,
-                    Schema.String,
-                    Ref.update(executed, (count) => count + 1).pipe(
-                      Effect.as("v".repeat(900 * 1024)),
-                    ),
-                  );
-                }
+              for (let index = 0; index < (calls === 1 ? 5 : 3); index++) {
+                yield* step.do(
+                  `large-${index}`,
+                  Schema.String,
+                  Ref.update(executed, (count) => count + 1).pipe(
+                    Effect.as("v".repeat(900 * 1024)),
+                  ),
+                );
+              }
 
-                return { state: "saved" };
-              }),
+              return { state: "saved" };
+            }),
           });
 
           const definition = Agent.make(`durable-step-capacity-${calls}`, {
@@ -2061,18 +2059,17 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
         const executed = yield* Ref.make<ReadonlyArray<string>>([]);
 
         const toolLayer = itineraryTools.toLayer({
-          itinerary: ({ ref }) =>
-            Effect.gen(function* () {
-              const step = yield* DurableStep;
+          itinerary: Effect.fnUntraced(function* ({ ref }) {
+            const step = yield* DurableStep;
 
-              const state = yield* step.do(
-                ref,
-                Schema.String,
-                Ref.update(executed, (names) => [...names, ref]).pipe(Effect.as(ref)),
-              );
+            const state = yield* step.do(
+              ref,
+              Schema.String,
+              Ref.update(executed, (names) => [...names, ref]).pipe(Effect.as(ref)),
+            );
 
-              return { state };
-            }),
+            return { state };
+          }),
         });
 
         const definition = Agent.make("durable-step-identities", {

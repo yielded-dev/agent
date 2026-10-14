@@ -45,7 +45,9 @@ export const decodeExportRecordJson = (
 // Both codecs validate RecordJson before this getter; decode the supported view once.
 const decodeView = SchemaGetter.transformEffect((value: RecordJson) =>
   decodeRecord(value).pipe(
-    Effect.map((record) => new ExportedRecord({ ...record, wire: value }, { disableChecks: true })),
+    Effect.map((record) =>
+      ExportedRecord.make({ ...record, wire: value }, { disableChecks: true }),
+    ),
     Effect.mapError((error) => error.issue),
   ),
 );
@@ -104,8 +106,8 @@ export const ReadEnvelope = Schema.Struct({
   record: ReadRecord,
 }).pipe(
   Schema.decodeTo(Schema.toType(CanonicalRecordEnvelope), {
-    decode: SchemaGetter.transform(
-      (fields) => new CanonicalRecordEnvelope(fields, { disableChecks: true }),
+    decode: SchemaGetter.transform((fields) =>
+      CanonicalRecordEnvelope.make(fields, { disableChecks: true }),
     ),
     encode: SchemaGetter.transform((envelope) => envelope),
   }),

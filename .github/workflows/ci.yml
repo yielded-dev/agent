@@ -133,7 +133,7 @@ jobs:
         with:
           node-version: "24.20.0"
           run-install: false
-          cache: true
+          cache: false
 
       - name: Install trusted base dependencies
         uses: ./.github/actions/run-ci
@@ -353,6 +353,8 @@ jobs:
           timeout: 8m
           command: vp run -v build
 
+      # Publication trusts Build success. Validation and artifact upload must
+      # remain unconditional and fail this job on error.
       - name: Validate versioned release packages
         run: |
           ./node_modules/.bin/vp fmt --check
