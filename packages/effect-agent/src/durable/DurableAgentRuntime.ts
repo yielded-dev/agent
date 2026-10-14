@@ -158,7 +158,7 @@ import {
 } from "./internal/agent-registration.ts";
 import { makeAgentUpdateRuntime } from "./internal/agent-updates.ts";
 import { inspectForeignDiagnostic, safeUnknownString } from "./internal/foreign-diagnostic.ts";
-import { initialContext } from "./internal/initial-context.ts";
+import { initialContext, type InitialContextInput } from "./internal/initial-context.ts";
 import {
   makeJournalMetadata,
   type JournalMetadata,
@@ -403,6 +403,9 @@ import {
   getRunInput,
   ThreadReader,
   MAX_THREAD_EXPORT_PAGE_BYTES,
+  PreparedAppend,
+  type CommitBatch,
+  type ExecutionUpdate,
 } from "./ThreadStore.ts";
 import {
   type WorkIndexRebuildRequest,
@@ -593,6 +596,11 @@ export { threadCreatedBatchId, threadCreatedRecordId } from "./internal/thread-i
 /** Deterministic batch identity of one executed recovery decision's audit append (DUR-013). */
 export const recoveryRepairBatchId = (submissionId: SubmissionId, decisionTag: string): BatchId =>
   decodeBatchId(`repair:${submissionId}:${decisionTag}`);
+
+const isOriginalInputRecord = (
+  record: RecordEnvelope,
+): record is RecordEnvelope & { readonly payload: UserInputRecorded } =>
+  record.payload._tag === "UserInputRecorded";
 
 /** Deterministic record identity of one executed recovery decision's `RepairAnnotated` record. */
 export const recoveryRepairRecordId = (submissionId: SubmissionId, decisionTag: string): RecordId =>
@@ -1364,7 +1372,7 @@ interface OpenCallReview {
 
 interface InitialJournalSource {
   records: ReadonlyArray<JournalRecordEnvelope> | undefined;
-  readonly original: CanonicalRecordEnvelope;
+  readonly original: InitialContextInput;
   readonly suffix: ReadonlyArray<CanonicalRecordEnvelope>;
   cacheable: boolean;
   readonly prefix?: CachedPromptHistory;
@@ -1472,7 +1480,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
   // Rebuild the pinned admission and captured suffix using this runtime's host dependencies.
   const readInitialJournal = (
-    original: CanonicalRecordEnvelope,
+    original: InitialContextInput,
     suffix: ReadonlyArray<CanonicalRecordEnvelope>,
   ) =>
     initialContext(original).pipe(
@@ -2617,7 +2625,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       Effect.map(({ owned }) => owned),
     );
 
-  const withProgressSession = Effect.fnUntraced(function* (session: RunStorageSession) {
+  const withProgressSession = Effect.fnUntraced(function* (
+    session: RunStorageSession,
+    originalInput?: () => InitialContextInput | undefined,
+  ) {
     const { owned, progress } = yield* withProgress(session);
 
     activeProgress.set(session.threadId, { writer: progress });
@@ -2628,9 +2639,44 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       }),
     );
 
+    const inputWriter =
+      session.appendInput === undefined
+        ? undefined
+        : {
+            ...session,
+            append: session.appendInput,
+          };
+
     const wrapped: RunStorageSession = {
       ...session,
       append: owned.append,
+      ...(inputWriter === undefined
+        ? {}
+        : {
+            appendInput: (batch: CommitBatch) =>
+              storageOwner.withProgress(
+                session.threadId,
+                storageOwner.withMutation(
+                  Effect.gen(function* () {
+                    yield* session.checkActive;
+                    // The captured empty canonical prefix is enforced again by the append tail and
+                    // checkpoint revision-zero CAS. It is not a cache entry across preparation IO.
+                    const original = originalInput?.();
+                    const commit = progress.commit(batch);
+
+                    return yield* (
+                      original === undefined
+                        ? commit
+                        : progress.withVerifiedEmptyRun(
+                            runIdForSubmission(session.claim.submissionId),
+                            CanonicalSequence.make(original.sequence - 1),
+                            commit,
+                          )
+                    ).pipe(Effect.provideService(CurrentRunWriter, inputWriter));
+                  }),
+                ),
+              ),
+          }),
       publishSettlement: (batch) =>
         progress.publish(batch).pipe(Effect.provideService(CurrentRunSettlement, session)),
     };
@@ -3167,6 +3213,20 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     );
   });
 
+  const prepareOriginalInput = (submission: SubmissionSnapshot) =>
+    makeEnvelope(
+      submissionInputRecordId(submission.submissionId),
+      UserInputRecorded.make({
+        submissionId: submission.submissionId,
+        kind: "user",
+        runId: runIdForSubmission(submission.submissionId),
+        input: submission.inputPayload,
+        ...(submission.messageAdmission === undefined
+          ? {}
+          : { messageAdmission: submission.messageAdmission }),
+      }),
+    );
+
   /**
    * Plan step 2: append the deterministic `UserInputRecorded` record (batch idempotency makes it
    * exactly-once canonical, DUR-007) and mark it applied. When canonical history already carries
@@ -3192,18 +3252,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       return;
     }
 
-    const envelope = yield* makeEnvelope(
-      recordId,
-      UserInputRecorded.make({
-        submissionId,
-        kind: "user",
-        runId: runIdForSubmission(submissionId),
-        input: submission.inputPayload,
-        ...(submission.messageAdmission === undefined
-          ? {}
-          : { messageAdmission: submission.messageAdmission }),
-      }),
-    );
+    const envelope = yield* prepareOriginalInput(submission);
 
     const result = yield* appendBatch(
       ctx,
@@ -3254,6 +3303,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     maxDurationMillis: number,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     operational: ReadonlyArray<RecordEnvelope>,
+    input?: { readonly record: RecordEnvelope; readonly append: RunWriter["append"] },
   ) {
     const writer = yield* CurrentRunWriter;
     const runId = runIdForSubmission(submission.submissionId);
@@ -3304,13 +3354,21 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       }
       yield* hit("run:before-start-append");
       yield* appendBatch(
-        writer,
+        input === undefined ? writer : { threadId: writer.threadId, append: input.append },
         CanonicalBatch.make({
-          batchId: runStartedBatchId(runId),
+          batchId:
+            input === undefined
+              ? runStartedBatchId(runId)
+              : submissionInputBatchId(submission.submissionId),
           producerId: config.producerId,
-          records: [start, ...(context === undefined ? [] : [context])],
+          records: [
+            input?.record ?? start,
+            ...(input === undefined ? [] : [start]),
+            ...(context === undefined ? [] : [context]),
+          ],
         }),
       );
+      if (input !== undefined) yield* hit("input:after-canonical-append");
       committed = true;
       yield* hit("run:after-start-append");
     });
@@ -4856,12 +4914,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       // Unrelated Thread traffic does not invalidate an already validated owner projection.
       const projectionThrough = Math.max(progressThrough ?? 0, records.at(-1)?.sequence ?? 0);
 
-      const originalInput = records.find(
-        ({ record: { payload } }) =>
-          payload._tag === "UserInputRecorded" &&
-          payload.kind === "user" &&
-          payload.submissionId === submissionId,
-      );
+      const originalInput =
+        initialJournal?.original ??
+        records.find(
+          ({ record: { payload } }) =>
+            payload._tag === "UserInputRecorded" &&
+            payload.kind === "user" &&
+            payload.submissionId === submissionId,
+        );
 
       if (originalInput === undefined)
         return yield* RunJournalError.make({ message: "Run has no original context boundary" });
@@ -5839,6 +5899,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               const start = yield* CurrentRunStart;
 
               yield* start.commit(yield* makeEnvelope(recordId, payload));
+              knownIds.add(originalInput.record.recordId);
               knownIds.add(runStartedRecordId(runId));
               knownIds.add(recordId);
               historyEvidence.clear();
@@ -8164,6 +8225,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       // before suspension; only acknowledged ranges enter this Attempt's disposable suffix.
       let committedPromptSuffix: CommittedPromptSuffix | undefined;
       const storageSession = session;
+      let pendingOriginal: InitialContextInput | undefined;
 
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
@@ -8174,6 +8236,27 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const promptSession: RunStorageSession = {
         ...storageSession,
+        ...(storageSession.appendInput === undefined
+          ? {}
+          : {
+              appendInput: (batch: CommitBatch, executions?: ReadonlyArray<ExecutionUpdate>) =>
+                storageSession.appendInput!(batch, executions).pipe(
+                  Effect.tap((result) =>
+                    Effect.sync(() => {
+                      if (
+                        pendingOriginal !== undefined &&
+                        !result.replayed &&
+                        result.firstSequence === pendingOriginal.sequence
+                      )
+                        committedPromptSuffix = makeCommittedPromptSuffix({
+                          threadId: storageSession.threadId,
+                          sequence: result.firstSequence,
+                          record: batch.records[0]!,
+                        });
+                    }),
+                  ),
+                ),
+            }),
         append: (batch, executions) => {
           const suffix = committedPromptSuffix;
           const append = storageSession.append(batch, executions);
@@ -8209,7 +8292,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         },
       };
 
-      session = yield* withProgressSession(promptSession);
+      session = yield* withProgressSession(promptSession, () => pendingOriginal);
       const { claim, threadId } = session;
       const submissionId = claim.submissionId;
 
@@ -8254,6 +8337,41 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   view.records.some(({ record }) => record.payload._tag !== "ThreadCreated")
                 )
                   return undefined;
+                if (session.appendInput !== undefined) {
+                  const captured = yield* PreparedAppend.capture(
+                    AppendRequest.make({
+                      threadId,
+                      expectedTailSequence: before,
+                      batch: CanonicalBatch.make({
+                        batchId: submissionInputBatchId(submissionId),
+                        producerId: config.producerId,
+                        records: [yield* prepareOriginalInput(submission)],
+                      }),
+                    }),
+                  );
+
+                  const record = captured.records[0]!.canonical;
+
+                  if (!isOriginalInputRecord(record))
+                    return yield* RunJournalError.make({
+                      message: "Captured startup has no original input",
+                    });
+                  pendingOriginal = {
+                    threadId,
+                    sequence: CanonicalSequence.make(before + 1),
+                    record,
+                  };
+
+                  const start = yield* makeRunStart(
+                    submission,
+                    Duration.toMillis(registeredAgent.definition.policy.maxDuration),
+                    view.records,
+                    view.operational,
+                    { record, append: session.appendInput },
+                  ).pipe(Effect.provideService(CurrentRunWriter, session));
+
+                  return { snapshot, through: before, view, start, input: pendingOriginal };
+                }
                 const progress = progressWriters.get(session);
 
                 const applyInput = applyCanonicalInput(
@@ -8303,6 +8421,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                     operational: accepted.operational,
                   },
                   start,
+                  input: undefined,
                 };
               }),
             )
@@ -8737,12 +8856,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         let initialJournal: InitialJournalSource | undefined;
 
         if (view.context === undefined) {
-          const original = currentRecords.find(
-            ({ record }) =>
-              record.payload._tag === "UserInputRecorded" &&
-              record.payload.kind === "user" &&
-              record.payload.submissionId === submissionId,
-          );
+          const original =
+            initialization?.input ??
+            currentRecords.find(
+              ({ record }) =>
+                record.payload._tag === "UserInputRecorded" &&
+                record.payload.kind === "user" &&
+                record.payload.submissionId === submissionId,
+            );
 
           if (original === undefined)
             return yield* RunJournalError.make({
@@ -8752,7 +8873,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           const suffix = currentRecords.filter((entry) => entry.sequence > original.sequence);
 
           const fresh =
-            !lineage.inputWasRecorded && tail.sequence === original.sequence && suffix.length === 0;
+            initialization?.input !== undefined ||
+            (!lineage.inputWasRecorded &&
+              tail.sequence === original.sequence &&
+              suffix.length === 0);
 
           // Every replay stays bounded at the ORIGINAL admission, never the later Thread tail.
           const source: InitialJournalSource = yield* Effect.gen(function* () {
@@ -8795,9 +8919,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         }
 
         committedPromptSuffix?.discard();
-        committedPromptSuffix = initialJournal?.cacheable
-          ? makeCommittedPromptSuffix(initialJournal.original)
-          : undefined;
+        committedPromptSuffix =
+          initialJournal?.cacheable && initialization?.input === undefined
+            ? makeCommittedPromptSuffix(initialJournal.original)
+            : undefined;
 
         const outcome = yield* runModel(
           agent,
@@ -8807,7 +8932,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           currentRecords,
           canonical,
           initialJournal,
-          tail.sequence,
+          initialization?.input?.sequence ?? tail.sequence,
           view.progressThrough,
           view.progress,
           view.context,

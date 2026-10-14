@@ -110,6 +110,8 @@ import {
   UnknownResolutionKind,
   unknownResolutionKind,
   unknownResolutionMatchesResult,
+  submissionInputRecordId,
+  submissionInputBatchId,
   submissionAbortRecordId,
   submissionSettlementRecordId,
   submissionSettlementBatchId,
@@ -1706,6 +1708,45 @@ const makeServices = Effect.fnUntraced(function* () {
     return claimed;
   });
 
+  const markInputAppliedInTransaction = Effect.fnUntraced(function* (
+    validated: MarkInputAppliedRequest,
+  ) {
+    const operation = "ledger mark input applied";
+
+    const submission = yield* requireSubmission(operation, validated.submissionId);
+
+    yield* requireOwner(operation, submission);
+    if (submission.input_applied_record_id !== null) {
+      if (
+        submission.input_applied_record_id === validated.recordId &&
+        submission.input_applied_sequence === validated.sequence
+      ) {
+        return;
+      }
+
+      return yield* corruptionFailure(
+        operation,
+        "effect_agent_submissions",
+        validated.submissionId,
+        "A different canonical input marker is already recorded for this Submission.",
+      );
+    }
+    yield* sql`
+    UPDATE effect_agent_submissions
+    SET
+      input_applied_record_id = ${validated.recordId},
+      input_applied_sequence = ${validated.sequence},
+      state = CASE
+        WHEN state IN ('admitted', 'ready') THEN 'input-applied'
+        ELSE state
+      END
+    WHERE submission_id = ${validated.submissionId}
+   RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
+      rows.submissions.write,
+      Effect.mapError(internalFailure(operation)),
+    );
+  });
+
   const markInputApplied: SubmissionLedger["Service"]["markInputApplied"] = Effect.fnUntraced(
     function* (request: MarkInputAppliedRequest) {
       const operation = "ledger mark input applied";
@@ -1715,44 +1756,111 @@ const makeServices = Effect.fnUntraced(function* () {
       );
 
       yield* hitFailpoint("ledger:mark-input-applied:before", operation);
-      yield* inWriteTransaction(
-        operation,
-        Effect.gen(function* () {
-          const submission = yield* requireSubmission(operation, validated.submissionId);
-
-          yield* requireOwner(operation, submission);
-          if (submission.input_applied_record_id !== null) {
-            if (
-              submission.input_applied_record_id === validated.recordId &&
-              submission.input_applied_sequence === validated.sequence
-            ) {
-              return;
-            }
-
-            return yield* corruptionFailure(
-              operation,
-              "effect_agent_submissions",
-              validated.submissionId,
-              "A different canonical input marker is already recorded for this Submission.",
-            );
-          }
-          yield* sql`
-          UPDATE effect_agent_submissions
-          SET
-            input_applied_record_id = ${validated.recordId},
-            input_applied_sequence = ${validated.sequence},
-            state = CASE
-              WHEN state IN ('admitted', 'ready') THEN 'input-applied'
-              ELSE state
-            END
-          WHERE submission_id = ${validated.submissionId}
-         RETURNING *, ${definitionJson(sql)} AS agent_digests_json`.pipe(
-            rows.submissions.write,
-            Effect.mapError(internalFailure(operation)),
-          );
-        }),
-      );
+      yield* inWriteTransaction(operation, markInputAppliedInTransaction(validated));
       yield* hitFailpoint("ledger:mark-input-applied:after", operation);
+    },
+  );
+
+  const appendInput: NonNullable<SubmissionLedger["Service"]["appendInput"]> = Effect.fnUntraced(
+    function* (submissionId, request) {
+      const operation = "append original input and context";
+
+      const prepared = yield* prepareCanonicalAppend(request).pipe(
+        Effect.provideService(Crypto.Crypto, crypto),
+      );
+
+      const record = prepared.request.batch.records[0];
+
+      const context = prepared.request.executions
+        ?.flatMap((update) => update.facts ?? [])
+        .find(({ payload }) => payload._tag === "RunContextRecorded");
+
+      if (
+        prepared.request.executions?.length !== 1 ||
+        prepared.request.executions[0]?.previousRevision !== 0 ||
+        prepared.request.batch.records.length !== 1 ||
+        record?.payload._tag !== "UserInputRecorded" ||
+        record.payload.kind !== "user" ||
+        record.payload.submissionId !== submissionId ||
+        record.payload.runId !== runIdForSubmission(submissionId) ||
+        record.recordId !== submissionInputRecordId(submissionId) ||
+        prepared.request.batch.batchId !== submissionInputBatchId(submissionId) ||
+        (context?.payload._tag === "RunContextRecorded" &&
+          context.payload.historyThrough !== prepared.request.expectedTailSequence)
+      )
+        return yield* ThreadStoreError.make({
+          operation,
+          message: "Original input publication has a different context boundary",
+        });
+
+      const mapError = (cause: { readonly message: string }) =>
+        ThreadStoreError.make({ operation, message: cause.message, cause });
+
+      yield* journal.prepareAppend(prepared.raw).pipe(Effect.mapError(mapError));
+
+      return yield* owner.withProgress(
+        prepared.request.threadId,
+        owner.withMutation(
+          Effect.gen(function* () {
+            yield* hitFailpoint("append:before", operation);
+            yield* hitFailpoint("ledger:mark-input-applied:before", operation);
+
+            const result = yield* journal
+              .withWriteTransaction(operation)(
+                Effect.gen(function* () {
+                  const submission = yield* requireSubmission(operation, submissionId);
+
+                  yield* requireOwner(operation, submission);
+                  if (submission.thread_id !== prepared.request.threadId)
+                    return yield* LedgerError.make({
+                      operation,
+                      message: "Original input belongs to another Thread",
+                    });
+                  const result = yield* journal.appendPrepared(prepared.raw);
+
+                  yield* markInputAppliedInTransaction(
+                    MarkInputAppliedRequest.make({
+                      submissionId,
+                      recordId: record.recordId,
+                      sequence: result.firstSequence,
+                    }),
+                  );
+
+                  return result;
+                }),
+              )
+              .pipe(
+                Effect.mapError((error) =>
+                  error._tag === "DoAppendConflict"
+                    ? AppendConflict.make({
+                        threadId: prepared.request.threadId,
+                        batchId: prepared.request.batch.batchId,
+                        reason: error.reason,
+                        ...(error.actualTailSequence === undefined
+                          ? {}
+                          : { actualTailSequence: error.actualTailSequence }),
+                      })
+                    : error._tag === "OwnershipLost"
+                      ? error
+                      : mapError(error),
+                ),
+              );
+
+            yield* hitFailpoint("ledger:mark-input-applied:after", operation);
+            yield* hitFailpoint("append:after", operation);
+
+            return result;
+          }).pipe(
+            Effect.mapError((error) =>
+              error._tag === "OwnershipLost" ||
+              error._tag === "ThreadStoreError" ||
+              error._tag === "AppendConflict"
+                ? error
+                : mapError(error),
+            ),
+          ),
+        ),
+      );
     },
   );
 
@@ -3863,6 +3971,7 @@ const makeServices = Effect.fnUntraced(function* () {
       resolveAdmission,
       selectHead,
       markInputApplied,
+      appendInput,
       finalizeSettlement: (request) => owner.withMutation(finalizeSettlement(request)),
       requestAbort,
       stopWorker,

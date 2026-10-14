@@ -7,11 +7,11 @@ import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
-import { LedgerError, SubmissionLedger } from "@yielded/agent/submission-ledger";
+import { AbortCommand, LedgerError, SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { readTestThread } from "@yielded/agent/testing/thread-store-conformance";
 import { ThreadStore, ThreadExportRequest } from "@yielded/agent/thread-store";
 import { env, runInDurableObject } from "cloudflare:test";
-import { Effect, Layer, Schema, Stream } from "effect";
+import { Deferred, Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { DurableObject } from "effect-cf";
 import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
 import { expect, it } from "vite-plus/test";
@@ -179,6 +179,94 @@ it("preserves a returned Tool result across an input-drain failure without repla
           after.records.filter(({ record }) => record.payload._tag === "ToolCallUnknown"),
         ).toHaveLength(0);
       }).pipe(Effect.provide(runtimeLayer)),
+    );
+  });
+});
+
+// Regression: b6e82a802 reused the live tail as an earlier verified-empty startup boundary.
+it("settles an abort during fresh instructions without a recovery attempt", () => {
+  const thread = `cf-abort-fresh-instructions-${crypto.randomUUID()}`;
+
+  return runInDurableObject(stubFor(thread), (instance, state) => {
+    const runtimeLayer = DurableAgentRuntime.layer.pipe(
+      Layer.provide(runStorageLayer()),
+      Layer.provideMerge(ThreadObject.layer([])),
+      Layer.provide(
+        ThreadObject.layerConfig({
+          deploymentId: "startup-abort",
+          producerPrefix: "startup-abort",
+        }),
+      ),
+      Layer.provide([DurableObjectContext.layer(state, env), threadNamespaceLayer(env, "THREADS")]),
+    );
+
+    return instance[DurableObject.RunSymbol](
+      Effect.gen(function* () {
+        const runtime = yield* DurableAgentRuntime;
+        const store = yield* ThreadStore;
+        const entered = yield* Deferred.make<void>();
+        let modelCalls = 0;
+
+        const model = Model.make(
+          "scripted",
+          "startup-abort",
+          Layer.effect(
+            LanguageModel.LanguageModel,
+            LanguageModel.make({
+              generateText: () => Effect.succeed([]),
+              streamText: () =>
+                Stream.suspend(() => {
+                  modelCalls++;
+
+                  return Stream.empty;
+                }),
+            }),
+          ),
+        );
+
+        const agent = Agent.withModel(
+          Agent.make("startup-abort", {
+            input: Schema.Struct({ question: Schema.String, ref: Schema.String }),
+            output: Schema.String,
+            instructions: () =>
+              Deferred.succeed(entered, undefined).pipe(Effect.andThen(Effect.never)),
+            toolkit: Toolkit.empty,
+          }),
+          model,
+        );
+
+        const receipt = yield* runtime.submit(
+          agent,
+          { question: "wait", ref: thread },
+          submitOptions(thread, "first"),
+        );
+
+        const attempt = yield* Effect.forkChild(runtime.processThread(agent, receipt.threadId));
+
+        yield* Deferred.await(entered);
+        yield* runtime.abort(
+          AbortCommand.make({
+            submissionId: receipt.submissionId,
+            author: "operator",
+            reason: "cancel instructions",
+          }),
+        );
+        yield* Fiber.join(attempt);
+        expect(yield* runtime.submissionStatus(receipt)).toMatchObject({
+          _tag: "settled",
+          settlement: { outcome: "aborted" },
+        });
+        expect(modelCalls).toBe(0);
+
+        const history = yield* readTestThread(
+          store,
+          ThreadExportRequest.make({ threadId: receipt.threadId }),
+        );
+
+        expect(
+          history.records.filter(({ record }) => record.payload._tag === "AbortRequested"),
+        ).toHaveLength(1);
+      }).pipe(Effect.scoped, Effect.provide(runtimeLayer)),
     );
   });
 });

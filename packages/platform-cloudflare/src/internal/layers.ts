@@ -83,8 +83,15 @@ import {
   type WorkerStopCommand,
 } from "@yielded/agent/submission-ledger";
 import { ThreadProjectionMaintenance } from "@yielded/agent/thread-projection-maintenance";
-import type { ThreadReader } from "@yielded/agent/thread-store";
-import { AppendResult, ThreadStoreError, ThreadStore } from "@yielded/agent/thread-store";
+import {
+  type ThreadReader,
+  AppendResult,
+  type AppendRequest,
+  type ThreadStoreFailure,
+  PreparedAppend,
+  ThreadStoreError,
+  ThreadStore,
+} from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { type WakeScheduler } from "@yielded/agent/wake-scheduler";
 import {
@@ -785,6 +792,54 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                 // Publication remains outside this local source/index critical section.
                 const sourceCommits = yield* Semaphore.make(1);
 
+                const observeAppend = (
+                  request: AppendRequest,
+                  body: Effect.Effect<AppendResult, ThreadStoreFailure>,
+                ) =>
+                  mutations
+                    .withMutation(
+                      sourceCommits
+                        .withPermit(
+                          body.pipe(
+                            Effect.tap((result) =>
+                              index
+                                .applyCommitted(request, result)
+                                .pipe(
+                                  Effect.catchCause((cause) =>
+                                    Cause.hasInterrupts(cause)
+                                      ? Effect.interrupt
+                                      : Effect.logError(
+                                          "Thread projection deferred after source commit",
+                                          cause,
+                                        ),
+                                  ),
+                                ),
+                            ),
+                          ),
+                        )
+                        .pipe(Effect.tap(() => afterCommit)),
+                      {
+                        lanes: [
+                          ...(options.projection === undefined ? [] : [DueQueue.Projection]),
+                          ...(options.lifecyclePublication === undefined ||
+                          !request.batch.records.some((record) =>
+                            Schema.is(Schema.toType(LifecyclePublicationFact))(record.payload),
+                          )
+                            ? []
+                            : [DueQueue.Lifecycle]),
+                        ],
+                      },
+                    )
+                    .pipe(
+                      Effect.catchTag("DurableAlarmError", (cause) =>
+                        ThreadStoreError.make({
+                          operation: "prearm publication append",
+                          message: cause.message,
+                          cause,
+                        }),
+                      ),
+                    );
+
                 // Every runtime-owned producer prearms too: a crash between commit and invalidation
                 // leaves a NEW, uncertified generation. Source errors keep their native port types.
                 const observedStore = ThreadStore.of({
@@ -807,52 +862,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                               ),
                         },
                       }),
-                  append: (request) =>
-                    mutations
-                      .withMutation(
-                        sourceCommits
-                          .withPermit(
-                            store
-                              .append(request)
-                              .pipe(
-                                Effect.tap((result) =>
-                                  index
-                                    .applyCommitted(request, result)
-                                    .pipe(
-                                      Effect.catchCause((cause) =>
-                                        Cause.hasInterrupts(cause)
-                                          ? Effect.interrupt
-                                          : Effect.logError(
-                                              "Thread projection deferred after source commit",
-                                              cause,
-                                            ),
-                                      ),
-                                    ),
-                                ),
-                              ),
-                          )
-                          .pipe(Effect.tap(() => afterCommit)),
-                        {
-                          lanes: [
-                            ...(options.projection === undefined ? [] : [DueQueue.Projection]),
-                            ...(options.lifecyclePublication === undefined ||
-                            !request.batch.records.some((record) =>
-                              Schema.is(Schema.toType(LifecyclePublicationFact))(record.payload),
-                            )
-                              ? []
-                              : [DueQueue.Lifecycle]),
-                          ],
-                        },
-                      )
-                      .pipe(
-                        Effect.catchTag("DurableAlarmError", (cause) =>
-                          ThreadStoreError.make({
-                            operation: "prearm publication append",
-                            message: cause.message,
-                            cause,
-                          }),
-                        ),
-                      ),
+                  append: (request) => observeAppend(request, store.append(request)),
                 });
 
                 const observeIntent = <A, Failure>(
@@ -906,6 +916,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                   );
 
                 const stopWorker = ledger.stopWorker;
+                const appendInput = ledger.appendInput;
 
                 return Context.make(ThreadStore, observedStore).pipe(
                   Context.add(StorageOwner, storageOwner),
@@ -967,6 +978,14 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
                   }),
                   Context.add(SubmissionLedger, {
                     ...ledger,
+                    ...(appendInput === undefined
+                      ? {}
+                      : {
+                          appendInput: (submissionId, input) =>
+                            Effect.flatMap(PreparedAppend.capture(input), (request) =>
+                              observeAppend(request, appendInput(submissionId, request)),
+                            ),
+                        }),
                     ...(options.hostLanesForMutation === undefined &&
                     options.lifecyclePublication === undefined
                       ? {}

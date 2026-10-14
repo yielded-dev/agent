@@ -6,9 +6,9 @@ import { boundedValueFootprint } from "../../engine/internal/bounded-value.ts";
 import { canonicalJson, digestCanonicalJson, utf8ByteLength } from "../Digest.ts";
 import {
   CanonicalSequence,
+  type CanonicalRecordEnvelope,
   CURRENT_RECORD_FORMAT,
   PromptRecord,
-  type CanonicalRecordEnvelope,
   type Digest,
   type PromptRecordEnvelope,
   type RecordEnvelope,
@@ -23,6 +23,7 @@ import {
   ThreadStore,
   ThreadTailRequest,
 } from "../ThreadStore.ts";
+import type { InitialContextInput } from "./initial-context.ts";
 import type { JournalRecordEnvelope } from "./journal-metadata.ts";
 import { promptJsonFootprint } from "./prompt-footprint.ts";
 import { captureRecord } from "./record-encoding.ts";
@@ -252,7 +253,9 @@ const suffixRecordFootprint = (entry: PromptRecordEnvelope, allowance: number) =
  * acknowledged, consecutive appends. Never authority for writes or recovery; any uncertainty
  * discards this derivative and completion rereads canonical history.
  */
-export const makeCommittedPromptSuffix = (original: CanonicalRecordEnvelope) => {
+export const makeCommittedPromptSuffix = (
+  original: Pick<CanonicalRecordEnvelope, "threadId" | "sequence" | "record">,
+) => {
   const records: Array<PromptRecordEnvelope> = [];
 
   const runId =
@@ -558,7 +561,7 @@ export const makePromptHistoryCache = Effect.fnUntraced(function* () {
   const complete = Effect.fnUntraced(
     function* (
       writer: WriterIdentity,
-      original: CanonicalRecordEnvelope,
+      original: InitialContextInput,
       history: PromptHistory,
       committed?: CommittedPromptSuffix,
     ) {
