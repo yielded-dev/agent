@@ -5,7 +5,7 @@ import {
   MessageDeliveryStore,
 } from "@yielded/agent/message-delivery";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Clock, Context, Effect, Layer, Option } from "effect";
+import { Clock, Context, Duration, Effect, Exit, Layer, Option } from "effect";
 
 import { DurableAlarmError, ThreadMessageDelivery, ThreadMutationGate } from "../Alarm.ts";
 import { ThreadObjectPlacement } from "../CloudflareBindings.ts";
@@ -85,7 +85,8 @@ export const lazyThreadMessageDeliveryLayer = <E, R>(
       const context = yield* Effect.context<R>();
       const store = yield* MessageDeliveryStore;
 
-      const service = yield* Effect.cached(
+      // Failed builds release their Layer scopes; let a later wave build again.
+      const service = yield* Effect.cachedWithTTL(
         Layer.buildWithMemoMap(driver, memoMap, scope).pipe(
           Effect.provide(context),
           Effect.map(Context.get(MessageDeliveryDriver)),
@@ -97,6 +98,7 @@ export const lazyThreadMessageDeliveryLayer = <E, R>(
             }),
           ),
         ),
+        (exit) => (Exit.isSuccess(exit) ? Duration.infinity : Duration.zero),
       );
 
       const failure = (operation: string) => () =>
