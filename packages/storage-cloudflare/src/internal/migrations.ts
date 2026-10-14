@@ -6,7 +6,8 @@ import {
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
-import { Effect, Schema } from "effect";
+import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
+import { Effect, Option, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 
@@ -215,7 +216,7 @@ export const readDoStorageHeader = Effect.fnUntraced(function* () {
 });
 
 /** Initialize fresh storage or atomically upgrade the exact released layouts 25–27. */
-export const ensureDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(function* () {
+const initializeDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
   return yield* sql
@@ -276,4 +277,37 @@ export const ensureDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(fun
       }),
     )
     .pipe(Effect.catchTag("SqlError", storageError));
+});
+
+const initializedLayouts = new WeakMap<object, DoStorageHeader>();
+
+/** Share committed inspection within one live Object owner; maintenance invalidates it. */
+export const ensureDoStorageLayout = Effect.fnUntraced(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const owner = yield* SqlStorageOwner;
+
+  // A caller-owned transaction can still roll back after this initializer returns.
+  if (owner === undefined || Option.isSome(yield* Effect.serviceOption(sql.transactionService)))
+    return yield* initializeDoStorageLayout();
+
+  const identity = owner.identity ?? owner;
+
+  return yield* owner.read(
+    Effect.gen(function* () {
+      const previous = initializedLayouts.get(identity);
+
+      if (previous !== undefined) return previous;
+      const header = yield* initializeDoStorageLayout();
+
+      const invalidate = () => {
+        initializedLayouts.delete(identity);
+        owner.invalidators.delete(invalidate);
+      };
+
+      initializedLayouts.set(identity, header);
+      owner.invalidators.add(invalidate);
+
+      return header;
+    }),
+  );
 });
