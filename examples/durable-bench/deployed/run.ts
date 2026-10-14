@@ -345,7 +345,24 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
   });
 
   yield* Effect.gen(function* () {
-    if (!resumed) yield* ensureVendor;
+    if (!resumed) {
+      if (
+        (yield* git([
+          "status",
+          "--porcelain",
+          "--",
+          "examples/durable-bench",
+          "package.json",
+          "bun.lock",
+          "patches",
+        ])).length > 0
+      )
+        return yield* BenchError.make({
+          message:
+            "Commit harness and dependency inputs before comparison; both arms use frozen commits.",
+        });
+      yield* ensureVendor;
+    }
     const versions: Record<string, string> = {};
 
     for (const file of resumed

@@ -348,6 +348,7 @@ export const build = Effect.fnUntraced(function* (
       revision,
       harnessRevision,
       target,
+      vendorLockSha256: hash(yield* fs.readFile(join(workspace, "third-party/bun.lock"))),
       materialization: "commit-archive",
       dependencyCacheHit,
       expectedEffect,
@@ -370,29 +371,19 @@ export const build = Effect.fnUntraced(function* (
 export const ensureVendor = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
 
-  const { dependencies } = yield* read(
-    join(workspace, "third-party/package.json"),
-    Schema.Struct({ dependencies: Schema.Record(Schema.String, Schema.String) }),
-  );
+  for (const name of ["package.json", "bun.lock"]) {
+    const path = `examples/durable-bench/third-party/${name}`;
 
-  const installed = Effect.gen(function* () {
-    for (const [name, version] of Object.entries(dependencies)) {
-      const file = join(workspace, "third-party/node_modules", name, "package.json");
-
-      if (!(yield* fs.exists(file))) return false;
-      if ((yield* read(file, Schema.Struct({ version: Schema.String }))).version !== version)
-        return false;
-    }
-
-    return true;
-  });
-
-  if (!(yield* installed)) {
-    const install = yield* execute(["run", "-F", "@yielded/agent-example-durable-bench", "vendor"]);
-
-    if (install.code !== 0 || !(yield* installed))
+    if (
+      (yield* fs.readFileString(join(repository, path))).trim() !==
+      (yield* git(["show", `HEAD:${path}`]))
+    )
       return yield* BenchError.make({
-        message: "Install the durable-bench vendor dependencies first.",
+        message: "Vendor inputs must match the frozen harness commit.",
       });
   }
+  const install = yield* execute(["run", "-F", "@yielded/agent-example-durable-bench", "vendor"]);
+
+  if (install.code !== 0)
+    return yield* BenchError.make({ message: "Frozen vendor install failed." });
 });
