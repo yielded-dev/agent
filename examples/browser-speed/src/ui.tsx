@@ -1149,57 +1149,54 @@ export const App = () => {
                 Open live view in a new tab <ArrowUpRight size={13} />
               </a>
             )}
-
-            {report?.race && (
-              <div className="route-summary">
-                <p className="fine">
-                  {report.race.start} → {report.race.target} ·{" "}
-                  {Math.max(0, report.race.path.length - 1)} navigations
-                  {report.status === "passed" ? " · arrival verified" : " · arrival not verified"}.
-                  Link-only rules are not enforced.
-                </p>
-                {report.race.ruleViolation && <p className="bad">{report.race.ruleViolation}</p>}
-                <ol className="route" aria-label="Route">
-                  {report.race.path.map((hop, index) => (
-                    <li
-                      key={`${index}-${hop.url}`}
-                      title={hop.via ? `Via ${hop.via.label}` : undefined}
-                    >
-                      <a href={hop.url} target="_blank" rel="noreferrer">
-                        {hop.title}
-                      </a>
-                      <small className="mono">
-                        {index === 0 ? "start" : `${seconds(fromReady(report, hop.at))} s`}
-                      </small>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-
-            {(!isChat || remote?.notice || chatControlFailure) &&
-              (failure || remote?.notice || busy || report) && (
-                <div
-                  className={`message ${failure || report?.status === "failed" ? "bad" : ""}`}
-                  role="status"
-                >
-                  {(isChat ? (chatControlFailure ?? remote?.notice) : failure) ??
-                    (selected ? report?.message : remote?.notice) ??
-                    (busy
-                      ? preparing
-                        ? "Preparing the starting page."
-                        : (report?.message ?? "Running.")
-                      : (report?.message ?? ""))}
-                </div>
-              )}
-            {connected && !remote.browserConfigured && (
-              <div className="message bad" role="alert">
-                This lab has no Cloudflare browser configured.
-              </div>
-            )}
           </section>
         </div>
       </main>
+
+      {report?.race && (
+        <div className="route-summary">
+          <p className="fine">
+            {report.race.start} → {report.race.target} · {Math.max(0, report.race.path.length - 1)}{" "}
+            navigations
+            {report.status === "passed" ? " · arrival verified" : " · arrival not verified"}.
+            Link-only rules are not enforced.
+          </p>
+          {report.race.ruleViolation && <p className="bad">{report.race.ruleViolation}</p>}
+          <ol className="route" aria-label="Route">
+            {report.race.path.map((hop, index) => (
+              <li key={`${index}-${hop.url}`} title={hop.via ? `Via ${hop.via.label}` : undefined}>
+                <a href={hop.url} target="_blank" rel="noreferrer">
+                  {hop.title}
+                </a>
+                <small className="mono">
+                  {index === 0 ? "start" : `${seconds(fromReady(report, hop.at))} s`}
+                </small>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {(!isChat || remote?.notice || chatControlFailure) &&
+        (failure || remote?.notice || busy || report) && (
+          <div
+            className={`message ${failure || report?.status === "failed" ? "bad" : ""}`}
+            role="status"
+          >
+            {(isChat ? (chatControlFailure ?? remote?.notice) : failure) ??
+              (selected ? report?.message : remote?.notice) ??
+              (busy
+                ? preparing
+                  ? "Preparing the starting page."
+                  : (report?.message ?? "Running.")
+                : (report?.message ?? ""))}
+          </div>
+        )}
+      {connected && !remote.browserConfigured && (
+        <div className="message bad" role="alert">
+          This lab has no Cloudflare browser configured.
+        </div>
+      )}
 
       <details className="run-inspector">
         <summary>Run details and comparisons</summary>
