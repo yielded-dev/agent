@@ -734,6 +734,18 @@ interface NativeDispatch {
   scanRevision?: number;
 }
 
+/** Observe already-owned waves; detach on success, failure and interruption. */
+const awaitAnyCompletion = (fibers: ReadonlyArray<Fiber.Fiber<unknown, MaintenancePassFailure>>) =>
+  Effect.acquireUseRelease(
+    Effect.sync<Array<() => void>>(() => []),
+    (observers) =>
+      Effect.callback<"completed">((resume) => {
+        for (const fiber of fibers)
+          observers.push(fiber.addObserver(() => resume(Effect.succeed("completed"))));
+      }),
+    (observers) => Effect.sync(() => observers.forEach((remove) => remove())),
+  );
+
 /** Post-native delivery shares a finite connection budget across independent host lanes. */
 const afterNativeDispatchConcurrency = 2;
 
@@ -2622,7 +2634,7 @@ export class ThreadMaintenance extends Context.Service<
           discoveryPending: false,
         };
 
-        const recoveryFiber = yield* fork(
+        let recoveryFiber: Fiber.Fiber<void, MaintenancePassFailure> | undefined = yield* fork(
           Effect.gen(function* () {
             for (const threadId of yield* Deferred.await(recovery.queue)) {
               yield* failpoint.hit("maintenance:select:before");
@@ -2649,29 +2661,22 @@ export class ThreadMaintenance extends Context.Service<
           }),
         );
 
-        // Backfill is one disposable wave; native and host work keep their own opportunities.
-        const backfill = yield* fork(
-          Effect.gen(function* () {
-            if ((yield* mutations.activeLanes).has(DueQueue.Projection)) return;
-            const row = (yield* queueSnapshot).find((row) => row.id === DueQueue.Projection);
+        const projectionRow = (yield* queueSnapshot).find((row) => row.id === DueQueue.Projection);
+        let backfill: Fiber.Fiber<void, DurableAlarmError | ThreadProjectionError> | undefined;
 
-            if (
-              row?.dueAt === null ||
-              row === undefined ||
-              row.dueAt > (yield* Clock.currentTimeMillis)
-            )
-              return;
-
-            return yield* runQueued(
-              row,
+        if (
+          projectionRow !== undefined &&
+          projectionRow.dueAt !== null &&
+          projectionRow.dueAt <= (yield* Clock.currentTimeMillis) &&
+          !(yield* mutations.activeLanes).has(DueQueue.Projection)
+        )
+          backfill = yield* fork(
+            runQueued(
+              projectionRow,
               projection.drain.pipe(Effect.andThen(projection.pendingDeadline)),
               observed,
-            ).pipe(Effect.timeoutOption(config.projectionDispatchTimeoutMillis));
-          }),
-        );
-
-        let backfillObserved = false;
-        let recoveryObserved = false;
+            ).pipe(Effect.timeoutOption(config.projectionDispatchTimeoutMillis), Effect.asVoid),
+          );
 
         const dispatch: NativeDispatch = {
           scope: auxiliaryScope,
@@ -2725,19 +2730,17 @@ export class ThreadMaintenance extends Context.Service<
             if (exit.value === 0) dispatch.deferred.add(threadId);
             nativeCheck = true;
           }
-          if (!recoveryObserved && recoveryFiber.pollUnsafe() !== undefined) {
+          if (recoveryFiber?.pollUnsafe() !== undefined) {
             yield* Fiber.join(recoveryFiber);
-            recoveryObserved = true;
+            recoveryFiber = undefined;
             dispatch.scanGeneration = undefined;
             nativeCheck ||= recovery.needsCheckpoint;
           }
-          if (!backfillObserved) {
-            const exit = backfill.pollUnsafe();
+          const backfillExit = backfill?.pollUnsafe();
 
-            if (exit !== undefined) {
-              backfillObserved = true;
-              if (Exit.isFailure(exit)) failure ??= exit.cause;
-            }
+          if (backfillExit !== undefined) {
+            backfill = undefined;
+            if (Exit.isFailure(backfillExit)) failure ??= backfillExit.cause;
           }
           for (const lane of lanes) {
             const exit = lane.fiber?.pollUnsafe();
@@ -2844,9 +2847,9 @@ export class ThreadMaintenance extends Context.Service<
           if (
             native === undefined &&
             dispatch.active.size === 0 &&
-            recoveryObserved &&
+            recoveryFiber === undefined &&
             !recovery.needsCheckpoint &&
-            backfillObserved &&
+            backfill === undefined &&
             delivery === undefined &&
             lanes.every((lane) => lane.fiber === undefined)
           )
@@ -2859,7 +2862,9 @@ export class ThreadMaintenance extends Context.Service<
           ) {
             nativeCheck = false;
             const nativeCheckpoint = dispatch.needsCheckpoint && dispatch.active.size === 0;
-            const checkpoint = (recoveryObserved && recovery.needsCheckpoint) || nativeCheckpoint;
+
+            const checkpoint =
+              (recoveryFiber === undefined && recovery.needsCheckpoint) || nativeCheckpoint;
 
             if (checkpoint) recovery.needsCheckpoint = false;
             // Keep this opportunity's reservations across beginNative's storage awaits.
@@ -2894,25 +2899,19 @@ export class ThreadMaintenance extends Context.Service<
           );
 
           const completing = [
-            ...(native === undefined ? [] : [native]),
+            native,
             ...dispatch.active.values(),
-            ...(recoveryObserved ? [] : [recoveryFiber]),
-            ...(backfillObserved ? [] : [backfill]),
-            ...(delivery === undefined ? [] : [delivery]),
-            ...lanes.flatMap((lane) => (lane.fiber === undefined ? [] : [lane.fiber])),
-          ];
+            recoveryFiber,
+            backfill,
+            delivery,
+            ...lanes.map((lane) => lane.fiber),
+          ].filter((fiber) => fiber !== undefined);
 
           const ready = yield* Effect.raceAllFirst([
-            ...completing.map((fiber) =>
-              Fiber.await<unknown, MaintenancePassFailure>(fiber).pipe(
-                Effect.as("completed" as const),
-              ),
-            ),
-            Effect.raceAllFirst([
-              notified,
-              mutations.awaitChange(queueRevision),
-              Effect.sleep(Math.max(0, next - now)),
-            ]).pipe(Effect.as("scan" as const)),
+            awaitAnyCompletion(completing),
+            notified.pipe(Effect.as("scan" as const)),
+            mutations.awaitChange(queueRevision).pipe(Effect.as("scan" as const)),
+            Effect.sleep(Math.max(0, next - now)).pipe(Effect.as("scan" as const)),
           ]);
 
           if (ready === "scan") {
@@ -2939,9 +2938,10 @@ export class ThreadMaintenance extends Context.Service<
         for (const fiber of [
           recoveryFiber,
           backfill,
-          ...(delivery === undefined ? [] : [delivery]),
-          ...lanes.flatMap((lane) => (lane.fiber === undefined ? [] : [lane.fiber])),
+          delivery,
+          ...lanes.map((lane) => lane.fiber),
         ]) {
+          if (fiber === undefined) continue;
           // Await exits without failing fast: every admitted wave owns its original
           // bounded allowance and cleanup even if another wave has already failed.
           const exit = yield* Fiber.await<unknown, MaintenancePassFailure>(fiber);

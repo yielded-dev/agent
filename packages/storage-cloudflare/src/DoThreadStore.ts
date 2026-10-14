@@ -602,15 +602,7 @@ const makeServices = Effect.fnUntraced(function* () {
       snapshot: journal.state.read,
       tail: (threadId) =>
         journal.getThread(threadId).pipe(
-          Effect.flatMap((rows) =>
-            Schema.decodeEffect(
-              Schema.UndefinedOr(
-                Schema.Struct({
-                  tail_sequence: CanonicalSequence,
-                }),
-              ),
-            )(rows[0]),
-          ),
+          Effect.map((rows) => rows[0]),
           Effect.mapError((error) => storeError("native thread tail", error)),
         ),
     }),
