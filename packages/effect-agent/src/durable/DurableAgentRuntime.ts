@@ -3303,9 +3303,13 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     maxDurationMillis: number,
     records: ReadonlyArray<CanonicalRecordEnvelope>,
     operational: ReadonlyArray<RecordEnvelope>,
-    input?: { readonly record: RecordEnvelope; readonly append: RunWriter["append"] },
+    input?: RecordEnvelope,
   ) {
     const writer = yield* CurrentRunWriter;
+    const append = input === undefined ? writer.append : writer.appendInput;
+
+    if (append === undefined)
+      return yield* RunJournalError.make({ message: "Fresh startup requires an input publisher" });
     const runId = runIdForSubmission(submission.submissionId);
     const recordId = runStartedRecordId(runId);
     const existing = yield* readRunStart(submission.threadId, runId, operational);
@@ -3354,7 +3358,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       }
       yield* hit("run:before-start-append");
       yield* appendBatch(
-        input === undefined ? writer : { threadId: writer.threadId, append: input.append },
+        { threadId: writer.threadId, append },
         CanonicalBatch.make({
           batchId:
             input === undefined
@@ -3362,7 +3366,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               : submissionInputBatchId(submission.submissionId),
           producerId: config.producerId,
           records: [
-            input?.record ?? start,
+            input ?? start,
             ...(input === undefined ? [] : [start]),
             ...(context === undefined ? [] : [context]),
           ],
@@ -5507,18 +5511,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           usageSummary: yield* currentUsageSummary(),
         };
       }
-      // Summaries cover only prior Runs. Pruning and rollover also map fully settled
-      // current-Run records and preserves the canonical instruction/input block during replay.
-      let ownerFirstSequence: CanonicalSequence | undefined;
-
-      for (const envelope of records) {
-        const payload = envelope.record.payload;
-
-        if ("runId" in payload && payload.runId === runId) {
-          ownerFirstSequence = envelope.sequence;
-          break;
-        }
-      }
 
       /** Only canonical joined inputs can require restoration from an earlier Attempt. */
       let joinBacklog: ReadonlyArray<JoinSnapshot> | undefined =
@@ -6461,13 +6453,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             );
           }
 
-          // Summaries use the initial prior-Run boundaries; pruning and rollover also admit
-          // complete current-Run boundaries from the fresh canonical source above.
+          // The validated original input bounds summaries even when startup deferred its append.
+          // Pruning and rollover also admit complete current-Run canonical boundaries.
           const coverable = sourceBoundaries.filter(
-            (boundary) =>
-              commit.kind !== "summarize" ||
-              ownerFirstSequence === undefined ||
-              boundary.sequence < ownerFirstSequence,
+            (boundary) => commit.kind !== "summarize" || boundary.sequence < originalInput.sequence,
           );
 
           if (coverable.length === 0) {
@@ -8367,7 +8356,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                     Duration.toMillis(registeredAgent.definition.policy.maxDuration),
                     view.records,
                     view.operational,
-                    { record, append: session.appendInput },
+                    record,
                   ).pipe(Effect.provideService(CurrentRunWriter, session));
 
                   return { snapshot, through: before, view, start, input: pendingOriginal };

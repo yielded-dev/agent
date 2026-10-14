@@ -1,5 +1,6 @@
 import { CloudflareThreadClient } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import * as Agent from "@yielded/agent/agent";
+import { CompactionPolicy } from "@yielded/agent/agent-policy";
 import { DurableWorkerBinding } from "@yielded/agent/agent-registration";
 import { ContextCompactor } from "@yielded/agent/context-compactor";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
@@ -19,6 +20,7 @@ import {
   contextCompactorProbe,
   contextAuthorizationProbe,
   searchDefinition,
+  searchToolLayer,
   submitOptions,
   TEST_DIGESTS,
 } from "./fixtures.ts";
@@ -200,6 +202,146 @@ describe("Cloudflare replaceable compaction", () => {
           yield* process("new window request");
           expect(prompts.at(-1)).toContain("new window request");
           expect(prompts.at(-1)).not.toContain("first fresh request");
+        }).pipe(Effect.scoped),
+      ),
+    );
+  });
+
+  // 8df7c2a587d111bebdcb14ba6e6b7ef15a544e80 deferred the input past the startup read.
+  // A warm prefix must still forbid summaries of the owning Run, as canonical replay does.
+  it("refuses a same-Run summary after warm startup", () => {
+    const thread = lane("summary-owner-boundary");
+
+    return runInDurableObject(stubFor(thread), (instance) =>
+      instance[DurableObject.RunSymbol](
+        Effect.gen(function* () {
+          const store = yield* ThreadStore;
+          let calls = 0;
+          let summaries = 0;
+
+          const model = Model.make(
+            "scripted",
+            "summary-owner-boundary",
+            Layer.effect(
+              LanguageModel.LanguageModel,
+              LanguageModel.make({
+                generateText: () => Effect.succeed([]),
+                streamText: () => {
+                  calls += 1;
+                  if (calls === 2 || calls === 3)
+                    return Stream.fromIterable([
+                      {
+                        type: "tool-call",
+                        id: `search-current-${calls}`,
+                        name: "search",
+                        params: { query: "current" },
+                        providerExecuted: false,
+                      },
+                      {
+                        type: "finish",
+                        reason: "tool-calls",
+                        usage: { inputTokens: {}, outputTokens: {} },
+                      },
+                    ]);
+
+                  return Stream.fromIterable([
+                    { type: "text-start", id: "answer" },
+                    { type: "text-delta", id: "answer", delta: '"done"' },
+                    { type: "text-end", id: "answer" },
+                    {
+                      type: "finish",
+                      reason: "stop",
+                      usage: { inputTokens: {}, outputTokens: {} },
+                    },
+                  ]);
+                },
+              }),
+            ),
+          );
+
+          const agent = Agent.withModel(
+            Agent.make("summary-owner-boundary", {
+              input: Schema.String,
+              output: Schema.String,
+              instructions: "Search before answering.",
+              toolkit: searchDefinition.toolkit,
+              policy: {
+                maxTurns: 3,
+                maxToolCalls: 2,
+                maxDuration: "30 seconds",
+                contextTokenLimit: 2_000,
+                compaction: CompactionPolicy.make({ mode: "summarize", keepRecentTokens: 1 }),
+              },
+            }),
+            model,
+          );
+
+          const binding = yield* DurableWorkerBinding.make(agent, TEST_DIGESTS).pipe(
+            Effect.provide(searchToolLayer),
+          );
+
+          const runtime = yield* Layer.build(
+            DurableAgentRuntime.layerWithBindings([binding]).pipe(
+              Layer.provide(runStorageLayer()),
+              Layer.provide(RunToolAuthorization.allowAll),
+              Layer.provide(
+                Layer.succeed(ContextCompactor, {
+                  estimate: (messages) =>
+                    messages.filter((message) => message.role === "tool").length >= 2 ? 2_001 : 1,
+                  compact: (request) =>
+                    Stream.suspend(() => {
+                      summaries += 1;
+
+                      return Stream.succeed({
+                        kind: "summarize",
+                        through:
+                          request.source.content.findIndex((message) => message.role === "tool") +
+                          1,
+                        summary: "Overbroad summary.",
+                      });
+                    }),
+                }),
+              ),
+            ),
+          ).pipe(
+            Effect.map((services) => Context.get(services, DurableAgentRuntime)),
+            Effect.provideService(ThreadStore, store),
+            Effect.provideService(RunContextPreparation, { hook: undefined }),
+          );
+
+          const seed = yield* runtime.submit(agent, "prior Run", submitOptions(thread, "prior"));
+
+          expect(yield* runtime.processThreadHead(seed.threadId)).toMatchObject({
+            value: { outcome: "completed" },
+          });
+
+          const receipt = yield* runtime.submit(
+            agent,
+            "current Run",
+            submitOptions(thread, "current"),
+          );
+
+          const result = yield* runtime.processThreadHead(receipt.threadId);
+
+          const exported = yield* readTestThread(
+            store,
+            ThreadExportRequest.make({ threadId: receipt.threadId }),
+          );
+
+          expect(summaries).toBe(1);
+          expect(
+            exported.records.some(({ record }) => record.payload._tag === "CompactionCreated"),
+          ).toBe(false);
+          expect(result).toMatchObject({
+            value: {
+              outcome: "failed",
+              failure: {
+                errorTag: "CompactionError",
+                message: "Compaction coverage cannot be mapped to complete canonical records",
+              },
+            },
+          });
+          expect(calls).toBe(3);
         }).pipe(Effect.scoped),
       ),
     );
