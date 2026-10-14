@@ -128,6 +128,22 @@ const RangeRow = Schema.Struct({
 
 type RangeRow = typeof RangeRow.Type;
 
+const decodeRanges = Schema.decodeUnknownEffect(Schema.Array(RangeRow));
+
+const decodeReplayPlan = Schema.decodeUnknownEffect(
+  Schema.Array(
+    Schema.Struct({
+      first_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
+      last_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
+      byte_count: SqlInteger.pipe(
+        Schema.decodeTo(
+          Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: MAX_CANONICAL_BATCH_BYTES })),
+        ),
+      ),
+    }),
+  ).check(Schema.isMaxLength(1)),
+);
+
 export interface SqlArchiveTransactions {
   readonly read: <A, E, R>(
     body: Effect.Effect<A, E, R>,
@@ -148,25 +164,9 @@ export const makeSqlThreadArchiveRange = Effect.fnUntraced(function* (
   const query = <A extends object>(statement: Parameters<typeof execute<A>>[0]) =>
     execute(statement).pipe(Effect.mapError((cause) => failure("archive SQL", cause)));
 
-  const decodeRanges = Schema.decodeUnknownEffect(Schema.Array(RangeRow));
-
   /** Retired operational intent is deliberately absent; historical replay proves canonical bytes. */
   const replay = Effect.fnUntraced(function* (threadId: string, batchId: string) {
-    const [plan] = yield* Schema.decodeUnknownEffect(
-      Schema.Array(
-        Schema.Struct({
-          first_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-          last_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)),
-          byte_count: SqlInteger.pipe(
-            Schema.decodeTo(
-              Schema.Int.check(
-                Schema.isBetween({ minimum: 1, maximum: MAX_CANONICAL_BATCH_BYTES }),
-              ),
-            ),
-          ),
-        }),
-      ).check(Schema.isMaxLength(1)),
-    )(
+    const [plan] = yield* decodeReplayPlan(
       yield* query(sql`
       SELECT first_sequence, last_sequence, ${canonicalBatchBytes(sql, namespace)} AS byte_count
       FROM ${table("effect_agent_canonical_batches")} WHERE thread_id=${threadId} AND batch_id=${JSON.stringify(batchId)}`),

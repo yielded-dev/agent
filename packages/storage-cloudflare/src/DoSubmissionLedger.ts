@@ -344,8 +344,12 @@ const decodeSettlement = Schema.decodeUnknownEffect(Settlement);
 const decodeAbortIntent = Schema.decodeUnknownEffect(AbortIntent);
 const decodeInputAppliedMarker = Schema.decodeUnknownEffect(InputAppliedMarker);
 
+const decodeSubmissionSnapshotFields = Schema.decodeEffect(
+  Schema.toType(Schema.Struct(SubmissionSnapshot.fields)),
+);
+
 const decodeSubmissionSnapshotType = (input: typeof SubmissionSnapshot.Type) =>
-  Schema.decodeEffect(Schema.toType(Schema.Struct(SubmissionSnapshot.fields)))(input).pipe(
+  decodeSubmissionSnapshotFields(input).pipe(
     Effect.map((fields) => SubmissionSnapshot.make(fields)),
   );
 
@@ -366,6 +370,46 @@ const decodeChildReservationSnapshotUnknown = Schema.decodeUnknownEffect(
 const decodeChildAttachmentSnapshot = Schema.decodeUnknownEffect(ChildAttachmentSnapshot);
 const equivalentPersistedJson = Schema.toEquivalence(PersistedJson);
 const equivalentUnknownResolution = Schema.toEquivalence(UnknownResolution);
+const decodeAdmissionRequestType = Schema.decodeEffect(Schema.toType(AdmissionRequest));
+const decodeSubmissionLookupType = Schema.decodeEffect(Schema.toType(SubmissionLookup));
+const decodeClaimRequestType = Schema.decodeEffect(Schema.toType(ClaimRequest));
+
+const decodeMarkInputAppliedRequestType = Schema.decodeEffect(
+  Schema.toType(MarkInputAppliedRequest),
+);
+
+const decodeSettlementFinalizationType = Schema.decodeEffect(Schema.toType(SettlementFinalization));
+const decodeClaimJoiningRequestType = Schema.decodeEffect(Schema.toType(ClaimJoiningRequest));
+
+const decodeAbortIntentRequestType = Schema.decodeEffect(Schema.toType(AbortIntentRequest));
+
+const decodeRecoverySnapshotRequestType = Schema.decodeEffect(
+  Schema.toType(RecoverySnapshotRequest),
+);
+
+const SubmissionRows = Schema.Array(SubmissionRow);
+const ChildReservationRows = Schema.Array(ChildReservationRow);
+const MaxQueueSequenceRows = Schema.Array(MaxQueueSequenceRow);
+const SubmissionWorkItems = Schema.Array(SubmissionWorkItem);
+const decodeSubmissionWorkItems = Schema.decodeEffect(SubmissionWorkItems);
+const equivalentWorkerOrigin = Schema.toEquivalence(Schema.optional(WorkerAdmission.fields.origin));
+
+const decodeFirstWorkerAdmissions = Schema.decodeUnknownEffect(
+  Schema.Array(
+    Schema.Struct({
+      worker_admission_json: Schema.NullOr(BoundedStoredText),
+    }),
+  ),
+);
+
+const CanonicalSettlementRows = Schema.Array(
+  Schema.Struct({
+    batch_id: Schema.fromJsonString(BoundedIdentifier),
+    record_id: Schema.fromJsonString(BoundedIdentifier),
+    record_json: BoundedStoredText,
+  }),
+);
+
 const isDoStorageError = Schema.is(DoStorageError);
 
 /** Wrap an adapter-internal failure into the port's LedgerError without erasing its tag. */
@@ -606,7 +650,7 @@ const makeServices = Effect.fnUntraced(function* () {
   }));
 
   const decodeSubmissionRows = (operation: string, rowKey: string, rows: unknown) =>
-    decodeRows(Schema.Array(SubmissionRow), "effect_agent_submissions", rowKey, rows).pipe(
+    decodeRows(SubmissionRows, "effect_agent_submissions", rowKey, rows).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -721,13 +765,7 @@ const makeServices = Effect.fnUntraced(function* () {
       AND record_id = ${JSON.stringify(recordId)}`.pipe(Effect.mapError(sqlFailure(operation)));
 
     const decoded = yield* decodeRows(
-      Schema.Array(
-        Schema.Struct({
-          batch_id: Schema.fromJsonString(BoundedIdentifier),
-          record_id: Schema.fromJsonString(BoundedIdentifier),
-          record_json: BoundedStoredText,
-        }),
-      ),
+      CanonicalSettlementRows,
       "effect_agent_canonical_records",
       recordId,
       found,
@@ -810,12 +848,9 @@ const makeServices = Effect.fnUntraced(function* () {
   });
 
   const decodeChildReservationRows = (operation: string, rowKey: string, rows: unknown) =>
-    decodeRows(
-      Schema.Array(ChildReservationRow),
-      "effect_agent_child_reservations",
-      rowKey,
-      rows,
-    ).pipe(Effect.mapError(internalFailure(operation)));
+    decodeRows(ChildReservationRows, "effect_agent_child_reservations", rowKey, rows).pipe(
+      Effect.mapError(internalFailure(operation)),
+    );
 
   const readChildReservation = Effect.fnUntraced(function* (
     operation: string,
@@ -1040,7 +1075,7 @@ const makeServices = Effect.fnUntraced(function* () {
   ) {
     const operation = "ledger admit";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(AdmissionRequest))(request).pipe(
+    const validated = yield* decodeAdmissionRequestType(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -1221,13 +1256,9 @@ const makeServices = Effect.fnUntraced(function* () {
             WHERE thread_id=${validated.threadId} ORDER BY queue_sequence LIMIT 1
           `.pipe(Effect.mapError(sqlFailure(operation)));
 
-        const first = yield* Schema.decodeUnknownEffect(
-          Schema.Array(
-            Schema.Struct({
-              worker_admission_json: Schema.NullOr(BoundedStoredText),
-            }),
-          ),
-        )(firstRows).pipe(Effect.mapError(internalFailure(operation)));
+        const first = yield* decodeFirstWorkerAdmissions(firstRows).pipe(
+          Effect.mapError(internalFailure(operation)),
+        );
 
         if (first[0] !== undefined) {
           const previous =
@@ -1237,12 +1268,7 @@ const makeServices = Effect.fnUntraced(function* () {
                   first[0].worker_admission_json,
                 ).pipe(Effect.mapError(internalFailure(operation)));
 
-          if (
-            !Schema.toEquivalence(Schema.optional(WorkerAdmission.fields.origin))(
-              previous?.origin,
-              validated.workerAdmission?.origin,
-            )
-          )
+          if (!equivalentWorkerOrigin(previous?.origin, validated.workerAdmission?.origin))
             return yield* AdmissionPolicyError.make({
               reason: "refused",
               code: "worker-origin-conflict",
@@ -1270,7 +1296,7 @@ const makeServices = Effect.fnUntraced(function* () {
           `.pipe(Effect.mapError(sqlFailure(operation)));
 
         const decodedMax = yield* decodeRows(
-          Schema.Array(MaxQueueSequenceRow),
+          MaxQueueSequenceRows,
           "effect_agent_submissions",
           validated.threadId,
           maxRows,
@@ -1496,7 +1522,7 @@ const makeServices = Effect.fnUntraced(function* () {
   ) {
     const operation = "ledger lookup";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(SubmissionLookup))(request).pipe(
+    const validated = yield* decodeSubmissionLookupType(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -1570,7 +1596,7 @@ const makeServices = Effect.fnUntraced(function* () {
   )(function* (request: ClaimRequest) {
     const operation = "ledger select head";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(ClaimRequest))(request).pipe(
+    const validated = yield* decodeClaimRequestType(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -1688,9 +1714,9 @@ const makeServices = Effect.fnUntraced(function* () {
     function* (request: MarkInputAppliedRequest) {
       const operation = "ledger mark input applied";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(MarkInputAppliedRequest))(
-        request,
-      ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* decodeMarkInputAppliedRequestType(request).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
       yield* hitFailpoint("ledger:mark-input-applied:before", operation);
       yield* inWriteTransaction(
@@ -1949,9 +1975,9 @@ const makeServices = Effect.fnUntraced(function* () {
   )(function* (request: SettlementFinalization) {
     const operation = "ledger finalize settlement";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(SettlementFinalization))(
-      request,
-    ).pipe(Effect.mapError(internalFailure(operation)));
+    const validated = yield* decodeSettlementFinalizationType(request).pipe(
+      Effect.mapError(internalFailure(operation)),
+    );
 
     yield* hitFailpoint("ledger:finalize-settlement:before", operation);
 
@@ -2263,7 +2289,7 @@ const makeServices = Effect.fnUntraced(function* () {
   ) {
     const operation = "ledger claim joining";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(ClaimJoiningRequest))(request).pipe(
+    const validated = yield* decodeClaimJoiningRequestType(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -3526,7 +3552,7 @@ const makeServices = Effect.fnUntraced(function* () {
     ).pipe(Effect.mapError(sqlFailure(operation)));
 
     const decoded = yield* decodeRows(
-      Schema.Array(SubmissionWorkItem),
+      SubmissionWorkItems,
       "effect_agent_submissions",
       "nonterminal_scan",
       rows,
@@ -3574,7 +3600,7 @@ const makeServices = Effect.fnUntraced(function* () {
             : left.queue_sequence - right.queue_sequence,
       );
 
-      const work = yield* Schema.decodeEffect(Schema.Array(SubmissionWorkItem))(
+      const work = yield* decodeSubmissionWorkItems(
         sorted.map((row) => ({
           submissionId: row.submission_id,
           threadId: row.thread_id,
@@ -3613,7 +3639,7 @@ const makeServices = Effect.fnUntraced(function* () {
     Effect.fnUntraced(function* (request) {
       const operation = "ledger read abort intent";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(AbortIntentRequest))(request).pipe(
+      const validated = yield* decodeAbortIntentRequestType(request).pipe(
         Effect.mapError(internalFailure(operation)),
       );
 
@@ -3638,9 +3664,9 @@ const makeServices = Effect.fnUntraced(function* () {
     Effect.fnUntraced(function* (request: RecoverySnapshotRequest) {
       const operation = "ledger load recovery snapshot";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(RecoverySnapshotRequest))(
-        request,
-      ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* decodeRecoverySnapshotRequestType(request).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
       return yield* state.read(
         Effect.gen(function* () {

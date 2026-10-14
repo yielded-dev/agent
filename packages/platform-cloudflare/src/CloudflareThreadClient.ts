@@ -386,13 +386,14 @@ const liveTextProtocolFailure = () =>
     message: "Provisional text is incomplete or invalid; discard drafts and read canonical records",
   });
 
+const decodeLiveTextFrame = Schema.decodeUnknownSync(Schema.fromJsonString(LiveTextFrame));
+
 const decodeLiveText = (
   threadId: ThreadId,
   source: ReadableStream<unknown>,
 ): Stream.Stream<LiveTextFrame, HostProtocolError | ThreadClientError> =>
   Stream.suspend(() => {
     const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false });
-    const decode = Schema.decodeUnknownSync(Schema.fromJsonString(LiveTextFrame));
     let pending = "";
     let pendingBytes = 0;
     let expected = 0;
@@ -488,7 +489,7 @@ const decodeLiveText = (
             if (newline < 0) break;
 
             const frame = yield* Effect.try({
-              try: () => decode(pending),
+              try: () => decodeLiveTextFrame(pending),
               catch: liveTextProtocolFailure,
             });
 

@@ -103,6 +103,11 @@ const isDoCheckpointConflict = Schema.is(DoCheckpointConflict);
 const ThreadCheckpointJson = Schema.fromJsonString(ThreadCheckpoint);
 const decodeCanonicalRecord = decodeExportRecordJson;
 
+const decodeThreadMaterializationType = Schema.decodeEffect(Schema.toType(ThreadMaterialization));
+const decodeThreadReadRequestType = Schema.decodeEffect(Schema.toType(ThreadReadRequest));
+const decodeThreadTailRequestType = Schema.decodeEffect(Schema.toType(ThreadTailRequest));
+const decodeStorageConfig = Schema.decodeEffect(DoStorageConfigValue);
+
 const storeError = (
   operation: string,
   error: { readonly message: string; readonly diagnostic?: ThreadStoreDiagnostic },
@@ -299,9 +304,9 @@ const makeServices = Effect.fnUntraced(function* () {
   const materialize: ThreadStore["Service"]["materialize"] = Effect.fnUntraced(function* (
     request: ThreadMaterialization,
   ) {
-    const validated = yield* Schema.decodeEffect(Schema.toType(ThreadMaterialization))(
-      request,
-    ).pipe(Effect.mapError((error) => schemaStoreError("validate materialization", error)));
+    const validated = yield* decodeThreadMaterializationType(request).pipe(
+      Effect.mapError((error) => schemaStoreError("validate materialization", error)),
+    );
 
     const now = yield* Clock.currentTimeMillis;
 
@@ -368,7 +373,7 @@ const makeServices = Effect.fnUntraced(function* () {
   });
 
   const readEffect = Effect.fnUntraced(function* (request: ThreadReadRequest) {
-    const validated = yield* Schema.decodeEffect(Schema.toType(ThreadReadRequest))(request).pipe(
+    const validated = yield* decodeThreadReadRequestType(request).pipe(
       Effect.mapError((error) => schemaStoreError("validate thread read", error)),
     );
 
@@ -480,7 +485,7 @@ const makeServices = Effect.fnUntraced(function* () {
   const inspectTail: ThreadStore["Service"]["inspectTail"] = Effect.fnUntraced(function* (
     request: ThreadTailRequest,
   ) {
-    const validated = yield* Schema.decodeEffect(Schema.toType(ThreadTailRequest))(request).pipe(
+    const validated = yield* decodeThreadTailRequestType(request).pipe(
       Effect.mapError((error) => schemaStoreError("validate tail inspection", error)),
     );
 
@@ -637,7 +642,7 @@ export const storageConfigLayer = (
   options: DoStorageOptions,
 ): Layer.Layer<DoStorageConfig, DoStorageError> =>
   Layer.effect(DoStorageConfig)(
-    Schema.decodeEffect(DoStorageConfigValue)({
+    decodeStorageConfig({
       observationPollInterval: options.observationPollInterval ?? 25,
       maxStoredValueBytes: options.maxStoredValueBytes ?? DEFAULT_MAX_STORED_VALUE_BYTES,
       verifyOnOpen: options.verifyOnOpen ?? false,
