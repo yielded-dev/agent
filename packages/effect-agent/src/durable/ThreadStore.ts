@@ -415,10 +415,6 @@ const captureExecution = (input: ExecutionUpdate) => {
     facts.push(record.success);
   }
 
-  // Keep the actual owned arrays within the persisted bounds as well.
-  validateExecutionRecordCount(operational);
-  validateExecutionRecordCount(facts);
-
   const checkpoint = Object.freeze(
     ExecutionCheckpoint.make(
       {
@@ -549,8 +545,6 @@ export const PreparedAppend = {
             for (let index = 0; index < executionLength; index++)
               executionWrites.push(yield* captureExecution(executions[index]!));
             Object.freeze(executionWrites);
-
-            validateRecordCount(executionWrites);
 
             if (input.batch.records.length === 0 && executionWrites.length === 0)
               return yield* Result.fail(
