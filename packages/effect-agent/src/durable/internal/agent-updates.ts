@@ -51,6 +51,9 @@ const updateDigest = (threadId: ThreadId, runId: RunId, updateId: string) =>
   digestJson([threadId, runId, updateId]);
 
 const nativeParameters = Schema.Struct({ value: Schema.Json });
+const isNativeParameters = Schema.is(nativeParameters);
+const definitionDigestsEqual = Schema.toEquivalence(DefinitionDigests);
+const updateValuesEqual = Schema.toEquivalence(Schema.Json);
 
 /** Canonical native acceptance proves only this exact update call, never an external effect.
  * Its frozen delivery remains independently recoverable even when its Tool acknowledgement is lost.
@@ -60,8 +63,7 @@ export const nativeUpdateAccepted = (
   call: DeclaredToolCall,
   records: ReadonlyArray<CanonicalRecordEnvelope>,
 ): boolean => {
-  if (call.toolName !== "emit_update" || !Schema.is(nativeParameters)(call.parameters))
-    return false;
+  if (call.toolName !== "emit_update" || !isNativeParameters(call.parameters)) return false;
   const value = call.parameters.value;
 
   return records.some(
@@ -71,8 +73,8 @@ export const nativeUpdateAccepted = (
       payload.update.agentId === submission.agentId &&
       payload.update.runId === call.runId &&
       payload.update.updateId === nativeUpdateId(call.runId, call.toolCallId) &&
-      Schema.toEquivalence(DefinitionDigests)(payload.definitions, submission.agentDigests) &&
-      Schema.toEquivalence(Schema.Json)(payload.update.value, value),
+      definitionDigestsEqual(payload.definitions, submission.agentDigests) &&
+      updateValuesEqual(payload.update.value, value),
   );
 };
 
