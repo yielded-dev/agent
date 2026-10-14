@@ -36,7 +36,6 @@ const makeAgent = (search: boolean) =>
     inputPrompt: (input: string) => input,
     output: TaskResult,
     instructions: `Help the user in the browser using browser_execute. Write JavaScript that calls the cdp globals to inspect and operate websites. Inspect before acting; use Runtime.evaluate, DOM, Input, Page and other page-scoped CDP commands as needed. Return concise JSON observations. Use cdp.tabs({}) and cdp.newTab({}) to list and create tabs; use targetId for a specific tab. Browser.* and Target.* are host-only.
-cdp.send returns the raw CDP response. For Runtime.evaluate with returnByValue:true, read response.result.value and check response.exceptionDetails. The browser_execute tool separately wraps your function's return value in {result, logs}; that outer wrapper is not part of the cdp.send response inside your code. If a field is unexpectedly missing, return and inspect the raw response instead of substituting an empty string and claiming the page has no content.
 ${
   search
     ? "For discovery, research, comparisons and recommendations, use OpenAiWebSearch to gather current evidence before choosing a website or claiming an option is best. Compare plausible candidates and cite the sources that support your choice. Then use the browser to inspect the selected website and verify product details and availability before acting. A user-supplied URL or a follow-up on the current page can be opened directly. If search fails, explain the failure; do not present remembered URLs as search findings."
