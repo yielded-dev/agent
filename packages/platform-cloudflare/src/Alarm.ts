@@ -2168,7 +2168,12 @@ export class ThreadMaintenance extends Context.Service<
 
             return {
               scannedGeneration: state.dirty,
-              afterWorkThread: state.lastRecoveredThreadId,
+              // Single-Thread placement would immediately wrap past its own cursor.
+              afterWorkThread:
+                framework.singleThreadRuntime === runtime &&
+                state.lastRecoveredThreadId === nativeThread
+                  ? undefined
+                  : state.lastRecoveredThreadId,
             };
           },
         );
