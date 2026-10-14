@@ -887,9 +887,11 @@ const makeJournal = Effect.fnUntraced(function* (
       });
     }
 
-    const firstSequence = yield* Schema.decodeEffect(CanonicalSequence)(
-      thread.tail_sequence + (request.records.length === 0 ? 0 : 1),
-    ).pipe(
+    const result = yield* Schema.decodeEffect(AppendResult)({
+      firstSequence: thread.tail_sequence + (request.records.length === 0 ? 0 : 1),
+      lastSequence: thread.tail_sequence + request.records.length,
+      replayed: false,
+    }).pipe(
       Effect.mapError((error) =>
         DoStorageError.make({
           cause: error,
@@ -899,25 +901,9 @@ const makeJournal = Effect.fnUntraced(function* (
       ),
     );
 
-    const lastSequence = yield* Schema.decodeEffect(CanonicalSequence)(
-      thread.tail_sequence + request.records.length,
-    ).pipe(
-      Effect.mapError((error) =>
-        DoStorageError.make({
-          cause: error,
-          operation: "append canonical batch",
-          message: error.message,
-        }),
-      ),
-    );
+    const { firstSequence, lastSequence } = result;
 
     yield* executionConflict(executions.validate(request));
-
-    const result = AppendResult.make({
-      firstSequence,
-      lastSequence,
-      replayed: false,
-    });
 
     if (yield* appendNativeBody(request, firstSequence, lastSequence, inserted.length > 0)) {
       yield* progress.committed("canonical").pipe(
