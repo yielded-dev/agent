@@ -365,7 +365,7 @@ request against the shared reference. It has no durable receipts, storage or rec
 is not a drop-in durable engine. Each pass starts from the original history. It runs the
 same preceding turns as Yielded, but excludes the cold slots from its results and stays
 resident; Yielded and pi retain their normal cold measurements. Only compare their warm
-cells. The floor requires `--restore-each-pass` (the default through 1,000 turns), rejects
+cells. The floor requires `--restore-each-pass` (required for comparisons), rejects
 history-build/recovery diagnostics, and uses its own harness-pinned bundle, so it does not measure
 isolated Effect startup or an additive cost of durability.
 

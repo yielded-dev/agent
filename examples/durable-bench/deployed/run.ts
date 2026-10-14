@@ -1012,10 +1012,15 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   object: cohort.object,
                   epoch,
                   expectedBuild,
-                  ...(identity === undefined ? {} : { objectBuild: identity.identity.build }),
+                  ...(identity === undefined
+                    ? {}
+                    : { objectBuild: identity.identity.build, identity: identity.identity }),
                   ...(identity?.directory === undefined
                     ? {}
-                    : { directoryBuild: identity.directory.build }),
+                    : {
+                        directoryBuild: identity.directory.build,
+                        directoryIdentity: identity.directory,
+                      }),
                   atMs: started + probeWaitMs,
                   phase: "identity",
                   outcome,
@@ -1062,11 +1067,15 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   epoch,
                   expectedBuild,
                   objectBuild: reset.before.build,
+                  identity: reset.before,
                   atMs: started + waitMs,
                   phase: "reset",
                   ...(reset.directoryBefore === undefined
                     ? {}
-                    : { directoryBuild: reset.directoryBefore.build }),
+                    : {
+                        directoryBuild: reset.directoryBefore.build,
+                        directoryIdentity: reset.directoryBefore,
+                      }),
                   attempt,
                   waitMs,
                 },
@@ -1653,6 +1662,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
               const sample: Sample = {
                 ...query,
                 driverRequestId,
+                controllerQueuedMs: yield* Clock.currentTimeMillis,
                 wave,
                 peers,
                 build: label,
