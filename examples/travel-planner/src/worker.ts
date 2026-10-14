@@ -150,18 +150,11 @@ export const handleRequest = (verify = authenticate) =>
 
       return Response.redirect(url.href, 308);
     }
-    if (!url.pathname.startsWith("/travel/")) return new Response("Not found", { status: 404 });
-
-    // Start, Auth, and Alchemy's asset manifest use the public base path.
-    // The remaining API handlers retain root-relative paths inside this Worker.
     const pageRequest = request;
-
-    url.pathname = url.pathname.slice("/travel".length);
-    request = new Request(url, request);
 
     // Auth routes own their Origin/CSRF and body-size checks. Callback GET only renders.
     if (
-      url.pathname === "/login" ||
+      url.pathname === "/auth/login" ||
       url.pathname === "/auth/github/callback" ||
       url.pathname === "/auth/yielded/callback"
     ) {
@@ -203,6 +196,12 @@ export const handleRequest = (verify = authenticate) =>
         ),
       );
     }
+    if (!url.pathname.startsWith("/travel/")) return new Response("Not found", { status: 404 });
+
+    // Page and asset URLs keep their public paths; planner APIs are root-relative internally.
+    url.pathname = url.pathname.slice("/travel".length);
+    request = new Request(url, request);
+
     if ((url.pathname.startsWith("/assets/") || url.pathname === "/favicon.svg") && env.ASSETS)
       return yield* Effect.promise(() => env.ASSETS!.fetch(pageRequest));
 
@@ -222,7 +221,10 @@ export const handleRequest = (verify = authenticate) =>
       )
         return new Response(null, {
           status: 303,
-          headers: { location: "/travel/login", "cache-control": "no-store" },
+          headers: {
+            location: "/auth/login?provider=yielded&return=%2Ftravel%2F",
+            "cache-control": "no-store",
+          },
         });
 
       return new Response(identity.error.message, {

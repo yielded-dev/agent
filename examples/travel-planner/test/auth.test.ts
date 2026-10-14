@@ -94,7 +94,7 @@ const makeClient = () => {
 
     headers.set("cookie", [...cookies].map(([k, v]) => `${k}=${v}`).join("; "));
 
-    const response = await mf.dispatchFetch(`https://planner.test/travel${path}`, {
+    const response = await mf.dispatchFetch(`https://planner.test${path}`, {
       ...init,
       redirect: "manual",
       headers: Object.fromEntries(headers),
@@ -252,7 +252,7 @@ it("keeps credential-bearing callback GET inert and rejects unauthorized request
   const count = githubExchanges;
 
   for (const path of ["/api/rpc"]) {
-    const response = await client.request(path);
+    const response = await client.request(`/travel${path}`);
 
     expect(response.status).toBe(401);
     await response.arrayBuffer();
@@ -327,7 +327,6 @@ it("serves funding administration only to the verified owner and fences cross-or
         reference: first.result.reference,
         registration: { displayName: login },
       });
-      await complete();
     }
 
     const session = Schema.decodeUnknownSync(Schema.Struct({ subjectId: Schema.String }))(
@@ -348,7 +347,7 @@ it("serves funding administration only to the verified owner and fences cross-or
       origin = "https://planner.test",
       id = account.id,
     ) =>
-      account.client.request(`/api/funding/${path}`, {
+      account.client.request(`/travel/api/funding/${path}`, {
         method: body ? "POST" : "GET",
         headers: { origin, "x-elsewhere-account": id, "content-type": "application/json" },
         ...(body ? { body: JSON.stringify(body) } : {}),

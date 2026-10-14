@@ -2,6 +2,7 @@ import { Dialog } from "@base-ui/react/dialog";
 import {
   RegistryContext,
   useAtom,
+  useAtomMount,
   useAtomInitialValues,
   useAtomSet,
   useAtomValue,
@@ -13,7 +14,7 @@ import { ArrowUp, ArrowUpRight, Clock3, Map, Menu, Plus, X } from "lucide-react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { AccountSession } from "./auth/account";
-import { auth, accountLifetime } from "./auth/client";
+import { auth, accountLifetime, sessionObservation } from "./auth/client";
 import { ActivityPanel } from "./components/activity-panel";
 import { AgentProgress } from "./components/agent-progress.tsx";
 import { FundingPanel } from "./components/funding-panel";
@@ -61,12 +62,13 @@ function failure(result: AsyncResult.AsyncResult<unknown, unknown>): string | nu
 }
 
 export function Planner({ conversationId }: { readonly conversationId: string }) {
+  useAtomMount(sessionObservation);
   const session = useAtomValue(auth.session);
   const account = useAtomValue(accountLifetime);
   const signOut = useAtomSet(auth.signOut);
 
   if (AsyncResult.isSuccess(session) && session.value === null)
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/auth/login" replace />;
   if (
     !AsyncResult.isSuccess(session) ||
     session.value === null ||
@@ -233,13 +235,13 @@ function PlannerContent({ signOut }: { readonly signOut: () => void }) {
 
   const navigation = (
     <>
-      <Link className="wordmark" to="/" preload={false}>
+      <Link className="wordmark" to="/travel" preload={false}>
         elsewhere
         <ArrowUpRight size={34} aria-hidden="true" />
       </Link>
       <Link
         className="new-trip"
-        to="/"
+        to="/travel"
         preload={false}
         onClick={() => {
           setMenuOpen(false);
@@ -255,7 +257,7 @@ function PlannerContent({ signOut }: { readonly signOut: () => void }) {
           <Link
             className={`trip-link ${selection.conversationId === saved.conversationId ? "selected" : ""}`}
             key={saved.conversationId}
-            to="/conversations/$conversationId"
+            to="/travel/conversations/$conversationId"
             params={{ conversationId: saved.conversationId }}
             onClick={() => {
               setMenuOpen(false);

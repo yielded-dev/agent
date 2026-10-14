@@ -5,7 +5,7 @@ with background agents, saving itineraries, and building standalone trip website
 
 The planner lives at <https://agent.yielded.dev/travel/>. It shares host-only sign-in
 cookies (`__Host-elsewhere-auth-*`, `Path=/`) with `/browser-use/`. Link to
-`/travel/login?return=%2Fbrowser-use%2F` to return to the lab after sign-in;
+`/auth/login?provider=yielded&return=%2Fbrowser-use%2F` to return to the lab after sign-in;
 only `/travel/` (the default) and `/browser-use/` are accepted return targets.
 Generated trip apps stay on `*-trip.effect-agent.com`, outside the session origin.
 
@@ -23,15 +23,15 @@ The lab binds `PlannerAuthV2` on script `effect-agent-travel-planner`, instance
 
 Shared sign-in uses `https://auth.yielded.dev` as its OpenID issuer. Register client
 `yielded-agent` there with callback
-`https://agent.yielded.dev/travel/auth/yielded/callback`. Set `AUTH_YIELDED_ISSUER`
+`https://agent.yielded.dev/auth/yielded/callback`. Set `AUTH_YIELDED_ISSUER`
 to that issuer and `AUTH_YIELDED_CLIENT_SECRET` to its separate client secret.
 The central GitHub app's callback stays at Auth. Direct GitHub sign-in remains
 with email and account switching under **Other sign-in options**, with callback
-`https://agent.yielded.dev/travel/auth/github/callback`. If it shares a GitHub OAuth
+`https://agent.yielded.dev/auth/github/callback`. If it shares a GitHub OAuth
 app with Auth, register both exact callback entries and retain those needed by
 other consumers; see [GitHub's callback rules](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#redirect-urls). Set `AUTH_ORIGIN` to `https://agent.yielded.dev` and retain
 `auth@effect-agent.com` as the email sender.
-This stack owns only `agent.yielded.dev/travel*` on `yielded.dev`; the existing DNS
+This stack owns `agent.yielded.dev/travel*` and `agent.yielded.dev/auth/*` on `yielded.dev`; the existing DNS
 record and the browser lab's root and `/browser-use*` routes stay externally managed.
 
 It uses Cloudflare:
@@ -80,9 +80,9 @@ verifies issuer, audience, nonce, PKCE and the signed identity before establishi
 an Agent session. Agent requests `max_age=240` so authentication stays within its
 five-minute evidence policy, including time to complete the callback. Auth starts
 GitHub sign-in automatically when its session is absent or older than that limit;
-the original `auth_time` is preserved. The initial screen shows one sign-in button;
-**Other sign-in options** contains account switching and the existing direct GitHub/email
-methods. **Use another Yielded account** explicitly requests account selection; new permissions require
+the original `auth_time` is preserved. App sign-in links start Yielded authentication directly. `/auth/login` offers
+account switching and the existing direct GitHub/email methods. Confirmed OAuth
+registration establishes the Agent session without another provider round trip. **Use another Yielded account** explicitly requests account selection; new permissions require
 consent. Cancelling returns to login with a retry action. Auth
 and Agent have separate sessions: **Sign out of Agent** leaves Auth signed in.
 The browser lab already consumes this Agent session, so the same login covers it;
@@ -128,7 +128,7 @@ For the full application, configure [.env.example](.env.example) with developmen
 credentials and use `vp run -F @yielded/agent-example-travel-planner dev` from the repository
 root. Alchemy supplies the resources declared in [alchemy.run.ts](alchemy.run.ts), including
 `AUTH_V2` and `AUTH_EMAIL`. Authentication requires a canonical HTTPS `AUTH_ORIGIN`, a matching
-GitHub OAuth callback at `${AUTH_ORIGIN}/travel/auth/github/callback`, a verified email sender, and
+GitHub OAuth callback at `${AUTH_ORIGIN}/auth/github/callback`, a verified email sender, and
 three independent persistent base64url-encoded 32-byte auth keys. Shared sign-in also
 requires the issuer, registered callback and matching OpenID client secret above.
 The deployment workflow reads `TRAVEL_PLANNER_YIELDED_CLIENT_SECRET` from GitHub
