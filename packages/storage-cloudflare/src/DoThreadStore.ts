@@ -634,6 +634,13 @@ export const threadStoreLayer: Layer.Layer<
 > = ThreadReader.layer().pipe(Layer.provideMerge(Layer.effectContext(makeServices())));
 
 /**
+ * Share one initialized journal between local storage ports in one Object build. Provide
+ * this beneath both ports and above their common SQL, owner, configuration, failpoint,
+ * progress and lifecycle providers. Standalone ports initialize their own journal.
+ */
+export { initializedDoJournalLayer as journalLayer } from "./internal/do-journal.ts";
+
+/**
  * Validated Durable Object storage configuration Layer with the documented defaults applied.
  * Shared by the ThreadStore and SubmissionLedger convenience layers so their defaults
  * cannot drift.
