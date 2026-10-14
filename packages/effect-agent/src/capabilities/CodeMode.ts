@@ -727,6 +727,7 @@ const make = <
     "",
     "The `code` argument must be one JavaScript async function expression; the sandbox invokes it exactly once with no arguments. It runs isolated with no ambient network, filesystem, environment, or secrets. Return one JSON value. `console.log` output is captured within a bounded budget and returned alongside the result.",
     "Namespace methods return Promises. An expected Tool failure rejects with a JSON envelope carrying a stable `_tag`; catch it to branch. Use Promise.all for independent calls; the host bounds concurrency. Await every call you need. Writes may complete before a failure: inspect call outcomes and never blindly retry a program.",
+    "A failed program is an intermediate observation. Read its diagnostic, logs, thrown value and call evidence; correct recoverable source, runtime or argument errors with a fresh, smaller program and continue the authorized task without asking permission again. Reconcile possible partial writes before further actions. Do not replay the failed program unchanged. Stop and report the actual obstacle when authority, required information, capabilities or execution limits prevent progress; a failed or refused step does not cancel independent permitted work.",
     ...(options.includeDeclarations === false
       ? []
       : ["", "Sandbox globals:", "```ts", declarations, "```"]),

@@ -3,8 +3,11 @@ import { expect, layer } from "@effect/vitest";
 import { MemorySubmissionLedgerLive } from "@yielded/agent-storage-memory/memory-submission-ledger";
 import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
 import { inProcessCodeExecutorLayer } from "@yielded/agent-testing/code-executor-substitute";
+import { ScriptedModel } from "@yielded/agent-testing/scripted-model";
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
+import * as AgentRuntime from "@yielded/agent/agent-runtime";
+import * as BrowserUse from "@yielded/agent/browser-use";
 import * as CodeMode from "@yielded/agent/code-mode";
 import { DurableAgentRuntime, DurableRuntimeConfig } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
@@ -46,6 +49,137 @@ const testLayer = Layer.mergeAll(
 );
 
 layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (it) => {
+  // User-requested red/green at the model boundary: a CDP page exception must not
+  // disappear when generated code reads only result.value. A preceding write
+  // makes the no-replay requirement observable without mutating a live store.
+  it.effect(
+    "surfaces page exceptions to the next model turn without replaying a partial write",
+    () =>
+      Effect.gen(function* () {
+        const browser = BrowserUse.make();
+        const expressions: Array<Schema.Json | undefined> = [];
+        const diagnostic = "TypeError: Cannot read properties of null (reading 'innerText')";
+
+        const code = [
+          `async () => {
+          await cdp.send({method: "Runtime.evaluate", params: {expression: "addToCart()"}});
+          const r = await cdp.send({method: "Runtime.evaluate", params: {expression: "document.querySelector('#missing').innerText"}});
+          return {value: r.result.value ?? null};
+        }`,
+          `async () => {
+          const r = await cdp.send({method: "Runtime.evaluate", params: {expression: "readCart()"}});
+          return r.result.value;
+        }`,
+        ];
+
+        const model = Model.make(
+          "scripted",
+          "browser-repair",
+          ScriptedModel.layer([
+            ...code.map((source, index) => ({
+              _tag: "Stream" as const,
+              parts: [
+                {
+                  type: "tool-call" as const,
+                  id: `inspect-${index}`,
+                  name: "browser_execute",
+                  params: { code: source },
+                  providerExecuted: false,
+                },
+                { type: "finish" as const, reason: "tool-calls" as const, usage },
+              ],
+              termination: { _tag: "Complete" as const },
+            })),
+            {
+              _tag: "Stream",
+              parts: [
+                { type: "text-start", id: "answer" },
+                { type: "text-delta", id: "answer", delta: '"Cart contains one bag"' },
+                { type: "text-end", id: "answer" },
+                { type: "finish", reason: "stop", usage },
+              ],
+              termination: { _tag: "Complete" },
+            },
+          ]),
+        );
+
+        const definition = Agent.make("browser-repair", {
+          input: Schema.String,
+          output: Schema.String,
+          instructions: "Inspect the cart.",
+          toolkit: Toolkit.make(browser.tool),
+          policy: { maxTurns: 3, maxToolCalls: 8, maxDuration: "30 seconds" },
+        });
+
+        const handlers = browser.handlers.pipe(
+          Layer.provide([
+            inProcessCodeExecutorLayer,
+            BrowserUse.layer.pipe(
+              Layer.provide(
+                Layer.succeed(BrowserUse.BrowserCdp, {
+                  send: ({ params }) =>
+                    Effect.sync((): Schema.Json => {
+                      expressions.push(params?.expression);
+
+                      return params?.expression === "document.querySelector('#missing').innerText"
+                        ? {
+                            result: { type: "object", subtype: "error" },
+                            exceptionDetails: {
+                              text: "Uncaught",
+                              exception: { description: diagnostic },
+                            },
+                          }
+                        : { result: { value: { quantity: 1 } } };
+                    }),
+                  tabs: Effect.succeed([]),
+                  frames: () => Effect.succeed([]),
+                  newTab: Effect.die("must not open a tab"),
+                  closeTab: () => Effect.die("must not close a tab"),
+                }),
+              ),
+            ),
+          ]),
+        );
+
+        yield* Effect.gen(function* () {
+          const result = yield* AgentRuntime.run(definition, "inspect").pipe(
+            Effect.provide(handlers),
+          );
+
+          const script = yield* ScriptedModel;
+          const requests = yield* script.requests;
+
+          const failure = requests[1]?.options.prompt.content.flatMap((message) =>
+            message.role === "tool" ? message.content : [],
+          )[0];
+
+          expect(failure).toMatchObject({
+            isFailure: true,
+            result: {
+              _tag: "CodeModeFailure",
+              thrown: {
+                _tag: "BrowserUseError",
+                dispatch: "possibly-dispatched",
+                message: expect.stringContaining(diagnostic),
+              },
+              calls: [{ status: "succeeded" }, { status: "failed" }],
+            },
+          });
+          expect(result.output).toBe("Cart contains one bag");
+          expect(expressions).toEqual([
+            "addToCart()",
+            "document.querySelector('#missing').innerText",
+            "readCart()",
+          ]);
+          expect(
+            requests[2]?.options.prompt.content
+              .flatMap((message) => (message.role === "tool" ? message.content : []))
+              .at(-1),
+          ).toMatchObject({ isFailure: false, result: { result: { quantity: 1 } } });
+        }).pipe(Effect.provide(model));
+      }),
+  );
+
   it.effect(
     "RUN-036 CAP-016 observes the inner Cause while CodeModeFailure recovers to a completed durable Run",
     () => {
