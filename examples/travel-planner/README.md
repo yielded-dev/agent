@@ -100,8 +100,10 @@ single-use consumption remain durable.
 The production deployment workflow enables Cloudflare traces after verifying request URL
 query-string redaction, keeping authentication callback parameters out of platform telemetry.
 Direct Alchemy deployments leave traces disabled because its SDK does not yet expose that setting.
-Manual dispatch of **Deploy travel planner** deploys the selected branch to production, so it
-requires deployment authorization even for a PR branch. Automatic deployments remain on `main`.
+Every push to `main` runs **Deploy Agent demos**, checking both applications and deploying the
+planner before the browser lab. Automatic deployment requires the repository variable
+`TRAVEL_PLANNER_DEPLOY_ENABLED=true`. Manual dispatch deploys the selected branch to production,
+so it requires deployment authorization even for a PR branch.
 
 For a local UI preview without cloud accounts or provider credentials, run:
 

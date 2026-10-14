@@ -121,6 +121,11 @@ The `public` environment remains `yielded-agent-browser-use`, serving
 supply an OpenAI key; same-origin travel planner accounts on the funding allowlist can use
 `FUNDED_OPENAI_API_KEY`. Auth lookup failures leave the request unfunded.
 
+Every push to `main` runs [Deploy Agent demos](../../.github/workflows/deploy-travel-planner.yml),
+which checks both applications and deploys the planner before the browser lab. Automatic
+deployment uses the repository variable `TRAVEL_PLANNER_DEPLOY_ENABLED=true` and the existing
+Cloudflare secrets. For a manual deployment of the lab alone:
+
 ```sh
 vp run -F @yielded/agent-example-browser-speed deploy:public
 ```

@@ -1,16 +1,8 @@
-name: Deploy travel planner
+name: Deploy Agent demos
 
 on:
   push:
     branches: [main]
-    paths:
-      - "examples/travel-planner/**"
-      - ".github/workflows/deploy-travel-planner.yml"
-      - "bun.lock"
-      - "package.json"
-      - "patches/**"
-      - "bunfig.toml"
-      - "tsconfig.base.json"
   workflow_dispatch:
 
 permissions:
@@ -48,15 +40,13 @@ jobs:
       - name: Install dependencies
         run: vp install --frozen-lockfile --ignore-scripts
 
-      - name: Check application
-        run: vp run -F @yielded/agent-example-travel-planner check
+      - name: Check applications
+        run: vp run -F @yielded/agent-example-travel-planner -F @yielded/agent-example-browser-speed check
 
-      - name: Test application
-        working-directory: examples/travel-planner
-        run: vp test
+      - name: Test applications
+        run: vp run -F @yielded/agent-example-travel-planner -F @yielded/agent-example-browser-speed test
 
       - name: Detach the browser lab from retired auth
-        id: browser-auth
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -80,11 +70,7 @@ jobs:
           writeFileSync(path, source.replace(binding, ""));
           JS
             vp run -F @yielded/agent-example-browser-speed deploy:public
-            echo "rebind=true" >> "$GITHUB_OUTPUT"
-          elif vp exec jq -e '.result.bindings | all(.name != "AUTH")' "$RUNNER_TEMP/browser-settings.json"; then
-            # Resume a cutover whose planner deployment failed after detaching.
-            echo "rebind=true" >> "$GITHUB_OUTPUT"
-          else
+          elif vp exec jq -e '.result.bindings | any(.name == "AUTH")' "$RUNNER_TEMP/browser-settings.json"; then
             vp exec jq -e '.result.bindings | any(.name == "AUTH" and .class_name == "PlannerAuthV2" and .script_name == "effect-agent-travel-planner")' "$RUNNER_TEMP/browser-settings.json"
           fi
 
@@ -113,8 +99,7 @@ jobs:
           done
           vp run -F @yielded/agent-example-travel-planner deploy --yes
 
-      - name: Rebind the browser lab to fresh auth
-        if: steps.browser-auth.outputs.rebind == 'true'
+      - name: Deploy browser lab
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
