@@ -714,8 +714,11 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
       // The same local ports serve routed decorators and owner-side RPC execution.
       // The RPC executor must never receive routed ports and bounce requests between Objects.
       const rawLocalPorts = Layer.suspend(() =>
-        Layer.mergeAll(threadStoreLayer, submissionLedgerLayer),
-      ).pipe(Layer.provide(localInfrastructure), Layer.provide(sourceProgress));
+        Layer.mergeAll(threadStoreLayer, submissionLedgerLayer).pipe(
+          Layer.provide(localInfrastructure),
+          Layer.provide(sourceProgress),
+        ),
+      );
 
       const base = Layer.suspend(() =>
         Layer.mergeAll(DurableAlarmService.layer, ProgressWaitRegistry.layer),
@@ -723,14 +726,16 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
 
       const wakes = cloudflareWakeSchedulerLayer.pipe(Layer.provide(base));
 
-      const messageStore = guardedMessageDeliveryStoreLayer.pipe(
-        Layer.provide(
-          doMessageDeliveryStoreLayer().pipe(
-            Layer.provide(localInfrastructure),
-            Layer.provide(sourceProgress),
+      const messageStore = Layer.suspend(() =>
+        guardedMessageDeliveryStoreLayer.pipe(
+          Layer.provide(
+            doMessageDeliveryStoreLayer().pipe(
+              Layer.provide(localInfrastructure),
+              Layer.provide(sourceProgress),
+            ),
           ),
+          Layer.provide(wakes),
         ),
-        Layer.provide(wakes),
       );
 
       const messageRecovery = Layer.suspend(() =>
