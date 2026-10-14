@@ -113,6 +113,8 @@ export interface RunWriter {
 
 export interface RunStorageSession extends RunWriter, RunOwnership {
   readonly claim: Claim;
+  /** Atomic original input/context plus the ledger marker, when the adapter supports it. */
+  readonly appendInput?: RunWriter["append"];
   /** Library-only initialization, before application/model IO. Hold progress before mutation
    * so the captured controls and this owner's acknowledged input remain one read view. */
   readonly withInitialization?: <A, E, R>(
@@ -176,69 +178,75 @@ const makeWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
     }),
   );
 
-  const append: RunWriter["append"] = Effect.fnUntraced(function* (batch, executions) {
-    const captured = yield* PreparedAppend.capture(
-      AppendRequest.make({
-        threadId,
-        expectedTailSequence: tail.sequence,
-        batch,
-        ...(executions === undefined ? {} : { executions }),
-      }),
-    ).pipe(
-      Effect.mapError((cause) =>
-        ThreadStoreError.make({
-          operation: "capture append",
-          message: cause.message,
-          cause,
+  const makeAppend = Effect.gen(function* () {
+    const publisher = yield* ThreadStore;
+
+    const append: RunWriter["append"] = Effect.fnUntraced(function* (batch, executions) {
+      const captured = yield* PreparedAppend.capture(
+        AppendRequest.make({
+          threadId,
+          expectedTailSequence: tail.sequence,
+          batch,
+          ...(executions === undefined ? {} : { executions }),
         }),
-      ),
-    );
+      ).pipe(
+        Effect.mapError((cause) =>
+          ThreadStoreError.make({
+            operation: "capture append",
+            message: cause.message,
+            cause,
+          }),
+        ),
+      );
 
-    return yield* owner.withProgress(
-      threadId,
-      owner.withMutation(
-        Effect.gen(function* () {
-          yield* checkActive;
-          for (let retries = 0; ; retries++) {
-            const result = yield* store
-              .append(
-                captured.expectedTailSequence === tail.sequence
-                  ? captured
-                  : AppendRequest.make({
-                      ...captured,
-                      expectedTailSequence: tail.sequence,
-                    }),
-              )
-              .pipe(
-                Effect.catchTag("AppendConflict", (conflict) => {
-                  if (
-                    conflict.reason !== "tail" ||
-                    conflict.actualTailSequence === undefined ||
-                    retries >= 8
-                  )
-                    return Effect.fail(conflict);
-                  tail = { sequence: conflict.actualTailSequence };
-                  if (captured.executions !== undefined) return Effect.fail(conflict);
+      return yield* owner.withProgress(
+        threadId,
+        owner.withMutation(
+          Effect.gen(function* () {
+            yield* checkActive;
+            for (let retries = 0; ; retries++) {
+              const result = yield* publisher
+                .append(
+                  captured.expectedTailSequence === tail.sequence
+                    ? captured
+                    : AppendRequest.make({
+                        ...captured,
+                        expectedTailSequence: tail.sequence,
+                      }),
+                )
+                .pipe(
+                  Effect.catchTag("AppendConflict", (conflict) => {
+                    if (
+                      conflict.reason !== "tail" ||
+                      conflict.actualTailSequence === undefined ||
+                      retries >= 8
+                    )
+                      return Effect.fail(conflict);
+                    tail = { sequence: conflict.actualTailSequence };
+                    if (captured.executions !== undefined) return Effect.fail(conflict);
 
-                  return Effect.succeed(undefined);
-                }),
-              );
+                    return Effect.succeed(undefined);
+                  }),
+                );
 
-            if (result === undefined) continue;
-            // A historical replay returns its original coordinates, not today's canonical tail.
-            if (result.replayed) yield* refresh;
-            else tail = { sequence: result.lastSequence };
+              if (result === undefined) continue;
+              // A historical replay returns its original coordinates, not today's canonical tail.
+              if (result.replayed) yield* refresh;
+              else tail = { sequence: result.lastSequence };
 
-            return result;
-          }
-        }).pipe(
-          // Revoke uncertain writes before releasing the writer's mutation gate.
-          Effect.onError((cause) =>
-            isDefiniteWriteFailure(cause) ? Effect.void : ownership.release,
+              return result;
+            }
+          }).pipe(
+            // Revoke uncertain writes before releasing the writer's mutation gate.
+            Effect.onError((cause) =>
+              isDefiniteWriteFailure(cause) ? Effect.void : ownership.release,
+            ),
           ),
         ),
-      ),
-    );
+      );
+    });
+
+    return append;
   });
 
   const writer = {
@@ -247,13 +255,14 @@ const makeWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
     withProgress: <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       owner.withProgress(threadId, Effect.andThen(checkActive, effect)),
     tail: Effect.sync(() => tail),
-    append,
+    append: yield* makeAppend,
     checkActive: owner.withMutation(checkActive),
     refresh,
   };
 
   return {
     writer,
+    makeAppend,
     adoptTail: (sequence: CanonicalSequence) => {
       tail = { sequence };
     },
@@ -310,7 +319,7 @@ export const make = Effect.gen(function* () {
               });
             yield* store.materialize(ThreadMaterialization.make({ threadId: request.threadId }));
 
-            const { writer, adoptTail } = yield* makeWriter(request.threadId).pipe(
+            const { writer, makeAppend, adoptTail } = yield* makeWriter(request.threadId).pipe(
               Effect.provideService(WriterOwnership, generation),
               Effect.provideService(ThreadStore, store),
               Effect.provideService(StorageOwner, owner),
@@ -318,9 +327,22 @@ export const make = Effect.gen(function* () {
 
             const owned = <A, E>(effect: Effect.Effect<A, E>) => generation.use(effect);
 
+            const inputPublisher = ledger.appendInput;
+
+            const appendInput =
+              inputPublisher === undefined
+                ? undefined
+                : yield* makeAppend.pipe(
+                    Effect.provideService(ThreadStore, {
+                      ...store,
+                      append: (request) => inputPublisher(claimed.submissionId, request),
+                    }),
+                  );
+
             const session: RunStorageSession = {
               ...writer,
               claim: claimed,
+              ...(appendInput === undefined ? {} : { appendInput }),
               withInitialization: (effect) =>
                 owner.withProgress(request.threadId, generation.use(effect)),
               release: generation.release,

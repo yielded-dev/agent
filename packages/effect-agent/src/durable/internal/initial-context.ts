@@ -1,17 +1,32 @@
 import { Effect, Option, Schema, Stream } from "effect";
 import { Prompt } from "effect/ai";
 
-import { CanonicalSequence, type CanonicalRecordEnvelope } from "../Records.ts";
+import {
+  CanonicalSequence,
+  type CanonicalRecordEnvelope,
+  type RecordEnvelope,
+  type UserInputRecorded,
+} from "../Records.ts";
 import { RunJournalError, toolCallSettledRecordId } from "../RunJournal.ts";
 import { submissionSettlementRecordId } from "../SubmissionLedger.ts";
 import { getRecord, getRunInput, PROMPT_EVIDENCE_TAGS, ThreadReader } from "../ThreadStore.ts";
 import type { JournalRecordEnvelope } from "./journal-metadata.ts";
 
+/** A captured original input can prepare context before its atomic publication. It carries
+ * an expected position, never a committed observation cursor or dispatch authority. */
+export type InitialContextInput =
+  | CanonicalRecordEnvelope
+  | {
+      readonly threadId: CanonicalRecordEnvelope["threadId"];
+      readonly sequence: CanonicalRecordEnvelope["sequence"];
+      readonly record: RecordEnvelope & { readonly payload: UserInputRecorded };
+    };
+
 const invalid = (message: string) => RunJournalError.make({ message });
 const promptTag = new Set<string>(PROMPT_EVIDENCE_TAGS);
 
 /** Fresh admission trusts validated immutable history; recovery verifies its saved Prompt digest. */
-export const initialContext = Effect.fnUntraced(function* (original: CanonicalRecordEnvelope) {
+export const initialContext = Effect.fnUntraced(function* (original: InitialContextInput) {
   const reader = yield* ThreadReader;
   const threadId = original.threadId;
   const through = CanonicalSequence.make(original.sequence - 1);

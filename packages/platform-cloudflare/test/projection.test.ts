@@ -60,6 +60,7 @@ import {
   ProjectionIndex,
   projectionControls,
 } from "./projection-fixture.ts";
+import { PublicationCursor, PUBLICATION_KEY } from "./publication-fixture.ts";
 
 const namespace = "PROJECTIONS";
 const stub = (thread: string) => env.PROJECTIONS.get(env.PROJECTIONS.idFromName(thread));
@@ -169,6 +170,49 @@ const append = (thread: string, request: AppendRequest) =>
   );
 
 describe("live Thread projection and alarm backfill", () => {
+  // Regression: b6e82a802 added atomic startup outside the configured source decorators.
+  it("projects and publishes the fresh input before the first model request", () =>
+    withThread(async (thread) => {
+      await submit(thread, plannerDefinition);
+      let atModel: { tail: number; indexed: number; published: number } | undefined;
+
+      try {
+        await runInDurableObject(stub(thread), (instance, state) =>
+          instance[DurableObject.RunSymbol](
+            Effect.gen(function* () {
+              const store = yield* ThreadStore;
+              const index = yield* ProjectionIndex;
+              const runtime = yield* DurableAgentRuntime;
+
+              modelRequestHolds.set(
+                thread,
+                Effect.gen(function* () {
+                  const tail = yield* store.inspectTail(
+                    ThreadTailRequest.make({ threadId: decodeThreadId(thread) }),
+                  );
+
+                  const indexed = yield* index.watermark;
+
+                  const publication = yield* Effect.promise(() =>
+                    state.storage.get(PUBLICATION_KEY),
+                  ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(PublicationCursor)));
+
+                  atModel = { tail: tail.tailSequence, indexed, published: publication.tail };
+                }).pipe(Effect.orDie),
+              );
+              yield* runtime.processThreadHead(decodeThreadId(thread));
+            }),
+          ),
+        );
+        // Fresh canonical history contains ThreadCreated and UserInputRecorded here;
+        // operational RunStarted/context are in the same durable startup checkpoint.
+        expect(atModel).toEqual({ tail: 2, indexed: 2, published: 2 });
+        expect(await allSettled(thread, namespace)()).toBe(true);
+      } finally {
+        modelRequestHolds.delete(thread);
+      }
+    }));
+
   // Regression: https://github.com/yielded-dev/agent/commit/0e83011e
   it("enrolls native admission, replayed finalization and stop without another append", () =>
     withThread(async (thread) => {

@@ -52,7 +52,7 @@ import {
   subagentRequestedRecordId,
   subagentStartedRecordId,
 } from "./RunJournal.ts";
-import type { RunStorageSession, RunWriter } from "./RunStorage.ts";
+import type { RunStorageSession } from "./RunStorage.ts";
 import {
   submissionAbortRecordId,
   submissionInputRecordId,
@@ -74,7 +74,7 @@ export { RunContinuation, RunContextRecorded, EvidenceReference } from "./Record
 /** Writer and progress sequencer selected at the local owner's resource boundary. */
 export class CurrentRunWriter extends Context.Service<
   CurrentRunWriter,
-  Pick<RunWriter, "threadId" | "tail" | "append" | "withProgress">
+  Pick<RunStorageSession, "threadId" | "tail" | "append" | "appendInput" | "withProgress">
 >()("@effect-agent/thread/CurrentRunWriter") {}
 
 /** Settlement publication keeps its original atomic authority and claim-scoped implementation. */

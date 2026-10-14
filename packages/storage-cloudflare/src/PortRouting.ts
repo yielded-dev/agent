@@ -730,6 +730,23 @@ const makeRoutedLedgerServices = Effect.fnUntraced(function* (options: RoutedPor
         ? local.claimJoining(request)
         : Effect.fail(crossThreadLedgerError("ledger claim joining", request.threadId)),
 
+    ...(local.appendInput === undefined
+      ? {}
+      : {
+          appendInput: (
+            submissionId: SubmissionSnapshot["submissionId"],
+            request: Parameters<NonNullable<SubmissionLedger["Service"]["appendInput"]>>[1],
+          ) =>
+            options.ownsThread(request.threadId)
+              ? local.appendInput!(submissionId, request)
+              : Effect.fail(
+                  ThreadStoreError.make({
+                    operation: "append original input",
+                    message: "Original input publication is lane-local",
+                  }),
+                ),
+        }),
+
     markInputApplied: (request) =>
       submissionTarget("ledger mark input applied", request.submissionId).pipe(
         Effect.flatMap((target) =>

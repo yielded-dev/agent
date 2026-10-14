@@ -36,6 +36,7 @@ import {
   ToolCallUnknown,
   WorkerAdmission,
 } from "./Records.ts";
+import type { AppendRequest, AppendResult, ThreadStoreFailure } from "./ThreadStore.ts";
 
 export { IdempotencyKey, JoinedToHost, QueueSequence, Principal } from "../core/Receipt.ts";
 
@@ -1113,6 +1114,13 @@ export class SubmissionLedger extends Context.Service<
     readonly selectHead: (
       request: ClaimRequest,
     ) => Effect.Effect<Option.Option<Claim>, LedgerError>;
+    /** Atomically publish a captured original input, active context and applied marker.
+     * Optional adapters retain the ordinary append-then-repair protocol. The captured input
+     * must be this owner's deterministic admission; a moved context boundary is refused. */
+    readonly appendInput?: (
+      submissionId: SubmissionId,
+      request: AppendRequest,
+    ) => Effect.Effect<AppendResult, ThreadStoreFailure>;
     readonly markInputApplied: (
       request: MarkInputAppliedRequest,
     ) => Effect.Effect<void, OwnershipLost | LedgerError>;
