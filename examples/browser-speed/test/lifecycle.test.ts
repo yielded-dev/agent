@@ -1,16 +1,18 @@
 import { assert, expectTypeOf, it } from "@effect/vitest";
+import { InMemory } from "@yielded/agent";
 import {
   BrowserSessionError,
   BrowserSessionReference,
   BrowserSessions,
 } from "@yielded/agent-platform-cloudflare/browser-session";
 import { CodeExecutor } from "@yielded/agent/code-executor";
+import type { ThreadHistory } from "@yielded/agent/thread-history";
 import type { Scope } from "effect";
 import { Deferred, Effect, Exit, Fiber, Redacted, Schema } from "effect";
 import { TestClock } from "effect/testing";
 
 import type { Browser } from "../src/browser.ts";
-import { LabError, seed, verify, type RunInput } from "../src/contract.ts";
+import { LabError, type RunInput } from "../src/contract.ts";
 import type { connectKitesurf } from "../src/kitesurf.ts";
 import { emptyControl, makeOwner, Control } from "../src/owner.ts";
 import type { executeTask } from "../src/runner.ts";
@@ -20,7 +22,7 @@ import { makeTrace } from "../src/telemetry.ts";
 
 expectTypeOf<Effect.Error<ReturnType<typeof executeTask>>>().toEqualTypeOf<LabError>();
 expectTypeOf<Effect.Services<ReturnType<typeof executeTask>>>().toEqualTypeOf<
-  Browser | Trace | CodeExecutor
+  Browser | Trace | CodeExecutor | ThreadHistory
 >();
 expectTypeOf<Effect.Error<ReturnType<typeof connectKitesurf>>>().toEqualTypeOf<LabError>();
 expectTypeOf<Effect.Services<ReturnType<typeof connectKitesurf>>>().toEqualTypeOf<Scope.Scope>();
@@ -33,7 +35,7 @@ expectTypeOf<
 
 const request = (): RunInput => ({
   id: crypto.randomUUID(),
-  scenario: "create",
+  scenario: "coffee",
   prompt: "",
   screenshots: false,
   liveView: false,
@@ -69,6 +71,7 @@ it.effect(
           {
             model: "unused",
             apiKey: "fixture-key",
+            history: InMemory.layer,
             kitesurf: Effect.fnUntraced(function* (retainClose) {
               opened++;
               retainClose(
@@ -107,7 +110,7 @@ it.effect(
 
         yield* Deferred.await(started);
         if (outcome === "stop") yield* owner.stop();
-        if (outcome === "timeout") yield* TestClock.adjust("4 minutes");
+        if (outcome === "timeout") yield* TestClock.adjust("12 minutes");
         const report = yield* Fiber.join(run);
 
         assert.strictEqual(opened, outcome === "failure" ? 2 : 1);
@@ -143,7 +146,7 @@ it.effect(
             },
             alarm: () => Effect.void,
           },
-          { model: "unused", apiKey: "fixture-key" },
+          { model: "unused", apiKey: "fixture-key", history: InMemory.layer },
         );
 
         const services = BrowserSessions.of({
@@ -182,7 +185,7 @@ it.effect(
 
             assert.strictEqual(concurrent._tag, "Failure");
             if (outcome === "stop") yield* owner.stop();
-            else yield* TestClock.adjust("4 minutes");
+            else yield* TestClock.adjust("12 minutes");
           }
           const report = yield* Fiber.join(fiber);
 
@@ -224,7 +227,7 @@ it.effect(
           },
           alarm: () => Effect.void,
         },
-        { model: "unused", apiKey: "fixture-key" },
+        { model: "unused", apiKey: "fixture-key", history: InMemory.layer },
       );
 
       const unused = () => Effect.die("Lost work must not acquire or attach a browser");
@@ -293,24 +296,6 @@ it.effect(
     ),
 );
 
-it("rejects extra writes, changed unrelated fields and agent-only success claims", () => {
-  const created = {
-    id: 5,
-    title: "Ship demo",
-    assignee: "Alex",
-    priority: "High",
-    status: "Todo",
-  } as const;
-
-  assert.isTrue(verify("create", [...seed, created]));
-  assert.isFalse(verify("create", [...seed, created, { ...created, id: 6 }]));
-  assert.isFalse(
-    verify("create", [...seed.map((task) => ({ ...task, priority: "High" as const })), created]),
-  );
-  assert.isFalse(verify("create", seed));
-  assert.isFalse(verify("browse", [...seed, created]));
-});
-
 it.effect(
   "accounts for every owner mutation failpoint and retires a recovered browser without replay",
   () =>
@@ -364,7 +349,11 @@ it.effect(
               }),
           };
 
-          const owner = makeOwner(store, { model: "unused", apiKey: "fixture-key" });
+          const owner = makeOwner(store, {
+            model: "unused",
+            apiKey: "fixture-key",
+            history: InMemory.layer,
+          });
 
           const services = BrowserSessions.of({
             createAttached: () => Effect.die("The lab creates and attaches separately"),
@@ -405,7 +394,12 @@ it.effect(
             assert.isTrue(reached.has(location), `Unreached failpoint: ${location}`);
             const admitted = store.read().admitted.includes(input.id);
             const acquiredBeforeRecovery = acquisitions;
-            const recovered = makeOwner(store, { model: "unused", apiKey: "fixture-key" });
+
+            const recovered = makeOwner(store, {
+              model: "unused",
+              apiKey: "fixture-key",
+              history: InMemory.layer,
+            });
 
             yield* recovered.close();
             assert.isFalse(alive, location);

@@ -43,7 +43,10 @@ closed inside the program; obtain approval through an appropriate outer workflow
 
 Writes are not transactional. A failed program can leave successful writes behind. Failure reports
 classify calls as succeeded, failed, uncertain, or not started; omitted evidence does not mean a
-call never ran. Reconcile uncertain effects before retrying.
+call never ran. The model receives the diagnostic and can write a corrected, smaller program on
+the next turn. Built-in tool guidance asks it to continue authorized work after recoverable errors
+and reconcile partial effects before further actions. Programs are never automatically replayed;
+the model still decides whether to continue or report a blocker within the Agent's limits.
 
 The outer Code Mode tool is always `uncertain`, even if its allowlisted tools are readonly.
 A durable host cannot checkpoint or replay an unfinished JavaScript program automatically.

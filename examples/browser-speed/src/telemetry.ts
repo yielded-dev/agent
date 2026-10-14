@@ -6,17 +6,20 @@ import {
   DateTime,
   Effect,
   Exit,
+  Layer,
   Option,
   Schema,
   Stream,
   Tracer,
 } from "effect";
-import { Telemetry } from "effect/ai";
+import { LanguageModel, Telemetry, type Response } from "effect/ai";
 
 import {
   browserCommandTimeoutMillis,
-  isBoardScenario,
   LabError,
+  modelOutputEntryLimit,
+  modelOutputLimit,
+  type ModelOutput,
   type Phase,
   type Report,
   type RunInput,
@@ -42,17 +45,16 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
   const origin = clock.monotonicTimeNanosUnsafe();
   const startedAt = DateTime.formatIso(yield* DateTime.now);
   const spans: Array<Span> = [];
+  const modelOutput: Array<ModelOutput> = [];
+  const outputIds = new Map<string, number>();
+  let outputLength = 0;
+  let outputTruncated = false;
   let turn = 0;
   const now = () => Number(clock.monotonicTimeNanosUnsafe() - origin) / 1_000_000;
 
   let report: Report = {
-    version: 2,
-    fixture:
-      input.scenario === "wikipedia"
-        ? "wikipedia-race-v1"
-        : isBoardScenario(input.scenario)
-          ? "task-board-v1"
-          : "website",
+    version: 3,
+    fixture: input.scenario === "wikipedia" ? "wikipedia-race-v1" : "website",
     input,
     model,
     commandTimeoutMillis: browserCommandTimeoutMillis,
@@ -66,7 +68,6 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
     verifiedAt: null,
     firstActionAt: null,
     cleanup: "pending",
-    board: [],
   };
 
   const begin = (phase: Phase, name: string) => {
@@ -112,6 +113,48 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
   return {
     now,
     begin,
+    // The demo admits one model call at a time. Native IDs are scoped to that span;
+    // repeated IDs in later model turns must never overwrite earlier text.
+    modelPart: (
+      part:
+        | Response.TextDeltaPart
+        | Response.ReasoningDeltaPart
+        | Response.TextEndPart
+        | Response.ReasoningEndPart,
+    ) => {
+      const span = spans.findLast((span) => span.phase === "model" && span.outcome === "running");
+
+      if (span === undefined) return;
+      const kind = part.type.startsWith("text-") ? "text" : "reasoning-summary";
+      const key = `${span.id}:${kind}:${part.id}`;
+      const index = outputIds.get(key);
+
+      if (part.type === "text-end" || part.type === "reasoning-end") {
+        if (index !== undefined) modelOutput[index] = { ...modelOutput[index], complete: true };
+
+        return;
+      }
+      const delta = part.delta.slice(0, modelOutputLimit - outputLength);
+
+      if (!delta || (index === undefined && modelOutput.length === modelOutputEntryLimit)) {
+        if (part.delta.length > 0) outputTruncated = true;
+
+        return;
+      }
+      if (delta.length < part.delta.length) outputTruncated = true;
+      outputLength += delta.length;
+      if (index === undefined) {
+        outputIds.set(key, modelOutput.length);
+        modelOutput.push({
+          id: modelOutput.length,
+          spanId: span.id,
+          kind,
+          text: delta,
+          at: now(),
+          complete: false,
+        });
+      } else modelOutput[index] = { ...modelOutput[index], text: modelOutput[index].text + delta };
+    },
     // Called only after the initial page and observation are ready, before any decision or action.
     // Never reset this boundary: a flow failure must not become a preparation retry.
     ready: () => {
@@ -128,6 +171,8 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
     snapshot: (): Report => ({
       ...report,
       spans: [...spans],
+      modelOutput: [...modelOutput],
+      outputTruncated,
       elapsed: report.status === "running" ? now() : report.elapsed,
     }),
     update: (patch: Partial<Report>) => {
@@ -154,6 +199,40 @@ export class Trace extends Context.Service<Trace, Effect.Success<ReturnType<type
   "browser-speed/Trace",
 ) {}
 
+/** Observe native parts for every provider; the final finish-tool message remains report.message. */
+export const traceModelStream = <Services, E, R>(
+  modelLayer: Layer.Layer<LanguageModel.LanguageModel | Services, E, R>,
+) =>
+  Layer.effect(
+    LanguageModel.LanguageModel,
+    Effect.gen(function* () {
+      const model = yield* LanguageModel.LanguageModel;
+      const trace = yield* Trace;
+
+      // The no-error/no-requirement tap preserves every native overload's tool,
+      // error and service types; parameters and response parts pass through unchanged.
+      const streamText = ((options: Parameters<typeof model.streamText>[0]) =>
+        model.streamText(options).pipe(
+          Stream.tap((part) =>
+            Effect.sync(() => {
+              if (
+                part.type === "text-delta" ||
+                part.type === "reasoning-delta" ||
+                part.type === "text-end" ||
+                part.type === "reasoning-end"
+              )
+                trace.modelPart(part);
+            }),
+          ),
+        )) as typeof model.streamText;
+
+      return LanguageModel.LanguageModel.of({
+        ...model,
+        streamText,
+      });
+    }),
+  ).pipe(Layer.provideMerge(modelLayer));
+
 const decodeServedTier = Schema.decodeUnknownOption(
   Schema.Struct({
     type: Schema.Literals(["response.completed", "response.incomplete", "response.failed"]),
@@ -161,10 +240,54 @@ const decodeServedTier = Schema.decodeUnknownOption(
   }),
 );
 
-/** Preserve raw served tiers, including aliases missing from the provider's finish metadata. */
+const decodeSearchEvent = Schema.decodeUnknownOption(
+  Schema.Struct({
+    type: Schema.Literals(["response.output_item.added", "response.output_item.done"]),
+    item: Schema.Struct({
+      type: Schema.Literal("web_search_call"),
+      id: Schema.String,
+      status: Schema.optionalKey(Schema.String),
+      action: Schema.optionalKey(
+        Schema.Struct({
+          type: Schema.String,
+          queries: Schema.optionalKey(Schema.Array(Schema.String)),
+          query: Schema.optionalKey(Schema.String),
+          url: Schema.optionalKey(Schema.String),
+        }),
+      ),
+    }),
+  }),
+);
+
+/** Preserve raw served tiers and trace hosted searches inside their model calls. */
 export const traceOpenAiClient = Effect.gen(function* () {
   const client = yield* OpenAiClient.OpenAiClient;
   const trace = yield* Trace;
+  const searches = new Map<string, ReturnType<typeof trace.begin>>();
+
+  const searchEvent = (event: unknown) => {
+    const decoded = decodeSearchEvent(event);
+
+    if (Option.isNone(decoded)) return;
+    const { type, item } = decoded.value;
+    const handle = searches.get(item.id) ?? trace.begin("action", "Web search");
+
+    if (type === "response.output_item.added") {
+      searches.set(item.id, handle);
+      trace.update({ message: "Searching the web…" });
+    } else {
+      const query = item.action?.queries?.join(" · ") ?? item.action?.query ?? item.action?.url;
+
+      handle.end(
+        item.status === "completed"
+          ? Exit.void
+          : Exit.fail(LabError.make({ code: "browser", message: "Web search did not complete." })),
+        { name: `Web search${query ? ` · ${query.slice(0, 240)}` : ""}` },
+      );
+      searches.delete(item.id);
+      if (searches.size === 0) trace.update({ message: "Agent is working…" });
+    }
+  };
 
   return OpenAiClient.OpenAiClient.of({
     ...client,
@@ -174,6 +297,8 @@ export const traceOpenAiClient = Effect.gen(function* () {
           Effect.sync(() => {
             if (response.service_tier !== undefined)
               trace.annotateModel({ serviceTier: response.service_tier });
+            for (const item of response.output)
+              searchEvent({ type: "response.output_item.done", item });
           }),
         ),
       ),
@@ -186,10 +311,27 @@ export const traceOpenAiClient = Effect.gen(function* () {
               events.pipe(
                 Stream.tap((event) =>
                   Effect.sync(() => {
+                    searchEvent(event);
                     const evidence = decodeServedTier(event);
 
                     if (Option.isSome(evidence))
                       trace.annotateModel({ serviceTier: evidence.value.response.service_tier });
+                  }),
+                ),
+                Stream.onExit((exit) =>
+                  Effect.sync(() => {
+                    for (const handle of searches.values())
+                      handle.end(
+                        Exit.isFailure(exit)
+                          ? exit
+                          : Exit.fail(
+                              LabError.make({
+                                code: "browser",
+                                message: "Web search ended without a completion event.",
+                              }),
+                            ),
+                      );
+                    searches.clear();
                   }),
                 ),
               ),

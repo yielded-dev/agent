@@ -4,6 +4,7 @@ import { AsyncResult, Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 
 import {
   LabApi,
+  LabError,
   Report,
   VisitorKey,
   requiresReasoning,
@@ -30,6 +31,20 @@ export const ClientSample = Schema.Struct({ report: Report, clientElapsedMillis:
 export type ClientSample = typeof ClientSample.Type;
 export const historyAtom = Atom.make<ReadonlyArray<ClientSample>>([]);
 export const selectedAtom = Atom.make<string | null>(null);
+
+export const chatDraftAtom = Atom.make("").pipe(Atom.keepAlive);
+export const chatIdAtom = Atom.make<string | null>(null).pipe(Atom.keepAlive);
+
+export interface ChatTurn {
+  readonly id: string;
+  readonly prompt: string;
+  readonly pending: boolean;
+  readonly connectionLost?: boolean;
+  readonly report?: Report;
+  readonly error?: string;
+}
+
+export const chatTurnsAtom = Atom.make<ReadonlyArray<ChatTurn>>([]).pipe(Atom.keepAlive);
 
 const headers = { "x-lab-session": sessionId };
 
@@ -96,9 +111,13 @@ const snapshotQuery = LabClient.query("lab", "snapshot", {
 
 const pollingSnapshot = snapshotQuery.pipe(Atom.withRefresh("300 millis"));
 
-export const snapshotAtom = Atom.make((get) =>
-  get(get(watchingAtom) ? pollingSnapshot : snapshotQuery),
-);
+export const snapshotAtom = Atom.make((get) => {
+  const snapshot = get(snapshotQuery);
+  const remote = Option.getOrNull(AsyncResult.value(snapshot));
+
+  // A lost POST does not imply the Worker stopped. Keep its status and Stop control live.
+  return get(watchingAtom) || remote?.busy ? get(pollingSnapshot) : snapshot;
+});
 
 export const runAtom = LabClient.runtime.fn<
   Omit<RunInput, "id"> & {
@@ -169,6 +188,8 @@ export const runAtom = LabClient.runtime.fn<
           ["lab"],
         );
 
+        get.set(chatIdAtom, null);
+        get.set(chatTurnsAtom, []);
         get.set(
           historyAtom,
           [
@@ -200,10 +221,200 @@ export const controlAtom = LabClient.runtime.fn<"stop" | "close">()(
   Effect.fnUntraced(function* (action, get) {
     const client = yield* LabClient;
 
-    if (action === "stop") get.set(stopRequestedAtom, true);
+    if (action === "stop") {
+      get.set(stopRequestedAtom, true);
+      get.set(chatIdAtom, null);
+    }
+    if (action === "close") get.set(chatDraftAtom, "");
     yield* Reactivity.mutation(
       action === "stop" ? client.lab.stop({ headers }) : client.lab.close({ headers }),
       ["lab"],
+    );
+    if (action === "close") {
+      get.set(chatIdAtom, null);
+      get.set(chatTurnsAtom, []);
+    }
+  }),
+);
+
+export const sendChatAtom = LabClient.runtime.fn<
+  Omit<RunInput, "id" | "scenario" | "prompt" | "chatId">
+>()(
+  Effect.fnUntraced(function* (settings, get) {
+    if (get(watchingAtom)) return;
+    const prompt = get(chatDraftAtom).trim();
+
+    if (!prompt) return;
+    const client = yield* LabClient;
+    const { url, ...options } = settings;
+    const id = crypto.randomUUID();
+    const chatId = get(chatIdAtom);
+    const start = performance.now();
+
+    get.mount(stopRequestedAtom);
+    get.set(watchingAtom, true);
+    get.set(stopRequestedAtom, false);
+    get.set(selectedAtom, null);
+    get.set(progressAtom, { current: 1, total: 1 });
+    get.set(chatTurnsAtom, [...get(chatTurnsAtom), { id, prompt, pending: true }].slice(-50));
+    get.set(chatDraftAtom, "");
+
+    return yield* Effect.gen(function* () {
+      // One polling transport, owned by this workflow. Keep the latest matching snapshot
+      // even when the POST fails; a previous run's delayed poll cannot populate this turn.
+      yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          get.registry.subscribe(snapshotAtom, (snapshot) => {
+            if (!AsyncResult.isSuccess(snapshot)) return;
+            const report = snapshot.value.report;
+
+            if (report?.input.id !== id) return;
+            get.set(
+              chatTurnsAtom,
+              get(chatTurnsAtom).map((turn) =>
+                turn.id === id &&
+                turn.pending &&
+                (turn.report === undefined ||
+                  (turn.report.status === "running" &&
+                    (report.status !== "running" || report.elapsed >= turn.report.elapsed)))
+                  ? { ...turn, report }
+                  : turn,
+              ),
+            );
+          }),
+        ),
+        (unsubscribe) => Effect.sync(unsubscribe),
+      );
+
+      const report = yield* Reactivity.mutation(
+        client.lab.run({
+          headers: { ...headers, ...keyHeaders(get(keysAtom)) },
+          payload: {
+            ...options,
+            id,
+            scenario: "chat",
+            prompt,
+            ...(chatId === null ? (url === undefined ? {} : { url }) : { chatId }),
+          },
+        }),
+        ["lab"],
+      ).pipe(
+        Effect.catchIf(
+          (error) =>
+            !(
+              Schema.is(LabError)(error) &&
+              ["configuration", "invalid", "busy", "expired"].includes(error.code)
+            ),
+          () =>
+            Effect.gen(function* () {
+              get.set(
+                chatTurnsAtom,
+                get(chatTurnsAtom).map((turn) =>
+                  turn.id === id ? { ...turn, connectionLost: true } : turn,
+                ),
+              );
+
+              // Match the owner's twelve-minute run limit. A matching report can shorten
+              // the wait without synchronized browser/Worker wall clocks.
+              const runDeadlineMillis = 12 * 60_000;
+              let deadline = start + runDeadlineMillis;
+
+              while (true) {
+                if (get(stopRequestedAtom))
+                  return yield* LabError.make({
+                    code: "interrupted",
+                    message:
+                      "Stopped checking this response. Admission or completion could not be confirmed. Check the browser status; no actions were replayed.",
+                  });
+                const snapshot = get(snapshotAtom);
+
+                if (AsyncResult.isSuccess(snapshot)) {
+                  const remote = snapshot.value;
+                  const report = remote.report;
+
+                  if (report?.input.id === id) {
+                    if (!remote.busy && report.status !== "running" && report.cleanup !== "pending")
+                      return report;
+                    if (remote.busy && remote.canClose)
+                      return yield* LabError.make({
+                        code: "interrupted",
+                        message:
+                          "The Worker cannot resolve this run. Choose New chat to close the browser; no actions will be replayed.",
+                      });
+                    deadline = Math.min(
+                      deadline,
+                      performance.now() + runDeadlineMillis - report.elapsed,
+                    );
+                  }
+                }
+                const remaining = deadline - performance.now();
+
+                if (remaining <= 0)
+                  return yield* LabError.make({
+                    code: "interrupted",
+                    message:
+                      "The twelve-minute run deadline was reached without a confirmed result. Check the browser status and close it before starting again; no actions were replayed.",
+                  });
+                // Read the existing polling atom; never issue another run or status request.
+                yield* Effect.sleep(Math.min(300, remaining));
+              }
+            }),
+        ),
+      );
+
+      get.set(
+        chatIdAtom,
+        !get(stopRequestedAtom) && report.cleanup === "retained" ? (chatId ?? id) : null,
+      );
+      get.set(
+        chatTurnsAtom,
+        get(chatTurnsAtom).map((turn) =>
+          turn.id === id ? { ...turn, report, pending: false, connectionLost: false } : turn,
+        ),
+      );
+      get.set(
+        historyAtom,
+        [
+          ...get(historyAtom),
+          {
+            report,
+            clientElapsedMillis: performance.now() - start,
+          },
+        ].slice(-100),
+      );
+    }).pipe(
+      Effect.tapCause((cause) =>
+        Effect.sync(() => {
+          const error = Option.flatMap(
+            Cause.findErrorOption(cause),
+            Schema.decodeUnknownOption(LabError),
+          );
+
+          const uncertain = get(chatTurnsAtom).find((turn) => turn.id === id)?.connectionLost;
+
+          if (uncertain || (Option.isSome(error) && error.value.code === "expired"))
+            get.set(chatIdAtom, null);
+          get.set(
+            chatTurnsAtom,
+            get(chatTurnsAtom).map((turn) =>
+              turn.id === id
+                ? {
+                    ...turn,
+                    pending: false,
+                    error: failureMessage(cause),
+                  }
+                : turn,
+            ),
+          );
+          if (!uncertain && !get(chatDraftAtom)) get.set(chatDraftAtom, prompt);
+        }),
+      ),
+      Effect.ensuring(
+        Effect.sync(() => get.set(watchingAtom, false)).pipe(
+          Effect.andThen(Reactivity.invalidate(["lab"])),
+        ),
+      ),
+      Effect.scoped,
     );
   }),
 );
@@ -225,11 +436,9 @@ export const exportAtom = Atom.fn<void>()(
   }),
 );
 
-export const errorMessage = <A, E>(result: AsyncResult.AsyncResult<A, E>) => {
-  if (!AsyncResult.isFailure(result)) return null;
-
+const failureMessage = <E>(cause: Cause.Cause<E>) => {
   const error = Option.flatMap(
-    Cause.findErrorOption(result.cause),
+    Cause.findErrorOption(cause),
     Schema.decodeUnknownOption(Schema.Struct({ message: Schema.String })),
   );
 
@@ -237,6 +446,9 @@ export const errorMessage = <A, E>(result: AsyncResult.AsyncResult<A, E>) => {
 
   return "The connection to the Worker was interrupted. Check the browser status before running again.";
 };
+
+export const errorMessage = <A, E>(result: AsyncResult.AsyncResult<A, E>) =>
+  AsyncResult.isFailure(result) ? failureMessage(result.cause) : null;
 
 /** Durations use the page-ready boundary on the same Worker clock. */
 export const fromReady = (report: Report, at: number | null | undefined): number | null =>
@@ -262,8 +474,6 @@ const sameWorkload = (value: Report, report: Report) =>
   value.input.url === report.input.url &&
   value.input.wikipedia?.start === report.input.wikipedia?.start &&
   value.input.wikipedia?.target === report.input.wikipedia?.target &&
-  value.input.shop?.url === report.input.shop?.url &&
-  value.input.shop?.item === report.input.shop?.item &&
   value.input.screenshots === report.input.screenshots &&
   value.input.liveView === report.input.liveView;
 
