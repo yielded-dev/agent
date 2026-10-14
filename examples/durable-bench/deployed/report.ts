@@ -85,7 +85,7 @@ export const retirementFailures = (result: Result): string[] => {
     const candidate = rows.filter((row) => row.build === "candidate").length;
 
     if (
-      Math.max(baseline, candidate) >= 3 &&
+      baseline + candidate >= 3 &&
       Math.max(baseline, candidate) >= 2 * Math.min(baseline, candidate)
     )
       failures.push(

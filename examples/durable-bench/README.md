@@ -280,7 +280,7 @@ non-receipt permits resending the same ID; an acknowledged input is never sent a
 cell and epoch. Receipt storage and polling are outside the measured intervals.
 If the outcome remains unknown, retire that Object's entire A/B pair and continue the other Objects. Raw attempts remain in JSON; retirements are reported
 by target, history, TTFT, build and epoch. Each cell must retain at least 75% of its Object pairs
-(9 of 12); otherwise rerun a fresh cohort with 24 Objects per cell. Build-attributed retirements of at least three and at least twice the other
+(9 of 12); otherwise rerun a fresh cohort with 24 Objects per cell. At least three total retirements with one build's count at least twice the other
 build's count invalidate the cohort, checked per cell and per target across cells. Exclusions never
 depend on latency; all retained pairs still require complete CPU attribution when requested.
 Real-history builds and passes carrying history into or out of another pass cannot recover
