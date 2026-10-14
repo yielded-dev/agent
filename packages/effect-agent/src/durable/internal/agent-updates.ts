@@ -2,6 +2,7 @@ import { Clock, Crypto, DateTime, Effect, Option, Schema, Stream } from "effect"
 
 import { Update, UpdateError } from "../../core/AgentUpdates.ts";
 import type { RunId, SubmissionId, ThreadId } from "../../core/Identifiers.ts";
+import { nativeUpdateId } from "../../core/internal/agent-updates.ts";
 import { utf8ByteLength } from "../../core/internal/utf8.ts";
 import { IdempotencyKey } from "../../core/Receipt.ts";
 import { digestJson } from "../Digest.ts";
@@ -16,6 +17,8 @@ import {
   BatchId,
   CanonicalBatch,
   DefinitionDigests,
+  type CanonicalRecordEnvelope,
+  type DeclaredToolCall,
   type DeploymentId,
   PersistedJson,
   type ProducerId,
@@ -43,6 +46,32 @@ const storage = () =>
   LedgerError.make({ operation: "agent-update", message: "Durable update persistence failed" });
 
 const rejected = (reason: UpdateError["reason"]) => UpdateError.make({ reason });
+
+const nativeParameters = Schema.Struct({ value: Schema.Json });
+
+/** Canonical native acceptance proves only this exact update call, never an external effect.
+ * Its frozen delivery remains independently recoverable even when its Tool acknowledgement is lost.
+ */
+export const nativeUpdateAccepted = (
+  submission: SubmissionSnapshot,
+  call: DeclaredToolCall,
+  records: ReadonlyArray<CanonicalRecordEnvelope>,
+): boolean => {
+  if (call.toolName !== "emit_update" || !Schema.is(nativeParameters)(call.parameters))
+    return false;
+  const value = call.parameters.value;
+
+  return records.some(
+    ({ record: { payload } }) =>
+      payload._tag === "AgentUpdateEmitted" &&
+      payload.update.threadId === submission.threadId &&
+      payload.update.agentId === submission.agentId &&
+      payload.update.runId === call.runId &&
+      payload.update.updateId === nativeUpdateId(call.runId, call.toolCallId) &&
+      Schema.toEquivalence(DefinitionDigests)(payload.definitions, submission.agentDigests) &&
+      Schema.toEquivalence(Schema.Json)(payload.update.value, value),
+  );
+};
 
 /** Acceptance is fenced by the actual emitting Attempt; recovery only recreates frozen outbox rows. */
 export const makeAgentUpdateRuntime = Effect.fnUntraced(function* (options: {

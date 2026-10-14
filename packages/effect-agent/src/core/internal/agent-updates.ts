@@ -3,6 +3,12 @@ import * as Toolkit from "effect/ai/Toolkit";
 import * as Schema from "effect/Schema";
 
 import { Emitter, UpdateError } from "../AgentUpdates.ts";
+import type { RunId } from "../Identifiers.ts";
+import { ToolExecutionClass } from "./tool-execution.ts";
+
+/** Stable native acceptance identity, shared by execution and recovery. */
+export const nativeUpdateId = (runId: RunId, toolCallId: string): string =>
+  `tool:${runId}:${toolCallId}`;
 
 /** Definition-owned native Tool. Runtime supplies its handler under the same identity. */
 export const updateTool = <S extends Schema.Top>(schema: S) =>
@@ -14,7 +20,9 @@ export const updateTool = <S extends Schema.Top>(schema: S) =>
     success: Schema.Struct({ emitted: Schema.Literal(true) }),
     failure: UpdateError,
     failureMode: "return",
-  }).addDependency(Emitter);
+  })
+    .addDependency(Emitter)
+    .annotate(ToolExecutionClass, "idempotent");
 
 export type UpdateToolkit<
   T extends Toolkit.Any,

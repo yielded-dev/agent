@@ -71,6 +71,7 @@ import {
   type TurnId,
 } from "../../core/Identifiers.ts";
 import { IdGenerator } from "../../core/IdGenerator.ts";
+import { nativeUpdateId } from "../../core/internal/agent-updates.ts";
 import { copyJson } from "../../core/internal/json.ts";
 import { utf8ByteLength } from "../../core/internal/utf8.ts";
 import { IdempotencyKey } from "../../core/Receipt.ts";
@@ -9126,7 +9127,7 @@ function executeWithCompletion<
                     );
 
                     const updateId = yield* Schema.decodeEffect(IdempotencyKey)(
-                      `tool:${context.runId}:${call.toolCallId}`,
+                      nativeUpdateId(context.runId, call.toolCallId),
                     ).pipe(Effect.mapError(() => UpdateError.make({ reason: "validation" })));
 
                     const emitter = yield* Emitter;

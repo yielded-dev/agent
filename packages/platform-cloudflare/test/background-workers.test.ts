@@ -380,23 +380,33 @@ it("delivers an accepted worker update before completion after eviction with onl
       ),
     ).toHaveLength(0);
     expect((await deliveries()).items).toHaveLength(1);
-    await recoveredAlarm;
     await expect
       .poll(
         async () =>
-          (await readCanonical(started.worker.threadId)).filter(
-            ({ record }) => record.payload._tag === "ToolCallUnknown",
-          ).length,
+          (await readCanonical(started.worker.threadId))
+            .filter(
+              ({ record }) =>
+                record.payload._tag === "ToolCallSettled" &&
+                record.payload.toolCallId === "area-concern",
+            )
+            .map(({ record }) => record.payload),
         // Alarm-driven recovery may outlive Vitest's default polling deadline.
         { timeout: 5_000 },
       )
-      .toBe(1);
-    // The native update call lost its acknowledgement; ordinary tool recovery must not replay it.
+      .toMatchObject([{ toolCallId: "area-concern", result: { emitted: true }, isFailure: false }]);
+    expect(
+      (await readCanonical(started.worker.threadId)).filter(
+        ({ record }) => record.payload._tag === "ToolCallUnknown",
+      ),
+    ).toHaveLength(0);
+    // Recovery now resumes the deliberately open model. Cancel that live attempt
+    // before awaiting its alarm; accepted update delivery remains independent.
     await withOwner(source, (host) =>
       Subagent.cancel(backgroundUpdateWorkers, started.worker, started.delivery.receipt!).pipe(
         Effect.provideService(SubagentHost, host),
       ),
     );
+    await recoveredAlarm;
     await drainAlarmsUntil(started.worker.threadId, allSettled(started.worker.threadId));
     await drainAlarmsUntil(
       started.worker.threadId,

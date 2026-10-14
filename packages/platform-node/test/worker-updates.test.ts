@@ -127,7 +127,9 @@ for (const [parentState, failpoint] of [
               childModelCalls++;
 
               return Stream.fromIterable(
-                calls({ name: "emit_update", params: { value: concern } }),
+                childModelCalls === 1
+                  ? calls({ name: "emit_update", params: { value: concern } })
+                  : finish("Finding delivered"),
               );
             }),
           );
@@ -262,28 +264,31 @@ for (const [parentState, failpoint] of [
           expect(messages).toHaveLength(1);
           expect(messages[0]).toMatchObject({ worker: started.worker, update: accepted[0] });
           expect(selections).toBe(1);
+          // Human-requested regression: canonical acceptance must also recover the native call.
+          const recovered = yield* read(started.worker.threadId);
+
+          expect(
+            recovered.records.filter(({ record }) => record.payload._tag === "ToolCallUnknown"),
+          ).toHaveLength(0);
+          expect((yield* reopened.awaitSettlement(started.delivery.receipt!)).outcome).toBe(
+            "completed",
+          );
           const blocked = yield* read(started.worker.threadId);
 
           expect(
             blocked.records.filter(({ record }) => record.payload._tag === "AgentUpdateEmitted"),
           ).toHaveLength(1);
           expect(
-            blocked.records.filter(({ record }) => record.payload._tag === "RunCompleted"),
-          ).toHaveLength(0);
-          expect(childModelCalls).toBe(1);
+            blocked.records.filter(
+              ({ record }) =>
+                record.payload._tag === "SubmissionSettled" &&
+                record.payload.outcome === "completed",
+            ),
+          ).toHaveLength(1);
+          expect(childModelCalls).toBe(2);
           expect(
             blocked.records.filter(({ record }) => record.payload._tag === "ToolCallUnknown"),
-          ).toHaveLength(1);
-          yield* reopened.abort(
-            AbortCommand.make({
-              submissionId: started.delivery.receipt!.submissionId,
-              author: principal,
-              reason: "resolve interrupted worker",
-            }),
-          );
-          expect((yield* reopened.awaitSettlement(started.delivery.receipt!)).outcome).toBe(
-            "aborted",
-          );
+          ).toHaveLength(0);
           const finalChild = yield* read(started.worker.threadId);
 
           expect(
@@ -292,7 +297,7 @@ for (const [parentState, failpoint] of [
             ),
           ).toEqual(accepted);
           expect((yield* reopened.awaitSettlement(sourceReceipt)).outcome).toBe(parentState);
-          expect(childModelCalls).toBe(1);
+          expect(childModelCalls).toBe(2);
         }),
       ).pipe(Effect.provide(NodeFileSystem.layer)),
     15_000,

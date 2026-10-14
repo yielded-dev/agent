@@ -113,6 +113,133 @@ const withFacet = <A, E>(
   effect: Effect.Effect<A, E, SubagentHost>,
 ) => effect.pipe(Effect.provideService(SubagentHost, facet));
 
+// Human-requested regression: unowned uncertain work must not be advertised as active.
+it.effect("reports an unknown worker without replaying its uncertain operation", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "worker-unknown-" });
+      let dispatches = 0;
+
+      const toolkit = Toolkit.make(
+        Tool.make("external_action", {
+          parameters: Schema.Struct({}),
+          success: Schema.String,
+        }),
+      );
+
+      const child = Agent.withModel(
+        Agent.make("unknown-worker", {
+          input: target.definition.input,
+          output: Schema.String,
+          instructions: "Perform the synthetic action",
+          toolkit,
+          policy: { maxTurns: 2, maxToolCalls: 2, maxDuration: "1 minute" },
+        }),
+        Model.make(
+          "scripted",
+          "unknown-worker",
+          Layer.effect(
+            LanguageModel.LanguageModel,
+            LanguageModel.make({
+              generateText: () => Effect.succeed([]),
+              streamText: () =>
+                Stream.fromIterable<Response.StreamPartEncoded>([
+                  { type: "tool-call", id: "original-action", name: "external_action", params: {} },
+                  {
+                    type: "finish",
+                    reason: "tool-calls",
+                    usage: { inputTokens: {}, outputTokens: {} },
+                  },
+                ]),
+            }),
+          ),
+        ),
+      );
+
+      const handlers = toolkit.toLayer({
+        external_action: () =>
+          Effect.suspend(() => {
+            dispatches++;
+
+            return Effect.die("Synthetic lost acknowledgement");
+          }),
+      });
+
+      const research = Subagent.make("unknown", {
+        target: child.definition,
+        policy: declaration.policy,
+      });
+
+      const context = yield* Layer.build(
+        NodeHost.NodeDurableHost.layerRegistered(
+          [
+            { agent: source, definitions },
+            { agent: child, definitions },
+          ],
+          {
+            filename: `${directory}/runtime.sqlite`,
+            deploymentId: "unknown",
+            producerId: "node",
+          },
+        ).pipe(Layer.provide([authority, handlers])),
+      );
+
+      const runtime = Context.get(context, DurableAgentRuntime);
+
+      yield* runtime.submitRegistered(
+        source,
+        { question: "synthetic work" },
+        {
+          threadId: sourceThreadId,
+          principal,
+          idempotencyKey: key("source"),
+        },
+      );
+      const owner = yield* runtime.workerHost({ sourceThreadId, principal });
+
+      const started = yield* withFacet(
+        owner,
+        Subagent.start(
+          research,
+          { question: "synthetic" },
+          {
+            idempotencyKey: key("unknown"),
+          },
+        ),
+      );
+
+      expect(
+        Exit.isFailure(
+          yield* runtime.processThreadResolved(started.worker.threadId).pipe(Effect.exit),
+        ),
+      ).toBe(true);
+      yield* runtime.runRecovery({ threadId: started.worker.threadId });
+      const summary = yield* withFacet(owner, Subagent.inspect(research, started.worker));
+
+      expect.soft(summary.state).toBe("unknown");
+      expect
+        .soft((yield* withFacet(owner, Subagent.list(research))).items[0]?.state)
+        .toBe("unknown");
+      expect(summary.run?.outcome).toBeNull();
+      expect(summary.run?.hostReceipt).toEqual(started.delivery.receipt);
+      yield* runtime.processThreadResolved(started.worker.threadId);
+      expect(dispatches).toBe(1);
+
+      const log = yield* readTestThread(
+        Context.get(context, ThreadReader),
+        ThreadExportRequest.make({ threadId: started.worker.threadId }),
+      );
+
+      expect(
+        log.records.flatMap(({ record }) =>
+          record.payload._tag === "ToolCallUnknown" ? [record.payload] : [],
+        ),
+      ).toMatchObject([{ toolCallId: "original-action", toolName: "external_action" }]);
+    }),
+  ).pipe(Effect.provide(NodeFileSystem.layer)),
+);
+
 // Regression: https://github.com/yielded-dev/agent/commit/6ceda1d221d990d4959f21596eedad84e742c95f
 it.effect(
   "keeps launching Run evidence unchanged across independently funded worker follow-ups",
