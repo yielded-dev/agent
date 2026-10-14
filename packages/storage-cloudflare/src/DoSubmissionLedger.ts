@@ -1148,9 +1148,7 @@ const makeServices = Effect.fnUntraced(function* () {
       Effect.gen(function* () {
         const keyRowKey = `${validated.threadId}/${validated.principal}/${validated.idempotencyKey}`;
 
-        const existingRows = yield* byKey(validated, operation);
-
-        const existing = yield* decodeSubmissionRows(operation, keyRowKey, existingRows);
+        const existing = yield* byKey(validated, operation);
 
         if (existing.length > 1) {
           return yield* corruptionFailure(
@@ -1532,13 +1530,7 @@ const makeServices = Effect.fnUntraced(function* () {
       return Option.some(yield* decodeSubmissionSnapshot(operation, row.value));
     }
 
-    const foundRows = yield* byKey(validated, operation);
-
-    const decoded = yield* decodeSubmissionRows(
-      operation,
-      `${validated.threadId}/${validated.principal}/${validated.idempotencyKey}`,
-      foundRows,
-    );
+    const decoded = yield* byKey(validated, operation);
 
     if (decoded.length > 1) {
       return yield* corruptionFailure(
@@ -1565,13 +1557,7 @@ const makeServices = Effect.fnUntraced(function* () {
         request,
       ).pipe(Effect.mapError(internalFailure(operation)));
 
-      const foundRows = yield* byKey(validated, operation);
-
-      const decoded = yield* decodeSubmissionRows(
-        operation,
-        `${validated.threadId}/${validated.principal}/${validated.idempotencyKey}`,
-        foundRows,
-      );
+      const decoded = yield* byKey(validated, operation);
 
       if (decoded.length > 1) {
         return yield* corruptionFailure(
@@ -3810,19 +3796,16 @@ const makeServices = Effect.fnUntraced(function* () {
             .filter((row) => row.joined_host_submission_id === validated.submissionId)
             .sort((a, b) => a.queue_sequence - b.queue_sequence);
 
-          const joinSubmissions = yield* decodeSubmissionRows(
-            operation,
-            validated.submissionId,
-            joinRows,
-          );
+          const joins: Array<JoinSnapshot> = [];
 
-          const joins = yield* Effect.forEach(joinSubmissions, (row) =>
-            decodeJoinSnapshot({
-              submissionId: row.submission_id,
-              state: row.state,
-              hostSubmissionId: validated.submissionId,
-            }).pipe(Effect.mapError(internalFailure(operation))),
-          );
+          for (const row of joinRows)
+            joins.push(
+              yield* decodeJoinSnapshot({
+                submissionId: row.submission_id,
+                state: row.state,
+                hostSubmissionId: validated.submissionId,
+              }).pipe(Effect.mapError(internalFailure(operation))),
+            );
 
           let hostSubmissionId: RecoverySnapshot["hostSubmissionId"];
 
@@ -3863,15 +3846,17 @@ const makeServices = Effect.fnUntraced(function* () {
 
           const decisionRows = yield* readApprovalDecisions(operation, validated.submissionId);
 
-          const approvalDecisions = yield* Effect.forEach(decisionRows, (row) =>
-            approvalIntentFromRow(operation, row),
-          );
+          const approvalDecisions: Array<ApprovalDecisionIntent> = [];
+
+          for (const row of decisionRows)
+            approvalDecisions.push(yield* approvalIntentFromRow(operation, row));
 
           const resolutionRows = yield* readUnknownResolutions(operation, validated.submissionId);
 
-          const unknownResolutions = yield* Effect.forEach(resolutionRows, (row) =>
-            unknownResolutionIntentFromRow(operation, row),
-          );
+          const unknownResolutions: Array<UnknownResolutionIntent> = [];
+
+          for (const row of resolutionRows)
+            unknownResolutions.push(yield* unknownResolutionIntentFromRow(operation, row));
 
           // Parent-side subagent view: this Submission's child budget reservations in parent
           // Tool Call order, plus each attached child's current lane state (a disposable
@@ -3886,21 +3871,16 @@ const makeServices = Effect.fnUntraced(function* () {
             .filter((row) => row.parent_submission_id === validated.submissionId)
             .sort((a, b) => a.parent_tool_call_id.localeCompare(b.parent_tool_call_id));
 
-          const decodedChildReservations = yield* decodeChildReservationRows(
-            operation,
-            validated.submissionId,
-            childReservationRows,
-          );
+          const childReservations: Array<ChildBudgetReservationSnapshot> = [];
 
-          const childReservations = yield* Effect.forEach(decodedChildReservations, (row) =>
-            childReservationSnapshotFromRow(operation, row),
-          );
+          for (const row of childReservationRows)
+            childReservations.push(yield* childReservationSnapshotFromRow(operation, row));
 
           const markers = yield* readChildSettlementMarkers(operation, validated.submissionId);
           const markersByChild = new Map(markers.map((row) => [row.child_submission_id, row]));
           const childAttachments: Array<ChildAttachmentSnapshot> = [];
 
-          for (const row of decodedChildReservations) {
+          for (const row of childReservationRows) {
             if (row.child_submission_id === null) continue;
             const child = yield* readSubmission(operation, row.child_submission_id);
 

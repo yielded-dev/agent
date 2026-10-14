@@ -236,35 +236,36 @@ const LOCAL: RouteTarget = { _tag: "local" };
  * Identities beyond the ledger's 1,024-character row bound fail typed: the minting side
  * refused them at admission, so they cannot name any stored row anywhere.
  */
-const routableSubmissionTarget = (
-  ownsThread: RoutedPortOptions["ownsThread"],
-): ((operation: string, submissionId: string) => Effect.Effect<RouteTarget, LedgerError>) =>
-  Effect.fnUntraced(function* (
-    operation: string,
-    submissionId: string,
-  ): Effect.fn.Return<RouteTarget, LedgerError> {
-    if (submissionId.length > MAX_ROUTABLE_SUBMISSION_ID_LENGTH) {
-      return yield* LedgerError.make({
-        operation,
-        message:
-          `A Submission identity of ${submissionId.length} characters exceeds the ` +
-          `${MAX_ROUTABLE_SUBMISSION_ID_LENGTH}-character routable identity bound; admission ` +
-          "refuses such identities, so it cannot name any stored row.",
-      });
-    }
-    const separator = submissionId.indexOf(":");
+const routableSubmissionTarget =
+  (
+    ownsThread: RoutedPortOptions["ownsThread"],
+  ): ((operation: string, submissionId: string) => Effect.Effect<RouteTarget, LedgerError>) =>
+  (operation, submissionId) =>
+    Effect.suspend(() => {
+      if (submissionId.length > MAX_ROUTABLE_SUBMISSION_ID_LENGTH) {
+        return Effect.fail(
+          LedgerError.make({
+            operation,
+            message:
+              `A Submission identity of ${submissionId.length} characters exceeds the ` +
+              `${MAX_ROUTABLE_SUBMISSION_ID_LENGTH}-character routable identity bound; admission ` +
+              "refuses such identities, so it cannot name any stored row.",
+          }),
+        );
+      }
+      const separator = submissionId.indexOf(":");
 
-    if (separator === -1) return LOCAL;
-    if (!UUID_HEAD_PATTERN.test(submissionId.slice(0, separator))) return LOCAL;
-    const tail = submissionId.slice(separator + 1);
+      if (separator === -1 || !UUID_HEAD_PATTERN.test(submissionId.slice(0, separator)))
+        return Effect.succeed(LOCAL);
 
-    return yield* decodeThreadId(tail).pipe(
-      Effect.map((threadId): RouteTarget =>
-        ownsThread(threadId) ? LOCAL : { _tag: "foreign", threadId },
-      ),
-      Effect.orElseSucceed(() => LOCAL),
-    );
-  });
+      return decodeThreadId(submissionId.slice(separator + 1)).pipe(
+        Effect.match({
+          onFailure: () => LOCAL,
+          onSuccess: (threadId): RouteTarget =>
+            ownsThread(threadId) ? LOCAL : { _tag: "foreign", threadId },
+        }),
+      );
+    });
 
 /**
  * Read a Submission only from this physical owner. Encoded foreign identities fail before
