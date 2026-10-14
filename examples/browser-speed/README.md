@@ -20,6 +20,12 @@ Workers AI uses search engines through the browser. Start a new chat when changi
 after hosted search, since native provider tool history belongs to its original provider.
 The canned demos retain only the browser and reply tools.
 
+Recoverable code and page-script errors return diagnostics to the agent. The demo refuses
+completion after these errors until a revised program makes a successful browser observation;
+the agent is instructed to inspect current state before any further mutation and continue
+permitted work. Browser transport failures and exhausted limits can still end the run.
+This check does not verify that a product matches the request or that a cart is correct.
+
 The Wikipedia race asks the agent to follow article links only, with no search, direct URL
 entry, back button or extra tabs. The host resolves the destination, records main-page
 navigations, and checks the final URL and canonical article. A passing run means **arrival

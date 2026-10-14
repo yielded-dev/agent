@@ -13,7 +13,7 @@ export const TaskResult = Schema.Struct({ message: Schema.String });
 export const completionTools = Toolkit.make(
   Tool.make("finish", {
     description:
-      "Reply with findings supported by observed evidence and source URLs. Before reporting an action complete, inspect the resulting page or cart and verify it satisfies the user's explicit requirements. Explain any unmet requirement. Ask a question only when information or authorization is missing. The host checks Wikipedia arrival. Other website results are not independently verified.",
+      "Reply with findings supported by observed evidence and source URLs. Correct recoverable code or page inspection errors with a fresh browser observation before finishing; an error is not a reason to ask whether to continue authorized work. Before reporting an action complete, inspect the resulting page or cart and verify it satisfies the user's explicit requirements. Explain any unmet requirement. Ask a question only when information or authorization is missing. The host checks Wikipedia arrival. Other website results are not independently verified.",
     parameters: TaskResult,
     success: TaskResult,
     failure: LabError,
