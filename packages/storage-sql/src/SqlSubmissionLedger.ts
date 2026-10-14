@@ -343,13 +343,9 @@ const decodeSettlement = Schema.decodeUnknownEffect(Settlement);
 const decodeAbortIntent = Schema.decodeUnknownEffect(AbortIntent);
 const decodeInputAppliedMarker = Schema.decodeUnknownEffect(InputAppliedMarker);
 
-const decodeSubmissionSnapshotFields = Schema.decodeEffect(
-  Schema.toType(Schema.Struct(SubmissionSnapshot.fields)),
-);
-
 const decodeSubmissionSnapshotType = (input: typeof SubmissionSnapshot.Type) =>
-  decodeSubmissionSnapshotFields(input).pipe(
-    Effect.map((fields) => SubmissionSnapshot.make(fields)),
+  SubmissionSnapshot.makeEffect(input).pipe(
+    Effect.mapError((issue) => new Schema.SchemaError(issue)),
   );
 
 const decodeSubmissionId = Schema.decodeUnknownEffect(SubmissionSnapshot.fields.submissionId);

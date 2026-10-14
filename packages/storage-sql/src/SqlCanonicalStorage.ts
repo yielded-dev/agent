@@ -83,7 +83,6 @@ const failure = (operation: string, cause?: unknown) =>
 
 const decodeWire = Schema.decodeUnknownEffect(Schema.Record(Schema.String, RecordJson));
 const decodeText = Schema.decodeUnknownEffect(Schema.String);
-const decodeEnvelope = Schema.decodeEffect(EnvelopeFragments);
 
 const readKey = Schema.decodeUnknownEffect(
   Schema.Array(Schema.Struct({ key: Key })).check(Schema.isMaxLength(1)),
@@ -147,12 +146,12 @@ const captureValidatedStorage = Effect.fnUntraced(
     }
     fragments[at] += "}";
 
-    const envelope = yield* decodeEnvelope({
+    const envelope = {
       prefix: fragments[0],
       before_payload: fragments[1],
       before_record_id: fragments[2],
       suffix: fragments[3],
-    });
+    };
 
     const created_at_json = JSON.stringify(createdAt);
     const payload_json = canonicalJson(payload);
@@ -170,7 +169,8 @@ const captureValidatedStorage = Effect.fnUntraced(
     )
       return yield* failure("capture canonical wire");
 
-    return CapturedRecordStorage.make({
+    // Validate the complete representation once, including all fragment bounds.
+    return yield* CapturedRecordStorage.makeEffect({
       created_at_json,
       record_id_json: JSON.stringify(recordId),
       payload_json,
