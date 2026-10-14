@@ -10,6 +10,8 @@ The agent can choose where to browse, answer questions, and ask for clarificatio
 messages share the same Chromium browser and persisted Thread history. Press Enter to send,
 Shift+Enter for a new line, and **New chat** to close the browser and clear the conversation.
 Chat runs one message at a time; model and browser comparisons remain in the demos.
+If a response connection drops, chat keeps checking that run's status and restores its final
+reply and browser when confirmed. Stop ends this wait; the message is never resubmitted.
 Chat shows native assistant text as it arrives, returned reasoning summaries when available,
 and search/browser activity separately. These summaries are provider-returned content, not
 access to hidden reasoning. The final answer appears when the `finish` tool completes; its
@@ -103,8 +105,8 @@ The owner has a twelve-minute overall deadline and a durable cleanup alarm.
 Demos prepare a fresh browser for each run and close it afterward. Chat retains the browser
 for up to one hour, with ten minutes of idle time between messages. Completed messages persist
 in the owner’s SQLite storage, so an idle Worker restart preserves the conversation and browser.
-Chat captures screenshots only when requested. An unavailable final screenshot ends the chat
-and closes the browser while keeping the completed reply.
+Chat captures screenshots only when requested. If the final screenshot fails, the chat ends
+and browser cleanup runs.
 Reloading the page starts a new UI session. An expired chat refuses follow-up input; choose
 **New chat** to start again. A failed or interrupted message is never replayed after restart.
 
