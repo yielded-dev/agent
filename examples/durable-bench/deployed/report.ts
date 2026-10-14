@@ -158,6 +158,10 @@ type Metric =
   | "firstTextMs"
   | "observerToCompletionMs"
   | "observerToFirstTextMs"
+  | "workerStartMs"
+  | "observationMs"
+  | "coldStartToFirstTextMs"
+  | "coldStartToCompletionMs"
   | "constructorAndProbeMs"
   | "objectToFirstModelMs"
   | "providerFirstTokenMs"
@@ -551,6 +555,23 @@ export const table = (result: Result): string => {
         );
       lines.push("");
     }
+  }
+  if (rows.some((row) => row.workerStart !== undefined)) {
+    lines.push(
+      "Fresh-deployment first use; cold positions remain separate. Worker RTT includes routing and startup incurred; Object opening includes subscription. Full staged endpoints also include identity validation. None isolates module-evaluation CPU.",
+      "",
+      "| Cell / position / target / build | First Worker request ms | Object open / subscription ms | Full staged first text ms | Full staged completion ms |",
+      "|---|---:|---:|---:|---:|",
+    );
+    for (const [cell, samples] of group(
+      rows.filter((row) => row.state === "cold"),
+      (row) => `${row.history}/${row.ttftMs}/${row.repeat}/${row.target}/${row.build}`,
+    )) {
+      lines.push(
+        `| ${cell} | ${(["workerStartMs", "observationMs", "coldStartToFirstTextMs", "coldStartToCompletionMs"] as const).map((metric) => interval(objectMedians(samples, metric))).join(" | ")} |`,
+      );
+    }
+    lines.push("");
   }
   lines.push(
     "Turn phases: Object-clock milliseconds since submission entry; receipt is driver admission latency. Missing markers are not zero.",

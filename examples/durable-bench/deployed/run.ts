@@ -615,7 +615,10 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         ? ["baseline", "candidate"]
         : ["working"];
 
-    const turnsPerEpoch = options.repeats + (options.buildHistory ? 1 : 3);
+    const turnsPerEpoch =
+      options.repeats + (options.buildHistory ? 1 : 1 + (options.coldSamples ?? 2));
+
+    const coldPosition = (index: number) => index === 1 || index >= options.repeats + 2;
 
     const sampleName = (epoch: number, index: number, attempt = 0) =>
       options.buildHistory
@@ -712,7 +715,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                 (cohort) =>
                   cohort.history === size && cohort.ttftMs === ttft && cohort.target === target,
               ),
-              `assignment/${size}/${ttft}/${target}`,
+              `assignment/${size}/${ttft}/${options.isolateCold ? "paired-targets" : target}`,
               objectKey,
             );
 
@@ -820,6 +823,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       });
 
       let restoring = restorePass;
+      let coldGeneration = 0;
 
       const deploymentFor = Effect.fnUntraced(function* (cohort: Pick<Query, "target" | "object">) {
         const { compiled, restoreBuild } = yield* assignment(cohort);
@@ -827,7 +831,10 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         const bundle =
           restoring && active.has(objectKey(cohort)) && restoreBuild ? restoreBuild : compiled;
 
-        return { bundle: bundle.file, build: `${bundle.sha256}-${runName}-e${epoch}` };
+        return {
+          bundle: bundle.file,
+          build: `${bundle.sha256}-${runName}-e${epoch}${coldGeneration === 0 ? "" : `-c${coldGeneration}`}`,
+        };
       });
 
       const expectedFor = (cohort: Pick<Query, "target" | "object">) =>
@@ -844,7 +851,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         );
       });
 
-      const deployPass = Effect.fnUntraced(function* () {
+      const deployPass = Effect.fnUntraced(function* (probe = true) {
         const items = yield* ordered(
           poolCohorts,
           `deploy/${epoch}/${attempt}/${restoring ? "restore" : "target"}`,
@@ -857,6 +864,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           items.map(workerName),
           yield* assignments(items),
           persistent,
+          probe,
         );
 
         yield* update((value) => ({
@@ -1628,17 +1636,13 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           });
 
           const { label } = yield* assignment(cohort);
-          const expectedBuild = yield* expectedFor(cohort);
-
           let reset: typeof ColdResult.Type | undefined;
           let incarnation = "";
           let directoryIncarnation: string | undefined;
 
           const firstAfterReset = (index: number) =>
             index === 0 ||
-            (!options.buildHistory &&
-              cohort.target !== "effect-ai-floor" &&
-              (index === 1 || index === turnsPerEpoch - 1));
+            (!options.buildHistory && cohort.target !== "effect-ai-floor" && coldPosition(index));
 
           const prepare = Effect.fnUntraced(function* (index: number) {
             if (firstAfterReset(index)) reset = yield* resetForBuild(cohort);
@@ -1646,6 +1650,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
           const measure = (index: number, wave: number, peers: readonly string[]) =>
             Effect.gen(function* () {
+              const expectedBuild = yield* expectedFor(cohort);
+
               if (reset === undefined)
                 return yield* BenchError.make({
                   message: "Measurement must follow acknowledged readiness/reset.",
@@ -1662,8 +1668,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
               const state =
                 !options.buildHistory && index === 0
                   ? "preparation"
-                  : cohort.target === "effect-ai-floor" &&
-                      (index === 1 || index === turnsPerEpoch - 1)
+                  : cohort.target === "effect-ai-floor" && coldPosition(index)
                     ? "warmup"
                     : firstAfterReset(index)
                       ? "cold"
@@ -1690,6 +1695,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                 repeat: index,
                 state: index < resumeAt ? "recovery" : state,
                 status: "running",
+                ...(firstAfterReset(index) ? { coldBoundary: acknowledgedReset } : {}),
               };
 
               currentSample = sample;
@@ -1715,6 +1721,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   observeText: !options.buildHistory,
                   expectedDriverBuild,
                   cold: options.buildHistory && index === 0,
+                  isolateCold: options.isolateCold === true && state === "cold",
                   quiescent: state === "preparation" || index === turnsPerEpoch - 1,
                   resetBeforeMetrics:
                     options.verifyIncarnationRecovery === true &&
@@ -1855,6 +1862,14 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   metrics.identity.incarnation !== acknowledgedReset.before.incarnation &&
                   metrics.identity.firstEntry &&
                   metrics.identity.priorAlarms === 0 &&
+                  (!options.isolateCold ||
+                    state !== "cold" ||
+                    (metrics.identity.isolate !== acknowledgedReset.before.isolate &&
+                      metrics.identity.incarnation ===
+                        measured.value.coldObjectIdentity?.incarnation)) &&
+                  (!(cohort.target === "yielded" || cohort.target === "pi") ||
+                    (acknowledgedReset.maintenanceAfter?.logical === null &&
+                      acknowledgedReset.maintenanceAfter.native === null)) &&
                   (!options.buildHistory ||
                     metrics.identity.incarnation === measured.value.primed?.incarnation);
 
@@ -1892,6 +1907,15 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                       ? {
                           ...sample,
                           status: "ok",
+                          ...(measured.value.workerStart === undefined
+                            ? {}
+                            : {
+                                workerStart: measured.value.workerStart,
+                                coldObjectIdentity: measured.value.coldObjectIdentity,
+                                workerStartMs: measured.value.workerStartMs,
+                                coldStartToFirstTextMs: measured.value.coldStartToFirstTextMs,
+                                coldStartToCompletionMs: measured.value.coldStartToCompletionMs,
+                              }),
                           driverMs: measured.value.driverMs,
                           firstTextMs: measured.value.firstTextMs,
                           ...(measured.value.firstText === undefined
@@ -2043,10 +2067,26 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             !failedObjects.has(objectKey(cohort)) && !retryFrom.has(objectKey(cohort)),
         );
 
+        const freshVersion = options.isolateCold === true && coldPosition(index);
+
+        if (freshVersion) {
+          yield* Effect.forEach(activeMeasurements, (item) => item.prepare(index), {
+            concurrency: options.concurrency,
+            discard: true,
+          });
+          coldGeneration++;
+          endpoints = yield* deployPass(false);
+          // Fixed propagation allowance; any stale first response fails without input retry.
+          yield* Effect.sleep("10 seconds");
+        }
+
         const groups = new Map<string, typeof activeMeasurements>();
 
         for (const item of activeMeasurements) {
-          const key = `${item.cohort.target}/${item.cohort.history}/${item.cohort.ttftMs}`;
+          const key = options.isolateCold
+            ? `${item.cohort.history}/${item.cohort.ttftMs}/${item.cohort.object}`
+            : `${item.cohort.target}/${item.cohort.history}/${item.cohort.ttftMs}`;
+
           const group = groups.get(key) ?? [];
 
           group.push(item);
@@ -2055,12 +2095,16 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
         const cells = shuffle([...groups], `wave-cells/${epoch}/${attempt}/${index}`).map(
           ([cell, items]) => {
-            const arms = labels.map((label) =>
-              shuffle(
-                items.filter((item) => item.label === label),
-                `wave-arm/${epoch}/${attempt}/${index}/${cell}/${label}`,
-              ),
-            );
+            const arms = options.isolateCold
+              ? options.targets.map((target) =>
+                  items.filter((item) => item.cohort.target === target),
+                )
+              : labels.map((label) =>
+                  shuffle(
+                    items.filter((item) => item.label === label),
+                    `wave-arm/${epoch}/${attempt}/${index}/${cell}/${label}`,
+                  ),
+                );
 
             const paired: (typeof items)[] = [];
 
@@ -2107,10 +2151,11 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         for (const [waveIndex, wave] of waves.entries()) {
           const peers = wave.map(({ cohort }) => objectKey(cohort));
 
-          yield* Effect.forEach(wave, (item) => item.prepare(index), {
-            concurrency: options.concurrency,
-            discard: true,
-          });
+          if (!freshVersion)
+            yield* Effect.forEach(wave, (item) => item.prepare(index), {
+              concurrency: options.concurrency,
+              discard: true,
+            });
           yield* Effect.forEach(wave, (item) => item.measure(index, waveIndex, peers), {
             concurrency: options.concurrency,
             discard: true,

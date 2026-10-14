@@ -86,6 +86,19 @@ export const command = Command.make(
       Flag.withDefault(false),
       Flag.withDescription("Include the first turn after Object abort, before warmup"),
     ),
+    isolateCold: Flag.Boolean("isolate-cold").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription(
+        "Upload a fresh version before each cold boundary without readiness probes",
+      ),
+    ),
+    coldSamples: Flag.Int("cold-samples").pipe(
+      Flag.withSchema(Schema.Int.check(Schema.isBetween({ minimum: 2, maximum: 12 }))),
+      Flag.withDefault(2),
+      Flag.withDescription(
+        "Cold turns per Object/epoch with --isolate-cold; extra cold turns follow the warm batch",
+      ),
+    ),
     cpu: Flag.Boolean("cpu").pipe(
       Flag.withDefault(false),
       Flag.withDescription(
@@ -192,6 +205,21 @@ export const command = Command.make(
 
     const profiles = [...new Set(flags.profile.flat())];
 
+    if (flags.coldSamples !== 2 && !flags.isolateCold)
+      return yield* BenchError.make({ message: "Extra cold samples require --isolate-cold." });
+
+    if (
+      flags.isolateCold &&
+      (flags.buildHistory ||
+        flags.verifyIncarnationRecovery ||
+        profiles.length > 0 ||
+        targets.some((target) => target !== "yielded" && target !== "pi"))
+    )
+      return yield* BenchError.make({
+        message:
+          "--isolate-cold requires an unprofiled Yielded/pi snapshot comparison without recovery diagnostics.",
+      });
+
     if (
       !flags.buildHistory &&
       (profiles.length > 0 || Option.getOrElse(flags.restoreEachPass, () => true) === false)
@@ -267,6 +295,8 @@ export const command = Command.make(
       concurrency,
       buildConcurrency,
       cold: true,
+      isolateCold: flags.isolateCold,
+      coldSamples: flags.coldSamples,
       cpu: flags.cpu,
       profiles,
       ...(profileAfter === undefined ? {} : { profileAfter }),

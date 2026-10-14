@@ -14,7 +14,7 @@ import { text } from "@yielded/agent/output";
 import { IdempotencyKey, Principal, Receipt } from "@yielded/agent/receipt";
 import { DefinitionDigestInput, PersistedJson } from "@yielded/agent/records";
 import { Effect, Layer, Schema } from "effect";
-import { DurableObject, DurableObjectState } from "effect-cf";
+import { DurableObject, DurableObjectAlarm, DurableObjectState } from "effect-cf";
 import { Model, Tool, Toolkit } from "effect/ai";
 import { FetchHttpClient } from "effect/http";
 
@@ -213,6 +213,28 @@ export class YieldedDO extends YieldedDOBase {
   private async drainDispatches() {
     while (this.activeDispatches.size) await Promise.all(this.activeDispatches);
   }
+  private maintenanceStatus() {
+    return this[DurableObject.RunSymbol](
+      Effect.gen(function* () {
+        const alarms = yield* DurableObjectAlarm.DurableObjectAlarm;
+        const state = yield* DurableObjectState.DurableObjectState;
+
+        const logical = yield* alarms.getAlarmStatus({
+          tag: "@yielded/agent/thread-maintenance",
+          id: "queue",
+        });
+
+        const native = yield* state.storage.getAlarm();
+
+        return {
+          logical:
+            logical === undefined ? null : { attempts: logical.attempts, parked: logical.parked },
+          native,
+        };
+      }),
+      { event: "rpc" },
+    );
+  }
   override async fetch(request: Request): Promise<Response> {
     // CPU evidence is captured after both timer endpoints, before the observer closes.
     if (this.host.meter.cpuEnabled && new URL(request.url).pathname === "/metrics")
@@ -220,6 +242,7 @@ export class YieldedDO extends YieldedDOBase {
 
     return this.host.fetch(request, {
       close: () => this.drainDispatches(),
+      maintenance: () => this.maintenanceStatus(),
       run: (input) => this.historyTurn(input),
     });
   }

@@ -1,6 +1,7 @@
 import { Schema } from "../../../node_modules/effect/dist/index.js";
+import { isolateIdentity } from "../../../deployed/worker/observe.ts";
 import { COLD_ABORT } from "../../../deployed/worker/host.ts";
-import { BulkFixture, Failure, Identity, ObjectIdentity, MetricsResult, measurementPaths, SeedBatch, TransientObjectTransport, errorText, readQuery, transientObjectTransport, type Env, type Query, type Target } from "../../../deployed/worker/protocol.ts";
+import { BulkFixture, Failure, Identity, MaintenanceStatus, ObjectIdentity, MetricsResult, measurementPaths, SeedBatch, TransientObjectTransport, errorText, readQuery, transientObjectTransport, type Env, type Query, type Target } from "../../../deployed/worker/protocol.ts";
 import type { ActorDO } from "./tardie.ts";
 
 const expectedAbort = async (abort: () => Promise<unknown>) => {
@@ -17,6 +18,8 @@ const expectedAbort = async (abort: () => Promise<unknown>) => {
   }
 };
 
+let workerFetches = 0;
+
 export const router = <E extends Env>(target: Target, routes: {
   stub: (env: E, query: Query) => Pick<DurableObjectStub, "fetch">;
   ready?: (env: E) => Promise<void>;
@@ -26,9 +29,12 @@ export const router = <E extends Env>(target: Target, routes: {
   async fetch(request: Request, env: E): Promise<Response> {
     if (!env.BENCH_TOKEN || request.headers.get("authorization") !== `Bearer ${env.BENCH_TOKEN}`)
       return new Response("unauthorized", { status: 401 });
+    const firstFetch = workerFetches++ === 0;
     const url = new URL(request.url);
 
     try {
+      if (url.pathname === "/worker-start")
+        return Response.json({ ok: true, build: env.BUILD, isolate: isolateIdentity(), firstFetch });
       if (url.pathname === "/health") {
         await routes.ready?.(env);
 
@@ -82,6 +88,23 @@ export const router = <E extends Env>(target: Target, routes: {
       }
 
       if (url.pathname === "/cold") {
+        // Normal effect-cf RPC completion owns dispatch; polling never deletes alarms.
+        const maintenanceUrl = new URL(url);
+        maintenanceUrl.pathname = "/maintenance-status";
+        const readMaintenance = async () => {
+          const response = await fetchObject(new Request(maintenanceUrl, { headers: request.headers }));
+          if (!response.ok) throw new Error("Cold maintenance status failed");
+          return Schema.decodeUnknownSync(MaintenanceStatus)(await response.json());
+        };
+        const maintenanceBefore = target === "yielded" || target === "pi" ? await readMaintenance() : undefined;
+        let maintenanceAfter = maintenanceBefore;
+        let maintenancePolls = maintenanceBefore === undefined ? 0 : 1;
+        while (maintenanceAfter && (maintenanceAfter.logical !== null || maintenanceAfter.native !== null)) {
+          if (maintenancePolls >= 600) throw new Error("Cold maintenance did not become quiescent");
+          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+          maintenanceAfter = await readMaintenance();
+          maintenancePolls++;
+        }
         const identityUrl = new URL(url);
 
         identityUrl.pathname = "/identity";
@@ -103,6 +126,9 @@ export const router = <E extends Env>(target: Target, routes: {
             directoryBefore,
             threadAborted,
             directoryAborted,
+            maintenanceBefore,
+            maintenanceAfter,
+            maintenancePolls,
           },
           { status: threadAborted && directoryAborted !== false ? 200 : 502 },
         );

@@ -21,7 +21,7 @@ DURABLE_BENCH_PREFIX=bench-change vp run -F @yielded/agent-example-durable-bench
 ```
 
 Quick defaults to Yielded, 1,000 historical turns, TTFT 0 and 12 Objects. Each build
-runs one excluded preparation turn, resets the isolate, then measures a cold turn,
+runs one excluded preparation turn, restarts the Object, then measures a cold turn,
 twelve sequential warm turns and a second cold turn after another reset. Preparation
 awaits native post-settlement writers so revision-specific derived state exists. Both builds
 measure the same Objects. Within each target/history/TTFT cell, quick randomly assigns half
@@ -264,7 +264,11 @@ that Object; short intervals may resolve to zero. Object/driver clock offsets ar
 
 `--cold` includes the first turn after acknowledged `storage.sync()` + `ctx.abort()`;
 tardie's Actor directory and Thread are both restarted. It verifies a new instance, no
-earlier alarm entry, and a first request. This is a cold Object over retained storage,
+earlier alarm entry, and a first request. Before resetting Yielded or pi, the router waits
+for native alarm absence; Yielded also requires effect-cf’s logical maintenance alarm to
+be absent. Normal effect-cf dispatch drains the work, with a bounded wait that fails closed.
+No alarms are manually deleted. Each sample’s `coldBoundary` retains initial/final alarm
+status and poll count. This is a cold Object over retained storage,
 not a cold isolate, cold disk, or newly seeded conversation. Warm samples require the
 same live instance as the preceding verified turn.
 The driver collects metrics after its timer endpoints, before closing the text observer.
@@ -318,7 +322,12 @@ For Yielded and pi, pre-subscription opens the new Object before a cold turn's s
 after restart with observation prepared, and are not comparable to earlier unobserved cold
 completion timings. Tardie's cold timer still includes opening its native reference.
 
-Cold completion, first text and admission receipt share the logical start `driver submit start − constructorAndProbeMs`; the constructor/probe interval is also reported separately, while priming transport and observer attachment remain excluded.
+In `--build-history` mode only, cold completion and admission use the logical start
+`driver submit start − constructorAndProbeMs`. That interval includes a provider-health
+round trip used to advance the Object clock; it is not pure construction CPU. Normal
+comparisons do not prime: use observer-open endpoints to include Object opening.
+Health and readiness have already evaluated the Worker module before these cold turns;
+none of these fields measures fresh-isolate startup.
 
 Request decoding, transcript normalization and fingerprinting run in the provider Worker,
 not the measured Object. The Object records response chunks and timestamps; it validates
@@ -430,3 +439,33 @@ Dependency installs publish immutable complete directories atomically. Build/cac
 seeded and cache-hit receipts are retained. Import, recovery,
 transcript, build or residency failures invalidate the affected Object; the command never
 bypasses durability checks to force a comparison.
+
+## Fresh-deployment cold requests
+
+`--isolate-cold` uploads a fresh executable version onto the same prepared storage
+before each cold position. Yielded and pi must be quiescent before that upload.
+The executable differs only by a recorded deployment nonce; source-bundle hashes
+and uploaded-executable hashes remain separate. The harness skips readiness probes
+for this upload, allows ten seconds for propagation, then measures the first request.
+A stale build or contaminated first use fails the attempt without retrying an input.
+Use this mode only with snapshot-backed Yielded/pi comparisons. It pairs the two
+targets on the same Object index, AB/BA assignment and measurement wave.
+`--cold-samples 6` adds four more fresh-version cold turns after the usual second
+cold turn (default two; maximum twelve). Each advances history by one turn, equally
+for both targets. Extra cold positions remain separately labeled in the report.
+
+The driver starts before a Worker-only `/worker-start` request, then attaches the
+text observer, checks the opened Object's identity, and submits the turn. JSON records:
+
+- `workerStartMs`: first Worker request, including routing and any startup incurred.
+- `observationMs`: Object open and subscription, including any startup incurred.
+- `coldStartToFirstTextMs` and `coldStartToCompletionMs`: the full staged request,
+  including the identity check. These are directly measured intervals, not sums of medians.
+
+The router must report its first authenticated fetch. The Object must report its first
+construction in a new module instance, fresh incarnation, no preceding alarm and the
+expected build. Router and Object module tokens are recorded separately; equal tokens
+mean the ping already evaluated their shared module. Cloudflare may evaluate code before
+traffic, so these measurements do not isolate pure module-evaluation time. Keep both cold
+positions separate: their histories differ by the intervening turns. Production CPU
+profiles attach to already-loaded isolates and cannot recover earlier startup work.
