@@ -111,13 +111,8 @@
               },
               "historyRecordCount": {
                 "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991,
-                "allOf": [
-                  {
-                    "minimum": 0
-                  }
-                ]
+                "minimum": 0,
+                "maximum": 9007199254740991
               },
               "result": {
                 "$ref": "#/$defs/@effect-agent~1thread~1PersistedJsonEncoded"
@@ -293,13 +288,8 @@
         },
         "queueSequence": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": ["receiptId", "submissionId", "threadId", "queueSequence"],
@@ -388,7 +378,6 @@
         },
         "sequence": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -762,13 +751,8 @@
         },
         "programmaticToolCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "finalizationUsed": {
           "type": "boolean"
@@ -884,43 +868,23 @@
       "properties": {
         "total": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "uncached": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "cacheRead": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "cacheWrite": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": ["total", "uncached", "cacheRead", "cacheWrite"],
@@ -931,33 +895,18 @@
       "properties": {
         "total": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "text": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "reasoning": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": ["total", "text", "reasoning"],
@@ -1009,23 +958,13 @@
         },
         "webSearchCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "costMicrousd": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": ["provider", "model", "inputTokens", "outputTokens", "costMicrousd"],
@@ -1040,27 +979,13 @@
         },
         "toolResultMaxBytes": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 256,
-              "maximum": 1048576
-            }
-          ]
+          "minimum": 256,
+          "maximum": 1048576
         },
         "toolSelectionMaxBytes": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            },
-            {
-              "maximum": 4194304
-            }
-          ]
+          "minimum": 0,
+          "maximum": 4194304
         },
         "toolOperations": {
           "type": "array",
@@ -1130,7 +1055,6 @@
         },
         "turn": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -1139,7 +1063,6 @@
         },
         "runScopedPrefixLength": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -1151,43 +1074,23 @@
         },
         "unobservedModelCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "inputTokens": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "outputTokens": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "costMicrousd": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": [
@@ -1252,7 +1155,6 @@
         },
         "turn": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -1352,7 +1254,6 @@
         },
         "turn": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -1397,7 +1298,6 @@
         },
         "turn": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -1454,20 +1354,13 @@
         },
         "turn": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
         "restart": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 1,
-              "maximum": 2
-            }
-          ]
+          "minimum": 1,
+          "maximum": 2
         },
         "reason": {
           "type": "string",
@@ -1481,13 +1374,8 @@
         },
         "unobservedModelCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": [
@@ -1515,7 +1403,6 @@
         },
         "turn": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -1525,13 +1412,8 @@
         },
         "coversThrough": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "summary": {
           "type": "string",
@@ -1647,13 +1529,7 @@
         },
         "modelCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ],
           "exclusiveMinimum": 0
         },
         "inputTokens": {
@@ -1664,23 +1540,13 @@
         },
         "webSearchCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "costMicrousd": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": [
@@ -1698,13 +1564,8 @@
       "properties": {
         "modelCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "inputTokens": {
           "$ref": "#/$defs/@effect-agent~1core~1InputTokenUsageEncoded"
@@ -1714,23 +1575,13 @@
         },
         "webSearchCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "costMicrousd": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "byModel": {
           "type": "array",
@@ -1748,13 +1599,8 @@
         },
         "unobservedModelCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": ["modelCalls", "inputTokens", "outputTokens", "costMicrousd", "byModel"],
@@ -1765,13 +1611,8 @@
       "properties": {
         "maxBytes": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 256
-            }
-          ]
+          "minimum": 256,
+          "maximum": 9007199254740991
         }
       },
       "required": ["maxBytes"],
@@ -1782,7 +1623,6 @@
       "properties": {
         "keepRecentTokens": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -1799,13 +1639,11 @@
       "properties": {
         "maxTurns": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
         "maxToolCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -1868,19 +1706,13 @@
         },
         "toolConcurrency": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
         "repeatedFailureLimit": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "onExhaustion": {
           "type": "string",
@@ -1888,33 +1720,21 @@
         },
         "tokenBudget": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
         "completionReserveTokens": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "costBudgetMicrousd": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "contextTokenLimit": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -1930,13 +1750,8 @@
         },
         "modelRetries": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "compaction": {
           "$ref": "#/$defs/CompactionPolicyEncoded"
@@ -1961,93 +1776,48 @@
       "properties": {
         "maxTotalChildInvocations": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "maxConcurrentChildren": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "maxTurns": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "maxToolCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "maxDurationMillis": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "maxInputTokens": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "maxOutputTokens": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "maxCostMicrousd": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "maxResultBytes": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "additionalProperties": true
@@ -2057,73 +1827,38 @@
       "properties": {
         "turns": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "toolCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "durationMillis": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "inputTokens": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "outputTokens": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "costMicrousd": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "resultBytes": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": [
@@ -2150,14 +1885,8 @@
         },
         "maxDepth": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 1,
-              "maximum": 16
-            }
-          ]
+          "minimum": 1,
+          "maximum": 16
         },
         "childLifetimes": {
           "type": "array",
@@ -2188,7 +1917,6 @@
         },
         "turn": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -2240,7 +1968,6 @@
         },
         "toolCallAllowance": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -2258,13 +1985,8 @@
             },
             "descendantInvocations": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             }
           },
           "required": ["caps", "allocation"],
@@ -2275,13 +1997,8 @@
         },
         "depth": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 1
-            }
-          ]
+          "minimum": 1,
+          "maximum": 9007199254740991
         }
       },
       "required": [
@@ -2352,53 +2069,28 @@
       "properties": {
         "modelCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "inputTokens": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "outputTokens": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "webSearchCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "costMicrousd": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "usageStatus": {
           "type": "string",
@@ -2410,13 +2102,8 @@
         },
         "unobservedModelCalls": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": ["modelCalls", "inputTokens", "outputTokens", "costMicrousd"],
@@ -2505,13 +2192,8 @@
         },
         "depth": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 1
-            }
-          ]
+          "minimum": 1,
+          "maximum": 9007199254740991
         }
       },
       "required": [
@@ -2549,7 +2231,6 @@
         },
         "toolCallAllowance": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -2567,13 +2248,8 @@
             },
             "descendantInvocations": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             }
           },
           "required": ["caps", "allocation"],
@@ -2741,13 +2417,8 @@
                     },
                     "descendantInvocations": {
                       "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991,
-                      "allOf": [
-                        {
-                          "minimum": 0
-                        }
-                      ]
+                      "minimum": 0,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": ["caps", "allocation"],
@@ -2758,17 +2429,11 @@
                 },
                 "depth": {
                   "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991,
-                  "allOf": [
-                    {
-                      "minimum": 1
-                    }
-                  ]
+                  "minimum": 1,
+                  "maximum": 9007199254740991
                 },
                 "toolCallAllowance": {
                   "type": "integer",
-                  "minimum": -9007199254740991,
                   "maximum": 9007199254740991,
                   "exclusiveMinimum": 0
                 },
@@ -2779,23 +2444,13 @@
                 },
                 "createdAtMillis": {
                   "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991,
-                  "allOf": [
-                    {
-                      "minimum": 0
-                    }
-                  ]
+                  "minimum": 0,
+                  "maximum": 9007199254740991
                 },
                 "expiresAtMillis": {
                   "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991,
-                  "allOf": [
-                    {
-                      "minimum": 0
-                    }
-                  ]
+                  "minimum": 0,
+                  "maximum": 9007199254740991
                 },
                 "reporting": {
                   "type": "object",
@@ -2827,13 +2482,8 @@
                         },
                         "depth": {
                           "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991,
-                          "allOf": [
-                            {
-                              "minimum": 0
-                            }
-                          ]
+                          "minimum": 0,
+                          "maximum": 9007199254740991
                         },
                         "grant": {
                           "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentGrantEncoded"
@@ -2886,13 +2536,8 @@
             },
             "createdAtMillis": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "sourceSubmissionId": {
               "type": "string",
@@ -3138,13 +2783,8 @@
                 },
                 "descendantInvocations": {
                   "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991,
-                  "allOf": [
-                    {
-                      "minimum": 0
-                    }
-                  ]
+                  "minimum": 0,
+                  "maximum": 9007199254740991
                 }
               },
               "required": ["caps", "allocation"],
@@ -3155,17 +2795,11 @@
             },
             "depth": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 1
-                }
-              ]
+              "minimum": 1,
+              "maximum": 9007199254740991
             },
             "toolCallAllowance": {
               "type": "integer",
-              "minimum": -9007199254740991,
               "maximum": 9007199254740991,
               "exclusiveMinimum": 0
             },
@@ -3176,23 +2810,13 @@
             },
             "createdAtMillis": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "expiresAtMillis": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "reporting": {
               "type": "object",
@@ -3224,13 +2848,8 @@
                     },
                     "depth": {
                       "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991,
-                      "allOf": [
-                        {
-                          "minimum": 0
-                        }
-                      ]
+                      "minimum": 0,
+                      "maximum": 9007199254740991
                     },
                     "grant": {
                       "$ref": "#/$defs/@effect-agent~1capabilities~1SubagentGrantEncoded"
@@ -3296,13 +2915,8 @@
         },
         "completedAtMillis": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "effectsResolved": {
           "type": "boolean",
@@ -3360,7 +2974,6 @@
         },
         "deliveryVersion": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -3440,23 +3053,13 @@
         },
         "createdAtMillis": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "deadlineAtMillis": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "predecessor": {
           "type": "string",
@@ -3493,23 +3096,13 @@
             },
             "createdAtMillis": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "deadlineAtMillis": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "predecessor": {
               "type": "string",
@@ -3633,7 +3226,6 @@
         },
         "deadlineAtMillis": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
           "exclusiveMinimum": 0
         },
@@ -3689,13 +3281,8 @@
         },
         "depth": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 1
-            }
-          ]
+          "minimum": 1,
+          "maximum": 9007199254740991
         },
         "policy": {
           "$ref": "#/$defs/AgentPolicyEncoded"
@@ -3714,13 +3301,8 @@
             },
             "descendantInvocations": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             }
           },
           "required": ["caps", "allocation"],
@@ -3778,24 +3360,13 @@
         },
         "historyFrom": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ],
           "exclusiveMinimum": 0
         },
         "historyThrough": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "retained": {
           "type": "array",
@@ -3808,13 +3379,8 @@
               },
               "sequence": {
                 "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991,
-                "allOf": [
-                  {
-                    "minimum": 0
-                  }
-                ]
+                "minimum": 0,
+                "maximum": 9007199254740991
               }
             },
             "required": ["recordId", "sequence"],
@@ -3827,13 +3393,8 @@
         },
         "priorHistoryLength": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "contextWindowId": {
           "type": "string",
@@ -3875,102 +3436,43 @@
         },
         "revision": {
           "type": "integer",
-          "minimum": -9007199254740991,
           "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ],
           "exclusiveMinimum": 0
         },
         "recordCount": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            },
-            {
-              "maximum": 16388
-            }
-          ]
+          "minimum": 0,
+          "maximum": 16388
         },
         "recordBytes": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            },
-            {
-              "maximum": 42205184
-            }
-          ]
+          "minimum": 0,
+          "maximum": 42205184
         },
         "turn": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            }
-          ]
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "turnBytes": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            },
-            {
-              "maximum": 12845056
-            }
-          ]
+          "minimum": 0,
+          "maximum": 12845056
         },
         "terminalBytes": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            },
-            {
-              "maximum": 8650752
-            }
-          ]
+          "minimum": 0,
+          "maximum": 8650752
         },
         "terminalRecords": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            },
-            {
-              "maximum": 4
-            }
-          ]
+          "minimum": 0,
+          "maximum": 4
         },
         "terminalUsageBytes": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991,
-          "allOf": [
-            {
-              "minimum": 0
-            },
-            {
-              "maximum": 33554432
-            }
-          ]
+          "minimum": 0,
+          "maximum": 33554432
         },
         "originalInput": {
           "type": "object",
@@ -4045,137 +3547,71 @@
           "properties": {
             "committedTurns": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "toolCalls": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "programmaticToolCalls": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "consecutiveToolFailures": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "finalizationUsed": {
               "type": "boolean"
             },
             "modelRestarts": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0,
-                  "maximum": 2
-                }
-              ]
+              "minimum": 0,
+              "maximum": 2
             },
             "modelCalls": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "unobservedModelCalls": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "inputTokens": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "outputTokens": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "lastInputTokens": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "lastOutputTokens": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "costMicrousd": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "accountedToolTurn": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991,
-              "allOf": [
-                {
-                  "minimum": 0
-                }
-              ]
+              "minimum": 0,
+              "maximum": 9007199254740991
             }
           },
           "required": [
