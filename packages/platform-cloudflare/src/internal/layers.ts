@@ -7,6 +7,7 @@ import {
 import { submissionLedgerLayer } from "@yielded/agent-storage-cloudflare/do-submission-ledger";
 import {
   threadStoreLayer,
+  journalLayer,
   storageConfigLayer,
   storageFailpointLayer,
   sqlOwnerLayer,
@@ -722,6 +723,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
       // The RPC executor must never receive routed ports and bounce requests between Objects.
       const rawLocalPorts = Layer.suspend(() =>
         Layer.mergeAll(threadStoreLayer, submissionLedgerLayer).pipe(
+          Layer.provide(journalLayer),
           Layer.provide(localInfrastructure),
           Layer.provide(sourceProgress),
         ),

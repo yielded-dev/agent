@@ -33,7 +33,9 @@ import {
 import {
   Cause,
   Clock,
+  Context,
   Effect,
+  Layer,
   Option,
   Predicate,
   References,
@@ -46,6 +48,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import { classifySqliteError, SqlError } from "effect/sql/SqlError";
 import { CurrentTransformer, type Statement } from "effect/sql/Statement";
 
+import { DoStorageConfig } from "../DoStorageConfig.ts";
 import {
   type DoStorageFailpointError,
   DoAppendConflict,
@@ -55,7 +58,7 @@ import {
   DoValueBoundExceeded,
   type DoStorageFailpointLocation,
 } from "../DoStorageError.ts";
-import { isDefaultDoStorageFailpoint } from "../DoStorageFailpoint.ts";
+import { DoStorageFailpoint, isDefaultDoStorageFailpoint } from "../DoStorageFailpoint.ts";
 import { ensureDoStorageLayout } from "./migrations.ts";
 import { ownedState, ownedRows, type OwnedState } from "./owned-state.ts";
 import {
@@ -1570,4 +1573,27 @@ const makeJournal = Effect.fnUntraced(function* (
 
 export type DoJournal = Effect.Success<ReturnType<typeof makeJournal>>;
 
-export const initializeDoJournal = ensureCurrentStorage;
+const InitializedDoJournal = Context.Reference<DoJournal | undefined>(
+  "@effect-agent/storage-cloudflare/InitializedDoJournal",
+  { defaultValue: () => undefined },
+);
+
+/** Build once in the common owner, SQL, configuration, failpoint and lifecycle context. */
+export const initializedDoJournalLayer = Layer.effect(InitializedDoJournal)(
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const config = yield* DoStorageConfig;
+    const failpoint = yield* DoStorageFailpoint;
+
+    return yield* ensureCurrentStorage(sql, failpoint.hit, config.maxStoredValueBytes);
+  }),
+);
+
+export const initializeDoJournal = (
+  sql: SqlClient.SqlClient,
+  failpoint: DoJournalFailpoint,
+  maxStoredValueBytes: number,
+) =>
+  Effect.filterOrElse(InitializedDoJournal, Predicate.isNotUndefined, () =>
+    ensureCurrentStorage(sql, failpoint, maxStoredValueBytes),
+  );
