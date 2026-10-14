@@ -22,10 +22,11 @@ import {
   LifecyclePublicationFact,
   LifecyclePublicationError,
 } from "@yielded/agent/lifecycle-publication";
-import { CanonicalRecord, CanonicalSequence } from "@yielded/agent/records";
+import { BatchId, CanonicalRecord, CanonicalSequence } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import {
   type AppendConflict,
+  AppendResult,
   ThreadStoreDiagnostic,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
@@ -114,8 +115,8 @@ const threadRows = ownedRows(
 );
 
 class RecordRow extends Schema.Class<RecordRow>("RecordRow")({
-  batch_id: Schema.fromJsonString(BoundedIdentifier),
-  thread_id: BoundedIdentifier,
+  batch_id: Schema.fromJsonString(BatchId.check(Schema.isMaxLength(MAX_IDENTIFIER_LENGTH))),
+  thread_id: ThreadId.check(Schema.isMaxLength(MAX_IDENTIFIER_LENGTH)),
   record_id: Schema.fromJsonString(BoundedIdentifier),
   record_json: BoundedStoredText,
   sequence: CanonicalSequence,
@@ -219,14 +220,6 @@ const lifecycleCursorRows = ownedRows(
 const initializedLifecycleSources = new WeakSet<OwnedState>();
 
 export type { RawAppendRequest } from "@yielded/agent-storage-sql/sql-journal";
-
-export class RawAppendResult extends Schema.Class<RawAppendResult>(
-  "@effect-agent/storage-cloudflare/RawAppendResult",
-)({
-  firstSequence: CanonicalSequence,
-  lastSequence: CanonicalSequence,
-  replayed: Schema.Boolean,
-}) {}
 
 export class RawReadRequest extends Schema.Class<RawReadRequest>(
   "@effect-agent/storage-cloudflare/RawReadRequest",
@@ -790,6 +783,7 @@ const makeJournal = Effect.fnUntraced(function* (
             recordCache.put(
               RecordRow.make({
                 ...physicalRecords[index]!.columns,
+                thread_id: request.threadId,
                 record_id: record.recordId,
                 batch_id: request.batchId,
                 record_json: record.recordJson,
@@ -812,7 +806,7 @@ const makeJournal = Effect.fnUntraced(function* (
 
   const appendPrepared = Effect.fnUntraced(function* (
     request: RawAppendRequest,
-  ): Effect.fn.Return<RawAppendResult, AppendError> {
+  ): Effect.fn.Return<AppendResult, AppendError> {
     const threadRows = yield* getThread(request.threadId);
 
     const thread = threadRows.length === 1 ? threadRows[0] : undefined;
@@ -851,7 +845,7 @@ const makeJournal = Effect.fnUntraced(function* (
     if (inserted.length === 0) {
       const replay = yield* executionConflict(executions.replay(request));
 
-      if (replay !== undefined) return RawAppendResult.make(replay);
+      if (replay !== undefined) return AppendResult.make(replay);
 
       const prefix = recordCache.prefix(request.threadId, thread.tail_sequence);
 
@@ -868,7 +862,7 @@ const makeJournal = Effect.fnUntraced(function* (
           });
         }
 
-        return RawAppendResult.make({
+        return AppendResult.make({
           firstSequence: existing.first_sequence,
           lastSequence: existing.last_sequence,
           replayed: true,
@@ -893,9 +887,11 @@ const makeJournal = Effect.fnUntraced(function* (
       });
     }
 
-    const firstSequence = yield* Schema.decodeEffect(CanonicalSequence)(
-      thread.tail_sequence + (request.records.length === 0 ? 0 : 1),
-    ).pipe(
+    const result = yield* Schema.decodeEffect(AppendResult)({
+      firstSequence: thread.tail_sequence + (request.records.length === 0 ? 0 : 1),
+      lastSequence: thread.tail_sequence + request.records.length,
+      replayed: false,
+    }).pipe(
       Effect.mapError((error) =>
         DoStorageError.make({
           cause: error,
@@ -905,25 +901,9 @@ const makeJournal = Effect.fnUntraced(function* (
       ),
     );
 
-    const lastSequence = yield* Schema.decodeEffect(CanonicalSequence)(
-      thread.tail_sequence + request.records.length,
-    ).pipe(
-      Effect.mapError((error) =>
-        DoStorageError.make({
-          cause: error,
-          operation: "append canonical batch",
-          message: error.message,
-        }),
-      ),
-    );
+    const { firstSequence, lastSequence } = result;
 
     yield* executionConflict(executions.validate(request));
-
-    const result = RawAppendResult.make({
-      firstSequence,
-      lastSequence,
-      replayed: false,
-    });
 
     if (yield* appendNativeBody(request, firstSequence, lastSequence, inserted.length > 0)) {
       yield* progress.committed("canonical").pipe(
@@ -1000,6 +980,7 @@ const makeJournal = Effect.fnUntraced(function* (
         recordCache.put(
           RecordRow.make({
             ...row,
+            thread_id: request.threadId,
             record_id: record.recordId,
             batch_id: request.batchId,
             record_json: record.recordJson,
@@ -1114,7 +1095,7 @@ const makeJournal = Effect.fnUntraced(function* (
     function* (
       request: RawAppendRequest,
       observed: ThreadRow,
-    ): Effect.fn.Return<RawAppendResult, AppendError> {
+    ): Effect.fn.Return<AppendResult, AppendError> {
       yield* prepareAppend(request);
       // The facade already read this tail. Reject a known stale writer without opening a
       // transaction; a matching tail is still checked atomically below. Replays precede tail

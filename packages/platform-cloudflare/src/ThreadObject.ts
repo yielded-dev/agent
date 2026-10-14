@@ -351,16 +351,17 @@ const gateAdmissionLimits = Effect.fnUntraced(function* (
     );
   }
 
-  const nonterminal = yield* ledger.scanNonterminal.pipe(
-    Stream.filter((submission) => submission.threadId === threadId),
-    Stream.runCollect,
+  const queueDepth = yield* Stream.runFold(
+    ledger.scanNonterminal,
+    () => 0,
+    (depth, submission) => depth + (submission.threadId === threadId ? 1 : 0),
   );
 
-  if (nonterminal.length >= config.limits.maxQueueDepthPerLane) {
+  if (queueDepth >= config.limits.maxQueueDepthPerLane) {
     return yield* refuseFresh(
       AdmissionLimitExceeded.make({
         limit: "queue-depth",
-        actual: nonterminal.length,
+        actual: queueDepth,
         maximum: config.limits.maxQueueDepthPerLane,
       }),
     );

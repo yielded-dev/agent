@@ -1456,6 +1456,17 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   // observer must never replace this host choice on a fresh or replacement Attempt.
   const toolFailureObserver = yield* CurrentToolFailureObserver;
 
+  const runServices = Context.make(CurrentToolFailureObserver, toolFailureObserver).pipe(
+    Context.add(RunToolVisibility, runToolVisibility),
+    Context.add(RunToolScheduling, runToolScheduling),
+    Context.add(ContextCompactor, compactor),
+    Context.add(RunContextPreparation, runContextPreparation),
+  );
+
+  const journalServices = Context.make(ThreadReader, reader).pipe(
+    Context.add(Crypto.Crypto, crypto),
+  );
+
   const withCrypto = <A, E>(effect: Effect.Effect<A, E, Crypto.Crypto>): Effect.Effect<A, E> =>
     Effect.provideService(effect, Crypto.Crypto, crypto);
 
@@ -1465,8 +1476,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     suffix: ReadonlyArray<CanonicalRecordEnvelope>,
   ) =>
     initialContext(original).pipe(
-      Effect.provideService(ThreadReader, reader),
-      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.provideContext(journalServices),
       Effect.map((history) => history.concat(suffix)),
     );
 
@@ -1720,10 +1730,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
         if (found === undefined) {
           // An exact lookup distinguishes missing evidence from an incomplete native index.
-          yield* resolveEvidence(threadId, ref).pipe(
-            Effect.provideService(ThreadReader, reader),
-            Effect.provideService(Crypto.Crypto, crypto),
-          );
+          yield* resolveEvidence(threadId, ref).pipe(Effect.provideContext(journalServices));
 
           return yield* invalid(
             "Required Run evidence is absent from its locator; rebuild the index explicitly",
@@ -1790,8 +1797,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         } else {
           saved = yield* readRunContext(initial, input, cursor.savedContext.recordId).pipe(
             Effect.provide(RunContextReader.layer(threadId)),
-            Effect.provideService(ThreadReader, reader),
-            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.provideContext(journalServices),
             Effect.mapError(() =>
               invalid("Saved original context cannot be resolved from its evidence"),
             ),
@@ -2585,8 +2591,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
     const progress =
       active?.writer ??
       (yield* makeProgressWriter(writer.threadId, config.deploymentId).pipe(
-        Effect.provideService(ThreadReader, reader),
-        Effect.provideService(Crypto.Crypto, crypto),
+        Effect.provideContext(journalServices),
       ));
 
     const owned: RunWriter = {
@@ -2645,8 +2650,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const progress =
         active?.writer ??
         (yield* makeProgressWriter(request.threadId, config.deploymentId).pipe(
-          Effect.provideService(ThreadReader, reader),
-          Effect.provideService(Crypto.Crypto, crypto),
+          Effect.provideContext(journalServices),
         ));
 
       let tail = {
@@ -7864,34 +7868,33 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             Effect.provideServiceEffect(ConversationStore, makeMemoryStore),
             Effect.scoped,
           ),
-        Effect.provideService(SubagentHost.forTool, (source) =>
-          source.threadId !== submission.threadId ||
-          source.agentId !== submission.agentId ||
-          source.runId !== runId
-            ? SubagentHost.unavailable
-            : workerRuntime.facet(
-                {
-                  source,
-                  policy: agent.definition.policy,
-                  depth: delegationDepth,
-                  ...(inheritedGrant === undefined ? {} : { grant: inheritedGrant }),
-                },
-                submission.principal,
-                submission.submissionId,
-              ),
+        Effect.provideContext(
+          runServices.pipe(
+            Context.add(SubagentHost.forTool, (source) =>
+              source.threadId !== submission.threadId ||
+              source.agentId !== submission.agentId ||
+              source.runId !== runId
+                ? SubagentHost.unavailable
+                : workerRuntime.facet(
+                    {
+                      source,
+                      policy: agent.definition.policy,
+                      depth: delegationDepth,
+                      ...(inheritedGrant === undefined ? {} : { grant: inheritedGrant }),
+                    },
+                    submission.principal,
+                    submission.submissionId,
+                  ),
+            ),
+            Context.add(MessagingHost.forTool, (source) =>
+              source.threadId !== submission.threadId ||
+              source.agentId !== submission.agentId ||
+              source.runId !== runId
+                ? MessagingHost.unavailable
+                : messagingRuntime.forTool(source, submission.principal),
+            ),
+          ),
         ),
-        Effect.provideService(MessagingHost.forTool, (source) =>
-          source.threadId !== submission.threadId ||
-          source.agentId !== submission.agentId ||
-          source.runId !== runId
-            ? MessagingHost.unavailable
-            : messagingRuntime.forTool(source, submission.principal),
-        ),
-        Effect.provideService(CurrentToolFailureObserver, toolFailureObserver),
-        Effect.provideService(RunToolVisibility, runToolVisibility),
-        Effect.provideService(RunToolScheduling, runToolScheduling),
-        Effect.provideService(ContextCompactor, compactor),
-        Effect.provideService(RunContextPreparation, runContextPreparation),
         Effect.andThen(checkpoint),
         // A wrapped Tool/approval failure cannot outrank retained infrastructure authority.
         // Preserve independent defects, interruptions and already-marked coordinator failures.
@@ -8184,11 +8187,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const checkpointPrompt = yield* promptHistory
         .take({ threadId: session.threadId })
-        .pipe(
-          Effect.provideService(ThreadStore, store),
-          Effect.provideService(ThreadReader, reader),
-          Effect.provideService(Crypto.Crypto, crypto),
-        );
+        .pipe(Effect.provideService(ThreadStore, store), Effect.provideContext(journalServices));
 
       // withProgressSession exposes only progress.commit/publish. Their prepare step owns and
       // freezes each canonical fact before reaching this raw writer. Snapshot the private array

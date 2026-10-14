@@ -18,7 +18,6 @@ import { ThreadImport } from "@yielded/agent/thread-import";
 import {
   type ThreadExportRequest,
   AppendConflict,
-  AppendResult,
   CheckpointRejected,
   ThreadCheckpoint,
   ThreadMaterialization,
@@ -126,19 +125,6 @@ const schemaStoreError = (operation: string, error: Schema.SchemaError) =>
     }),
   });
 
-const makeOffset = (
-  threadId: ThreadMaterialization["threadId"],
-  sequence: number,
-): Effect.Effect<ObservationOffset, ThreadStoreError> =>
-  Schema.decodeEffect(CanonicalSequence)(sequence).pipe(
-    Effect.flatMap((validatedSequence) =>
-      Schema.decodeEffect(ObservationOffset)(
-        `${DO_OFFSET_PREFIX}${encodeURIComponent(threadId)}:${validatedSequence}`,
-      ),
-    ),
-    Effect.mapError((error) => schemaStoreError("encode observation offset", error)),
-  );
-
 const parseOffset = Effect.fnUntraced(function* (
   threadId: ThreadMaterialization["threadId"],
   offset: ObservationOffset | undefined,
@@ -179,8 +165,8 @@ const encodeCheckpoint = (checkpoint: ThreadCheckpoint): Effect.Effect<string, T
 const envelopes = new WeakMap<object, CanonicalRecordEnvelope>();
 
 const decodeEnvelope = Effect.fnUntraced(function* (row: {
-  readonly batch_id: string;
-  readonly thread_id: string;
+  readonly batch_id: CanonicalRecordEnvelope["batchId"];
+  readonly thread_id: CanonicalRecordEnvelope["threadId"];
   readonly record_json: string;
   readonly sequence: CanonicalSequence;
 }) {
@@ -213,15 +199,11 @@ const decodeEnvelope = Effect.fnUntraced(function* (row: {
     ),
   );
 
-  const threadId = yield* Schema.decodeEffect(CanonicalRecordEnvelope.fields.threadId)(
-    row.thread_id,
-  ).pipe(Effect.mapError((error) => schemaStoreError("decode thread identity", error)));
+  const { thread_id: threadId, batch_id: batchId } = row;
 
-  const offset = yield* makeOffset(threadId, row.sequence);
-
-  const batchId = yield* Schema.decodeEffect(CanonicalRecordEnvelope.fields.batchId)(
-    row.batch_id,
-  ).pipe(Effect.mapError((error) => schemaStoreError("decode batch identity", error)));
+  const offset = ObservationOffset.make(
+    `${DO_OFFSET_PREFIX}${encodeURIComponent(threadId)}:${row.sequence}`,
+  );
 
   const envelope = CanonicalRecordEnvelope.make(
     { threadId, batchId, sequence: row.sequence, offset, record },
@@ -362,11 +344,6 @@ const makeServices = Effect.fnUntraced(function* () {
 
             return storeError("append canonical batch", error);
           }),
-          Effect.flatMap((result) =>
-            Schema.decodeEffect(AppendResult)(result).pipe(
-              Effect.mapError((error) => schemaStoreError("decode append result", error)),
-            ),
-          ),
         );
 
       yield* hitFailpoint("append:after");
