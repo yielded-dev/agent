@@ -116,9 +116,13 @@ export const prepareSqlAppend = Effect.fnUntraced(function* (
 
   const executionWrites = captured.executionWrites;
 
-  const commitDigest = yield* sqlCommitIntentDigest(
-    captured.batchJson,
-    executionWrites.flatMap(({ update }) => update.facts),
+  const factsJson = `[${executionWrites
+    .map(({ factsJson }) => factsJson.slice(1, -1))
+    .filter((json) => json.length > 0)
+    .join(",")}]`;
+
+  const commitDigest = yield* digestCanonicalJson(
+    JSON.stringify([captured.batchJson, factsJson]),
   ).pipe(Effect.mapError(invalid("digest execution commit")));
 
   return {

@@ -281,6 +281,7 @@ import {
   modelResponseInterruptedRecordId,
   modelResponseRecordId,
   projectRunJournalStream,
+  initialRunJournal,
   type JournalBoundary,
   type RunJournalProjection,
   type RunJournalContext,
@@ -847,6 +848,11 @@ export class RecoverySweepResult extends Schema.Class<RecoverySweepResult>("Reco
 /** Recover one bounded page of native work, optionally confined to one Thread. */
 export interface RecoverySweepOptions {
   readonly threadId?: ThreadId;
+  /** Leave this incarnation's untouched root admissions to their first actual claim.
+   * A verified sole admission needs no recovery inventory; other owners retain bounded
+   * discovery and deferred reports. Neither case supplies ownership or a recovery decision:
+   * the Attempt still verifies current controls, journal, fencing and historyDigest. */
+  readonly deferUnclaimedAdmissions?: boolean;
   /** Continue the previous pass with the same Thread selection until its result has no cursor. */
   readonly cursor?: string;
 }
@@ -1374,6 +1380,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const store = yield* ThreadStore;
   const reader = ThreadReader.fromStore(store);
   const promptHistory = yield* makePromptHistoryCache();
+
+  // One incarnation remembers only newly accepted root input, never a recovery decision.
+  // A claim consumes the hint before binding/application code can run. Cold owners,
+  // replays, linked inputs, and any changed ledger state retain the recovery path.
+  const unclaimedAdmissions = new Map<SubmissionId, ThreadId>();
 
   const workDiscovery = yield* ThreadWorkDiscovery.pipe(
     Effect.provide(ThreadWorkDiscovery.layer),
@@ -4857,23 +4868,35 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           historyEvidence.set(entry.record.recordId, entry);
       };
 
+      // An exact cache prefix followed only by this fresh input has no response,
+      // policy reservation or context to replay. Keep recovery on the full projector.
+      const freshPrefix =
+        priorContext === undefined &&
+        initialJournal?.prefix !== undefined &&
+        initialJournal.records?.length === 1 &&
+        initialJournal.records[0] === originalInput
+          ? initialJournal.prefix.prompt
+          : undefined;
+
       let journal =
-        cached !== undefined &&
-        cached.threadId === ctx.threadId &&
-        cached.through === projectionThrough &&
-        cached.runId === runId &&
-        cached.contextRecordId === priorContext?.recordId
-          ? (boundaries.push(...cached.boundaries),
-            cached.contextEvidence.forEach(retainHistory),
-            cached.journal)
-          : yield* projectRunJournalStream(
-              canonical,
-              runId,
-              (boundary) => boundaries.push(boundary),
-              priorContext,
-              journalMetadata,
-              priorContext === undefined ? retainHistory : undefined,
-            );
+        freshPrefix !== undefined
+          ? initialRunJournal(freshPrefix)
+          : cached !== undefined &&
+              cached.threadId === ctx.threadId &&
+              cached.through === projectionThrough &&
+              cached.runId === runId &&
+              cached.contextRecordId === priorContext?.recordId
+            ? (boundaries.push(...cached.boundaries),
+              cached.contextEvidence.forEach(retainHistory),
+              cached.journal)
+            : yield* projectRunJournalStream(
+                canonical,
+                runId,
+                (boundary) => boundaries.push(boundary),
+                priorContext,
+                journalMetadata,
+                priorContext === undefined ? retainHistory : undefined,
+              );
 
       if (initialJournal?.prefix !== undefined) {
         const prompt = initialJournal.prefix.prompt;
@@ -8154,6 +8177,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       resumeAfterRetention: () => void,
       onHandoff: (nextSubmissionId: SubmissionId) => void,
       yieldAfter?: DateTime.Utc,
+      freshlyAdmitted = false,
     ) {
       // Recheck ownership outside the disposable cache's failure recovery.
       yield* session.checkActive;
@@ -8178,7 +8202,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           committedPromptSuffix = undefined;
         }),
       );
-      session = yield* withProgressSession({
+
+      const promptSession: RunStorageSession = {
         ...storageSession,
         append: (batch, executions) => {
           const suffix = committedPromptSuffix;
@@ -8213,17 +8238,117 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             Effect.tapCause(() => Effect.sync(() => suffix.discard())),
           );
         },
-      });
+      };
+
+      session = yield* withProgressSession(promptSession);
       const { claim, threadId } = session;
       const submissionId = claim.submissionId;
 
-      const snapshot = yield* ledger.loadRecoverySnapshot(
-        RecoverySnapshotRequest.make({ submissionId }),
-      );
+      // The hint only selects this preparation. A real claim, current controls, exact
+      // evidence and checkpoint absence are verified under its owner before any reuse.
+      // No binding, instructions, model, Tool or cross-Thread operation runs in the window.
+      let prepared =
+        freshlyAdmitted && session.withInitialization !== undefined
+          ? yield* session.withInitialization(
+              Effect.gen(function* () {
+                const snapshot = yield* ledger.loadRecoverySnapshot(
+                  RecoverySnapshotRequest.make({ submissionId }),
+                );
+
+                const submission = snapshot.submission;
+
+                if (
+                  submission.state !== "ready" ||
+                  submission.workerAdmission !== undefined ||
+                  submission.messageAdmission !== undefined ||
+                  submission.parentLinkage !== undefined ||
+                  snapshot.inputApplied !== undefined ||
+                  snapshot.abortIntent !== undefined ||
+                  snapshot.approvalDecisions.length !== 0
+                )
+                  return undefined;
+                yield* ensureThreadCreated(threadId, submission.agentId, submission.agentDigests);
+                yield* session.refresh;
+                const before = (yield* session.tail).sequence;
+
+                const view = yield* recoveryView(
+                  threadId,
+                  before,
+                  [submissionId],
+                  runIdForSubmission(submissionId),
+                );
+
+                if (
+                  view.progress !== undefined ||
+                  view.context !== undefined ||
+                  view.operational.length !== 0 ||
+                  view.records.some(({ record }) => record.payload._tag !== "ThreadCreated")
+                )
+                  return undefined;
+                const progress = progressWriters.get(session);
+
+                const applyInput = applyCanonicalInput(
+                  session,
+                  submission,
+                  session,
+                  view.records,
+                  undefined,
+                );
+
+                yield* progress === undefined
+                  ? applyInput
+                  : progress
+                      .withVerifiedEmptyRun(runIdForSubmission(submissionId), before, applyInput)
+                      .pipe(Effect.provideService(CurrentRunWriter, promptSession));
+                const through = (yield* session.tail).sequence;
+                const added = yield* selectedRange(threadId, [submissionId], through, before);
+                const records = [...view.records, ...added];
+
+                const accepted = progressWriters
+                  .get(session)
+                  ?.acceptedCheckpoint(runIdForSubmission(submissionId));
+
+                if (
+                  accepted === undefined ||
+                  accepted.throughSequence !== through ||
+                  accepted.progress.runId !== runIdForSubmission(submissionId) ||
+                  accepted.progress.submissionId !== submissionId
+                )
+                  return undefined;
+
+                const start = yield* makeRunStart(
+                  submission,
+                  Duration.toMillis(registeredAgent.definition.policy.maxDuration),
+                  records,
+                  view.operational,
+                ).pipe(Effect.provideService(CurrentRunWriter, session));
+
+                return {
+                  snapshot,
+                  through,
+                  view: {
+                    ...view,
+                    records,
+                    progress: accepted.progress,
+                    progressThrough: accepted.throughSequence,
+                    operational: accepted.operational,
+                  },
+                  start,
+                };
+              }),
+            )
+          : undefined;
+
+      const preparedInput = prepared !== undefined;
+
+      const snapshot =
+        prepared?.snapshot ??
+        (yield* ledger.loadRecoverySnapshot(RecoverySnapshotRequest.make({ submissionId })));
 
       const submission = snapshot.submission;
 
-      yield* ensureThreadCreated(threadId, submission.agentId, submission.agentDigests);
+      if (prepared === undefined)
+        yield* ensureThreadCreated(threadId, submission.agentId, submission.agentDigests);
       if (submission.workerAdmission?.origin.reporting?.mode === "standard")
         yield* updateRuntime.repairRun(threadId, submissionId);
       if (submission.workerAdmission !== undefined) {
@@ -8238,18 +8363,20 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       if (submission.state === "admitted") {
         yield* ledger.markReady(MarkReadyRequest.make({ submissionId }));
       }
-      yield* session.refresh;
+      if (prepared === undefined) yield* session.refresh;
       const ctx: AttemptAppendContext = session;
-      let controlThrough = (yield* session.tail).sequence;
+      let controlThrough = prepared?.through ?? (yield* session.tail).sequence;
 
       const initialThrough = controlThrough;
 
-      const initialView = yield* recoveryView(
-        threadId,
-        initialThrough,
-        [submissionId],
-        runIdForSubmission(submissionId),
-      );
+      const initialView =
+        prepared?.view ??
+        (yield* recoveryView(
+          threadId,
+          initialThrough,
+          [submissionId],
+          runIdForSubmission(submissionId),
+        ));
 
       let journalMetadata: ReturnType<typeof makeJournalMetadata> | undefined;
 
@@ -8372,15 +8499,17 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           ),
         );
       }
-      yield* applyCanonicalInput(ctx, submission, session, records, snapshot.inputApplied);
+      if (prepared === undefined)
+        yield* applyCanonicalInput(ctx, submission, session, records, snapshot.inputApplied);
 
-      const start = yield* makeRunStart(
-        submission,
-        Duration.toMillis(agent.definition.policy.maxDuration),
-        yield* refreshControl(),
-        // Applying the input cannot change the Run start captured by this Attempt's owner.
-        initialView.operational,
-      ).pipe(Effect.provideService(CurrentRunWriter, ctx));
+      const start =
+        prepared?.start ??
+        (yield* makeRunStart(
+          submission,
+          Duration.toMillis(agent.definition.policy.maxDuration),
+          yield* refreshControl(),
+          initialView.operational,
+        ).pipe(Effect.provideService(CurrentRunWriter, ctx)));
 
       const savedRunTiming = start.timing;
 
@@ -8402,8 +8531,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             };
 
       let expiredChildObligation = false;
+      let preparedControl = prepared !== undefined;
 
       if ((yield* Clock.currentTimeMillis) >= DateTime.toEpochMillis(runTiming.deadline)) {
+        prepared = undefined;
+        preparedControl = false;
         yield* commitStart;
         yield* reconcileRetainedChildren(ctx, submission, session);
         expiredChildObligation = yield* completeJoinedReleases(submission);
@@ -8411,7 +8543,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       // Recheck after duration interruption too: that Attempt may have declared new ordinary calls.
       const ordinaryCallsResolved = Effect.gen(function* () {
-        const reconciliationRecords = yield* refreshControl();
+        const reconciliationRecords = preparedControl ? records : yield* refreshControl();
+
+        preparedControl = false;
 
         const reconciliationEvidence = yield* evidenceFor(
           reconciliationRecords,
@@ -8461,7 +8595,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       if (!expiredChildObligation && !(yield* ordinaryCallsResolved))
         return Option.none<Settlement>();
 
-      const continuationRecords = yield* refreshControl();
+      const continuationRecords = prepared === undefined ? yield* refreshControl() : records;
 
       const continuation = yield* pendingToolBatchFor(
         continuationRecords,
@@ -8601,24 +8735,30 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const lineage: AttemptLineage = {
         attemptId: claim.attemptId,
-        inputWasRecorded: evidence.inputRecorded,
+        inputWasRecorded: !preparedInput && evidence.inputRecorded,
       };
 
       let approvalDecisionIntents = snapshot.approvalDecisions;
 
       while (true) {
-        yield* session.refresh;
+        const initialization = prepared;
+
+        prepared = undefined;
+        if (initialization === undefined) yield* session.refresh;
         const tail = yield* session.tail;
 
-        const currentRecords = yield* refreshControl(tail.sequence);
+        const currentRecords =
+          initialization === undefined ? yield* refreshControl(tail.sequence) : records;
 
-        const view = yield* recoveryView(
-          threadId,
-          tail.sequence,
-          [submissionId],
-          runIdForSubmission(submissionId),
-          currentRecords,
-        );
+        const view =
+          initialization?.view ??
+          (yield* recoveryView(
+            threadId,
+            tail.sequence,
+            [submissionId],
+            runIdForSubmission(submissionId),
+            currentRecords,
+          ));
 
         let canonical: Stream.Stream<
           JournalRecordEnvelope,
@@ -8938,6 +9078,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           const session = claimed.value;
           const { claim } = session;
 
+          const freshlyAdmitted = unclaimedAdmissions.get(claim.submissionId) === threadId;
+
+          unclaimedAdmissions.delete(claim.submissionId);
           firstClaimedSubmissionId ??= claim.submissionId;
 
           const attributes = {
@@ -9022,6 +9165,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   });
                 },
                 options?.yieldAfter,
+                freshlyAdmitted,
               ),
             threadId,
             claim,
@@ -10400,6 +10544,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
   const recoverOwnedWork = Effect.fnUntraced(function* (
     request: WorkRecoveryRequest,
     recoveredAdmissions = new Map<SubmissionId, RecoveryReport>(),
+    deferUnclaimedAdmissions = false,
   ): Effect.fn.Return<WorkRecoveryReport, DurableWorkerFailure> {
     const { threadId, work: entry } = yield* Schema.decodeEffect(WorkRecoveryRequest)(request).pipe(
       Effect.mapError((cause) =>
@@ -10453,6 +10598,21 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const original = yield* lookupKnownSubmission("recover work", owner.submissionId);
 
       if (original.threadId !== threadId) return yield* invalid();
+      if (
+        deferUnclaimedAdmissions &&
+        unclaimedAdmissions.get(owner.submissionId) === threadId &&
+        original.state === "ready" &&
+        !storageOwner.hasOwner(threadId) &&
+        (yield* ledger.readAbortIntent(
+          AbortIntentRequest.make({ submissionId: owner.submissionId }),
+        )) === undefined
+      ) {
+        // The worker's first scoped claim performs the authoritative control/journal
+        // read. This hint skips only a redundant pre-claim recovery traversal; it grants
+        // no claim, synthesizes no decision, and supplies no model-visible facts.
+        return report("deferred");
+      }
+      unclaimedAdmissions.delete(owner.submissionId);
       const submission = yield* recoverAdmission(owner.submissionId);
 
       return report(submission.disposition, submission);
@@ -10931,6 +11091,29 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
       const outcome = yield* isolateRecovery(
         Effect.gen(function* () {
+          // This incarnation admitted the sole untouched root. The native snapshot proves
+          // there is no old owner to repair; claim and live controls still run normally.
+          // New source mutations retain their dirty generation for the next maintenance scan.
+          if (
+            workCursor === undefined &&
+            options?.deferUnclaimedAdmissions === true &&
+            workDiscovery.isOnlyFreshAdmission !== undefined &&
+            !storageOwner.hasOwner(threadId)
+          ) {
+            const fresh = [...unclaimedAdmissions].find(([, owner]) => owner === threadId);
+
+            if (
+              fresh !== undefined &&
+              (yield* workDiscovery.isOnlyFreshAdmission({
+                threadId,
+                submissionId: fresh[0],
+              }))
+            ) {
+              complete = true;
+
+              return;
+            }
+          }
           for (
             let pages = 0;
             pages < MAX_RECOVERY_PAGES && workReports.length < MAX_RECOVERY_WORK_ITEMS;
@@ -10946,7 +11129,11 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
             phase = "recovery";
             for (const work of workPage.entries) {
-              const repaired = yield* recoverOwnedWork({ threadId, work }, recoveredAdmissions);
+              const repaired = yield* recoverOwnedWork(
+                { threadId, work },
+                recoveredAdmissions,
+                options?.deferUnclaimedAdmissions === true,
+              );
 
               workReports.push(repaired);
               if (
@@ -11191,6 +11378,18 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       yield* ensureThreadCreated(options.threadId, agent.definition.id, options.definitions);
       yield* hit("submit:after-materialize");
       yield* ledger.markReady(MarkReadyRequest.make({ submissionId: admitted.submissionId }));
+    }
+    if (
+      !admitted.replayed &&
+      messageAdmission === undefined &&
+      options.workerAdmission === undefined
+    ) {
+      unclaimedAdmissions.set(admitted.submissionId, options.threadId);
+      if (unclaimedAdmissions.size > 128) {
+        const oldest = unclaimedAdmissions.keys().next().value;
+
+        if (oldest !== undefined) unclaimedAdmissions.delete(oldest);
+      }
     }
     yield* wake.notify(options.threadId);
 
