@@ -127,10 +127,10 @@
         "@yielded/agent-platform-cloudflare": "workspace:*",
         "@yielded/agent-storage-cloudflare": "workspace:*",
         "@yielded/agent-testing": "workspace:*",
-        "@yielded/auth": "0.1.0-beta.34",
-        "@yielded/auth-persistence": "0.1.0-beta.34",
-        "@yielded/auth-persistence-drizzle": "0.1.0-beta.34",
-        "@yielded/crypto": "0.1.0-beta.34",
+        "@yielded/auth": "0.1.0-beta.38",
+        "@yielded/auth-persistence": "0.1.0-beta.38",
+        "@yielded/auth-persistence-drizzle": "0.1.0-beta.38",
+        "@yielded/crypto": "0.1.0-beta.38",
         "class-variance-authority": "catalog:",
         "clsx": "catalog:",
         "drizzle-orm": "1.0.0-rc.5-5935859",
@@ -1871,17 +1871,17 @@
 
     "@yielded/agent-workflow": ["@yielded/agent-workflow@workspace:packages/workflow"],
 
-    "@yielded/auth": ["@yielded/auth@0.1.0-beta.34", "", { "dependencies": { "@yielded/crypto": "0.1.0-beta.34", "@yielded/jose": "0.1.0-beta.34", "@yielded/oauth": "0.1.0-beta.34" }, "peerDependencies": { "effect": "^4.0.3" } }, "sha512-PBvCTYIm8yzRx670yAKw7Dud3DkTSifRFs5jxi8WTRu1EONqOvoRhJdfMJvwprBGogszZgAIV9u0/GXXt6jMBA=="],
+    "@yielded/auth": ["@yielded/auth@0.1.0-beta.38", "", { "dependencies": { "@yielded/crypto": "0.1.0-beta.38", "@yielded/jose": "0.1.0-beta.38", "@yielded/oauth": "0.1.0-beta.38" }, "peerDependencies": { "effect": "^4.0.3" } }, "sha512-0SIaHejXG2bz7W6mrV/zpZP4Nd+Q4ZvLwwOnMu59T4RmNa0MCfq1rlDXErXOpTJGZfM/c0by4lVreQ2lTvkGbA=="],
 
-    "@yielded/auth-persistence": ["@yielded/auth-persistence@0.1.0-beta.34", "", { "dependencies": { "@yielded/auth": "0.1.0-beta.34", "@yielded/crypto": "0.1.0-beta.34" }, "peerDependencies": { "effect": "^4.0.3" } }, "sha512-0XdQ0tWbT+M8RYMTCCkcUPcPF4SLSCH3ViXhAfvVRZWeBQWlMU/CBoBhz0npEF4hT6yXqXqwoVPtQ5VK7Nx21g=="],
+    "@yielded/auth-persistence": ["@yielded/auth-persistence@0.1.0-beta.38", "", { "dependencies": { "@yielded/auth": "0.1.0-beta.38", "@yielded/crypto": "0.1.0-beta.38" }, "peerDependencies": { "effect": "^4.0.3" } }, "sha512-RUIr7idrupFaLfDYZUyrjfZxCNxTJLulFCW82R01CPTlGpcfc2gquh7X0+XS40RVydiz2btATipUszwjh3JN7Q=="],
 
-    "@yielded/auth-persistence-drizzle": ["@yielded/auth-persistence-drizzle@0.1.0-beta.34", "", { "dependencies": { "@yielded/auth": "0.1.0-beta.34", "@yielded/auth-persistence": "0.1.0-beta.34" }, "peerDependencies": { "@effect/sql-d1": ">=4.0.0", "@effect/sql-libsql": ">=4.0.0", "@effect/sql-mysql2": ">=4.0.0", "@effect/sql-pg": ">=4.0.0", "@effect/sql-pglite": ">=4.0.0", "@effect/sql-sqlite-bun": ">=4.0.0", "@effect/sql-sqlite-do": ">=4.0.0", "@effect/sql-sqlite-node": ">=4.0.0", "@effect/sql-sqlite-wasm": ">=4.0.0", "drizzle-orm": ">=1.0.0-rc.4", "effect": "^4.0.3" }, "optionalPeers": ["@effect/sql-d1", "@effect/sql-libsql", "@effect/sql-mysql2", "@effect/sql-pg", "@effect/sql-pglite", "@effect/sql-sqlite-bun", "@effect/sql-sqlite-do", "@effect/sql-sqlite-node", "@effect/sql-sqlite-wasm"] }, "sha512-ax3scsfoLhE7vDAtrNZbbUY4hVe44Ogsd+3djITRAb7QXERabTswFlC7xN9wbi9HK5QqlsflxJ6T5VXK6xQ4aw=="],
+    "@yielded/auth-persistence-drizzle": ["@yielded/auth-persistence-drizzle@0.1.0-beta.38", "", { "dependencies": { "@yielded/auth": "0.1.0-beta.38", "@yielded/auth-persistence": "0.1.0-beta.38" }, "peerDependencies": { "@effect/sql-d1": ">=4.0.0", "@effect/sql-libsql": ">=4.0.0", "@effect/sql-mysql2": ">=4.0.0", "@effect/sql-pg": ">=4.0.0", "@effect/sql-pglite": ">=4.0.0", "@effect/sql-sqlite-bun": ">=4.0.0", "@effect/sql-sqlite-do": ">=4.0.0", "@effect/sql-sqlite-node": ">=4.0.0", "@effect/sql-sqlite-wasm": ">=4.0.0", "drizzle-orm": ">=1.0.0-rc.4", "effect": "^4.0.3" }, "optionalPeers": ["@effect/sql-d1", "@effect/sql-libsql", "@effect/sql-mysql2", "@effect/sql-pg", "@effect/sql-pglite", "@effect/sql-sqlite-bun", "@effect/sql-sqlite-do", "@effect/sql-sqlite-node", "@effect/sql-sqlite-wasm"] }, "sha512-iQSFEZgQZIqApbPMp1Bhu1455mWRJYA5Ou4kQVFciImjJwbmHiMotwFk9cceWuVM+SoZttSJngJFpLf3Cl+KTg=="],
 
-    "@yielded/crypto": ["@yielded/crypto@0.1.0-beta.34", "", { "peerDependencies": { "effect": "^4.0.3" } }, "sha512-Ow3x9E9321oK1l2BlIJ/XDWfSjXC4kzOUUR6HMge4qb1WN8R74jql2oXxMQcxGOAcvoawPll6VUrpQcZvg3R6w=="],
+    "@yielded/crypto": ["@yielded/crypto@0.1.0-beta.38", "", { "peerDependencies": { "effect": "^4.0.3" } }, "sha512-kycPGD3Fx8rsR1ykbUFTpm+FIxVdnxUM11A4LjHZM7oxYXBKNSpeipdMtZT74VTRAKvNk/Y9CskCc/p8TlhryQ=="],
 
-    "@yielded/jose": ["@yielded/jose@0.1.0-beta.34", "", { "dependencies": { "@yielded/crypto": "0.1.0-beta.34" }, "peerDependencies": { "effect": "^4.0.3" } }, "sha512-gVfb4p8NrkbNysxILH4ZttojhBf4gli3FbfNhp3KZDcjCWWMBUqY6F0tB2UsomLBfxksVTFm0eqmCVmNzd49Wg=="],
+    "@yielded/jose": ["@yielded/jose@0.1.0-beta.38", "", { "dependencies": { "@yielded/crypto": "0.1.0-beta.38" }, "peerDependencies": { "effect": "^4.0.3" } }, "sha512-AXSuwMI7Z85fdSOMwv3mpUN2mK0S+fGkgyjuEO5KBXnQbShiLGkr0a0TPn3dBnzTOcv9JafSXL4iUZcofH5MnA=="],
 
-    "@yielded/oauth": ["@yielded/oauth@0.1.0-beta.34", "", { "dependencies": { "@yielded/jose": "0.1.0-beta.34" }, "peerDependencies": { "effect": "^4.0.3" } }, "sha512-FbHGl2B6Zxk2bEa8Y/hK4dURcR0I4x42wyxD2NfAUdWRD9hFV/yTBUU3MgG9gpKCGJlmWFsTx5HbVKkpT0jXJw=="],
+    "@yielded/oauth": ["@yielded/oauth@0.1.0-beta.38", "", { "dependencies": { "@yielded/jose": "0.1.0-beta.38" }, "peerDependencies": { "effect": "^4.0.3" } }, "sha512-0f5JtRKSdYQ2qGhvxh4tgdCf/7kXHpMnbNQM1CZYXxQ+iSQeg6uTvVXcYHgUnng2AXPbrLSwA/zvdDLfwAsrgw=="],
 
     "@yielded/starlight-theme": ["@yielded/starlight-theme@0.2.2", "", { "dependencies": { "@fontsource-variable/ibm-plex-sans": "^5.3.0", "@fontsource/ibm-plex-mono": "^5.3.0", "@fontsource/ibm-plex-sans": "^5.3.0", "@resvg/resvg-js": "^2.6.2", "github-slugger": "^2.0.0", "mdast-util-from-markdown": "^2.0.3", "mdast-util-gfm": "^3.1.0", "mermaid": "^12.0.0", "micromark-extension-gfm": "^3.0.0", "satori": "^0.33.5" }, "peerDependencies": { "@astrojs/starlight": ">=0.42.0", "astro": ">=7.2.10" } }, "sha512-Jq/l7INND8IYYAwpIy5T9oACEoVlYtSdGzgBI1ArJefHAroF/E5S+BZ7BoYukksZFqBoz3H4Wnc6/lFWiIPM2Q=="],
 

@@ -67,7 +67,7 @@ The early thinking indicator contains no private model reasoning.
 
 The planner and scout select one current binding per agent ID.
 
-Authentication uses `@yielded/auth` beta.34, its built-in GitHub and OpenID Connect
+Authentication uses `@yielded/auth`, its built-in GitHub and OpenID Connect
 providers, the portable `@yielded/crypto` backend, and the Drizzle persistence adapter. The app owns
 its SQLite tables and provides the adapter's `SqliteDo.Database` through `databaseLayer`.
 It supplies session claims through each strategy's `SessionClaims` service. The Atom client uses Fetch transport with
