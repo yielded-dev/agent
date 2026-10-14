@@ -1,5 +1,5 @@
 import { useAtom, useAtomSet, useAtomValue } from "@effect/atom-react";
-import { Predicate, Schema } from "effect";
+import { Option, Predicate, Schema } from "effect";
 import { AsyncResult } from "effect/reactivity";
 import {
   ArrowUpRight,
@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Streamdown } from "streamdown";
 
 import {
   ArticleTitle,
@@ -65,6 +66,10 @@ import {
   watchingAtom,
   type ProviderKeys,
 } from "./state.ts";
+
+// Native provider citation IDs have no meaning outside their response; source links carry the references.
+const formatReply = (text: string) =>
+  text.replace(/\uE200cite\uE202.*?\uE201|\\ue200cite\\ue202.*?\\ue201/gu, "").trim();
 
 const hostOf = (url: string) => {
   try {
@@ -796,11 +801,56 @@ export const App = () => {
                       </div>
                       <div className="chat-message from-agent">
                         <b>Agent</b>
-                        <p>
-                          {turn.response ??
-                            (remote?.busy ? remote.report?.message : null) ??
-                            "Connecting to the agent…"}
-                        </p>
+                        <Streamdown
+                          className="chat-reply"
+                          mode="static"
+                          controls={false}
+                          skipHtml
+                          rehypePlugins={[]}
+                          allowedElements={[
+                            "p",
+                            "a",
+                            "strong",
+                            "em",
+                            "del",
+                            "h1",
+                            "h2",
+                            "h3",
+                            "h4",
+                            "h5",
+                            "h6",
+                            "ul",
+                            "ol",
+                            "li",
+                            "blockquote",
+                            "pre",
+                            "code",
+                            "hr",
+                            "br",
+                            "table",
+                            "thead",
+                            "tbody",
+                            "tr",
+                            "th",
+                            "td",
+                          ]}
+                          urlTransform={(url) =>
+                            Option.getOrUndefined(Schema.decodeOption(StartUrl)(url))
+                          }
+                          components={{
+                            a: ({ href, children }) => (
+                              <a href={href} target="_blank" rel="noopener noreferrer">
+                                {children}
+                              </a>
+                            ),
+                          }}
+                        >
+                          {formatReply(
+                            turn.response ??
+                              (remote?.busy ? remote.report?.message : null) ??
+                              "Connecting to the agent…",
+                          )}
+                        </Streamdown>
                       </div>
                     </div>
                   ))

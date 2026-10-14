@@ -87,7 +87,7 @@ export const serviceTierForModel = (model: string, tier: typeof ServiceTier.Type
 export const RunInput = Schema.Struct({
   id: Schema.String.check(Schema.isUUID()),
   scenario: Scenario,
-  /** Continue this owner's in-memory Thread and browser; omitted for a fresh conversation. */
+  /** Continue this owner's retained Thread and browser; omitted for a fresh conversation. */
   chatId: Schema.optionalKey(Schema.String.check(Schema.isUUID())),
   url: Schema.optionalKey(StartUrl),
   wikipedia: Schema.optionalKey(WikipediaChallenge),
