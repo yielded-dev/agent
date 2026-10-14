@@ -1889,16 +1889,33 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
       }),
     );
 
+  const checkState = (state: ProgressState | undefined, recovered: boolean) => {
+    if (state === undefined) return Effect.fail(failure("Execution has no canonical Run progress"));
+
+    const capacity = () =>
+      state.continuation.position === "settling" || state.continuation.position === "settled"
+        ? Effect.void
+        : checkCapacity(state);
+
+    // Accepted states were shape-checked, but usage and reservations remain live inputs.
+    return recovered ? Effect.andThen(checkFutureShapes(state), capacity) : capacity();
+  };
+
   const check = (runId: RunId) =>
     gate.withPermits(1)(
-      Effect.gen(function* () {
-        const state = yield* loadState(runId, yield* tail);
+      Effect.flatMap(CurrentRunWriter, (writer) => {
+        if (writer.threadId !== threadId)
+          return Effect.fail(failure("Progress writer belongs to another Thread"));
 
-        if (state === undefined) return yield* failure("Execution has no canonical Run progress");
-        // Accepted states were shape-checked during preparation; recovered states still need proof.
-        if (cached.get(runId) !== state) yield* checkFutureShapes(state);
-        if (state.continuation.position !== "settling" && state.continuation.position !== "settled")
-          yield* checkCapacity(state);
+        const retained = cached.get(runId);
+
+        if (retained !== undefined) return checkState(retained, false);
+
+        return Effect.flatMap(writer.tail, (position) =>
+          Effect.flatMap(loadUncachedState(runId, position.sequence), (state) =>
+            checkState(state, true),
+          ),
+        );
       }),
     );
 
