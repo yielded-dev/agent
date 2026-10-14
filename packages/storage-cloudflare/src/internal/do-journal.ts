@@ -26,6 +26,7 @@ import { CanonicalRecord, CanonicalSequence } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import {
   type AppendConflict,
+  AppendResult,
   ThreadStoreDiagnostic,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
@@ -219,14 +220,6 @@ const lifecycleCursorRows = ownedRows(
 const initializedLifecycleSources = new WeakSet<OwnedState>();
 
 export type { RawAppendRequest } from "@yielded/agent-storage-sql/sql-journal";
-
-export class RawAppendResult extends Schema.Class<RawAppendResult>(
-  "@effect-agent/storage-cloudflare/RawAppendResult",
-)({
-  firstSequence: CanonicalSequence,
-  lastSequence: CanonicalSequence,
-  replayed: Schema.Boolean,
-}) {}
 
 export class RawReadRequest extends Schema.Class<RawReadRequest>(
   "@effect-agent/storage-cloudflare/RawReadRequest",
@@ -812,7 +805,7 @@ const makeJournal = Effect.fnUntraced(function* (
 
   const appendPrepared = Effect.fnUntraced(function* (
     request: RawAppendRequest,
-  ): Effect.fn.Return<RawAppendResult, AppendError> {
+  ): Effect.fn.Return<AppendResult, AppendError> {
     const threadRows = yield* getThread(request.threadId);
 
     const thread = threadRows.length === 1 ? threadRows[0] : undefined;
@@ -851,7 +844,7 @@ const makeJournal = Effect.fnUntraced(function* (
     if (inserted.length === 0) {
       const replay = yield* executionConflict(executions.replay(request));
 
-      if (replay !== undefined) return RawAppendResult.make(replay);
+      if (replay !== undefined) return AppendResult.make(replay);
 
       const prefix = recordCache.prefix(request.threadId, thread.tail_sequence);
 
@@ -868,7 +861,7 @@ const makeJournal = Effect.fnUntraced(function* (
           });
         }
 
-        return RawAppendResult.make({
+        return AppendResult.make({
           firstSequence: existing.first_sequence,
           lastSequence: existing.last_sequence,
           replayed: true,
@@ -919,7 +912,7 @@ const makeJournal = Effect.fnUntraced(function* (
 
     yield* executionConflict(executions.validate(request));
 
-    const result = RawAppendResult.make({
+    const result = AppendResult.make({
       firstSequence,
       lastSequence,
       replayed: false,
@@ -1114,7 +1107,7 @@ const makeJournal = Effect.fnUntraced(function* (
     function* (
       request: RawAppendRequest,
       observed: ThreadRow,
-    ): Effect.fn.Return<RawAppendResult, AppendError> {
+    ): Effect.fn.Return<AppendResult, AppendError> {
       yield* prepareAppend(request);
       // The facade already read this tail. Reject a known stale writer without opening a
       // transaction; a matching tail is still checked atomically below. Replays precede tail
