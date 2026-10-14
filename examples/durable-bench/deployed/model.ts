@@ -403,6 +403,16 @@ export const Result = Schema.Struct({
       query: Schema.optionalKey(Query),
       before: Schema.optionalKey(Identity),
       after: Schema.optionalKey(Identity),
+      discovery: Schema.optionalKey(
+        Schema.Struct({
+          durationMs: Schema.Number,
+          startedMs: Schema.Number,
+          completedMs: Schema.Number,
+          requests: Schema.Natural,
+          first: Identity,
+          last: Identity,
+        }),
+      ),
       versionId: Schema.optionalKey(Schema.String),
       requestedMs: Schema.optionalKey(Schema.Number),
       resetCompletedMs: Schema.optionalKey(Schema.Number),

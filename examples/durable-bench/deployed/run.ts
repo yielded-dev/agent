@@ -1596,6 +1596,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         yield* phase("deploy");
         restoring = false;
         endpoints = yield* deployPass();
+        // Allow the measurement build to propagate before preparation readiness/reset.
+        if (options.isolateCold) yield* Effect.sleep(COLD_PROPAGATION_DELAY);
         yield* phase("measurement");
       }
       const isolateOwners = new Map<string, Set<string>>();
@@ -2183,27 +2185,89 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
             let profiling: Fiber.Fiber<Profile, BenchError> | undefined;
 
-            const beforeReset = Effect.gen(function* () {
+            // POST to these read-only routes disables request()'s automatic GET retries.
+            const readIdentity = request(
+              yield* url("/identity", cohort),
+              deploy.token,
+              ObjectIdentity,
+              {},
+              "5 seconds",
+            ).pipe(Effect.map(({ value }) => value.identity));
+
+            const quiescent = Effect.gen(function* () {
               for (;;) {
                 const status = (yield* request(
                   yield* url("/maintenance-status", cohort),
                   deploy.token,
                   MaintenanceStatus,
+                  {},
+                  "5 seconds",
                 )).value;
 
                 if (status.logical === null && status.native === null) break;
                 yield* Effect.sleep("100 millis");
               }
+            });
 
-              const before = (yield* request(
-                yield* url("/identity", cohort),
-                deploy.token,
-                ObjectIdentity,
-              )).value.identity;
+            // Discovery traffic precedes the reset deadline and the capture itself.
+            const discovery = yield* Effect.gen(function* () {
+              yield* quiescent;
+              const startedMs = yield* Clock.currentTimeMillis;
+              const started = yield* Clock.monotonicTimeNanos;
+              const first = yield* readIdentity;
 
-              if (before.build !== query.expectedBuild)
+              if (first.build !== query.expectedBuild)
+                return yield* BenchError.make({ message: "Profiling discovery build mismatch." });
+              let last = first;
+              let requests = 1;
+
+              for (;;) {
+                const remaining =
+                  60_000 - Number((yield* Clock.monotonicTimeNanos) - started) / 1_000_000;
+
+                if (remaining <= 0) break;
+                yield* Effect.sleep(Math.min(1000, remaining));
+                if ((yield* Clock.monotonicTimeNanos) - started >= 60_000_000_000n) break;
+                last = yield* readIdentity;
+                requests++;
+                if (
+                  last.build !== first.build ||
+                  last.isolate !== first.isolate ||
+                  last.incarnation !== first.incarnation
+                )
+                  return yield* BenchError.make({
+                    message: "Profiling Object changed during discovery traffic.",
+                  });
+              }
+
+              return {
+                durationMs: 60_000,
+                startedMs,
+                completedMs: yield* Clock.currentTimeMillis,
+                requests,
+                first,
+                last,
+              };
+            }).pipe(
+              Effect.timeoutOrElse({
+                duration: "75 seconds",
+                orElse: () => BenchError.make({ message: "Profiling discovery timed out." }),
+              }),
+            );
+
+            yield* updateDiagnostic({ discovery });
+
+            const beforeReset = Effect.gen(function* () {
+              yield* quiescent;
+              const before = yield* readIdentity;
+
+              if (
+                before.build !== query.expectedBuild ||
+                before.isolate !== discovery.last.isolate ||
+                before.incarnation !== discovery.last.incarnation
+              )
                 return yield* BenchError.make({
-                  message: "Profiling Object changed builds before capture.",
+                  message: "Profiling Object changed identity before capture.",
                 });
               yield* updateDiagnostic({ before });
 

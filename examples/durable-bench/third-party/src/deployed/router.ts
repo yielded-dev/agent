@@ -48,7 +48,7 @@ export const router = <E extends Env>(target: Target, routes: {
         return Response.json(
           {
             ok: false,
-            error: "Benchmark Worker build mismatch; request was not dispatched",
+            error: `Benchmark Worker build mismatch; request was not dispatched; actualBuild=${env.BUILD}; expectedBuild=${query.expectedBuild}`,
             sample: query.sample,
           },
           { status: 503 },

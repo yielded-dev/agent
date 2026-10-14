@@ -163,8 +163,10 @@ Profiling is diagnostic and separate from timing comparisons. With saved snapsho
 `--profile cpu` requires one Yielded/pi target, size and TTFT, `--objects 2`, and quick mode.
 It excludes `--isolate-cold`, `--cpu`, `--profile-after` and recovery diagnostics.
 Both Objects run their preparation turn; only the epoch-zero candidate Object then runs
-its first cold turn. After native maintenance becomes quiescent, the controller issues one
-50-second capture against that Object's loaded isolate immediately before resetting it.
+its first cold turn. After native maintenance becomes quiescent, the controller sends
+read-only identity traffic for 60 seconds to aid profiler discovery, requiring a stable
+build, module and Object incarnation. It then rechecks quiescence and identity and issues
+one 50-second capture against that Object's loaded isolate immediately before resetting it.
 It waits for capture completion after the turn and stops, without warm turns, another pass,
 native sample recovery or another capture request.
 
@@ -173,7 +175,8 @@ vp run deployed -- --targets yielded --sizes 1000 --ttft 0 --objects 2 --profile
 ```
 
 The issuance hook confirms only that the capture POST was issued, not profiler attachment.
-JSON's `diagnostic` records the selected query, epoch, pre-capture and reopened identities,
+JSON's `diagnostic` records the discovery interval, request count and identities,
+selected query, epoch, pre-capture and reopened identities,
 request, reset and turn chronology; the profile retains its version, sample, request/response
 times and source map. Changed module identity is labeled `cold-work-not-captured`.
 Matching identity is `same-isolate-unverified`: `ctx.abort()` may detach profiling, and
@@ -471,6 +474,8 @@ bypasses durability checks to force a comparison.
 
 `--isolate-cold` uploads a fresh executable version onto the same prepared storage
 before each cold position. Yielded and pi must be quiescent before that upload.
+After restoring snapshots, it also waits 180 seconds after the measurement deployment
+before any preparation readiness checks or resets.
 The executable differs only by a recorded deployment nonce; source-bundle hashes
 and uploaded-executable hashes remain separate. The harness skips readiness probes
 for this upload, waits a fixed 180 seconds for propagation, then measures the first request.
