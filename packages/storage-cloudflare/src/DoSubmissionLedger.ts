@@ -344,8 +344,12 @@ const decodeSettlement = Schema.decodeUnknownEffect(Settlement);
 const decodeAbortIntent = Schema.decodeUnknownEffect(AbortIntent);
 const decodeInputAppliedMarker = Schema.decodeUnknownEffect(InputAppliedMarker);
 
+const decodeSubmissionSnapshotFields = Schema.decodeEffect(
+  Schema.toType(Schema.Struct(SubmissionSnapshot.fields)),
+);
+
 const decodeSubmissionSnapshotType = (input: typeof SubmissionSnapshot.Type) =>
-  Schema.decodeEffect(Schema.toType(Schema.Struct(SubmissionSnapshot.fields)))(input).pipe(
+  decodeSubmissionSnapshotFields(input).pipe(
     Effect.map((fields) => SubmissionSnapshot.make(fields)),
   );
 
@@ -366,6 +370,98 @@ const decodeChildReservationSnapshotUnknown = Schema.decodeUnknownEffect(
 const decodeChildAttachmentSnapshot = Schema.decodeUnknownEffect(ChildAttachmentSnapshot);
 const equivalentPersistedJson = Schema.toEquivalence(PersistedJson);
 const equivalentUnknownResolution = Schema.toEquivalence(UnknownResolution);
+const decodeAdmissionRequestType = Schema.decodeEffect(Schema.toType(AdmissionRequest));
+const decodeMarkReadyRequestType = Schema.decodeEffect(Schema.toType(MarkReadyRequest));
+const decodeFundingOwnerType = Schema.decodeEffect(Schema.toType(FundingOwner));
+const decodeSubmissionLookupType = Schema.decodeEffect(Schema.toType(SubmissionLookup));
+const decodeSubmissionLookupByKeyType = Schema.decodeEffect(Schema.toType(SubmissionLookupByKey));
+const decodeClaimRequestType = Schema.decodeEffect(Schema.toType(ClaimRequest));
+
+const decodeMarkInputAppliedRequestType = Schema.decodeEffect(
+  Schema.toType(MarkInputAppliedRequest),
+);
+
+const decodeSettlementFinalizationType = Schema.decodeEffect(Schema.toType(SettlementFinalization));
+const decodeWorkerLedgerStateType = Schema.decodeEffect(Schema.toType(WorkerLedgerState));
+const decodeAbortCommandType = Schema.decodeEffect(Schema.toType(AbortCommand));
+const decodeClaimJoiningRequestType = Schema.decodeEffect(Schema.toType(ClaimJoiningRequest));
+const decodeMarkJoinedRequestType = Schema.decodeEffect(Schema.toType(MarkJoinedRequest));
+const decodeRevertJoiningRequestType = Schema.decodeEffect(Schema.toType(RevertJoiningRequest));
+const decodeSuspendRequestType = Schema.decodeEffect(Schema.toType(SuspendRequest));
+
+const decodeApprovalDecisionCommandType = Schema.decodeEffect(
+  Schema.toType(ApprovalDecisionCommand),
+);
+
+const decodeMarkUnknownRequestType = Schema.decodeEffect(Schema.toType(MarkUnknownRequest));
+
+const decodeUnknownResolutionCommandType = Schema.decodeEffect(
+  Schema.toType(UnknownResolutionCommand),
+);
+
+const decodeChildSettledNotificationType = Schema.decodeEffect(
+  Schema.toType(ChildSettledNotification),
+);
+
+const decodeChildBudgetReservationRequestType = Schema.decodeEffect(
+  Schema.toType(ChildBudgetReservationRequest),
+);
+
+const decodeAttachChildToReservationRequestType = Schema.decodeEffect(
+  Schema.toType(AttachChildToReservationRequest),
+);
+
+const decodeBeginChildBudgetReleaseRequestType = Schema.decodeEffect(
+  Schema.toType(BeginChildBudgetReleaseRequest),
+);
+
+const decodeReleaseChildBudgetRequestType = Schema.decodeEffect(
+  Schema.toType(ReleaseChildBudgetRequest),
+);
+
+const decodeAbortIntentRequestType = Schema.decodeEffect(Schema.toType(AbortIntentRequest));
+
+const decodeRecoverySnapshotRequestType = Schema.decodeEffect(
+  Schema.toType(RecoverySnapshotRequest),
+);
+
+const SubmissionRows = Schema.Array(SubmissionRow);
+const ChildReservationRows = Schema.Array(ChildReservationRow);
+const MaxQueueSequenceRows = Schema.Array(MaxQueueSequenceRow);
+const SubmissionWorkItems = Schema.Array(SubmissionWorkItem);
+const decodeSubmissionWorkItems = Schema.decodeEffect(SubmissionWorkItems);
+const encodeWorkerAdmissionText = Schema.encodeEffect(Schema.fromJsonString(WorkerAdmission));
+const encodeInputMessageText = Schema.encodeEffect(Schema.fromJsonString(InputMessage));
+const decodeWorkerAdmissionText = Schema.decodeEffect(Schema.fromJsonString(WorkerAdmission));
+const decodeInputMessageText = Schema.decodeEffect(Schema.fromJsonString(InputMessage));
+const decodeAdmissionFenceText = Schema.decodeEffect(Schema.fromJsonString(AdmissionFence));
+const decodeSuspensionReasonText = Schema.decodeEffect(Schema.fromJsonString(SuspensionReason));
+const equivalentWorkerAdmission = Schema.toEquivalence(Schema.optional(WorkerAdmission));
+const equivalentInputMessage = Schema.toEquivalence(Schema.optional(InputMessage));
+const equivalentAdmissionFence = Schema.toEquivalence(Schema.optional(AdmissionFence));
+const equivalentWorkerOrigin = Schema.toEquivalence(Schema.optional(WorkerAdmission.fields.origin));
+
+const decodeFirstWorkerAdmissions = Schema.decodeUnknownEffect(
+  Schema.Array(
+    Schema.Struct({
+      worker_admission_json: Schema.NullOr(BoundedStoredText),
+    }),
+  ),
+);
+
+const CanonicalSettlementRows = Schema.Array(
+  Schema.Struct({
+    batch_id: Schema.fromJsonString(BoundedIdentifier),
+    record_id: Schema.fromJsonString(BoundedIdentifier),
+    record_json: BoundedStoredText,
+  }),
+);
+
+const StoredRecordRows = Schema.Array(Schema.Struct({ record_json: BoundedStoredText }));
+const decodeSubmissionThreadId = Schema.decodeEffect(SubmissionSnapshot.fields.threadId);
+const decodeFundingOwnerRequest = Schema.decodeEffect(FundingOwnerRequest);
+const decodeWorkerStopCommand = Schema.decodeEffect(WorkerStopCommand);
+
 const isDoStorageError = Schema.is(DoStorageError);
 
 /** Wrap an adapter-internal failure into the port's LedgerError without erasing its tag. */
@@ -512,9 +608,9 @@ const makeServices = Effect.fnUntraced(function* () {
     lifecycle === undefined
       ? Effect.void
       : Effect.gen(function* () {
-          const ownerThreadId = yield* Schema.decodeEffect(SubmissionSnapshot.fields.threadId)(
-            submission.thread_id,
-          ).pipe(Effect.mapError(internalFailure("lifecycle owner")));
+          const ownerThreadId = yield* decodeSubmissionThreadId(submission.thread_id).pipe(
+            Effect.mapError(internalFailure("lifecycle owner")),
+          );
 
           yield* lifecycle
             .retain({ ownerThreadId, createdAt: yield* DateTime.now, fact })
@@ -530,9 +626,9 @@ const makeServices = Effect.fnUntraced(function* () {
       : Effect.gen(function* () {
           const operation = "retain worker inbox seal";
 
-          const ownerThreadId = yield* Schema.decodeEffect(SubmissionSnapshot.fields.threadId)(
-            threadId,
-          ).pipe(Effect.mapError(internalFailure(operation)));
+          const ownerThreadId = yield* decodeSubmissionThreadId(threadId).pipe(
+            Effect.mapError(internalFailure(operation)),
+          );
 
           const active =
             yield* sql`SELECT submission_id FROM effect_agent_submissions WHERE thread_id = ${threadId} AND state <> 'settled' ORDER BY queue_sequence`.pipe(
@@ -606,7 +702,7 @@ const makeServices = Effect.fnUntraced(function* () {
   }));
 
   const decodeSubmissionRows = (operation: string, rowKey: string, rows: unknown) =>
-    decodeRows(Schema.Array(SubmissionRow), "effect_agent_submissions", rowKey, rows).pipe(
+    decodeRows(SubmissionRows, "effect_agent_submissions", rowKey, rows).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -721,13 +817,7 @@ const makeServices = Effect.fnUntraced(function* () {
       AND record_id = ${JSON.stringify(recordId)}`.pipe(Effect.mapError(sqlFailure(operation)));
 
     const decoded = yield* decodeRows(
-      Schema.Array(
-        Schema.Struct({
-          batch_id: Schema.fromJsonString(BoundedIdentifier),
-          record_id: Schema.fromJsonString(BoundedIdentifier),
-          record_json: BoundedStoredText,
-        }),
-      ),
+      CanonicalSettlementRows,
       "effect_agent_canonical_records",
       recordId,
       found,
@@ -810,12 +900,9 @@ const makeServices = Effect.fnUntraced(function* () {
   });
 
   const decodeChildReservationRows = (operation: string, rowKey: string, rows: unknown) =>
-    decodeRows(
-      Schema.Array(ChildReservationRow),
-      "effect_agent_child_reservations",
-      rowKey,
-      rows,
-    ).pipe(Effect.mapError(internalFailure(operation)));
+    decodeRows(ChildReservationRows, "effect_agent_child_reservations", rowKey, rows).pipe(
+      Effect.mapError(internalFailure(operation)),
+    );
 
   const readChildReservation = Effect.fnUntraced(function* (
     operation: string,
@@ -1040,7 +1127,7 @@ const makeServices = Effect.fnUntraced(function* () {
   ) {
     const operation = "ledger admit";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(AdmissionRequest))(request).pipe(
+    const validated = yield* decodeAdmissionRequestType(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -1057,9 +1144,9 @@ const makeServices = Effect.fnUntraced(function* () {
     const workerAdmissionJson =
       validated.workerAdmission === undefined
         ? null
-        : yield* Schema.encodeEffect(Schema.fromJsonString(WorkerAdmission))(
-            validated.workerAdmission,
-          ).pipe(Effect.mapError(internalFailure(operation)));
+        : yield* encodeWorkerAdmissionText(validated.workerAdmission).pipe(
+            Effect.mapError(internalFailure(operation)),
+          );
 
     if (
       workerAdmissionJson !== null &&
@@ -1074,9 +1161,9 @@ const makeServices = Effect.fnUntraced(function* () {
     const messageAdmissionJson =
       validated.messageAdmission === undefined
         ? null
-        : yield* Schema.encodeEffect(Schema.fromJsonString(InputMessage))(
-            validated.messageAdmission,
-          ).pipe(Effect.mapError(internalFailure(operation)));
+        : yield* encodeInputMessageText(validated.messageAdmission).pipe(
+            Effect.mapError(internalFailure(operation)),
+          );
 
     if (
       messageAdmissionJson !== null &&
@@ -1150,38 +1237,29 @@ const makeServices = Effect.fnUntraced(function* () {
           const retainedWorkerAdmission =
             existing[0].worker_admission_json === null
               ? undefined
-              : yield* Schema.decodeEffect(Schema.fromJsonString(WorkerAdmission))(
-                  existing[0].worker_admission_json,
-                ).pipe(Effect.mapError(internalFailure(operation)));
+              : yield* decodeWorkerAdmissionText(existing[0].worker_admission_json).pipe(
+                  Effect.mapError(internalFailure(operation)),
+                );
 
           const retainedInputMessage =
             existing[0].message_admission_json === null
               ? undefined
-              : yield* Schema.decodeEffect(Schema.fromJsonString(InputMessage))(
-                  existing[0].message_admission_json,
-                ).pipe(Effect.mapError(internalFailure(operation)));
+              : yield* decodeInputMessageText(existing[0].message_admission_json).pipe(
+                  Effect.mapError(internalFailure(operation)),
+                );
 
           const retainedFence =
             existing[0].admission_fence_json === null
               ? undefined
-              : yield* Schema.decodeEffect(Schema.fromJsonString(AdmissionFence))(
-                  existing[0].admission_fence_json,
-                ).pipe(Effect.mapError(internalFailure(operation)));
+              : yield* decodeAdmissionFenceText(existing[0].admission_fence_json).pipe(
+                  Effect.mapError(internalFailure(operation)),
+                );
 
           if (
             (existing[0].admission_group ?? undefined) !== validated.admissionGroup ||
-            !Schema.toEquivalence(Schema.optional(WorkerAdmission))(
-              retainedWorkerAdmission,
-              validated.workerAdmission,
-            ) ||
-            !Schema.toEquivalence(Schema.optional(InputMessage))(
-              retainedInputMessage,
-              validated.messageAdmission,
-            ) ||
-            !Schema.toEquivalence(Schema.optional(AdmissionFence))(
-              retainedFence,
-              validated.admissionFence,
-            )
+            !equivalentWorkerAdmission(retainedWorkerAdmission, validated.workerAdmission) ||
+            !equivalentInputMessage(retainedInputMessage, validated.messageAdmission) ||
+            !equivalentAdmissionFence(retainedFence, validated.admissionFence)
           )
             return yield* AdmissionConflict.make({
               threadId: validated.threadId,
@@ -1221,28 +1299,19 @@ const makeServices = Effect.fnUntraced(function* () {
             WHERE thread_id=${validated.threadId} ORDER BY queue_sequence LIMIT 1
           `.pipe(Effect.mapError(sqlFailure(operation)));
 
-        const first = yield* Schema.decodeUnknownEffect(
-          Schema.Array(
-            Schema.Struct({
-              worker_admission_json: Schema.NullOr(BoundedStoredText),
-            }),
-          ),
-        )(firstRows).pipe(Effect.mapError(internalFailure(operation)));
+        const first = yield* decodeFirstWorkerAdmissions(firstRows).pipe(
+          Effect.mapError(internalFailure(operation)),
+        );
 
         if (first[0] !== undefined) {
           const previous =
             first[0].worker_admission_json === null
               ? undefined
-              : yield* Schema.decodeEffect(Schema.fromJsonString(WorkerAdmission))(
-                  first[0].worker_admission_json,
-                ).pipe(Effect.mapError(internalFailure(operation)));
+              : yield* decodeWorkerAdmissionText(first[0].worker_admission_json).pipe(
+                  Effect.mapError(internalFailure(operation)),
+                );
 
-          if (
-            !Schema.toEquivalence(Schema.optional(WorkerAdmission.fields.origin))(
-              previous?.origin,
-              validated.workerAdmission?.origin,
-            )
-          )
+          if (!equivalentWorkerOrigin(previous?.origin, validated.workerAdmission?.origin))
             return yield* AdmissionPolicyError.make({
               reason: "refused",
               code: "worker-origin-conflict",
@@ -1270,7 +1339,7 @@ const makeServices = Effect.fnUntraced(function* () {
           `.pipe(Effect.mapError(sqlFailure(operation)));
 
         const decodedMax = yield* decodeRows(
-          Schema.Array(MaxQueueSequenceRow),
+          MaxQueueSequenceRows,
           "effect_agent_submissions",
           validated.threadId,
           maxRows,
@@ -1400,7 +1469,7 @@ const makeServices = Effect.fnUntraced(function* () {
   ) {
     const operation = "ledger mark ready";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(MarkReadyRequest))(request).pipe(
+    const validated = yield* decodeMarkReadyRequestType(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -1435,7 +1504,7 @@ const makeServices = Effect.fnUntraced(function* () {
     Effect.fnUntraced(function* (input) {
       const operation = "resolve funding owner";
 
-      const request = yield* Schema.decodeEffect(FundingOwnerRequest)(input).pipe(
+      const request = yield* decodeFundingOwnerRequest(input).pipe(
         Effect.mapError(internalFailure(operation)),
       );
 
@@ -1485,7 +1554,7 @@ const makeServices = Effect.fnUntraced(function* () {
           "Funding host is not a stable earlier input in this Thread.",
         );
 
-      return yield* Schema.decodeEffect(Schema.toType(FundingOwner))({
+      return yield* decodeFundingOwnerType({
         selected: yield* decodeSubmissionSnapshot(operation, selected),
         owner: yield* decodeSubmissionSnapshot(operation, owner),
       }).pipe(Effect.mapError(internalFailure(operation)));
@@ -1496,7 +1565,7 @@ const makeServices = Effect.fnUntraced(function* () {
   ) {
     const operation = "ledger lookup";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(SubmissionLookup))(request).pipe(
+    const validated = yield* decodeSubmissionLookupType(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -1537,9 +1606,9 @@ const makeServices = Effect.fnUntraced(function* () {
     function* (request: SubmissionLookupByKey) {
       const operation = "ledger resolve admission";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(SubmissionLookupByKey))(
-        request,
-      ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* decodeSubmissionLookupByKeyType(request).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
       const foundRows = yield* byKey(validated, operation);
 
@@ -1570,7 +1639,7 @@ const makeServices = Effect.fnUntraced(function* () {
   )(function* (request: ClaimRequest) {
     const operation = "ledger select head";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(ClaimRequest))(request).pipe(
+    const validated = yield* decodeClaimRequestType(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -1688,9 +1757,9 @@ const makeServices = Effect.fnUntraced(function* () {
     function* (request: MarkInputAppliedRequest) {
       const operation = "ledger mark input applied";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(MarkInputAppliedRequest))(
-        request,
-      ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* decodeMarkInputAppliedRequestType(request).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
       yield* hitFailpoint("ledger:mark-input-applied:before", operation);
       yield* inWriteTransaction(
@@ -1949,9 +2018,9 @@ const makeServices = Effect.fnUntraced(function* () {
   )(function* (request: SettlementFinalization) {
     const operation = "ledger finalize settlement";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(SettlementFinalization))(
-      request,
-    ).pipe(Effect.mapError(internalFailure(operation)));
+    const validated = yield* decodeSettlementFinalizationType(request).pipe(
+      Effect.mapError(internalFailure(operation)),
+    );
 
     yield* hitFailpoint("ledger:finalize-settlement:before", operation);
 
@@ -2102,7 +2171,7 @@ const makeServices = Effect.fnUntraced(function* () {
 
           const stops = yield* cached(rows.workerStops.by("thread_id", threadId), operation);
 
-          return yield* Schema.decodeEffect(Schema.toType(WorkerLedgerState))({
+          return yield* decodeWorkerLedgerStateType({
             latest,
             active,
             stopped: stops.length > 0,
@@ -2121,7 +2190,7 @@ const makeServices = Effect.fnUntraced(function* () {
   const stopWorker = Effect.fnUntraced(function* (request: WorkerStopCommand) {
     const operation = "ledger stop worker";
 
-    const validated = yield* Schema.decodeEffect(WorkerStopCommand)(request).pipe(
+    const validated = yield* decodeWorkerStopCommand(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -2157,7 +2226,7 @@ const makeServices = Effect.fnUntraced(function* () {
   ) {
     const operation = "ledger request abort";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(AbortCommand))(request).pipe(
+    const validated = yield* decodeAbortCommandType(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -2263,7 +2332,7 @@ const makeServices = Effect.fnUntraced(function* () {
   ) {
     const operation = "ledger claim joining";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(ClaimJoiningRequest))(request).pipe(
+    const validated = yield* decodeClaimJoiningRequestType(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -2388,7 +2457,7 @@ const makeServices = Effect.fnUntraced(function* () {
   ) {
     const operation = "ledger mark joined";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(MarkJoinedRequest))(request).pipe(
+    const validated = yield* decodeMarkJoinedRequestType(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -2451,7 +2520,7 @@ const makeServices = Effect.fnUntraced(function* () {
   ) {
     const operation = "ledger revert joining";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(RevertJoiningRequest))(request).pipe(
+    const validated = yield* decodeRevertJoiningRequestType(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -2509,7 +2578,7 @@ const makeServices = Effect.fnUntraced(function* () {
   ) {
     const operation = "ledger suspend";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(SuspendRequest))(request).pipe(
+    const validated = yield* decodeSuspendRequestType(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -2632,9 +2701,7 @@ const makeServices = Effect.fnUntraced(function* () {
   ): Effect.fn.Return<void, LedgerError> {
     if (submission.state !== "suspended" || submission.suspended_reason_json === null) return;
 
-    const reason = yield* Schema.decodeEffect(Schema.fromJsonString(SuspensionReason))(
-      submission.suspended_reason_json,
-    ).pipe(
+    const reason = yield* decodeSuspensionReasonText(submission.suspended_reason_json).pipe(
       Effect.mapError((error) =>
         corruptionFailure(
           operation,
@@ -2674,9 +2741,9 @@ const makeServices = Effect.fnUntraced(function* () {
     Effect.fnUntraced(function* (command: ApprovalDecisionCommand) {
       const operation = "ledger record approval decision";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(ApprovalDecisionCommand))(
-        command,
-      ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* decodeApprovalDecisionCommandType(command).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
       yield* hitFailpoint("ledger:approval-decision:before", operation);
 
@@ -2759,7 +2826,7 @@ const makeServices = Effect.fnUntraced(function* () {
   ) {
     const operation = "ledger mark unknown";
 
-    const validated = yield* Schema.decodeEffect(Schema.toType(MarkUnknownRequest))(request).pipe(
+    const validated = yield* decodeMarkUnknownRequestType(request).pipe(
       Effect.mapError(internalFailure(operation)),
     );
 
@@ -2832,9 +2899,9 @@ const makeServices = Effect.fnUntraced(function* () {
     Effect.fnUntraced(function* (command: UnknownResolutionCommand) {
       const operation = "ledger record unknown resolution";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(UnknownResolutionCommand))(
-        command,
-      ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* decodeUnknownResolutionCommandType(command).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
       const resolutionJson = yield* encodeUnknownResolutionText(validated.resolution).pipe(
         Effect.mapError(internalFailure(operation)),
@@ -2908,7 +2975,7 @@ const makeServices = Effect.fnUntraced(function* () {
             `.pipe(Effect.mapError(sqlFailure(operation)));
 
             const outcomes = yield* decodeRows(
-              Schema.Array(Schema.Struct({ record_json: BoundedStoredText })),
+              StoredRecordRows,
               "effect_agent_canonical_records",
               validated.toolCallId,
               found,
@@ -3027,9 +3094,9 @@ const makeServices = Effect.fnUntraced(function* () {
     function* (request: ChildSettledNotification) {
       const operation = "ledger record child settled";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(ChildSettledNotification))(
-        request,
-      ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* decodeChildSettledNotificationType(request).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
       yield* hitFailpoint("ledger:child-settled:before", operation);
 
@@ -3085,9 +3152,7 @@ const makeServices = Effect.fnUntraced(function* () {
             return NOT_WAITING;
           }
 
-          const reason = yield* Schema.decodeEffect(Schema.fromJsonString(SuspensionReason))(
-            parent.suspended_reason_json,
-          ).pipe(
+          const reason = yield* decodeSuspensionReasonText(parent.suspended_reason_json).pipe(
             Effect.mapError((error) =>
               corruptionFailure(
                 operation,
@@ -3161,9 +3226,9 @@ const makeServices = Effect.fnUntraced(function* () {
     function* (request: ChildBudgetReservationRequest) {
       const operation = "ledger reserve child budget";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(ChildBudgetReservationRequest))(
-        request,
-      ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* decodeChildBudgetReservationRequestType(request).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
       const allocationJson = yield* encodePersistedJsonText(validated.allocation).pipe(
         Effect.mapError(internalFailure(operation)),
@@ -3275,9 +3340,9 @@ const makeServices = Effect.fnUntraced(function* () {
     Effect.fnUntraced(function* (request: AttachChildToReservationRequest) {
       const operation = "ledger attach child to reservation";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(AttachChildToReservationRequest))(
-        request,
-      ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* decodeAttachChildToReservationRequestType(request).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
       yield* hitFailpoint("ledger:child-attach:before", operation);
 
@@ -3350,9 +3415,9 @@ const makeServices = Effect.fnUntraced(function* () {
     Effect.fnUntraced(function* (request: BeginChildBudgetReleaseRequest) {
       const operation = "ledger begin child budget release";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(BeginChildBudgetReleaseRequest))(
-        request,
-      ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* decodeBeginChildBudgetReleaseRequestType(request).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
       const accountingJson = yield* encodePersistedJsonText(validated.accounting).pipe(
         Effect.mapError(internalFailure(operation)),
@@ -3429,9 +3494,9 @@ const makeServices = Effect.fnUntraced(function* () {
     function* (request: ReleaseChildBudgetRequest) {
       const operation = "ledger release child budget";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(ReleaseChildBudgetRequest))(
-        request,
-      ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* decodeReleaseChildBudgetRequestType(request).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
       yield* hitFailpoint("ledger:child-release:before", operation);
 
@@ -3526,7 +3591,7 @@ const makeServices = Effect.fnUntraced(function* () {
     ).pipe(Effect.mapError(sqlFailure(operation)));
 
     const decoded = yield* decodeRows(
-      Schema.Array(SubmissionWorkItem),
+      SubmissionWorkItems,
       "effect_agent_submissions",
       "nonterminal_scan",
       rows,
@@ -3574,7 +3639,7 @@ const makeServices = Effect.fnUntraced(function* () {
             : left.queue_sequence - right.queue_sequence,
       );
 
-      const work = yield* Schema.decodeEffect(Schema.Array(SubmissionWorkItem))(
+      const work = yield* decodeSubmissionWorkItems(
         sorted.map((row) => ({
           submissionId: row.submission_id,
           threadId: row.thread_id,
@@ -3613,7 +3678,7 @@ const makeServices = Effect.fnUntraced(function* () {
     Effect.fnUntraced(function* (request) {
       const operation = "ledger read abort intent";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(AbortIntentRequest))(request).pipe(
+      const validated = yield* decodeAbortIntentRequestType(request).pipe(
         Effect.mapError(internalFailure(operation)),
       );
 
@@ -3638,9 +3703,9 @@ const makeServices = Effect.fnUntraced(function* () {
     Effect.fnUntraced(function* (request: RecoverySnapshotRequest) {
       const operation = "ledger load recovery snapshot";
 
-      const validated = yield* Schema.decodeEffect(Schema.toType(RecoverySnapshotRequest))(
-        request,
-      ).pipe(Effect.mapError(internalFailure(operation)));
+      const validated = yield* decodeRecoverySnapshotRequestType(request).pipe(
+        Effect.mapError(internalFailure(operation)),
+      );
 
       return yield* state.read(
         Effect.gen(function* () {

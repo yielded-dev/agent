@@ -162,6 +162,9 @@ const DeliveryRow = Schema.Struct({
   deadline_at_millis: Schema.NullOr(SqlInteger.pipe(Schema.decodeTo(Schema.Natural))),
 });
 
+const FreshAdmissionRows = Schema.Array(Schema.Struct({ verified: SqlInteger }));
+const WorkThreadRows = Schema.Array(Schema.Struct({ thread_id: ThreadId }));
+
 export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThreadWorkOptions = {}) {
   const sql = yield* SqlClient.SqlClient;
   const crypto = yield* Crypto.Crypto;
@@ -839,7 +842,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
           if (!(yield* present())) return false;
 
           const rows = yield* decode(
-            Schema.Array(Schema.Struct({ verified: SqlInteger })),
+            FreshAdmissionRows,
             yield* query(sql`SELECT 1 AS verified
           FROM ${table("effect_agent_threads")} AS t
           JOIN ${table("effect_agent_submissions")} AS s ON s.thread_id=t.thread_id
@@ -1012,7 +1015,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
           const limit = request.limit + 1;
 
           const rows = yield* decode(
-            Schema.Array(Schema.Struct({ thread_id: ThreadId })),
+            WorkThreadRows,
             yield* query(sql`
           SELECT thread_id FROM (
             SELECT thread_id FROM (
