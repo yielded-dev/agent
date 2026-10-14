@@ -13,8 +13,7 @@ import { type ExhaustedLimit } from "../core/RunEvent.ts";
 import { RunPolicyUsage } from "../core/RunPolicyUsage.ts";
 import { type Selection, type Snapshot } from "../core/ToolExposure.ts";
 import type { ToolParameterRejection } from "../core/ToolResult.ts";
-import type { ModelCallUsage } from "../core/Usage.ts";
-import { summarizeModelUsage, type RunUsageSummary } from "../core/Usage.ts";
+import { type ModelCallUsage, summarizeModelUsage, type RunUsageSummary } from "../core/Usage.ts";
 import type { WorkerRef } from "../core/Worker.ts";
 import {
   CLEARED_TOOL_RESULT,
@@ -38,7 +37,7 @@ import {
   CanonicalBatch,
   ModelResponseRecorded,
   MAX_PERSISTED_JSON_BYTES,
-  type PersistedJson,
+  PersistedJson,
   RecordEnvelope,
   RunCompleted,
   ToolCallSettled,
@@ -1698,6 +1697,7 @@ export interface TurnCommitInput {
     | undefined;
 }
 
+const decodePersistedJson = Schema.decodeUnknownEffect(PersistedJson);
 const decodeModelResponse = Schema.decodeUnknownEffect(ModelResponseRecorded);
 const decodeToolSettled = Schema.decodeUnknownEffect(ToolCallSettled);
 const encodePrompt = Schema.encodeEffect(Prompt.Prompt);
@@ -1739,7 +1739,14 @@ const modelResponseRecord = Effect.fnUntraced(function* (
     Effect.mapError((cause) => journalError("Turn Prompt messages failed to encode", cause)),
   );
 
-  // The owning payload Schema checks detailed usage and aggregate counters together.
+  const messages = yield* decodePersistedJson(encodedMessages).pipe(
+    Effect.map(copyJson),
+    Effect.mapError((cause) =>
+      journalError("Turn Prompt messages exceed canonical persistence bounds", cause),
+    ),
+  );
+
+  // Validate the detached messages and usage together; no mutable caller data is trusted.
   const modelUsage = input.usage?.modelUsage;
 
   const payload = yield* decodeModelResponse({
@@ -1754,7 +1761,7 @@ const modelResponseRecord = Effect.fnUntraced(function* (
     runId: input.runId,
     turnId: input.turnId,
     turn: input.turn,
-    messages: encodedMessages,
+    messages,
     ...(runScopedPrefixLength === undefined ? {} : { runScopedPrefixLength }),
     ...(modelUsage === undefined ? {} : { modelUsage }),
     ...(input.unobservedModelCalls === undefined || input.unobservedModelCalls === 0
@@ -1801,11 +1808,7 @@ const modelResponseRecord = Effect.fnUntraced(function* (
     schemaVersion: 1,
     createdAt: input.createdAt,
     deploymentId: input.deploymentId,
-    // Decoding validated every field; detach the JSON passthrough before returning it.
-    payload: ModelResponseRecorded.make(
-      { ...payload, messages: copyJson(payload.messages) },
-      { disableChecks: true },
-    ),
+    payload,
   });
 });
 
