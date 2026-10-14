@@ -113,7 +113,9 @@ export class Observation {
   assertBuild(query: Query) {
     if (query.expectedBuild !== this.env.BUILD)
       // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Native Object RPC hooks reject mismatched builds before admitting input.
-      throw new Error("Benchmark Object build mismatch; input was not admitted");
+      throw new Error(
+        `Benchmark Object build mismatch; input was not admitted; actualBuild=${this.env.BUILD}; expectedBuild=${query.expectedBuild}; versionId=${this.env.VERSION?.id ?? "unavailable"}; isolate=${isolateIdentity()}; incarnation=${this.incarnation}`,
+      );
   }
   begin(query: Query) {
     for (const sample of this.cpuInvocations?.keys() ?? []) {

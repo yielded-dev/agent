@@ -446,8 +446,9 @@ bypasses durability checks to force a comparison.
 before each cold position. Yielded and pi must be quiescent before that upload.
 The executable differs only by a recorded deployment nonce; source-bundle hashes
 and uploaded-executable hashes remain separate. The harness skips readiness probes
-for this upload, allows ten seconds for propagation, then measures the first request.
-A stale build or contaminated first use fails the attempt without retrying an input.
+for this upload, waits a fixed 180 seconds for propagation, then measures the first request.
+The delay does not guarantee Worker/Object version convergence. A stale build or contaminated
+first use fails the attempt without retrying an input. Recovery attempts use distinct deployment nonces.
 Use this mode only with snapshot-backed Yielded/pi comparisons. It pairs the two
 targets on the same Object index, AB/BA assignment and measurement wave.
 `--cold-samples 6` adds four more fresh-version cold turns after the usual second

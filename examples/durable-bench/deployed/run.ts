@@ -66,6 +66,8 @@ import {
   type Query,
 } from "./worker/protocol.ts";
 
+const COLD_PROPAGATION_DELAY = "180 seconds";
+
 class IncarnationLost extends Schema.TaggedError<IncarnationLost>()("IncarnationLost", {
   message: Schema.String,
   identity: Identity,
@@ -833,7 +835,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
         return {
           bundle: bundle.file,
-          build: `${bundle.sha256}-${runName}-e${epoch}${coldGeneration === 0 ? "" : `-c${coldGeneration}`}`,
+          build: `${bundle.sha256}-${runName}-e${epoch}${attempt > 0 ? `-a${attempt}` : ""}${coldGeneration === 0 ? "" : `-c${coldGeneration}`}`,
         };
       });
 
@@ -2077,7 +2079,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           coldGeneration++;
           endpoints = yield* deployPass(false);
           // Fixed propagation allowance; any stale first response fails without input retry.
-          yield* Effect.sleep("10 seconds");
+          yield* Effect.sleep(COLD_PROPAGATION_DELAY);
         }
 
         const groups = new Map<string, typeof activeMeasurements>();
