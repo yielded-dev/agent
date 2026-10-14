@@ -125,6 +125,10 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
         yield* naturalFixture(target, source, options.ref, formatKey);
 
       if (!(yield* fs.exists(source + ".json"))) {
+        if (options.directory !== undefined)
+          return yield* FixtureError.make({
+            message: `Missing saved ${name} fixture; explicit inputs are read-only.`,
+          });
         let local = join(scratch, "seed", name);
         // Adopt historical caches only after proving their writer has this exact format key.
         const cacheRoot = join(homedir(), ".cache/yielded-durable-bench/fixtures");

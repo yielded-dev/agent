@@ -557,7 +557,14 @@ const requestKeys = [
 ];
 
 /** One acknowledged input per durable identity; an interrupted execution is never restarted. */
+let driverIsolate: string | undefined;
+
 export class DriverMeasurement {
+  private readonly identity = {
+    isolate: (driverIsolate ??= crypto.randomUUID()),
+    incarnation: crypto.randomUUID(),
+    constructedMs: Date.now(),
+  };
   private saved: StoredMeasurement | undefined;
   private running: Promise<void> | undefined;
 
@@ -584,10 +591,15 @@ export class DriverMeasurement {
       this.ctx,
     );
 
-    const outcome = Schema.decodeUnknownSync(StoredMeasureResponse)({
+    const measured = Schema.decodeUnknownSync(StoredMeasureResponse)({
       status: response.status,
       body: await response.json(),
     });
+
+    const outcome: StoredMeasureResponse = {
+      ...measured,
+      body: measured.body.ok ? { ...measured.body, driverIdentity: this.identity } : measured.body,
+    };
 
     const saved = { request: input, outcome };
 

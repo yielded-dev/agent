@@ -622,8 +622,8 @@ export const table = (result: Result): string => {
 
     const driftRows = [
       ...group(
-        rows.filter((row) => row.target === "yielded" && row.build === "baseline"),
-        (row) => `${row.history}/${row.ttftMs}/${row.state}`,
+        rows.filter((row) => row.build === "baseline" || row.build === "candidate"),
+        (row) => `${row.target}/${row.history}/${row.ttftMs}/${row.state}/${row.build}`,
       ).entries(),
     ].flatMap(([cell, samples]) => {
       const drifts = [...group(samples, (row) => row.object).values()].flatMap((turns) => {
@@ -642,7 +642,7 @@ export const table = (result: Result): string => {
     });
 
     if (driftRows.length)
-      lines.push("", "| Cell | Baseline repeat drift, median / max |", "|---|---:|", ...driftRows);
+      lines.push("", "| Cell | Repeat drift by arm, median / max |", "|---|---:|", ...driftRows);
     lines.push("");
   }
   if (result.phases) {

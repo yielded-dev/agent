@@ -17,7 +17,7 @@ require that optional install.
 From the repository root, screen a candidate against `origin/main`:
 
 ```sh
-DURABLE_BENCH_PREFIX=bench-change vp run -F @yielded/agent-example-durable-bench deployed -- --preset quick --candidate HEAD
+DURABLE_BENCH_PREFIX=bench-change vp run -F @yielded/agent-example-durable-bench deployed -- --preset quick --candidate HEAD --fixture-directory /path/to/saved-fixtures
 ```
 
 Quick defaults to Yielded, 1,000 historical turns, TTFT 0 and 12 Objects. Each build
@@ -26,7 +26,9 @@ twelve sequential warm turns and a second cold turn after another reset. Prepara
 awaits native post-settlement writers so revision-specific derived state exists. Both builds
 measure the same Objects. Within each target/history/TTFT cell, quick randomly assigns half
 the Objects to baseline then candidate (AB), and half to candidate then baseline (BA),
-swapping revisions in the second pass; an odd Object count differs by one between orders.
+swapping revisions in the second pass. Comparison requires an even Object count.
+`--seed <value>` replays arm assignment, build, deploy, restore and turn-wave orders;
+the generated seed and each order are saved in JSON.
 `--baseline <ref>` selects another baseline. The report
 includes Object medians, paired differences and ratios with Object-level bootstrap 95% CIs,
 the first-pass minus second-pass order effect, and setup, measurement and teardown wall times. Screening does not establish a small
@@ -40,11 +42,11 @@ account inventory requires at least 100 spare namespace slots, waiting 60 second
 checks for up to 30 minutes. Each prefix is limited to 40 namespaces; split larger cell grids
 into separate runs with a single target (for example, `--targets pi`).
 Every run clears and restores
-its Objects. Histories through 1,000 turns restore before every pass, so both revisions start
+its Objects before every pass, so both revisions start
 from identical saved state on those same Objects; earlier samples are never reused.
 Each pass uploads a fresh version and rejects Worker-isolate reuse across passes. Activating an
 already uploaded version can retain the previous isolate, including in an A/A control, so version
-activation is not used. Full, profiling and tardie runs use fresh Workers. Remove retained resources when done:
+activation is not used. Full, history-build and tardie runs use fresh Workers. Remove retained resources when done:
 
 ```sh
 DURABLE_BENCH_PREFIX=bench-change vp run -F @yielded/agent-example-durable-bench deployed -- --teardown
@@ -56,14 +58,17 @@ restart acknowledgement, warm residency and transcript checks. Each cohort has a
 separate Worker; isolate sharing rejects its measurements. Independent cells run
 concurrently, with `--concurrency` limiting measured Objects and `--build-concurrency`
 limiting restore work. Quick and full default to 12 concurrent Objects.
-Turns within an Object remain sequential.
+Turns within an Object remain sequential. Measurement proceeds in turn waves, pairing
+opposite arms of each target/cell where both survive. Readiness finishes for every member
+before a wave submits inputs; the wave finishes before the next starts. Recovery preserves
+the assigned arms and records any missing peers. Seeded setup order is independent of
+measurement order.
 
 ```sh
-vp run deployed -- --preset full --baseline origin/main --candidate HEAD
-vp run deployed -- --sizes 1000,10000 --ttft 0,400 --objects 8
-vp run deployed -- --targets yielded,pi --text-streaming --ttft 400
-vp run deployed -- --profile cpu
-vp run deployed -- --targets yielded,effect-ai-floor --text-streaming --cpu
+vp run deployed -- --preset full --baseline origin/main --candidate HEAD --fixture-directory /path/to/saved-fixtures
+vp run deployed -- --sizes 1000,10000 --ttft 0,400 --objects 8 --fixture-directory /path/to/saved-fixtures
+vp run deployed -- --targets yielded,pi --text-streaming --ttft 400 --fixture-directory /path/to/saved-fixtures
+vp run deployed -- --targets yielded,effect-ai-floor --text-streaming --cpu --fixture-directory /path/to/saved-fixtures
 ```
 
 The output has one table per cell: **first text (final answer)** in default mode or
@@ -77,7 +82,10 @@ The ratio includes the observed min(Yielded)/max(pi)–max(Yielded)/min(pi) rang
 Object medians. This unpaired spread is descriptive, not a confidence interval.
 JSON and the printed tables go to gitignored `results/durable-bench-*.{json,md}`. JSON also
 records subscription setup, the first text fragment, admission, model-call gaps, the last response-to-client interval, ingress colos,
-fingerprint/build checks, cold setup attempts, failures and cleanup. No timing evidence is committed.
+fingerprint/build checks, cold setup attempts, failures and cleanup. Upload completion,
+health readiness, restore and per-input controller timestamps expose Object age and pacing.
+Driver measurement identities distinguish its isolate/incarnation from the target's;
+reported colos remain ingress metadata, not proof of either Object's physical location. No timing evidence is committed.
 
 ## Build history on deployed Objects
 
@@ -147,15 +155,8 @@ The mode excludes text observation and A/B redeployment; use the original mode f
 workflows. Deployed absolute times include network hops and cannot be
 compared with Miniflare timings; compare ratios within a matched deployment.
 
-`--profile cpu|memory` selects one profile type per run. It captures the first
-Object of each selected target in every history/TTFT cell on the first build pass (tardie targets
-its Thread Object). Captures start after warmup, alongside the warm turns, for an estimated batch duration
-(1–50 seconds). Cloudflare profiles the running isolate containing that Object, which may
-also contain other Objects. Only already-running isolates can be captured; the bench supplies
-traffic. Captures are spaced at least five minutes apart, and the final cold reset waits for capture to finish. A capture that outlives its warm workload is incomplete. Memory profiles contain allocations
-made during the window, not retained memory or a heap snapshot.
-
-For history-build diagnostics, add `--profile-after <turns>` to start a ten-second capture
+Profiling is separate from comparison cohorts. Use `--build-history --profile cpu|memory`
+with `--profile-after <turns>` to start a ten-second capture
 after a verified checkpoint while subsequent batches continue. This requires one target,
 size, TTFT and Object, with both concurrency limits set to one. The checkpoint must be a
 multiple of 50 before the final history turn. JSON records the trigger and the latest acknowledged checkpoint
@@ -172,7 +173,7 @@ quota waits happen before warmup. Other account activity can still cause HTTP 42
 for the reported `Retry-After` before rerunning.
 The token needs Workers Scripts Read permission and the account must support profiling.
 Saved `.pprof` paths are printed at completion; filenames and result JSON identify
-the cell, target, build and Object. Bundles and linked source maps are uploaded;
+the cell, target, build and Object. Only executable bundles are uploaded; linked source maps stay local and
 copies remain beside the profiles in `results/` after cleanup. Inspect with
 `go tool pprof -http=:8080 results/<run>/<profile>.pprof`, or use Cloudflare's Observability →
 Flamegraph view while the Worker is retained with `--keep`.
@@ -365,25 +366,22 @@ is not a drop-in durable engine. Each pass starts from the original history. It 
 same preceding turns as Yielded, but excludes the cold slots from its results and stays
 resident; Yielded and pi retain their normal cold measurements. Only compare their warm
 cells. The floor requires `--restore-each-pass` (the default through 1,000 turns), rejects
-history-build/recovery diagnostics, and uses the shared bundle, so it does not measure
+history-build/recovery diagnostics, and uses its own harness-pinned bundle, so it does not measure
 isolated Effect startup or an additive cost of durability.
 
 ## Fixtures
 
-The default fixture directory is `~/.cache/yielded-durable-bench/fixtures/<format-key>/`;
-`--fixture-directory <path>` selects an existing directory. The format key is the SHA-256
-prefix of the Cloudflare adapter migrations and canonical record schema files at each build ref.
-Historical `main-<revision>` caches are adopted only when those files match exactly.
-For 1,000-turn Yielded and pi cells, both presets use `<format-key>-natural-id50-v1/`:
-the deployed history protocol generates this cache locally with 50-character Thread IDs,
-the networked mock provider and the same historical tool cycle. Historical turns have no
-text preamble or delay, matching deployed history construction; `--text-streaming` controls
-measured turns. Larger capacity fixtures retain their original workload and identities.
-Missing natural fixtures are generated with their build revision and copied into the cache (clone-copy on macOS); saved histories are
-never deleted or overwritten. Miniflare is used for deterministic fixture generation,
-never performance evidence. Cached idle histories may retain earlier definition entries; the
-excluded preparation turn installs the current instructions and tool declarations before
-measurement. Historical storage still reflects the original fixture.
+Comparison requires `--fixture-directory <path>` naming pre-existing saved fixtures.
+Their storage-format key is checked against both frozen Yielded revisions before either
+arm restores them. Missing fixtures fail without generation or mutation. Incompatible
+formats need a separately prepared equivalent-fixture experiment.
+
+For 1,000-turn Yielded and pi comparisons, use the natural history fixtures with
+50-character Thread IDs, the networked mock provider and the historical tool cycle.
+Historical turns have no text preamble or delay; `--text-streaming` controls measured turns.
+Miniflare fixture generation is deterministic setup, never performance evidence.
+The excluded preparation turn installs current instructions and tool declarations;
+historical storage still reflects the original fixture.
 
 Every ordinary cell restores the original idle SQLite snapshot, including historical
 attempt rows, indexes and triggers. Cohorts use separate namespaces so each can retain
@@ -406,23 +404,26 @@ Quick mode screens a candidate with a paired comparison. Use full mode to check 
 drift before claiming a small optimization.
 
 ```sh
-vp run deployed -- --rigorous --baseline origin/main --candidate HEAD
+vp run deployed -- --rigorous --baseline origin/main --candidate HEAD --fixture-directory /path/to/saved-fixtures
 ```
 
 Rigorous mode enables cold turns and six warm repeats per pass; CPU requires `--cpu`. It randomly chooses
 ABBA or BAAB, redeploying the **same Worker and namespaces** with the two Yielded builds.
-Each pass restarts the same physical Objects. Different storage-format keys automatically
-restore each revision's own fixture before every pass. Matching formats also restore by
-default when all selected histories have at most 1,000 turns. For larger matching-format
-capacity runs, `--restore-each-pass` opts in; otherwise history grows across passes. All restores preserve
-original SQLite rows and table counts, then run an excluded preparation turn.
-Repeated baselines reveal deployment/time/history drift. The output includes paired differences and confidence intervals. Do not claim gains smaller than
-the control or within-Object repeat spread; inspect all Objects, not just the median.
+Each pass restarts the same physical Objects and restores identical saved history.
+All restores preserve original SQLite rows and table counts, then run an excluded preparation turn.
+Repeat drift is reported for both arms and targets. The estimator remains paired differences
+and Object-level confidence intervals; inspect control and repeat spread before attributing a change.
 
-Refs supply `packages/` sources and their own frozen dependencies, including dependency patches.
-Each revision gets an isolated installation. Cache installs use fresh temporary directories
-and atomic publication; a competing loser discards its copy. Both builds
-use this harness, while pi and tardie retain their isolated vendor dependencies. Each
-revision must support its selected fixture. Import, recovery,
+Both input refs are resolved to commits before building and materialized by the same archive
+and frozen-install procedure. Dirty worktrees are not implicit inputs. Each target has its
+own executable. Only Yielded takes framework sources and dependencies from the tested ref;
+pi, tardie and the Effect AI floor take adapters, support code and dependencies from the
+recorded harness commit. Vendor dependencies use the harness lockfile. Both pi arm bundles
+(including restore bundles) must hash byte-identically or the run stops before deployment.
+Pi health never acquires a Yielded client. Expected-build checks still fence each run/epoch,
+and every Worker requires an explicit target-specific bundle assignment.
+
+Dependency installs publish immutable complete directories atomically. Build/cache order is
+seeded and cache-hit receipts are retained. Import, recovery,
 transcript, build or residency failures invalidate the affected Object; the command never
 bypasses durability checks to force a comparison.

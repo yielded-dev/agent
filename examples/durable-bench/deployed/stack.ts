@@ -1,9 +1,10 @@
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
-import { Clock, Config, Console, Effect, Layer, Schema } from "effect";
+import { Clock, Config, Console, Effect, Exit, Layer, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 
 import { WorkerBuild } from "./model.ts";
+import { BenchError } from "./platform.ts";
 
 // Record API wall time without URLs, headers, account identifiers, or response bodies.
 const deploymentHttp = Layer.effect(
@@ -21,10 +22,10 @@ const deploymentHttp = Layer.effect(
             : "api";
 
         return yield* response.pipe(
-          Effect.ensuring(
+          Effect.onExit((exit) =>
             Effect.gen(function* () {
               yield* Console.error(
-                `BENCH_DEPLOY_HTTP ${JSON.stringify({ category, startedMs, elapsedMs: (yield* Clock.currentTimeMillis) - startedMs })}`,
+                `BENCH_DEPLOY_HTTP ${JSON.stringify({ category, ...(category === "upload" ? { worker: new URL(request.url).pathname.split("/").at(-1), ok: Exit.isSuccess(exit) && exit.value.status >= 200 && exit.value.status < 300 } : {}), startedMs, elapsedMs: (yield* Clock.currentTimeMillis) - startedMs })}`,
               );
             }),
           ),
@@ -132,11 +133,23 @@ export default Alchemy.Stack(
     const workerBuilds: Readonly<Record<string, WorkerBuild>> = yield* Config.schema(
       Schema.fromJsonString(Schema.Record(Schema.String, WorkerBuild)),
       "DURABLE_BENCH_WORKER_BUILDS",
-    ).pipe(Config.withDefault({}));
+    );
+
+    if (
+      Object.keys(workerBuilds).length !== names.length ||
+      names.some((worker) => !workerBuilds[worker])
+    )
+      return yield* BenchError.make({
+        message: "Every target Worker requires an explicit build assignment.",
+      });
 
     const workers = yield* Effect.forEach(
       names,
       Effect.fnUntraced(function* (workerName) {
+        const assigned = workerBuilds[workerName];
+
+        if (!assigned) return yield* BenchError.make({ message: "Missing explicit Worker build." });
+
         const target = yield* Schema.decodeUnknownEffect(
           Schema.Literals(["yielded", "pi", "tardie", "effect-ai-floor"]),
         )(
@@ -151,11 +164,11 @@ export default Alchemy.Stack(
             ...options,
             name: workerName,
             ...(cpu === "true" ? { tailConsumers: [infrastructurePrefix + "-cpu"] } : {}),
-            main: workerBuilds[workerName]?.bundle ?? bundle,
+            main: assigned.bundle,
             placement: { region: "aws:us-west-1" },
             env: {
               ...env,
-              BUILD: workerBuilds[workerName]?.build ?? build,
+              BUILD: assigned.build,
               CPU: cpu,
               PROVIDER_URL: provider,
               ...(target === "effect-ai-floor"

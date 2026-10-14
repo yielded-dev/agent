@@ -26,7 +26,7 @@ export const naturalFixture = Effect.fnUntraced(function* (
     });
   const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "durable-bench-natural-" });
 
-  const compiled = yield* build(join(scratch, "target"), "target", ref);
+  const compiled = yield* build(join(scratch, "target"), "target", ref, target);
 
   const provider = yield* build(join(scratch, "provider"), "provider");
   const targetScript = yield* fs.readFileString(compiled.file);
@@ -57,12 +57,13 @@ export const naturalFixture = Effect.fnUntraced(function* (
                     PROVIDER_URL: "https://provider/v1",
                   },
                   durableObjects: Object.fromEntries(
-                    Object.entries({
-                      YIELDED: "YieldedDO",
-                      PI: "PiDO",
-                      ACTORS: "ActorDO",
-                      THREADS: "ThreadDO",
-                    }).map(([name, className]) => [name, { className, useSQLite: true }]),
+                    Object.entries(
+                      target === "yielded"
+                        ? { YIELDED: "YieldedDO" }
+                        : target === "pi"
+                          ? { PI: "PiDO" }
+                          : { ACTORS: "ActorDO", THREADS: "ThreadDO" },
+                    ).map(([name, className]) => [name, { className, useSQLite: true }]),
                   ),
                 },
                 {
