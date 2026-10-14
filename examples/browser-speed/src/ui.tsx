@@ -37,6 +37,7 @@ import {
   type Phase,
   type Report,
   type Scenario,
+  type Span,
 } from "./contract.ts";
 import {
   accountAtom,
@@ -65,11 +66,167 @@ import {
   verifiedMillis,
   watchingAtom,
   type ProviderKeys,
+  type ChatTurn,
 } from "./state.ts";
 
 // Native provider citation IDs have no meaning outside their response; source links carry the references.
 const formatReply = (text: string) =>
   text.replace(/\uE200cite\uE202.*?\uE201|\\ue200cite\\ue202.*?\\ue201/gu, "").trim();
+
+const Reply = ({ text, streaming = false }: { text: string; streaming?: boolean }) => (
+  <Streamdown
+    className="chat-reply"
+    mode={streaming ? "streaming" : "static"}
+    isAnimating={streaming}
+    controls={false}
+    skipHtml
+    rehypePlugins={[]}
+    allowedElements={[
+      "p",
+      "a",
+      "strong",
+      "em",
+      "del",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "ul",
+      "ol",
+      "li",
+      "blockquote",
+      "pre",
+      "code",
+      "hr",
+      "br",
+      "table",
+      "thead",
+      "tbody",
+      "tr",
+      "th",
+      "td",
+    ]}
+    urlTransform={(url) => Option.getOrUndefined(Schema.decodeOption(StartUrl)(url))}
+    components={{
+      a: ({ href, children }) => (
+        <a href={href} target="_blank" rel="noopener noreferrer">
+          {children}
+        </a>
+      ),
+    }}
+  >
+    {formatReply(text)}
+  </Streamdown>
+);
+
+const activityName = (span: Span) => {
+  if (span.name.startsWith("Web search"))
+    return span.name.replace(/^Web search(?: · )?/, "") || "Searching the web";
+  switch (span.name) {
+    case "Page.navigate":
+      return "Navigate page";
+    case "Runtime.evaluate":
+      return "Inspect or interact with page";
+    case "Page.captureScreenshot":
+      return "Capture page";
+    default:
+      return span.name;
+  }
+};
+
+const ChatResponse = ({ turn }: { turn: ChatTurn }) => {
+  const { report } = turn;
+  const active = turn.pending && (report === undefined || report.status === "running");
+  const completed = report?.status === "passed" || report?.status === "unverified";
+  const output = report?.modelOutput ?? [];
+  const actions = report?.spans.filter((span) => span.phase === "action") ?? [];
+  const lastText = output.findLast((entry) => entry.kind === "text");
+
+  const timeline = [
+    ...output
+      .filter(
+        (entry) =>
+          !(
+            completed &&
+            entry === lastText &&
+            formatReply(entry.text) === formatReply(report.message)
+          ),
+      )
+      .map((entry) => ({ type: "output" as const, at: entry.at, entry })),
+    ...actions.slice(-20).map((span) => ({ type: "activity" as const, at: span.start, span })),
+  ].sort((a, b) => a.at - b.at);
+
+  return (
+    <div className="chat-message from-agent" aria-busy={active}>
+      <b>Agent</b>
+      {actions.length > 20 && (
+        <p className="chat-note">
+          Showing the latest 20 actions. Earlier actions are in run details.
+        </p>
+      )}
+      {timeline.map((item) => {
+        if (item.type === "activity") {
+          const { span } = item;
+          const outcome = span.outcome === "running" && !active ? "incomplete" : span.outcome;
+
+          return (
+            <div className={`chat-activity ${outcome}`} key={`action-${span.id}`}>
+              <Circle size={8} fill="currentColor" aria-hidden="true" />
+              <span>
+                {span.name.startsWith("Web search") ? "Search" : "Browser"} · {activityName(span)}
+              </span>
+              <small>{outcome === "success" ? "done" : outcome}</small>
+            </div>
+          );
+        }
+        const { entry } = item;
+
+        const streaming =
+          active &&
+          !entry.complete &&
+          report?.spans.some((span) => span.id === entry.spanId && span.outcome === "running");
+
+        return (
+          <div className={`chat-output ${entry.kind}`} key={`output-${entry.id}`}>
+            {entry.kind === "reasoning-summary" && (
+              <span className="chat-label">Returned reasoning summary</span>
+            )}
+            <Reply text={entry.text} streaming={streaming} />
+          </div>
+        );
+      })}
+      {report?.outputTruncated && (
+        <p className="chat-note">Live output reached its display limit.</p>
+      )}
+      {completed && (
+        <div className="chat-final">
+          <span className="chat-label">Final answer</span>
+          <Reply text={report.message} />
+        </div>
+      )}
+      {active && (
+        <p className="chat-status" role="status">
+          {report?.message ?? "Connecting to the agent…"}
+        </p>
+      )}
+      {turn.error ? (
+        <p className="chat-status bad" role="status">
+          Response interrupted. Any text above is partial. {turn.error}
+        </p>
+      ) : report?.status === "cancelled" ? (
+        <p className="chat-status" role="status">
+          Stopped. Any text above is partial; no actions will be replayed.
+        </p>
+      ) : report?.status === "failed" ? (
+        <p className="chat-status bad" role="status">
+          Run failed. Any text above is partial. See run details for the diagnostic.
+        </p>
+      ) : null}
+    </div>
+  );
+};
 
 const hostOf = (url: string) => {
   try {
@@ -274,9 +431,12 @@ export const App = () => {
   const chatId = useAtomValue(chatIdAtom);
   const chatTurns = useAtomValue(chatTurnsAtom);
   const transcript = useRef<HTMLDivElement>(null);
+  const followOutput = useRef(true);
+  const [showLatest, setShowLatest] = useState(false);
 
   useEffect(() => {
-    transcript.current?.scrollTo({ top: transcript.current.scrollHeight });
+    if (followOutput.current)
+      transcript.current?.scrollTo({ top: transcript.current.scrollHeight });
   }, [chatTurns]);
   const [chatResult, sendChat] = useAtom(sendChatAtom);
   const [model, setModel] = useState<ModelId | "all">("gpt-6-luna");
@@ -319,6 +479,8 @@ export const App = () => {
     errorMessage(run) ??
     errorMessage(control) ??
     errorMessage(snapshot);
+
+  const chatControlFailure = errorMessage(control) ?? errorMessage(snapshot);
 
   const isWiki = scenario === "wikipedia";
   const isChat = scenario === "chat";
@@ -783,6 +945,13 @@ export const App = () => {
                 role="log"
                 aria-label="Conversation"
                 aria-live="polite"
+                onScroll={(event) => {
+                  const element = event.currentTarget;
+
+                  followOutput.current =
+                    element.scrollHeight - element.scrollTop - element.clientHeight < 48;
+                  setShowLatest(!followOutput.current);
+                }}
               >
                 {chatTurns.length === 0 ? (
                   <div className="chat-empty">
@@ -799,63 +968,23 @@ export const App = () => {
                         <b>You</b>
                         <p>{turn.prompt}</p>
                       </div>
-                      <div className="chat-message from-agent">
-                        <b>Agent</b>
-                        <Streamdown
-                          className="chat-reply"
-                          mode="static"
-                          controls={false}
-                          skipHtml
-                          rehypePlugins={[]}
-                          allowedElements={[
-                            "p",
-                            "a",
-                            "strong",
-                            "em",
-                            "del",
-                            "h1",
-                            "h2",
-                            "h3",
-                            "h4",
-                            "h5",
-                            "h6",
-                            "ul",
-                            "ol",
-                            "li",
-                            "blockquote",
-                            "pre",
-                            "code",
-                            "hr",
-                            "br",
-                            "table",
-                            "thead",
-                            "tbody",
-                            "tr",
-                            "th",
-                            "td",
-                          ]}
-                          urlTransform={(url) =>
-                            Option.getOrUndefined(Schema.decodeOption(StartUrl)(url))
-                          }
-                          components={{
-                            a: ({ href, children }) => (
-                              <a href={href} target="_blank" rel="noopener noreferrer">
-                                {children}
-                              </a>
-                            ),
-                          }}
-                        >
-                          {formatReply(
-                            turn.response ??
-                              (remote?.busy ? remote.report?.message : null) ??
-                              "Connecting to the agent…",
-                          )}
-                        </Streamdown>
-                      </div>
+                      <ChatResponse turn={turn} />
                     </div>
                   ))
                 )}
               </div>
+              {showLatest && (
+                <button
+                  className="ghost small chat-latest"
+                  onClick={() => {
+                    followOutput.current = true;
+                    setShowLatest(false);
+                    transcript.current?.scrollTo({ top: transcript.current.scrollHeight });
+                  }}
+                >
+                  Jump to latest <ChevronDown size={14} />
+                </button>
+              )}
               <form
                 className="chat-composer"
                 onSubmit={(event) => {
@@ -1033,20 +1162,21 @@ export const App = () => {
             </div>
           )}
 
-          {(failure || remote?.notice || busy || report) && (
-            <div
-              className={`message ${failure || report?.status === "failed" ? "bad" : ""}`}
-              role="status"
-            >
-              {failure ??
-                (selected ? report?.message : remote?.notice) ??
-                (busy
-                  ? preparing
-                    ? "Preparing the starting page."
-                    : (report?.message ?? "Running.")
-                  : (report?.message ?? ""))}
-            </div>
-          )}
+          {(!isChat || remote?.notice || chatControlFailure) &&
+            (failure || remote?.notice || busy || report) && (
+              <div
+                className={`message ${failure || report?.status === "failed" ? "bad" : ""}`}
+                role="status"
+              >
+                {(isChat ? (chatControlFailure ?? remote?.notice) : failure) ??
+                  (selected ? report?.message : remote?.notice) ??
+                  (busy
+                    ? preparing
+                      ? "Preparing the starting page."
+                      : (report?.message ?? "Running.")
+                    : (report?.message ?? ""))}
+              </div>
+            )}
           {connected && !remote.browserConfigured && (
             <div className="message bad" role="alert">
               This lab has no Cloudflare browser configured.
@@ -1059,6 +1189,9 @@ export const App = () => {
         <summary>Run details and comparisons</summary>
         {report && (
           <section className="section" aria-label="Run details">
+            <p className={report.status === "failed" ? "message bad" : "message"}>
+              {report.message}
+            </p>
             <div className="stats">
               <div>
                 <span>Total elapsed</span>

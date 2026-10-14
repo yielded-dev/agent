@@ -15,7 +15,7 @@ import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 
 import { TaskResult, Browser, completionTools } from "./browser.ts";
 import { LabError, defaultChallenge, type ModelApi, type RunInput } from "./contract.ts";
-import { traceModels, traceOpenAiClient, Trace } from "./telemetry.ts";
+import { traceModelStream, traceModels, traceOpenAiClient, Trace } from "./telemetry.ts";
 import { prepareWikipedia } from "./wikipedia.ts";
 
 const browserCode = BrowserUse.make({
@@ -216,7 +216,7 @@ export const executeTask = Effect.fnUntraced(function* (
       ),
       Effect.provide([
         conversation?.history ?? InMemory.layer,
-        modelLayer,
+        traceModelStream(modelLayer),
         completionLayer,
         codeLayer,
       ]),

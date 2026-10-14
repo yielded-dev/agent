@@ -6,16 +6,20 @@ import {
   DateTime,
   Effect,
   Exit,
+  Layer,
   Option,
   Schema,
   Stream,
   Tracer,
 } from "effect";
-import { Telemetry } from "effect/ai";
+import { LanguageModel, Telemetry, type Response } from "effect/ai";
 
 import {
   browserCommandTimeoutMillis,
   LabError,
+  modelOutputEntryLimit,
+  modelOutputLimit,
+  type ModelOutput,
   type Phase,
   type Report,
   type RunInput,
@@ -41,6 +45,10 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
   const origin = clock.monotonicTimeNanosUnsafe();
   const startedAt = DateTime.formatIso(yield* DateTime.now);
   const spans: Array<Span> = [];
+  const modelOutput: Array<ModelOutput> = [];
+  const outputIds = new Map<string, number>();
+  let outputLength = 0;
+  let outputTruncated = false;
   let turn = 0;
   const now = () => Number(clock.monotonicTimeNanosUnsafe() - origin) / 1_000_000;
 
@@ -105,6 +113,48 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
   return {
     now,
     begin,
+    // The demo admits one model call at a time. Native IDs are scoped to that span;
+    // repeated IDs in later model turns must never overwrite earlier text.
+    modelPart: (
+      part:
+        | Response.TextDeltaPart
+        | Response.ReasoningDeltaPart
+        | Response.TextEndPart
+        | Response.ReasoningEndPart,
+    ) => {
+      const span = spans.findLast((span) => span.phase === "model" && span.outcome === "running");
+
+      if (span === undefined) return;
+      const kind = part.type.startsWith("text-") ? "text" : "reasoning-summary";
+      const key = `${span.id}:${kind}:${part.id}`;
+      const index = outputIds.get(key);
+
+      if (part.type === "text-end" || part.type === "reasoning-end") {
+        if (index !== undefined) modelOutput[index] = { ...modelOutput[index], complete: true };
+
+        return;
+      }
+      const delta = part.delta.slice(0, modelOutputLimit - outputLength);
+
+      if (!delta || (index === undefined && modelOutput.length === modelOutputEntryLimit)) {
+        if (part.delta.length > 0) outputTruncated = true;
+
+        return;
+      }
+      if (delta.length < part.delta.length) outputTruncated = true;
+      outputLength += delta.length;
+      if (index === undefined) {
+        outputIds.set(key, modelOutput.length);
+        modelOutput.push({
+          id: modelOutput.length,
+          spanId: span.id,
+          kind,
+          text: delta,
+          at: now(),
+          complete: false,
+        });
+      } else modelOutput[index] = { ...modelOutput[index], text: modelOutput[index].text + delta };
+    },
     // Called only after the initial page and observation are ready, before any decision or action.
     // Never reset this boundary: a flow failure must not become a preparation retry.
     ready: () => {
@@ -121,6 +171,8 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
     snapshot: (): Report => ({
       ...report,
       spans: [...spans],
+      modelOutput: [...modelOutput],
+      outputTruncated,
       elapsed: report.status === "running" ? now() : report.elapsed,
     }),
     update: (patch: Partial<Report>) => {
@@ -146,6 +198,40 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
 export class Trace extends Context.Service<Trace, Effect.Success<ReturnType<typeof makeTrace>>>()(
   "browser-speed/Trace",
 ) {}
+
+/** Observe native parts for every provider; the final finish-tool message remains report.message. */
+export const traceModelStream = <E, R>(
+  modelLayer: Layer.Layer<LanguageModel.LanguageModel, E, R>,
+) =>
+  Layer.effect(
+    LanguageModel.LanguageModel,
+    Effect.gen(function* () {
+      const model = yield* LanguageModel.LanguageModel;
+      const trace = yield* Trace;
+
+      // The no-error/no-requirement tap preserves every native overload's tool,
+      // error and service types; parameters and response parts pass through unchanged.
+      const streamText = ((options: Parameters<typeof model.streamText>[0]) =>
+        model.streamText(options).pipe(
+          Stream.tap((part) =>
+            Effect.sync(() => {
+              if (
+                part.type === "text-delta" ||
+                part.type === "reasoning-delta" ||
+                part.type === "text-end" ||
+                part.type === "reasoning-end"
+              )
+                trace.modelPart(part);
+            }),
+          ),
+        )) as typeof model.streamText;
+
+      return LanguageModel.LanguageModel.of({
+        ...model,
+        streamText,
+      });
+    }),
+  ).pipe(Layer.provide(modelLayer));
 
 const decodeServedTier = Schema.decodeUnknownOption(
   Schema.Struct({

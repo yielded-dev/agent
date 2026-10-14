@@ -126,6 +126,21 @@ export const Span = Schema.Struct({
 
 export type Span = typeof Span.Type;
 
+export const modelOutputLimit = 64_000;
+export const modelOutputEntryLimit = 256;
+
+/** Display-only native model output, separate from tool payloads and the final answer. */
+export const ModelOutput = Schema.Struct({
+  id: Schema.Natural,
+  spanId: Schema.Natural,
+  kind: Schema.Literals(["text", "reasoning-summary"]),
+  text: Schema.String.check(Schema.isMaxLength(modelOutputLimit)),
+  at: Schema.Finite,
+  complete: Schema.Boolean,
+});
+
+export type ModelOutput = typeof ModelOutput.Type;
+
 export const Report = Schema.Struct({
   version: Schema.Literal(3),
   fixture: Schema.Literals(["wikipedia-race-v1", "website"]),
@@ -139,6 +154,11 @@ export const Report = Schema.Struct({
   status: Schema.Literals(["running", "passed", "failed", "unverified", "cancelled"]),
   message: Schema.String,
   spans: Schema.Array(Span),
+  /** Bounded across the whole run. Absent on reports saved before live output was captured. */
+  modelOutput: Schema.optionalKey(
+    Schema.Array(ModelOutput).check(Schema.isMaxLength(modelOutputEntryLimit)),
+  ),
+  outputTruncated: Schema.optionalKey(Schema.Boolean),
   elapsed: Schema.Finite,
   // All timestamps share the admission-relative Worker clock.
   readyAt: Schema.NullOr(Schema.Finite),

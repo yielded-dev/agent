@@ -1370,6 +1370,70 @@ tr.selected td {
 .from-agent b {
   color: var(--accent);
 }
+.chat-output,
+.chat-final {
+  margin-top: 12px;
+}
+.chat-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.reasoning-summary {
+  border-left: 2px solid var(--border);
+  padding-left: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.chat-final {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.chat-activity {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.chat-activity svg {
+  flex: none;
+}
+.chat-activity span {
+  flex: 1;
+}
+.chat-activity small {
+  flex: none;
+  color: var(--text-faint);
+}
+.chat-activity.running {
+  color: var(--accent);
+}
+.chat-activity.failure,
+.chat-activity.defect {
+  color: var(--bad);
+}
+.chat-message .chat-status,
+.chat-message .chat-note {
+  margin-top: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.chat-message .chat-status.bad {
+  color: var(--bad);
+}
+.chat-latest {
+  display: flex;
+  margin: 0 auto 12px;
+}
+.chat-reply pre {
+  overflow-x: auto;
+}
+.chat-reply p {
+  white-space: normal;
+}
 .chat-composer {
   padding: 0 18px 16px;
 }

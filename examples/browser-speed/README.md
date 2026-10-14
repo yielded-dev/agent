@@ -10,11 +10,21 @@ The agent can choose where to browse, answer questions, and ask for clarificatio
 messages share the same Chromium browser and persisted Thread history. Press Enter to send,
 Shift+Enter for a new line, and **New chat** to close the browser and clear the conversation.
 Chat runs one message at a time; model and browser comparisons remain in the demos.
+Chat shows native assistant text as it arrives, returned reasoning summaries when available,
+and search/browser activity separately. These summaries are provider-returned content, not
+access to hidden reasoning. The final answer appears when the `finish` tool completes; its
+JSON arguments are not rendered while streaming. You can draft the next message while the
+agent works. Scrolling up pauses automatic scrolling; **Jump to latest** resumes it.
+
+Intermediate text stays visible after completion, failure or Stop. Live output is limited to
+64,000 characters and 256 text/summary blocks per run; the chat keeps the latest 50 messages
+and shows the latest 20 actions per message. Full action diagnostics remain in run details.
+These display limits do not change the Thread history used for follow-ups.
 
 OpenAI chat has three tools: `browser_execute`, hosted `OpenAiWebSearch`, and `finish`.
 The agent is instructed to use search for discovery and recommendations, then the browser to
 inspect websites and verify products before acting. Replies render clickable source links.
-Search events appear in the run trace; their timing overlaps the containing model call.
+Search events appear in chat and the run trace; their timing overlaps the containing model call.
 Search-enabled chat has a 64,000-token context target, with pruning retaining 24,000 tokens.
 Workers AI uses search engines through the browser. Start a new chat when changing providers
 after hosted search, since native provider tool history belongs to its original provider.

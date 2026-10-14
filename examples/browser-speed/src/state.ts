@@ -35,13 +35,15 @@ export const selectedAtom = Atom.make<string | null>(null);
 export const chatDraftAtom = Atom.make("").pipe(Atom.keepAlive);
 export const chatIdAtom = Atom.make<string | null>(null).pipe(Atom.keepAlive);
 
-export const chatTurnsAtom = Atom.make<
-  ReadonlyArray<{
-    readonly id: string;
-    readonly prompt: string;
-    readonly response?: string;
-  }>
->([]).pipe(Atom.keepAlive);
+export interface ChatTurn {
+  readonly id: string;
+  readonly prompt: string;
+  readonly pending: boolean;
+  readonly report?: Report;
+  readonly error?: string;
+}
+
+export const chatTurnsAtom = Atom.make<ReadonlyArray<ChatTurn>>([]).pipe(Atom.keepAlive);
 
 const headers = { "x-lab-session": sessionId };
 
@@ -108,9 +110,13 @@ const snapshotQuery = LabClient.query("lab", "snapshot", {
 
 const pollingSnapshot = snapshotQuery.pipe(Atom.withRefresh("300 millis"));
 
-export const snapshotAtom = Atom.make((get) =>
-  get(get(watchingAtom) ? pollingSnapshot : snapshotQuery),
-);
+export const snapshotAtom = Atom.make((get) => {
+  const snapshot = get(snapshotQuery);
+  const remote = Option.getOrNull(AsyncResult.value(snapshot));
+
+  // A lost POST does not imply the Worker stopped. Keep its status and Stop control live.
+  return get(watchingAtom) || remote?.busy ? get(pollingSnapshot) : snapshot;
+});
 
 export const runAtom = LabClient.runtime.fn<
   Omit<RunInput, "id"> & {
@@ -244,10 +250,36 @@ export const sendChatAtom = LabClient.runtime.fn<
     get.set(watchingAtom, true);
     get.set(selectedAtom, null);
     get.set(progressAtom, { current: 1, total: 1 });
-    get.set(chatTurnsAtom, [...get(chatTurnsAtom), { id, prompt }]);
+    get.set(chatTurnsAtom, [...get(chatTurnsAtom), { id, prompt, pending: true }].slice(-50));
     get.set(chatDraftAtom, "");
 
     return yield* Effect.gen(function* () {
+      // One polling transport, owned by this workflow. Keep the latest matching snapshot
+      // even when the POST fails; a previous run's delayed poll cannot populate this turn.
+      yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          get.registry.subscribe(snapshotAtom, (snapshot) => {
+            if (!AsyncResult.isSuccess(snapshot)) return;
+            const report = snapshot.value.report;
+
+            if (report?.input.id !== id) return;
+            get.set(
+              chatTurnsAtom,
+              get(chatTurnsAtom).map((turn) =>
+                turn.id === id &&
+                turn.pending &&
+                (turn.report === undefined ||
+                  (turn.report.status === "running" &&
+                    (report.status !== "running" || report.elapsed >= turn.report.elapsed)))
+                  ? { ...turn, report }
+                  : turn,
+              ),
+            );
+          }),
+        ),
+        (unsubscribe) => Effect.sync(unsubscribe),
+      );
+
       const report = yield* Reactivity.mutation(
         client.lab.run({
           headers: { ...headers, ...keyHeaders(get(keysAtom)) },
@@ -266,7 +298,7 @@ export const sendChatAtom = LabClient.runtime.fn<
       get.set(
         chatTurnsAtom,
         get(chatTurnsAtom).map((turn) =>
-          turn.id === id ? { ...turn, response: report.message } : turn,
+          turn.id === id ? { ...turn, report, pending: false } : turn,
         ),
       );
       get.set(
@@ -294,7 +326,8 @@ export const sendChatAtom = LabClient.runtime.fn<
               turn.id === id
                 ? {
                     ...turn,
-                    response: failureMessage(cause),
+                    pending: false,
+                    error: failureMessage(cause),
                   }
                 : turn,
             ),
@@ -307,6 +340,7 @@ export const sendChatAtom = LabClient.runtime.fn<
           Effect.andThen(Reactivity.invalidate(["lab"])),
         ),
       ),
+      Effect.scoped,
     );
   }),
 );
