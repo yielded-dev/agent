@@ -1,5 +1,12 @@
 # @yielded/agent-storage-memory
 
+## 0.1.0-beta.176
+
+### Patch Changes
+
+- Updated dependencies [[`fefb1e1`](https://github.com/yielded-dev/agent/commit/fefb1e1cab7d60dbe0fdd2a5cc01a04106570e5b), [`9958974`](https://github.com/yielded-dev/agent/commit/9958974f756a136da8c991d2a8c229fbe96fa213), [`9701409`](https://github.com/yielded-dev/agent/commit/9701409f8060db88864f947295e668205ada858f), [`8a82272`](https://github.com/yielded-dev/agent/commit/8a82272f3ac6d75c6296e070d88f93529a2f1c66)]:
+  - @yielded/agent@0.1.0-beta.176
+
 ## 0.1.0-beta.175
 
 ### Patch Changes

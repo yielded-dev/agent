@@ -1,5 +1,22 @@
 # @yielded/agent-storage-cloudflare
 
+## 0.1.0-beta.176
+
+### Patch Changes
+
+- [#943](https://github.com/yielded-dev/agent/pull/943) [`9958974`](https://github.com/yielded-dev/agent/commit/9958974f756a136da8c991d2a8c229fbe96fa213) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Commit fresh Cloudflare Run inputs, original context, and applied markers atomically before model dispatch. Preserve configured projections and lifecycle publication while avoiding a second initial checkpoint write.
+
+- [#947](https://github.com/yielded-dev/agent/pull/947) [`7024a76`](https://github.com/yielded-dev/agent/commit/7024a76f18726e3a9cdbcb9379a2d6da9e1486b9) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reuse one initialized journal for the local Thread store and submission ledger within each Durable Object.
+
+- [#944](https://github.com/yielded-dev/agent/pull/944) [`7227117`](https://github.com/yielded-dev/agent/commit/72271179c4b87edae3fae33f26cff6141e2b3e77) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reuse validated ledger rows during admission and recovery, and simplify sequential recovery preparation.
+
+- [#945](https://github.com/yielded-dev/agent/pull/945) [`9701409`](https://github.com/yielded-dev/agent/commit/9701409f8060db88864f947295e668205ada858f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce storage transaction and record preparation overhead while preserving validation, rollback and canonical data.
+
+- [#942](https://github.com/yielded-dev/agent/pull/942) [`8a82272`](https://github.com/yielded-dev/agent/commit/8a82272f3ac6d75c6296e070d88f93529a2f1c66) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce repeated validation and dictionary work during durable turns. Capture canonical records by index and read execution arrays once, preserving their bounds even with custom iterators or getters.
+- Updated dependencies [[`fefb1e1`](https://github.com/yielded-dev/agent/commit/fefb1e1cab7d60dbe0fdd2a5cc01a04106570e5b), [`9958974`](https://github.com/yielded-dev/agent/commit/9958974f756a136da8c991d2a8c229fbe96fa213), [`9701409`](https://github.com/yielded-dev/agent/commit/9701409f8060db88864f947295e668205ada858f), [`8a82272`](https://github.com/yielded-dev/agent/commit/8a82272f3ac6d75c6296e070d88f93529a2f1c66)]:
+  - @yielded/agent@0.1.0-beta.176
+  - @yielded/agent-storage-sql@0.1.0-beta.176
+
 ## 0.1.0-beta.175
 
 ### Patch Changes
