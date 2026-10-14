@@ -122,7 +122,7 @@ it.live(
           headers: { ...headers, "content-type": "application/json" },
           body: JSON.stringify({
             id: crypto.randomUUID(),
-            scenario: "create",
+            scenario: "coffee",
             prompt: "",
             screenshots: false,
             liveView: false,
@@ -148,7 +148,7 @@ it.live(
         body: JSON.stringify({
           id: crypto.randomUUID(),
           engine: "kitesurf",
-          scenario: "create",
+          scenario: "coffee",
           prompt: "",
           screenshots: false,
           liveView: false,

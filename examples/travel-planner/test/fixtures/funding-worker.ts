@@ -8,6 +8,8 @@ import { credentialForOwner, credentialSourceLayer } from "../../src/server/cred
 
 const adminId = "00000000-0000-0000-0000-000000000001";
 const emailId = "00000000-0000-0000-0000-000000000002";
+const yieldedId = "00000000-0000-0000-0000-000000000003";
+const otherIssuerId = "00000000-0000-0000-0000-000000000004";
 
 export class FundingFixture extends DurableObject {
   fetch(request: Request) {
@@ -24,15 +26,23 @@ export class FundingFixture extends DurableObject {
             for (const [id, name] of [
               [adminId, "Dan"],
               [emailId, "Email reader"],
+              [yieldedId, "Yielded owner"],
+              [otherIssuerId, "Other issuer"],
             ]) {
               sql.exec("insert into auth_subject values (?,1,?,?)", id, "revision", name);
               sql.exec("insert into auth_credential values (?,?,?,1)", id, id, "revision");
             }
-            for (const [id, github] of [[adminId, "3450486"]]) {
+            for (const [id, provider, issuer, externalSubject] of [
+              [adminId, "github", "https://github.com/login/oauth", "3450486"],
+              [yieldedId, "yielded", "https://auth.yielded.dev", "settings-owner"],
+              [otherIssuerId, "yielded", "https://other-issuer.test", "settings-owner"],
+            ]) {
               sql.exec(
-                "insert into auth_oauth_identity (identityKey,provider,issuer,externalSubject,subjectId) values (?,'github','https://github.com/login/oauth',?,?)",
+                "insert into auth_oauth_identity (identityKey,provider,issuer,externalSubject,subjectId) values (?,?,?,?,?)",
                 id,
-                github,
+                provider,
+                issuer,
+                externalSubject,
                 id,
               );
               sql.exec(

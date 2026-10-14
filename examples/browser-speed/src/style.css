@@ -304,12 +304,12 @@ textarea {
   font-size: 12px;
 }
 
-.task-list {
+.mode-list {
   display: grid;
   gap: 2px;
 }
 
-.task {
+.mode {
   display: grid;
   grid-template-columns: 1fr;
   padding: 9px 12px;
@@ -318,32 +318,32 @@ textarea {
   border: 1px solid transparent;
 }
 
-.task:hover {
+.mode:hover {
   background: var(--bg-sunken);
 }
 
-.task.selected {
+.mode.selected {
   background: var(--bg-sunken);
   border-color: var(--border-strong);
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.task input {
+.mode input {
   position: absolute;
   opacity: 0;
   pointer-events: none;
 }
 
-.task:has(input:focus-visible) {
+.mode:has(input:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-.task-title {
+.mode-title {
   font-weight: 500;
 }
 
-.task-detail {
+.mode-detail {
   color: var(--text-faint);
   font-size: 13px;
 }
@@ -356,15 +356,7 @@ textarea {
   margin-top: 12px;
 }
 
-.shop-inputs {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: 8px;
-  margin-top: 12px;
-}
-
 .race-inputs label span,
-.shop-inputs label span,
 .browse-inputs label span {
   display: block;
   margin-bottom: 4px;
@@ -1052,8 +1044,15 @@ input[type="radio"] {
 }
 
 .table-wrap {
+  position: relative;
   overflow-x: auto;
   margin-bottom: 14px;
+}
+
+table[aria-label="Run history"] td:first-child {
+  max-width: 36ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 table {
@@ -1265,10 +1264,6 @@ tr.selected td {
     padding: 40px 0 28px;
   }
 
-  .shop-inputs {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .lede {
     font-size: 15.5px;
   }
@@ -1303,13 +1298,6 @@ tr.selected td {
 .route-summary {
   margin-top: 16px;
 }
-.board-result {
-  margin-top: 16px;
-  padding: 16px;
-}
-.board-result summary {
-  cursor: pointer;
-}
 .browse-inputs {
   display: grid;
   gap: 8px;
@@ -1317,4 +1305,109 @@ tr.selected td {
 }
 .browse-inputs .prompt {
   margin-top: 0;
+}
+
+.chat-panel {
+  margin-bottom: 22px;
+  overflow: hidden;
+}
+.chat-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.chat-heading > svg {
+  color: var(--accent);
+  flex: none;
+}
+.chat-heading h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+.chat-heading > span {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.chat-transcript {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 18px;
+  overflow-wrap: anywhere;
+}
+.chat-empty {
+  padding: 8px 0 16px;
+}
+.chat-empty p {
+  font-size: 21px;
+  margin: 0 0 6px;
+  letter-spacing: -0.025em;
+}
+.chat-empty span {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.chat-turn + .chat-turn {
+  border-top: 1px solid var(--border);
+  margin-top: 18px;
+  padding-top: 18px;
+}
+.chat-message b {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-faint);
+}
+.chat-message p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+}
+.from-user {
+  margin-bottom: 16px;
+}
+.from-agent b {
+  color: var(--accent);
+}
+.chat-composer {
+  padding: 0 18px 16px;
+}
+.chat-composer textarea {
+  resize: vertical;
+  min-height: 92px;
+}
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+.composer-actions > span {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.composer-actions .primary {
+  flex: none;
+}
+.budget-note {
+  margin: -6px 0 0;
+}
+.run-inspector {
+  margin-top: 32px;
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+}
+.run-inspector > summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+@media (max-width: 640px) {
+  .chat-heading > span {
+    display: none;
+  }
+  .composer-actions {
+    align-items: flex-end;
+  }
 }

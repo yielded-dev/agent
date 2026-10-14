@@ -61,6 +61,20 @@ const request = (store: string, path: string, input?: object, actor = admin) =>
 const json = async (store: string, path: string, input?: object, actor = admin) =>
   (await request(store, path, input, actor)).json();
 
+// e79665ba (#812) introduced shared Yielded sign-in without its funding identity.
+it("funds the verified Yielded owner and rejects the same subject from another issuer", async () => {
+  const owner = "00000000-0000-0000-0000-000000000003";
+  const otherIssuer = "00000000-0000-0000-0000-000000000004";
+
+  await json("shared-sign-in", "/seed");
+  expect(await json("shared-sign-in", "/status", undefined, owner)).toEqual({
+    admin: true,
+    allowed: true,
+  });
+  expect(await json("shared-sign-in", "/resolve", undefined, owner)).toEqual({ lastFour: "9876" });
+  expect((await request("shared-sign-in", "/resolve", undefined, otherIssuer)).status).toBe(403);
+});
+
 it("resolves server credentials only while a current grant applies, including after object restart", async () => {
   await json("credentials", "/seed");
   expect((await request("credentials", "/resolve", undefined, email)).status).toBe(403);

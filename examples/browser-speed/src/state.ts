@@ -31,6 +31,17 @@ export type ClientSample = typeof ClientSample.Type;
 export const historyAtom = Atom.make<ReadonlyArray<ClientSample>>([]);
 export const selectedAtom = Atom.make<string | null>(null);
 
+export const chatDraftAtom = Atom.make("").pipe(Atom.keepAlive);
+export const chatIdAtom = Atom.make<string | null>(null).pipe(Atom.keepAlive);
+
+export const chatTurnsAtom = Atom.make<
+  ReadonlyArray<{
+    readonly id: string;
+    readonly prompt: string;
+    readonly response?: string;
+  }>
+>([]).pipe(Atom.keepAlive);
+
 const headers = { "x-lab-session": sessionId };
 
 /** Visitor keys stay in this browser and travel only as headers on run requests. */
@@ -169,6 +180,8 @@ export const runAtom = LabClient.runtime.fn<
           ["lab"],
         );
 
+        get.set(chatIdAtom, null);
+        get.set(chatTurnsAtom, []);
         get.set(
           historyAtom,
           [
@@ -201,9 +214,92 @@ export const controlAtom = LabClient.runtime.fn<"stop" | "close">()(
     const client = yield* LabClient;
 
     if (action === "stop") get.set(stopRequestedAtom, true);
+    if (action === "close") get.set(chatDraftAtom, "");
     yield* Reactivity.mutation(
       action === "stop" ? client.lab.stop({ headers }) : client.lab.close({ headers }),
       ["lab"],
+    );
+    if (action === "close") {
+      get.set(chatIdAtom, null);
+      get.set(chatTurnsAtom, []);
+    }
+  }),
+);
+
+export const sendChatAtom = LabClient.runtime.fn<
+  Omit<RunInput, "id" | "scenario" | "prompt" | "chatId">
+>()(
+  Effect.fnUntraced(function* (settings, get) {
+    if (get(watchingAtom)) return;
+    const prompt = get(chatDraftAtom).trim();
+
+    if (!prompt) return;
+    const client = yield* LabClient;
+    const { url, ...options } = settings;
+    const id = crypto.randomUUID();
+    const chatId = get(chatIdAtom);
+    const start = performance.now();
+
+    get.set(watchingAtom, true);
+    get.set(selectedAtom, null);
+    get.set(progressAtom, { current: 1, total: 1 });
+    get.set(chatTurnsAtom, [...get(chatTurnsAtom), { id, prompt }]);
+    get.set(chatDraftAtom, "");
+
+    return yield* Effect.gen(function* () {
+      const report = yield* Reactivity.mutation(
+        client.lab.run({
+          headers: { ...headers, ...keyHeaders(get(keysAtom)) },
+          payload: {
+            ...options,
+            id,
+            scenario: "chat",
+            prompt,
+            ...(chatId === null ? (url === undefined ? {} : { url }) : { chatId }),
+          },
+        }),
+        ["lab"],
+      );
+
+      get.set(chatIdAtom, report.cleanup === "retained" ? (chatId ?? id) : null);
+      get.set(
+        chatTurnsAtom,
+        get(chatTurnsAtom).map((turn) =>
+          turn.id === id ? { ...turn, response: report.message } : turn,
+        ),
+      );
+      get.set(
+        historyAtom,
+        [
+          ...get(historyAtom),
+          {
+            report,
+            clientElapsedMillis: performance.now() - start,
+          },
+        ].slice(-100),
+      );
+    }).pipe(
+      Effect.tapError(() =>
+        Effect.sync(() => {
+          get.set(
+            chatTurnsAtom,
+            get(chatTurnsAtom).map((turn) =>
+              turn.id === id
+                ? {
+                    ...turn,
+                    response: "Message failed. Check the browser status below before trying again.",
+                  }
+                : turn,
+            ),
+          );
+          if (!get(chatDraftAtom)) get.set(chatDraftAtom, prompt);
+        }),
+      ),
+      Effect.ensuring(
+        Effect.sync(() => get.set(watchingAtom, false)).pipe(
+          Effect.andThen(Reactivity.invalidate(["lab"])),
+        ),
+      ),
     );
   }),
 );
@@ -262,8 +358,6 @@ const sameWorkload = (value: Report, report: Report) =>
   value.input.url === report.input.url &&
   value.input.wikipedia?.start === report.input.wikipedia?.start &&
   value.input.wikipedia?.target === report.input.wikipedia?.target &&
-  value.input.shop?.url === report.input.shop?.url &&
-  value.input.shop?.item === report.input.shop?.item &&
   value.input.screenshots === report.input.screenshots &&
   value.input.liveView === report.input.liveView;
 
