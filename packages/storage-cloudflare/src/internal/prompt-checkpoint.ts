@@ -40,7 +40,8 @@ const keyFor = (prefix: string, chunk: number) => prefix + String(chunk).padStar
 /**
  * Versioned derivative keys use the adapter's existing metadata store. Canonical layout and
  * export are unchanged. Chunking keeps SQL values below the DO limit; loading is one bounded
- * query followed by one parse of the native prompt. Only the latest checkpoint is retained.
+ * query followed by one parse of the native prompt. Retain unchanged chunks when replacing
+ * the checkpoint, so append-only growth writes at most the old tail and new chunks.
  */
 export const makePromptCheckpoints = (
   sql: SqlClient,
@@ -140,9 +141,11 @@ export const makePromptCheckpoints = (
             const [head] = yield* journal.getThread(checkpoint.threadId);
 
             if (head === undefined || head.tail_sequence !== checkpoint.throughSequence) return;
-            yield* sql`DELETE FROM effect_agent_meta WHERE key >= ${prefix} AND key < ${prefix + "~"}`;
+            yield* sql`DELETE FROM effect_agent_meta WHERE key >= ${keyFor(prefix, chunks.length + 1)} AND key < ${prefix + "~"}`;
             for (const [index, value] of [header, ...chunks].entries())
-              yield* sql`INSERT INTO effect_agent_meta (key, value) VALUES (${keyFor(prefix, index)}, ${value})`;
+              yield* sql`INSERT INTO effect_agent_meta (key, value) VALUES (${keyFor(prefix, index)}, ${value})
+                ON CONFLICT (key) DO UPDATE SET value = excluded.value
+                WHERE effect_agent_meta.value <> excluded.value`;
           }),
         )
         .pipe(Effect.provideService(SqlClient, sql));
