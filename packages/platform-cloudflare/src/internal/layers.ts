@@ -134,7 +134,7 @@ import * as DueQueue from "./due-queue.ts";
 import { LiveTextHub } from "./live-text.ts";
 import {
   guardedMessageDeliveryStoreLayer,
-  threadMessageDeliveryLayer,
+  lazyThreadMessageDeliveryLayer,
 } from "./message-delivery.ts";
 import { cloudflarePreparedInputAdmissionLayer } from "./prepared-admission.ts";
 import { ProgressWaitRegistry } from "./progress-wait.ts";
@@ -733,14 +733,17 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
         Layer.provide(wakes),
       );
 
-      const messageRecovery = threadMessageDeliveryLayer.pipe(
-        // Four parallel attempts per wave. Native completion stops new wake-driven waves;
-        // retained retry deadlines schedule future alarms.
-        Layer.provide(MessageDeliveryDriver.layer({ batchSize: 4, concurrency: 4 })),
-        Layer.provide(cloudflarePreparedInputAdmissionLayer),
-        Layer.provide(CloudflareThreadClient.layer),
-        Layer.provide(messageStore),
-        Layer.provide(wakes),
+      const messageRecovery = Layer.suspend(() =>
+        lazyThreadMessageDeliveryLayer(
+          // Four parallel attempts per wave. Native completion stops new wake-driven waves;
+          // retained retry deadlines schedule future alarms.
+          MessageDeliveryDriver.layer({ batchSize: 4, concurrency: 4 }).pipe(
+            Layer.provide(cloudflarePreparedInputAdmissionLayer),
+            Layer.provide(CloudflareThreadClient.layer),
+            Layer.provide(messageStore),
+            Layer.provide(wakes),
+          ),
+        ).pipe(Layer.provide(messageStore)),
       );
 
       const publication = (options.publication ?? ThreadPublication.layer).pipe(
