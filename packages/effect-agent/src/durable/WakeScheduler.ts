@@ -1,5 +1,5 @@
 import type { Scope } from "effect";
-import { Context, Deferred, Effect, Layer, Ref, Stream } from "effect";
+import { Context, Deferred, Effect, Layer, Stream } from "effect";
 
 import { type ThreadId } from "../core/Identifiers.ts";
 
@@ -17,78 +17,46 @@ export interface WakeSubscriptionHub {
   readonly notify: (threadId: ThreadId) => Effect.Effect<void>;
 }
 
-interface WakeRegistration {
-  readonly id: number;
-  readonly deferred: Deferred.Deferred<void>;
-}
-
-type WakeRegistrations = ReadonlyMap<ThreadId, ReadonlyMap<number, Deferred.Deferred<void>>>;
-
 /**
  * Build the shared per-incarnation registration primitive used by host WakeSchedulers. The hub
  * contains hints only: eviction may discard it, while a reconnecting caller re-subscribes and
  * rechecks canonical storage. Scope finalizers remove cancelled waiters, and notify broadcasts
  * instead of consuming a signal that belongs to another waiter.
  */
-export const makeWakeSubscriptionHub: Effect.Effect<WakeSubscriptionHub> = Effect.gen(function* () {
-  const registrations = yield* Ref.make<WakeRegistrations>(new Map());
-  const nextId = yield* Ref.make(0);
+export const makeWakeSubscriptionHub: Effect.Effect<WakeSubscriptionHub> = Effect.sync(() => {
+  const registrations = new Map<ThreadId, Set<Deferred.Deferred<void>>>();
 
-  const remove = (threadId: ThreadId, id: number) =>
-    Ref.update(registrations, (current) => {
-      const existing = current.get(threadId);
+  const subscribe = (threadId: ThreadId) =>
+    Effect.acquireRelease(
+      Effect.sync(() => {
+        const deferred = Deferred.makeUnsafe<void>();
+        let waiters = registrations.get(threadId);
 
-      if (existing === undefined || !existing.has(id)) return current;
-      const next = new Map(current);
-      const thread = new Map(existing);
+        if (waiters === undefined) {
+          waiters = new Set();
+          registrations.set(threadId, waiters);
+        }
+        waiters.add(deferred);
 
-      thread.delete(id);
-      if (thread.size === 0) {
-        next.delete(threadId);
-      } else {
-        next.set(threadId, thread);
-      }
+        return deferred;
+      }),
+      (deferred) =>
+        Effect.sync(() => {
+          const waiters = registrations.get(threadId);
 
-      return next;
+          if (waiters?.delete(deferred) && waiters.size === 0) registrations.delete(threadId);
+        }),
+    ).pipe(Effect.map(Deferred.await));
+
+  const notify = (threadId: ThreadId) =>
+    Effect.sync(() => {
+      const waiters = registrations.get(threadId);
+
+      if (waiters === undefined) return;
+      // Detach before resuming: a resumed waiter may register its next wait immediately.
+      registrations.delete(threadId);
+      for (const waiter of waiters) Deferred.doneUnsafe(waiter, Effect.void);
     });
-
-  const subscribe = Effect.fnUntraced(function* (
-    threadId: ThreadId,
-  ): Effect.fn.Return<Effect.Effect<void>, never, Scope.Scope> {
-    const deferred = yield* Deferred.make<void>();
-    const id = yield* Ref.getAndUpdate(nextId, (current) => current + 1);
-    const registration: WakeRegistration = { id, deferred };
-
-    yield* Effect.addFinalizer(() => remove(threadId, registration.id));
-    yield* Ref.update(registrations, (current) => {
-      const next = new Map(current);
-      const thread = new Map(current.get(threadId) ?? []);
-
-      thread.set(registration.id, registration.deferred);
-      next.set(threadId, thread);
-
-      return next;
-    });
-
-    return Deferred.await(registration.deferred);
-  });
-
-  const notify = Effect.fnUntraced(function* (threadId: ThreadId) {
-    const waiters = yield* Ref.modify(registrations, (current) => {
-      const thread = current.get(threadId);
-
-      if (thread === undefined) return [[], current] as const;
-      const next = new Map(current);
-
-      next.delete(threadId);
-
-      return [[...thread.values()], next] as const;
-    });
-
-    yield* Effect.forEach(waiters, (waiter) => Deferred.succeed(waiter, undefined), {
-      discard: true,
-    });
-  });
 
   return { subscribe, notify };
 });
