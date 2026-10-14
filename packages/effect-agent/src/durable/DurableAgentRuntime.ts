@@ -5220,9 +5220,6 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           ),
         );
 
-      const addUsageTotal = (field: string, left: number, right: number) =>
-        checkedUsageTotal(field, left + right);
-
       const subtractUsageTotal = (field: string, left: number, right: number) =>
         checkedUsageTotal(field, left - right);
 
@@ -5232,11 +5229,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           let unobservedModelCalls = journal.usage.unobservedModelCalls ?? 0;
 
           for (const count of stagedUnobservedCalls.values()) {
-            unobservedModelCalls = yield* addUsageTotal(
-              "unobservedModelCalls",
-              unobservedModelCalls,
-              count,
-            );
+            unobservedModelCalls += count;
           }
           const detailedCalls = [...journal.usage.modelUsage, ...stagedCalls];
 
@@ -5257,17 +5250,15 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           let costMicrousd = journal.usage.costMicrousd;
 
           for (const usage of stagedUsage.values()) {
-            inputTokens = yield* addUsageTotal("inputTokens", inputTokens, usage.inputTokens);
-            outputTokens = yield* addUsageTotal("outputTokens", outputTokens, usage.outputTokens);
-            costMicrousd = yield* addUsageTotal("costMicrousd", costMicrousd, usage.costMicrousd);
+            inputTokens += usage.inputTokens;
+            outputTokens += usage.outputTokens;
+            costMicrousd += usage.costMicrousd;
           }
 
-          const modelCalls = yield* addUsageTotal(
-            "modelCalls",
-            journal.usage.modelCalls,
-            stagedCalls.length,
-          );
+          const modelCalls = journal.usage.modelCalls + stagedCalls.length;
 
+          // Reconciliation must reject negative legacy deltas independently of
+          // the final summary's complete safe-integer and additive checks.
           const legacyCalls = yield* subtractUsageTotal(
             "legacy.modelCalls",
             modelCalls,
@@ -5311,81 +5302,52 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
 
             const existing = existingIndex < 0 ? undefined : byModel[existingIndex];
 
-            const legacyGroup = ModelUsageGroup.make({
+            const legacyGroup = yield* ModelUsageGroup.makeEffect({
               provider: "unknown",
               model: "legacy-record",
-              modelCalls: yield* addUsageTotal(
-                "byModel.modelCalls",
-                existing?.modelCalls ?? 0,
-                legacyCalls,
-              ),
-              inputTokens: InputTokenUsage.make({
-                total: yield* addUsageTotal(
-                  "byModel.inputTokens.total",
-                  existing?.inputTokens.total ?? 0,
-                  legacyInput,
-                ),
-                uncached: yield* addUsageTotal(
-                  "byModel.inputTokens.uncached",
-                  existing?.inputTokens.uncached ?? 0,
-                  legacyInput,
-                ),
+              modelCalls: (existing?.modelCalls ?? 0) + legacyCalls,
+              inputTokens: {
+                total: (existing?.inputTokens.total ?? 0) + legacyInput,
+                uncached: (existing?.inputTokens.uncached ?? 0) + legacyInput,
                 cacheRead: existing?.inputTokens.cacheRead ?? 0,
                 cacheWrite: existing?.inputTokens.cacheWrite ?? 0,
-              }),
-              outputTokens: OutputTokenUsage.make({
-                total: yield* addUsageTotal(
-                  "byModel.outputTokens.total",
-                  existing?.outputTokens.total ?? 0,
-                  legacyOutput,
-                ),
-                text: yield* addUsageTotal(
-                  "byModel.outputTokens.text",
-                  existing?.outputTokens.text ?? 0,
-                  legacyOutput,
-                ),
+              },
+              outputTokens: {
+                total: (existing?.outputTokens.total ?? 0) + legacyOutput,
+                text: (existing?.outputTokens.text ?? 0) + legacyOutput,
                 reasoning: existing?.outputTokens.reasoning ?? 0,
-              }),
-              costMicrousd: yield* addUsageTotal(
-                "byModel.costMicrousd",
-                existing?.costMicrousd ?? 0,
-                legacyCost,
+              },
+              costMicrousd: (existing?.costMicrousd ?? 0) + legacyCost,
+            }).pipe(
+              Effect.mapError((cause) =>
+                RunJournalError.make({
+                  message: "Run legacy usage exceeds safe-integer accounting bounds",
+                  cause,
+                }),
               ),
-            });
+            );
 
             if (existingIndex < 0) byModel.push(legacyGroup);
             else byModel[existingIndex] = legacyGroup;
           }
 
-          const uncached = yield* addUsageTotal(
-            "inputTokens.uncached",
-            detailed.inputTokens.uncached,
-            legacyInput,
-          );
-
-          const text = yield* addUsageTotal(
-            "outputTokens.text",
-            detailed.outputTokens.text,
-            legacyOutput,
-          );
-
-          return RunUsageSummary.make({
+          return yield* RunUsageSummary.makeEffect({
             ...(legacyCalls === 0 && detailed.webSearchCalls !== undefined
               ? { webSearchCalls: detailed.webSearchCalls }
               : {}),
             modelCalls,
-            inputTokens: InputTokenUsage.make({
+            inputTokens: {
               total: inputTokens,
               // Legacy aggregate inputs are conservatively classified as uncached.
-              uncached,
+              uncached: detailed.inputTokens.uncached + legacyInput,
               cacheRead: detailed.inputTokens.cacheRead,
               cacheWrite: detailed.inputTokens.cacheWrite,
-            }),
-            outputTokens: OutputTokenUsage.make({
+            },
+            outputTokens: {
               total: outputTokens,
-              text,
+              text: detailed.outputTokens.text + legacyOutput,
               reasoning: detailed.outputTokens.reasoning,
-            }),
+            },
             costMicrousd,
             byModel,
             unobservedModelCalls,
@@ -5401,7 +5363,14 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                   ? "unknown"
                   : "partial"
                 : detailed.pricingStatus,
-          });
+          }).pipe(
+            Effect.mapError((cause) =>
+              RunJournalError.make({
+                message: "Run usage summary exceeds safe-integer accounting bounds",
+                cause,
+              }),
+            ),
+          );
         });
 
       const activeExecution = yield* reader.readExecution({ threadId: ctx.threadId, runId });
