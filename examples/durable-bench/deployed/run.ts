@@ -1597,7 +1597,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         restoring = false;
         endpoints = yield* deployPass();
         // Allow the measurement build to propagate before preparation readiness/reset.
-        if (options.isolateCold) yield* Effect.sleep(COLD_PROPAGATION_DELAY);
+        if (options.isolateCold || snapshotProfile) yield* Effect.sleep(COLD_PROPAGATION_DELAY);
         yield* phase("measurement");
       }
       const isolateOwners = new Map<string, Set<string>>();

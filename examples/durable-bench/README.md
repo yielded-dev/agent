@@ -162,6 +162,7 @@ compared with Miniflare timings; compare ratios within a matched deployment.
 Profiling is diagnostic and separate from timing comparisons. With saved snapshots,
 `--profile cpu` requires one Yielded/pi target, size and TTFT, `--objects 2`, and quick mode.
 It excludes `--isolate-cold`, `--cpu`, `--profile-after` and recovery diagnostics.
+After snapshot restore and measurement deployment, it waits 180 seconds before preparation.
 Both Objects run their preparation turn; only the epoch-zero candidate Object then runs
 its first cold turn. After native maintenance becomes quiescent, the controller sends
 read-only identity traffic for 60 seconds to aid profiler discovery, requiring a stable
