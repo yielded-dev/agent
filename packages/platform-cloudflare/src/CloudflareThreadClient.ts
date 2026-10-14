@@ -116,15 +116,7 @@ export class ThreadClientError extends Schema.TaggedError<ThreadClientError>()(
 // Requests
 // ---------------------------------------------------------------------------
 
-/**
- * One durable submission, input ALREADY encoded by the caller through the Agent Binding's
- * input schema (the Worker bundles the same Agent definitions as the Object, so schema
- * validation happens client-side; the resolved Binding re-validates at claim time). The
- * Thread identity is deliberately absent — the addressed Object IS the lane.
- */
-export class SubmitRequest extends Schema.Class<SubmitRequest>(
-  "@effect-agent/platform-cloudflare/SubmitRequest",
-)({
+const SubmitFields = Schema.Struct({
   agentId: AgentId,
   principal: Principal,
   idempotencyKey: IdempotencyKey,
@@ -134,7 +126,17 @@ export class SubmitRequest extends Schema.Class<SubmitRequest>(
   messageAdmission: Schema.optionalKey(InputMessage),
   definitions: DefinitionDigests,
   inputPayload: PersistedJson,
-}) {}
+});
+
+/**
+ * One durable submission, input ALREADY encoded by the caller through the Agent Binding's
+ * input schema (the Worker bundles the same Agent definitions as the Object, so schema
+ * validation happens client-side; the resolved Binding re-validates at claim time). The
+ * Thread identity is deliberately absent — the addressed Object IS the lane.
+ */
+export class SubmitRequest extends Schema.Class<SubmitRequest>(
+  "@effect-agent/platform-cloudflare/SubmitRequest",
+)(SubmitFields) {}
 
 /** One bounded page of canonical records after an optional sequence. */
 export class ObservePageRequest extends Schema.Class<ObservePageRequest>(
@@ -284,7 +286,16 @@ export type HostResponse = typeof HostResponse.Type;
 // ---------------------------------------------------------------------------
 
 export const decodeSubmitRequest = Schema.decodeUnknownEffect(SubmitRequest);
-export const encodeSubmitRequest = Schema.encodeEffect(SubmitRequest);
+
+export const encodeSubmitRequest = Schema.encodeEffect(
+  SubmitFields.mapFields((fields) => ({
+    ...fields,
+    // Digests have identical type/wire fields. Accept structural values without
+    // constructing their otherwise method-free classes just to encode them.
+    definitions: Schema.toEncoded(fields.definitions),
+  })),
+);
+
 export const decodeReceipt = Schema.decodeUnknownEffect(Receipt);
 export const encodeReceipt = Schema.encodeEffect(Receipt);
 export const decodeAwaitSettlementRequest = Schema.decodeUnknownEffect(AwaitSettlementRequest);
@@ -801,7 +812,27 @@ export class CloudflareThreadClient extends Context.Service<
             ),
           );
 
-          const request = SubmitRequest.make({
+          // Optional metadata contains class-valued fields with real transformations.
+          // Retain constructor normalization for structurally typed caller values.
+          const workerAdmission =
+            options.workerAdmission === undefined
+              ? undefined
+              : yield* WorkerAdmission.makeEffect(options.workerAdmission).pipe(
+                  Effect.mapError(() =>
+                    HostProtocolError.make({ message: "Invalid worker admission metadata" }),
+                  ),
+                );
+
+          const messageAdmission =
+            options.messageAdmission === undefined
+              ? undefined
+              : yield* InputMessage.makeEffect(options.messageAdmission).pipe(
+                  Effect.mapError(() =>
+                    HostProtocolError.make({ message: "Invalid message admission metadata" }),
+                  ),
+                );
+
+          const encoded = yield* encodeSubmitRequest({
             agentId: agent.definition.id,
             principal: options.principal,
             idempotencyKey: options.idempotencyKey,
@@ -811,17 +842,11 @@ export class CloudflareThreadClient extends Context.Service<
             ...(options.admissionFence === undefined
               ? {}
               : { admissionFence: options.admissionFence }),
-            ...(options.workerAdmission === undefined
-              ? {}
-              : { workerAdmission: options.workerAdmission }),
-            ...(options.messageAdmission === undefined
-              ? {}
-              : { messageAdmission: options.messageAdmission }),
+            ...(workerAdmission === undefined ? {} : { workerAdmission }),
+            ...(messageAdmission === undefined ? {} : { messageAdmission }),
             definitions: options.definitions,
             inputPayload,
-          });
-
-          const encoded = yield* encodeSubmitRequest(request).pipe(
+          }).pipe(
             Effect.mapError((error) =>
               HostProtocolError.make({
                 message: boundHostDiagnostic(`submit request encode failed: ${error.message}`),
