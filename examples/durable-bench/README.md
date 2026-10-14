@@ -57,7 +57,8 @@ and the balanced ABBA/BAAB sequence. Add `--cpu` for invocation CPU in either pr
 restart acknowledgement, warm residency and transcript checks. Each cohort has a
 separate Worker; isolate sharing rejects its measurements. Independent cells run
 concurrently, with `--concurrency` limiting measured Objects and `--build-concurrency`
-limiting restore work. Quick and full default to 12 concurrent Objects.
+limiting restore work. Quick and full default to 12 concurrent Objects and require at least
+two. Waves may use fewer slots to keep opposite-arm pairs together.
 Turns within an Object remain sequential. Measurement proceeds in turn waves, pairing
 opposite arms of each target/cell where both survive. Readiness finishes for every member
 before a wave submits inputs; the wave finishes before the next starts. Recovery preserves

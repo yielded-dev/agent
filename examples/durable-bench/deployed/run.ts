@@ -2068,10 +2068,20 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           },
         );
 
-        const order: typeof activeMeasurements = [];
+        const waves: (typeof activeMeasurements)[] = [];
 
         for (let offset = 0; cells.some((cell) => offset < cell.length); offset++)
-          for (const cell of cells) order.push(...(cell[offset] ?? []));
+          for (const cell of cells) {
+            const pair = cell[offset];
+
+            if (!pair) continue;
+            const wave = waves.at(-1);
+
+            if (wave && wave.length + pair.length <= options.concurrency) wave.push(...pair);
+            else waves.push(pair);
+          }
+        const order = waves.flat();
+
         yield* update((value) => ({
           ...value,
           orders: [
@@ -2082,19 +2092,17 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             },
           ],
         }));
-        for (let offset = 0; offset < order.length; offset += options.concurrency) {
-          const wave = order.slice(offset, offset + options.concurrency);
+        for (const [waveIndex, wave] of waves.entries()) {
           const peers = wave.map(({ cohort }) => objectKey(cohort));
 
           yield* Effect.forEach(wave, (item) => item.prepare(index), {
             concurrency: options.concurrency,
             discard: true,
           });
-          yield* Effect.forEach(
-            wave,
-            (item) => item.measure(index, offset / options.concurrency, peers),
-            { concurrency: options.concurrency, discard: true },
-          );
+          yield* Effect.forEach(wave, (item) => item.measure(index, waveIndex, peers), {
+            concurrency: options.concurrency,
+            discard: true,
+          });
         }
       }
       // Only after the last wave: retire observers before collecting completed Tail events.

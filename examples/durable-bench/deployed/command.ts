@@ -72,7 +72,9 @@ export const command = Command.make(
     ),
     concurrency: positive("concurrency").pipe(
       Flag.optional,
-      Flag.withDescription("Concurrent measured Objects (quick/full: 12); turns stay sequential"),
+      Flag.withDescription(
+        "Concurrent measured Objects (quick/full: 12, minimum 2); pairs stay together",
+      ),
     ),
     buildConcurrency: positive("build-concurrency").pipe(
       Flag.optional,
@@ -210,6 +212,11 @@ export const command = Command.make(
       });
 
     const concurrency = Option.getOrElse(flags.concurrency, () => (flags.buildHistory ? 6 : 12));
+
+    if (!flags.buildHistory && concurrency < 2)
+      return yield* BenchError.make({
+        message: "Paired comparison requires concurrency of at least 2.",
+      });
 
     const buildConcurrency = Option.getOrElse(flags.buildConcurrency, () =>
       flags.buildHistory
