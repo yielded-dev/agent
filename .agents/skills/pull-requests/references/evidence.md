@@ -22,6 +22,18 @@ Use the repository's existing media publisher when available. Otherwise inspect
 that capability when authenticated access allows it. Do not assume a particular
 publisher script exists in every consumer repository.
 
-Use the returned link or Markdown in the PR. Keep originals until publication succeeds;
-if it fails, report the exact local path. Never extract browser cookies, expose
-credentials in arguments, create asset branches, or invent an upload service.
+For a supported GitHub CLI attachment workflow, pass `--attach` when creating
+or editing the PR. A local Markdown image path in the body places the matching
+attachment inline; use the same path in the attachment argument:
+
+```sh
+gh pr create --title "fix: describe the change" --body-file /tmp/pr-body.md --attach './screenshot.png#What this shows'
+gh pr edit <number> --attach ./interaction.mp4
+```
+
+Use the returned link or Markdown in the PR. Keep originals until publication
+succeeds. An attachment failure can still leave a created or updated PR with
+successful uploads; inspect the current PR before retrying only the missing
+files. Report unpublished files by their exact local paths. Never extract browser
+cookies, expose credentials in arguments, create asset branches, or invent an
+upload service.
