@@ -640,8 +640,9 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       Effect.mapError((cause) => failure("encode work entry", cause)),
     );
 
-    if (new TextEncoder().encode(encoded).byteLength > MAX_WORK_ENTRY_BYTES)
-      return yield* failure("work entry byte bound");
+    // The ordinary fold may retain a smaller origin from an existing entry.
+    // Leave admission and its byte bound to that fold when this plan cannot fit.
+    if (new TextEncoder().encode(encoded).byteLength > MAX_WORK_ENTRY_BYTES) return undefined;
 
     const pointers: Array<Statement<object>> = [];
 
