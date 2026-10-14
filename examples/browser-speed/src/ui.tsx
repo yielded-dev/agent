@@ -11,17 +11,19 @@ import {
   KeyRound,
   LogIn,
   Play,
+  Send,
+  MessageSquare,
   Square,
   UserRound,
   X,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   ArticleTitle,
   BrowserEngine,
   defaultChallenge,
-  defaultShopItem,
+  coffeeDemo,
   ModelId,
   modelChoices,
   requiresReasoning,
@@ -29,11 +31,6 @@ import {
   supportsUltrafast,
   racePrompt,
   Reasoning,
-  scenarios,
-  ShopRequest,
-  shopPrompt,
-  shopTask,
-  storeTask,
   ServiceTier,
   StartUrl,
   type Phase,
@@ -42,6 +39,10 @@ import {
 } from "./contract.ts";
 import {
   accountAtom,
+  chatDraftAtom,
+  chatIdAtom,
+  chatTurnsAtom,
+  sendChatAtom,
   cohort,
   comparisons,
   controlAtom,
@@ -67,7 +68,7 @@ import {
 
 const hostOf = (url: string) => {
   try {
-    return new URL(url).host;
+    return new URL(url).host || url;
   } catch {
     return url;
   }
@@ -89,17 +90,14 @@ const phaseNames: Record<Phase, string> = {
   cleanup: "Cleanup",
 };
 
-const tasks: ReadonlyArray<{ id: Scenario; title: string; detail: string }> = [
+const modes: ReadonlyArray<{ id: Scenario; title: string; detail: string }> = [
   {
-    id: "wikipedia",
-    title: "Wikipedia race",
-    detail: "Find a route between two articles",
+    id: "chat",
+    title: "Chat with the agent",
+    detail: "Any website. Your instructions. Keep the conversation going.",
   },
-  { id: "browse", title: "Browse a website", detail: "Your URL and goal · open-ended" },
-  ...scenarios.map(({ id, title, detail }) => ({ id, title, detail })),
-  { id: storeTask.id, title: storeTask.title, detail: storeTask.detail },
-  shopTask,
-  { id: "custom", title: "Your own task", detail: "Free-form on the task board · not verified" },
+  { id: "wikipedia", title: "Wikipedia race", detail: "Find a route between two articles" },
+  coffeeDemo,
 ];
 
 const keyLinks = {
@@ -263,14 +261,19 @@ const KeyField = ({
 );
 
 export const App = () => {
-  const [scenario, setScenario] = useState<Scenario>("wikipedia");
+  const [scenario, setScenario] = useState<Scenario>("chat");
   const [wikiStart, setWikiStart] = useState(defaultChallenge.start);
   const [wikiTarget, setWikiTarget] = useState(defaultChallenge.target);
-  const [prompt, setPrompt] = useState("");
-  const [url, setUrl] = useState("https://example.com");
-  const [goal, setGoal] = useState("Read the page and tell me what it is for.");
-  const [shopUrl, setShopUrl] = useState("");
-  const [shopItem, setShopItem] = useState(defaultShopItem);
+  const [url, setUrl] = useState("");
+  const [draftMessage, setDraftMessage] = useAtom(chatDraftAtom);
+  const chatId = useAtomValue(chatIdAtom);
+  const chatTurns = useAtomValue(chatTurnsAtom);
+  const transcript = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    transcript.current?.scrollTo({ top: transcript.current.scrollHeight });
+  }, [chatTurns]);
+  const [chatResult, sendChat] = useAtom(sendChatAtom);
   const [model, setModel] = useState<ModelId | "all">("gpt-6-luna");
   const [engine, setEngine] = useState<typeof BrowserEngine.Type | "all">("chromium");
   const [reasoning, setReasoning] = useState<typeof Reasoning.Type>("none");
@@ -292,7 +295,12 @@ export const App = () => {
   const download = useAtomSet(exportAtom);
   const remote = AsyncResult.isSuccess(snapshot) ? snapshot.value : null;
   const selectedSample = history.find(({ report }) => report.input.id === selected);
-  const report = selectedSample?.report ?? remote?.report ?? history.at(-1)?.report ?? null;
+  const latestReport = remote?.report ?? history.at(-1)?.report ?? null;
+
+  const report =
+    selectedSample?.report ??
+    (scenario === "chat" && latestReport?.input.id !== chatTurns.at(-1)?.id ? null : latestReport);
+
   const displayedScenario = report?.input.scenario ?? scenario;
   const busy = watching || remote?.busy === true;
   const connected = remote !== null;
@@ -300,12 +308,17 @@ export const App = () => {
   const accountResult = useAtomValue(accountAtom);
   const account = AsyncResult.isSuccess(accountResult) ? accountResult.value : null;
   const funded = account?.funded === true;
-  const failure = errorMessage(run) ?? errorMessage(control) ?? errorMessage(snapshot);
+
+  const failure =
+    (chatTurns.length ? errorMessage(chatResult) : null) ??
+    errorMessage(run) ??
+    errorMessage(control) ??
+    errorMessage(snapshot);
 
   const isWiki = scenario === "wikipedia";
-  const isStore = scenario === "coffee" || scenario === "shop";
-  const shop = { url: shopUrl.trim(), item: shopItem.trim() };
-  const validShop = Schema.is(ShopRequest)(shop);
+  const isChat = scenario === "chat";
+  const isStore = scenario === "coffee";
+  const chatEnded = chatTurns.length > 0 && chatId === null && !busy;
   const effectiveReasoning = reasoning === "none" && requiresReasoning(model) ? "low" : reasoning;
 
   const effectiveServiceTier =
@@ -313,15 +326,9 @@ export const App = () => {
 
   const effectivePrompt = isWiki
     ? racePrompt({ start: wikiStart.trim(), target: wikiTarget.trim() })
-    : scenario === "browse"
-      ? goal
-      : scenario === "custom"
-        ? prompt
-        : scenario === "shop"
-          ? shopPrompt(shop)
-          : isStore
-            ? storeTask.prompt
-            : (scenarios.find((preset) => preset.id === scenario)?.prompt ?? "");
+    : isChat
+      ? draftMessage
+      : coffeeDemo.prompt;
 
   const validChallenge =
     Schema.is(ArticleTitle)(wikiStart.trim()) &&
@@ -355,17 +362,19 @@ export const App = () => {
     },
   ];
 
+  const missingNeeds = needs.filter((need) => !need.ok);
+
   const canRun =
     connected &&
     remote.browserConfigured &&
     !busy &&
     !control.waiting &&
     (!isWiki || validChallenge) &&
-    (scenario !== "shop" || validShop) &&
-    (scenario !== "browse" || Schema.is(StartUrl)(url.trim())) &&
+    (!isChat ||
+      (!chatEnded && (!url.trim() || chatId !== null || Schema.is(StartUrl)(url.trim())))) &&
     effectivePrompt.trim().length > 0 &&
-    effectivePrompt.length <= 2000 &&
-    needs.every((need) => need.ok);
+    effectivePrompt.length <= 8000 &&
+    missingNeeds.length === 0;
 
   const matches = report ? cohort(history, report) : [];
   const comparison = report ? comparisons(history, report) : [];
@@ -382,10 +391,9 @@ export const App = () => {
     !selected && busy && (Predicate.isNullish(remote?.report?.readyAt) || !remote?.busy);
 
   const showingActive = !selected && busy;
-  const live = !selected && remote?.liveViewUrl;
-  const captured = !selected && remote?.image;
+  const live = !selected && report !== null && remote?.liveViewUrl;
+  const captured = !selected && report !== null && remote?.image;
   const lastHop = report?.race?.path.at(-1);
-  const shopAddress = report?.input.shop?.url ?? (scenario === "shop" ? shop.url : "");
 
   const flow = preparing
     ? null
@@ -405,8 +413,6 @@ export const App = () => {
       scenario,
       prompt: effectivePrompt,
       ...(isWiki ? { wikipedia: { start: wikiStart.trim(), target: wikiTarget.trim() } } : {}),
-      ...(scenario === "shop" ? { shop } : {}),
-      ...(scenario === "browse" ? { url: url.trim() } : {}),
       screenshots,
       liveView: liveView && engine === "chromium",
       repetitions,
@@ -417,6 +423,18 @@ export const App = () => {
       ...(model === "all"
         ? { compareModels: availableModels.map((choice) => choice.id) }
         : { model }),
+    });
+
+  const submitChat = () =>
+    sendChat({
+      ...(chatId === null && url.trim() ? { url: url.trim() } : {}),
+      screenshots,
+      liveView,
+      engine: "chromium",
+      model: model === "all" ? "gpt-6-luna" : model,
+      ...(!model.startsWith("@cf/")
+        ? { reasoning: effectiveReasoning, serviceTier: effectiveServiceTier }
+        : {}),
     });
 
   const keyCount = validKey(keys.openai) ? 1 : 0;
@@ -470,28 +488,34 @@ export const App = () => {
         <p className="kicker mono">Code Mode · live in a Cloudflare browser</p>
         <h1>Watch an agent drive a real browser.</h1>
         <p className="lede">
-          Race across Wikipedia, work through a task board, or give the agent a website and a goal.
-          Watch it write browser code and compare models, settings, and every step along the way.
+          Give it a goal, ask a question, then follow up. Watch the browser as it works, or try a
+          Wikipedia race and a coffee checkout demo.
         </p>
       </section>
 
       <main className="stage">
         <aside className="controls" aria-label="Run setup">
           <fieldset className="group">
-            <legend>Task</legend>
-            <div className="task-list">
-              {tasks.map((task) => (
-                <label key={task.id} className={`task ${scenario === task.id ? "selected" : ""}`}>
+            <legend>Try it</legend>
+            <div className="mode-list">
+              {modes.map((mode) => (
+                <label key={mode.id} className={`mode ${scenario === mode.id ? "selected" : ""}`}>
                   <input
                     type="radio"
-                    name="task"
-                    value={task.id}
-                    checked={scenario === task.id}
+                    name="mode"
+                    value={mode.id}
+                    checked={scenario === mode.id}
                     disabled={busy}
-                    onChange={() => setScenario(task.id)}
+                    onChange={() => {
+                      setScenario(mode.id);
+                      if (mode.id === "chat") {
+                        setEngine("chromium");
+                        if (model === "all") setModel("gpt-6-luna");
+                      }
+                    }}
                   />
-                  <span className="task-title">{task.title}</span>
-                  <span className="task-detail">{task.detail}</span>
+                  <span className="mode-title">{mode.title}</span>
+                  <span className="mode-detail">{mode.detail}</span>
                 </label>
               ))}
             </div>
@@ -519,62 +543,22 @@ export const App = () => {
                   />
                 </label>
               </div>
-            ) : scenario === "browse" ? (
+            ) : isChat ? (
               <div className="browse-inputs">
                 <label>
-                  <span>Starting URL</span>
+                  <span>
+                    Starting URL <small>optional</small>
+                  </span>
                   <input
                     type="url"
                     value={url}
-                    disabled={busy}
+                    disabled={busy || chatTurns.length > 0}
                     maxLength={2000}
+                    placeholder="Let the agent choose, or paste a URL"
                     onChange={(event) => setUrl(event.target.value)}
                   />
                 </label>
-                <label>
-                  <span>Your goal</span>
-                  <textarea
-                    className="prompt"
-                    value={goal}
-                    disabled={busy}
-                    maxLength={2000}
-                    onChange={(event) => setGoal(event.target.value)}
-                  />
-                </label>
               </div>
-            ) : scenario === "shop" ? (
-              <div className="shop-inputs">
-                <label>
-                  <span>Store link</span>
-                  <input
-                    value={shopUrl}
-                    disabled={busy}
-                    maxLength={500}
-                    inputMode="url"
-                    placeholder="https://store.example/"
-                    onChange={(event) => setShopUrl(event.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>Item</span>
-                  <input
-                    value={shopItem}
-                    disabled={busy}
-                    maxLength={120}
-                    onChange={(event) => setShopItem(event.target.value)}
-                  />
-                </label>
-              </div>
-            ) : scenario === "custom" ? (
-              <textarea
-                className="prompt"
-                aria-label="Your task"
-                placeholder="Describe a change to the task board, for example: Mark every task assigned to Jordan as Done."
-                value={prompt}
-                disabled={busy}
-                maxLength={2000}
-                onChange={(event) => setPrompt(event.target.value)}
-              />
             ) : (
               <p className="prompt-preview">{effectivePrompt}</p>
             )}
@@ -585,22 +569,17 @@ export const App = () => {
               ? "The host verifies arrival and records page navigations. Link-only racing rules are not enforced."
               : isStore
                 ? "The agent is instructed to stop before payment. There is no hard payment guard; real purchases are possible."
-                : scenario === "browse"
-                  ? "The agent can take real actions on this website. Results are agent-reported, not independently verified."
-                  : scenario === "custom"
-                    ? "Custom task outcomes are not independently verified."
-                    : "The host compares the saved board with the preset. Page code can modify the fixture; this is not tamper-resistant proof."}
+                : "The agent can take real actions on websites. Results are agent-reported. Chat keeps the same Chromium browser between messages."}
           </p>
 
-          {needs.length > 0 && (
+          {missingNeeds.length > 0 && (
             <div className="needs">
               <span>Needs</span>
-              {needs.map((need) => (
-                <span key={need.label} className={need.ok ? "ok" : "missing"}>
-                  {need.ok ? <Check size={13} /> : <X size={13} />} {need.label}
+              {missingNeeds.map((need) => (
+                <span key={need.label} className="missing">
+                  <X size={13} /> {need.label}
                 </span>
               ))}
-              {funded && <small className="needs-note">lab keys</small>}
               {needsAccount && !funded ? (
                 account === null ? (
                   <a className="link-button" href={signInUrl}>
@@ -610,11 +589,9 @@ export const App = () => {
                   <small className="needs-note">this account isn’t allowlisted</small>
                 )
               ) : (
-                needs.some((need) => !need.ok) && (
-                  <button className="link-button" onClick={openKeys}>
-                    Add keys
-                  </button>
-                )
+                <button className="link-button" onClick={openKeys}>
+                  Add keys
+                </button>
               )}
             </div>
           )}
@@ -629,19 +606,22 @@ export const App = () => {
                 <Square size={13} fill="currentColor" /> Stop run
                 {progress.total > 1 ? ` · ${progress.current}/${progress.total}` : ""}
               </button>
-            ) : (
+            ) : !isChat ? (
               <button className="primary" disabled={!canRun} onClick={startRun}>
-                <Play size={15} fill="currentColor" /> {isWiki ? "Start race" : "Run task"}
+                <Play size={15} fill="currentColor" /> {isWiki ? "Start race" : "Start demo"}
               </button>
-            )}
+            ) : null}
             <button
               className="ghost"
-              disabled={!remote?.canClose || control.waiting}
+              disabled={busy || (!remote?.canClose && !chatTurns.length) || control.waiting}
               onClick={() => act("close")}
             >
-              Close browser
+              {isChat ? "New chat" : "Close browser"}
             </button>
           </div>
+          <p className="fine budget-note">
+            120 model turns · 300 tool calls · 10 minutes per {isChat ? "message" : "run"}
+          </p>
 
           <details className="settings">
             <summary>
@@ -662,8 +642,12 @@ export const App = () => {
                   }
                 >
                   <option value="chromium">Chromium</option>
-                  <option value="kitesurf">Kitesurf · experimental</option>
-                  <option value="all">Compare both</option>
+                  <option value="kitesurf" disabled={isChat}>
+                    Kitesurf · experimental
+                  </option>
+                  <option value="all" disabled={isChat}>
+                    Compare both
+                  </option>
                 </select>
               </label>
               <>
@@ -689,7 +673,7 @@ export const App = () => {
                         {choice.label}
                       </option>
                     ))}
-                    <option value="all" disabled={availableModels.length < 2}>
+                    <option value="all" disabled={isChat || availableModels.length < 2}>
                       Compare available models
                     </option>
                   </select>
@@ -735,8 +719,8 @@ export const App = () => {
               <label>
                 <span>Repetitions</span>
                 <select
-                  value={repetitions}
-                  disabled={busy}
+                  value={isChat ? 1 : repetitions}
+                  disabled={busy || isChat}
                   onChange={(event) => setRepetitions(Number(event.target.value))}
                 >
                   <option value={1}>1 run</option>
@@ -773,15 +757,100 @@ export const App = () => {
             </div>
             {engine !== "chromium" && (
               <p className="fine">
-                Kitesurf is Cloudflare’s experimental lightweight engine. It has no live view, no
-                native dialogs (the task board needs them), and large pages such as Wikipedia can
-                exhaust its memory. Comparing browsers disables live view for both.
+                Kitesurf is Cloudflare’s experimental lightweight engine. It has no live view, and
+                large pages such as Wikipedia can exhaust its memory. Comparing browsers disables
+                live view for both.
               </p>
             )}
           </details>
         </aside>
 
         <section className="viewer" aria-label="Browser">
+          {isChat && (
+            <section className="chat-panel card" aria-label="Chat">
+              <div className="chat-heading">
+                <MessageSquare size={17} /> <h2>Chat with the agent</h2>
+                <span className="mono">{chatId ? "Browser connected" : "Open-ended browsing"}</span>
+              </div>
+              <div
+                className="chat-transcript"
+                ref={transcript}
+                role="log"
+                aria-label="Conversation"
+                aria-live="polite"
+              >
+                {chatTurns.length === 0 ? (
+                  <div className="chat-empty">
+                    <p>What would you like to explore?</p>
+                    <span>
+                      Ask it to research, compare, or work through a website. You can refine the
+                      goal as you go.
+                    </span>
+                  </div>
+                ) : (
+                  chatTurns.map((turn) => (
+                    <div className="chat-turn" key={turn.id}>
+                      <div className="chat-message from-user">
+                        <b>You</b>
+                        <p>{turn.prompt}</p>
+                      </div>
+                      <div className="chat-message from-agent">
+                        <b>Agent</b>
+                        <p>
+                          {turn.response ??
+                            (remote?.busy ? remote.report?.message : null) ??
+                            "Connecting to the agent…"}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <form
+                className="chat-composer"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (canRun) submitChat();
+                }}
+              >
+                <label className="sr-only" htmlFor="chat-message">
+                  Message the agent
+                </label>
+                <textarea
+                  id="chat-message"
+                  value={draftMessage}
+                  placeholder={
+                    chatEnded ? "Start a new chat to continue" : "Ask the agent to do something…"
+                  }
+                  maxLength={8000}
+                  rows={3}
+                  onChange={(event) => setDraftMessage(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "Enter" &&
+                      !event.shiftKey &&
+                      !event.nativeEvent.isComposing
+                    ) {
+                      event.preventDefault();
+                      if (canRun) event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
+                />
+                <div className="composer-actions">
+                  <span>
+                    {chatEnded
+                      ? "This chat ended. Choose New chat to start again."
+                      : busy
+                        ? "Working in the browser. You can draft your next message."
+                        : "Enter to send · Shift+Enter for a new line"}
+                  </span>
+                  <button className="primary" type="submit" disabled={!canRun}>
+                    <Send size={15} /> Send
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
           <div className="hud">
             <div className="clock">
               <span
@@ -838,13 +907,9 @@ export const App = () => {
               <span className="address mono">
                 {displayedScenario === "wikipedia" || report?.race
                   ? (lastHop?.url.replace("https://", "") ?? "en.wikipedia.org")
-                  : displayedScenario === "browse"
-                    ? hostOf(report?.finalUrl ?? report?.input.url ?? url)
-                    : shopAddress
-                      ? hostOf(shopAddress)
-                      : displayedScenario === "coffee"
-                        ? "www.hedge.coffee"
-                        : "task-board · synthetic data"}
+                  : displayedScenario === "chat"
+                    ? hostOf(report?.finalUrl ?? report?.input.url ?? (url || "about:blank"))
+                    : "www.hedge.coffee"}
               </span>
               <span className={`view-label mono ${live ? "live" : ""}`}>
                 {live
@@ -879,9 +944,7 @@ export const App = () => {
                           ? `A Cloudflare browser opens ${wikiStart || "the start article"} on Wikipedia and tries to reach ${wikiTarget || "the destination"}. Arrival is verified; link-only racing rules are not enforced.`
                           : isStore
                             ? "The agent opens the store, finds the item and prepares checkout. It is instructed to stop before payment, but there is no hard payment guard. Results are agent-reported."
-                            : scenario === "browse"
-                              ? "A Cloudflare browser opens your URL and works toward your goal using Code Mode."
-                              : "A Cloudflare browser opens a small task board. Preset runs compare the saved board with the requested result."}
+                            : "Send a message below. The agent can choose a website, explore, and answer your questions. Follow up in the same browser."}
                   </p>
                 </div>
               )}
@@ -942,209 +1005,190 @@ export const App = () => {
         </section>
       </main>
 
-      {report && (
-        <section className="section" aria-label="Run details">
-          <div className="stats">
-            <div>
-              <span>Total elapsed</span>
-              <b className="mono">{seconds(report.elapsed)} s</b>
-            </div>
-            <div>
-              <span>Page preparation</span>
-              <b className="mono">{seconds(report.readyAt)} s</b>
-            </div>
-            <div>
-              <span>First action after ready</span>
-              <b className="mono">{seconds(fromReady(report, report.firstActionAt))} s</b>
-            </div>
-            <div>
-              <span>Cleanup</span>
-              <b className="mono">{report.cleanup}</b>
-            </div>
-          </div>
-          {selectedSample && (
-            <p className="fine">
-              Client round trip: {seconds(selectedSample.clientElapsedMillis)} s
-            </p>
-          )}
-          {report.board.length > 0 && (
-            <details className="card board-result">
-              <summary>Saved task board · {report.board.length} tasks</summary>
-              <div className="table-wrap">
-                <table aria-label="Saved task board">
-                  <thead>
-                    <tr>
-                      <th>Task</th>
-                      <th>Assignee</th>
-                      <th>Priority</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.board.map((task) => (
-                      <tr key={task.id}>
-                        <td>{task.title}</td>
-                        <td>{task.assignee}</td>
-                        <td>{task.priority}</td>
-                        <td>{task.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </details>
-          )}
-        </section>
-      )}
-      <Steps key={report?.input.id ?? "empty"} report={report} />
-
-      <section className="section" aria-labelledby="compare-title">
-        <div className="section-head">
-          <h2 id="compare-title">Compare runs</h2>
-          <p>
-            Runs in this tab, grouped by task and settings. Medians use verified runs only; failures
-            count toward the started total. Wikipedia verification confirms arrival only. Website
-            outcomes are agent-reported; their history is retained without verified-time rankings.
-            {typeof benchmarkReportUrl === "string" && benchmarkReportUrl.length > 0 && (
-              <>
-                {" "}
-                <a href={benchmarkReportUrl}>Published comparison</a>
-              </>
-            )}
-          </p>
-          <button className="ghost small" disabled={!history.length} onClick={() => download()}>
-            <Download size={14} /> Export JSON
-          </button>
-        </div>
-        {history.length ? (
-          <>
+      <details className="run-inspector">
+        <summary>Run details and comparisons</summary>
+        {report && (
+          <section className="section" aria-label="Run details">
             <div className="stats">
               <div>
-                <span>Verified</span>
-                <b className="mono">
-                  {verified.length}/{started}
-                </b>
+                <span>Total elapsed</span>
+                <b className="mono">{seconds(report.elapsed)} s</b>
               </div>
               <div>
-                <span>Median</span>
-                <b className="mono">{seconds(percentile(verified, 0.5))} s</b>
+                <span>Page preparation</span>
+                <b className="mono">{seconds(report.readyAt)} s</b>
               </div>
               <div>
-                <span>p95</span>
-                <b className="mono">
-                  {verified.length >= 20 ? `${seconds(percentile(verified, 0.95))} s` : "—"}
-                </b>
-                {verified.length < 20 && <small>after 20 verified runs</small>}
+                <span>First action after ready</span>
+                <b className="mono">{seconds(fromReady(report, report.firstActionAt))} s</b>
               </div>
               <div>
-                <span>Preparation failures</span>
-                <b className="mono">
-                  {
-                    matches.filter(
-                      ({ report }) => !flowStarted(report) && report.status !== "running",
-                    ).length
-                  }
-                </b>
+                <span>Cleanup</span>
+                <b className="mono">{report.cleanup}</b>
               </div>
             </div>
-            {comparison.length > 1 && (
+            {selectedSample && (
+              <p className="fine">
+                Client round trip: {seconds(selectedSample.clientElapsedMillis)} s
+              </p>
+            )}
+          </section>
+        )}
+        <Steps key={report?.input.id ?? "empty"} report={report} />
+
+        <section className="section" aria-labelledby="compare-title">
+          <div className="section-head">
+            <h2 id="compare-title">Compare runs</h2>
+            <p>
+              Runs in this tab, grouped by goal and settings. Medians use verified runs only;
+              failures count toward the started total. Wikipedia verification confirms arrival only.
+              Website outcomes are agent-reported; their history is retained without verified-time
+              rankings.
+              {typeof benchmarkReportUrl === "string" && benchmarkReportUrl.length > 0 && (
+                <>
+                  {" "}
+                  <a href={benchmarkReportUrl}>Published comparison</a>
+                </>
+              )}
+            </p>
+            <button className="ghost small" disabled={!history.length} onClick={() => download()}>
+              <Download size={14} /> Export JSON
+            </button>
+          </div>
+          {history.length ? (
+            <>
+              <div className="stats">
+                <div>
+                  <span>Verified</span>
+                  <b className="mono">
+                    {verified.length}/{started}
+                  </b>
+                </div>
+                <div>
+                  <span>Median</span>
+                  <b className="mono">{seconds(percentile(verified, 0.5))} s</b>
+                </div>
+                <div>
+                  <span>p95</span>
+                  <b className="mono">
+                    {verified.length >= 20 ? `${seconds(percentile(verified, 0.95))} s` : "—"}
+                  </b>
+                  {verified.length < 20 && <small>after 20 verified runs</small>}
+                </div>
+                <div>
+                  <span>Preparation failures</span>
+                  <b className="mono">
+                    {
+                      matches.filter(
+                        ({ report }) => !flowStarted(report) && report.status !== "running",
+                      ).length
+                    }
+                  </b>
+                </div>
+              </div>
+              {comparison.length > 1 && (
+                <div className="table-wrap card">
+                  <table aria-label="Comparison">
+                    <thead>
+                      <tr>
+                        <th>Model</th>
+                        <th>Browser</th>
+                        <th>Reasoning</th>
+                        <th>Tier asked / served</th>
+                        <th className="num">Verified</th>
+                        <th className="num">Median</th>
+                        {report?.race && <th className="num">Hops</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comparison.map((group) => (
+                        <tr key={group.key}>
+                          <td>
+                            {modelChoices.find((value) => value.id === group.model)?.label ??
+                              group.model}
+                          </td>
+                          <td>{group.engine === "kitesurf" ? "Kitesurf" : "Chromium"}</td>
+                          <td>{group.reasoning}</td>
+                          <td>
+                            {group.serviceTier} / {group.servedTier}
+                          </td>
+                          <td className="num mono">
+                            {group.passed}/{group.started}
+                          </td>
+                          <td className="num mono">{seconds(group.median)} s</td>
+                          {report?.race && <td className="num mono">{group.hops ?? "—"}</td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               <div className="table-wrap card">
-                <table aria-label="Comparison">
+                <table aria-label="Run history">
                   <thead>
                     <tr>
+                      <th>Goal</th>
                       <th>Model</th>
                       <th>Browser</th>
-                      <th>Reasoning</th>
-                      <th>Tier asked / served</th>
-                      <th className="num">Verified</th>
-                      <th className="num">Median</th>
-                      {report?.race && <th className="num">Hops</th>}
+                      <th className="num">Work time</th>
+                      <th>Outcome</th>
+                      <th>
+                        <span className="sr-only">Inspect</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {comparison.map((group) => (
-                      <tr key={group.key}>
-                        <td>
-                          {modelChoices.find((value) => value.id === group.model)?.label ??
-                            group.model}
+                    {[...history].reverse().map(({ report: row }) => (
+                      <tr
+                        key={row.input.id}
+                        className={selected === row.input.id ? "selected" : ""}
+                      >
+                        <td title={row.input.prompt}>
+                          {row.input.scenario === "wikipedia"
+                            ? `${row.race?.start ?? row.input.wikipedia?.start ?? defaultChallenge.start} → ${row.race?.target ?? row.input.wikipedia?.target ?? defaultChallenge.target}${row.race ? ` · ${Math.max(0, row.race.path.length - 1)} hops` : ""}`
+                            : row.input.scenario === "chat"
+                              ? row.input.prompt
+                              : coffeeDemo.title}
                         </td>
-                        <td>{group.engine === "kitesurf" ? "Kitesurf" : "Chromium"}</td>
-                        <td>{group.reasoning}</td>
                         <td>
-                          {group.serviceTier} / {group.servedTier}
+                          {modelChoices.find((value) => value.id === row.model)?.label ?? row.model}
                         </td>
+                        <td>{row.input.engine === "kitesurf" ? "Kitesurf" : "Chromium"}</td>
                         <td className="num mono">
-                          {group.passed}/{group.started}
+                          {seconds(
+                            verifiedMillis(row) ?? fromReady(row, row.finishedAt ?? row.elapsed),
+                          )}{" "}
+                          s
                         </td>
-                        <td className="num mono">{seconds(group.median)} s</td>
-                        {report?.race && <td className="num mono">{group.hops ?? "—"}</td>}
+                        <td>
+                          <span className={`outcome ${row.status}`}>
+                            {row.race && row.status === "passed"
+                              ? "arrival verified"
+                              : runOutcome(row)}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            className="icon"
+                            aria-label={
+                              selected === row.input.id ? "Show latest run" : "Inspect run"
+                            }
+                            onClick={() => select(selected === row.input.id ? null : row.input.id)}
+                          >
+                            <ArrowUpRight size={15} />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            )}
-            <div className="table-wrap card">
-              <table aria-label="Run history">
-                <thead>
-                  <tr>
-                    <th>Task</th>
-                    <th>Model</th>
-                    <th>Browser</th>
-                    <th className="num">Work time</th>
-                    <th>Outcome</th>
-                    <th>
-                      <span className="sr-only">Inspect</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...history].reverse().map(({ report: row }) => (
-                    <tr key={row.input.id} className={selected === row.input.id ? "selected" : ""}>
-                      <td>
-                        {row.input.scenario === "wikipedia"
-                          ? `${row.race?.start ?? row.input.wikipedia?.start ?? defaultChallenge.start} → ${row.race?.target ?? row.input.wikipedia?.target ?? defaultChallenge.target}${row.race ? ` · ${Math.max(0, row.race.path.length - 1)} hops` : ""}`
-                          : row.input.scenario === "browse"
-                            ? hostOf(row.input.url ?? "Website")
-                            : (tasks.find((value) => value.id === row.input.scenario)?.title ??
-                              "Your own task")}
-                      </td>
-                      <td>
-                        {modelChoices.find((value) => value.id === row.model)?.label ?? row.model}
-                      </td>
-                      <td>{row.input.engine === "kitesurf" ? "Kitesurf" : "Chromium"}</td>
-                      <td className="num mono">
-                        {seconds(
-                          verifiedMillis(row) ?? fromReady(row, row.finishedAt ?? row.elapsed),
-                        )}{" "}
-                        s
-                      </td>
-                      <td>
-                        <span className={`outcome ${row.status}`}>
-                          {row.race && row.status === "passed"
-                            ? "arrival verified"
-                            : runOutcome(row)}
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          className="icon"
-                          aria-label={selected === row.input.id ? "Show latest run" : "Inspect run"}
-                          onClick={() => select(selected === row.input.id ? null : row.input.id)}
-                        >
-                          <ArrowUpRight size={15} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        ) : (
-          <div className="empty">No runs yet. Your results appear here, side by side.</div>
-        )}
-      </section>
+            </>
+          ) : (
+            <div className="empty">No runs yet. Your results appear here, side by side.</div>
+          )}
+        </section>
+      </details>
 
       <footer className="foot">
         <span>

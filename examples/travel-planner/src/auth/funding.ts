@@ -7,6 +7,8 @@ import { AccountId } from "./account";
 // GitHub's immutable ID for danieljvdm; neither display names nor registration order grant admin.
 export const fundingAdminGithubId = "3450486";
 const issuer = "https://github.com/login/oauth";
+// The hosted Yielded issuer provisions this stable owner for the same GitHub administrator.
+const yieldedOwner = { issuer: "https://auth.yielded.dev", subject: "settings-owner" } as const;
 
 const unavailable = () =>
   FundingError.make({ message: "Funding access is unavailable. Refresh before retrying." });
@@ -29,6 +31,10 @@ const Identity = Schema.Struct({
 });
 
 const Values = Schema.Array(Schema.Struct({ value: Schema.String }));
+
+const OAuthIdentities = Schema.Array(
+  Schema.Struct({ provider: Schema.String, issuer: Schema.String, subject: Schema.String }),
+);
 
 const Grants = Schema.Array(
   Schema.Struct({
@@ -121,19 +127,34 @@ export const makeFundingStore = Effect.fn("Funding.store")(function* (
       ).map((row) => row.value.toLowerCase()),
     );
 
-    const githubIds = yield* read(() =>
-      Schema.decodeUnknownSync(Values)(
+    const oauthIdentities = yield* read(() =>
+      Schema.decodeUnknownSync(OAuthIdentities)(
         storage.sql
           .exec(
-            `select t.externalSubject as value from auth_oauth_identity t join auth_oauth_credential o on o.identityKey = t.identityKey and o.subjectId = t.subjectId join auth_credential c on c.subjectId = o.subjectId and c.credentialId = o.credentialId where t.subjectId = ? and t.provider = 'github' and t.issuer = ? and o.active = 1 and c.active = 1 and c.revision = o.revision`,
+            `select t.provider, t.issuer, t.externalSubject as subject from auth_oauth_identity t join auth_oauth_credential o on o.identityKey = t.identityKey and o.subjectId = t.subjectId join auth_credential c on c.subjectId = o.subjectId and c.credentialId = o.credentialId where t.subjectId = ? and o.active = 1 and c.active = 1 and c.revision = o.revision`,
             subjectId,
-            issuer,
           )
           .toArray(),
-      ).map((row) => row.value),
+      ),
     );
 
-    return { ...subject, emails, githubIds, admin: githubIds.includes(fundingAdminGithubId) };
+    const githubIds = oauthIdentities
+      .filter((identity) => identity.provider === "github" && identity.issuer === issuer)
+      .map((identity) => identity.subject);
+
+    return {
+      ...subject,
+      emails,
+      githubIds,
+      admin:
+        githubIds.includes(fundingAdminGithubId) ||
+        oauthIdentities.some(
+          (identity) =>
+            identity.provider === "yielded" &&
+            identity.issuer === yieldedOwner.issuer &&
+            identity.subject === yieldedOwner.subject,
+        ),
+    };
   });
 
   const grants = Effect.gen(function* () {

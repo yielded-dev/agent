@@ -103,12 +103,12 @@ export class BrowserLab extends DurableObject<Env> {
         Schema.fromJsonString(Schema.Struct({ version: Schema.Int })),
       )(row.value).version;
 
-      if (version === 1) {
+      if (version === 1 || version === 2) {
         const previous = Schema.decodeSync(
           Schema.fromJsonString(
             Schema.Struct({
               ...Control.fields,
-              version: Schema.Literal(1),
+              version: Schema.Literals([1, 2]),
               report: Schema.NullOr(Schema.Json),
             }),
           ),
@@ -118,7 +118,7 @@ export class BrowserLab extends DurableObject<Env> {
           "UPDATE browser_lab SET value=? WHERE id=1",
           Schema.encodeSync(codec)({
             ...previous,
-            version: 2,
+            version: 3,
             report: null,
           }),
         );
@@ -225,11 +225,7 @@ export class BrowserLab extends DurableObject<Env> {
               request.headers.get("origin") === new URL(request.url).origin &&
               (yield* (yield* PlannerAccounts).read(request))?.funded === true;
 
-            if (
-              this.env.LAB_PUBLIC === "true" &&
-              (payload.scenario === "coffee" || payload.scenario === "shop") &&
-              !funded
-            )
+            if (this.env.LAB_PUBLIC === "true" && payload.scenario === "coffee" && !funded)
               return yield* LabError.make({
                 code: "configuration",
                 message: "Store scenarios are available only to signed-in, funded accounts.",

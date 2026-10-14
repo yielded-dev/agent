@@ -10,7 +10,7 @@ import { Deferred, Effect, Exit, Fiber, Redacted, Schema } from "effect";
 import { TestClock } from "effect/testing";
 
 import type { Browser } from "../src/browser.ts";
-import { LabError, seed, verify, type RunInput } from "../src/contract.ts";
+import { LabError, type RunInput } from "../src/contract.ts";
 import type { connectKitesurf } from "../src/kitesurf.ts";
 import { emptyControl, makeOwner, Control } from "../src/owner.ts";
 import type { executeTask } from "../src/runner.ts";
@@ -33,7 +33,7 @@ expectTypeOf<
 
 const request = (): RunInput => ({
   id: crypto.randomUUID(),
-  scenario: "create",
+  scenario: "coffee",
   prompt: "",
   screenshots: false,
   liveView: false,
@@ -107,7 +107,7 @@ it.effect(
 
         yield* Deferred.await(started);
         if (outcome === "stop") yield* owner.stop();
-        if (outcome === "timeout") yield* TestClock.adjust("4 minutes");
+        if (outcome === "timeout") yield* TestClock.adjust("12 minutes");
         const report = yield* Fiber.join(run);
 
         assert.strictEqual(opened, outcome === "failure" ? 2 : 1);
@@ -182,7 +182,7 @@ it.effect(
 
             assert.strictEqual(concurrent._tag, "Failure");
             if (outcome === "stop") yield* owner.stop();
-            else yield* TestClock.adjust("4 minutes");
+            else yield* TestClock.adjust("12 minutes");
           }
           const report = yield* Fiber.join(fiber);
 
@@ -292,24 +292,6 @@ it.effect(
       }),
     ),
 );
-
-it("rejects extra writes, changed unrelated fields and agent-only success claims", () => {
-  const created = {
-    id: 5,
-    title: "Ship demo",
-    assignee: "Alex",
-    priority: "High",
-    status: "Todo",
-  } as const;
-
-  assert.isTrue(verify("create", [...seed, created]));
-  assert.isFalse(verify("create", [...seed, created, { ...created, id: 6 }]));
-  assert.isFalse(
-    verify("create", [...seed.map((task) => ({ ...task, priority: "High" as const })), created]),
-  );
-  assert.isFalse(verify("create", seed));
-  assert.isFalse(verify("browse", [...seed, created]));
-});
 
 it.effect(
   "accounts for every owner mutation failpoint and retires a recovered browser without replay",

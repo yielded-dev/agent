@@ -5,8 +5,7 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { Tool, Toolkit } from "effect/ai";
 import type { Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
-import { Board, LabError, defaultChallenge, isBoardScenario, type RunInput } from "./contract.ts";
-import { fixtureHtml } from "./fixture.ts";
+import { LabError, defaultChallenge, type RunInput } from "./contract.ts";
 import { Trace } from "./telemetry.ts";
 
 export const TaskResult = Schema.Struct({ message: Schema.String });
@@ -14,7 +13,7 @@ export const TaskResult = Schema.Struct({ message: Schema.String });
 export const completionTools = Toolkit.make(
   Tool.make("finish", {
     description:
-      "Finish with a concise account of what happened. The host checks Wikipedia arrival or the saved task-board preset and returns mismatches for correction. Other website results are not independently verified.",
+      "Reply to the user with what you found or did, or ask a question if you need more information. The host checks Wikipedia arrival. Other website results are not independently verified.",
     parameters: TaskResult,
     success: TaskResult,
     failure: LabError,
@@ -33,7 +32,7 @@ export const makeBrowser = Effect.fnUntraced(function* (
   // It is not a URL allowlist, a read-only browser or a payment prevention boundary.
   const controller = yield* NativeBrowser.make(session, {
     authorize: () => Effect.void,
-    maxCommands: 500,
+    maxCommands: 2_000,
     maxReturnedBytes: 256 * 1024,
   }).pipe(Effect.mapError((error) => LabError.make({ code: "browser", message: error.message })));
 
@@ -75,40 +74,22 @@ export const makeBrowser = Effect.fnUntraced(function* (
     capture,
     layer: Layer.succeed(BrowserUse.BrowserCdp, client),
     prepare: (input: RunInput) =>
-      input.scenario === "browse" && input.url === undefined
-        ? Effect.fail(LabError.make({ code: "invalid", message: "Browsing needs a starting URL." }))
-        : trace.measure(
-            "setup",
-            "Open starting page",
-            native(async (page) => {
-              await page.setViewport({ width: 1100, height: 740 });
-              await page.goto(
-                input.scenario === "browse"
-                  ? (input.url ?? "about:blank")
-                  : input.scenario === "wikipedia"
-                    ? `https://en.wikipedia.org/wiki/${encodeURIComponent((input.wikipedia ?? defaultChallenge).start.trim().replaceAll(" ", "_"))}`
-                    : input.scenario === "coffee"
-                      ? "https://www.hedge.coffee/store"
-                      : input.scenario === "shop"
-                        ? (input.shop?.url ?? "about:blank")
-                        : isBoardScenario(input.scenario)
-                          ? `data:text/html;charset=utf-8,${encodeURIComponent(fixtureHtml())}`
-                          : "about:blank",
-                { waitUntil: "domcontentloaded" },
-              );
-            }),
-          ),
-    readBoard: trace
-      .measure(
-        "verify",
-        "Read saved task board",
-        native((page) => page.$eval("#board-state", (element) => element.textContent ?? "")),
-      )
-      .pipe(
-        Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Board))),
-        Effect.mapError(() =>
-          LabError.make({ code: "browser", message: "Could not validate the task board." }),
-        ),
+      trace.measure(
+        "setup",
+        "Open starting page",
+        native(async (page) => {
+          await page.setViewport({ width: 1100, height: 740 });
+          await page.goto(
+            input.scenario === "chat"
+              ? (input.url ?? "about:blank")
+              : input.scenario === "wikipedia"
+                ? `https://en.wikipedia.org/wiki/${encodeURIComponent((input.wikipedia ?? defaultChallenge).start.trim().replaceAll(" ", "_"))}`
+                : input.scenario === "coffee"
+                  ? "https://www.hedge.coffee/store"
+                  : "about:blank",
+            { waitUntil: "domcontentloaded" },
+          );
+        }),
       ),
   };
 });

@@ -3,29 +3,9 @@ import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 
 export const BrowserEngine = PageCaptureEngine;
-export const browserCommandTimeoutMillis = 30_000;
+export const browserCommandTimeoutMillis = 60_000;
 
-export const Task = Schema.Struct({
-  id: Schema.Natural,
-  title: Schema.NonEmptyString.check(Schema.isMaxLength(120)),
-  assignee: Schema.Literals(["Alex", "Sam", "Jordan"]),
-  priority: Schema.Literals(["Low", "Medium", "High"]),
-  status: Schema.Literals(["Todo", "Doing", "Done"]),
-});
-
-export type Task = typeof Task.Type;
-export const Board = Schema.Array(Task).check(Schema.isMaxLength(50));
-
-export const Scenario = Schema.Literals([
-  "wikipedia",
-  "coffee",
-  "shop",
-  "create",
-  "triage",
-  "batch",
-  "custom",
-  "browse",
-]);
+export const Scenario = Schema.Literals(["chat", "wikipedia", "coffee"]);
 
 export type Scenario = typeof Scenario.Type;
 
@@ -57,35 +37,13 @@ export const WikiRace = Schema.Struct({
   ruleViolation: Schema.optionalKey(Schema.String),
 });
 
-export const ShopRequest = Schema.Struct({
-  url: Schema.String.check(
-    Schema.isMaxLength(500),
-    Schema.isPattern(/^https:\/\/[a-z0-9.-]+\.[a-z]{2,}(?:[/?#]\S*)?$/i),
-  ),
-  item: Schema.NonEmptyString.check(Schema.isMaxLength(120)),
-});
-
-export type ShopRequest = typeof ShopRequest.Type;
-export const defaultShopItem = "a bag of natural process coffee";
-
-export const shopPrompt = (shop: ShopRequest) =>
-  `On the store at ${shop.url}, find ${shop.item}, add one to the cart and open checkout as a guest. Fill the checkout with the test buyer. Leave marketing boxes unchecked. Stop before submitting an order or payment.`;
-
-export const storeTask = {
+export const coffeeDemo = {
   id: "coffee",
   title: "Check out a bag of coffee",
   detail: "Hedge Coffee · prepare checkout, stop before payment",
-  prompt: shopPrompt({ url: "https://www.hedge.coffee/store", item: "one bag of coffee" }),
+  prompt:
+    "On https://www.hedge.coffee/store, find one bag of coffee, add it to the cart and open checkout as a guest. Fill the checkout with the test buyer. Leave marketing boxes unchecked. Stop before submitting an order or payment.",
 } as const;
-
-export const shopTask = {
-  id: "shop",
-  title: "Check out on any store",
-  detail: "Your store link · prepare checkout, stop before payment",
-} as const;
-
-export const isBoardScenario = (scenario: Scenario) =>
-  scenario === "create" || scenario === "triage" || scenario === "batch" || scenario === "custom";
 
 export const StartUrl = Schema.String.check(
   Schema.makeFilter((value) => URL.canParse(value), { expected: "a valid URL" }),
@@ -129,11 +87,12 @@ export const serviceTierForModel = (model: string, tier: typeof ServiceTier.Type
 export const RunInput = Schema.Struct({
   id: Schema.String.check(Schema.isUUID()),
   scenario: Scenario,
+  /** Continue this owner's in-memory Thread and browser; omitted for a fresh conversation. */
+  chatId: Schema.optionalKey(Schema.String.check(Schema.isUUID())),
   url: Schema.optionalKey(StartUrl),
   wikipedia: Schema.optionalKey(WikipediaChallenge),
-  shop: Schema.optionalKey(ShopRequest),
   engine: Schema.optionalKey(BrowserEngine),
-  prompt: Schema.String.check(Schema.isMaxLength(2_000)),
+  prompt: Schema.String.check(Schema.isMaxLength(8_000)),
   screenshots: Schema.Boolean,
   liveView: Schema.Boolean,
   model: Schema.optionalKey(ModelId),
@@ -168,8 +127,8 @@ export const Span = Schema.Struct({
 export type Span = typeof Span.Type;
 
 export const Report = Schema.Struct({
-  version: Schema.Literal(2),
-  fixture: Schema.Literals(["task-board-v1", "wikipedia-race-v1", "website"]),
+  version: Schema.Literal(3),
+  fixture: Schema.Literals(["wikipedia-race-v1", "website"]),
   input: RunInput,
   model: Schema.String,
   browserVersion: Schema.optionalKey(Schema.NonEmptyString.check(Schema.isMaxLength(256))),
@@ -187,7 +146,6 @@ export const Report = Schema.Struct({
   verifiedAt: Schema.NullOr(Schema.Finite),
   firstActionAt: Schema.NullOr(Schema.Finite),
   cleanup: Schema.Literals(["pending", "closed", "retained", "failed"]),
-  board: Board,
   race: Schema.optionalKey(WikiRace),
   finalUrl: Schema.optionalKey(Schema.String),
 });
@@ -264,75 +222,3 @@ export const LabApi = HttpApi.make("BrowserSpeedLab").add(
     HttpApiEndpoint.post("close", "/api/close", { headers, success: Schema.Void, error: LabError }),
   ),
 );
-
-export const scenarios = [
-  {
-    id: "create",
-    title: "Create a task",
-    detail: "A form, two selections, one save",
-    prompt:
-      'Create a task called "Ship demo", assign it to Alex, set High priority and Todo status. Leave all existing tasks unchanged.',
-  },
-  {
-    id: "triage",
-    title: "Triage the backlog",
-    detail: "Search, open, update, repeat",
-    prompt:
-      "Change every Todo task assigned to Sam to High priority and Doing status. Leave all other fields and tasks unchanged.",
-  },
-  {
-    id: "batch",
-    title: "Plan the launch",
-    detail: "Three tasks, then a status change",
-    prompt:
-      'Create three tasks named "Write launch notes", "Record demo", and "Publish release", each assigned to Alex with High priority and Todo status. Then mark "Write launch notes" Done. Leave existing tasks unchanged.',
-  },
-] as const;
-
-export const seed: ReadonlyArray<Task> = [
-  { id: 1, title: "Review onboarding", assignee: "Sam", priority: "Medium", status: "Todo" },
-  { id: 2, title: "Fix keyboard navigation", assignee: "Alex", priority: "High", status: "Doing" },
-  { id: 3, title: "Update help center", assignee: "Sam", priority: "Low", status: "Todo" },
-  { id: 4, title: "Audit empty states", assignee: "Jordan", priority: "Medium", status: "Done" },
-];
-
-/** Independent oracle compares the complete board, including unrelated fields and extra writes. */
-export const verify = (scenario: Scenario, board: ReadonlyArray<Task>): boolean => {
-  const expected =
-    scenario === "create"
-      ? [...seed, { id: 5, title: "Ship demo", assignee: "Alex", priority: "High", status: "Todo" }]
-      : scenario === "triage"
-        ? seed.map((task) =>
-            task.assignee === "Sam" && task.status === "Todo"
-              ? { ...task, priority: "High", status: "Doing" }
-              : task,
-          )
-        : scenario === "batch"
-          ? [
-              ...seed,
-              ...["Write launch notes", "Record demo", "Publish release"].map((title, i) => ({
-                id: i + 5,
-                title,
-                assignee: "Alex",
-                priority: "High",
-                status: i === 0 ? "Done" : "Todo",
-              })),
-            ]
-          : [];
-
-  return (
-    scenario !== "browse" &&
-    expected.length === board.length &&
-    expected.every((task) => {
-      const actual = board.find((value) => value.id === task.id);
-
-      return (
-        actual !== undefined &&
-        task.title === actual.title &&
-        task.assignee === actual.assignee &&
-        task.priority === actual.priority &&
-        task.status === actual.status
-      );
-    })
-  );
-};

@@ -1,8 +1,10 @@
+import { InMemory } from "@yielded/agent";
 import {
   BrowserSessionReference,
   BrowserSessions,
 } from "@yielded/agent-platform-cloudflare/browser-session";
-import { Cause, Clock, Effect, Exit, Fiber, Option, Redacted, Schema } from "effect";
+import { ThreadId } from "@yielded/agent/identifiers";
+import { Cause, Clock, Effect, Exit, Fiber, Layer, Option, Redacted, Schema, Scope } from "effect";
 
 import { Browser, makeBrowser } from "./browser.ts";
 import {
@@ -12,10 +14,8 @@ import {
   supportsUltrafast,
   defaultChallenge,
   racePrompt,
-  shopPrompt,
-  storeTask,
+  coffeeDemo,
   Report,
-  scenarios,
   type ModelApi,
   type ModelId,
   type RunInput,
@@ -31,7 +31,7 @@ export interface VisitorKeys {
 }
 
 export const Control = Schema.Struct({
-  version: Schema.Literal(2),
+  version: Schema.Literal(3),
   reference: Schema.NullOr(Schema.toCodecJson(BrowserSessionReference)),
   active: Schema.NullOr(Schema.String),
   lastRun: Schema.NullOr(Schema.String),
@@ -42,7 +42,7 @@ export const Control = Schema.Struct({
 export type Control = typeof Control.Type;
 
 export const emptyControl: Control = {
-  version: 2,
+  version: 3,
   reference: null,
   active: null,
   lastRun: null,
@@ -86,6 +86,9 @@ export const makeOwner = (
   let image: string | null = null;
   let notice: string | null = null;
   let closeKitesurf: Effect.Effect<void, LabError> | undefined;
+  // Only history outlives a request Scope. Browser attachments and provider keys never do.
+  let chat: { readonly id: string; readonly history: typeof InMemory.layer } | undefined;
+  let chatScope: Scope.Closeable | undefined;
 
   const patch = (change: Partial<Control>, transition: string) =>
     store.write({ ...store.read(), ...change }, transition);
@@ -132,6 +135,11 @@ export const makeOwner = (
   });
 
   const closeReference = Effect.fnUntraced(function* () {
+    chat = undefined;
+    if (chatScope !== undefined) {
+      yield* Scope.close(chatScope, Exit.void);
+      chatScope = undefined;
+    }
     if (closeKitesurf !== undefined) {
       yield* closeKitesurf;
       closeKitesurf = undefined;
@@ -152,12 +160,12 @@ export const makeOwner = (
     const sessions = yield* BrowserSessions;
     const now = yield* Clock.currentTimeMillis;
 
-    yield* store.alarm(now + 600_000);
+    yield* store.alarm(now + 3_600_000);
 
     return yield* provider(
       sessions.create(
         {
-          maxElapsedMillis: 600_000,
+          maxElapsedMillis: 3_600_000,
           keepAliveMillis: 600_000,
           commandTimeoutMillis: browserCommandTimeoutMillis,
         },
@@ -197,6 +205,7 @@ export const makeOwner = (
       "released",
     );
     trace = undefined;
+    image = null;
   });
 
   /** Visitor keys apply to one run only; they never enter owner state, reports or telemetry. */
@@ -216,15 +225,25 @@ export const makeOwner = (
         code: "invalid",
         message: "Ultrafast is available only for GPT-6 Astra and GPT-6.1 Sol.",
       });
-    if (requested.scenario === "browse" && (!requested.url || !requested.prompt.trim()))
+    if (requested.scenario === "chat" && !requested.prompt.trim())
       return yield* LabError.make({
         code: "invalid",
-        message: "Browsing needs a starting URL and a goal.",
+        message: "Write a message to the agent.",
       });
-    if (requested.scenario === "shop" && requested.shop === undefined)
-      return yield* LabError.make({ code: "invalid", message: "Choose a store URL and an item." });
-    if (requested.scenario === "custom" && !requested.prompt.trim())
-      return yield* LabError.make({ code: "invalid", message: "Describe the task-board goal." });
+    if (
+      requested.chatId !== undefined &&
+      (requested.scenario !== "chat" || requested.url !== undefined)
+    )
+      return yield* LabError.make({
+        code: "invalid",
+        message:
+          "Follow-up messages use the current browser. Start a new chat to choose a starting URL.",
+      });
+    if (requested.scenario === "chat" && requested.engine === "kitesurf")
+      return yield* LabError.make({
+        code: "invalid",
+        message: "Chat uses Chromium to keep the browser between messages.",
+      });
     const reasoning = requested.reasoning ?? "none";
 
     const input: RunInput = {
@@ -243,11 +262,8 @@ export const makeOwner = (
         requested.scenario === "wikipedia"
           ? racePrompt(requested.wikipedia ?? defaultChallenge)
           : requested.scenario === "coffee"
-            ? storeTask.prompt
-            : requested.scenario === "shop" && requested.shop !== undefined
-              ? shopPrompt(requested.shop)
-              : (scenarios.find((scenario) => scenario.id === requested.scenario)?.prompt ??
-                requested.prompt),
+            ? coffeeDemo.prompt
+            : requested.prompt,
     };
 
     const state = store.read();
@@ -267,6 +283,19 @@ export const makeOwner = (
       return yield* LabError.make({
         code: "busy",
         message: "Close the browser to resolve the previous cleanup failure before another run.",
+      });
+    const continuing = input.chatId !== undefined;
+
+    if (
+      continuing &&
+      (chat?.id !== input.chatId ||
+        state.reference === null ||
+        state.reference.expiresAt <= (yield* Clock.currentTimeMillis))
+    )
+      return yield* LabError.make({
+        code: "expired",
+        message:
+          "This chat has ended or its owner restarted. Start a new chat; previous actions will not be replayed.",
       });
 
     if (input.engine === "kitesurf" && config.kitesurf === undefined)
@@ -320,7 +349,8 @@ export const makeOwner = (
             ? "Preparing browser and starting page…"
             : "Retrying browser preparation · attempt 2 of 2…",
       });
-      yield* current.measure("cleanup", "Close previous browser", closeReference());
+      if (!continuing)
+        yield* current.measure("cleanup", "Close previous browser", closeReference());
 
       const session = yield* Effect.gen(function* () {
         if (input.engine === "kitesurf") {
@@ -331,7 +361,7 @@ export const makeOwner = (
               code: "configuration",
               message: "Kitesurf is unavailable.",
             });
-          yield* store.alarm((yield* Clock.currentTimeMillis) + 600_000);
+          yield* store.alarm((yield* Clock.currentTimeMillis) + 900_000);
 
           return yield* current.measure(
             "setup",
@@ -341,7 +371,10 @@ export const makeOwner = (
             }),
           );
         }
-        yield* current.measure("setup", `Launch browser · preparation ${ordinal}/2`, allocate());
+        if (!continuing)
+          yield* current.measure("setup", `Launch browser · preparation ${ordinal}/2`, allocate());
+        else
+          yield* store.alarm(store.read().reference?.expiresAt ?? (yield* Clock.currentTimeMillis));
         const reference = store.read().reference;
 
         if (reference === null)
@@ -413,12 +446,21 @@ export const makeOwner = (
       else if (input.liveView)
         notice =
           "Kitesurf has no persistent Live View. Enable screenshots to see action snapshots.";
+      if (input.scenario === "chat" && chat === undefined) {
+        chatScope = yield* Scope.make();
+        const services = yield* Layer.buildWithScope(InMemory.layer, chatScope);
+
+        chat = { id: input.id, history: Layer.succeedContext(services) };
+      }
       yield* executeTask(
         input,
         selectedModel.model,
         modelKey,
         selectedModel.apiUrl,
         selectedModel.apiType,
+        chat === undefined
+          ? undefined
+          : { threadId: ThreadId.make(chat.id), history: chat.history },
       ).pipe(Effect.provideService(Browser, browser));
       current.update({ finishedAt: current.now() });
       yield* browser.capture(true).pipe(Effect.catch(() => Effect.void));
@@ -437,6 +479,7 @@ export const makeOwner = (
         // The ready boundary is set before any generated code or model call.
         if (
           ordinal === 2 ||
+          continuing ||
           current.snapshot().readyAt !== null ||
           result.failure.code !== "browser"
         )
@@ -445,19 +488,19 @@ export const makeOwner = (
     }).pipe(
       Effect.scoped,
       Effect.timeoutOrElse({
-        duration: "4 minutes",
+        duration: "12 minutes",
         orElse: () =>
           Effect.fail(
             LabError.make({
               code: "browser",
-              message: "The four-minute run deadline was reached.",
+              message: "The twelve-minute run deadline was reached.",
             }),
           ),
       }),
-      Effect.onExit(() => {
+      Effect.onExit((exit) => {
         if (current.snapshot().finishedAt === null) current.update({ finishedAt: current.now() });
 
-        return current.measure("cleanup", "Close browser", closeReference()).pipe(
+        const cleanup = current.measure("cleanup", "Close browser", closeReference()).pipe(
           Effect.match({
             onSuccess: () => current.update({ cleanup: "closed" }),
             onFailure: () => {
@@ -469,6 +512,16 @@ export const makeOwner = (
             },
           }),
         );
+
+        if (Exit.isSuccess(exit) && input.scenario === "chat")
+          return Effect.gen(function* () {
+            const now = yield* Clock.currentTimeMillis;
+
+            yield* store.alarm(Math.min(store.read().reference?.expiresAt ?? now, now + 600_000));
+            current.update({ cleanup: "retained" });
+          }).pipe(Effect.catch(() => cleanup));
+
+        return cleanup;
       }),
     );
 

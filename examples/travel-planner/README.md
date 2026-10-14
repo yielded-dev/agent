@@ -88,6 +88,10 @@ and Agent have separate sessions: **Sign out of Agent** leaves Auth signed in.
 The browser lab already consumes this Agent session, so the same login covers it;
 Sync and docs are not connected by this change.
 
+Auth owns the funding allowlist. The verified shared Yielded owner and direct GitHub owner
+can administer grants and use server OpenAI keys in both demos. Funding checks read active
+identities and current grants on each request; the session cookie identifies the account.
+
 Each new provider identity creates a separate Agent account; email and display name
 never link existing accounts. Auth starts from one initial schema with no old-data
 conversion. Email codes use single-use proofs, and OAuth callbacks consume their
