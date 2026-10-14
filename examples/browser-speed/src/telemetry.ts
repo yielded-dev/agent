@@ -200,8 +200,8 @@ export class Trace extends Context.Service<Trace, Effect.Success<ReturnType<type
 ) {}
 
 /** Observe native parts for every provider; the final finish-tool message remains report.message. */
-export const traceModelStream = <E, R>(
-  modelLayer: Layer.Layer<LanguageModel.LanguageModel, E, R>,
+export const traceModelStream = <Services, E, R>(
+  modelLayer: Layer.Layer<LanguageModel.LanguageModel | Services, E, R>,
 ) =>
   Layer.effect(
     LanguageModel.LanguageModel,
@@ -231,7 +231,7 @@ export const traceModelStream = <E, R>(
         streamText,
       });
     }),
-  ).pipe(Layer.provide(modelLayer));
+  ).pipe(Layer.provideMerge(modelLayer));
 
 const decodeServedTier = Schema.decodeUnknownOption(
   Schema.Struct({
