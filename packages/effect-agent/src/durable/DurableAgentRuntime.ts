@@ -63,6 +63,7 @@ import {
   getToolExecutionKind,
   SubagentParentLink,
 } from "../core/SubagentContract.ts";
+import { Store as ConversationStore, makeMemoryStore } from "../core/Thread.ts";
 import { Selection, Snapshot } from "../core/ToolExposure.ts";
 import type { ToolParameterRejection } from "../core/ToolResult.ts";
 import {
@@ -7834,7 +7835,12 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               stagedUnobservedCalls.set(turn, (stagedUnobservedCalls.get(turn) ?? 0) + 1);
             }),
         }),
-        Effect.provide(ThreadHistory.layer),
+        (body) =>
+          body.pipe(
+            Effect.provideServiceEffect(ThreadHistory, ThreadHistory.makeFromStore),
+            Effect.provideServiceEffect(ConversationStore, makeMemoryStore),
+            Effect.scoped,
+          ),
         Effect.provideService(SubagentHost.forTool, (source) =>
           source.threadId !== submission.threadId ||
           source.agentId !== submission.agentId ||
@@ -7909,21 +7915,20 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         }),
       );
 
-      const execution = Effect.raceFirst(consume, abortWatcher);
-
-      const raced = (
-        yieldAfter === undefined && submissionScheduling.yieldTo === undefined
-          ? execution
-          : Effect.raceFirst(
-              execution,
+      const raced = Effect.raceAllFirst([
+        consume,
+        abortWatcher,
+        ...(yieldAfter === undefined && submissionScheduling.yieldTo === undefined
+          ? []
+          : [
               Deferred.await(yieldSignal).pipe(
                 Effect.map((nextSubmissionId) => ({
                   _tag: "yielded" as const,
                   ...(nextSubmissionId === undefined ? {} : { nextSubmissionId }),
                 })),
               ),
-            )
-      ).pipe(Effect.provideService(IdGenerator, idGenerator));
+            ]),
+      ]).pipe(Effect.provideService(IdGenerator, idGenerator));
 
       const result = yield* raced.pipe(
         Effect.catchCauseFilter(

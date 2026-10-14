@@ -75,57 +75,56 @@ export class ThreadHistory extends Context.Service<
   }
 >()("@effect-agent/engine/ThreadHistory") {
   /** Bind incremental history to the supplied Thread.Store, including scoped ownership views. */
-  static readonly layerFromStore = Layer.effect(
-    ThreadHistory,
-    Effect.gen(function* () {
-      const threads = yield* ConversationStore;
+  static readonly makeFromStore = Effect.gen(function* () {
+    const threads = yield* ConversationStore;
 
-      const historyError = (cause: ThreadError): ThreadHistoryError =>
-        ThreadHistoryError.make({
-          threadId: cause.threadId,
-          reason:
-            cause._tag === "ThreadNotFound"
-              ? "not-found"
-              : cause._tag === "ThreadLimitExceeded"
-                ? "limit"
-                : cause._tag === "ThreadHistoryDiverged"
-                  ? "conflict"
-                  : cause._tag === "ThreadOwnershipError"
-                    ? cause.reason === "closed"
-                      ? "fenced"
-                      : "conflict"
-                    : "encoding",
-          message:
-            cause._tag === "ThreadNotFound"
-              ? "Thread history is not present in this application Scope"
-              : cause._tag === "ThreadLimitExceeded"
-                ? `In-memory history exceeds the ${cause.limit} limit of ${cause.limitValue}`
-                : cause.message,
-          cause,
-        });
-
-      return ThreadHistory.of({
-        retention: "incremental",
-        memoryStore: threads,
-        load: (threadId) =>
-          threads.snapshot(threadId).pipe(Effect.map(toPrompt), Effect.mapError(historyError)),
-        open: Effect.fnUntraced(function* ({ threadId, runId }) {
-          const snapshot = yield* threads.create(threadId).pipe(Effect.mapError(historyError));
-
-          return {
-            prompt: toPrompt(snapshot),
-            stageInput: () => Effect.void,
-            stageHistory: ({ source }) =>
-              threads
-                .recordHistory(threadId, runId, source)
-                .pipe(Effect.asVoid, Effect.mapError(historyError)),
-            commit: () =>
-              threads.snapshot(threadId).pipe(Effect.asVoid, Effect.mapError(historyError)),
-          };
-        }),
+    const historyError = (cause: ThreadError): ThreadHistoryError =>
+      ThreadHistoryError.make({
+        threadId: cause.threadId,
+        reason:
+          cause._tag === "ThreadNotFound"
+            ? "not-found"
+            : cause._tag === "ThreadLimitExceeded"
+              ? "limit"
+              : cause._tag === "ThreadHistoryDiverged"
+                ? "conflict"
+                : cause._tag === "ThreadOwnershipError"
+                  ? cause.reason === "closed"
+                    ? "fenced"
+                    : "conflict"
+                  : "encoding",
+        message:
+          cause._tag === "ThreadNotFound"
+            ? "Thread history is not present in this application Scope"
+            : cause._tag === "ThreadLimitExceeded"
+              ? `In-memory history exceeds the ${cause.limit} limit of ${cause.limitValue}`
+              : cause.message,
+        cause,
       });
-    }),
-  );
+
+    return ThreadHistory.of({
+      retention: "incremental",
+      memoryStore: threads,
+      load: (threadId) =>
+        threads.snapshot(threadId).pipe(Effect.map(toPrompt), Effect.mapError(historyError)),
+      open: Effect.fnUntraced(function* ({ threadId, runId }) {
+        const snapshot = yield* threads.create(threadId).pipe(Effect.mapError(historyError));
+
+        return {
+          prompt: toPrompt(snapshot),
+          stageInput: () => Effect.void,
+          stageHistory: ({ source }) =>
+            threads
+              .recordHistory(threadId, runId, source)
+              .pipe(Effect.asVoid, Effect.mapError(historyError)),
+          commit: () =>
+            threads.snapshot(threadId).pipe(Effect.asVoid, Effect.mapError(historyError)),
+        };
+      }),
+    });
+  });
+
+  static readonly layerFromStore = Layer.effect(ThreadHistory, ThreadHistory.makeFromStore);
 
   /** Retain history for the application Scope, within message and host capacity. Separate Layer builds own separate stores. */
   static readonly layer = ThreadHistory.layerFromStore.pipe(Layer.provideMerge(layerMemory));
