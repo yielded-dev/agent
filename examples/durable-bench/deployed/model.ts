@@ -3,6 +3,7 @@ import { Schema } from "effect";
 import {
   Counts,
   Failure,
+  FixtureCompatibility,
   MetricsResult,
   ObjectPhases,
   ProviderCall,
@@ -43,6 +44,7 @@ export const Profile = Schema.Struct({
 export type Profile = typeof Profile.Type;
 
 export const Options = Schema.Struct({
+  seed: Schema.optionalKey(Schema.NonEmptyString),
   verifyIncarnationRecovery: Schema.optionalKey(Schema.Boolean),
   fixtureDirectory: Schema.optionalKey(Schema.String),
   restoreBytes: Schema.optionalKey(Schema.Int),
@@ -111,9 +113,21 @@ export type FirstTextSource = typeof FirstTextSource.Type;
 export const WorkerBuild = Schema.Struct({ bundle: Schema.String, build: Schema.String });
 export type WorkerBuild = typeof WorkerBuild.Type;
 
+export const DriverIdentity = Schema.Struct({
+  isolate: Schema.String,
+  incarnation: Schema.String,
+  constructedMs: Schema.Number,
+});
+
 export const Sample = Schema.Struct({
   ...Query.fields,
   driverRequestId: Schema.optionalKey(DriverRequestId),
+  driverIdentity: Schema.optionalKey(DriverIdentity),
+  controllerQueuedMs: Schema.optionalKey(Schema.Number),
+  controllerStartedMs: Schema.optionalKey(Schema.Number),
+  controllerEndedMs: Schema.optionalKey(Schema.Number),
+  wave: Schema.optionalKey(Schema.Natural),
+  peers: Schema.optionalKey(Schema.Array(Schema.String)),
   build: Schema.Literals(["working", "baseline", "candidate"]),
   epoch: Schema.Natural,
   order: Schema.optionalKey(Schema.Literals(["AB", "BA"])),
@@ -217,7 +231,38 @@ export const Result = Schema.Struct({
   resumeCount: Schema.optionalKey(Schema.Natural),
   options: Schema.Json,
   builds: Schema.Array(
-    Schema.Struct({ label: Schema.String, revision: Schema.String, sha256: Schema.String }),
+    Schema.Struct({
+      label: Schema.String,
+      target: Schema.optionalKey(Target),
+      revision: Schema.String,
+      sha256: Schema.String,
+      harnessRevision: Schema.optionalKey(Schema.String),
+      dependencyCacheHit: Schema.optionalKey(Schema.Boolean),
+    }),
+  ),
+  materialization: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        label: Schema.String,
+        revision: Schema.String,
+        tree: Schema.String,
+        kind: Schema.Literal("commit-archive"),
+      }),
+    ),
+  ),
+  orders: Schema.optionalKey(
+    Schema.Array(Schema.Struct({ phase: Schema.String, items: Schema.Array(Schema.String) })),
+  ),
+  deployments: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        worker: Schema.String,
+        build: Schema.String,
+        uploadedMs: Schema.Number,
+        readyMs: Schema.Number,
+        probes: Schema.Natural,
+      }),
+    ),
   ),
   versions: Schema.Record(Schema.String, Schema.String),
   restores: Schema.optionalKey(
@@ -230,11 +275,24 @@ export const Result = Schema.Struct({
         build: Schema.optionalKey(Schema.String),
         requests: Schema.Int,
         attempts: Schema.optionalKey(Schema.Natural),
+        startedMs: Schema.optionalKey(Schema.Number),
+        endedMs: Schema.optionalKey(Schema.Number),
         ms: Schema.Number,
       }),
     ),
   ),
   histories: Schema.Array(HistoryBuild),
+  fixtureChecks: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        label: Schema.Literals(["working", "baseline", "candidate"]),
+        history: Schema.Natural,
+        formatKey: Schema.String,
+        build: Schema.String,
+        ...FixtureCompatibility.fields,
+      }),
+    ),
+  ),
   fixtures: Schema.Array(
     Schema.Struct({
       target: Target,
@@ -282,6 +340,7 @@ export const Result = Schema.Struct({
       Schema.Struct({
         target: Target,
         object: Schema.String,
+        build: Schema.optionalKey(Sample.fields.build),
         epoch: Schema.Natural,
         repeat: Schema.Natural,
         sample: Schema.String,
@@ -293,10 +352,13 @@ export const Result = Schema.Struct({
   ),
   readiness: Schema.Array(
     Schema.Struct({
+      atMs: Schema.optionalKey(Schema.Number),
       target: Target,
       object: Schema.String,
       epoch: Schema.Natural,
       expectedBuild: Schema.String,
+      identity: Schema.optionalKey(Identity),
+      directoryIdentity: Schema.optionalKey(Identity),
       objectBuild: Schema.optionalKey(Schema.String),
       directoryBuild: Schema.optionalKey(Schema.String),
       phase: Schema.optionalKey(Schema.Literals(["routes", "identity", "reset"])),
@@ -347,6 +409,7 @@ export const MeasureRequest = Schema.Struct({
 export type MeasureRequest = typeof MeasureRequest.Type;
 
 export const MeasureResponse = Schema.Struct({
+  driverIdentity: Schema.optionalKey(DriverIdentity),
   metrics: MetricsResult,
   ok: Schema.Literal(true),
   driverMs: Schema.Number,

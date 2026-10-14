@@ -34,7 +34,8 @@ import {
   retryRequest,
 } from "./cloudflare.ts";
 import { deployments } from "./deploy.ts";
-import { fixtureFormat, prepareFixtures } from "./fixtures.ts";
+import { checkFixture } from "./fixture-check.ts";
+import { prepareFixtures } from "./fixtures.ts";
 import { BuildEvent, HistoryCheckpoint, Options, Result, type Sample } from "./model.ts";
 import {
   BenchError,
@@ -105,14 +106,16 @@ const append = (
   }
 };
 
-const shuffle = <A>(values: readonly A[]): A[] =>
-  values
-    .map((value) => ({ value, order: nonce() }))
-    .sort((a, b) => a.order.localeCompare(b.order))
-    .map(({ value }) => value);
-
 export const run = Effect.fnUntraced(function* (options: Options, resumed?: Result) {
   const started = yield* Clock.currentTimeMillis;
+  const seed = options.seed ?? nonce();
+
+  const shuffle = <A>(values: readonly A[], phase: string): A[] =>
+    values
+      .map((value, index) => ({ value, order: hash(JSON.stringify([seed, phase, index])) }))
+      .sort((a, b) => a.order.localeCompare(b.order))
+      .map(({ value }) => value);
+
   const cloud = yield* Cloudflare;
 
   const deploy = yield* deployments;
@@ -151,6 +154,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         resumeCount: 0,
         options: {
           ...options,
+          seed,
           targets: [...options.targets],
           sizes: [...options.sizes],
           ttft: [...options.ttft],
@@ -342,7 +346,24 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
   });
 
   yield* Effect.gen(function* () {
-    if (!resumed) yield* ensureVendor;
+    if (!resumed) {
+      if (
+        (yield* git([
+          "status",
+          "--porcelain",
+          "--",
+          "examples/durable-bench",
+          "package.json",
+          "bun.lock",
+          "patches",
+        ])).length > 0
+      )
+        return yield* BenchError.make({
+          message:
+            "Commit harness and dependency inputs before comparison; both arms use frozen commits.",
+        });
+      yield* ensureVendor;
+    }
     const versions: Record<string, string> = {};
 
     for (const file of resumed
@@ -365,73 +386,186 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
     type Label = Sample["build"];
     const labels: readonly Label[] = options.baseline ? ["baseline", "candidate"] : ["working"];
-    const builds = new Map<Label, Effect.Success<ReturnType<typeof build>>>();
+    const builds = new Map<string, Effect.Success<ReturnType<typeof build>>>();
+    const refs = new Map<Label, string>();
 
-    yield* phase("build");
+    const ordered = Effect.fnUntraced(function* <A>(
+      values: readonly A[],
+      phase: string,
+      key: (value: A) => string,
+    ) {
+      const items = shuffle(values, phase);
+
+      yield* update((value) => ({
+        ...value,
+        orders: [...(value.orders ?? []), { phase, items: items.map(key) }],
+      }));
+
+      return items;
+    });
+
+    // Resolve both inputs before either build. A worktree path is never an implicit snapshot.
     for (const label of labels) {
-      if (resumed) {
-        const previous = resumed.builds.find((item) => item.label === label);
-
-        if (!previous)
-          return yield* BenchError.make({ message: "Missing preserved target build." });
-        builds.set(label, {
-          ...previous,
-          file: join(privateDirectory, runName, label, "target.mjs"),
-        });
-        continue;
-      }
-
       const ref =
         label === "baseline"
           ? options.baseline
           : label === "candidate"
             ? options.candidate
-            : undefined;
+            : "HEAD";
 
-      const compiled = yield* build(join(privateDirectory, runName, label), "target", ref);
+      const revision = yield* git([
+        "rev-parse",
+        "--verify",
+        "--end-of-options",
+        `${ref ?? "HEAD"}^{commit}`,
+      ]);
+
+      refs.set(label, revision);
+    }
+    if (!resumed) {
+      const materialization = yield* Effect.forEach(
+        [...refs],
+        Effect.fnUntraced(function* ([label, revision]) {
+          return {
+            label,
+            revision,
+            tree: yield* git(["rev-parse", `${revision}^{tree}`]),
+            kind: "commit-archive" as const,
+          };
+        }),
+      );
+
+      yield* update((value) => ({ ...value, materialization }));
+    }
+    const jobs = labels.flatMap((label) => options.targets.map((target) => ({ label, target })));
+    const jobKey = ({ label, target }: (typeof jobs)[number]) => `${label}/${target}`;
+
+    yield* phase("build");
+    for (const job of yield* ordered(jobs, "build-target", jobKey)) {
+      const { label, target } = job;
+      const folder = join(privateDirectory, runName, label, target);
+
+      if (resumed) {
+        const previous = resumed.builds.find(
+          (item) => item.label === label && item.target === target,
+        );
+
+        if (!previous || !previous.harnessRevision)
+          return yield* BenchError.make({ message: "Missing preserved target build." });
+        builds.set(jobKey(job), {
+          ...previous,
+          harnessRevision: previous.harnessRevision,
+          dependencyCacheHit: previous.dependencyCacheHit ?? false,
+          file: join(folder, "target.mjs"),
+        });
+        continue;
+      }
+      const compiled = yield* build(folder, "target", refs.get(label), target);
+
+      if (compiled.harnessRevision !== result.revision)
+        return yield* BenchError.make({ message: "Harness revision changed during the build." });
 
       if (options.profiles.length > 0) {
-        const retained = join(output, label);
+        const retained = join(output, label, target);
 
         yield* fs.makeDirectory(retained, { recursive: true, mode: 0o700 });
         yield* fs.copyFile(compiled.file, join(retained, "target.mjs"));
         yield* fs.copyFile(compiled.file + ".map", join(retained, "target.mjs.map"));
       }
-      builds.set(label, compiled);
+      builds.set(jobKey(job), compiled);
       yield* update((value) => ({
         ...value,
-        builds: [...value.builds, { label, revision: compiled.revision, sha256: compiled.sha256 }],
+        builds: [
+          ...value.builds,
+          {
+            label,
+            target,
+            revision: compiled.revision,
+            sha256: compiled.sha256,
+            harnessRevision: compiled.harnessRevision,
+            dependencyCacheHit: compiled.dependencyCacheHit,
+          },
+        ],
       }));
     }
 
+    const requireIdenticalControl = Effect.fnUntraced(function* (artifacts: typeof builds) {
+      if (options.targets.includes("pi") && labels.length > 1) {
+        const controls = labels.map((label) => artifacts.get(`${label}/pi`));
+
+        if (
+          controls.some((item) => !item) ||
+          new Set(controls.map((item) => item?.sha256)).size !== 1
+        )
+          return yield* BenchError.make({
+            message: "Pi executable hashes differ across arms; deployment refused.",
+          });
+      }
+    });
+
+    yield* requireIdenticalControl(builds);
+
     yield* phase("local fixture");
     const preparedByBuild = new Map<Label, Effect.Success<ReturnType<typeof prepareFixtures>>>();
-    const preparedByFormat = new Map<string, Effect.Success<ReturnType<typeof prepareFixtures>>>();
-    const restoreBuilds = new Map<Label, Effect.Success<ReturnType<typeof build>>>();
+    const restoreBuilds = new Map<string, Effect.Success<ReturnType<typeof build>>>();
 
     if (!options.buildHistory) {
-      for (const label of labels) {
-        const ref = builds.get(label)?.revision;
-        const formatKey = yield* fixtureFormat(ref);
-        let prepared = preparedByFormat.get(formatKey);
+      if (options.fixtureDirectory === undefined)
+        return yield* BenchError.make({
+          message:
+            "Comparison requires --fixture-directory with pre-existing shared fixtures; no arm may generate the other's history.",
+        });
 
-        if (!prepared) {
-          prepared = yield* prepareFixtures({
-            targets: options.targets,
-            sizes: options.sizes,
-            ref,
-            ...(options.restoreBytes === undefined ? {} : { requestBytes: options.restoreBytes }),
-            ...(options.fixtureDirectory === undefined
-              ? {}
-              : { directory: options.fixtureDirectory }),
-          });
-          preparedByFormat.set(formatKey, prepared);
-        }
-        preparedByBuild.set(label, prepared);
+      const prepared = yield* prepareFixtures({
+        targets: options.targets,
+        sizes: options.sizes,
+        ...(options.restoreBytes === undefined ? {} : { requestBytes: options.restoreBytes }),
+        directory: options.fixtureDirectory,
+      });
+
+      for (const label of labels) preparedByBuild.set(label, prepared);
+      for (const job of yield* ordered(jobs, "build-restore", jobKey))
         restoreBuilds.set(
-          label,
-          yield* build(join(privateDirectory, runName, `${label}-restore`), "restore", ref),
+          jobKey(job),
+          yield* build(
+            join(privateDirectory, runName, `${job.label}-restore`, job.target),
+            "restore",
+            refs.get(job.label),
+            job.target,
+          ),
         );
+      yield* requireIdenticalControl(restoreBuilds);
+      // No source-code equality heuristic: execute each arm's own supported opener.
+      for (const job of yield* ordered(
+        jobs.filter((job) => job.target === "yielded"),
+        "fixture-validation",
+        jobKey,
+      )) {
+        const compiled = restoreBuilds.get(jobKey(job));
+
+        if (!compiled)
+          return yield* BenchError.make({ message: "Missing native fixture preflight build." });
+        for (const fixture of prepared.fixtures.filter((fixture) => fixture.target === "yielded")) {
+          const compatibility = yield* checkFixture(
+            compiled,
+            fixture,
+            prepared.chunks.get(`yielded-${fixture.history}`) ?? [],
+          );
+
+          yield* update((value) => ({
+            ...value,
+            fixtureChecks: [
+              ...(value.fixtureChecks ?? []),
+              {
+                label: job.label,
+                history: fixture.history,
+                formatKey: prepared.formatKey,
+                build: compiled.sha256,
+                ...compatibility,
+              },
+            ],
+          }));
+        }
       }
     }
     const firstFixtures = preparedByBuild.values().next().value?.fixtures ?? [];
@@ -474,7 +608,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     yield* phase("reference transcript");
 
     const epochs: readonly Label[] = options.rigorous
-      ? nonce().charAt(0) < "8"
+      ? hash(seed + "/epochs").charAt(0) < "8"
         ? ["baseline", "candidate", "candidate", "baseline"]
         : ["candidate", "baseline", "baseline", "candidate"]
       : options.baseline
@@ -516,10 +650,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       seededTranscripts.set(size, seededMessages);
 
       for (let epoch = 0; epoch < epochs.length; epoch++) {
-        if (
-          !options.buildHistory &&
-          (preparedByFormat.size > 1 || options.restoreEachPass === true)
-        )
+        if (!options.buildHistory && options.restoreEachPass === true)
           messages = [...seededMessages];
         for (let index = 0; index < turnsPerEpoch; index++) {
           const sample = sampleName(epoch, index);
@@ -569,18 +700,20 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     for (const cohort of cohorts)
       targetOwners.set(workerName(cohort), { target: cohort.target, object: cohort.object });
 
-    const counterbalanced = Boolean(options.baseline && !options.rigorous && !options.buildHistory);
+    const counterbalanced = Boolean(options.baseline && !options.buildHistory);
     const firstLabels = new Map<string, "baseline" | "candidate">();
 
     if (counterbalanced) {
       for (const size of options.sizes)
         for (const ttft of options.ttft)
           for (const target of options.targets) {
-            const cell = shuffle(
+            const cell = yield* ordered(
               cohorts.filter(
                 (cohort) =>
                   cohort.history === size && cohort.ttftMs === ttft && cohort.target === target,
               ),
+              `assignment/${size}/${ttft}/${target}`,
+              objectKey,
             );
 
             for (const [index, cohort] of cell.entries())
@@ -652,16 +785,12 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
           }
         }
 
-      // Different formats cannot share persisted state; matching formats can opt into identical pass inputs.
+      // Every comparison pass restores the same source bytes before its arm opens them.
       const restorePass =
-        !options.buildHistory &&
-        (epoch === 0 || preparedByFormat.size > 1 || options.restoreEachPass === true);
+        !options.buildHistory && (epoch === 0 || options.restoreEachPass === true);
 
       const recoveryAvailable =
-        restorePass &&
-        (epoch === epochs.length - 1 ||
-          preparedByFormat.size > 1 ||
-          options.restoreEachPass === true);
+        restorePass && (epoch === epochs.length - 1 || options.restoreEachPass === true);
 
       const clearBeforeRestore = persistent || epoch > 0 || attempt > 0;
 
@@ -671,20 +800,20 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         const label =
           first === undefined
             ? defaultLabel
-            : epoch === 0
+            : epoch === 0 || (options.rigorous && epoch === 3)
               ? first
               : first === "baseline"
                 ? "candidate"
                 : "baseline";
 
-        const compiled = builds.get(label);
+        const compiled = builds.get(`${label}/${cohort.target}`);
 
         if (!compiled) return yield* BenchError.make({ message: "Missing target build." });
 
         return {
           label,
           compiled,
-          restoreBuild: restoreBuilds.get(label),
+          restoreBuild: restoreBuilds.get(`${label}/${cohort.target}`),
           fixtures: preparedByBuild.get(label)?.fixtures ?? [],
           chunks: preparedByBuild.get(label)?.chunks ?? new Map<string, string[]>(),
         };
@@ -704,29 +833,38 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       const expectedFor = (cohort: Pick<Query, "target" | "object">) =>
         deploymentFor(cohort).pipe(Effect.map((deployment) => deployment.build));
 
-      const firstCohort = cohorts[0];
-
-      if (!firstCohort) return yield* BenchError.make({ message: "Missing sample cohort." });
-
-      const deployPass = Effect.fnUntraced(function* () {
-        const first = yield* deploymentFor(firstCohort);
-
-        return yield* deploy.targets(
-          targetStack,
-          first.bundle,
-          first.build,
-          options.cpu,
-          [...new Set(poolCohorts.map(workerName))],
-          persistent,
-          Object.fromEntries(
-            yield* Effect.forEach(
-              poolCohorts,
-              Effect.fnUntraced(function* (cohort) {
-                return [workerName(cohort), yield* deploymentFor(cohort)] as const;
-              }),
-            ),
+      const assignments = Effect.fnUntraced(function* (items: typeof poolCohorts) {
+        return Object.fromEntries(
+          yield* Effect.forEach(
+            items,
+            Effect.fnUntraced(function* (cohort) {
+              return [workerName(cohort), yield* deploymentFor(cohort)] as const;
+            }),
           ),
         );
+      });
+
+      const deployPass = Effect.fnUntraced(function* () {
+        const items = yield* ordered(
+          poolCohorts,
+          `deploy/${epoch}/${attempt}/${restoring ? "restore" : "target"}`,
+          objectKey,
+        );
+
+        const deployed = yield* deploy.targets(
+          targetStack,
+          options.cpu,
+          items.map(workerName),
+          yield* assignments(items),
+          persistent,
+        );
+
+        yield* update((value) => ({
+          ...value,
+          deployments: [...(value.deployments ?? []), ...deployed.events],
+        }));
+
+        return deployed.endpoints;
       });
 
       yield* phase("deploy");
@@ -734,7 +872,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       let endpoints = resumed
         ? (yield* deploy.attach(
             runName,
-            yield* expectedFor(firstCohort),
+            yield* assignments(poolCohorts),
             resumed.infrastructureBuild ?? "",
           )).endpoints
         : yield* deployPass();
@@ -821,6 +959,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   object: cohort.object,
                   epoch,
                   expectedBuild,
+                  atMs: now,
                   phase: "routes",
                   outcome: ready
                     ? "ready"
@@ -885,10 +1024,16 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   object: cohort.object,
                   epoch,
                   expectedBuild,
-                  ...(identity === undefined ? {} : { objectBuild: identity.identity.build }),
+                  ...(identity === undefined
+                    ? {}
+                    : { objectBuild: identity.identity.build, identity: identity.identity }),
                   ...(identity?.directory === undefined
                     ? {}
-                    : { directoryBuild: identity.directory.build }),
+                    : {
+                        directoryBuild: identity.directory.build,
+                        directoryIdentity: identity.directory,
+                      }),
+                  atMs: started + probeWaitMs,
                   phase: "identity",
                   outcome,
                   attempt,
@@ -934,10 +1079,15 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   epoch,
                   expectedBuild,
                   objectBuild: reset.before.build,
+                  identity: reset.before,
+                  atMs: started + waitMs,
                   phase: "reset",
                   ...(reset.directoryBefore === undefined
                     ? {}
-                    : { directoryBuild: reset.directoryBefore.build }),
+                    : {
+                        directoryBuild: reset.directoryBefore.build,
+                        directoryIdentity: reset.directoryBefore,
+                      }),
                   attempt,
                   waitMs,
                 },
@@ -971,11 +1121,13 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       if (epoch === 0 || restorePass) {
         yield* Console.error(`Seeding and verifying ${cohorts.length} Objects…`);
         yield* Effect.forEach(
-          shuffle(
+          yield* ordered(
             cohorts.filter(
               (cohort) =>
                 !failedObjects.has(objectKey(cohort)) && !measuredObjects.has(objectKey(cohort)),
             ),
+            `restore/${epoch}/${attempt}`,
+            objectKey,
           ),
           (cohort) =>
             Effect.gen(function* () {
@@ -1082,7 +1234,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                         token: deploy.token,
                         query: { ...cohort, expectedBuild },
                         output,
-                        sourceMap: join(output, label, "target.mjs.map"),
+                        sourceMap: join(output, label, cohort.target, "target.mjs.map"),
                       });
 
                 const reached = yield* Deferred.make<void>();
@@ -1326,6 +1478,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                     build: label,
                     requests: restoreRequests,
                     attempts: restoreAttempt,
+                    startedMs: restoreStarted,
+                    endedMs: restoreStarted + restoreMs,
                     ms: restoreMs,
                   },
                 ],
@@ -1407,22 +1561,15 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       yield* Console.error(
         `Measuring ${counterbalanced ? "counterbalanced AB/BA" : defaultLabel}, pass ${epoch + 1}/${epochs.length}: ${cohorts.length} Objects, concurrency ${options.concurrency}…`,
       );
-      yield* Effect.forEach(
-        shuffle(
-          cohorts.filter(
-            (cohort) =>
-              !failedObjects.has(objectKey(cohort)) && !measuredObjects.has(objectKey(cohort)),
-          ),
+
+      const measurements = yield* Effect.forEach(
+        cohorts.filter(
+          (cohort) =>
+            !failedObjects.has(objectKey(cohort)) && !measuredObjects.has(objectKey(cohort)),
         ),
-        (cohort) => {
+        Effect.fnUntraced(function* (cohort) {
           const resumeAt = replayBefore.get(objectKey(cohort)) ?? 0;
           let currentSample: Sample | undefined;
-
-          const profiled =
-            epoch === 0 &&
-            options.profileAfter === undefined &&
-            options.profiles.length > 0 &&
-            cohort.object.endsWith("-o0");
 
           const recover = Effect.fnUntraced(function* (
             error: IncarnationLost | TransientObjectTransport,
@@ -1434,7 +1581,6 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             // failure at this logical index is fatal, even after another Object recovers.
             if (
               !recoveryAvailable ||
-              profiled ||
               !sample ||
               sample.state === "recovery" ||
               retriedSamples.has(key)
@@ -1470,6 +1616,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   repeat: sample.repeat,
                   sample: sample.sample,
                   replacementSample,
+                  build: sample.build,
                   reason,
                   error: error.message,
                 },
@@ -1480,86 +1627,31 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
             );
           });
 
-          return Effect.gen(function* () {
-            const { label } = yield* assignment(cohort);
-            const expectedBuild = yield* expectedFor(cohort);
+          const { label } = yield* assignment(cohort);
+          const expectedBuild = yield* expectedFor(cohort);
 
-            const capture = profiled
-              ? yield* prepareProfile({
-                  worker: workerName(cohort),
-                  endpoint: yield* url("/profile-target", cohort),
-                  token: deploy.token,
-                  query: { ...cohort, expectedBuild },
-                  output,
-                  sourceMap: join(output, label, "target.mjs.map"),
-                })
-              : undefined;
+          let reset: typeof ColdResult.Type | undefined;
+          let incarnation = "";
+          let directoryIncarnation: string | undefined;
 
-            const warmed = yield* Deferred.make<number>();
-            let warmWorkEnded = false;
+          const firstAfterReset = (index: number) =>
+            index === 0 ||
+            (!options.buildHistory &&
+              cohort.target !== "effect-ai-floor" &&
+              (index === 1 || index === turnsPerEpoch - 1));
 
-            const profiling = capture
-              ? yield* Deferred.await(warmed).pipe(
-                  Effect.flatMap((warmupMs) =>
-                    Effect.forEach(
-                      options.profiles,
-                      (type) =>
-                        capture(
-                          type,
-                          Math.min(
-                            50_000,
-                            Math.max(1000, Math.floor(warmupMs * options.repeats * 0.5)),
-                          ),
-                        ).pipe(
-                          Effect.matchCauseEffect({
-                            onFailure: (cause) =>
-                              update((value) => ({
-                                ...value,
-                                failures: [
-                                  ...value.failures,
-                                  `${cohort.target}/${cohort.history}/${cohort.ttftMs} ${type} profile: ${message(cause)}`,
-                                ],
-                              })),
-                            onSuccess: (profile) =>
-                              update((value) => ({
-                                ...value,
-                                profiles: warmWorkEnded
-                                  ? value.profiles
-                                  : [...value.profiles, profile],
-                                failures: warmWorkEnded
-                                  ? [
-                                      ...value.failures,
-                                      "Profile capture outlived its warm workload; capture is incomplete.",
-                                    ]
-                                  : value.failures,
-                              })),
-                          }),
-                        ),
-                      { concurrency: 2, discard: true },
-                    ),
-                  ),
-                  Effect.forkScoped,
-                )
-              : undefined;
+          const prepare = Effect.fnUntraced(function* (index: number) {
+            if (firstAfterReset(index)) reset = yield* resetForBuild(cohort);
+          });
 
-            // Discard constructor caches after import, and restart the same stored Object after every build change.
-            let reset = yield* resetForBuild(cohort);
-            let incarnation = "";
-            let directoryIncarnation: string | undefined;
+          const measure = (index: number, wave: number, peers: readonly string[]) =>
+            Effect.gen(function* () {
+              if (reset === undefined)
+                return yield* BenchError.make({
+                  message: "Measurement must follow acknowledged readiness/reset.",
+                });
 
-            for (let index = 0; index < turnsPerEpoch; index++) {
-              const firstAfterReset =
-                index === 0 ||
-                (!options.buildHistory &&
-                  cohort.target !== "effect-ai-floor" &&
-                  (index === 1 || index === turnsPerEpoch - 1));
-
-              if (profiling && index === turnsPerEpoch - 1) {
-                warmWorkEnded = true;
-                // Never abort the profiled incarnation while the API capture is still open.
-                yield* Fiber.join(profiling);
-              }
-              if (index > 0 && firstAfterReset) reset = yield* resetForBuild(cohort);
+              const acknowledgedReset = reset;
 
               const query = {
                 ...cohort,
@@ -1573,7 +1665,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   : cohort.target === "effect-ai-floor" &&
                       (index === 1 || index === turnsPerEpoch - 1)
                     ? "warmup"
-                    : firstAfterReset
+                    : firstAfterReset(index)
                       ? "cold"
                       : "warm";
 
@@ -1582,6 +1674,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
               const sample: Sample = {
                 ...query,
                 driverRequestId,
+                controllerQueuedMs: yield* Clock.currentTimeMillis,
+                wave,
+                peers,
                 build: label,
                 ...(counterbalanced
                   ? {
@@ -1733,7 +1828,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                     message:
                       "Object or provider receipt build mismatch; sample is invalid and input will not be replayed.",
                   });
-                if (!firstAfterReset && incarnation !== metrics.identity.incarnation)
+                if (!firstAfterReset(index) && incarnation !== metrics.identity.incarnation)
                   return yield* IncarnationLost.make({
                     message: "Warm Object incarnation changed; the sample prefix must be restored.",
                     identity: metrics.identity,
@@ -1756,25 +1851,26 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   });
 
                 const coldVerified =
-                  firstAfterReset &&
-                  metrics.identity.incarnation !== reset.before.incarnation &&
+                  firstAfterReset(index) &&
+                  metrics.identity.incarnation !== acknowledgedReset.before.incarnation &&
                   metrics.identity.firstEntry &&
                   metrics.identity.priorAlarms === 0 &&
                   (!options.buildHistory ||
                     metrics.identity.incarnation === measured.value.primed?.incarnation);
 
                 const residentVerified =
-                  !firstAfterReset && incarnation === metrics.identity.incarnation;
+                  !firstAfterReset(index) && incarnation === metrics.identity.incarnation;
 
                 const actorVerified =
                   cohort.target !== "tardie" ||
-                  (firstAfterReset
-                    ? metrics.directory?.incarnation !== reset.directoryBefore?.incarnation &&
+                  (firstAfterReset(index)
+                    ? metrics.directory?.incarnation !==
+                        acknowledgedReset.directoryBefore?.incarnation &&
                       metrics.directory?.firstEntry === true &&
                       metrics.directory.priorAlarms === 0
                     : metrics.directory?.incarnation === directoryIncarnation);
 
-                if (!(firstAfterReset ? coldVerified : residentVerified) || !actorVerified)
+                if (!(firstAfterReset(index) ? coldVerified : residentVerified) || !actorVerified)
                   return yield* BenchError.make({
                     message:
                       "Object residency changed; sample is not valid for its cold/warm label.",
@@ -1831,6 +1927,11 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                           ...(lastEnd === undefined
                             ? {}
                             : { lastResponseToClientMs: measured.value.observedMs - lastEnd }),
+                          controllerStartedMs: before,
+                          controllerEndedMs: after,
+                          ...(measured.value.driverIdentity
+                            ? { driverIdentity: measured.value.driverIdentity }
+                            : {}),
                           controllerMs: after - before,
                           controllerColo: measured.colo,
                           colo: measured.value.colo,
@@ -1873,7 +1974,6 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                       : row,
                   ),
                 }));
-                if (index === 1) yield* Deferred.succeed(warmed, measured.value.driverMs);
               }).pipe(
                 Effect.tapCause((cause) =>
                   update((value) => ({
@@ -1884,61 +1984,149 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   })),
                 ),
               );
-            }
-            // Joining and writing profiles are outside the driver's per-turn timer.
-            if (profiling) yield* Fiber.join(profiling);
-            // The final metrics are quiescent. Retire native observers that outlive
-            // remote stream cancellation before collecting their completed Tail events.
-            if (options.cpu) yield* resetForBuild(cohort);
-          }).pipe(
-            Effect.scoped,
-            (batch) => (profiled ? withProfileBatch(batch) : batch),
-            Effect.catchTag("IncarnationLost", recover),
-            Effect.catchTag("TransientObjectTransport", recover),
-            Effect.catchTag("UnknownOutcome", (error) =>
-              Effect.gen(function* () {
-                const sample = currentSample;
+            }).pipe(
+              Effect.catchTag("IncarnationLost", recover),
+              Effect.catchTag("TransientObjectTransport", recover),
+              Effect.catchTag("UnknownOutcome", (error) =>
+                Effect.gen(function* () {
+                  const sample = currentSample;
 
-                if (!sample || options.buildHistory) return yield* error;
-                failedObjects.add(objectKey(cohort));
-                yield* update((value) => ({
-                  ...value,
-                  retirements: [
-                    ...(value.retirements ?? []),
-                    {
-                      target: cohort.target,
-                      object: cohort.object,
-                      history: cohort.history,
-                      ttftMs: cohort.ttftMs,
-                      build: sample.build,
-                      epoch,
-                      sample: sample.sample,
-                      error: message(Cause.fail(error)),
-                    },
-                  ],
-                }));
-                yield* Console.error(
-                  `${cohort.target}/${cohort.history}/${cohort.ttftMs}/${sample.build}/epoch${epoch}: retiring the complete Object pair after an unknown input outcome; no resubmission.`,
-                );
-              }),
-            ),
-            Effect.catchCause((cause) =>
-              Effect.gen(function* () {
-                if (Cause.hasInterrupts(cause)) return yield* Effect.failCause(cause);
-                yield* update((value) => ({
-                  ...value,
-                  failures: [
-                    ...value.failures,
-                    `${cohort.target}/${cohort.history}/${cohort.ttftMs}: ${message(cause)}`,
-                  ],
-                }));
-                if (!options.buildHistory) return yield* Effect.failCause(cause);
-              }),
-            ),
-          );
-        },
-        { concurrency: options.concurrency, discard: true },
+                  if (!sample || options.buildHistory) return yield* error;
+                  failedObjects.add(objectKey(cohort));
+                  yield* update((value) => ({
+                    ...value,
+                    retirements: [
+                      ...(value.retirements ?? []),
+                      {
+                        target: cohort.target,
+                        object: cohort.object,
+                        history: cohort.history,
+                        ttftMs: cohort.ttftMs,
+                        build: sample.build,
+                        epoch,
+                        sample: sample.sample,
+                        error: message(Cause.fail(error)),
+                      },
+                    ],
+                  }));
+                  yield* Console.error(
+                    `${cohort.target}/${cohort.history}/${cohort.ttftMs}/${sample.build}/epoch${epoch}: retiring the complete Object pair after an unknown input outcome; no resubmission.`,
+                  );
+                }),
+              ),
+              Effect.catchCause((cause) =>
+                Effect.gen(function* () {
+                  if (Cause.hasInterrupts(cause)) return yield* Effect.failCause(cause);
+                  yield* update((value) => ({
+                    ...value,
+                    failures: [
+                      ...value.failures,
+                      `${cohort.target}/${cohort.history}/${cohort.ttftMs}: ${message(cause)}`,
+                    ],
+                  }));
+                  failedObjects.add(objectKey(cohort));
+                  if (!options.buildHistory) return yield* Effect.failCause(cause);
+                }),
+              ),
+            );
+
+          return { cohort, label, prepare, measure };
+        }),
       );
+
+      // Each wave contains paired arms of the same target/cell where both survive.
+      // Readiness completes for the whole wave before any input; all turns finish
+      // before the next wave, so completion speed cannot choose the next peer mix.
+      for (let index = 0; index < turnsPerEpoch; index++) {
+        const activeMeasurements = measurements.filter(
+          ({ cohort }) =>
+            !failedObjects.has(objectKey(cohort)) && !retryFrom.has(objectKey(cohort)),
+        );
+
+        const groups = new Map<string, typeof activeMeasurements>();
+
+        for (const item of activeMeasurements) {
+          const key = `${item.cohort.target}/${item.cohort.history}/${item.cohort.ttftMs}`;
+          const group = groups.get(key) ?? [];
+
+          group.push(item);
+          groups.set(key, group);
+        }
+
+        const cells = shuffle([...groups], `wave-cells/${epoch}/${attempt}/${index}`).map(
+          ([cell, items]) => {
+            const arms = labels.map((label) =>
+              shuffle(
+                items.filter((item) => item.label === label),
+                `wave-arm/${epoch}/${attempt}/${index}/${cell}/${label}`,
+              ),
+            );
+
+            const paired: (typeof items)[] = [];
+
+            for (let offset = 0; arms.some((arm) => offset < arm.length); offset++)
+              paired.push(
+                shuffle(
+                  arms.flatMap((arm) => {
+                    const item = arm[offset];
+
+                    return item ? [item] : [];
+                  }),
+                  `wave-pair/${epoch}/${attempt}/${index}/${cell}/${offset}`,
+                ),
+              );
+
+            return paired;
+          },
+        );
+
+        const waves: (typeof activeMeasurements)[] = [];
+
+        for (let offset = 0; cells.some((cell) => offset < cell.length); offset++)
+          for (const cell of cells) {
+            const pair = cell[offset];
+
+            if (!pair) continue;
+            const wave = waves.at(-1);
+
+            if (wave && wave.length + pair.length <= options.concurrency) wave.push(...pair);
+            else waves.push(pair);
+          }
+        const order = waves.flat();
+
+        yield* update((value) => ({
+          ...value,
+          orders: [
+            ...(value.orders ?? []),
+            {
+              phase: `measure/${epoch}/${attempt}/${index}`,
+              items: order.map(({ cohort }) => objectKey(cohort)),
+            },
+          ],
+        }));
+        for (const [waveIndex, wave] of waves.entries()) {
+          const peers = wave.map(({ cohort }) => objectKey(cohort));
+
+          yield* Effect.forEach(wave, (item) => item.prepare(index), {
+            concurrency: options.concurrency,
+            discard: true,
+          });
+          yield* Effect.forEach(wave, (item) => item.measure(index, waveIndex, peers), {
+            concurrency: options.concurrency,
+            discard: true,
+          });
+        }
+      }
+      // Only after the last wave: retire observers before collecting completed Tail events.
+      if (options.cpu)
+        yield* Effect.forEach(
+          measurements.filter(
+            ({ cohort }) =>
+              !failedObjects.has(objectKey(cohort)) && !retryFrom.has(objectKey(cohort)),
+          ),
+          ({ cohort }) => resetForBuild(cohort),
+          { concurrency: options.concurrency, discard: true },
+        );
 
       return retryFrom;
     });

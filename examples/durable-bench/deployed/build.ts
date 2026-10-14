@@ -18,6 +18,7 @@ import {
   save,
   workspace,
 } from "./platform.ts";
+import type { Target } from "./worker/protocol.ts";
 
 const Package = Schema.Struct({ name: Schema.String });
 const Catalog = Schema.Struct({ catalog: Schema.Record(Schema.String, Schema.String) });
@@ -52,7 +53,9 @@ const dependenciesFor = Effect.fnUntraced(function* (revision: string) {
     return (yield* fs.exists(receipt)) && (yield* fs.readFileString(receipt)) === revision;
   });
 
-  if (!(yield* installed)) {
+  const cacheHit = yield* installed;
+
+  if (!cacheHit) {
     yield* fs.makeDirectory(join(root, ".."), { recursive: true });
 
     const temporary = yield* Effect.acquireRelease(
@@ -89,36 +92,57 @@ const dependenciesFor = Effect.fnUntraced(function* (revision: string) {
       );
   }
 
-  return { root, expectedEffect };
+  return { root, expectedEffect, cacheHit };
 });
 
 const entries = {
   driver: "driver.ts",
   provider: "provider.ts",
   tail: "tail.ts",
-  target: "../third-party/src/deployed/index.ts",
-  restore: "worker/restore-worker.ts",
+  yielded: "../third-party/src/deployed/index.ts",
+  pi: "../third-party/src/deployed/pi-entry.ts",
+  tardie: "../third-party/src/deployed/tardie-entry.ts",
+  "effect-ai-floor": "../third-party/src/deployed/floor-entry.ts",
+  "restore-yielded": "worker/restore-yielded.ts",
+  "restore-pi": "worker/restore-pi.ts",
 };
 
 /** A ref supplies framework sources and its complete frozen dependency installation. */
 export const build = Effect.fnUntraced(function* (
   output: string,
-  entry: keyof typeof entries,
+  entry: "driver" | "provider" | "tail" | "target" | "restore",
   ref?: string,
+  target?: Target,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  let revision = yield* git(["rev-parse", "HEAD"]);
+  const harnessRevision = yield* git(["rev-parse", "HEAD"]);
+  const isTarget = entry === "target" || entry === "restore";
+
+  if (isTarget && target === undefined)
+    return yield* BenchError.make({ message: "Target builds require an explicit target." });
+
+  // Controls, including every transitive support dependency, belong to the harness,
+  // independently of the tested Yielded revision. Both arms take this same path.
+  const sourceRef = isTarget
+    ? target === "yielded"
+      ? (ref ?? harnessRevision)
+      : harnessRevision
+    : undefined;
+
+  let revision = harnessRevision;
+  let dependencyCacheHit = false;
   let sourceRoot: string | undefined;
   let dependencyRoot = repository;
   let expectedEffect: string | undefined;
   const packages = new Set<string>();
 
   yield* fs.makeDirectory(output, { recursive: true, mode: 0o700 });
-  if (ref) {
-    revision = yield* git(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`]);
+  if (sourceRef) {
+    revision = yield* git(["rev-parse", "--verify", "--end-of-options", `${sourceRef}^{commit}`]);
     const dependencies = yield* dependenciesFor(revision);
 
     dependencyRoot = dependencies.root;
+    dependencyCacheHit = dependencies.cacheHit;
     expectedEffect = dependencies.expectedEffect;
     sourceRoot = join(output, "source");
     yield* fs.makeDirectory(sourceRoot, { recursive: true, mode: 0o700 });
@@ -153,6 +177,39 @@ export const build = Effect.fnUntraced(function* (
       packages.add(metadata.name);
     }
   }
+  let entryDirectory = directory;
+  let vendorRoot = join(workspace, "third-party");
+
+  if (isTarget) {
+    const harnessRoot = join(output, "harness");
+
+    yield* fs.makeDirectory(harnessRoot, { recursive: true });
+
+    const archive = ChildProcess.make(
+      "vp",
+      ["exec", "git", "archive", harnessRevision, "examples/durable-bench"],
+      { cwd: repository },
+    );
+
+    const child = yield* archive.pipe(
+      ChildProcess.pipeTo(ChildProcess.make("vp", ["exec", "tar", "-x", "-C", harnessRoot])),
+    );
+
+    if ((yield* child.exitCode) !== 0)
+      return yield* BenchError.make({ message: "Could not freeze harness sources." });
+    const frozenWorkspace = join(harnessRoot, "examples/durable-bench");
+
+    entryDirectory = join(frozenWorkspace, "deployed");
+    vendorRoot = join(frozenWorkspace, "third-party");
+    yield* fs.symlink(
+      join(workspace, "third-party/node_modules"),
+      join(vendorRoot, "node_modules"),
+    );
+    yield* fs.symlink(
+      join(dependencyRoot, "examples/durable-bench/node_modules"),
+      join(frozenWorkspace, "node_modules"),
+    );
+  }
   const refRoot = sourceRoot;
 
   const resolver: Plugin = {
@@ -162,7 +219,8 @@ export const build = Effect.fnUntraced(function* (
         // Tardie has an intentionally isolated pre-release Effect graph. Do not upgrade it.
         if (
           args.importer.startsWith(join(workspace, "third-party/node_modules")) ||
-          args.importer === join(workspace, "third-party/src/deployed/tardie.ts")
+          args.importer.startsWith(join(vendorRoot, "node_modules")) ||
+          args.importer === join(vendorRoot, "src/deployed/tardie.ts")
         )
           return;
 
@@ -210,12 +268,27 @@ export const build = Effect.fnUntraced(function* (
     },
   };
 
+  const selected =
+    entry === "target" || entry === "restore"
+      ? target === "yielded"
+        ? entry === "restore"
+          ? "restore-yielded"
+          : "yielded"
+        : target === "pi"
+          ? entry === "restore"
+            ? "restore-pi"
+            : "pi"
+          : target === "tardie"
+            ? "tardie"
+            : "effect-ai-floor"
+      : entry;
+
   const outfile = join(output, `${entry}.mjs`);
 
   yield* Effect.tryPromise({
     try: () =>
       bundle({
-        entryPoints: [join(directory, entries[entry])],
+        entryPoints: [join(entryDirectory, entries[selected])],
         outfile,
         bundle: true,
         // Remove source-path comments so equal bundles hash equally across run directories.
@@ -273,6 +346,11 @@ export const build = Effect.fnUntraced(function* (
       });
     yield* save(outfile + ".dependencies.json", {
       revision,
+      harnessRevision,
+      target,
+      vendorLockSha256: hash(yield* fs.readFile(join(workspace, "third-party/bun.lock"))),
+      materialization: "commit-archive",
+      dependencyCacheHit,
       expectedEffect,
       versions,
       frameworkRoots,
@@ -281,35 +359,31 @@ export const build = Effect.fnUntraced(function* (
     });
   }
 
-  return { file: outfile, revision, sha256: hash(yield* fs.readFile(outfile)) };
+  return {
+    file: outfile,
+    revision,
+    harnessRevision,
+    dependencyCacheHit,
+    sha256: hash(yield* fs.readFile(outfile)),
+  };
 }, Effect.scoped);
 
 export const ensureVendor = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
 
-  const { dependencies } = yield* read(
-    join(workspace, "third-party/package.json"),
-    Schema.Struct({ dependencies: Schema.Record(Schema.String, Schema.String) }),
-  );
+  for (const name of ["package.json", "bun.lock"]) {
+    const path = `examples/durable-bench/third-party/${name}`;
 
-  const installed = Effect.gen(function* () {
-    for (const [name, version] of Object.entries(dependencies)) {
-      const file = join(workspace, "third-party/node_modules", name, "package.json");
-
-      if (!(yield* fs.exists(file))) return false;
-      if ((yield* read(file, Schema.Struct({ version: Schema.String }))).version !== version)
-        return false;
-    }
-
-    return true;
-  });
-
-  if (!(yield* installed)) {
-    const install = yield* execute(["run", "-F", "@yielded/agent-example-durable-bench", "vendor"]);
-
-    if (install.code !== 0 || !(yield* installed))
+    if (
+      (yield* fs.readFileString(join(repository, path))).trim() !==
+      (yield* git(["show", `HEAD:${path}`]))
+    )
       return yield* BenchError.make({
-        message: "Install the durable-bench vendor dependencies first.",
+        message: "Vendor inputs must match the frozen harness commit.",
       });
   }
+  const install = yield* execute(["run", "-F", "@yielded/agent-example-durable-bench", "vendor"]);
+
+  if (install.code !== 0)
+    return yield* BenchError.make({ message: "Frozen vendor install failed." });
 });

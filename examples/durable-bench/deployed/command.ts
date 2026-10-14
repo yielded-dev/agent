@@ -24,9 +24,7 @@ export const command = Command.make(
     ),
     restoreEachPass: Flag.Boolean("restore-each-pass").pipe(
       Flag.optional,
-      Flag.withDescription(
-        "Restore each pass (default through 1,000 turns; always across storage formats)",
-      ),
+      Flag.withDescription("Restore identical history before every comparison pass (required)"),
     ),
     verifyIncarnationRecovery: Flag.Boolean("verify-incarnation-recovery").pipe(
       Flag.withDefault(false),
@@ -74,7 +72,9 @@ export const command = Command.make(
     ),
     concurrency: positive("concurrency").pipe(
       Flag.optional,
-      Flag.withDescription("Concurrent measured Objects (quick/full: 12); turns stay sequential"),
+      Flag.withDescription(
+        "Concurrent measured Objects (quick/full: 12, minimum 2); pairs stay together",
+      ),
     ),
     buildConcurrency: positive("build-concurrency").pipe(
       Flag.optional,
@@ -115,6 +115,10 @@ export const command = Command.make(
     rigorous: Flag.Boolean("rigorous").pipe(
       Flag.withDefault(false),
       Flag.withDescription("Alias for --preset full: cold + same-Object balanced A/B"),
+    ),
+    seed: Flag.String("seed").pipe(
+      Flag.optional,
+      Flag.withDescription("Replay all native arm and scheduling orders"),
     ),
     baseline: Flag.String("baseline").pipe(Flag.optional),
     candidate: Flag.String("candidate").pipe(Flag.optional),
@@ -168,7 +172,7 @@ export const command = Command.make(
       targets.includes("effect-ai-floor") &&
       (flags.buildHistory ||
         flags.verifyIncarnationRecovery ||
-        !Option.getOrElse(flags.restoreEachPass, () => sizes.every((size) => size <= 1000)))
+        !Option.getOrElse(flags.restoreEachPass, () => true))
     )
       return yield* BenchError.make({
         message:
@@ -179,7 +183,7 @@ export const command = Command.make(
       flags.verifyIncarnationRecovery &&
       (flags.buildHistory ||
         flags.profile.flat().length > 0 ||
-        !Option.getOrElse(flags.restoreEachPass, () => sizes.every((size) => size <= 1000)))
+        !Option.getOrElse(flags.restoreEachPass, () => true))
     )
       return yield* BenchError.make({
         message:
@@ -187,13 +191,32 @@ export const command = Command.make(
       });
 
     const profiles = [...new Set(flags.profile.flat())];
+
+    if (
+      !flags.buildHistory &&
+      (profiles.length > 0 || Option.getOrElse(flags.restoreEachPass, () => true) === false)
+    )
+      return yield* BenchError.make({
+        message:
+          "Comparison requires identical restored histories and no profiling; profile a separate --build-history run.",
+      });
     const profileAfter = Option.getOrUndefined(flags.profileAfter);
 
     const objects = Option.getOrElse(flags.objects, () =>
       flags.buildHistory ? 2 : rigorous ? 30 : 12,
     );
 
+    if (!flags.buildHistory && objects % 2 !== 0)
+      return yield* BenchError.make({
+        message: "Counterbalanced comparison requires an even Object count.",
+      });
+
     const concurrency = Option.getOrElse(flags.concurrency, () => (flags.buildHistory ? 6 : 12));
+
+    if (!flags.buildHistory && concurrency < 2)
+      return yield* BenchError.make({
+        message: "Paired comparison requires concurrency of at least 2.",
+      });
 
     const buildConcurrency = Option.getOrElse(flags.buildConcurrency, () =>
       flags.buildHistory
@@ -227,14 +250,12 @@ export const command = Command.make(
       return yield* BenchError.make({ message: "History profiling requires --profile-after." });
 
     return yield* run({
+      ...(Option.isSome(flags.seed) ? { seed: flags.seed.value } : {}),
       ...(Option.isSome(flags.fixtureDirectory)
         ? { fixtureDirectory: flags.fixtureDirectory.value }
         : {}),
       restoreBytes: flags.restoreBytes,
-      restoreEachPass: Option.getOrElse(
-        flags.restoreEachPass,
-        () => !flags.buildHistory && sizes.every((size) => size <= 1000),
-      ),
+      restoreEachPass: Option.getOrElse(flags.restoreEachPass, () => !flags.buildHistory),
       verifyIncarnationRecovery: flags.verifyIncarnationRecovery,
       buildHistory: flags.buildHistory,
       targets: [...new Set(targets)],

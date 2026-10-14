@@ -1,17 +1,16 @@
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import { Effect, FileSystem, Schema } from "effect";
 
-import { naturalFixture } from "./natural-fixture.ts";
-import { execute, git, hash, read, repository, workspace } from "./platform.ts";
+import { hash, read, workspace } from "./platform.ts";
 import {
   type BulkFixture,
   Counts,
   RESTORE_BYTES,
   SqlDump,
   SqlValue,
+  StorageFormat,
   type RestoreChunk,
   type Target,
 } from "./worker/protocol.ts";
@@ -22,7 +21,6 @@ export class FixtureError extends Schema.TaggedError<FixtureError>()("FixtureErr
 
 const Meta = Schema.Struct({
   version: Schema.String,
-  formatKey: Schema.optionalKey(Schema.String),
   fingerprint: Schema.String,
   tables: Counts,
   threadId: Schema.optionalKey(Schema.NonEmptyString),
@@ -30,11 +28,6 @@ const Meta = Schema.Struct({
 
 const Definition = Schema.Struct({ name: Schema.String, sql: Schema.String, type: Schema.String });
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
-
-const formatFiles = [
-  "packages/storage-cloudflare/src/internal/migrations.ts",
-  "packages/effect-agent/src/durable/Records.ts",
-];
 
 const dumpDatabase = (db: DatabaseSync, includeRows = false): SqlDump => {
   const definitions = Schema.decodeUnknownSync(Schema.Array(Definition))(
@@ -74,26 +67,12 @@ const dumpDatabase = (db: DatabaseSync, includeRows = false): SqlDump => {
   });
 };
 
-/** The format key hashes adapter migrations and the canonical record schema at the build ref. */
-export const fixtureFormat = Effect.fnUntraced(function* (ref?: string) {
-  const fs = yield* FileSystem.FileSystem;
-
-  const contents = yield* Effect.forEach(formatFiles, (file) =>
-    ref
-      ? git(["show", `${ref}:${file}`]).pipe(Effect.map((text) => text + "\n"))
-      : fs.readFileString(join(repository, file)),
-  );
-
-  return hash(contents.join("\n")).slice(0, 16);
-});
-
 /** Read saved SQLite without opening a host or rewriting any history. */
 export const prepareFixtures = Effect.fnUntraced(function* (options: {
   readonly sizes: readonly number[];
   readonly targets?: readonly Target[];
-  readonly directory?: string;
+  readonly directory: string;
   readonly requestBytes?: number;
-  readonly ref?: string;
 }) {
   const fs = yield* FileSystem.FileSystem;
   const requestBytes = options.requestBytes ?? RESTORE_BYTES;
@@ -103,88 +82,23 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
     Schema.Struct({ dependencies: Schema.Record(Schema.String, Schema.String) }),
   );
 
-  const formatKey = yield* fixtureFormat(options.ref);
-
-  const baseDirectory =
-    options.directory ?? join(homedir(), ".cache/yielded-durable-bench/fixtures", formatKey);
-
   const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "durable-bench-restore-" });
   const fixtures: BulkFixture[] = [];
   const chunks = new Map<string, string[]>();
+  const formats = new Set<string>();
 
   for (const target of (options.targets ?? ["yielded"]).filter(
     (target) => target !== "effect-ai-floor",
   )) {
     for (const history of options.sizes) {
       const name: string = `${target}-${history}`;
-      const natural = options.directory === undefined && history === 1000 && target !== "tardie";
-      const directory = natural ? baseDirectory + "-natural-id50-v1" : baseDirectory;
-      const source = join(directory, name);
+      const source = join(options.directory, name);
 
-      if (natural && !(yield* fs.exists(source + ".json")))
-        yield* naturalFixture(target, source, options.ref, formatKey);
-
-      if (!(yield* fs.exists(source + ".json"))) {
-        let local = join(scratch, "seed", name);
-        // Adopt historical caches only after proving their writer has this exact format key.
-        const cacheRoot = join(homedir(), ".cache/yielded-durable-bench/fixtures");
-
-        if (options.directory === undefined && (yield* fs.exists(cacheRoot))) {
-          for (const legacy of yield* fs.readDirectory(cacheRoot)) {
-            const ref = /^main-([a-f0-9]+)$/.exec(legacy)?.[1];
-
-            if (!ref || !(yield* fs.exists(join(cacheRoot, legacy, name + ".json")))) continue;
-
-            const contents = yield* Effect.forEach(formatFiles, (file) =>
-              git(["show", `${ref}:${file}`]),
-            );
-
-            const current = yield* Effect.forEach(formatFiles, (file) =>
-              options.ref
-                ? git(["show", `${options.ref}:${file}`])
-                : fs.readFileString(join(repository, file)),
-            );
-
-            if (contents.every((content, index) => content.trim() === current[index]?.trim())) {
-              local = join(cacheRoot, legacy, name);
-              break;
-            }
-          }
-        }
-
-        if (!(yield* fs.exists(local + ".json"))) {
-          if (options.ref && formatKey !== (yield* fixtureFormat()))
-            return yield* FixtureError.make({
-              message:
-                "A new format requires a natural 1,000-turn fixture; select --sizes 1000 first or supply a matching saved fixture directory.",
-            });
-
-          const seeded = yield* execute(["run", "seed", target, String(history)], workspace, {
-            DURABLE_BENCH_FIXTURE_DIRECTORY: join(scratch, "seed"),
-          });
-
-          if (seeded.code !== 0)
-            return yield* FixtureError.make({ message: `Seed ${name} failed` });
-        }
-        yield* fs.makeDirectory(directory, { recursive: true });
-
-        const copied = yield* execute([
-          "exec",
-          "cp",
-          ...(process.platform === "darwin" ? ["-cR"] : ["-R"]),
-          local,
-          source,
-        ]);
-
-        if (copied.code !== 0) return yield* FixtureError.make({ message: `Cache ${name} failed` });
-        yield* fs.copyFile(local + ".json", source + ".json");
-      }
-      const meta = yield* read(source + ".json", Meta);
-
-      if (meta.formatKey !== undefined && meta.formatKey !== formatKey)
+      if (!(yield* fs.exists(source + ".json")))
         return yield* FixtureError.make({
-          message: `Saved ${name} belongs to another storage format`,
+          message: `Missing saved ${name} fixture; explicit inputs are read-only.`,
         });
+      const meta = yield* read(source + ".json", Meta);
 
       if (
         (target === "pi" && meta.version !== dependencies["@earendil-works/pi-durable"]) ||
@@ -213,10 +127,12 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
         (db) => Effect.sync(() => db.close()),
       );
 
+      let storageFormat: typeof StorageFormat.Type | undefined;
+
       if (target === "yielded") {
-        yield* Effect.try({
+        storageFormat = yield* Effect.try({
           try: () => {
-            Schema.decodeUnknownSync(
+            const header = Schema.decodeUnknownSync(
               Schema.Struct({
                 layout_version: Schema.Natural,
                 record_format: Schema.NonEmptyString,
@@ -228,11 +144,12 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
                 )
                 .get(),
             );
+
             Schema.decodeUnknownSync(
               Schema.Tuple([Schema.Struct({ thread_id: Schema.Literal(meta.threadId ?? "main") })]),
             )(db.prepare("SELECT thread_id FROM effect_agent_threads").all());
 
-            const { n } = Schema.decodeUnknownSync(Schema.Struct({ n: Schema.Literal(0) }))(
+            Schema.decodeUnknownSync(Schema.Struct({ n: Schema.Literal(0) }))(
               db
                 .prepare(
                   `SELECT (SELECT COUNT(*) FROM effect_agent_submissions WHERE state != 'settled')${[
@@ -246,7 +163,10 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
                 .get(),
             );
 
-            return n;
+            return StorageFormat.make({
+              layoutVersion: header.layout_version,
+              recordFormat: header.record_format,
+            });
           },
           catch: () =>
             FixtureError.make({
@@ -259,6 +179,18 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
         try: () => dumpDatabase(db),
         catch: () => FixtureError.make({ message: `Read ${name} schema` }),
       });
+
+      // Describe persisted bytes, not the source code that happens to open them.
+      // Each frozen arm must still pass the native open/upgrade preflight.
+      formats.add(
+        hash(
+          JSON.stringify({
+            target,
+            format: storageFormat ?? meta.version,
+            schema: exported,
+          }),
+        ).slice(0, 16),
+      );
 
       if (
         exported.tables
@@ -357,6 +289,7 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
         threadId: meta.threadId ?? "main",
         tables: meta.tables,
         mode: "import",
+        ...(storageFormat === undefined ? {} : { storageFormat }),
         thread: exported,
         ...(actor === undefined ? {} : { actor }),
       });
@@ -387,5 +320,5 @@ export const prepareFixtures = Effect.fnUntraced(function* (options: {
       chunks.set(`effect-ai-floor-${history}`, []);
     }
 
-  return { fixtures, chunks, formatKey };
+  return { fixtures, chunks, formatKey: hash([...formats].sort().join("\n")).slice(0, 16) };
 });

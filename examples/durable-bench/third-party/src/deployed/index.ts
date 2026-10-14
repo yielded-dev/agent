@@ -9,22 +9,11 @@ import { Settlement } from "@yielded/agent/submission-ledger";
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "../../../node_modules/effect/dist/index.js";
 
 import { MEASURED_TOOLS, turn } from "../../../src/plan.ts";
-import { COLD_ABORT } from "../../../deployed/worker/host.ts";
-import { EffectAiFloorDO } from "../../../deployed/worker/effect-ai-floor.ts";
-import { PiDO } from "./pi.ts";
-import { BulkFixture, Failure, Identity, ObjectIdentity, MetricsResult, measurementPaths, SeedBatch, TextObservation, TransientObjectTransport, errorText, readQuery, transientObjectTransport, type Env, type Query } from "../../../deployed/worker/protocol.ts";
-import { ActorDO, ThreadDO, cloudflareThreadName, coordinate } from "./tardie.ts";
 import { agent, definitions, YieldedDO } from "../../../deployed/worker/yielded.ts";
-
-export { YieldedDO, PiDO, ActorDO, ThreadDO, EffectAiFloorDO };
-type Bindings = Env & {
-  YIELDED: DurableObjectNamespace<YieldedDO>;
-  PI: DurableObjectNamespace<PiDO>;
-  ACTORS: DurableObjectNamespace<ActorDO>;
-  THREADS: DurableObjectNamespace<ThreadDO>;
-  FLOOR: DurableObjectNamespace<EffectAiFloorDO>;
-};
-
+import { TextObservation, transientObjectTransport, type Env, type Query } from "../../../deployed/worker/protocol.ts";
+import { router } from "./router.ts";
+export { YieldedDO };
+type Bindings = Env & { YIELDED: DurableObjectNamespace<YieldedDO> };
 const clients = new WeakMap<Bindings, ReturnType<typeof makeClient>>();
 
 const makeClient = (env: Bindings) => {
@@ -94,82 +83,11 @@ const getClient = (env: Bindings) => {
   return client;
 };
 
-const expectedAbort = async (abort: () => Promise<unknown>) => {
-  try {
-    const result = await abort();
-
-    return (
-      result instanceof Response &&
-      result.status === 500 &&
-      (await result.text()).includes(COLD_ABORT)
-    );
-  } catch (cause) {
-    return errorText(cause).includes(COLD_ABORT);
-  }
-};
-
-export default {
-  async fetch(request: Request, env: Bindings): Promise<Response> {
-    if (!env.BENCH_TOKEN || request.headers.get("authorization") !== `Bearer ${env.BENCH_TOKEN}`)
-      return new Response("unauthorized", { status: 401 });
+export default router<Bindings>("yielded", {
+  stub: (env, query) => env.YIELDED.getByName(query.storageObject ?? query.object, { locationHint: "wnam" }),
+  ready: async (env) => { await getClient(env).ready; },
+  handle: async (request, env, query) => {
     const url = new URL(request.url);
-
-    try {
-      if (url.pathname === "/health") {
-        await getClient(env).ready;
-
-        return Response.json({ ok: true, build: env.BUILD });
-      }
-      const query = readQuery(url);
-      if (request.method === "GET" && url.searchParams.get("readiness") === "1" && measurementPaths(query.target).includes(url.pathname))
-        return Response.json({ ok: true, build: env.BUILD });
-      if (["/prime", "/seed", "/seed-progress", "/submit", "/await", "/result", "/run", "/text", "/metrics", "/profile-target"].includes(url.pathname) && query.expectedBuild !== env.BUILD)
-        return Response.json(
-          {
-            ok: false,
-            error: "Benchmark Worker build mismatch; request was not dispatched",
-            sample: query.sample,
-          },
-          { status: 503 },
-        );
-      const mutating = url.pathname.startsWith("/restore/") || ["/prime", "/seed", "/cold", "/submit", "/await", "/result", "/run"].includes(url.pathname);
-
-      if (url.pathname === "/profile-target") {
-        const namespace = query.target === "effect-ai-floor" ? env.FLOOR : query.target === "yielded" ? env.YIELDED : query.target === "pi" ? env.PI : env.THREADS;
-        const name = query.target === "tardie" ? cloudflareThreadName(coordinate((query.storageObject ?? query.object))) : (query.storageObject ?? query.object);
-
-        return namespace.getByName(name, { locationHint: "wnam" }).fetch(request);
-      }
-
-      if (mutating && request.method !== "POST")
-        return new Response("POST required", { status: 405 });
-      if (!url.pathname.startsWith("/restore/") && !["/identity", "/prime", "/seed", "/seed-progress", "/cold", "/submit", "/await", "/result", "/run", "/text", "/metrics"].includes(url.pathname))
-        return new Response("not found", { status: 404 });
-
-      const actor =
-        query.target === "tardie"
-          ? env.ACTORS.getByName((query.storageObject ?? query.object), { locationHint: "wnam" })
-          : undefined;
-
-      const stub =
-        query.target === "effect-ai-floor"
-          ? env.FLOOR.getByName((query.storageObject ?? query.object), { locationHint: "wnam" })
-          : query.target === "yielded"
-          ? env.YIELDED.getByName((query.storageObject ?? query.object), { locationHint: "wnam" })
-          : query.target === "pi"
-            ? env.PI.getByName((query.storageObject ?? query.object), { locationHint: "wnam" })
-            : env.THREADS.getByName(cloudflareThreadName(coordinate((query.storageObject ?? query.object))), {
-                locationHint: "wnam",
-              });
-
-      const fetchObject = async (request: Request): Promise<Response> => {
-        try {
-          return await stub.fetch(request);
-        } catch (cause) {
-          throw transientObjectTransport(cause) ?? cause;
-        }
-      };
-
       if (url.pathname === "/text" && query.target === "yielded") {
         const cached = getClient(env);
         cached.observations?.set(query.storageObject ?? query.object, query);
@@ -194,43 +112,6 @@ export default {
         });
       }
 
-      if (url.pathname === "/identity") {
-        const response = await fetchObject(new Request(url, { headers: request.headers }));
-
-        if (!response.ok) throw new Error("Object identity probe failed");
-
-        return Response.json(Schema.decodeUnknownSync(ObjectIdentity)({
-          identity: await response.json(),
-          ...(actor === undefined ? {} : { directory: await actor.identity() }),
-        }));
-      }
-
-      if (url.pathname === "/cold") {
-        const identityUrl = new URL(url);
-
-        identityUrl.pathname = "/identity";
-        const response = await fetchObject(new Request(identityUrl, { headers: request.headers }));
-
-        if (!response.ok) throw new Error("Pre-cold identity failed");
-        const before = Schema.decodeUnknownSync(Identity)(await response.json());
-        const directoryBefore = actor === undefined ? undefined : await actor.identity();
-
-        const threadAborted = await expectedAbort(() => fetchObject(request));
-        const directoryAborted =
-          actor === undefined ? undefined : await expectedAbort(() => actor.abortCold());
-
-        // The driver next attaches its observer, then times submission on this new incarnation.
-        return Response.json(
-          {
-            ok: threadAborted && directoryAborted !== false,
-            before,
-            directoryBefore,
-            threadAborted,
-            directoryAborted,
-          },
-          { status: threadAborted && directoryAborted !== false ? 200 : 502 },
-        );
-      }
       if (url.pathname === "/submit" || url.pathname === "/await" || url.pathname === "/result") {
         if (query.target !== "yielded") throw new Error("Only Yielded uses native receipts");
         const receiptWire = url.pathname === "/submit" ? undefined : await request.json();
@@ -287,68 +168,6 @@ export default {
         }
       }
 
-      let directoryTables: Readonly<Record<string, number>> | undefined;
-
-      if (url.pathname === "/restore/clear" && actor) await actor.clearFixture(query);
-      if (url.pathname === "/restore/start" && actor) {
-        const fixture = Schema.decodeUnknownSync(BulkFixture)(await request.clone().json());
-
-        if (!fixture.actor || fixture.target !== "tardie")
-          throw new Error("Missing Tardie Actor fixture");
-        directoryTables = await actor.importFixture(fixture.actor, query);
-      }
-      if (url.pathname === "/seed" && actor) {
-        const batch = Schema.decodeUnknownSync(SeedBatch)(await request.clone().json());
-
-        if (batch.to <= batch.from || batch.to - batch.from > 50 || batch.to > query.history)
-          throw new Error("Invalid history batch");
-        if (batch.from === 0) await actor.prepareSeed(query);
-      }
-      const response = await fetchObject(request);
-
-      if (url.pathname === "/restore/start" && directoryTables && response.ok)
-        return Response.json({
-          ...Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Unknown))(
-            await response.json(),
-          ),
-          directoryTables,
-        });
-
-      if (url.pathname === "/metrics" && actor && response.ok) {
-        const metrics = Schema.decodeUnknownSync(MetricsResult)(
-          await response.json(),
-        );
-
-        if (!metrics.ok) return Response.json(metrics);
-        const directoryUsed = Schema.decodeUnknownSync(Schema.Boolean)(metrics.directoryUsed);
-
-        const directoryBytes = await actor.bytes().catch((cause: unknown) => {
-          throw transientObjectTransport(cause) ?? cause;
-        });
-
-        return Response.json({
-          ...metrics,
-          bytes: metrics.bytes + directoryBytes,
-          directoryBytes,
-          directory: await actor.end(directoryUsed).catch((cause: unknown) => {
-            throw transientObjectTransport(cause) ?? cause;
-          }),
-        });
-      }
-
-      return response;
-    } catch (cause) {
-      const transport = Schema.is(TransientObjectTransport)(cause) ? cause : undefined;
-
-      return Response.json(
-        Schema.encodeSync(Failure)({
-          ok: false,
-          error: errorText(cause),
-          sample: url.searchParams.get("sample"),
-          ...(transport === undefined ? {} : { transport }),
-        }),
-        { status: 500 },
-      );
-    }
+    return undefined;
   },
-};
+});

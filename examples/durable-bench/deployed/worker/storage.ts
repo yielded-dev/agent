@@ -7,17 +7,25 @@ import { Prompt } from "effect/ai";
 
 import { fingerprint, type Message } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";
-import { expectedSeed, type BulkFixture, type SqlDump, type Target } from "./protocol.ts";
+import {
+  expectedSeed,
+  StorageFormat,
+  type FixtureCompatibility,
+  type BulkFixture,
+  type SqlDump,
+  type Target,
+} from "./protocol.ts";
 
 /** Native storage is supplied only by the Durable Object request boundary. */
 export class RestoreStorage extends Context.Service<RestoreStorage, DurableObjectStorage>()(
   "durable-bench/RestoreStorage",
 ) {}
 
-/** Read-only export capability; the native adapter is bound by Host at the request boundary. */
+/** Native open and read-only export, bound by Host at the request boundary. */
 export class FixtureExport extends Context.Service<
   FixtureExport,
   {
+    readonly open: Effect.Effect<void, FixtureError>;
     readonly page: (request: typeof ThreadExportRequest.Type) => ReturnType<typeof exportThread>;
   }
 >()("durable-bench/FixtureExport") {}
@@ -234,8 +242,31 @@ export const transcript = Effect.fnUntraced(function* (sql: SqlStorage, target: 
 
 export const verifyFixture = Effect.fnUntraced(function* (fixture: BulkFixture) {
   const storage = yield* RestoreStorage;
+  let compatibility: typeof FixtureCompatibility.Type | undefined;
 
   if (fixture.target === "yielded") {
+    const stored = yield* Effect.try({
+      try: () =>
+        Schema.decodeUnknownSync(StorageFormat)(
+          storage.sql
+            .exec(
+              "SELECT layout_version AS layoutVersion, record_format AS recordFormat FROM effect_agent_schema WHERE singleton = 1",
+            )
+            .one(),
+        ),
+      catch: (cause) => FixtureError.make({ message: "Read fixture storage format", cause }),
+    });
+
+    if (
+      !fixture.storageFormat ||
+      stored.layoutVersion !== fixture.storageFormat.layoutVersion ||
+      stored.recordFormat !== fixture.storageFormat.recordFormat
+    )
+      return yield* fail("Restored storage header differs from the saved fixture");
+
+    // The frozen arm owns compatibility, including its supported atomic upgrades.
+    // This is called only after the complete idle snapshot and its indexes arrive.
+    yield* (yield* FixtureExport).open;
     yield* Effect.try({
       try: () =>
         Schema.decodeUnknownSync(
@@ -253,6 +284,10 @@ export const verifyFixture = Effect.fnUntraced(function* (fixture: BulkFixture) 
       catch: (cause) =>
         FixtureError.make({ message: "Fixture storage format differs from this revision", cause }),
     });
+    compatibility = {
+      stored,
+      opened: { layoutVersion: CurrentDoStorageVersion, recordFormat: CURRENT_RECORD_FORMAT },
+    };
   }
 
   const compact =
@@ -287,5 +322,9 @@ export const verifyFixture = Effect.fnUntraced(function* (fixture: BulkFixture) 
       );
   }
 
-  return { fingerprint: digest, tables: counts };
+  return {
+    fingerprint: digest,
+    tables: counts,
+    ...(compatibility === undefined ? {} : { compatibility }),
+  };
 });

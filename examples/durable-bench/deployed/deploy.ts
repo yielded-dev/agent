@@ -96,6 +96,8 @@ export const deployments = Effect.gen(function* () {
   const provider = url(state.infrastructurePrefix + "-provider") + "/v1";
   const secrets = [cloud.accountId, cloud.apiToken, state.token, cloud.accountName];
 
+  const uploads = new Map<string, number>();
+
   const alchemy = Effect.fnUntraced(function* (
     stack: Stack,
     action: "deploy" | "destroy",
@@ -173,7 +175,23 @@ export const deployments = Effect.gen(function* () {
     for (const line of result.output.split("\n")) {
       const marker = line.indexOf("BENCH_DEPLOY_HTTP ");
 
-      if (marker >= 0) yield* Console.error(line.slice(marker));
+      if (marker >= 0) {
+        const event = yield* Schema.decodeEffect(
+          Schema.fromJsonString(
+            Schema.Struct({
+              category: Schema.String,
+              worker: Schema.optionalKey(Schema.String),
+              ok: Schema.optionalKey(Schema.Boolean),
+              startedMs: Schema.Number,
+              elapsedMs: Schema.Number,
+            }),
+          ),
+        )(line.slice(marker + "BENCH_DEPLOY_HTTP ".length));
+
+        if (event.category === "upload" && event.ok && event.worker)
+          uploads.set(event.worker, event.startedMs + event.elapsedMs);
+        yield* Console.error(line.slice(marker));
+      }
     }
     yield* Console.error(
       `BENCH_DEPLOY ${JSON.stringify({ kind: stack.kind, action, retry: force, elapsedMs: (yield* Clock.currentTimeMillis) - startedMs })}`,
@@ -214,7 +232,7 @@ export const deployments = Effect.gen(function* () {
           `BENCH_READY ${JSON.stringify({ role, fromDriver, attempts: attempt + 1, elapsedMs: (yield* Clock.currentTimeMillis) - startedMs })}`,
         );
 
-        return;
+        return { readyMs: now, probes: attempt + 1 };
       }
       yield* Effect.sleep("250 millis");
     }
@@ -243,23 +261,29 @@ export const deployments = Effect.gen(function* () {
 
   const readyTargets = (
     workers: readonly string[],
-    revision: string,
-    workerBuilds: Readonly<Record<string, WorkerBuild>> = {},
+    workerBuilds: Readonly<Record<string, WorkerBuild>>,
   ) =>
     Effect.forEach(
       workers,
-      (name) =>
-        Effect.all(
-          [
-            ready(url(name), workerBuilds[name]?.build ?? revision),
-            ready(url(name), workerBuilds[name]?.build ?? revision, true),
-          ],
-          {
-            concurrency: 2,
-            discard: true,
-          },
-        ),
-      { concurrency: workers.length, discard: true },
+      Effect.fnUntraced(function* (name) {
+        const assigned = workerBuilds[name];
+
+        if (!assigned)
+          return yield* BenchError.make({ message: "Missing Worker readiness assignment." });
+
+        const probes = yield* Effect.all(
+          [ready(url(name), assigned.build), ready(url(name), assigned.build, true)],
+          { concurrency: 2 },
+        );
+
+        return {
+          worker: name,
+          build: assigned.build,
+          readyMs: Math.max(...probes.map((probe) => probe.readyMs)),
+          probes: probes.reduce((sum, probe) => sum + probe.probes, 0),
+        };
+      }),
+      { concurrency: workers.length },
     );
 
   const infrastructureBuild = Effect.fnUntraced(function* () {
@@ -313,7 +337,8 @@ export const deployments = Effect.gen(function* () {
             "Shared endpoint unavailable; reconciling its Alchemy deployment once…",
           );
           yield* alchemy(infrastructure, "deploy", true);
-          yield* health;
+
+          return yield* health;
         }),
       ),
     );
@@ -325,19 +350,22 @@ export const deployments = Effect.gen(function* () {
 
   const targets = Effect.fnUntraced(function* (
     name: string,
-    bundle: string,
-    revision: string,
     cpu: boolean,
     workers: readonly string[],
+    workerBuilds: Readonly<Record<string, WorkerBuild>>,
     persistent = false,
-    workerBuilds: Readonly<Record<string, WorkerBuild>> = {},
   ) {
     yield* Schema.decodeEffect(Name)(name);
     const names = yield* Schema.decodeUnknownEffect(ownedWorkers(name))(workers);
 
     yield* Schema.decodeEffect(Schema.Record(Name, WorkerBuild))(workerBuilds);
-    if (Object.keys(workerBuilds).some((worker) => !names.includes(worker)))
-      return yield* BenchError.make({ message: "Worker build assignment is outside its pool." });
+    if (
+      Object.keys(workerBuilds).length !== names.length ||
+      names.some((worker) => !workerBuilds[worker])
+    )
+      return yield* BenchError.make({
+        message: "Every Worker in the pool requires exactly one explicit build assignment.",
+      });
 
     // One retained pool per prefix. Retire legacy four-binding pools before allocating replacements.
     for (const old of Object.values(state.targets))
@@ -348,16 +376,8 @@ export const deployments = Effect.gen(function* () {
         yield* Console.error("Retiring the previous owned Worker pool before deployment…");
         yield* destroy(old.name);
       }
-    const retained = join(privateDirectory, name, "bundles", revision);
-
-    if (persistent) {
-      yield* fs.makeDirectory(retained, { recursive: true });
-      yield* fs.copyFile(bundle, join(retained, basename(bundle)));
-      yield* fs.copyFile(bundle + ".map", join(retained, basename(bundle) + ".map"));
-    }
-
     const retainedBuilds: Record<string, WorkerBuild> = {};
-    const copied = new Map([[revision, persistent ? join(retained, basename(bundle)) : bundle]]);
+    const copied = new Map<string, string>();
 
     for (const [worker, assigned] of Object.entries(workerBuilds)) {
       let file = copied.get(assigned.build);
@@ -379,8 +399,14 @@ export const deployments = Effect.gen(function* () {
     const stack: Stack = {
       name,
       kind: "target",
-      bundle: persistent ? join(retained, basename(bundle)) : bundle,
-      build: revision,
+      bundle: "explicit-worker-builds",
+      build: hash(
+        JSON.stringify(
+          Object.entries(workerBuilds)
+            .map(([worker, assigned]) => [worker, assigned.build])
+            .sort(),
+        ),
+      ),
       cpu,
       workers: names,
       workerBuilds: retainedBuilds,
@@ -392,16 +418,17 @@ export const deployments = Effect.gen(function* () {
     yield* Console.error(`Uploading ${names.length} target Worker(s)…`);
     yield* alchemy(stack, "deploy");
 
-    const health = readyTargets(names, revision, retainedBuilds);
+    const health = readyTargets(names, retainedBuilds);
 
-    yield* health.pipe(
+    const readyEvents = yield* health.pipe(
       Effect.catchTag("BenchError", () =>
         Effect.gen(function* () {
           yield* Console.error(
             "Target endpoint unavailable; reconciling its Alchemy deployment once…",
           );
           yield* alchemy(stack, "deploy", true);
-          yield* health;
+
+          return yield* health;
         }),
       ),
     );
@@ -410,45 +437,54 @@ export const deployments = Effect.gen(function* () {
       names.map((worker) => [worker, url(worker)]),
     );
 
-    return endpoints;
-  });
+    const events = yield* Effect.forEach(
+      readyEvents,
+      Effect.fnUntraced(function* (event) {
+        const uploadedMs = uploads.get(event.worker);
 
-  const target = Effect.fnUntraced(function* (
-    name: string,
-    bundle: string,
-    revision: string,
-    cpu: boolean,
-  ) {
-    yield* targets(name, bundle, revision, cpu, [name]);
+        if (uploadedMs === undefined)
+          return yield* BenchError.make({ message: "Missing target upload chronology." });
 
-    return url(name);
+        return { ...event, uploadedMs };
+      }),
+    );
+
+    return { endpoints, events };
   });
 
   const attach = Effect.fnUntraced(function* (
     name: string,
-    expectedTargetBuild: string,
+    expectedBuilds: Readonly<Record<string, WorkerBuild>>,
     expectedInfrastructureBuild: string,
   ) {
     yield* Schema.decodeEffect(Name)(name);
     const stack = state.targets[name];
-    const targetHash = expectedTargetBuild.slice(0, 64);
 
     if (
       !stack ||
       stack.name !== name ||
       stack.kind !== "target" ||
-      stack.build !== expectedTargetBuild ||
-      !/^[a-f0-9]{64}$/.test(targetHash) ||
-      expectedTargetBuild !== `${targetHash}-${name}-e0`
+      !stack.workerBuilds ||
+      Object.keys(stack.workerBuilds).length !== Object.keys(expectedBuilds).length
     )
       return yield* BenchError.make({
-        message: "Resume target does not match the owned deployment.",
+        message: "Resume target assignments differ from the owned deployment.",
       });
+    for (const [worker, expected] of Object.entries(expectedBuilds)) {
+      const assigned = stack.workerBuilds[worker];
+      const targetHash = expected.build.slice(0, 64);
 
-    if (hash(yield* fs.readFile(stack.bundle)) !== targetHash)
-      return yield* BenchError.make({
-        message: "Retained target bundle differs from the resume build.",
-      });
+      if (
+        !assigned ||
+        assigned.build !== expected.build ||
+        !/^[a-f0-9]{64}$/.test(targetHash) ||
+        expected.build !== `${targetHash}-${name}-e0` ||
+        hash(yield* fs.readFile(assigned.bundle)) !== targetHash
+      )
+        return yield* BenchError.make({
+          message: "Retained target differs from the resume assignment.",
+        });
+    }
 
     const revision = yield* infrastructureBuild();
 
@@ -460,7 +496,7 @@ export const deployments = Effect.gen(function* () {
     const names = yield* Schema.decodeUnknownEffect(ownedWorkers(name))(stack.workers ?? [name]);
 
     yield* readyInfrastructure(revision);
-    yield* readyTargets(names, expectedTargetBuild);
+    yield* readyTargets(names, expectedBuilds);
 
     const endpoints: Readonly<Record<string, string>> = Object.fromEntries(
       names.map((worker) => [worker, url(worker)]),
@@ -522,7 +558,6 @@ export const deployments = Effect.gen(function* () {
     tail: url(state.infrastructurePrefix + "-cpu"),
     infrastructure,
     infrastructureBuild,
-    target,
     targets,
     attach,
     destroy,
