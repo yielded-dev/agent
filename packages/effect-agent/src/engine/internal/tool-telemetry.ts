@@ -6,7 +6,6 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as ErrorReporter from "effect/ErrorReporter";
 import * as Exit from "effect/Exit";
-import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -425,9 +424,9 @@ export class ToolSpanTelemetry extends Context.Service<
   ToolSpanTelemetry,
   ToolSpanTelemetryService
 >()("@effect-agent/engine/ToolSpanTelemetry") {
-  static readonly layer: Layer.Layer<ToolSpanTelemetry> = Layer.effect(
-    ToolSpanTelemetry,
-    Effect.map(Tracer.Tracer, (delegate) =>
+  static readonly make: Effect.Effect<ToolSpanTelemetryService> = Effect.map(
+    Tracer.Tracer,
+    (delegate) =>
       ToolSpanTelemetry.of({
         isolateEffectSpanLifecycle: (effect) =>
           Effect.suspend(() => {
@@ -485,6 +484,5 @@ export class ToolSpanTelemetry extends Context.Service<
             }),
           ),
       }),
-    ),
   );
 }

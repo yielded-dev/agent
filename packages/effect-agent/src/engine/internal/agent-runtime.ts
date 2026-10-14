@@ -2882,7 +2882,8 @@ const executeToolBatch = Effect.fnUntraced(function* <
           ),
         { concurrency: group.length === 1 ? 1 : "unbounded", discard: true },
       );
-      yield* checkpointExecution(context, durability);
+      // Each following call checks before dispatch; the batch owner checks again
+      // after the final group, its cleanup, and the optional budget guard.
     }
   }).pipe(
     Effect.provideService(RunEventSink, batchSink),
@@ -8578,10 +8579,9 @@ function executeWithCompletion<
 
       // Normalize the selected host policy at the Run boundary. Inner calls project typed
       // override failures into broker outcomes; native calls retain their original E channel.
-      const programmaticAuthorization = Layer.effect(
-        ProgrammaticToolAuthorization,
-        Effect.gen(function* () {
-          const services = yield* Effect.context<HookRequirements>();
+      const programmaticAuthorization = Effect.map(
+        Effect.context<HookRequirements>(),
+        (services) => {
           const selected = options.toolAuthorization;
 
           return ProgrammaticToolAuthorization.of({
@@ -8594,7 +8594,7 @@ function executeWithCompletion<
                     ),
                   ),
           });
-        }),
+        },
       );
 
       const interpreted = Effect.flatten(
@@ -9006,8 +9006,13 @@ function executeWithCompletion<
                         ),
                   );
 
-                  yield* checkpointExecution(context, options.durability);
-                  if (output._tag !== "NextTurn") return output;
+                  if (output._tag !== "NextTurn") {
+                    yield* checkpointExecution(context, options.durability);
+
+                    return output;
+                  }
+                  // Both Turn entry points check before any hook or dispatch. The
+                  // preceding Scope has closed, so that check also sees finalizer failures.
                   request = output;
                 }
 
@@ -9254,7 +9259,8 @@ function executeWithCompletion<
       const events = modeled.pipe(
         // The engine composition boundary owns span-lifecycle isolation while preserving the host's
         // ambient Tracer/Logger configuration. Individual Tool executions consume this capability.
-        Effect.provide(ToolSpanTelemetry.layer.pipe(Layer.provideMerge(programmaticAuthorization))),
+        Effect.provideServiceEffect(ToolSpanTelemetry, ToolSpanTelemetry.make),
+        Effect.provideServiceEffect(ProgrammaticToolAuthorization, programmaticAuthorization),
       );
 
       // Closing execution first joins every owned child and finalizer before validation,
