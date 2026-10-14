@@ -1,5 +1,4 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { Navigate } from "@tanstack/react-router";
 import { Atom } from "effect/reactivity";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -7,8 +6,6 @@ import { useEffect, useState } from "react";
 // Copied unchanged from yielded-dev/brand assets/. Regenerate there, not here.
 import lockupInk from "./brand/lockup-agent-ink.svg?url";
 import lockupPaper from "./brand/lockup-agent-paper.svg?url";
-import markInk from "./brand/mark-ink.svg?url";
-import markPaper from "./brand/mark-paper.svg?url";
 import {
   loginTarget,
   leaveLogin,
@@ -17,7 +14,7 @@ import {
   loginView,
   requestEmailCode,
   verifyEmailCode,
-  type LoginLoadingStep,
+  enterLogin,
 } from "./client";
 
 /** One account signs in to every app on agent.yielded.dev; copy names the one the visitor returns to. */
@@ -39,6 +36,7 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
   const returnTarget = useAtomValue(loginTarget(callback));
   const startOAuth = useAtomSet(oauthLogin);
   const consume = useAtomSet(consumeCallback);
+  const enter = useAtomSet(enterLogin);
   const leave = useAtomSet(leaveLogin);
   const requestCode = useAtomSet(requestEmailCode);
   const verifyCode = useAtomSet(verifyEmailCode);
@@ -49,20 +47,31 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
 
   useEffect(() => {
     if (callback) consume();
-  }, [callback, consume]);
+    else enter();
+  }, [callback, consume, enter]);
   useEffect(() => {
     if (view._tag === "Authenticated") leave(view.returnTarget);
   }, [view, leave]);
-  if (view._tag === "Authenticated")
-    return view.returnTarget === "/travel/" ? (
-      <Navigate to="/" replace />
-    ) : (
-      <LoginLoading step="session" />
-    );
-  if (view._tag === "Loading") return <LoginLoading step={view.step} />;
+  if (view._tag === "Authenticated" || view._tag === "Loading") return <LoginLoading />;
 
   const { pending, busy } = view;
   const destination = destinations[returnTarget];
+
+  if (callback)
+    return (
+      <LoginShell back={destination.back}>
+        <section className="login-card">
+          <h1>{view.cancelled ? "Sign-in cancelled" : "We couldn’t sign you in"}</h1>
+          <p className="login-lede">Start a new attempt to continue.</p>
+          <a
+            className="login-primary"
+            href={`/auth/login?return=${encodeURIComponent(returnTarget)}`}
+          >
+            Try again
+          </a>
+        </section>
+      </LoginShell>
+    );
 
   return (
     <LoginShell back={destination.back}>
@@ -222,38 +231,14 @@ export function Login({ callback = false }: { readonly callback?: boolean }) {
   );
 }
 
-export function LoginLoading({ step }: { readonly step: LoginLoadingStep }) {
+export function LoginLoading() {
   return (
-    <LoginShell>
-      <section className="login-card login-loading" aria-labelledby="login-loading-title">
-        <div className="login-loading-content" role="status" aria-live="polite">
-          <div className="login-loader" aria-hidden="true">
-            <picture>
-              <source media="(prefers-color-scheme: dark)" srcSet={markPaper} />
-              <img src={markInk} alt="" width={63} height={90} />
-            </picture>
-          </div>
-          <h1 id="login-loading-title">
-            {step === "yielded"
-              ? "Connecting to Yielded"
-              : step === "github"
-                ? "Connecting to GitHub"
-                : step === "callback"
-                  ? "Signing you in"
-                  : "Getting things ready"}
-          </h1>
-          <p>
-            {step === "yielded"
-              ? "Using your Yielded account, or taking you to GitHub to sign in."
-              : step === "github"
-                ? "Taking you to GitHub to continue."
-                : step === "callback"
-                  ? "Finishing up. You’ll be on your way in a moment."
-                  : "One moment while we check your sign-in."}
-          </p>
-        </div>
-      </section>
-    </LoginShell>
+    <main className="auth-transition" aria-busy="true">
+      <div role="status">
+        <h1>Signing you in</h1>
+        <p>You’ll return to the app automatically.</p>
+      </div>
+    </main>
   );
 }
 

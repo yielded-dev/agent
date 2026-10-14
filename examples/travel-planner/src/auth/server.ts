@@ -75,6 +75,7 @@ export const makeAuth = (config: AuthConfiguration) => {
       email: Email.makeCode(email),
       emailRegistration: Email.makeRegistration({ ...email, registration: Registration }),
       oauth: OAuth.makeRegistration({
+        authenticate: true,
         namespace: "travel-planner/oauth",
         registration: Registration,
         policy: {
@@ -120,7 +121,7 @@ export const makeAuth = (config: AuthConfiguration) => {
             configurationGeneration: 2,
             clientId: config.AUTH_GITHUB_CLIENT_ID,
             clientSecret: Redacted.make(config.AUTH_GITHUB_CLIENT_SECRET),
-            redirectUri: `${config.AUTH_ORIGIN}/travel/auth/github/callback`,
+            redirectUri: `${config.AUTH_ORIGIN}/auth/github/callback`,
           }),
         ),
         OAuth.OAuthProtocol,
@@ -139,7 +140,7 @@ export const makeAuth = (config: AuthConfiguration) => {
                 issuer: config.AUTH_YIELDED_ISSUER,
                 clientId: "yielded-agent",
                 clientSecret: Redacted.make(config.AUTH_YIELDED_CLIENT_SECRET),
-                redirectUri: `${config.AUTH_ORIGIN}/travel/auth/yielded/callback`,
+                redirectUri: `${config.AUTH_ORIGIN}/auth/yielded/callback`,
                 scopes: ["openid", "profile"],
                 // Refresh old issuer sessions before returning; leave a minute for completion.
                 maxAgeSeconds: Math.floor(requirement.maximumAgeMillis / 1000) - 60,

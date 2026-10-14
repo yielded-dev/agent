@@ -1,7 +1,6 @@
 import * as AuthContract from "@yielded/auth/AuthContract";
 import * as Email from "@yielded/auth/Email";
 import { HookDenied } from "@yielded/auth/Hooks";
-import { IdentityConflict } from "@yielded/auth/Identity";
 import * as OAuth from "@yielded/auth/OAuth";
 import { RequestBindingFlowId, RequestBindingPublic } from "@yielded/auth/Operations";
 import { ProofReference, ProofRequestId, ProofRequestReceipt } from "@yielded/auth/Proofs";
@@ -12,13 +11,6 @@ import { Schema } from "effect";
 export const Registration = Schema.Struct({
   displayName: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
 });
-
-const Failure = Schema.Union([
-  OAuth.OAuthRejected,
-  OAuth.OAuthUnavailable,
-  OAuth.OAuthMethodUnsupported,
-  HookDenied,
-]);
 
 const EmailFailure = Schema.Union([
   Email.EmailRejected,
@@ -47,7 +39,7 @@ const attempt = {
 };
 
 export const LoginApi = AuthContract.make("travel-planner/Auth", {
-  basePath: "/travel/auth",
+  basePath: "/auth",
   claims: Schema.Struct({ displayName: Schema.String }),
   actions: (sessions) => ({
     beginEmailSignIn: AuthContract.action({
@@ -123,53 +115,8 @@ export const LoginApi = AuthContract.make("travel-planner/Auth", {
       strategy: "emailRegistration",
       requestFields: { requestBinding: "request-binding" },
     }),
-    signIn: AuthContract.action({
-      payload: OAuth.OAuthSignInInput,
-      success: OAuth.OAuthSignInAuthorization,
-      error: Failure,
-      mode: "mutation",
-      credentials: true,
-    }),
-    completeSignIn: AuthContract.action({
-      payload: Schema.Struct({
-        flowId: OAuth.OAuthSignInComplete.fields.flowId,
-        provider: OAuth.OAuthSignInComplete.fields.provider,
-        callbackId: OAuth.OAuthSignInComplete.fields.callbackId,
-        response: OAuth.OAuthCallbackResponse,
-      }),
-      success: Schema.Union([
-        Schema.Struct({
-          completion: sessions.CompletionResult,
-          returnTarget: OAuth.OAuthReturnTarget,
-        }),
-        Schema.TaggedStruct("Cancelled", { returnTarget: OAuth.OAuthReturnTarget }),
-        OAuth.OAuthRegistrationRequired,
-      ]),
-      error: Failure,
-      mode: "mutation",
-      replay: "single-use",
-      credentials: true,
-      requestFields: { requestBinding: "request-binding" },
-      subject: {
-        fromSuccess: (value) =>
-          "completion" in value && value.completion._tag === "Authenticated"
-            ? value.completion.session.subjectId
-            : undefined,
-      },
-    }),
-    register: AuthContract.action({
-      payload: Schema.Struct({
-        reference: OAuth.OAuthRegistrationReference,
-        flowId: OAuth.OAuthSignInBegin.fields.flowId,
-        commandId: OAuth.OAuthCommandId,
-        registration: Registration,
-      }),
-      success: OAuth.OAuthRegistrationResult,
-      error: Schema.Union([Failure, IdentityConflict]),
-      mode: "mutation",
-      replay: "single-use",
-      credentials: true,
-      requestFields: { requestBinding: "request-binding", credential: "registration" },
-    }),
+    signIn: AuthContract.oauthSignIn(),
+    completeSignIn: AuthContract.oauthCompleteSignIn(sessions),
+    register: AuthContract.oauthRegister(sessions, Registration, { authenticate: true }),
   }),
 });

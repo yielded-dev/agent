@@ -1,7 +1,5 @@
-import { RegistryProvider, useAtomMount } from "@effect/atom-react";
+import { RegistryProvider } from "@effect/atom-react";
 import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
-
-import { sessionObservation } from "../auth/client";
 
 import appCss from "../styles.css?url";
 
@@ -39,18 +37,9 @@ function Document({ children }: { readonly children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <RegistryProvider>
-          <SessionObservation />
-          {children}
-        </RegistryProvider>
+        <RegistryProvider>{children}</RegistryProvider>
         <Scripts />
       </body>
     </html>
   );
-}
-
-function SessionObservation() {
-  useAtomMount(sessionObservation);
-
-  return null;
 }

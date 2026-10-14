@@ -48,6 +48,7 @@ export default Alchemy.Stack(
       domain: "travel.effect-agent.com",
       routes: [
         { pattern: "agent.yielded.dev/travel*", zoneName: "yielded.dev" },
+        { pattern: "agent.yielded.dev/auth/*", zoneName: "yielded.dev" },
         { pattern: "*-trip.effect-agent.com/*", zoneId },
       ],
       workersDev: { enabled: false, previewsEnabled: false },

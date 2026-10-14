@@ -85,8 +85,8 @@ const keyHeaders = (keys: ProviderKeys) =>
 
 export const accountAtom = LabClient.query("lab", "account", { headers });
 
-/** The travel planner signs visitors in on this origin and returns them to the lab. */
-export const signInUrl = `/travel/login?return=${encodeURIComponent(import.meta.env.BASE_URL)}`;
+/** Shared Agent sign-in returns visitors to the lab. */
+export const signInUrl = `/auth/login?provider=yielded&return=${encodeURIComponent(import.meta.env.BASE_URL)}`;
 
 const snapshotQuery = LabClient.query("lab", "snapshot", {
   headers,

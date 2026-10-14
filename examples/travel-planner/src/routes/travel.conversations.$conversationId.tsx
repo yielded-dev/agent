@@ -4,7 +4,7 @@ import { Schema } from "effect";
 import { ConversationId } from "../domain";
 import { Planner } from "../planner";
 
-export const Route = createFileRoute("/conversations/$conversationId")({
+export const Route = createFileRoute("/travel/conversations/$conversationId")({
   beforeLoad: ({ params }) => {
     // oxlint-disable-next-line effect/no-untyped-throw -- TanStack Router consumes thrown notFound responses from beforeLoad.
     if (!Schema.is(ConversationId)(params.conversationId)) throw notFound();

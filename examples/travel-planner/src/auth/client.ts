@@ -95,7 +95,6 @@ export const loginTarget = Atom.family((callback: boolean) =>
 const Provider = Schema.Literals(["yielded", "github"]);
 
 type Provider = typeof Provider.Type;
-const activeProvider = Atom.make<Provider>("yielded");
 
 const PendingOAuth = Schema.fromJsonString(
   Schema.Struct({ flowId: Schema.NonEmptyString, returnTarget: ReturnTarget, provider: Provider }),
@@ -137,11 +136,33 @@ export const oauthLogin = Atom.fn<{
   readonly provider: Provider;
   readonly returnTarget: ReturnTarget;
   readonly selectAccount?: boolean;
-}>()((input, get) => {
-  get.set(activeProvider, input.provider);
+}>()((input, get) =>
+  startOAuth(input).pipe(Effect.provideService(AtomRegistry.AtomRegistry, get.registry)),
+).pipe(Atom.setIdleTTL(0));
 
-  return startOAuth(input).pipe(Effect.provideService(AtomRegistry.AtomRegistry, get.registry));
-}).pipe(Atom.setIdleTTL(0));
+const loginStarted = Atom.make(false).pipe(Atom.keepAlive);
+
+/** App sign-in buttons start the shared provider directly; the plain login URL offers choices. */
+const automaticLogin = Atom.fn<void>()((_, get) =>
+  Effect.gen(function* () {
+    const session = yield* AtomRegistry.getResult(get.registry, auth.session, {
+      suspendOnWaiting: true,
+    });
+
+    if (session !== null) return;
+    yield* get.setResult(oauthLogin, {
+      provider: "yielded",
+      returnTarget: get(loginTarget(false)),
+    });
+  }),
+);
+
+export const enterLogin = Atom.fnSync<void>()((_, get) => {
+  if (get(loginStarted) || new URLSearchParams(location.search).get("provider") !== "yielded")
+    return;
+  get.set(loginStarted, true);
+  get.set(automaticLogin, undefined);
+});
 
 // The Worker captures callback credentials in memory before loading page resources.
 // Only public flow correlation survives navigation.
@@ -166,7 +187,7 @@ export const callbackInput = Effect.gen(function* () {
   if (!captured.query || !captured.pending) return yield* BrowserFlowUnavailable.make();
   const pending = yield* Schema.decodeEffect(PendingOAuth)(captured.pending);
 
-  if (location.pathname !== `/travel/auth/${pending.provider}/callback`)
+  if (location.pathname !== `/auth/${pending.provider}/callback`)
     return yield* BrowserFlowUnavailable.make();
   const query = new URLSearchParams(captured.query);
 
@@ -214,10 +235,15 @@ export const completeOAuth = Atom.fn<void>()((_, get) =>
         },
       });
 
-      if (registered._tag !== "RegistrationAccepted") return yield* BrowserFlowUnavailable.make();
-      // Accepted registration creates an account, not a session. Start a NEW authorized flow.
-      yield* startOAuth({ provider: input.provider, returnTarget });
+      // Only a first confirmed registration can issue credentials. A metadata-only
+      // replay is not permission to repeat registration or provider exchange.
+      if (registered._tag !== "Authenticated") return yield* BrowserFlowUnavailable.make();
+
+      return { completion: registered, returnTarget };
     }
+
+    if ("completion" in result && result.completion._tag !== "Authenticated")
+      return yield* BrowserFlowUnavailable.make();
 
     return result;
   }).pipe(Effect.provideService(AtomRegistry.AtomRegistry, get.registry)),
@@ -334,14 +360,12 @@ export const verifyEmailCode = Atom.fn<{
   }).pipe(Effect.provideService(AtomRegistry.AtomRegistry, get.registry)),
 ).pipe(Atom.setIdleTTL(0));
 
-export type LoginLoadingStep = "session" | "github" | "yielded" | "callback";
-
 type LoginView =
   | {
       readonly _tag: "Authenticated";
       readonly returnTarget: ReturnTarget;
     }
-  | { readonly _tag: "Loading"; readonly step: LoginLoadingStep }
+  | { readonly _tag: "Loading" }
   | {
       readonly _tag: "Form";
       readonly pending: EmailPending | undefined;
@@ -357,45 +381,48 @@ const interrupted = <A, E>(result: AsyncResult.AsyncResult<A, E>) =>
 const failed = <A, E>(result: AsyncResult.AsyncResult<A, E>) =>
   AsyncResult.isFailure(result) && !result.waiting && !interrupted(result);
 
-/** Session publication owns success; public login results live only as long as this screen. */
+/** Complete a callback before reading any ambient session; its result owns the return. */
 export const loginView = Atom.family((callback: boolean) =>
   Atom.make((get): LoginView => {
-    const session = get(auth.session);
     const started = get(oauthLogin);
     const completed = get(completeOAuth);
     const requested = get(requestEmailCode);
     const verified = get(verifyEmailCode);
+    const entered = callback ? undefined : get(automaticLogin);
+    // Keep login queries and its workflow mounted while the provider starts.
+    // A callback instead relies on its completion and reads no ambient session.
+    const session = callback ? undefined : get(auth.session);
 
-    if (AsyncResult.isSuccess(session) && session.value !== null)
-      return {
-        _tag: "Authenticated",
-        returnTarget: get(loginTarget(callback)),
-      };
+    if (started.waiting || AsyncResult.isSuccess(started)) return { _tag: "Loading" };
+    if (callback) {
+      if (completed._tag === "Initial" || completed.waiting) return { _tag: "Loading" };
+      if (
+        AsyncResult.isSuccess(completed) &&
+        "completion" in completed.value &&
+        completed.value.completion._tag === "Authenticated"
+      )
+        return {
+          _tag: "Authenticated",
+          returnTarget: loginReturnTarget(completed.value.returnTarget),
+        };
+    }
 
-    if (started.waiting || AsyncResult.isSuccess(started))
-      return { _tag: "Loading", step: get(activeProvider) };
+    if (session && AsyncResult.isSuccess(session) && session.value !== null)
+      return { _tag: "Authenticated", returnTarget: get(loginTarget(false)) };
+
     if (
-      callback &&
-      (completed._tag === "Initial" ||
-        completed.waiting ||
-        (AsyncResult.isSuccess(completed) &&
-          "_tag" in completed.value &&
-          completed.value._tag === "RegistrationRequired"))
+      entered &&
+      new URLSearchParams(location.search).get("provider") === "yielded" &&
+      (entered._tag === "Initial" || entered.waiting)
     )
-      return { _tag: "Loading", step: "callback" };
+      return { _tag: "Loading" };
 
     const registered = Option.getOrUndefined(AsyncResult.value(verified));
     const busy = requested.waiting || verified.waiting;
 
-    const authenticated =
-      (AsyncResult.isSuccess(completed) &&
-        "completion" in completed.value &&
-        completed.value.completion._tag === "Authenticated") ||
-      (AsyncResult.isSuccess(verified) && verified.value === undefined);
-
-    if (session.waiting && authenticated) return { _tag: "Loading", step: "callback" };
-    if (session._tag === "Initial" && !busy)
-      return { _tag: "Loading", step: callback ? "callback" : "session" };
+    if (session?.waiting && AsyncResult.isSuccess(verified) && verified.value === undefined)
+      return { _tag: "Loading" };
+    if (session?._tag === "Initial" && !busy) return { _tag: "Loading" };
 
     return {
       _tag: "Form",
@@ -408,7 +435,7 @@ export const loginView = Atom.family((callback: boolean) =>
           ? "provider"
           : failed(requested) || failed(verified)
             ? "email"
-            : failed(session)
+            : (session && failed(session)) || (entered && failed(entered))
               ? "session"
               : undefined,
       cancelled:
@@ -420,7 +447,7 @@ export const loginView = Atom.family((callback: boolean) =>
   }).pipe(Atom.setIdleTTL(0)),
 );
 
-/** The browser lab is outside this router; internal returns stay client-side. */
+/** Re-enter the destination through its server authorization boundary. */
 export const leaveLogin = Atom.fnSync<ReturnTarget>()((returnTarget) => {
-  if (returnTarget === "/browser-use/") window.location.replace(returnTarget);
+  window.location.replace(returnTarget);
 });

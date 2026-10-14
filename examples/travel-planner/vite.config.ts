@@ -17,7 +17,7 @@ export default defineConfig({
                 compatibilityDate: "2026-07-01",
                 compatibilityFlags: ["nodejs_compat"],
               }),
-          tanstackStart({ router: { basepath: "/travel" } }),
+          tanstackStart({ router: { basepath: "/" } }),
           tailwindcss(),
           react(),
         ],
