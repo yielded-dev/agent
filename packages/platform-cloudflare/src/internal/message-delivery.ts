@@ -5,7 +5,7 @@ import {
   MessageDeliveryStore,
 } from "@yielded/agent/message-delivery";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Clock, Context, Effect, Layer, Option } from "effect";
+import { Clock, Context, Duration, Effect, Exit, Layer, Option } from "effect";
 
 import { DurableAlarmError, ThreadMessageDelivery, ThreadMutationGate } from "../Alarm.ts";
 import { ThreadObjectPlacement } from "../CloudflareBindings.ts";
@@ -76,45 +76,69 @@ export const guardedMessageDeliveryStoreLayer = Layer.effect(
   }),
 );
 
+/** Build the driver in the Object's Scope only when retained delivery work is due. */
+export const lazyThreadMessageDeliveryLayer = <E, R>(
+  driver: Layer.Layer<MessageDeliveryDriver, E, R>,
+) =>
+  Layer.fromBuildMemo((memoMap, scope) =>
+    Effect.gen(function* () {
+      const context = yield* Effect.context<R>();
+      const store = yield* MessageDeliveryStore;
+
+      // Failed builds release their Layer scopes; let a later wave build again.
+      const service = yield* Effect.cachedWithTTL(
+        Layer.buildWithMemoMap(driver, memoMap, scope).pipe(
+          Effect.provide(context),
+          Effect.map(Context.get(MessageDeliveryDriver)),
+          Effect.mapError((cause) =>
+            DurableAlarmError.make({
+              operation: "prepare message delivery",
+              message: "Durable message recovery remains pending",
+              cause,
+            }),
+          ),
+        ),
+        (exit) => (Exit.isSuccess(exit) ? Duration.infinity : Duration.zero),
+      );
+
+      const failure = (operation: string) => () =>
+        DurableAlarmError.make({
+          operation,
+          message: "Durable message recovery remains pending",
+        });
+
+      const prepare = Effect.gen(function* () {
+        const deadline = yield* store.nextDeadline();
+
+        if (deadline === null || deadline > (yield* Clock.currentTimeMillis))
+          return { timeoutMillis: 1, run: Effect.succeed(Option.fromNullishOr(deadline)) };
+        // The assembled driver has four permits: a wave is one parallel attempt window.
+        const keys = yield* store.due(yield* Clock.currentTimeMillis, 4);
+        const records = yield* Effect.forEach(keys, (key) => store.get(key));
+
+        return {
+          timeoutMillis: Math.max(
+            1,
+            ...records.map((record) => record?.policy.attemptTimeoutMillis ?? 1),
+          ),
+          run: Effect.flatMap(service, (driver) =>
+            Effect.forEach(keys, (key) => driver.process(key), {
+              concurrency: 4,
+              discard: true,
+            }),
+          ).pipe(
+            Effect.andThen(store.nextDeadline()),
+            Effect.map(Option.fromNullishOr),
+            Effect.mapError(failure("dispatch message delivery")),
+          ),
+        };
+      }).pipe(Effect.mapError(failure("prepare message delivery")));
+
+      return Context.make(ThreadMessageDelivery, { prepare });
+    }),
+  );
+
 /** Message progress shares the native alarm slot without blocking source runtime work. */
-export const threadMessageDeliveryLayer = Layer.effectContext(
-  Effect.gen(function* () {
-    const driver = yield* MessageDeliveryDriver;
-    const store = yield* MessageDeliveryStore;
-
-    const failure = (operation: string) => () =>
-      DurableAlarmError.make({
-        operation,
-        message: "Durable message recovery remains pending",
-      });
-
-    const prepare = Effect.gen(function* () {
-      const deadline = yield* store.nextDeadline();
-
-      if (deadline === null || deadline > (yield* Clock.currentTimeMillis))
-        return { timeoutMillis: 1, run: Effect.succeed(Option.fromNullishOr(deadline)) };
-      // The assembled driver has four permits: a wave is one parallel attempt window.
-      const keys = yield* store.due(yield* Clock.currentTimeMillis, 4);
-      const records = yield* Effect.forEach(keys, (key) => store.get(key));
-
-      return {
-        timeoutMillis: Math.max(
-          1,
-          ...records.map((record) => record?.policy.attemptTimeoutMillis ?? 1),
-        ),
-        run: Effect.forEach(keys, (key) => driver.process(key), {
-          concurrency: 4,
-          discard: true,
-        }).pipe(
-          Effect.andThen(store.nextDeadline()),
-          Effect.map(Option.fromNullishOr),
-          Effect.mapError(failure("dispatch message delivery")),
-        ),
-      };
-    }).pipe(Effect.mapError(failure("prepare message delivery")));
-
-    return Context.make(ThreadMessageDelivery, {
-      prepare,
-    });
-  }),
+export const threadMessageDeliveryLayer = lazyThreadMessageDeliveryLayer(
+  Layer.effect(MessageDeliveryDriver, MessageDeliveryDriver),
 );
