@@ -6,6 +6,7 @@ import {
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
+import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import { Effect, Option, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
@@ -15,7 +16,6 @@ import {
   DoStorageCorruptionError,
   DoStorageError,
 } from "../DoStorageError.ts";
-import type { OwnedState } from "./owned-state.ts";
 
 export const CurrentDoStorageVersion = 28;
 
@@ -279,30 +279,33 @@ const initializeDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(functi
     .pipe(Effect.catchTag("SqlError", storageError));
 });
 
-const initializedLayouts = new WeakMap<OwnedState, DoStorageHeader>();
+const initializedLayouts = new WeakMap<object, DoStorageHeader>();
 
 /** Share committed inspection within one live Object owner; maintenance invalidates it. */
-export const ensureDoStorageLayout = Effect.fnUntraced(function* (state: OwnedState) {
+export const ensureDoStorageLayout = Effect.fnUntraced(function* () {
   const sql = yield* SqlClient.SqlClient;
+  const owner = yield* SqlStorageOwner;
 
   // A caller-owned transaction can still roll back after this initializer returns.
-  if (Option.isSome(yield* Effect.serviceOption(sql.transactionService)))
+  if (owner === undefined || Option.isSome(yield* Effect.serviceOption(sql.transactionService)))
     return yield* initializeDoStorageLayout();
 
-  return yield* state.read(
+  const identity = owner.identity ?? owner;
+
+  return yield* owner.read(
     Effect.gen(function* () {
-      const previous = initializedLayouts.get(state);
+      const previous = initializedLayouts.get(identity);
 
       if (previous !== undefined) return previous;
       const header = yield* initializeDoStorageLayout();
 
       const invalidate = () => {
-        initializedLayouts.delete(state);
-        state.invalidators.delete(invalidate);
+        initializedLayouts.delete(identity);
+        owner.invalidators.delete(invalidate);
       };
 
-      initializedLayouts.set(state, header);
-      state.invalidators.add(invalidate);
+      initializedLayouts.set(identity, header);
+      owner.invalidators.add(invalidate);
 
       return header;
     }),

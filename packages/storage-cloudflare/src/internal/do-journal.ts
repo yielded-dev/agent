@@ -338,10 +338,13 @@ const ensureCurrentStorage = Effect.fnUntraced(function* (
   maxStoredValueBytes: number,
 ) {
   const state = yield* ownedState(sql);
-
-  yield* ensureDoStorageLayout(state).pipe(Effect.provideService(SqlClient.SqlClient, sql));
-
   const owner = (yield* SqlStorageOwner) ?? state;
+
+  yield* ensureDoStorageLayout().pipe(
+    Effect.provideService(SqlStorageOwner, owner),
+    Effect.provideService(SqlClient.SqlClient, sql),
+  );
+
   let journal: DoJournal | undefined;
 
   const lifecycle = yield* makeSqlLifecyclePublication(undefined, maxStoredValueBytes).pipe(
