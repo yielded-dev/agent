@@ -217,7 +217,7 @@ type MaintenanceCheckpoint = {
   readonly mutations: Parameters<
     Parameters<ThreadMaintenanceAlarm["Service"]["transaction"]>[0]
   >[0];
-  readonly requireActive: Effect.Effect<void, DurableAlarmError>;
+  readonly isActive: (fiber: Fiber.Fiber<unknown, unknown>) => boolean;
 };
 
 const CurrentCheckpoint = Context.Reference<MaintenanceCheckpoint | undefined>(
@@ -232,31 +232,27 @@ const makeAlarmOperation = Effect.gen(function* () {
   const { ctx } = yield* DurableObjectContext;
   const queue = DueQueue.make(ctx.storage);
 
-  const transaction: SqlClient["withTransaction"] = (body) =>
+  const transaction = <A, E, R>(
+    body: (owner: Fiber.Fiber<unknown, unknown>) => Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | SqlError, R> =>
     alarms
       .transaction(
         (mutations) =>
           Effect.withFiber((owner) => {
             let active = true;
 
-            const requireActive = Effect.withFiber((fiber) =>
-              active && fiber === owner
-                ? Effect.void
-                : Effect.fail(
-                    DurableAlarmError.make({
-                      operation: "enroll maintenance source",
-                      message: "Source intent requires its active transaction callback's fiber",
-                    }),
-                  ),
-            );
-
-            return body.pipe(
-              Effect.provideService(CurrentCheckpoint, { mutations, requireActive }),
-              Effect.ensuring(
-                Effect.sync(() => {
-                  active = false;
+            return Effect.onExitPrimitive(
+              body(owner).pipe(
+                Effect.provideService(CurrentCheckpoint, {
+                  mutations,
+                  isActive: (fiber) => active && fiber === owner,
                 }),
               ),
+              () => {
+                active = false;
+
+                return undefined;
+              },
             );
           }),
         { sqlClient: sql },
@@ -276,7 +272,9 @@ const makeAlarmOperation = Effect.gen(function* () {
       );
 
   const withTransaction = <A, E, R>(body: Effect.Effect<A, E, R>) =>
-    Effect.flatMap(Effect.serviceOption(sql.transactionService), (ambient) => {
+    Effect.withFiber((fiber) => {
+      const ambient = Context.getOption(fiber.context, sql.transactionService);
+
       if (ambient._tag === "Some" && !DueQueue.ownsTransaction(ctx.storage, ambient.value[1]))
         return Effect.fail(
           SqlError.make({
@@ -287,53 +285,53 @@ const makeAlarmOperation = Effect.gen(function* () {
             }),
           }),
         );
+      let frame: ReturnType<typeof queue.begin> | undefined;
 
       return Effect.uninterruptibleMask((restore) =>
-        Effect.suspend(() => {
-          let frame: ReturnType<typeof queue.begin> | undefined;
+        Effect.onExitPrimitive(
+          transaction((owner) => {
+            const current = Context.getOption(owner.context, sql.transactionService);
 
-          return transaction(
-            Effect.flatMap(Effect.serviceOption(sql.transactionService), (transaction) =>
-              Effect.gen(function* () {
-                if (transaction._tag === "None")
-                  return yield* SqlError.make({
-                    reason: UnknownError.make({
-                      operation: "begin maintenance source transaction",
-                      message: "SQL transaction unavailable",
-                      cause: "SQL transaction unavailable",
-                    }),
-                  });
-                frame = queue.begin(transaction.value[1]);
-              }),
-            ).pipe(
-              Effect.andThen(restore(body)),
-              Effect.tap(() =>
-                Effect.try({
-                  try: () => {
-                    if (frame !== undefined) queue.flush(frame);
-                  },
-                  catch: (cause) =>
-                    SqlError.make({
-                      reason: UnknownError.make({
-                        cause,
-                        operation: "flush maintenance due queue",
-                        message: "Maintenance intent could not commit",
-                      }),
-                    }),
+            if (current._tag === "None")
+              return SqlError.make({
+                reason: UnknownError.make({
+                  operation: "begin maintenance source transaction",
+                  message: "SQL transaction unavailable",
+                  cause: "SQL transaction unavailable",
                 }),
-              ),
-            ),
-          ).pipe(
-            Effect.onExit((exit) =>
-              Effect.sync(() => {
-                if (frame !== undefined) queue.finish(frame, Exit.isSuccess(exit));
+              });
+            const started = queue.begin(current.value[1]);
+
+            frame = started;
+
+            return Effect.flatMap(restore(body), (value) =>
+              Effect.try({
+                try: () => {
+                  queue.flush(started);
+
+                  return value;
+                },
+                catch: (cause) =>
+                  SqlError.make({
+                    reason: UnknownError.make({
+                      cause,
+                      operation: "flush maintenance due queue",
+                      message: "Maintenance intent could not commit",
+                    }),
+                  }),
               }),
-            ),
-            // A released permit can resume another transaction. Do not auto-yield
-            // between the driver's settlement and removing this transaction's frame.
-            Effect.provideService(Scheduler.PreventSchedulerYield, true),
-          );
-        }),
+            );
+          }),
+          (exit) => {
+            if (frame !== undefined) queue.finish(frame, Exit.isSuccess(exit));
+
+            return undefined;
+          },
+        ).pipe(
+          // A released permit can resume another transaction. Do not auto-yield
+          // between the driver's settlement and removing this transaction's frame.
+          Effect.provideService(Scheduler.PreventSchedulerYield, true),
+        ),
       );
     }).pipe(Effect.provideService(SqlClient, sql));
 
@@ -352,32 +350,33 @@ const makeAlarmOperation = Effect.gen(function* () {
           }),
         );
 
-      return tx.requireActive.pipe(
-        Effect.andThen(
-          Effect.suspend(() => {
-            let checkpoint: ReturnType<DurableObjectAlarm.AlarmScheduler["scheduleAlarm"]> =
-              Effect.void;
-
-            const intent: CheckpointIntent = {
-              at: (at) => {
-                checkpoint = tx.mutations.scheduleAlarm(maintenanceAlarmInput(at));
-              },
-              earlier: (at) => {
-                checkpoint = tx.mutations.scheduleAlarmEarlier(maintenanceAlarmInput(at));
-              },
-              cancel: () => {
-                checkpoint = tx.mutations.cancelAlarm(maintenanceAlarmRef);
-              },
-            };
-
-            // The SQL/alarm callback already owns the native transaction; KV uses the same storage.
-            return Effect.tryPromise({
-              try: () => execute(ctx.storage, intent),
-              catch: alarmFailure(operation),
-            }).pipe(Effect.tap(() => checkpoint));
+      if (!tx.isActive(fiber))
+        return Effect.fail(
+          DurableAlarmError.make({
+            operation: "enroll maintenance source",
+            message: "Source intent requires its active transaction callback's fiber",
           }),
-        ),
-      );
+        );
+
+      let checkpoint: ReturnType<DurableObjectAlarm.AlarmScheduler["scheduleAlarm"]> = Effect.void;
+
+      const intent: CheckpointIntent = {
+        at: (at) => {
+          checkpoint = tx.mutations.scheduleAlarm(maintenanceAlarmInput(at));
+        },
+        earlier: (at) => {
+          checkpoint = tx.mutations.scheduleAlarmEarlier(maintenanceAlarmInput(at));
+        },
+        cancel: () => {
+          checkpoint = tx.mutations.cancelAlarm(maintenanceAlarmRef);
+        },
+      };
+
+      // The SQL/alarm callback already owns the native transaction; KV uses the same storage.
+      return Effect.tryPromise({
+        try: () => execute(ctx.storage, intent),
+        catch: alarmFailure(operation),
+      }).pipe(Effect.tap(() => checkpoint));
     });
 
     return Effect.withFiber((fiber) => {
@@ -388,7 +387,7 @@ const makeAlarmOperation = Effect.gen(function* () {
 
       // Preserve eager writes and invalidation for an unwrapped host SQL transaction.
       return ambient._tag === "Some" && !DueQueue.buffering(ctx.storage)
-        ? transaction(commit).pipe(
+        ? transaction(() => commit).pipe(
             Effect.ensuring(Effect.sync(() => DueQueue.invalidate(ctx.storage))),
           )
         : withTransaction(commit);
