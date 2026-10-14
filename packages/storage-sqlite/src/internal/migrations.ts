@@ -20,7 +20,7 @@ import {
 
 export const CurrentSqliteStorageVersion = 28;
 
-/** Exact released rowid layout, retained for predecessor validation. */
+/** Exact released layout, retained for predecessor validation. */
 const layout27Statements = [
   "CREATE TABLE \"effect_agent_threads\" ( thread_id TEXT PRIMARY KEY NOT NULL, created_at TEXT, tail_sequence INTEGER NOT NULL, work_version INTEGER NOT NULL DEFAULT 3, work_state TEXT NOT NULL DEFAULT 'ready', work_through_sequence INTEGER NOT NULL DEFAULT 0, work_reporting INTEGER NOT NULL DEFAULT 0, work_entry_count INTEGER NOT NULL DEFAULT 0, worker_input_sequence INTEGER, worker_settlement_sequence INTEGER )",
   "CREATE TABLE effect_agent_envelopes (envelope_key INTEGER PRIMARY KEY NOT NULL, content_digest TEXT UNIQUE NOT NULL, prefix TEXT NOT NULL, before_payload TEXT NOT NULL, before_record_id TEXT NOT NULL, suffix TEXT NOT NULL)",
@@ -101,15 +101,9 @@ const layout27Statements = [
   "CREATE INDEX effect_agent_message_deliveries_capacity ON effect_agent_message_deliveries(owner_thread_id, (COALESCE(json_extract(record_json, '$.envelope.messageAdmission._tag'), '') = 'WorkerUpdate'), message_id) WHERE state IN ('pending', 'accepted', 'parked')",
 ] as const;
 
-const clusteredTables = ["effect_agent_executions", "effect_agent_tool_declarations"] as const;
-
-const layoutStatements = layout27Statements
-  .filter((statement) => !statement.startsWith("CREATE INDEX effect_agent_canonical_batches_last "))
-  .map((statement) =>
-    clusteredTables.some((name) => statement.startsWith(`CREATE TABLE ${name} (`))
-      ? `${statement} WITHOUT ROWID`
-      : statement,
-  );
+const layoutStatements = layout27Statements.filter(
+  (statement) => !statement.startsWith("CREATE INDEX effect_agent_canonical_batches_last "),
+);
 
 const headerStatement =
   "CREATE TABLE effect_agent_schema (singleton INTEGER PRIMARY KEY NOT NULL CHECK (singleton = 1), layout_version INTEGER NOT NULL CHECK (layout_version > 0), record_format TEXT NOT NULL CHECK (length(record_format) > 0))";
@@ -297,20 +291,6 @@ export const ensureSqliteStorageLayout = Effect.fn("SqliteStorage.initializeLayo
       }
       if (header !== undefined && header.layoutVersion < CurrentSqliteStorageVersion) {
         yield* sql`DROP INDEX effect_agent_canonical_batches_last`;
-        // These tables have no inbound foreign keys; retain every row under the writer transaction.
-        for (const name of clusteredTables) {
-          const statement = layoutStatements.find((ddl) =>
-            ddl.startsWith(`CREATE TABLE ${name} (`),
-          )!;
-
-          yield* sql.unsafe(
-            statement.replace(`CREATE TABLE ${name} (`, `CREATE TABLE ${name}_clustered (`),
-          ).withoutTransform;
-          yield* sql.unsafe(`INSERT INTO ${name}_clustered SELECT * FROM ${name}`).withoutTransform;
-          yield* sql.unsafe(`DROP TABLE ${name}`).withoutTransform;
-          yield* sql.unsafe(`ALTER TABLE ${name}_clustered RENAME TO ${name}`).withoutTransform;
-        }
-        yield* sql`CREATE INDEX effect_agent_tool_declarations_sequence ON effect_agent_tool_declarations(thread_id, sequence)`;
         yield* sql`UPDATE effect_agent_schema SET layout_version=${CurrentSqliteStorageVersion} WHERE singleton=1`;
         yield* sql.unsafe(`PRAGMA user_version = ${CurrentSqliteStorageVersion}`).withoutTransform;
 
