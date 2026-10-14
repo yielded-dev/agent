@@ -5577,37 +5577,38 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const recordHalt = <A, R>(
         effect: Effect.Effect<A, DurableWorkerFailure, R>,
       ): Effect.Effect<A, CoordinatorHalt | AgentPersistenceCapacityError, R> =>
-        effect.pipe(
-          Effect.tapError((failure) =>
-            failure instanceof ThreadStoreError &&
-            failure.cause instanceof AgentPersistenceCapacityError
-              ? Effect.void
-              : Ref.set(haltRef, failure),
-          ),
-          Effect.catchCause((cause) =>
-            Effect.failCause(
-              Cause.map(cause, (failure) =>
-                failure instanceof ThreadStoreError &&
-                failure.cause instanceof AgentPersistenceCapacityError
-                  ? failure.cause
-                  : new CoordinatorHalt(failure),
-              ),
+        Effect.catchCause(effect, (cause) => {
+          const first = Cause.findErrorOption(cause);
+
+          const failure = Effect.failCause(
+            Cause.map(cause, (error) =>
+              error instanceof ThreadStoreError &&
+              error.cause instanceof AgentPersistenceCapacityError
+                ? error.cause
+                : new CoordinatorHalt(error),
             ),
-          ),
-        );
+          );
+
+          return Option.isNone(first) ||
+            (first.value instanceof ThreadStoreError &&
+              first.value.cause instanceof AgentPersistenceCapacityError)
+            ? failure
+            : Effect.andThen(Ref.set(haltRef, first.value), failure);
+        });
 
       // Infrastructure errors can be wrapped by broker/Tool APIs. The interpreter checks this
       // authority before semantic work; progress delivery is not a coordinator checkpoint.
+      const progress = progressWriters.get(ctx);
+
+      const checkProgress =
+        progress === undefined
+          ? Effect.void
+          : progress.check(runId).pipe(Effect.provideService(CurrentRunWriter, ctx));
+
       const checkpoint = recordHalt(
-        Effect.gen(function* () {
-          const failure = yield* Ref.get(haltRef);
-
-          if (failure !== undefined) return yield* failure;
-          const progress = progressWriters.get(ctx);
-
-          if (progress !== undefined)
-            yield* progress.check(runId).pipe(Effect.provideService(CurrentRunWriter, ctx));
-        }),
+        Effect.flatMap(Ref.get(haltRef), (failure) =>
+          failure === undefined ? checkProgress : Effect.fail(failure),
+        ),
       );
 
       // One readonly Turn may own its response without publishing it. Promotion and settlement
