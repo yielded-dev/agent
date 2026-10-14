@@ -76,56 +76,6 @@ export const guardedMessageDeliveryStoreLayer = Layer.effect(
   }),
 );
 
-const makeThreadMessageDelivery = Effect.fnUntraced(function* (
-  driver: Effect.Effect<MessageDeliveryDriver["Service"], DurableAlarmError>,
-) {
-  const store = yield* MessageDeliveryStore;
-
-  const failure = (operation: string) => () =>
-    DurableAlarmError.make({
-      operation,
-      message: "Durable message recovery remains pending",
-    });
-
-  const prepare = Effect.gen(function* () {
-    const deadline = yield* store.nextDeadline();
-
-    if (deadline === null || deadline > (yield* Clock.currentTimeMillis))
-      return { timeoutMillis: 1, run: Effect.succeed(Option.fromNullishOr(deadline)) };
-    // The assembled driver has four permits: a wave is one parallel attempt window.
-    const keys = yield* store.due(yield* Clock.currentTimeMillis, 4);
-    const records = yield* Effect.forEach(keys, (key) => store.get(key));
-
-    return {
-      timeoutMillis: Math.max(
-        1,
-        ...records.map((record) => record?.policy.attemptTimeoutMillis ?? 1),
-      ),
-      run: Effect.flatMap(driver, (driver) =>
-        Effect.forEach(keys, (key) => driver.process(key), {
-          concurrency: 4,
-          discard: true,
-        }),
-      ).pipe(
-        Effect.andThen(store.nextDeadline()),
-        Effect.map(Option.fromNullishOr),
-        Effect.mapError(failure("dispatch message delivery")),
-      ),
-    };
-  }).pipe(Effect.mapError(failure("prepare message delivery")));
-
-  return Context.make(ThreadMessageDelivery, {
-    prepare,
-  });
-});
-
-/** Message progress shares the native alarm slot without blocking source runtime work. */
-export const threadMessageDeliveryLayer = Layer.effectContext(
-  Effect.flatMap(MessageDeliveryDriver, (driver) =>
-    makeThreadMessageDelivery(Effect.succeed(driver)),
-  ),
-);
-
 /** Build the driver in the Object's Scope only when retained delivery work is due. */
 export const lazyThreadMessageDeliveryLayer = <E, R>(
   driver: Layer.Layer<MessageDeliveryDriver, E, R>,
@@ -133,6 +83,7 @@ export const lazyThreadMessageDeliveryLayer = <E, R>(
   Layer.fromBuildMemo((memoMap, scope) =>
     Effect.gen(function* () {
       const context = yield* Effect.context<R>();
+      const store = yield* MessageDeliveryStore;
 
       const service = yield* Effect.cached(
         Layer.buildWithMemoMap(driver, memoMap, scope).pipe(
@@ -148,6 +99,44 @@ export const lazyThreadMessageDeliveryLayer = <E, R>(
         ),
       );
 
-      return yield* makeThreadMessageDelivery(service);
+      const failure = (operation: string) => () =>
+        DurableAlarmError.make({
+          operation,
+          message: "Durable message recovery remains pending",
+        });
+
+      const prepare = Effect.gen(function* () {
+        const deadline = yield* store.nextDeadline();
+
+        if (deadline === null || deadline > (yield* Clock.currentTimeMillis))
+          return { timeoutMillis: 1, run: Effect.succeed(Option.fromNullishOr(deadline)) };
+        // The assembled driver has four permits: a wave is one parallel attempt window.
+        const keys = yield* store.due(yield* Clock.currentTimeMillis, 4);
+        const records = yield* Effect.forEach(keys, (key) => store.get(key));
+
+        return {
+          timeoutMillis: Math.max(
+            1,
+            ...records.map((record) => record?.policy.attemptTimeoutMillis ?? 1),
+          ),
+          run: Effect.flatMap(service, (driver) =>
+            Effect.forEach(keys, (key) => driver.process(key), {
+              concurrency: 4,
+              discard: true,
+            }),
+          ).pipe(
+            Effect.andThen(store.nextDeadline()),
+            Effect.map(Option.fromNullishOr),
+            Effect.mapError(failure("dispatch message delivery")),
+          ),
+        };
+      }).pipe(Effect.mapError(failure("prepare message delivery")));
+
+      return Context.make(ThreadMessageDelivery, { prepare });
     }),
   );
+
+/** Message progress shares the native alarm slot without blocking source runtime work. */
+export const threadMessageDeliveryLayer = lazyThreadMessageDeliveryLayer(
+  Layer.effect(MessageDeliveryDriver, MessageDeliveryDriver),
+);
