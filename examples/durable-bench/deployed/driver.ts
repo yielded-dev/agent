@@ -7,6 +7,10 @@ import {
   DriverRequest,
   Health,
   MeasureRequest,
+  DriverRequestId,
+  MeasureOutcome,
+  StoredMeasurement,
+  StoredMeasureResponse,
   type FirstTextSource,
 } from "./model.ts";
 import {
@@ -46,10 +50,15 @@ interface Env {
   BENCH_PREFIX: string;
   WORKERS_SUBDOMAIN: string;
   BUILD: string;
+  MEASUREMENTS: DurableObjectNamespace;
 }
 
-export default {
-  async fetch(request: Request, env: Env, context: ExecutionContext): Promise<Response> {
+const operation = {
+  async fetch(
+    request: Request,
+    env: Env,
+    context: Pick<ExecutionContext, "waitUntil">,
+  ): Promise<Response> {
     if (request.headers.get("authorization") !== `Bearer ${env.BENCH_TOKEN}`)
       return new Response("unauthorized", { status: 401 });
     if (new URL(request.url).pathname === "/health")
@@ -538,6 +547,128 @@ export default {
         }),
         { status: 502 },
       );
+    }
+  },
+};
+
+const requestKeys = [
+  ...Object.keys(MeasureRequest.fields),
+  ...Object.keys(DriverRequest.fields.query.fields),
+];
+
+/** One acknowledged input per durable identity; an interrupted execution is never restarted. */
+export class DriverMeasurement {
+  private saved: StoredMeasurement | undefined;
+  private running: Promise<void> | undefined;
+
+  constructor(
+    private readonly ctx: DurableObjectState,
+    private readonly env: Env,
+  ) {
+    ctx.blockConcurrencyWhile(async () => {
+      const stored = await ctx.storage.get<unknown>("measurement");
+
+      if (stored !== undefined) this.saved = Schema.decodeUnknownSync(StoredMeasurement)(stored);
+    });
+  }
+
+  private async complete(request: Request, input: MeasureRequest): Promise<void> {
+    // This request has its own lifetime, independent of the controller connection.
+    const response = await operation.fetch(
+      new Request(request, {
+        method: "POST",
+        body: JSON.stringify(input),
+        signal: new AbortController().signal,
+      }),
+      this.env,
+      this.ctx,
+    );
+
+    const outcome = Schema.decodeUnknownSync(StoredMeasureResponse)({
+      status: response.status,
+      body: await response.json(),
+    });
+
+    const saved = { request: input, outcome };
+
+    await this.ctx.storage.put("measurement", Schema.encodeSync(StoredMeasurement)(saved));
+    this.saved = saved;
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    const requestId = Schema.decodeUnknownSync(DriverRequestId)(
+      new URL(request.url).searchParams.get("requestId"),
+    );
+
+    if (request.method === "POST") {
+      const input = Schema.decodeUnknownSync(MeasureRequest)(await request.json());
+
+      if (input.requestId !== requestId || input.expectedDriverBuild !== this.env.BUILD)
+        return new Response("Driver request identity or build mismatch", { status: 409 });
+      if (this.saved !== undefined) {
+        if (JSON.stringify(this.saved.request, requestKeys) !== JSON.stringify(input, requestKeys))
+          return new Response("Driver request ID already belongs to another input", {
+            status: 409,
+          });
+      } else {
+        // Set the in-memory identity before yielding. Storage's input/output gates protect
+        // admission; persistence precedes the first outgoing measurement request.
+        this.saved = { request: input };
+        await this.ctx.storage.put("measurement", Schema.encodeSync(StoredMeasurement)(this.saved));
+        this.running = this.complete(request, input);
+        // Durable Object waitUntil survives client disconnects. The existing measurement
+        // timeout is three minutes; a reset leaves a durable accepted record, never a replay.
+        this.ctx.waitUntil(this.running);
+      }
+      if (this.running !== undefined) await this.running;
+    } else if (request.method !== "GET") {
+      return new Response("method not allowed", { status: 405 });
+    }
+
+    const identity = { requestId, build: this.env.BUILD };
+
+    const outcome: MeasureOutcome =
+      this.saved === undefined
+        ? { _tag: "NotReceived", ...identity }
+        : this.saved.outcome === undefined
+          ? { _tag: "Running", ...identity }
+          : { _tag: "Complete", ...identity, outcome: this.saved.outcome };
+
+    return Response.json(Schema.encodeSync(MeasureOutcome)(outcome));
+  }
+}
+
+export default {
+  async fetch(request: Request, env: Env, context: ExecutionContext): Promise<Response> {
+    if (request.headers.get("authorization") !== `Bearer ${env.BENCH_TOKEN}`)
+      return new Response("unauthorized", { status: 401 });
+    const address = new URL(request.url);
+
+    if (address.pathname !== "/measure" || address.searchParams.has("readiness"))
+      return operation.fetch(request, env, context);
+    try {
+      const input =
+        request.method === "POST"
+          ? Schema.decodeUnknownSync(MeasureRequest)(await request.json())
+          : undefined;
+
+      const requestId = Schema.decodeUnknownSync(DriverRequestId)(
+        input?.requestId ?? address.searchParams.get("requestId"),
+      );
+
+      address.searchParams.set("requestId", requestId);
+      const stub = env.MEASUREMENTS.getByName(requestId, { locationHint: "wnam" });
+
+      return await stub.fetch(
+        new Request(address, {
+          method: request.method,
+          headers: request.headers,
+          ...(input === undefined ? {} : { body: JSON.stringify(input) }),
+          cf: request.cf,
+        }),
+      );
+    } catch (cause) {
+      return new Response(`Driver request unavailable: ${errorText(cause)}`, { status: 503 });
     }
   },
 };

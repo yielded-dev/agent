@@ -12,7 +12,13 @@ import {
 } from "effect";
 import { Ndjson } from "effect/encoding";
 
-import { DriverRequest } from "./model.ts";
+import {
+  DriverRequest,
+  DriverRecovery,
+  MeasureOutcome,
+  type MeasureRequest,
+  type StoredMeasureResponse,
+} from "./model.ts";
 import { BenchError, redact } from "./platform.ts";
 import { errorText, Failure, UnknownOutcome } from "./worker/protocol.ts";
 
@@ -161,7 +167,7 @@ const connect = Effect.gen(function* () {
   const namespaceHeadroom = Effect.fnUntraced(function* (workers: readonly string[]) {
     const namespaces = yield* listNamespaces;
 
-    if (workers.some((worker) => !/-(yielded|pi|tardie|effect-ai-floor)$/.test(worker)))
+    if (workers.some((worker) => !/-(yielded|pi|tardie|effect-ai-floor|driver)$/.test(worker)))
       return yield* BenchError.make({ message: "Unknown benchmark Worker target" });
 
     const required = workers.flatMap((worker) => {
@@ -178,7 +184,9 @@ const connect = Effect.gen(function* () {
               ? ["PiDO"]
               : target === "tardie"
                 ? ["ActorDO", "ThreadDO"]
-                : [];
+                : target === "driver"
+                  ? ["DriverMeasurement"]
+                  : [];
 
       return classes.map((name) => `${worker}_${name}`);
     });
@@ -358,7 +366,7 @@ export const request = Effect.fnUntraced(
 
     return { value, colo: response.headers.get("cf-ray")?.split("-").at(-1) ?? null };
   },
-  (operation, url, _token, _schema, body?: unknown, timeout: Duration.Input = "3 minutes") => {
+  (operation, _url, _token, _schema, body?: unknown, timeout: Duration.Input = "3 minutes") => {
     const timed = operation.pipe(
       Effect.timeoutOrElse({
         duration: timeout,
@@ -366,17 +374,116 @@ export const request = Effect.fnUntraced(
       }),
     );
 
-    return body === undefined
-      ? timed.pipe(retryRequest)
-      : new URL(url).pathname === "/measure"
-        ? timed.pipe(
-            Effect.catchTag("RequestError", (error) =>
-              UnknownOutcome.make({ message: error.message }),
-            ),
-          )
-        : timed;
+    return body === undefined ? timed.pipe(retryRequest) : timed;
   },
 );
+
+/** A lost controller response is reconciled with the Driver's durable receipt, never guessed. */
+export const measureRequest = Effect.fnUntraced(function* (
+  url: string,
+  token: string,
+  input: MeasureRequest,
+) {
+  const address = new URL(url);
+
+  address.searchParams.set("requestId", input.requestId);
+
+  const send = () =>
+    request(address, token, MeasureOutcome, input).pipe(
+      Effect.catchTag("RequestError", Effect.succeed),
+    );
+
+  const first = yield* send();
+
+  const validate = (value: MeasureOutcome) =>
+    value.requestId === input.requestId && value.build === input.expectedDriverBuild
+      ? Effect.succeed(value)
+      : BenchError.make({ message: "Driver outcome request ID or build mismatch." });
+
+  if (!Schema.is(RequestError)(first)) {
+    const value = yield* validate(first.value);
+
+    if (value._tag === "Complete")
+      return { outcome: value.outcome, colo: first.colo, recovery: undefined };
+  }
+
+  const initialError = Schema.is(RequestError)(first)
+    ? first.message
+    : "Driver acknowledged a pending measurement.";
+
+  let acknowledged = !Schema.is(RequestError)(first) && first.value._tag === "Running";
+  let polls = 0;
+  let resubmissions = 0;
+
+  return yield* Effect.gen(function* () {
+    for (;;) {
+      yield* Effect.sleep(Math.min(8, 2 ** Math.min(polls, 3)) * 1000);
+      polls++;
+
+      let response = yield* request(address, token, MeasureOutcome, undefined, "10 seconds").pipe(
+        Effect.catchTag("RequestError", Effect.succeed),
+      );
+
+      if (Schema.is(RequestError)(response)) continue;
+      let value = yield* validate(response.value);
+
+      if (value._tag === "NotReceived") {
+        if (acknowledged)
+          return yield* BenchError.make({
+            message: "Driver lost an acknowledged request record; refusing resubmission.",
+          });
+        // The strongly consistent same-ID Object proved non-receipt. Concurrent delayed
+        // arrivals also deduplicate at that Object; this is never a new input identity.
+        resubmissions++;
+        response = yield* send();
+        if (Schema.is(RequestError)(response)) continue;
+        value = yield* validate(response.value);
+      }
+      if (value._tag === "Running") acknowledged = true;
+      if (value._tag !== "Complete") continue;
+
+      return {
+        outcome: value.outcome,
+        colo: response.colo,
+        recovery: DriverRecovery.make({
+          requestId: input.requestId,
+          polls,
+          resubmissions,
+          error: initialError,
+        }),
+      };
+    }
+  }).pipe(
+    Effect.timeoutOrElse({
+      duration: "5 minutes",
+      orElse: () =>
+        UnknownOutcome.make({
+          message: `Driver outcome remains unknown after ${polls} polls for ${input.requestId}; ${initialError}`,
+        }),
+    }),
+  );
+});
+
+/** Persisted failures keep the existing target failure classification and recovery rules. */
+export const measureResult = Effect.fnUntraced(function* (
+  outcome: StoredMeasureResponse,
+  sample: string,
+) {
+  const value = outcome.body;
+
+  if (value.ok) {
+    if (outcome.status !== 200)
+      return yield* BenchError.make({ message: "Driver success had an invalid HTTP status." });
+
+    return value;
+  }
+  if (value.sample !== sample)
+    return yield* BenchError.make({ message: "Driver failure named a different sample." });
+  if (value.transport !== undefined) return yield* value.transport;
+  if (value.unknownOutcome !== undefined) return yield* value.unknownOutcome;
+
+  return yield* BenchError.make({ message: value.error });
+});
 
 export const requestEvents = <S extends Schema.Top & { readonly DecodingServices: never }>(
   url: URL | string,

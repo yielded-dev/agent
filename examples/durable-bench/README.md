@@ -34,7 +34,8 @@ optimization when the interval includes zero.
 
 Quick runs retain one per-Object Worker pool per prefix. Changing pool options destroys
 the previous pool before allocating its replacement. Each Worker declares only its target's
-namespaces (one for Yielded or pi, two for Tardie). Immediately before each deploy, a live
+namespaces (one for Yielded or pi, two for Tardie); the Driver adds one namespace for durable
+measurement receipts. Immediately before each deploy, a live
 account inventory requires at least 100 spare namespace slots, waiting 60 seconds between
 checks for up to 30 minutes. Each prefix is limited to 40 namespaces; split larger cell grids
 into separate runs with a single target (for example, `--targets pi`).
@@ -272,8 +273,12 @@ then measures the replacement and continues. Prefix turns reestablish the cold/w
 and are excluded from timing and CPU comparisons. Original failures and replacement IDs
 remain in JSON; earlier valid measurements are retained. A second failure at the same sample,
 a failed prefix rebuild, sample-key mismatch or wrong build stops the run.
-An unknown submitted-input outcome never resubmits the input: it retires that Object's entire
-A/B pair and continues the other Objects. Raw attempts remain in JSON; retirements are reported
+Each measured request has a durable Driver request ID and saved outcome. If the controller loses
+its response, it polls that outcome for up to five minutes with bounded backoff. Only a confirmed
+non-receipt permits resending the same ID; an acknowledged input is never sent again. Raw
+`polledRecoveries` and the report count recovered outcomes and non-receipt resubmissions per build,
+cell and epoch. Receipt storage and polling are outside the measured intervals.
+If the outcome remains unknown, retire that Object's entire A/B pair and continue the other Objects. Raw attempts remain in JSON; retirements are reported
 by target, history, TTFT, build and epoch. Each cell must retain at least 75% of its Object pairs
 (9 of 12); otherwise rerun a fresh cohort with 24 Objects per cell. Build-attributed retirements of at least three and at least twice the other
 build's count invalidate the cohort, checked per cell and per target across cells. Exclusions never

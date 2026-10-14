@@ -114,6 +114,27 @@ const retirementTable = (result: Result): string[] => {
   ];
 };
 
+const polledRecoveryTable = (result: Result): string[] => {
+  if (!result.polledRecoveries?.length) return [];
+
+  return [
+    "Driver outcomes recovered by request ID; polling is outside the measured intervals.",
+    "",
+    "| Target / history / TTFT / build / epoch | Recovered outcomes | Polls | Proved-not-received resubmissions |",
+    "|---|---:|---:|---:|",
+    ...[
+      ...group(
+        result.polledRecoveries,
+        (row) => `${row.target}/${row.history}/${row.ttftMs}/${row.build}/${row.epoch}`,
+      ),
+    ].map(
+      ([cell, rows]) =>
+        `| ${cell} | ${rows.length} | ${rows.reduce((sum, row) => sum + row.polls, 0)} | ${rows.reduce((sum, row) => sum + row.resubmissions, 0)} |`,
+    ),
+    "",
+  ];
+};
+
 type Metric =
   | "driverMs"
   | "firstTextMs"
@@ -436,6 +457,7 @@ export const table = (result: Result): string => {
           `Recovery prefix turns: ${result.samples.filter((row) => row.state === "recovery").length}; setup only, excluded from timing and CPU comparisons.`,
         ]
       : []),
+    ...polledRecoveryTable(result),
     ...retirementTable(result),
     "Driver-observed milliseconds; median [Q1–Q3] of Object medians.",
     "Yielded falls back to settled text if no preview arrives; JSON records firstTextSource.",

@@ -105,7 +105,9 @@ export const deployments = Effect.gen(function* () {
       yield* Effect.gen(function* () {
         for (;;) {
           const headroom = yield* cloud.namespaceHeadroom(
-            stack.kind === "target" ? (stack.workers ?? [stack.name]) : [],
+            stack.kind === "target"
+              ? (stack.workers ?? [stack.name])
+              : [state.infrastructurePrefix + "-driver"],
           );
 
           if (headroom.projectedOwned > 40)

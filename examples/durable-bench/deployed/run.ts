@@ -25,17 +25,17 @@ import {
   type Turn,
 } from "../src/plan.ts";
 import { build, ensureVendor } from "./build.ts";
-import { Cloudflare, request, requestEvents, retryRequest } from "./cloudflare.ts";
+import {
+  Cloudflare,
+  measureRequest,
+  measureResult,
+  request,
+  requestEvents,
+  retryRequest,
+} from "./cloudflare.ts";
 import { deployments } from "./deploy.ts";
 import { fixtureFormat, prepareFixtures } from "./fixtures.ts";
-import {
-  BuildEvent,
-  HistoryCheckpoint,
-  MeasureResponse,
-  Options,
-  Result,
-  type Sample,
-} from "./model.ts";
+import { BuildEvent, HistoryCheckpoint, Options, Result, type Sample } from "./model.ts";
 import {
   BenchError,
   git,
@@ -1568,8 +1568,11 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                       ? "cold"
                       : "warm";
 
+              const driverRequestId = `${query.target}/${query.object}/${epoch}/${query.sample}`;
+
               const sample: Sample = {
                 ...query,
+                driverRequestId,
                 build: label,
                 ...(counterbalanced
                   ? {
@@ -1596,27 +1599,55 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
               yield* Effect.gen(function* () {
                 const before = yield* Clock.currentTimeMillis;
 
-                const measured = yield* request(
-                  deploy.driver + "/measure",
-                  deploy.token,
-                  MeasureResponse,
-                  {
-                    query,
-                    targetUrl: yield* endpointFor(cohort),
-                    observeText: !options.buildHistory,
-                    expectedDriverBuild: result.infrastructureBuild,
-                    cold: options.buildHistory && index === 0,
-                    quiescent: state === "preparation" || index === turnsPerEpoch - 1,
-                    resetBeforeMetrics:
-                      options.verifyIncarnationRecovery === true &&
-                      attempt === 0 &&
-                      epoch === 0 &&
-                      index === 2 &&
-                      cohort === poolCohorts.find((item) => item.target === cohort.target),
-                  },
-                );
+                const expectedDriverBuild = result.infrastructureBuild;
+
+                if (expectedDriverBuild === undefined)
+                  return yield* BenchError.make({ message: "Driver build was not recorded." });
+
+                const received = yield* measureRequest(deploy.driver + "/measure", deploy.token, {
+                  requestId: driverRequestId,
+                  query,
+                  targetUrl: yield* endpointFor(cohort),
+                  observeText: !options.buildHistory,
+                  expectedDriverBuild,
+                  cold: options.buildHistory && index === 0,
+                  quiescent: state === "preparation" || index === turnsPerEpoch - 1,
+                  resetBeforeMetrics:
+                    options.verifyIncarnationRecovery === true &&
+                    attempt === 0 &&
+                    epoch === 0 &&
+                    index === 2 &&
+                    cohort === poolCohorts.find((item) => item.target === cohort.target),
+                });
 
                 const after = yield* Clock.currentTimeMillis;
+
+                const recovery = received.recovery;
+
+                if (recovery !== undefined)
+                  yield* update((value) => ({
+                    ...value,
+                    polledRecoveries: [
+                      ...(value.polledRecoveries ?? []),
+                      {
+                        ...recovery,
+                        target: query.target,
+                        object: query.object,
+                        history: query.history,
+                        ttftMs: query.ttftMs,
+                        build: label,
+                        epoch,
+                        sample: query.sample,
+                        outcome: received.outcome.body.ok ? "completed" : "failed",
+                      },
+                    ],
+                  }));
+
+                const measured = {
+                  value: yield* measureResult(received.outcome, query.sample),
+                  colo: received.colo,
+                };
+
                 const firstText = measured.value.firstText;
 
                 const expectedText = [
