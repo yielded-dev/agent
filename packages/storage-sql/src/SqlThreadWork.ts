@@ -34,7 +34,7 @@ import {
   type ThreadWorkEntry,
   type WorkerReportingMode,
 } from "@yielded/agent/thread-work";
-import { Crypto, Effect, Result, Schema } from "effect";
+import { Crypto, Effect, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { Statement } from "effect/sql/Statement";
 
@@ -142,7 +142,6 @@ interface WorkEntryWrite {
 const WorkEntryJson = Schema.fromJsonString(CanonicalWorkEntry);
 const decodeWorkEntry = Schema.decodeEffect(WorkEntryJson);
 const encodeWorkEntry = Schema.encodeEffect(WorkEntryJson);
-const encodeWorkEntryResult = Schema.encodeResult(WorkEntryJson);
 const Tail = Schema.Struct({ tail_sequence: SqlInteger.pipe(Schema.decodeTo(CanonicalSequence)) });
 const decodeTailRows = Schema.decodeUnknownEffect(Schema.Array(Tail));
 const metadataFailure = (cause: Schema.SchemaError) => failure("decode work metadata", cause);
@@ -592,13 +591,13 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     return headerFields(through, workerMode, "ready", count, input, settlement);
   });
 
-  /** A synchronous plan; the caller still owns the native transaction and rollback. */
-  const prepareClosedPair = (
+  /** Validate the transient entry before the caller executes the native transaction body. */
+  const prepareClosedPair = Effect.fnUntraced(function* (
     threadId: ThreadId,
     first: CanonicalSequence,
     last: CanonicalSequence,
     records: ReadonlyArray<CanonicalRecord>,
-  ) => {
+  ) {
     if (!tablesPresent || records.length !== 2) return undefined;
     const declaration = records[0]!;
     const model = declaration.payload;
@@ -625,6 +624,39 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
       });
     };
 
+    // This is the ordinary operation Put followed by its matching Remove.
+    // Keep the transient encoding bound: a bounded index rebuild can stop at the declaration.
+    const entry: CanonicalWorkEntry = {
+      id: workId("operation", model.runId, result.toolCallId),
+      owner: { _tag: "Operation", runId: model.runId, toolCallId: result.toolCallId },
+      stateReference: { _tag: "Canonical", recordId: declaration.recordId },
+      state: "ready",
+      createdSequence: first,
+      updatedSequence: first,
+      originRecordId: declaration.recordId,
+    };
+
+    const encoded = yield* encodeWorkEntry(entry).pipe(
+      Effect.mapError((cause) => failure("encode work entry", cause)),
+    );
+
+    // The ordinary fold may retain a smaller origin from an existing entry.
+    // Leave admission and its byte bound to that fold when this plan cannot fit.
+    if (new TextEncoder().encode(encoded).byteLength > MAX_WORK_ENTRY_BYTES) return undefined;
+
+    const pointers: Array<Statement<object>> = [];
+
+    for (let index = 0; index < records.length; index++) {
+      const metadata = canonicalRecordPointers(records[index]!);
+
+      for (const settlement of metadata.toolSettlements)
+        pointers.push(sql`INSERT INTO ${table("effect_agent_tool_declarations")} (thread_id, settlement_record_id, sequence)
+          VALUES (${threadId}, ${settlement}, ${first + index})`);
+      if (metadata.refusalReservation !== undefined)
+        pointers.push(sql`INSERT INTO ${table("effect_agent_record_refusals")} (thread_id, reservation_record_id, sequence)
+          VALUES (${threadId}, ${metadata.refusalReservation}, ${first + index})`);
+    }
+
     return {
       advance: sql`UPDATE ${table("effect_agent_threads")}
         SET tail_sequence=${last}, work_through_sequence=${last}
@@ -635,45 +667,9 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
           AND (SELECT COUNT(*) FROM ${table("effect_agent_work_entries")} WHERE thread_id=${threadId})=0
           AND ${pointer("worker_input_sequence")} AND ${pointer("worker_settlement_sequence")}
         RETURNING *`,
-      fold: () => {
-        // This is the ordinary operation Put followed by its matching Remove.
-        // Keep the transient encoding bound: recovery can stop between the two facts.
-        const entry: CanonicalWorkEntry = {
-          id: workId("operation", model.runId, result.toolCallId),
-          owner: { _tag: "Operation", runId: model.runId, toolCallId: result.toolCallId },
-          stateReference: { _tag: "Canonical", recordId: declaration.recordId },
-          state: "ready",
-          createdSequence: first,
-          updatedSequence: first,
-          originRecordId: declaration.recordId,
-        };
-
-        const encoded = encodeWorkEntryResult(entry);
-
-        if (Result.isFailure(encoded))
-          return Result.fail(failure("encode work entry", encoded.failure));
-        if (new TextEncoder().encode(encoded.success).byteLength > MAX_WORK_ENTRY_BYTES)
-          return Result.fail(failure("work entry byte bound"));
-
-        const pointers: Array<Statement<object>> = [];
-
-        for (let index = 0; index < records.length; index++) {
-          const metadata = canonicalRecordPointers(records[index]!);
-
-          for (const settlement of metadata.toolSettlements)
-            pointers.push(sql`INSERT INTO ${table("effect_agent_tool_declarations")} (thread_id, settlement_record_id, sequence)
-              VALUES (${threadId}, ${settlement}, ${first + index})`);
-          if (metadata.refusalReservation !== undefined)
-            pointers.push(sql`INSERT INTO ${table("effect_agent_record_refusals")} (thread_id, reservation_record_id, sequence)
-              VALUES (${threadId}, ${metadata.refusalReservation}, ${first + index})`);
-        }
-
-        return Result.succeed({
-          pointers,
-        });
-      },
+      pointers,
     };
-  };
+  });
 
   /** Source insert hook, including deduplication; seed only an absent, unmaterialized owner. */
   const transferDelivery = Effect.fnUntraced(function* (

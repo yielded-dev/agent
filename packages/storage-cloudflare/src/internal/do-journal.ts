@@ -690,7 +690,7 @@ const makeJournal = Effect.fnUntraced(function* (
     )
       return false;
 
-    const workPlan = work.prepareClosedPair(
+    const workPlan = yield* work.prepareClosedPair(
       request.threadId,
       first,
       last,
@@ -729,7 +729,6 @@ const makeJournal = Effect.fnUntraced(function* (
           // A zero-row predicate miss has made no change. A successful update
           // must never fall back: every later refusal rolls back this transaction.
           if (rows.length === 0) return undefined;
-          const closed = yield* workPlan.fold();
           const executionPlans = executions.prepareCommit(request);
 
           if (!batchInserted)
@@ -760,7 +759,8 @@ const makeJournal = Effect.fnUntraced(function* (
               sql`INSERT INTO effect_agent_record_runs ${sql.insert(group)}`,
               "index canonical Run membership",
             );
-          for (const pointer of closed.pointers) yield* query(pointer, "index canonical pointers");
+          for (const pointer of workPlan.pointers)
+            yield* query(pointer, "index canonical pointers");
 
           for (const plan of executionPlans) {
             const changed = yield* query(plan.statement, "commit active execution");

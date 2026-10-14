@@ -18,11 +18,16 @@ import {
   SqlStorageProgress,
   SqlStorageProgressError,
 } from "@yielded/agent-storage-sql/sql-storage-progress";
+import { digestJson } from "@yielded/agent/digest";
 import { lifecyclePublicationLayer } from "@yielded/agent/lifecycle-publication";
 import {
   CanonicalBatch,
   CanonicalRecord,
   RunStartedRecord,
+  RunContextRecorded,
+  ModelResponseRecorded,
+  ToolCallSettled,
+  ToolOperation,
   UserInputRecorded,
 } from "@yielded/agent/records";
 import {
@@ -51,6 +56,7 @@ import {
   SaveCheckpointRequest,
 } from "@yielded/agent/thread-store";
 import { Cause, Effect, Exit, Layer, Option, Schema, Stream, Tracer } from "effect";
+import { Prompt } from "effect/ai";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -258,6 +264,151 @@ const batch = (
     producerId: TEST_PRODUCER,
     records,
   });
+
+// Regression: e70e2f9ec validates an empty-index entry before testing applicability.
+// A replacement keeps its smaller original declaration identity in the ordinary fold.
+it("settles a large replacement declaration with an existing operation origin", async () => {
+  const name = `replacement-work-bound-${crypto.randomUUID()}`;
+  const threadId = thread(name);
+  const submissionId = id(SubmissionId, "replacement-work-bound");
+  const runId = runIdForSubmission(submissionId);
+  const toolCallId = id(ToolOperation.fields.toolCallId, "lookup");
+  const replacementId = "\u0001".repeat(768);
+
+  await withThreadStorage(name, (storage) =>
+    Effect.gen(function* () {
+      const store = yield* ThreadStore;
+
+      yield* store.materialize(ThreadMaterialization.make({ threadId }));
+      const writer = yield* makeRunWriter(threadId);
+      const progress = yield* makeProgressWriter(threadId, TEST_DEPLOYMENT);
+
+      const record = (recordId: string, payload: CanonicalRecord["payload"]) =>
+        CanonicalRecord.make({
+          ...inputRecord(recordId, "lookup"),
+          payload,
+        });
+
+      const messages = yield* Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt))(
+        Prompt.make([
+          Prompt.makeMessage("assistant", {
+            content: [
+              Prompt.makePart("tool-call", {
+                id: toolCallId,
+                name: "lookup",
+                params: {},
+                providerExecuted: false,
+              }),
+            ],
+          }),
+        ]),
+      );
+
+      const input = yield* Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt))(
+        Prompt.make([
+          Prompt.makeMessage("user", { content: [Prompt.makePart("text", { text: "lookup" })] }),
+        ]),
+      );
+
+      const empty = yield* Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt))(Prompt.empty);
+
+      const response = (recordId: string, turn: number) =>
+        record(
+          recordId,
+          ModelResponseRecorded.make({
+            runId,
+            turnId: id(ModelResponseRecorded.fields.turnId, `turn-${turn}`),
+            turn: Schema.decodeSync(ModelResponseRecorded.fields.turn)(turn),
+            messages,
+            toolResultMaxBytes: 1_024,
+            toolSelectionMaxBytes: 0,
+            toolOperations: [
+              ToolOperation.make({
+                toolCallId,
+                toolName: "lookup",
+                executionClass: "readonly",
+                executionKind: "ordinary",
+                replay: id(ToolOperation.fields.replay, "a".repeat(64)),
+              }),
+            ],
+          }),
+        );
+
+      yield* progress
+        .commit(
+          batch("replacement-start", [
+            record(
+              "replacement-input",
+              UserInputRecorded.make({ submissionId, runId, kind: "user", input: "lookup" }),
+            ),
+            record(
+              "replacement-start",
+              RunStartedRecord.make({
+                runId,
+                policyAccountingVersion: 1,
+                maxDurationMillis: 30_000,
+              }),
+            ),
+            record(
+              "replacement-context",
+              RunContextRecorded.make({
+                version: 1,
+                runId,
+                runScopedInput: input,
+                historyFrom: sequence(1),
+                historyThrough: sequence(0),
+                retained: [],
+                priorHistoryLength: 0,
+                historyDigest: yield* digestJson(empty),
+              }),
+            ),
+          ]),
+        )
+        .pipe(Effect.provideService(CurrentRunWriter, writer));
+      yield* progress
+        .commit(batch("original-declaration", [response("original", 1)]))
+        .pipe(Effect.provideService(CurrentRunWriter, writer));
+      expect((yield* store.work!.page({ threadId, limit: 10 })).entries).toMatchObject([
+        { originRecordId: "original" },
+      ]);
+
+      yield* progress
+        .commit(
+          batch("replacement-and-settlement", [
+            response(replacementId, 2),
+            record(
+              "settlement",
+              ToolCallSettled.make({
+                runId,
+                toolCallId,
+                toolName: "lookup",
+                result: "found",
+                isFailure: false,
+              }),
+            ),
+          ]),
+        )
+        .pipe(Effect.provideService(CurrentRunWriter, writer));
+
+      expect((yield* store.work!.page({ threadId, limit: 10 })).entries).toEqual([]);
+
+      const records = yield* store
+        .read(ThreadRead.make({ threadId, limit: 10 }))
+        .pipe(Stream.runCollect);
+
+      expect(records.map(({ record }) => record.recordId)).toEqual([
+        "replacement-input",
+        "original",
+        replacementId,
+        "settlement",
+      ]);
+      expect(
+        Option.getOrThrow(yield* store.readExecution({ threadId, runId })).progress.accounting
+          .committedTurns,
+      ).toBe(2);
+    }).pipe(Effect.provide(layer({ storage }).pipe(Layer.provideMerge(BrowserCrypto.layer)))),
+  );
+});
 
 describe("DoThreadStore", () => {
   // Layout 22 replaces active progress in the same transaction as its facts;
