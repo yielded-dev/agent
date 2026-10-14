@@ -17,10 +17,10 @@ import {
   DoStorageError,
 } from "../DoStorageError.ts";
 
-export const CurrentDoStorageVersion = 28;
+export const CurrentDoStorageVersion = 29;
 
-/** Fresh layout only. Unsupported stores are rejected before these statements execute. */
-const layoutStatements = [
+/** Released layout; retain its exact shape for fail-closed upgrade inspection. */
+const layout28Statements = [
   "CREATE TABLE effect_agent_threads ( thread_id TEXT PRIMARY KEY NOT NULL, created_at TEXT, tail_sequence INTEGER NOT NULL, work_version INTEGER NOT NULL DEFAULT 3, work_state TEXT NOT NULL DEFAULT 'ready', work_through_sequence INTEGER NOT NULL DEFAULT 0, work_reporting INTEGER NOT NULL DEFAULT 0, work_entry_count INTEGER NOT NULL DEFAULT 0, worker_input_sequence INTEGER, worker_settlement_sequence INTEGER )",
   "CREATE TABLE effect_agent_envelopes (envelope_key INTEGER PRIMARY KEY NOT NULL, content_digest TEXT UNIQUE NOT NULL, prefix TEXT NOT NULL, before_payload TEXT NOT NULL, before_record_id TEXT NOT NULL, suffix TEXT NOT NULL)",
   "CREATE TABLE effect_agent_run_keys (run_key INTEGER PRIMARY KEY NOT NULL, thread_id TEXT NOT NULL, run_id TEXT NOT NULL, UNIQUE (thread_id, run_id), FOREIGN KEY (thread_id) REFERENCES effect_agent_threads(thread_id) ON DELETE RESTRICT)",
@@ -84,6 +84,17 @@ const layoutStatements = [
   "CREATE INDEX effect_agent_message_deliveries_capacity ON effect_agent_message_deliveries(owner_thread_id, (COALESCE(json_extract(record_json, '$.envelope.messageAdmission._tag'), '') = 'WorkerUpdate'), message_id) WHERE state IN ('pending', 'accepted', 'parked')",
 ] as const;
 
+// Composite keys already identify these rows. Retain their secondary lookups without
+// a second, rowid-addressed copy of each record.
+const clusteredTables = ["effect_agent_executions", "effect_agent_tool_declarations"] as const;
+
+/** Fresh layout only. Unsupported stores are rejected before these statements execute. */
+const layoutStatements = layout28Statements.map((statement) =>
+  clusteredTables.some((name) => statement.startsWith(`CREATE TABLE ${name} (`))
+    ? `${statement} WITHOUT ROWID`
+    : statement,
+);
+
 const headerStatement =
   "CREATE TABLE effect_agent_schema (singleton INTEGER PRIMARY KEY NOT NULL CHECK (singleton = 1), layout_version INTEGER NOT NULL CHECK (layout_version > 0), record_format TEXT NOT NULL CHECK (length(record_format) > 0))";
 
@@ -142,7 +153,7 @@ const inspection = (version: number, statements: ReadonlyArray<string>) =>
 const addedIndexes = new Set(["effect_agent_message_deliveries_peer_retained"]);
 
 const layout27Statements = [
-  ...layoutStatements,
+  ...layout28Statements,
   "CREATE INDEX effect_agent_canonical_batches_last ON effect_agent_canonical_batches(thread_id, last_sequence)",
 ];
 
@@ -161,6 +172,7 @@ const { decode, readObjects, readHeader } = inspection(CurrentDoStorageVersion, 
 const layout25 = inspection(25, layout25Statements);
 const layout26 = inspection(26, layout27Statements);
 const layout27 = inspection(27, layout27Statements);
+const layout28 = inspection(28, layout28Statements);
 
 const inspectStorage = Effect.fnUntraced(function* (
   allowUpgrade = false,
@@ -191,10 +203,13 @@ const inspectStorage = Effect.fnUntraced(function* (
 
   const version = legacy.value;
 
-  if (allowUpgrade && (version === 25 || version === 26 || version === 27)) {
+  if (allowUpgrade && (version === 25 || version === 26 || version === 27 || version === 28)) {
     if (version === 25 && objects.some(({ name }) => addedIndexes.has(name)))
       return yield* incompatible(version, "Mixed layout 25 and 26 objects.");
-    const predecessor = version === 25 ? layout25 : version === 26 ? layout26 : layout27;
+
+    const predecessor =
+      version === 25 ? layout25 : version === 26 ? layout26 : version === 27 ? layout27 : layout28;
+
     const header = yield* predecessor.readHeader(objects, version);
 
     yield* predecessor.readManagedTriggers(true);
@@ -215,7 +230,7 @@ export const readDoStorageHeader = Effect.fnUntraced(function* () {
   return header;
 });
 
-/** Initialize fresh storage or atomically upgrade the exact released layouts 25–27. */
+/** Initialize fresh storage or atomically upgrade the exact released layouts 25–28. */
 const initializeDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
@@ -252,7 +267,24 @@ const initializeDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(functi
           );
         }
         if (header !== undefined && header.layoutVersion < CurrentDoStorageVersion) {
-          yield* sql`DROP INDEX effect_agent_canonical_batches_last`;
+          if (header.layoutVersion < 28) yield* sql`DROP INDEX effect_agent_canonical_batches_last`;
+          // Neither table has inbound foreign keys. Copy every column verbatim and replace
+          // the physical table in this transaction; canonical history is never rewritten.
+          for (const name of clusteredTables) {
+            const replacement = `${name}_clustered`;
+
+            const statement = layoutStatements.find((value) =>
+              value.startsWith(`CREATE TABLE ${name} (`),
+            )!;
+
+            yield* sql.unsafe(
+              statement.replace(`CREATE TABLE ${name}`, `CREATE TABLE ${replacement}`),
+            ).withoutTransform;
+            yield* sql`INSERT INTO ${sql(replacement)} SELECT * FROM ${sql(name)}`;
+            yield* sql`DROP TABLE ${sql(name)}`;
+            yield* sql`ALTER TABLE ${sql(replacement)} RENAME TO ${sql(name)}`;
+          }
+          yield* sql`CREATE INDEX effect_agent_tool_declarations_sequence ON effect_agent_tool_declarations(thread_id, sequence)`;
           yield* sql`UPDATE effect_agent_schema SET layout_version=${CurrentDoStorageVersion} WHERE singleton=1`;
           yield* sql`UPDATE effect_agent_meta SET value=${String(CurrentDoStorageVersion)} WHERE key='storage_version'`;
 
