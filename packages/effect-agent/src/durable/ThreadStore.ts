@@ -343,18 +343,19 @@ export class AppendRequest extends Schema.Class<AppendRequest>(
   expectedTailSequence: CanonicalSequence,
 }) {}
 
+const RecordCount = Schema.Array(Schema.Unknown).check(Schema.isMaxLength(256));
+const ExecutionRecordCount = Schema.Array(Schema.Unknown).check(Schema.isMaxLength(8));
+
 const AppendHeader = Schema.Struct({
   threadId: ThreadId,
   expectedTailSequence: CanonicalSequence,
   batchId: BatchId,
   producerId: ProducerId,
+  records: RecordCount,
+  executions: RecordCount,
 });
 
 const validateHeader = Schema.decodeUnknownSync(AppendHeader);
-
-const validateRecordCount = Schema.decodeUnknownSync(
-  Schema.Array(Schema.Unknown).check(Schema.isMaxLength(256)),
-);
 
 const validateExecutionHeader = Schema.decodeUnknownSync(
   Schema.Struct({
@@ -366,24 +367,36 @@ const validateExecutionHeader = Schema.decodeUnknownSync(
       originalSequence: ExecutionCheckpoint.fields.originalSequence,
       throughSequence: ExecutionCheckpoint.fields.throughSequence,
       batchId: ExecutionCheckpoint.fields.batchId,
+      operational: ExecutionRecordCount,
     }),
+    facts: ExecutionRecordCount,
   }),
-);
-
-const validateExecutionRecordCount = Schema.decodeUnknownSync(
-  Schema.Array(Schema.Unknown).check(Schema.isMaxLength(8)),
 );
 
 /** Capture records once; wrapper fields retain their owning Schema's constraints. */
 const captureExecution = (input: ExecutionUpdate) => {
-  const header = validateExecutionHeader(input);
-  const operationalInput = input.checkpoint.operational;
+  const checkpointInput = input.checkpoint;
+  const operationalInput = checkpointInput.operational;
   const factsInput = input.facts;
 
-  const operationalLength = validateExecutionRecordCount(operationalInput).length;
-  const factsLength = validateExecutionRecordCount(factsInput).length;
+  const header = validateExecutionHeader({
+    previousRevision: input.previousRevision,
+    retire: input.retire,
+    checkpoint: {
+      version: checkpointInput.version,
+      canonicalRecords: checkpointInput.canonicalRecords,
+      originalSequence: checkpointInput.originalSequence,
+      throughSequence: checkpointInput.throughSequence,
+      batchId: checkpointInput.batchId,
+      operational: operationalInput,
+    },
+    facts: factsInput,
+  });
 
-  const progress = captureRecord(input.checkpoint.progressRecord);
+  const operationalLength = header.checkpoint.operational.length;
+  const factsLength = header.facts.length;
+
+  const progress = captureRecord(checkpointInput.progressRecord);
 
   if (Result.isFailure(progress)) return Result.fail(progress.failure);
   const progressRecord = progress.success.canonical;
@@ -530,15 +543,19 @@ export const PreparedAppend = {
       return Effect.try({
         try: () =>
           Result.gen(function* () {
+            const executions = input.executions ?? [];
+            const recordInputs = input.batch.records;
+
             const header = validateHeader({
               ...input,
               batchId: input.batch.batchId,
               producerId: input.batch.producerId,
+              records: recordInputs,
+              executions,
             });
 
-            validateRecordCount(input.batch.records);
-            const executions = input.executions ?? [];
-            const executionLength = validateRecordCount(executions).length;
+            const recordLength = header.records.length;
+            const executionLength = header.executions.length;
 
             const executionWrites: Array<PreparedAppend["executionWrites"][number]> = [];
 
@@ -546,7 +563,7 @@ export const PreparedAppend = {
               executionWrites.push(yield* captureExecution(executions[index]!));
             Object.freeze(executionWrites);
 
-            if (input.batch.records.length === 0 && executionWrites.length === 0)
+            if (recordLength === 0 && executionWrites.length === 0)
               return yield* Result.fail(
                 ThreadStoreError.make({
                   operation: "prepare durable commit",
@@ -560,8 +577,11 @@ export const PreparedAppend = {
                   message: "Active state exceeds its bounded transfer representation",
                 }),
               );
-            // Visit sparse slots too: capture owns each record's validation boundary.
-            const encodings = yield* Result.all(Array.from(input.batch.records, captureRecord));
+            // Visit Schema-validated indexed slots, including sparse ones, never a caller's iterator.
+            const encodings = [];
+
+            for (let index = 0; index < recordLength; index++)
+              encodings.push(yield* captureRecord(recordInputs[index]!));
             const prefix = `{"batchId":${JSON.stringify(header.batchId)},"producerId":${JSON.stringify(header.producerId)},"records":[`;
             const batchJson = `${prefix}${encodings.map(({ json }) => json).join(",")}]}`;
 

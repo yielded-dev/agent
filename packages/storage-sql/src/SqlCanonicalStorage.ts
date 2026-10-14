@@ -278,6 +278,13 @@ export const definitionJson = (sql: SqlClient.SqlClient, namespace?: string, ali
 };
 
 interface DictionaryKeys {
+  definition:
+    | {
+        readonly namespace: string | undefined;
+        readonly json: string;
+        readonly key: number;
+      }
+    | undefined;
   envelope:
     | {
         readonly namespace: string | undefined;
@@ -310,13 +317,14 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
   let keys = identity === undefined ? undefined : dictionaryKeys.get(identity);
 
   if (owner !== undefined && identity !== undefined && keys === undefined) {
-    keys = { envelope: undefined, run: undefined };
+    keys = { envelope: undefined, run: undefined, definition: undefined };
     dictionaryKeys.set(identity, keys);
     const retained = keys;
 
     owner.invalidators.add(() => {
       retained.envelope = undefined;
       retained.run = undefined;
+      retained.definition = undefined;
     });
   }
 
@@ -428,13 +436,29 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
       const prior = yield* lookupKey(statement);
 
       if (prior !== undefined) return retain(prior);
-      yield* query(sql`INSERT INTO ${table("effect_agent_run_keys")} (thread_id, run_id)
-        VALUES (${threadId}, ${runId}) ON CONFLICT(thread_id, run_id) DO NOTHING`);
-      const inserted = yield* lookupKey(statement);
 
-      return inserted === undefined ? yield* failure("missing Run dictionary") : retain(inserted);
+      const inserted =
+        yield* lookupKey(sql`INSERT INTO ${table("effect_agent_run_keys")} (thread_id, run_id)
+        VALUES (${threadId}, ${runId}) ON CONFLICT(thread_id, run_id) DO NOTHING
+        RETURNING run_key AS key`);
+
+      const key = inserted ?? (yield* lookupKey(statement));
+
+      return key === undefined ? yield* failure("missing Run dictionary") : retain(key);
     }),
     definition: Effect.fnUntraced(function* (json: string) {
+      const retained = keys?.definition;
+
+      if (retained !== undefined && retained.namespace === namespace && retained.json === json)
+        return retained.key;
+
+      const retain = (key: number) => {
+        if (keys !== undefined && (namespace?.length ?? 0) + json.length <= 32_768)
+          keys.definition = { namespace, json, key };
+
+        return key;
+      };
+
       const digest = yield* digestCanonicalJson(json).pipe(
         Effect.provideService(Crypto.Crypto, crypto),
         Effect.mapError((cause) => failure("digest admission definitions", cause)),
@@ -455,12 +479,14 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
 
       const prior = yield* read();
 
-      if (prior !== undefined) return prior;
+      if (prior !== undefined) return retain(prior);
       yield* query(sql`INSERT INTO ${table("effect_agent_definitions")} (content_digest, value_json)
         VALUES (${digest}, ${json}) ON CONFLICT(content_digest) DO NOTHING`);
       const inserted = yield* read();
 
-      return inserted === undefined ? yield* failure("missing definition dictionary") : inserted;
+      return inserted === undefined
+        ? yield* failure("missing definition dictionary")
+        : retain(inserted);
     }),
   };
 
