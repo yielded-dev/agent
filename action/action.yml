@@ -11,6 +11,13 @@ inputs:
     description: "Token with pull-requests: write and, for manual commands, issues: write on this repository."
     required: false
     default: ${{ github.token }}
+  dependency-sources:
+    description: "Trusted JSON array of {alias, repository, commits}. Allows up to eight dependency repositories and eight full commit SHAs each, selected from each reviewed revision’s root package.json catalog. Never load this input from PR-controlled files."
+    required: false
+    default: "[]"
+  dependency-token:
+    description: "Token with Contents read access to the explicitly authorized dependency repositories. Defaults to github-token; the repository-scoped github.token cannot read other private repositories."
+    required: false
   pull-request:
     description: "Pull request number."
     required: true
