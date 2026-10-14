@@ -113,19 +113,19 @@ const envelopeDigests = new WeakMap<
   { readonly json: string; readonly digest: Digest }
 >();
 
-const digestEnvelope = Effect.fnUntraced(function* (envelope: typeof EnvelopeFragments.Type) {
-  const json = canonicalJson(envelope);
-  const crypto = yield* Crypto.Crypto;
-  const prior = envelopeDigests.get(crypto);
+const digestEnvelope = (envelope: typeof EnvelopeFragments.Type) =>
+  Effect.flatMap(Crypto.Crypto, (crypto) => {
+    const json = canonicalJson(envelope);
+    const prior = envelopeDigests.get(crypto);
 
-  if (prior?.json === json) return prior.digest;
+    if (prior?.json === json) return Effect.succeed(prior.digest);
 
-  const digest = yield* digestCanonicalJson(json);
+    return Effect.map(digestCanonicalJson(json), (digest) => {
+      if (json.length <= 32_768) envelopeDigests.set(crypto, { json, digest });
 
-  if (json.length <= 32_768) envelopeDigests.set(crypto, { json, digest });
-
-  return digest;
-});
+      return digest;
+    });
+  });
 
 const captureValidatedStorage = Effect.fnUntraced(
   function* (
@@ -154,6 +154,7 @@ const captureValidatedStorage = Effect.fnUntraced(
     };
 
     const created_at_json = JSON.stringify(createdAt);
+    const record_id_json = JSON.stringify(recordId);
     const payload_json = canonicalJson(payload);
 
     if (
@@ -163,7 +164,7 @@ const captureValidatedStorage = Effect.fnUntraced(
         envelope.before_payload +
         payload_json +
         envelope.before_record_id +
-        JSON.stringify(recordId) +
+        record_id_json +
         envelope.suffix !==
         json
     )
@@ -172,7 +173,7 @@ const captureValidatedStorage = Effect.fnUntraced(
     // Validate the complete representation once, including all fragment bounds.
     return yield* CapturedRecordStorage.makeEffect({
       created_at_json,
-      record_id_json: JSON.stringify(recordId),
+      record_id_json,
       payload_json,
       envelope,
       envelope_digest: yield* digestEnvelope(envelope),
@@ -201,15 +202,21 @@ export const captureRecordStorage = Effect.fnUntraced(
 export const capturePreparedRecordStorage = Effect.fnUntraced(function* (input: AppendRequest) {
   const captured = yield* PreparedAppend.capture(input);
 
-  return yield* Effect.forEach(captured.records, (record) =>
-    captureValidatedStorage(
+  const records: Array<(typeof captured.records)[number] & { storage: CapturedRecordStorage }> = [];
+
+  for (const record of captured.records) {
+    const storage = yield* captureValidatedStorage(
       record.wire,
       record.wire.createdAt,
       record.wire.recordId,
       record.wire.payload,
       record.recordJson,
-    ).pipe(Effect.map((storage) => ({ ...record, storage }))),
-  );
+    );
+
+    records.push({ ...record, storage });
+  }
+
+  return records;
 });
 
 /** SQL concatenation preserves additive envelope members and original scalar spelling. */

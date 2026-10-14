@@ -156,7 +156,7 @@ export const ownedRows = <A, I>(
 
     const decode = (rows: unknown) =>
       decodeRows(rows).pipe(
-        Effect.mapError(() =>
+        Effect.mapErrorEager(() =>
           DoStorageCorruptionError.make({
             table,
             rowKey: "owned-state",
@@ -200,9 +200,8 @@ export const ownedRows = <A, I>(
 
           if (view !== undefined) return Effect.succeed(view.rows);
 
-          return query.pipe(
-            Effect.flatMap(decode),
-            Effect.map((rows) => {
+          return Effect.flatMap(query, (rows) =>
+            Effect.mapEager(decode(rows), (rows) => {
               retain(id, matches, rows, maxRows);
 
               return rows;

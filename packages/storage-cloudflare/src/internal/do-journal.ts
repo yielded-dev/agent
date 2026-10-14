@@ -498,34 +498,36 @@ const makeJournal = Effect.fnUntraced(function* (
    * transaction. Expected outcomes may be captured only when every such refusal precedes
    * mutation; real faults still roll back. Successful preflight reads never authorize a write.
    */
-  const withWriteTransaction =
-    (operation: string, expected: (error: { readonly _tag: string }) => boolean = () => false) =>
-    <A, E extends { readonly _tag: string }>(
+  const withWriteTransaction = (
+    operation: string,
+    expected?: (error: { readonly _tag: string }) => boolean,
+  ) => {
+    const transaction = <A, E extends { readonly _tag: string }>(
       effect: Effect.Effect<A, E>,
     ): Effect.Effect<A, E | DoStorageError> =>
       Effect.withFiber((fiber) => {
-        const body = state.owner
-          .withMutation(owner.transaction(storageResult(effect, expected)))
-          .pipe(
-            Effect.provideService(SqlClient.SqlClient, sql),
-            Effect.mapError((error) =>
-              isSqlError(error) ? storageError(operation)(error) : error,
-            ),
-          );
+        const body = state.owner.withMutation(owner.transaction(effect)).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+          Effect.mapError((error) => (isSqlError(error) ? storageError(operation)(error) : error)),
+        );
 
         const traced =
           fiber.getRef(References.TracerEnabled) &&
           fiber.getRef(Tracer.Tracer) !== Tracer.nativeTracer;
 
-        return (
-          traced
-            ? body.pipe(
-                Effect.tapError(annotateStorageError),
-                Effect.withSpan("DoJournal.withWriteTransaction", { attributes: { operation } }),
-              )
-            : body
-        ).pipe(Effect.flatMap(Effect.fromResult));
+        return traced
+          ? body.pipe(
+              Effect.tapError(annotateStorageError),
+              Effect.withSpan("DoJournal.withWriteTransaction", { attributes: { operation } }),
+            )
+          : body;
       });
+
+    return <A, E extends { readonly _tag: string }>(effect: Effect.Effect<A, E>) =>
+      expected === undefined
+        ? transaction(effect)
+        : transaction(storageResult(effect, expected)).pipe(Effect.flatMap(Effect.fromResult));
+  };
 
   const materialize = Effect.fnUntraced(function* (
     threadId: string,

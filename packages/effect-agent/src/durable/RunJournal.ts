@@ -1736,12 +1736,12 @@ const modelResponseRecord = Effect.fnUntraced(function* (
   }
 
   const encodedMessages = yield* encodePrompt(Prompt.fromMessages([...promptMessages])).pipe(
-    Effect.mapError((cause) => journalError("Turn Prompt messages failed to encode", cause)),
+    Effect.mapErrorEager((cause) => journalError("Turn Prompt messages failed to encode", cause)),
   );
 
   const messages = yield* decodePersistedJson(encodedMessages).pipe(
-    Effect.map(copyJson),
-    Effect.mapError((cause) =>
+    Effect.mapEager(copyJson),
+    Effect.mapErrorEager((cause) =>
       journalError("Turn Prompt messages exceed canonical persistence bounds", cause),
     ),
   );
@@ -1783,7 +1783,9 @@ const modelResponseRecord = Effect.fnUntraced(function* (
               }),
         }),
   }).pipe(
-    Effect.mapError((cause) => journalError("Invalid model response operation evidence", cause)),
+    Effect.mapErrorEager((cause) =>
+      journalError("Invalid model response operation evidence", cause),
+    ),
   );
 
   if (payload.modelUsage !== undefined) {
@@ -1791,7 +1793,9 @@ const modelResponseRecord = Effect.fnUntraced(function* (
       return yield* journalError("Turn model usage must contain at least one completed call");
 
     const summary = yield* continuationUsage(payload.modelUsage).pipe(
-      Effect.mapError((cause) => journalError("Turn model usage exceeds accounting bounds", cause)),
+      Effect.mapErrorEager((cause) =>
+        journalError("Turn model usage exceeds accounting bounds", cause),
+      ),
     );
 
     if (

@@ -150,12 +150,14 @@ const retainedBytes = (value: unknown, json: string, allowance: number) => {
   return footprint === undefined ? undefined : encodedBytes + 2 * footprint;
 };
 
-const encodeHistory = Effect.fnUntraced(function* (prompt: Prompt.Prompt, allowance: number) {
-  const value = yield* encodePrompt(prompt);
-  const encoded = canonicalJson(value);
+const encodeHistory = (prompt: Prompt.Prompt, allowance: number) =>
+  Effect.suspend(() =>
+    Effect.mapEager(encodePrompt(prompt), (value) => {
+      const encoded = canonicalJson(value);
 
-  return { encoded, bytes: retainedBytes(value, encoded, allowance) };
-});
+      return { encoded, bytes: retainedBytes(value, encoded, allowance) };
+    }),
+  );
 
 // Finish parsing/decoding before suspending for suffix reads. Only the native prefix and its
 // canonical string leave this Effect; it does not keep a second parsed root in the outer Run.
