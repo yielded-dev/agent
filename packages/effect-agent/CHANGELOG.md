@@ -1,5 +1,39 @@
 # @yielded/agent
 
+## 0.1.0-beta.175
+
+### Patch Changes
+
+- [#925](https://github.com/yielded-dev/agent/pull/925) [`4a4c74d`](https://github.com/yielded-dev/agent/commit/4a4c74dc5458347165eedf785c316168f78e840a) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce repeated validation when committing captured Run state.
+
+- [#926](https://github.com/yielded-dev/agent/pull/926) [`ca850e3`](https://github.com/yielded-dev/agent/commit/ca850e30cc38567a11df099a95f36b5c99a82f92) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce repeated validation and intermediate allocations during Cloudflare turns.
+
+- [#916](https://github.com/yielded-dev/agent/pull/916) [`619d472`](https://github.com/yielded-dev/agent/commit/619d472c7ab5b857a1ae21d5737cd79ba3db6aee) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Coalesce receipt admission and readiness for initialized Cloudflare Threads to avoid a redundant storage transaction while preserving initialization, recovery, and lifecycle publication.
+
+- [#929](https://github.com/yielded-dev/agent/pull/929) [`6d7aa0e`](https://github.com/yielded-dev/agent/commit/6d7aa0eed29be8da53fd5b129726afb2e0e4577e) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce repeated coordinator work during durable turns and redundant recovery scans in single-Thread Cloudflare Objects.
+
+- [#936](https://github.com/yielded-dev/agent/pull/936) [`0a0d58c`](https://github.com/yielded-dev/agent/commit/0a0d58c8ffeb161317f4f25eec8c28dd698c4984) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Defer SQL memory equivalence derivation and unavailable messaging-context errors until first use to reduce eager initialization work.
+
+- [#917](https://github.com/yielded-dev/agent/pull/917) [`61a1553`](https://github.com/yielded-dev/agent/commit/61a1553a4b6a380c85585bec8dbab8094ea15358) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce empty maintenance waves, repeated decoding and per-Run service construction during durable Cloudflare turns. Preserve scoped cancellation, receipts and recovery.
+
+- [#921](https://github.com/yielded-dev/agent/pull/921) [`c592692`](https://github.com/yielded-dev/agent/commit/c5926920601470230cc07a163cd3de343806be45) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reuse verified state held by the current owner when starting durable Cloudflare turns. Retain canonical validation and recovery when the view is absent or no longer matches.
+
+- [#908](https://github.com/yielded-dev/agent/pull/908) [`e0ebc70`](https://github.com/yielded-dev/agent/commit/e0ebc704f871971a7c83ebae9d30bc1e7996fea9) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce commit overhead for model responses and readonly tool results on Cloudflare while preserving durable replay, recovery, and existing stores.
+
+- [#915](https://github.com/yielded-dev/agent/pull/915) [`864a897`](https://github.com/yielded-dev/agent/commit/864a897aca150b64b1e2e8fab297963078857fcf) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce repeated execution checks and service setup while preserving Run ownership and live capacity validation.
+
+- [#939](https://github.com/yielded-dev/agent/pull/939) [`195c9c3`](https://github.com/yielded-dev/agent/commit/195c9c350afa23a934da03d6fef18a91919a8fb5) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce per-part streaming overhead while preserving model validation, owned response data, and ordered text delivery.
+
+- [#935](https://github.com/yielded-dev/agent/pull/935) [`efd458b`](https://github.com/yielded-dev/agent/commit/efd458b44b183e6e16b4436a013bbc1bffbed898) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce execution overhead for tool results and durable progress while preserving validation and stored records.
+
+- [#934](https://github.com/yielded-dev/agent/pull/934) [`ba869fb`](https://github.com/yielded-dev/agent/commit/ba869fbb61a045d9b2e447394c3b42952b241ae1) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce allocation and Effect overhead when notifying scoped Thread waiters.
+
+- [#940](https://github.com/yielded-dev/agent/pull/940) [`ac9620b`](https://github.com/yielded-dev/agent/commit/ac9620be4c3e50a77b3762b071543a588ae2484c) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce prompt preparation copies and commit continuation overhead while preserving model-visible messages and durable outcomes.
+
+- [#933](https://github.com/yielded-dev/agent/pull/933) [`cc50268`](https://github.com/yielded-dev/agent/commit/cc502681dcaff9440a49780a49b68c615d96063f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce redundant validation during model and tool execution while preserving usage bounds and canonical conversation records.
+
+- [#931](https://github.com/yielded-dev/agent/pull/931) [`4236b5c`](https://github.com/yielded-dev/agent/commit/4236b5c14a5745de69b949a9e35a3c24ccaf7b92) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce work between model calls while preserving durable tool results and usage accounting.
+
 ## 0.1.0-beta.174
 
 ### Minor Changes

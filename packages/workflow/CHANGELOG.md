@@ -1,5 +1,12 @@
 # @yielded/agent-workflow
 
+## 0.1.0-beta.175
+
+### Patch Changes
+
+- Updated dependencies [[`4a4c74d`](https://github.com/yielded-dev/agent/commit/4a4c74dc5458347165eedf785c316168f78e840a), [`ca850e3`](https://github.com/yielded-dev/agent/commit/ca850e30cc38567a11df099a95f36b5c99a82f92), [`619d472`](https://github.com/yielded-dev/agent/commit/619d472c7ab5b857a1ae21d5737cd79ba3db6aee), [`6d7aa0e`](https://github.com/yielded-dev/agent/commit/6d7aa0eed29be8da53fd5b129726afb2e0e4577e), [`0a0d58c`](https://github.com/yielded-dev/agent/commit/0a0d58c8ffeb161317f4f25eec8c28dd698c4984), [`61a1553`](https://github.com/yielded-dev/agent/commit/61a1553a4b6a380c85585bec8dbab8094ea15358), [`c592692`](https://github.com/yielded-dev/agent/commit/c5926920601470230cc07a163cd3de343806be45), [`e0ebc70`](https://github.com/yielded-dev/agent/commit/e0ebc704f871971a7c83ebae9d30bc1e7996fea9), [`864a897`](https://github.com/yielded-dev/agent/commit/864a897aca150b64b1e2e8fab297963078857fcf), [`195c9c3`](https://github.com/yielded-dev/agent/commit/195c9c350afa23a934da03d6fef18a91919a8fb5), [`efd458b`](https://github.com/yielded-dev/agent/commit/efd458b44b183e6e16b4436a013bbc1bffbed898), [`ba869fb`](https://github.com/yielded-dev/agent/commit/ba869fbb61a045d9b2e447394c3b42952b241ae1), [`ac9620b`](https://github.com/yielded-dev/agent/commit/ac9620be4c3e50a77b3762b071543a588ae2484c), [`cc50268`](https://github.com/yielded-dev/agent/commit/cc502681dcaff9440a49780a49b68c615d96063f), [`4236b5c`](https://github.com/yielded-dev/agent/commit/4236b5c14a5745de69b949a9e35a3c24ccaf7b92)]:
+  - @yielded/agent@0.1.0-beta.175
+
 ## 0.1.0-beta.174
 
 ### Patch Changes
