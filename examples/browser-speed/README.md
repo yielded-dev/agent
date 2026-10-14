@@ -11,6 +11,15 @@ messages share the same Chromium browser and persisted Thread history. Press Ent
 Shift+Enter for a new line, and **New chat** to close the browser and clear the conversation.
 Chat runs one message at a time; model and browser comparisons remain in the demos.
 
+OpenAI chat has three tools: `browser_execute`, hosted `OpenAiWebSearch`, and `finish`.
+The agent is instructed to use search for discovery and recommendations, then the browser to
+inspect websites and verify products before acting. Replies render clickable source links.
+Search events appear in the run trace; their timing overlaps the containing model call.
+Search-enabled chat has a 64,000-token context target, with pruning retaining 24,000 tokens.
+Workers AI uses search engines through the browser. Start a new chat when changing providers
+after hosted search, since native provider tool history belongs to its original provider.
+The canned demos retain only the browser and reply tools.
+
 The Wikipedia race asks the agent to follow article links only, with no search, direct URL
 entry, back button or extra tabs. The host resolves the destination, records main-page
 navigations, and checks the final URL and canonical article. A passing run means **arrival

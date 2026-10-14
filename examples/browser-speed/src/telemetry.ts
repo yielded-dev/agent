@@ -154,10 +154,54 @@ const decodeServedTier = Schema.decodeUnknownOption(
   }),
 );
 
-/** Preserve raw served tiers, including aliases missing from the provider's finish metadata. */
+const decodeSearchEvent = Schema.decodeUnknownOption(
+  Schema.Struct({
+    type: Schema.Literals(["response.output_item.added", "response.output_item.done"]),
+    item: Schema.Struct({
+      type: Schema.Literal("web_search_call"),
+      id: Schema.String,
+      status: Schema.optionalKey(Schema.String),
+      action: Schema.optionalKey(
+        Schema.Struct({
+          type: Schema.String,
+          queries: Schema.optionalKey(Schema.Array(Schema.String)),
+          query: Schema.optionalKey(Schema.String),
+          url: Schema.optionalKey(Schema.String),
+        }),
+      ),
+    }),
+  }),
+);
+
+/** Preserve raw served tiers and trace hosted searches inside their model calls. */
 export const traceOpenAiClient = Effect.gen(function* () {
   const client = yield* OpenAiClient.OpenAiClient;
   const trace = yield* Trace;
+  const searches = new Map<string, ReturnType<typeof trace.begin>>();
+
+  const searchEvent = (event: unknown) => {
+    const decoded = decodeSearchEvent(event);
+
+    if (Option.isNone(decoded)) return;
+    const { type, item } = decoded.value;
+    const handle = searches.get(item.id) ?? trace.begin("action", "Web search");
+
+    if (type === "response.output_item.added") {
+      searches.set(item.id, handle);
+      trace.update({ message: "Searching the web…" });
+    } else {
+      const query = item.action?.queries?.join(" · ") ?? item.action?.query ?? item.action?.url;
+
+      handle.end(
+        item.status === "completed"
+          ? Exit.void
+          : Exit.fail(LabError.make({ code: "browser", message: "Web search did not complete." })),
+        { name: `Web search${query ? ` · ${query.slice(0, 240)}` : ""}` },
+      );
+      searches.delete(item.id);
+      if (searches.size === 0) trace.update({ message: "Agent is working…" });
+    }
+  };
 
   return OpenAiClient.OpenAiClient.of({
     ...client,
@@ -167,6 +211,8 @@ export const traceOpenAiClient = Effect.gen(function* () {
           Effect.sync(() => {
             if (response.service_tier !== undefined)
               trace.annotateModel({ serviceTier: response.service_tier });
+            for (const item of response.output)
+              searchEvent({ type: "response.output_item.done", item });
           }),
         ),
       ),
@@ -179,10 +225,27 @@ export const traceOpenAiClient = Effect.gen(function* () {
               events.pipe(
                 Stream.tap((event) =>
                   Effect.sync(() => {
+                    searchEvent(event);
                     const evidence = decodeServedTier(event);
 
                     if (Option.isSome(evidence))
                       trace.annotateModel({ serviceTier: evidence.value.response.service_tier });
+                  }),
+                ),
+                Stream.onExit((exit) =>
+                  Effect.sync(() => {
+                    for (const handle of searches.values())
+                      handle.end(
+                        Exit.isFailure(exit)
+                          ? exit
+                          : Exit.fail(
+                              LabError.make({
+                                code: "browser",
+                                message: "Web search ended without a completion event.",
+                              }),
+                            ),
+                      );
+                    searches.clear();
                   }),
                 ),
               ),

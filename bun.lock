@@ -75,6 +75,7 @@
         "puppeteer-core": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
+        "streamdown": "catalog:",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "catalog:",
