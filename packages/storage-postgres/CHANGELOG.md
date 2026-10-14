@@ -1,5 +1,14 @@
 # @yielded/agent-storage-postgres
 
+## 0.1.0-beta.175
+
+### Patch Changes
+
+- [#930](https://github.com/yielded-dev/agent/pull/930) [`48ae17b`](https://github.com/yielded-dev/agent/commit/48ae17b94075a565ce73ff4beb3a70b04a2ea259) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Remove the redundant batch-end index from SQLite and PostgreSQL stores while preserving existing tables, Threads and receipts.
+- Updated dependencies [[`4a4c74d`](https://github.com/yielded-dev/agent/commit/4a4c74dc5458347165eedf785c316168f78e840a), [`ca850e3`](https://github.com/yielded-dev/agent/commit/ca850e30cc38567a11df099a95f36b5c99a82f92), [`619d472`](https://github.com/yielded-dev/agent/commit/619d472c7ab5b857a1ae21d5737cd79ba3db6aee), [`b27e6bc`](https://github.com/yielded-dev/agent/commit/b27e6bcd8b8d9cbc3ddea766a6ca77cf2546567b), [`6d7aa0e`](https://github.com/yielded-dev/agent/commit/6d7aa0eed29be8da53fd5b129726afb2e0e4577e), [`0a0d58c`](https://github.com/yielded-dev/agent/commit/0a0d58c8ffeb161317f4f25eec8c28dd698c4984), [`61a1553`](https://github.com/yielded-dev/agent/commit/61a1553a4b6a380c85585bec8dbab8094ea15358), [`c592692`](https://github.com/yielded-dev/agent/commit/c5926920601470230cc07a163cd3de343806be45), [`e0ebc70`](https://github.com/yielded-dev/agent/commit/e0ebc704f871971a7c83ebae9d30bc1e7996fea9), [`72aea39`](https://github.com/yielded-dev/agent/commit/72aea39efec9a914621961d0465dfc6b6a097bbe), [`864a897`](https://github.com/yielded-dev/agent/commit/864a897aca150b64b1e2e8fab297963078857fcf), [`460b2c5`](https://github.com/yielded-dev/agent/commit/460b2c519b464f9a05510885737c528fc6d4a14b), [`195c9c3`](https://github.com/yielded-dev/agent/commit/195c9c350afa23a934da03d6fef18a91919a8fb5), [`efd458b`](https://github.com/yielded-dev/agent/commit/efd458b44b183e6e16b4436a013bbc1bffbed898), [`ba869fb`](https://github.com/yielded-dev/agent/commit/ba869fbb61a045d9b2e447394c3b42952b241ae1), [`a64a59f`](https://github.com/yielded-dev/agent/commit/a64a59f7471798706a75c7b59c4ae32c98cd0fc8), [`ac9620b`](https://github.com/yielded-dev/agent/commit/ac9620be4c3e50a77b3762b071543a588ae2484c), [`cc50268`](https://github.com/yielded-dev/agent/commit/cc502681dcaff9440a49780a49b68c615d96063f), [`4236b5c`](https://github.com/yielded-dev/agent/commit/4236b5c14a5745de69b949a9e35a3c24ccaf7b92)]:
+  - @yielded/agent@0.1.0-beta.175
+  - @yielded/agent-storage-sql@0.1.0-beta.175
+
 ## 0.1.0-beta.174
 
 ### Patch Changes
