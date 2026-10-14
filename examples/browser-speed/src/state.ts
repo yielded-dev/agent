@@ -39,6 +39,7 @@ export interface ChatTurn {
   readonly id: string;
   readonly prompt: string;
   readonly pending: boolean;
+  readonly connectionLost?: boolean;
   readonly report?: Report;
   readonly error?: string;
 }
@@ -220,7 +221,10 @@ export const controlAtom = LabClient.runtime.fn<"stop" | "close">()(
   Effect.fnUntraced(function* (action, get) {
     const client = yield* LabClient;
 
-    if (action === "stop") get.set(stopRequestedAtom, true);
+    if (action === "stop") {
+      get.set(stopRequestedAtom, true);
+      get.set(chatIdAtom, null);
+    }
     if (action === "close") get.set(chatDraftAtom, "");
     yield* Reactivity.mutation(
       action === "stop" ? client.lab.stop({ headers }) : client.lab.close({ headers }),
@@ -232,6 +236,54 @@ export const controlAtom = LabClient.runtime.fn<"stop" | "close">()(
     }
   }),
 );
+
+const reconcileChatReport = Effect.fnUntraced(function* (
+  get: Atom.FnContext,
+  id: string,
+  start: number,
+) {
+  // Match the owner's twelve-minute run limit. A matching report can shorten the
+  // remaining wait without relying on synchronized browser/Worker wall clocks.
+  const runDeadlineMillis = 12 * 60_000;
+  let deadline = start + runDeadlineMillis;
+
+  while (true) {
+    if (get(stopRequestedAtom))
+      return yield* LabError.make({
+        code: "interrupted",
+        message:
+          "Stopped checking this response. Admission or completion could not be confirmed. Check the browser status; no actions were replayed.",
+      });
+    const snapshot = get(snapshotAtom);
+
+    if (AsyncResult.isSuccess(snapshot)) {
+      const remote = snapshot.value;
+      const report = remote.report;
+
+      if (report?.input.id === id) {
+        if (!remote.busy && report.status !== "running" && report.cleanup !== "pending")
+          return report;
+        if (remote.busy && remote.canClose)
+          return yield* LabError.make({
+            code: "interrupted",
+            message:
+              "The Worker cannot resolve this run. Choose New chat to close the browser; no actions will be replayed.",
+          });
+        deadline = Math.min(deadline, performance.now() + runDeadlineMillis - report.elapsed);
+      }
+    }
+    const remaining = deadline - performance.now();
+
+    if (remaining <= 0)
+      return yield* LabError.make({
+        code: "interrupted",
+        message:
+          "The twelve-minute run deadline was reached without a confirmed result. Check the browser status and close it before starting again; no actions were replayed.",
+      });
+    // Read the existing polling atom; never issue another run or status request here.
+    yield* Effect.sleep(Math.min(300, remaining));
+  }
+});
 
 export const sendChatAtom = LabClient.runtime.fn<
   Omit<RunInput, "id" | "scenario" | "prompt" | "chatId">
@@ -247,7 +299,9 @@ export const sendChatAtom = LabClient.runtime.fn<
     const chatId = get(chatIdAtom);
     const start = performance.now();
 
+    get.mount(stopRequestedAtom);
     get.set(watchingAtom, true);
+    get.set(stopRequestedAtom, false);
     get.set(selectedAtom, null);
     get.set(progressAtom, { current: 1, total: 1 });
     get.set(chatTurnsAtom, [...get(chatTurnsAtom), { id, prompt, pending: true }].slice(-50));
@@ -292,13 +346,35 @@ export const sendChatAtom = LabClient.runtime.fn<
           },
         }),
         ["lab"],
+      ).pipe(
+        Effect.catchIf(
+          (error) =>
+            !(
+              Schema.is(LabError)(error) &&
+              ["configuration", "invalid", "busy", "expired"].includes(error.code)
+            ),
+          () =>
+            Effect.gen(function* () {
+              get.set(
+                chatTurnsAtom,
+                get(chatTurnsAtom).map((turn) =>
+                  turn.id === id ? { ...turn, connectionLost: true } : turn,
+                ),
+              );
+
+              return yield* reconcileChatReport(get, id, start);
+            }),
+        ),
       );
 
-      get.set(chatIdAtom, report.cleanup === "retained" ? (chatId ?? id) : null);
+      get.set(
+        chatIdAtom,
+        !get(stopRequestedAtom) && report.cleanup === "retained" ? (chatId ?? id) : null,
+      );
       get.set(
         chatTurnsAtom,
         get(chatTurnsAtom).map((turn) =>
-          turn.id === id ? { ...turn, report, pending: false } : turn,
+          turn.id === id ? { ...turn, report, pending: false, connectionLost: false } : turn,
         ),
       );
       get.set(
@@ -319,7 +395,10 @@ export const sendChatAtom = LabClient.runtime.fn<
             Schema.decodeUnknownOption(LabError),
           );
 
-          if (Option.isSome(error) && error.value.code === "expired") get.set(chatIdAtom, null);
+          const uncertain = get(chatTurnsAtom).find((turn) => turn.id === id)?.connectionLost;
+
+          if (uncertain || (Option.isSome(error) && error.value.code === "expired"))
+            get.set(chatIdAtom, null);
           get.set(
             chatTurnsAtom,
             get(chatTurnsAtom).map((turn) =>
@@ -332,7 +411,7 @@ export const sendChatAtom = LabClient.runtime.fn<
                 : turn,
             ),
           );
-          if (!get(chatDraftAtom)) get.set(chatDraftAtom, prompt);
+          if (!uncertain && !get(chatDraftAtom)) get.set(chatDraftAtom, prompt);
         }),
       ),
       Effect.ensuring(

@@ -211,9 +211,18 @@ const ChatResponse = ({ turn }: { turn: ChatTurn }) => {
           {report?.message ?? "Connecting to the agent…"}
         </p>
       )}
+      {turn.pending && turn.connectionLost && (
+        <p className="chat-status" role="status">
+          Run response interrupted. Checking run status… Any text above may be partial. You can stop
+          this wait; the message will not be sent again automatically.
+        </p>
+      )}
       {turn.error ? (
         <p className="chat-status bad" role="status">
-          Response interrupted. Any text above is partial. {turn.error}
+          {report === undefined && !turn.connectionLost
+            ? "Message not sent. "
+            : "Response interrupted. Any text above may be partial. "}
+          {turn.error}
         </p>
       ) : report?.status === "cancelled" ? (
         <p className="chat-status" role="status">
@@ -780,7 +789,12 @@ export const App = () => {
             ) : null}
             <button
               className="ghost"
-              disabled={busy || (!remote?.canClose && !chatTurns.length) || control.waiting}
+              disabled={
+                watching ||
+                (remote?.busy && !remote.canClose) ||
+                (!remote?.canClose && !chatTurns.length) ||
+                control.waiting
+              }
               onClick={() => act("close")}
             >
               {isChat ? "New chat" : "Close browser"}
