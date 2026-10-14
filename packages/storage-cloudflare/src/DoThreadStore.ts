@@ -165,8 +165,8 @@ const encodeCheckpoint = (checkpoint: ThreadCheckpoint): Effect.Effect<string, T
 const envelopes = new WeakMap<object, CanonicalRecordEnvelope>();
 
 const decodeEnvelope = Effect.fnUntraced(function* (row: {
-  readonly batch_id: string;
-  readonly thread_id: string;
+  readonly batch_id: CanonicalRecordEnvelope["batchId"];
+  readonly thread_id: CanonicalRecordEnvelope["threadId"];
   readonly record_json: string;
   readonly sequence: CanonicalSequence;
 }) {
@@ -199,17 +199,11 @@ const decodeEnvelope = Effect.fnUntraced(function* (row: {
     ),
   );
 
-  const threadId = yield* Schema.decodeEffect(CanonicalRecordEnvelope.fields.threadId)(
-    row.thread_id,
-  ).pipe(Effect.mapError((error) => schemaStoreError("decode thread identity", error)));
+  const { thread_id: threadId, batch_id: batchId } = row;
 
   const offset = ObservationOffset.make(
     `${DO_OFFSET_PREFIX}${encodeURIComponent(threadId)}:${row.sequence}`,
   );
-
-  const batchId = yield* Schema.decodeEffect(CanonicalRecordEnvelope.fields.batchId)(
-    row.batch_id,
-  ).pipe(Effect.mapError((error) => schemaStoreError("decode batch identity", error)));
 
   const envelope = CanonicalRecordEnvelope.make(
     { threadId, batchId, sequence: row.sequence, offset, record },

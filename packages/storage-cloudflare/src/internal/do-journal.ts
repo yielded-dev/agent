@@ -22,7 +22,7 @@ import {
   LifecyclePublicationFact,
   LifecyclePublicationError,
 } from "@yielded/agent/lifecycle-publication";
-import { CanonicalRecord, CanonicalSequence } from "@yielded/agent/records";
+import { BatchId, CanonicalRecord, CanonicalSequence } from "@yielded/agent/records";
 import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import {
   type AppendConflict,
@@ -115,8 +115,8 @@ const threadRows = ownedRows(
 );
 
 class RecordRow extends Schema.Class<RecordRow>("RecordRow")({
-  batch_id: Schema.fromJsonString(BoundedIdentifier),
-  thread_id: BoundedIdentifier,
+  batch_id: Schema.fromJsonString(BatchId.check(Schema.isMaxLength(MAX_IDENTIFIER_LENGTH))),
+  thread_id: ThreadId.check(Schema.isMaxLength(MAX_IDENTIFIER_LENGTH)),
   record_id: Schema.fromJsonString(BoundedIdentifier),
   record_json: BoundedStoredText,
   sequence: CanonicalSequence,
@@ -783,6 +783,7 @@ const makeJournal = Effect.fnUntraced(function* (
             recordCache.put(
               RecordRow.make({
                 ...physicalRecords[index]!.columns,
+                thread_id: request.threadId,
                 record_id: record.recordId,
                 batch_id: request.batchId,
                 record_json: record.recordJson,
@@ -993,6 +994,7 @@ const makeJournal = Effect.fnUntraced(function* (
         recordCache.put(
           RecordRow.make({
             ...row,
+            thread_id: request.threadId,
             record_id: record.recordId,
             batch_id: request.batchId,
             record_json: record.recordJson,
