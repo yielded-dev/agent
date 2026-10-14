@@ -204,7 +204,7 @@ export const command = Command.make(
       flags.buildHistory ? 2 : rigorous ? 30 : 12,
     );
 
-    if (!flags.buildHistory && !rigorous && objects % 2 !== 0)
+    if (!flags.buildHistory && objects % 2 !== 0)
       return yield* BenchError.make({
         message: "Counterbalanced comparison requires an even Object count.",
       });

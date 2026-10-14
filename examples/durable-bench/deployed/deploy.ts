@@ -427,7 +427,8 @@ export const deployments = Effect.gen(function* () {
             "Target endpoint unavailable; reconciling its Alchemy deployment once…",
           );
           yield* alchemy(stack, "deploy", true);
-          yield* health;
+
+          return yield* health;
         }),
       ),
     );

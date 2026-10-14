@@ -114,6 +114,24 @@ const retirementTable = (result: Result): string[] => {
   ];
 };
 
+const prefixRecoveryTable = (result: Result): string[] => {
+  if (!result.recoveries?.length) return [];
+
+  return [
+    "Restored-prefix recoveries; original attempts remain in JSON.",
+    "",
+    "| Target / build / epoch | Recovered inputs |",
+    "|---|---:|",
+    ...[
+      ...group(
+        result.recoveries,
+        (row) => `${row.target}/${row.build ?? "unrecorded"}/${row.epoch}`,
+      ),
+    ].map(([cell, rows]) => `| ${cell} | ${rows.length} |`),
+    "",
+  ];
+};
+
 const polledRecoveryTable = (result: Result): string[] => {
   if (!result.polledRecoveries?.length) return [];
 
@@ -256,6 +274,7 @@ const historyTable = (result: Result): string => {
           "",
         ]
       : []),
+    ...prefixRecoveryTable(result),
     ...polledRecoveryTable(result),
     "Independent Objects per size; real one-tool, one-tool, zero-tool turns in batches of 50 at zero provider TTFT, with runtime restarts between batches.",
     "Each logical sample has a dedicated Worker. Batch isolate tokens are checked for sharing across build cohorts; shared cohorts are rejected.",
@@ -458,6 +477,7 @@ export const table = (result: Result): string => {
           `Recovery prefix turns: ${result.samples.filter((row) => row.state === "recovery").length}; setup only, excluded from timing and CPU comparisons.`,
         ]
       : []),
+    ...prefixRecoveryTable(result),
     ...polledRecoveryTable(result),
     ...retirementTable(result),
     "Driver-observed milliseconds; median [Q1–Q3] of Object medians.",

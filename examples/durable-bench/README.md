@@ -407,8 +407,7 @@ drift before claiming a small optimization.
 vp run deployed -- --rigorous --baseline origin/main --candidate HEAD --fixture-directory /path/to/saved-fixtures
 ```
 
-Rigorous mode enables cold turns and six warm repeats per pass; CPU requires `--cpu`. It randomly chooses
-ABBA or BAAB, redeploying the **same Worker and namespaces** with the two Yielded builds.
+Rigorous mode enables cold turns and six warm repeats per pass; CPU requires `--cpu`. It assigns half of each cell to ABBA and half to BAAB, redeploying the **same Worker and namespaces** with the two Yielded builds.
 Each pass restarts the same physical Objects and restores identical saved history.
 All restores preserve original SQLite rows and table counts, then run an excluded preparation turn.
 Repeat drift is reported for both arms and targets. The estimator remains paired differences

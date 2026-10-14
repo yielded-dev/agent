@@ -461,6 +461,9 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       }
       const compiled = yield* build(folder, "target", refs.get(label), target);
 
+      if (compiled.harnessRevision !== result.revision)
+        return yield* BenchError.make({ message: "Harness revision changed during the build." });
+
       if (options.profiles.length > 0) {
         const retained = join(output, label, target);
 
@@ -681,7 +684,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
     for (const cohort of cohorts)
       targetOwners.set(workerName(cohort), { target: cohort.target, object: cohort.object });
 
-    const counterbalanced = Boolean(options.baseline && !options.rigorous && !options.buildHistory);
+    const counterbalanced = Boolean(options.baseline && !options.buildHistory);
     const firstLabels = new Map<string, "baseline" | "candidate">();
 
     if (counterbalanced) {
@@ -785,7 +788,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
         const label =
           first === undefined
             ? defaultLabel
-            : epoch === 0
+            : epoch === 0 || (options.rigorous && epoch === 3)
               ? first
               : first === "baseline"
                 ? "candidate"
@@ -1627,6 +1630,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                   message: "Measurement must follow acknowledged readiness/reset.",
                 });
 
+              const acknowledgedReset = reset;
+
               const query = {
                 ...cohort,
                 sample: sampleName(epoch, index, attempt),
@@ -1825,7 +1830,7 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
 
                 const coldVerified =
                   firstAfterReset(index) &&
-                  metrics.identity.incarnation !== reset.before.incarnation &&
+                  metrics.identity.incarnation !== acknowledgedReset.before.incarnation &&
                   metrics.identity.firstEntry &&
                   metrics.identity.priorAlarms === 0 &&
                   (!options.buildHistory ||
@@ -1837,7 +1842,8 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
                 const actorVerified =
                   cohort.target !== "tardie" ||
                   (firstAfterReset(index)
-                    ? metrics.directory?.incarnation !== reset.directoryBefore?.incarnation &&
+                    ? metrics.directory?.incarnation !==
+                        acknowledgedReset.directoryBefore?.incarnation &&
                       metrics.directory?.firstEntry === true &&
                       metrics.directory.priorAlarms === 0
                     : metrics.directory?.incarnation === directoryIncarnation);
