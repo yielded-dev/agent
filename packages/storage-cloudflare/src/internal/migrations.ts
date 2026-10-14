@@ -6,7 +6,7 @@ import {
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 
@@ -15,6 +15,7 @@ import {
   DoStorageCorruptionError,
   DoStorageError,
 } from "../DoStorageError.ts";
+import type { OwnedState } from "./owned-state.ts";
 
 export const CurrentDoStorageVersion = 28;
 
@@ -215,7 +216,7 @@ export const readDoStorageHeader = Effect.fnUntraced(function* () {
 });
 
 /** Initialize fresh storage or atomically upgrade the exact released layouts 25–27. */
-export const ensureDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(function* () {
+const initializeDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(function* () {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
   return yield* sql
@@ -276,4 +277,34 @@ export const ensureDoStorageLayout = Effect.fn("DoStorage.initializeLayout")(fun
       }),
     )
     .pipe(Effect.catchTag("SqlError", storageError));
+});
+
+const initializedLayouts = new WeakMap<OwnedState, DoStorageHeader>();
+
+/** Share committed inspection within one live Object owner; maintenance invalidates it. */
+export const ensureDoStorageLayout = Effect.fnUntraced(function* (state: OwnedState) {
+  const sql = yield* SqlClient.SqlClient;
+
+  // A caller-owned transaction can still roll back after this initializer returns.
+  if (Option.isSome(yield* Effect.serviceOption(sql.transactionService)))
+    return yield* initializeDoStorageLayout();
+
+  return yield* state.read(
+    Effect.gen(function* () {
+      const previous = initializedLayouts.get(state);
+
+      if (previous !== undefined) return previous;
+      const header = yield* initializeDoStorageLayout();
+
+      const invalidate = () => {
+        initializedLayouts.delete(state);
+        state.invalidators.delete(invalidate);
+      };
+
+      initializedLayouts.set(state, header);
+      state.invalidators.add(invalidate);
+
+      return header;
+    }),
+  );
 });
