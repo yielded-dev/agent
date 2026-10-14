@@ -989,6 +989,10 @@ export type SubmissionLedgerFailure =
  *   An optional `parentLinkage` is recorded immutably at first admission (SUB-016); a replay
  *   whose linkage diverges (present vs. absent, or different identities) fails with
  *   `AdmissionConflict` even when the input digest matches.
+ *   With `readyIfInitialized`, an adapter may insert a fresh ordinary Submission as ready
+ *   when it proves Thread initialization under the admission's owner transaction. Readiness,
+ *   its lifecycle fact and source progress commit with the receipt. Otherwise it returns
+ *   admitted and the caller completes materialization and `markReady` as usual.
  * - `resolveAdmission` — authoritative tri-state admission lookup by scoped idempotency key
  *   (SUB-031): `NotAdmitted` proves absence, `Admitted` carries the full snapshot, and
  *   `Indeterminate` states that the adapter cannot currently prove either. Only `NotAdmitted`
@@ -1093,6 +1097,7 @@ export class SubmissionLedger extends Context.Service<
     readonly capabilities: Effect.Effect<LedgerCapabilities>;
     readonly admit: (
       request: AdmissionRequest,
+      options?: { readonly readyIfInitialized?: boolean },
     ) => Effect.Effect<AdmissionResult, AdmissionConflict | AdmissionPolicyError | LedgerError>;
     readonly markReady: (request: MarkReadyRequest) => Effect.Effect<void, LedgerError>;
     readonly lookup: (
