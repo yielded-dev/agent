@@ -669,7 +669,7 @@
     "clsx": "2.1.1",
     "diff": "8.0.4",
     "effect": "4.0.4",
-    "effect-cf": "0.56.2",
+    "effect-cf": "0.56.4",
     "esbuild": "0.28.1",
     "expressive-code-twoslash": "0.6.1",
     "isomorphic-git": "1.41.9",
@@ -2264,7 +2264,7 @@
 
     "effect": ["effect@4.0.4", "", {}, "sha512-Sr50OeVSC3M5UkoUYUhFf3EULryhGaZZUf6OzDHTvaznOw7HRlxOKdF3/4nvQXHL22StOyMG3Cvo8Bt7xUp+Ng=="],
 
-    "effect-cf": ["effect-cf@0.56.2", "", { "peerDependencies": { "@cloudflare/computer": "^0.2.0", "@cloudflare/sandbox": "^0.13.0-next.738.2 || ^1.0.0", "@cloudflare/vitest-plugin": "^1.0.0", "@cloudflare/workers-types": "^5.20260926.1", "@effect/sql-d1": "^4.0.0", "@effect/sql-pg": "^4.0.0", "@effect/sql-sqlite-do": "^4.0.0", "@modelcontextprotocol/server": "^2.0.0", "effect": "^4.0.0" }, "optionalPeers": ["@cloudflare/computer", "@cloudflare/sandbox", "@cloudflare/vitest-plugin", "@cloudflare/workers-types", "@effect/sql-pg", "@modelcontextprotocol/server"] }, "sha512-97xJVkfc6r99BiVpInTuldlqJwsylwrKMGFX3Ed5Xn7vLQQQkKz4HwZ8fKLPDCr/qP24S5LL/W0dRod0hmE+KQ=="],
+    "effect-cf": ["effect-cf@0.56.4", "", { "peerDependencies": { "@cloudflare/computer": "^0.2.0", "@cloudflare/sandbox": "^0.13.0-next.738.2 || ^1.0.0", "@cloudflare/vitest-plugin": "^1.0.0", "@cloudflare/workers-types": "^5.20260926.1", "@effect/sql-d1": "^4.0.0", "@effect/sql-pg": "^4.0.0", "@effect/sql-sqlite-do": "^4.0.0", "@modelcontextprotocol/server": "^2.0.0", "effect": "^4.0.0" }, "optionalPeers": ["@cloudflare/computer", "@cloudflare/sandbox", "@cloudflare/vitest-plugin", "@cloudflare/workers-types", "@effect/sql-pg", "@modelcontextprotocol/server"] }, "sha512-Y7M0dI+bCjkGaMo0mV+nYJYUKX2Bv36SUydf6lpnebNLzt1bXiaY/D0+GsvMM88cMddbMNexjBkz74l7tA1NLg=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.398", "", {}, "sha512-AsvhAxopJGh6museTDMIjn6JpDYOfgu4RLlygomt87MUwBUqTfd/1EiPtx10/LZE8xpTvkP2E9Gafq7lkLtodQ=="],
 
