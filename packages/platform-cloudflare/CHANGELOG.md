@@ -1,5 +1,15 @@
 # @yielded/agent-platform-cloudflare
 
+## 0.1.0-beta.177
+
+### Patch Changes
+
+- [#952](https://github.com/yielded-dev/agent/pull/952) [`bd491ca`](https://github.com/yielded-dev/agent/commit/bd491ca3cf8a6ef873fd9d4fc334e67682e438ec) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Update effect-cf to 0.56.4 to reduce Cloudflare binding, alarm, and storage transaction overhead.
+- Updated dependencies [[`6a77744`](https://github.com/yielded-dev/agent/commit/6a77744c006df578203285778ed38c06fce18b21)]:
+  - @yielded/agent@0.1.0-beta.177
+  - @yielded/agent-storage-cloudflare@0.1.0-beta.177
+  - @yielded/agent-storage-sql@0.1.0-beta.177
+
 ## 0.1.0-beta.176
 
 ### Patch Changes
