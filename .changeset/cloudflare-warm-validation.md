@@ -1,4 +1,5 @@
 ---
+"@yielded/agent": patch
 "@yielded/agent-platform-cloudflare": patch
 "@yielded/agent-storage-cloudflare": patch
 ---
