@@ -7827,19 +7827,26 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
         ...(config.estimateCostMicrousd === undefined
           ? {}
           : { estimateCostMicrousd: config.estimateCostMicrousd }),
-        resumeUsage: {
-          ...journal.usage,
-          ...journal.policyUsage,
-          ...(journal.usage.modelCalls === 0 &&
-          (journal.usage.unobservedModelCalls ?? 0) === 0 &&
-          !records.some(
-            ({ record }) =>
-              record.payload._tag === "ModelResponseInterrupted" && record.payload.runId === runId,
-          )
-            ? emptyRunTotals()
-            : runTotalsFromSummary(yield* currentUsageSummary())),
-          children: childUsageReportsOf(subagentState),
-        },
+        // An exact committed history prefix followed only by this input creates the
+        // initial journal above. There is no resumed accounting to reconstruct or decode.
+        ...(freshPrefix !== undefined && continuation === undefined
+          ? {}
+          : {
+              resumeUsage: {
+                ...journal.usage,
+                ...journal.policyUsage,
+                ...(journal.usage.modelCalls === 0 &&
+                (journal.usage.unobservedModelCalls ?? 0) === 0 &&
+                !records.some(
+                  ({ record }) =>
+                    record.payload._tag === "ModelResponseInterrupted" &&
+                    record.payload.runId === runId,
+                )
+                  ? emptyRunTotals()
+                  : runTotalsFromSummary(yield* currentUsageSummary())),
+                children: childUsageReportsOf(subagentState),
+              },
+            }),
         ...(journal.contextWindowId === undefined
           ? {}
           : { initialContextWindowId: journal.contextWindowId }),

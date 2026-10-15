@@ -294,8 +294,9 @@ export const makeCommittedPromptSuffix = (
       return;
     }
     // Prepared append facts already have privately frozen encodings; the original input and
-    // winning settlement are captured here before retention. Decode the same prompt projection
-    // as readPrompt, never raw provider values. Failure invalidates this derivative, not the commit.
+    // winning settlement are captured here before retention. An input contributes only its
+    // owned identity; other facts still decode the prompt projection used by readPrompt.
+    // Failure invalidates this derivative, not the commit.
     try {
       for (const fact of facts) {
         const captured = captureRecord(fact);
@@ -332,10 +333,25 @@ export const makeCommittedPromptSuffix = (
           return;
         }
 
+        const record: PromptRecord =
+          payload._tag === "UserInputRecorded"
+            ? {
+                recordId: owned.canonical.recordId,
+                payload: {
+                  _tag: payload._tag,
+                  kind: payload.kind,
+                  ...(payload.runId === undefined ? {} : { runId: payload.runId }),
+                  ...(payload.submissionId === undefined
+                    ? {}
+                    : { submissionId: payload.submissionId }),
+                },
+              }
+            : decodeCommittedPromptRecord(owned.wire);
+
         const entry: PromptRecordEnvelope = {
           threadId: original.threadId,
           sequence: CanonicalSequence.make(through + 1),
-          record: decodeCommittedPromptRecord(owned.wire),
+          record,
         };
 
         const footprint = suffixRecordFootprint(entry, remaining);

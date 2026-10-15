@@ -27,6 +27,7 @@ import {
   workerOriginRecordId,
   toolCallSettledRecordId,
 } from "@yielded/agent/run-journal";
+import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import {
   submissionAbortRecordId,
   submissionInputRecordId,
@@ -54,6 +55,11 @@ import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 import type { Fragment } from "effect/sql/Statement";
 
+import {
+  executionStates,
+  executionStateKey,
+  retainExecutionState,
+} from "./internal/SqlExecutionState.ts";
 import { RECORD_TAGS, recordBatchId, runKey } from "./SqlCanonicalStorage.ts";
 import type { RawAppendRequest } from "./SqlJournal.ts";
 import { makeSqlQuery, SqlInteger, makeSqlTransaction } from "./SqlStorage.ts";
@@ -495,6 +501,8 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
 ) {
   const sql = yield* SqlClient.SqlClient;
   const owner = yield* SelectedReadOwner;
+  const storageOwner = yield* SqlStorageOwner;
+  const ownerIdentity = storageOwner?.identity ?? storageOwner;
   const { table: relation, execute } = yield* makeSqlQuery(namespace);
   const recordJson = canonicalRecordJson(sql, namespace);
   const membershipJson = canonicalRecordJson(sql, namespace, "canonical");
@@ -1267,24 +1275,49 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
 
           if (rows.length === 0) return Option.none();
 
-          const records = yield* Effect.forEach(rows, (row) =>
-            envelope(row).pipe(
-              Effect.filterOrFail(
-                (value) => value.record.recordId === row.record_id,
-                () => failure("fresh Run identity locator"),
-              ),
-            ),
-          );
+          if (rows.length !== 1) return yield* failure("fresh Run identity count");
+          const row = rows[0]!;
+          const root = yield* envelope(row);
 
-          if (records[0]?.record.payload._tag !== "ThreadCreated")
+          if (
+            row.thread_id !== request.threadId ||
+            root.threadId !== request.threadId ||
+            root.sequence !== 1 ||
+            root.record.recordId !== row.record_id ||
+            root.record.payload._tag !== "ThreadCreated"
+          )
             return yield* failure("fresh Run identity");
 
-          const identity = yield* ThreadIdentity.makeEffect({
-            threadId: request.threadId,
-            tailSequence: tail.tail_sequence,
-            hasAdmissions: true,
-            records,
-          });
+          // The row decoder and envelope boundary proved the values; the single root above
+          // establishes ordering, uniqueness and membership without decoding the record again.
+          const identity = ThreadIdentity.make(
+            {
+              threadId: request.threadId,
+              tailSequence: tail.tail_sequence,
+              hasAdmissions: true,
+              records: [root],
+            },
+            { disableChecks: true },
+          );
+
+          const states =
+            owner === undefined || ownerIdentity === undefined
+              ? undefined
+              : executionStates.get(ownerIdentity);
+
+          if (states !== undefined) {
+            const key = executionStateKey(
+              namespace,
+              request.threadId,
+              runIdForSubmission(request.submissionId),
+            );
+
+            retainExecutionState(states, key, {
+              checkpoint: undefined,
+              throughSequence: tail.tail_sequence,
+              bytes: 2 * key.length + 32,
+            });
+          }
 
           return Option.some(identity);
         }),

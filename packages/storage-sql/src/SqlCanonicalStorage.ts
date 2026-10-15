@@ -437,19 +437,17 @@ export const makeCanonicalStorage = Effect.fnUntraced(function* (namespace?: str
         return key;
       };
 
-      const statement = sql`SELECT run_key AS key FROM ${table("effect_agent_run_keys")}
-        WHERE thread_id=${threadId} AND run_id=${runId}`;
-
-      const prior = yield* lookupKey(statement);
-
-      if (prior !== undefined) return retain(prior);
-
+      // The enclosing transaction already owns the write. A fresh Run needs only INSERT;
+      // an existing immutable mapping is read after the no-op conflict.
       const inserted =
         yield* lookupKey(sql`INSERT INTO ${table("effect_agent_run_keys")} (thread_id, run_id)
         VALUES (${threadId}, ${runId}) ON CONFLICT(thread_id, run_id) DO NOTHING
         RETURNING run_key AS key`);
 
-      const key = inserted ?? (yield* lookupKey(statement));
+      const key =
+        inserted ??
+        (yield* lookupKey(sql`SELECT run_key AS key FROM ${table("effect_agent_run_keys")}
+          WHERE thread_id=${threadId} AND run_id=${runId}`));
 
       return key === undefined ? yield* failure("missing Run dictionary") : retain(key);
     }),
