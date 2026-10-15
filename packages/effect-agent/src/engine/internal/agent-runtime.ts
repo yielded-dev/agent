@@ -1020,22 +1020,20 @@ const inspectModelResponsePartCapacity = (
   part: unknown,
   limits: EffectiveRunBufferLimits,
   knownSafePrototypes: ReadonlySet<object> = knownSafeModelResponsePrototypes,
-): Effect.Effect<number, ModelProtocolError> =>
-  Effect.suspend(() => {
-    const bytes = boundedValueFootprint(
-      part,
-      limits.maxModelResponseBytes - usage.responsePartBytes,
-      knownSafePrototypes,
-    );
+): number | ModelProtocolError => {
+  const bytes = boundedValueFootprint(
+    part,
+    limits.maxModelResponseBytes - usage.responsePartBytes,
+    knownSafePrototypes,
+  );
 
-    return bytes === undefined
-      ? Effect.fail(
-          ModelProtocolError.make({
-            message: `Model response exceeded the ${limits.maxModelResponseBytes}-byte retained response limit`,
-          }),
-        )
-      : Effect.succeed(bytes);
-  });
+  return (
+    bytes ??
+    ModelProtocolError.make({
+      message: `Model response exceeded the ${limits.maxModelResponseBytes}-byte retained response limit`,
+    })
+  );
+};
 
 /**
  * LanguageModel validates encoded parameters even with automatic resolution disabled.
@@ -1128,7 +1126,7 @@ const modelResponseParsersFor = (toolkit: Toolkit.Any) => {
   return parsers;
 };
 
-const captureModelResponsePartGeneral = Effect.fnUntraced(function* <
+const captureModelResponsePartGeneral = Effect.fnUntracedEager(function* <
   Tools extends Record<string, Tool.Any>,
 >(
   part: unknown,
@@ -1155,19 +1153,23 @@ const captureModelResponsePartGeneral = Effect.fnUntraced(function* <
   if (directInputBytes === undefined) {
     const preflight = schemaClassToolPartPreflight(part, toolkit);
 
-    yield* inspectModelResponsePartCapacity(usage, preflight ?? part, limits);
+    const capacity = inspectModelResponsePartCapacity(usage, preflight ?? part, limits);
+
+    if (typeof capacity !== "number") return yield* capacity;
   }
   const parsers = modelResponseParsersFor(toolkit);
 
   const encoded = yield* parsers
     .encode(part)
     .pipe(
-      Effect.mapError(() =>
+      Effect.mapErrorEager(() =>
         ModelProtocolError.make({ message: "Model response part failed canonical encoding" }),
       ),
     );
 
-  const retainedBytes = yield* inspectModelResponsePartCapacity(usage, encoded, limits);
+  const retainedBytes = inspectModelResponsePartCapacity(usage, encoded, limits);
+
+  if (typeof retainedBytes !== "number") return yield* retainedBytes;
 
   if (typeof structuredCloneFunction !== "function") {
     return yield* ModelProtocolError.make({
@@ -1175,17 +1177,15 @@ const captureModelResponsePartGeneral = Effect.fnUntraced(function* <
     });
   }
 
-  const ownedEncoded = yield* Effect.try({
-    try: () => {
-      const cloned: unknown = Reflect.apply(structuredCloneFunction, globalThis, [encoded]);
+  let ownedEncoded: unknown;
 
-      return cloned;
-    },
-    catch: () =>
-      ModelProtocolError.make({
-        message: "Model response part could not be converted into engine-owned data",
-      }),
-  });
+  try {
+    ownedEncoded = Reflect.apply(structuredCloneFunction, globalThis, [encoded]);
+  } catch {
+    return yield* ModelProtocolError.make({
+      message: "Model response part could not be converted into engine-owned data",
+    });
+  }
 
   return { encodedPart: ownedEncoded, retainedBytes };
 });
@@ -1208,49 +1208,51 @@ const decodePrimitiveModelResponsePart = Schema.decodeUnknownEffect(
   ),
 );
 
-/** Reject trailing content before its capture can run an application codec or suspend. */
+/**
+ * Called once by the executing consumer. Pure capture stays in that step; application
+ * codecs may suspend in the same fiber. Reject trailing content before either path.
+ */
 const ownModelResponsePart = <Tools extends Record<string, Tool.Any>>(
   part: unknown,
   toolkit: Toolkit.Toolkit<Tools>,
   usage: ModelResponseBufferUsage,
   limits: EffectiveRunBufferLimits,
   finished: boolean,
-): Effect.Effect<OwnedModelResponsePart, ModelProtocolError> =>
-  Effect.suspend((): Effect.Effect<OwnedModelResponsePart, ModelProtocolError> => {
-    if (finished) {
-      return Effect.fail(
-        ModelProtocolError.make({
-          message: "Model response emitted content after its finish part",
-        }),
-      );
-    }
+): Effect.Effect<OwnedModelResponsePart, ModelProtocolError> => {
+  if (finished) {
+    return Effect.fail(
+      ModelProtocolError.make({
+        message: "Model response emitted content after its finish part",
+      }),
+    );
+  }
 
-    const primitive =
-      usage.responsePartCount < limits.maxModelResponseParts
-        ? capturePrimitiveTextPart(part, limits.maxModelResponseBytes - usage.responsePartBytes)
-        : undefined;
+  const primitive =
+    usage.responsePartCount < limits.maxModelResponseParts
+      ? capturePrimitiveTextPart(part, limits.maxModelResponseBytes - usage.responsePartBytes)
+      : undefined;
 
-    // Complete primitive snapshots need validation, but no defaults or transformation.
-    // Schema.toType retains every constraint from the native Response part schemas.
-    if (primitive !== undefined) {
-      return Effect.mapBothEager(decodePrimitiveModelResponsePart(primitive.part), {
+  // Complete primitive snapshots need validation, but no defaults or transformation.
+  // Schema.toType retains every constraint from the native Response part schemas.
+  if (primitive !== undefined) {
+    return Effect.mapBothEager(decodePrimitiveModelResponsePart(primitive.part), {
+      onFailure: () =>
+        ModelProtocolError.make({ message: "Model response part failed canonical decoding" }),
+      onSuccess: (ownedPart) => ({ ownedPart, retainedBytes: primitive.retainedBytes }),
+    });
+  }
+
+  // Pending application codecs keep normal Effect execution in this same consumer fiber.
+  return Effect.flatMapEager(
+    captureModelResponsePartGeneral(part, toolkit, usage, limits),
+    (captured) =>
+      Effect.mapBothEager(modelResponseParsersFor(toolkit).decode(captured.encodedPart), {
         onFailure: () =>
           ModelProtocolError.make({ message: "Model response part failed canonical decoding" }),
-        onSuccess: (ownedPart) => ({ ownedPart, retainedBytes: primitive.retainedBytes }),
-      });
-    }
-
-    // Pending application codecs keep normal Effect execution in this same consumer fiber.
-    return Effect.flatMapEager(
-      captureModelResponsePartGeneral(part, toolkit, usage, limits),
-      (captured) =>
-        Effect.mapBothEager(modelResponseParsersFor(toolkit).decode(captured.encodedPart), {
-          onFailure: () =>
-            ModelProtocolError.make({ message: "Model response part failed canonical decoding" }),
-          onSuccess: (ownedPart) => ({ ownedPart, retainedBytes: captured.retainedBytes }),
-        }),
-    );
-  });
+        onSuccess: (ownedPart) => ({ ownedPart, retainedBytes: captured.retainedBytes }),
+      }),
+  );
+};
 
 type PartLifecycle = "open" | "closed";
 
@@ -1307,10 +1309,12 @@ const endPart = (
   parts: Map<string, PartLifecycle>,
   id: string,
   description: string,
-): Effect.Effect<void, ModelProtocolError> =>
-  continuePart(parts, id, `${description} end`).pipe(
-    Effect.tap(() => Effect.sync(() => parts.set(id, "closed"))),
-  );
+): Effect.Effect<void, ModelProtocolError> => {
+  if (parts.get(id) !== "open") return continuePart(parts, id, `${description} end`);
+  parts.set(id, "closed");
+
+  return Effect.void;
+};
 
 const firstOpenPart = (trace: TurnTrace): string | undefined => {
   for (const [id, state] of trace.textParts) {
@@ -6548,8 +6552,8 @@ const makeTurn = <
                           activeProvisionalText = provisionalText;
                         }),
                       ),
-                      Stream.runForEachArray((parts) =>
-                        Effect.gen(function* () {
+                      Stream.runForEachArray(
+                        Effect.fnUntracedEager(function* (parts) {
                           for (const part of parts) {
                             const owned = yield* ownModelResponsePart(
                               part,
