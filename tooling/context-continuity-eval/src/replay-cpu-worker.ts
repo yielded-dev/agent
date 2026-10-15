@@ -376,7 +376,9 @@ const application = Layer.unwrap(
                   runId,
                   turnId: TurnId.make(`seed-turn-${index}`),
                   turn: 1,
-                  messages,
+                  messages: yield* Schema.decodeEffect(ModelResponseRecorded.fields.messages)(
+                    messages,
+                  ),
                   runScopedPrefixLength: 1,
                 });
               } else payload = RunCompleted.make({ runId, output });
