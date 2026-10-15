@@ -1,5 +1,11 @@
 # @yielded/agent
 
+## 0.1.0-beta.181
+
+### Patch Changes
+
+- [#979](https://github.com/yielded-dev/agent/pull/979) [`f14a1a7`](https://github.com/yielded-dev/agent/commit/f14a1a7623d5d27ee7f89942289a09ec3cdc1f42) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Honor Effect error-reporting ignore annotations on declared tool failures in direct and programmatic observers while preserving tool outcomes and subsequent handler faults.
+
 ## 0.1.0-beta.180
 
 ### Patch Changes
