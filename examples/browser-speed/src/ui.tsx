@@ -372,14 +372,9 @@ const ChatResponse = ({ turn }: { turn: ChatTurn }) => {
       )}
       {completed && (
         <div className="chat-final">
-          {report.handoff === undefined ? (
-            <>
-              <span className="chat-label">Final answer</span>
-              <Reply text={report.message} />
-            </>
-          ) : (
-            <HandoffCard report={report} />
-          )}
+          {report.handoff === undefined && <span className="chat-label">Final answer</span>}
+          <Reply text={report.message} />
+          {report.handoff !== undefined && <HandoffCard report={report} />}
         </div>
       )}
       {active && (

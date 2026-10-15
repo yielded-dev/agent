@@ -6,6 +6,7 @@ import { beforeEach, vi } from "vite-plus/test";
 
 import {
   BrowserCredentialAccess,
+  CredentialForm,
   FillCredentialRequest,
   LoginCredential,
 } from "../src/BrowserCredentials.ts";
@@ -32,6 +33,7 @@ const provider = vi.hoisted(() => ({
   pageFailure: false,
   malformedHandoff: false,
   lostWriteReply: false,
+  prepareReply: undefined as (() => Promise<void>) | undefined,
   writeReply: undefined as ((count: number) => Promise<void>) | undefined,
   credentialWrites: 0,
   disposedFields: 0,
@@ -59,7 +61,11 @@ vi.mock("puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js", () => ({
       };
 
       const fields = {
-        prepare: () => ({ action: "https://merchant.test/login", shape: "[]" }),
+        prepare: async () => {
+          await provider.prepareReply?.();
+
+          return { action: "https://merchant.test/login", shape: "[]" };
+        },
         target: () => ({ action: "https://merchant.test/login", shape: "[]" }),
         fill: () => {
           provider.credentialWrites++;
@@ -239,6 +245,7 @@ beforeEach(() =>
     pageFailure: false,
     malformedHandoff: false,
     lostWriteReply: false,
+    prepareReply: undefined,
     writeReply: undefined,
     credentialWrites: 0,
     disposedFields: 0,
@@ -490,6 +497,53 @@ it.effect("closes an uncertain handoff even when the provider reply is malformed
     expect(provider.closed).toEqual([id]);
     expect(yield* session.run(Effect.void, (page) => page.title()).pipe(Effect.flip)).toMatchObject(
       { reason: "closed" },
+    );
+  }).pipe(Effect.scoped, Effect.provide(layer)),
+);
+
+// Regression in ae4b2da8: preparation could outlive the session while holding its lock.
+it.effect("bounds credential preparation by the remaining session lifetime", () =>
+  Effect.gen(function* () {
+    const host = yield* BrowserSessions;
+    const reference = yield* host.create(options, () => Effect.void);
+    const session = yield* host.attach(reference);
+    const waiting = yield* Deferred.make<void>();
+    const reply = yield* Deferred.make<void>();
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+    yield* Effect.addFinalizer(() => Deferred.succeed(reply, undefined));
+    provider.prepareReply = async () => {
+      await runPromise(Deferred.succeed(waiting, undefined));
+      await runPromise(Deferred.await(reply));
+    };
+    yield* TestClock.adjust(59_750);
+
+    const fiber = yield* session
+      .prepareCredential(
+        CredentialForm.make({
+          kind: "login",
+          fields: [
+            { selector: "#username", role: "username" },
+            { selector: "#password", role: "password" },
+          ],
+        }),
+      )
+      .pipe(Effect.flip, Effect.forkChild);
+
+    yield* Deferred.await(waiting);
+    yield* TestClock.adjust(250);
+    expect(fiber.pollUnsafe()).toBeDefined();
+    expect(yield* Fiber.join(fiber)).toMatchObject({
+      reason: "timeout",
+      dispatch: "not-dispatched",
+      cleanup: "confirmed",
+    });
+    expect(provider.closed).toEqual([id]);
+    expect(provider.disposedFields).toBe(1);
+    expect(yield* session.run(Effect.void, (page) => page.title()).pipe(Effect.flip)).toMatchObject(
+      {
+        reason: "closed",
+      },
     );
   }).pipe(Effect.scoped, Effect.provide(layer)),
 );

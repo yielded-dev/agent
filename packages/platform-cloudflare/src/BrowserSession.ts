@@ -121,7 +121,10 @@ export interface BrowserSession {
     action: (page: Page) => Promise<A>,
     options?: { readonly timeoutMillis: number },
   ) => Effect.Effect<A, E | BrowserSessionError, R>;
-  /** Prepare a delayed private-entry request. The host owns persistence, expiry and one-use consumption. */
+  /**
+   * Prepare a delayed private-entry request within the command/session deadline; timeout closes
+   * the browser. The host owns persistence, expiry and one-use consumption.
+   */
   readonly prepareCredential: (
     request: CredentialForm,
   ) => Effect.Effect<CredentialBinding, CredentialFillError | BrowserSessionError>;
@@ -525,6 +528,15 @@ export class BrowserSessions extends Context.Service<
                 Effect.provideService(BrowserSessionPage, {
                   page: currentPage,
                   commandTimeoutMillis,
+                }),
+                Effect.timeoutOrElse({
+                  duration: commandTimeoutMillis,
+                  orElse: () =>
+                    terminate.pipe(
+                      Effect.flatMap((closed) =>
+                        Effect.fail(failure("timeout", "not-dispatched", closed)),
+                      ),
+                    ),
                 }),
               ),
             ),
