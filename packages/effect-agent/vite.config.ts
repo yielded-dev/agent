@@ -97,6 +97,7 @@ export default defineConfig({
       "src/durable/ScheduleTransition.ts",
       "src/durable/Scheduling.ts",
       "src/durable/SqlMemoryStore.ts",
+      "src/durable/SqlStorageOwner.ts",
       "src/durable/SubmissionLedger.ts",
       "src/durable/SettlementPublisher.ts",
       "src/durable/SubmissionStatus.ts",
