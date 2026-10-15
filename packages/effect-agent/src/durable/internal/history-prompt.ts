@@ -23,7 +23,7 @@ function restorePart(part: Prompt.PartEncoded): Prompt.Part {
   }
 }
 
-const restoreMessage = (message: Prompt.MessageEncoded): Prompt.Message => {
+export const restoreHistoryMessage = (message: Prompt.MessageEncoded): Prompt.Message => {
   switch (message.role) {
     case "system":
       return Prompt.makeMessage("system", message);
@@ -55,11 +55,16 @@ const restoreMessage = (message: Prompt.MessageEncoded): Prompt.Message => {
  * Validate the upstream encoded history once, then restore native values with its constructors.
  * The canonical codec remains authoritative at append, import, recovery and explicit verification.
  */
-export const HistoryPrompt = Schema.toEncoded(Prompt.Prompt).pipe(
+export const HistoryMessage = Schema.toEncoded(Prompt.Message);
+
+export const HistoryPrompt = Schema.Struct({
+  content: Schema.Array(HistoryMessage),
+}).pipe(
   Schema.decodeTo(
     Schema.toType(Prompt.Prompt),
     SchemaTransformation.transformEffect({
-      decode: (input) => Effect.succeed(Prompt.fromMessages(input.content.map(restoreMessage))),
+      decode: (input) =>
+        Effect.succeed(Prompt.fromMessages(input.content.map(restoreHistoryMessage))),
       encode: SchemaParser.encodeEffect(Prompt.Prompt),
     }),
   ),
