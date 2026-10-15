@@ -101,7 +101,7 @@ its output is not published.
 The ignored `.checkout-proof/<run>/report.json` in this workspace retains the commit,
 Worker name, dispatch status, sanitized independent evidence, allowlisted Worker failure codes,
 the last checkout operation, login request count, failure stage/status,
-up to sixteen sanitized browser operation/reason/status diagnostics, separate cleanup failure, cleanup result, and total, checkout, and cleanup milliseconds. Total time includes
+up to sixteen sanitized browser operation/reason/status diagnostics with a safe SDK error name when available, separate cleanup failure, cleanup result, and total, checkout, and cleanup milliseconds. Total time includes
 deployment and retirement. Checkout time measures the single run request; cleanup time
 measures closure, its independent confirmation, and Worker retirement. Evidence is
 written atomically. A mismatched receipt is omitted rather than publishing unexpected
