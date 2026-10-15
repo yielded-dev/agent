@@ -11,7 +11,7 @@ import { LifecyclePublicationFact } from "@yielded/agent/lifecycle-publication";
 import type { Digest } from "@yielded/agent/records";
 import { CanonicalSequence, RunContinuation } from "@yielded/agent/records";
 import { ProgressAppendReader, validateProgressAppend } from "@yielded/agent/run-continuation";
-import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
+import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import {
   AppendConflict,
   CheckpointRejected,

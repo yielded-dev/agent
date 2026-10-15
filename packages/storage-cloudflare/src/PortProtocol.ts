@@ -616,7 +616,15 @@ export type PortResponseEnvelope = typeof PortResponse.Encoded;
 // Codecs
 // ---------------------------------------------------------------------------
 
-export const encodePortRequest = Schema.encodeEffect(PortRequest);
+// Remote codecs derive their memoized encoding AST only when a port is used.
+export const encodePortRequest: ReturnType<typeof Schema.encodeEffect<typeof PortRequest>> = (
+  ...args
+) => Schema.encodeEffect(PortRequest)(...args);
+
 export const decodePortRequest = Schema.decodeUnknownEffect(PortRequest);
-export const encodePortResponse = Schema.encodeEffect(PortResponse);
+
+export const encodePortResponse: ReturnType<typeof Schema.encodeEffect<typeof PortResponse>> = (
+  ...args
+) => Schema.encodeEffect(PortResponse)(...args);
+
 export const decodePortResponse = Schema.decodeUnknownEffect(PortResponse);

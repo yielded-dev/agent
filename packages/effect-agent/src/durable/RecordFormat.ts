@@ -22,7 +22,6 @@ export class ExportedRecord extends RecordEnvelope.extend<ExportedRecord>(
 )({ wire: RecordJson }) {}
 
 const decodeRecord = Schema.decodeUnknownEffect(RecordEnvelope);
-const sameRecord = Schema.toEquivalence(RecordEnvelope);
 
 const parseRecordObject = Schema.decodeEffect(
   Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
@@ -73,8 +72,9 @@ export const ExportRecord = RecordJson.pipe(
     encode: SchemaGetter.transformEffect((record) =>
       decodeRecord(record.wire).pipe(
         Effect.mapError((error) => error.issue),
+        // Derive the memoized equivalence only when an archive is encoded.
         Effect.flatMap((view) =>
-          sameRecord(view, record)
+          Schema.toEquivalence(RecordEnvelope)(view, record)
             ? Effect.succeed(record.wire)
             : Effect.fail(
                 new SchemaIssue.InvalidValue({
