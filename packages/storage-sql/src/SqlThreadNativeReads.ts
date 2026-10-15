@@ -27,6 +27,7 @@ import {
   workerOriginRecordId,
   toolCallSettledRecordId,
 } from "@yielded/agent/run-journal";
+import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
 import {
   submissionAbortRecordId,
   submissionInputRecordId,
@@ -54,6 +55,11 @@ import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 import type { Fragment } from "effect/sql/Statement";
 
+import {
+  executionStates,
+  executionStateKey,
+  retainExecutionState,
+} from "./internal/SqlExecutionState.ts";
 import { RECORD_TAGS, recordBatchId, runKey } from "./SqlCanonicalStorage.ts";
 import type { RawAppendRequest } from "./SqlJournal.ts";
 import { makeSqlQuery, SqlInteger, makeSqlTransaction } from "./SqlStorage.ts";
@@ -495,6 +501,8 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
 ) {
   const sql = yield* SqlClient.SqlClient;
   const owner = yield* SelectedReadOwner;
+  const storageOwner = yield* SqlStorageOwner;
+  const ownerIdentity = storageOwner?.identity ?? storageOwner;
   const { table: relation, execute } = yield* makeSqlQuery(namespace);
   const recordJson = canonicalRecordJson(sql, namespace);
   const membershipJson = canonicalRecordJson(sql, namespace, "canonical");
@@ -1291,6 +1299,25 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
             },
             { disableChecks: true },
           );
+
+          const states =
+            owner === undefined || ownerIdentity === undefined
+              ? undefined
+              : executionStates.get(ownerIdentity);
+
+          if (states !== undefined) {
+            const key = executionStateKey(
+              namespace,
+              request.threadId,
+              runIdForSubmission(request.submissionId),
+            );
+
+            retainExecutionState(states, key, {
+              checkpoint: undefined,
+              throughSequence: tail.tail_sequence,
+              bytes: 2 * key.length + 32,
+            });
+          }
 
           return Option.some(identity);
         }),

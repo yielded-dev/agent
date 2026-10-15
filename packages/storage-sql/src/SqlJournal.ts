@@ -1,3 +1,9 @@
+import {
+  executionStates,
+  executionStateKey,
+  retainExecutionState,
+  type ExecutionPredecessor,
+} from "./internal/SqlExecutionState.ts";
 import { sqlStorageOwner } from "./internal/SqlOwner.ts";
 export { sqlStorageOwner } from "./internal/SqlOwner.ts";
 import { type RunId, ThreadId } from "@yielded/agent/identifiers";
@@ -140,19 +146,6 @@ export class RawAppendResult extends Schema.Class<RawAppendResult>(
   replayed: Schema.Boolean,
 }) {}
 
-interface ExecutionPredecessor {
-  readonly progress: RunContinuation;
-  readonly originalSequence: CanonicalSequence;
-  readonly operational: ReadonlyArray<Pick<ExecutionCheckpoint["operational"][number], "recordId">>;
-}
-
-// Private predecessors belong to the physical owner's mutation gate. Failed transactions
-// and out-of-band maintenance discard them before readers can enter that gate again.
-const executionPredecessors = new WeakMap<
-  object,
-  Map<string, { readonly checkpoint: ExecutionPredecessor; readonly bytes: number }>
->();
-
 /** Shared native transaction body; callers own the local capability check and mutation transaction. */
 export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string) {
   const sql = yield* SqlClient.SqlClient;
@@ -161,26 +154,28 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
   const readInitial = yield* makeInitialProgressRead(namespace);
   const owner = yield* SqlStorageOwner;
   const identity = owner?.identity ?? owner;
-  let predecessors = identity === undefined ? undefined : executionPredecessors.get(identity);
+  let predecessors = identity === undefined ? undefined : executionStates.get(identity);
 
   if (owner !== undefined && identity !== undefined && predecessors === undefined) {
     predecessors = new Map();
-    executionPredecessors.set(identity, predecessors);
+    executionStates.set(identity, predecessors);
     const retained = predecessors;
 
     owner.invalidators.add(() => retained.clear());
   }
-  const key = (threadId: string, runId: string) => JSON.stringify([namespace, threadId, runId]);
+  const key = (threadId: string, runId: string) => executionStateKey(namespace, threadId, runId);
 
   const readPrevious = (
     threadId: ThreadId,
     runId: RunId,
+    throughSequence: CanonicalSequence,
   ): Effect.Effect<Option.Option<ExecutionPredecessor>, ThreadStoreError> => {
     const retained = predecessors?.get(key(threadId, runId));
 
-    return retained === undefined
-      ? read({ threadId, runId })
-      : Effect.succeed(Option.some(retained.checkpoint));
+    return retained !== undefined &&
+      (retained.checkpoint !== undefined || retained.throughSequence === throughSequence)
+      ? Effect.succeed(Option.fromUndefinedOr(retained.checkpoint))
+      : read({ threadId, runId });
   };
 
   const retain = (threadId: ThreadId, write: RawAppendRequest["executionWrites"][number]) => {
@@ -192,7 +187,7 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
       const { progress, originalSequence, operational } = write.update.checkpoint;
 
       // Detach the validator's small working set from the prepared append and its payloads.
-      predecessors.set(id, {
+      retainExecutionState(predecessors, id, {
         checkpoint: {
           originalSequence,
           operational: operational.map(({ recordId }) => ({ recordId })),
@@ -215,16 +210,6 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
         },
         bytes: write.bytes,
       });
-    }
-    let bytes = 0;
-
-    for (const value of predecessors.values()) bytes += value.bytes;
-    while (predecessors.size > 128 || bytes > 4 * 1024 * 1024) {
-      const oldest = predecessors.entries().next().value;
-
-      if (oldest === undefined) break;
-      bytes -= oldest[1].bytes;
-      predecessors.delete(oldest[0]);
     }
   };
 
@@ -286,7 +271,11 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
     if (request.records.length > 0) return;
     for (const { update } of request.executionWrites) {
       const prior = Option.getOrUndefined(
-        yield* readPrevious(request.threadId, update.checkpoint.progress.runId),
+        yield* readPrevious(
+          request.threadId,
+          update.checkpoint.progress.runId,
+          request.expectedTailSequence,
+        ),
       );
 
       if (
@@ -310,7 +299,9 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
 
       if (prior.has(next.runId)) return yield* failed("Duplicate execution update");
 
-      const previous = Option.getOrUndefined(yield* readPrevious(request.threadId, next.runId));
+      const previous = Option.getOrUndefined(
+        yield* readPrevious(request.threadId, next.runId, request.expectedTailSequence),
+      );
 
       prior.set(next.runId, previous?.progress);
 
@@ -373,7 +364,17 @@ export const makeSqlExecutions = Effect.fnUntraced(function* (namespace?: string
     ).pipe(
       Effect.provideService(ProgressAppendReader, {
         previous: (runId) => Effect.succeed(prior.get(runId)),
-        initial: (next) => readInitial(request, next),
+        initial: (next) => {
+          const retained = predecessors?.get(key(request.threadId, next.runId));
+
+          // Fresh preparation proved absence under this same owner. A changed canonical
+          // frontier, intervening execution write or invalidation requires the full read.
+          return retained !== undefined &&
+            retained.checkpoint === undefined &&
+            retained.throughSequence === request.expectedTailSequence
+            ? Effect.succeed([])
+            : readInitial(request, next);
+        },
       }),
     );
   });
