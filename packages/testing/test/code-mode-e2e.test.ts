@@ -54,16 +54,28 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
   // makes the no-replay requirement observable without mutating a live store.
   // Regression in 2cc267f9: successful Runtime.getExceptionDetails must remain
   // available to a corrective program despite returning exception metadata.
+  // User-requested regression: a host policy refusal must survive the real
+  // BrowserUse return-mode/broker path without exposing payloads to observers.
+  // A live replay cannot safely reproduce the original pre-dispatch refusal.
   it.effect(
-    "surfaces page exceptions to the next model turn without replaying a partial write",
+    "surfaces policy refusals and page exceptions to the model without replaying a browser mutation",
     () =>
       Effect.gen(function* () {
+        const refusal = BrowserUse.BrowserUsePolicyError.make({
+          reason: "observation-required",
+          dispatch: "not-dispatched",
+          nextStep: "fresh-observation",
+          message: "Inspect the current page before attempting this browser action.",
+        });
+
+        const observations: Array<ToolFailureObservation> = [];
         const browser = BrowserUse.make();
         const sends: Array<typeof BrowserUse.SendRequest.Type> = [];
         const diagnostic = "TypeError: Cannot read properties of null (reading 'innerText')";
         const lookup = { exceptionDetails: { text: "Error: diagnostic" } };
 
         const code = [
+          `async () => cdp.send({method: "Runtime.evaluate", params: {expression: "guardedMutation()"}})`,
           `async () => {
           await cdp.send({method: "Runtime.evaluate", params: {expression: "addToCart()"}});
           const r = await cdp.send({method: "Runtime.evaluate", params: {expression: "document.querySelector('#missing').innerText"}});
@@ -113,7 +125,7 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
           output: Schema.String,
           instructions: "Inspect the cart.",
           toolkit: Toolkit.make(browser.tool),
-          policy: { maxTurns: 3, maxToolCalls: 8, maxDuration: "30 seconds" },
+          policy: { maxTurns: 4, maxToolCalls: 12, maxDuration: "30 seconds" },
         });
 
         const handlers = browser.handlers.pipe(
@@ -122,28 +134,31 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
             BrowserUse.layer.pipe(
               Layer.provide(
                 Layer.succeed(BrowserUse.BrowserCdp, {
-                  send: (request) =>
-                    Effect.sync((): Schema.Json => {
-                      sends.push(request);
+                  send: Effect.fnUntraced(function* (
+                    request: typeof BrowserUse.SendRequest.Type,
+                  ): Effect.fn.Return<Schema.Json, BrowserUse.BrowserUsePolicyError> {
+                    sends.push(request);
 
-                      if (request.method === "Runtime.getExceptionDetails") return lookup;
+                    if (request.params?.expression === "guardedMutation()") return yield* refusal;
 
-                      if (request.params?.expression === "new Error('diagnostic')")
-                        return {
-                          result: { type: "object", subtype: "error", objectId: "error-1" },
-                        };
+                    if (request.method === "Runtime.getExceptionDetails") return lookup;
 
-                      return request.params?.expression ===
-                        "document.querySelector('#missing').innerText"
-                        ? {
-                            result: { type: "object", subtype: "error" },
-                            exceptionDetails: {
-                              text: "Uncaught",
-                              exception: { description: diagnostic },
-                            },
-                          }
-                        : { result: { value: { quantity: 1 } } };
-                    }),
+                    if (request.params?.expression === "new Error('diagnostic')")
+                      return {
+                        result: { type: "object", subtype: "error", objectId: "error-1" },
+                      };
+
+                    return request.params?.expression ===
+                      "document.querySelector('#missing').innerText"
+                      ? {
+                          result: { type: "object", subtype: "error" },
+                          exceptionDetails: {
+                            text: "Uncaught",
+                            exception: { description: diagnostic },
+                          },
+                        }
+                      : { result: { value: { quantity: 1 } } };
+                  }),
                   tabs: Effect.succeed([]),
                   frames: () => Effect.succeed([]),
                   newTab: Effect.die("must not open a tab"),
@@ -156,15 +171,49 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
 
         yield* Effect.gen(function* () {
           const result = yield* AgentRuntime.run(definition, "inspect").pipe(
-            Effect.provide(handlers),
+            Effect.provide([
+              handlers,
+              toolFailureObserverLayer({
+                observe: (observation) =>
+                  Effect.sync(() => {
+                    observations.push(observation);
+                  }),
+              }),
+            ]),
           );
 
           const script = yield* ScriptedModel;
           const requests = yield* script.requests;
 
-          const failure = requests[1]?.options.prompt.content.flatMap((message) =>
+          const policyResult = requests[1]?.options.prompt.content.flatMap((message) =>
             message.role === "tool" ? message.content : [],
           )[0];
+
+          expect(policyResult).toMatchObject({
+            isFailure: true,
+            result: {
+              _tag: "CodeModeFailure",
+              thrown: {
+                _tag: "BrowserUsePolicyError",
+                reason: "observation-required",
+                dispatch: "not-dispatched",
+                nextStep: "fresh-observation",
+              },
+              calls: [{ status: "failed" }],
+            },
+          });
+          expect(observations[0]).toMatchObject({
+            _tag: "ProgrammaticToolFailure",
+            kind: "declared-failure",
+            tag: "BrowserUsePolicyError",
+            toolName: "browser_cdp_send",
+          });
+          for (const field of ["cause", "message", "result", "encodedResult"])
+            expect(observations[0]).not.toHaveProperty(field);
+
+          const failure = requests[2]?.options.prompt.content
+            .flatMap((message) => (message.role === "tool" ? message.content : []))
+            .at(-1);
 
           expect(failure).toMatchObject({
             isFailure: true,
@@ -180,7 +229,7 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
           });
           expect(result.output).toBe("Cart contains one bag");
           expect(
-            requests[2]?.options.prompt.content
+            requests[3]?.options.prompt.content
               .flatMap((message) => (message.role === "tool" ? message.content : []))
               .at(-1),
           ).toMatchObject({
@@ -188,6 +237,7 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
             result: { result: { cart: { quantity: 1 }, details: lookup } },
           });
           expect(sends).toEqual([
+            { method: "Runtime.evaluate", params: { expression: "guardedMutation()" } },
             { method: "Runtime.evaluate", params: { expression: "addToCart()" } },
             {
               method: "Runtime.evaluate",
