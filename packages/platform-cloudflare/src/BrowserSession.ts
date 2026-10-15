@@ -29,7 +29,11 @@ import {
 } from "./InteractiveBrowser.ts";
 import { BrowserRunBinding, type BrowserRunAttachment } from "./internal/browser-binding.ts";
 import { BrowserSessionPage, fillCredential } from "./internal/browser-credentials.ts";
-import { reportBrowserCause, reportedBrowserError } from "./internal/browser-failure.ts";
+import {
+  inheritBrowserReport,
+  reportBrowserCause,
+  reportedBrowserError,
+} from "./internal/browser-failure.ts";
 import { BrowserRunReadonlyLiveView } from "./internal/browser-readonly-live-view.ts";
 import {
   BrowserRunSessionLifecycle,
@@ -217,6 +221,7 @@ export class BrowserSessions extends Context.Service<
      * No session is exposed before retain succeeds. Failed acquisition releases its attachment
      * immediately; after retention the application owns remote cleanup. The 30-second acquisition
      * timeout ends before use; each command retains its own timeout and the fixed session expiry.
+     * Failed acquisition reports confirmed cleanup only after exact-session termination succeeds.
      */
     readonly createAttached: <E, R>(
       options: BrowserSessionOptions,
@@ -294,6 +299,7 @@ export class BrowserSessions extends Context.Service<
       const allocate = Effect.fnUntraced(function* <E, R>(
         input: BrowserSessionOptions,
         retain: (reference: BrowserSessionReference) => Effect.Effect<void, E, R>,
+        cleanupState: { result: BrowserSessionError["cleanup"] },
       ) {
         const options = yield* decode(BrowserSessionOptions, input);
         const expiresAt = (yield* Clock.currentTimeMillis) + options.maxElapsedMillis;
@@ -304,8 +310,17 @@ export class BrowserSessions extends Context.Service<
         const runCleanup = Effect.runPromiseWith(yield* Effect.context<never>());
 
         yield* Effect.addFinalizer(() =>
-          sessionId === undefined || retained ? Effect.void : cleanup(sessionId),
+          sessionId === undefined || retained
+            ? Effect.void
+            : cleanup(sessionId).pipe(
+                Effect.tap((result) =>
+                  Effect.sync(() => {
+                    cleanupState.result = result;
+                  }),
+                ),
+              ),
         );
+        cleanupState.result = "unconfirmed";
         sessionId = yield* native("session.acquire", async (signal) => {
           const id = Redacted.make(
             await binding.acquire(options.keepAliveMillis ?? 600_000, "session.acquire"),
@@ -340,6 +355,7 @@ export class BrowserSessions extends Context.Service<
             Effect.tap(() =>
               Effect.sync(() => {
                 retained = true;
+                cleanupState.result = "not-requested";
               }),
             ),
           ),
@@ -348,19 +364,36 @@ export class BrowserSessions extends Context.Service<
         return { reference, page, ...connection };
       });
 
-      const create = <E, R>(
+      const create = Effect.fnUntraced(function* <E, R>(
         input: BrowserSessionOptions,
         retain: (reference: BrowserSessionReference) => Effect.Effect<void, E, R>,
-      ) =>
-        allocate(input, retain).pipe(
+      ) {
+        const cleanupState: { result: BrowserSessionError["cleanup"] } = {
+          result: "not-requested",
+        };
+
+        return yield* allocate(input, retain, cleanupState).pipe(
           Effect.map(({ reference }) => reference),
-          Effect.scoped,
           Effect.timeoutOrElse({
             duration: "30 seconds",
             orElse: () => Effect.fail(failure("timeout")),
           }),
+          Effect.scoped,
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                error instanceof BrowserSessionError
+                  ? inheritBrowserReport(
+                      error,
+                      BrowserSessionError.make({ ...error, cleanup: cleanupState.result }),
+                    )
+                  : error,
+              ),
+            ),
+          ),
           Effect.withTracerEnabled(false),
         );
+      });
 
       const makeSession = Effect.fnUntraced(function* (
         reference: BrowserSessionReference,
@@ -581,7 +614,11 @@ export class BrowserSessions extends Context.Service<
       ) {
         const scope = yield* Scope.fork(yield* Effect.scope);
 
-        return yield* allocate(input, retain).pipe(
+        const cleanupState: { result: BrowserSessionError["cleanup"] } = {
+          result: "not-requested",
+        };
+
+        return yield* allocate(input, retain, cleanupState).pipe(
           Effect.flatMap(({ reference, browser, page, retire }) =>
             makeSession(reference, browser, page, retire),
           ),
@@ -591,6 +628,18 @@ export class BrowserSessions extends Context.Service<
             orElse: () => Effect.fail(failure("timeout")),
           }),
           Effect.onExit((exit) => (Exit.isFailure(exit) ? Scope.close(scope, exit) : Effect.void)),
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                error instanceof BrowserSessionError
+                  ? inheritBrowserReport(
+                      error,
+                      BrowserSessionError.make({ ...error, cleanup: cleanupState.result }),
+                    )
+                  : error,
+              ),
+            ),
+          ),
           Effect.withTracerEnabled(false),
         );
       });
