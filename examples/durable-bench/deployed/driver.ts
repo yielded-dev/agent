@@ -1,6 +1,6 @@
 import { decodeLiveText } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import { ThreadId } from "@yielded/agent/identifiers";
-import { Cause, Clock, Deferred, Effect, Option, Schema, Stream } from "effect";
+import { Cause, Clock, Deferred, Effect, Exit, Fiber, Option, Schema, Stream } from "effect";
 import { Ndjson } from "effect/encoding";
 
 import {
@@ -397,6 +397,7 @@ const operation = {
             let input: string | undefined = query.target !== "yielded" ? query.sample : undefined;
             let observationMs: number | null = null;
             let observerOpenedMs: number | undefined;
+            let observer: Fiber.Fiber<void, ObservationError> | undefined;
 
             if (observeText && query.target !== "tardie") {
               observerOpenedMs = yield* Clock.currentTimeMillis;
@@ -434,7 +435,7 @@ const operation = {
                     )
                   : bytes.pipe(Stream.pipeThroughChannel(Ndjson.decodeSchema(TextObservation)()));
 
-              yield* observations.pipe(
+              observer = yield* observations.pipe(
                 Stream.concat(
                   Stream.fail(
                     ObservationError.make({
@@ -466,18 +467,20 @@ const operation = {
                     if (frame.input === input) yield* Deferred.succeed(first, seen);
                   }),
                 ),
-                Effect.catchCauseIf(
-                  (cause) => !Cause.hasInterrupts(cause),
-                  (cause) =>
-                    Effect.gen(function* () {
-                      const error = ObservationError.make({
-                        message: `Public text observation failed: ${Cause.pretty(cause)}`,
-                        cause,
-                      });
+                Effect.catchCause((cause) =>
+                  Cause.hasInterruptsOnly(cause)
+                    ? Effect.interrupt
+                    : Effect.gen(function* () {
+                        const error = ObservationError.make({
+                          message: "Public text observation failed before cancellation.",
+                          cause,
+                        });
 
-                      yield* Deferred.fail(ready, error);
-                      yield* Deferred.fail(first, error);
-                    }),
+                        yield* Deferred.fail(ready, error);
+                        yield* Deferred.fail(first, error);
+
+                        return yield* error;
+                      }),
                 ),
                 Effect.forkScoped,
               );
@@ -566,6 +569,14 @@ const operation = {
               MetricsResult,
               quiescent ? "/metrics?quiescent=true" : "/metrics",
             );
+
+            if (observer !== undefined) {
+              yield* Fiber.interrupt(observer);
+              const exit = yield* Fiber.await(observer);
+
+              if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause))
+                return yield* Effect.failCause(exit.cause);
+            }
 
             return {
               ok: true,
