@@ -1840,6 +1840,15 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
   const publish = (batch: CanonicalBatch) =>
     captureFacts(batch).pipe(Effect.flatMap(publishCaptured));
 
+  const preflight = (batch: CanonicalBatch) =>
+    gate.withPermits(1)(
+      Effect.gen(function* () {
+        const owned = yield* captureFacts(batch);
+
+        yield* prepare(owned, yield* tail, "preflight");
+      }),
+    );
+
   const reserve = (runId: RunId, probe: CanonicalBatch, bytes: number) =>
     gate.withPermits(1)(
       Effect.gen(function* () {
@@ -1952,6 +1961,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
   return {
     commit,
     publish,
+    preflight,
     reserve,
     defer,
     check,

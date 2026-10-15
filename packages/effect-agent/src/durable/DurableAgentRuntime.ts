@@ -1155,6 +1155,15 @@ const isCoordinatorHaltCause = (
     (reason) => reason._tag !== "Fail" || reason.error instanceof CoordinatorHalt,
   );
 
+const isPersistenceCapacityCause = (cause: Cause.Cause<unknown>): boolean =>
+  cause.reasons.length > 0 &&
+  cause.reasons.every(
+    (reason) =>
+      Cause.isFailReason(reason) &&
+      reason.error instanceof ThreadStoreError &&
+      reason.error.cause instanceof AgentPersistenceCapacityError,
+  );
+
 const PolicyFailure = Schema.TaggedStruct("AgentPolicyError", {
   limit: PolicyLimit,
 });
@@ -6150,6 +6159,26 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 return "committed" as const;
               }
 
+              if (
+                commit._tag === "Response" &&
+                commit.defer !== true &&
+                response !== undefined &&
+                progress !== undefined
+              ) {
+                // This read-only preflight proves that no append or Tool dispatch began.
+                // Append failures and recovered declarations retain their existing uncertainty.
+                const admissible = yield* progress.preflight(yield* turnResponseBatch(input)).pipe(
+                  Effect.provideService(CurrentRunWriter, ctx),
+                  Effect.as(true),
+                  Effect.catchCauseIf(
+                    (cause) => isPersistenceCapacityCause(cause),
+                    () => Effect.succeed(false),
+                  ),
+                );
+
+                if (!admissible) return "capacity-refused" as const;
+              }
+
               if (commit._tag === "Response" && commit.defer === true) {
                 if (
                   toolOperations.length === 0 ||
@@ -6216,11 +6245,18 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                     message: "Dispatch has no scoped progress writer",
                   });
 
-                const batch = yield* progress
-                  .defer(candidate.batch)
-                  .pipe(Effect.provideService(CurrentRunWriter, ctx));
+                const batch = yield* progress.defer(candidate.batch).pipe(
+                  Effect.provideService(CurrentRunWriter, ctx),
+                  Effect.asSome,
+                  Effect.catchCauseIf(
+                    (cause) => isPersistenceCapacityCause(cause),
+                    () => Effect.succeedNone,
+                  ),
+                );
 
-                deferredResponse = { ...candidate, batch };
+                // Deferral does not append, and installs its reservation only after every check.
+                if (Option.isNone(batch)) return "capacity-refused" as const;
+                deferredResponse = { ...candidate, batch: batch.value };
 
                 return "deferred" as const;
               }

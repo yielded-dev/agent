@@ -757,7 +757,7 @@ const acceptTurnCommit = <E, R>(
   trace: TurnTrace,
   durability: RunDurabilityHook<E, R> | undefined,
   commit: RunTurnCommit,
-): Effect.Effect<void, E | ModelProtocolError | AgentPolicyError, R> =>
+): Effect.Effect<void | "capacity-refused", E | ModelProtocolError | AgentPolicyError, R> =>
   Effect.suspend(() => {
     if (trace.commitFailed) return Effect.void;
 
@@ -767,6 +767,15 @@ const acceptTurnCommit = <E, R>(
 
     return Effect.onExitPrimitive(
       Effect.flatMap(accepted, (receipt) => {
+        if (receipt === "capacity-refused")
+          return commit._tag === "Response" && trace.responseCommitted !== true
+            ? Effect.succeed(receipt)
+            : Effect.fail(
+                ModelProtocolError.make({
+                  message: "Durability refused capacity after response acceptance",
+                }),
+              );
+
         if (receipt === "deferred")
           return commit._tag === "Response" && commit.defer === true
             ? Effect.void
@@ -837,7 +846,7 @@ const settleTurn = <E, R>(
                   ...(response === undefined ? {} : { response }),
                   results,
                   ...(completion === undefined ? {} : { completion }),
-                }),
+                }).pipe(Effect.asVoid),
         );
       });
 
@@ -1663,7 +1672,7 @@ const makeToolFailedEvent = Effect.fnUntraced(function* (
 /**
  * Settle a rejected Tool batch without starting any handler: every open
  * application call receives the encoded failure as its model-visible result.
- * Only budget rejections (RUN-018) are exempt from repeated-failure folding;
+ * Policy and persistence budget rejections are exempt from repeated-failure folding;
  * correctable model declarations count as ordinary failed calls. Emit one
  * `ToolCallFailed` per call with no `ToolCallStarted` (the
  * approval-denied precedent). The caller hands the trace to
@@ -1676,10 +1685,10 @@ const settleRejectedBatch = Effect.fnUntraced(function* (
   context: RunContext,
   turnId: TurnId,
   trace: TurnTrace,
-  error: AgentPolicyError | ModelProtocolError,
+  error: AgentPolicyError | AgentPersistenceCapacityError | ModelProtocolError,
   alreadySettled?: ReadonlySet<string>,
 ): Effect.fn.Return<ReadonlyArray<RunEvent>, ModelProtocolError> {
-  const budgetRejected = error._tag === "AgentPolicyError" ? true : undefined;
+  const budgetRejected = error._tag !== "ModelProtocolError" ? true : undefined;
 
   const encodedResult = {
     _tag: error._tag,
@@ -7349,9 +7358,10 @@ const makeTurn = <
                     return yield* ModelProtocolError.make({
                       message: "Tool dispatch has no validated response facts",
                     });
+
                   // Idempotency only permits replay of the original operation. Re-asking the
                   // model could choose different arguments or a new key, so it keeps the barrier.
-                  yield* acceptTurnCommit(context, trace, options.durability, {
+                  const admission = yield* acceptTurnCommit(context, trace, options.durability, {
                     _tag: "Response",
                     turn,
                     turnId,
@@ -7370,6 +7380,33 @@ const makeTurn = <
                       ? { defer: true as const }
                       : {}),
                   });
+
+                  if (admission === "capacity-refused") {
+                    const rejection = yield* settleRejectedBatch(
+                      context,
+                      turnId,
+                      trace,
+                      AgentPersistenceCapacityError.make({
+                        message:
+                          "This application tool batch was not dispatched because its durable results exceed available capacity. Retry the needed application tools in smaller batches. Earlier tool results remain valid.",
+                      }),
+                    );
+
+                    return publishEvents(context, rejection).pipe(
+                      Effect.andThen(
+                        toolBatchContinuation(
+                          agent,
+                          context,
+                          trace,
+                          prompt,
+                          turn,
+                          turnId,
+                          toolCalls,
+                          options,
+                        ),
+                      ),
+                    );
+                  }
                 }
 
                 const toolResults = executeToolBatch(

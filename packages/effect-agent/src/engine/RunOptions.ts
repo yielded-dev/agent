@@ -688,10 +688,13 @@ export interface RunDurabilityHook<Error = never, Requirements = never> {
    * `committed` accepts the supplied facts canonically. `deferred` is valid only for a Response
    * with `defer: true`: validation and ownership succeeded, but no canonical acceptance occurred.
    * The interpreter retains its response and inputs until the Settled commit is accepted.
+   * `capacity-refused` is valid only for a fresh Response rejected before any storage append or
+   * Tool work. The interpreter settles every application call as not dispatched, atomically with
+   * that response. A failed append or an already accepted response must never return this value.
    */
   readonly commitTurn: (
     commit: RunTurnCommit,
-  ) => Effect.Effect<"committed" | "deferred", Error, Requirements>;
+  ) => Effect.Effect<"committed" | "deferred" | "capacity-refused", Error, Requirements>;
   /** Check the writer fence after approval/authorization and before handler permits; no write. */
   readonly checkToolDispatch: Effect.Effect<void, Error, Requirements>;
   readonly step: RunStepHook<Error, Requirements>;
