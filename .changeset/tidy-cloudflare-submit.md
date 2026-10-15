@@ -2,4 +2,4 @@
 "@yielded/agent-platform-cloudflare": patch
 ---
 
-Encode Cloudflare submission envelopes in one pass while preserving caller validation.
+Reduce Cloudflare client imports and encode submission envelopes in one pass while preserving caller validation.
