@@ -743,7 +743,9 @@ function compileRegistration(entry: AgentRegistration) {
 
         const agent =
           entry.modelLifetime === "runtime"
-            ? { definition: selected.definition, model: yield* residentModel(selected.model) }
+            ? // The public overload retains the selected binding's concrete requirements.
+              // @effect-diagnostics-next-line anyUnknownInErrorContext:off
+              { definition: selected.definition, model: yield* residentModel(selected.model) }
             : selected;
 
         // Omitted attempt services need no Layer construction or provisioning scope.
