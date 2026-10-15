@@ -17,12 +17,51 @@ permissions:
   contents: read
 
 jobs:
+  # The generated version PR only carries changeset output, and CI's release
+  # equivalence check verifies every changed byte. Pass the required check
+  # without a model review; manual @effect-agent commands still run.
+  version-pr:
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'changeset-release/main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == 'effect-agent[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: pr-review
+      deployment: false
+    steps:
+      - name: Mint the Effect Agent GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.EFFECT_AGENT_APP_ID }}
+          private-key: ${{ secrets.EFFECT_AGENT_APP_PRIVATE_KEY }}
+          permission-checks: write
+
+      - name: Pass the review check
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/check-runs" \
+            -f name="Effect Agent review" -f head_sha="$HEAD_SHA" \
+            -f status=completed -f conclusion=success \
+            -f "output[title]=Generated version PR" \
+            -f "output[summary]=Changeset output verified by release equivalence; no model review."
+
   review:
     # The Action parses the first command line; keep this filter broad enough
     # for leading whitespace, varied spacing, and explanation below it.
     if: >-
       (github.event_name == 'pull_request_target' &&
-        !github.event.pull_request.draft) ||
+        !github.event.pull_request.draft &&
+        !(github.event.pull_request.base.ref == 'main' &&
+          github.event.pull_request.head.ref == 'changeset-release/main' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login == 'effect-agent[bot]')) ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
         (github.event.comment.author_association == 'OWNER' ||
          github.event.comment.author_association == 'MEMBER' ||
