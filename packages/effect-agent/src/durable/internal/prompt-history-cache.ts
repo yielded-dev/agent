@@ -23,8 +23,9 @@ import {
   ThreadStore,
   ThreadTailRequest,
 } from "../ThreadStore.ts";
+import { HistoryMessage, restoreHistoryMessage } from "./history-prompt.ts";
 import type { InitialContextInput } from "./initial-context.ts";
-import type { JournalRecordEnvelope } from "./journal-metadata.ts";
+import { makeJournalMetadata, type JournalRecordEnvelope } from "./journal-metadata.ts";
 import { promptJsonFootprint } from "./prompt-footprint.ts";
 import { captureRecord } from "./record-encoding.ts";
 import { digestRunHistory } from "./run-context.ts";
@@ -47,9 +48,7 @@ const decodeCommittedPromptRecord = Schema.decodeUnknownSync(PromptRecord);
 const decodeEncodedPrompt = Schema.decodeUnknownEffect(
   Schema.suspend(() =>
     Schema.Struct({
-      content: Schema.Array(Schema.toEncoded(Prompt.Message)).check(
-        Schema.isMaxLength(MAX_ENTRIES),
-      ),
+      content: Schema.Array(HistoryMessage).check(Schema.isMaxLength(MAX_ENTRIES)),
     }),
   ),
 );
@@ -63,64 +62,6 @@ const decodePrompt = Schema.decodeUnknownEffect(
     }),
   ),
 );
-
-// Inputs have crossed Effect's encoded-message Schema boundary. Native constructors
-// supply only the brands and defaults; Effect still owns every message and part type.
-function hydratePart(part: Prompt.UserMessagePartEncoded): Prompt.UserMessagePart;
-function hydratePart(part: Prompt.ToolMessagePartEncoded): Prompt.ToolMessagePart;
-function hydratePart(part: Prompt.AssistantMessagePartEncoded): Prompt.AssistantMessagePart;
-function hydratePart(part: Prompt.PartEncoded): Prompt.Part {
-  switch (part.type) {
-    case "text":
-      return Prompt.textPart(part);
-    case "reasoning":
-      return Prompt.reasoningPart(part);
-    case "file":
-      return Prompt.filePart(part);
-    case "tool-call":
-      // Unlike options, providerExecuted is required by Effect's constructors;
-      // only its Schema decoder supplies the false default.
-      return Prompt.toolCallPart({ ...part, providerExecuted: part.providerExecuted ?? false });
-    case "tool-result":
-      return Prompt.toolResultPart({ ...part, providerExecuted: part.providerExecuted ?? false });
-    case "tool-approval-request":
-      return Prompt.toolApprovalRequestPart(part);
-    case "tool-approval-response":
-      return Prompt.toolApprovalResponsePart(part);
-  }
-
-  return part satisfies never;
-}
-
-const hydrateMessage = (message: Prompt.MessageEncoded): Prompt.Message => {
-  switch (message.role) {
-    case "system":
-      return Prompt.systemMessage(message);
-    case "user":
-      return Prompt.userMessage({
-        ...message,
-        content:
-          typeof message.content === "string"
-            ? [Prompt.textPart({ text: message.content })]
-            : message.content.map((p) => hydratePart(p)),
-      });
-    case "assistant":
-      return Prompt.assistantMessage({
-        ...message,
-        content:
-          typeof message.content === "string"
-            ? [Prompt.textPart({ text: message.content })]
-            : message.content.map((p) => hydratePart(p)),
-      });
-    case "tool":
-      return Prompt.toolMessage({
-        ...message,
-        content: message.content.map((p) => hydratePart(p)),
-      });
-  }
-
-  return message satisfies never;
-};
 
 export interface PromptHistory {
   readonly prompt: Prompt.Prompt;
@@ -171,7 +112,7 @@ export const decodeCheckpointPrefix = Effect.fnUntraced(function* (
   if (bytes === undefined) return undefined;
 
   const decoded = yield* decodeEncodedPrompt(value).pipe(
-    Effect.map((prompt) => ({ content: prompt.content.map(hydrateMessage) })),
+    Effect.map((prompt) => ({ content: prompt.content.map(restoreHistoryMessage) })),
     // Keep the canonical codec as fallback for representations the encoded Schema rejects.
     Effect.catch(() => decodePrompt(value)),
   );
@@ -399,6 +340,7 @@ const readSuffix = Effect.fnUntraced(function* (
 ) {
   const store = yield* ThreadStore;
   const records: Array<JournalRecordEnvelope> = [];
+  const metadata = makeJournalMetadata(undefined);
   let after = from;
   let remaining = allowance;
   let active: RunId | undefined;
@@ -461,6 +403,7 @@ const readSuffix = Effect.fnUntraced(function* (
       if (footprint === undefined) return undefined;
       remaining -= 32 * footprint;
       records.push(entry);
+      metadata.add(entry);
       after = entry.sequence;
     }
     if (page.length === 0) break;
@@ -474,6 +417,8 @@ const readSuffix = Effect.fnUntraced(function* (
     (boundary) => {
       if (boundary.incomplete) incomplete = true;
     },
+    undefined,
+    metadata.finish(),
   );
 
   if (incomplete || delta.prompt.content.length > MAX_ENTRIES) return undefined;
