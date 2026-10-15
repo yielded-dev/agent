@@ -206,8 +206,8 @@ const testLayer = Layer.mergeAll(
 );
 
 layer(testLayer)("RUN-036 trusted Tool failure observation", (it) => {
-  // Explicit regression request: exercise the live direct and broker observer bridges before
-  // declared failures lose their ErrorReporter annotation during encoding/tag projection.
+  // Exercise the live direct and broker observer bridges before declared failures lose
+  // their ErrorReporter annotation during encoding/tag projection.
   it.effect.each([false, true])("honors ignored=%s on direct declared failures", (ignored) =>
     Effect.gen(function* () {
       {
