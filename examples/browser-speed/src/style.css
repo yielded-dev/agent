@@ -1627,3 +1627,45 @@ tr.selected td {
   overflow-wrap: anywhere;
   margin: 0 0 16px;
 }
+
+.private-entry {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.private-entry form {
+  display: grid;
+  gap: 12px;
+}
+.private-entry label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.private-entry input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--bg-sunken);
+  color: var(--text);
+  font: inherit;
+}
+.private-entry .private-entry-target {
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.private-entry-skip {
+  justify-self: center;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

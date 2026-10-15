@@ -16,6 +16,8 @@ import type { Browser, Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-c
 
 import {
   CredentialFillError,
+  type CredentialBinding,
+  type CredentialForm,
   type BrowserCredentialAccess,
   type CredentialFillResult,
   type FillCredentialRequest,
@@ -28,7 +30,11 @@ import {
   BrowserRunLiveViewResult,
 } from "./InteractiveBrowser.ts";
 import { BrowserRunBinding, type BrowserRunAttachment } from "./internal/browser-binding.ts";
-import { BrowserSessionPage, fillCredential } from "./internal/browser-credentials.ts";
+import {
+  BrowserSessionPage,
+  fillCredential,
+  prepareCredential,
+} from "./internal/browser-credentials.ts";
 import {
   inheritBrowserReport,
   reportBrowserCause,
@@ -115,6 +121,10 @@ export interface BrowserSession {
     action: (page: Page) => Promise<A>,
     options?: { readonly timeoutMillis: number },
   ) => Effect.Effect<A, E | BrowserSessionError, R>;
+  /** Prepare a delayed private-entry request. The host owns persistence, expiry and one-use consumption. */
+  readonly prepareCredential: (
+    request: CredentialForm,
+  ) => Effect.Effect<CredentialBinding, CredentialFillError | BrowserSessionError>;
   /**
    * Resolves host-owned material under fresh credential grants. Never submits or retries a write.
    * Credential timeouts retain acknowledged writes and dispatch evidence alongside cleanup.
@@ -509,6 +519,15 @@ export class BrowserSessions extends Context.Service<
               : decode(PositiveMillis, options.timeoutMillis).pipe(
                   Effect.flatMap((timeoutMillis) => run(authorize, action, false, timeoutMillis)),
                 ),
+          prepareCredential: (request) =>
+            runEffect((commandTimeoutMillis) =>
+              prepareCredential(request).pipe(
+                Effect.provideService(BrowserSessionPage, {
+                  page: currentPage,
+                  commandTimeoutMillis,
+                }),
+              ),
+            ),
           fillCredential: (request) =>
             runEffect((commandTimeoutMillis) =>
               fillCredential(request).pipe(

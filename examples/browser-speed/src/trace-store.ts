@@ -1,6 +1,6 @@
 import { Clock, Context, Effect, Schema, Semaphore } from "effect";
 
-import { LabError, Report, TraceArchive, TraceEvent } from "./contract.ts";
+import { LabError, PrivateEntry, Report, TraceArchive, TraceEvent } from "./contract.ts";
 
 export interface TraceSink {
   readonly append: (event: TraceEvent) => void;
@@ -16,6 +16,7 @@ export class TraceStore extends Context.Service<
     readonly reports: Effect.Effect<ReadonlyArray<Report>, LabError>;
     readonly read: (id: string) => Effect.Effect<TraceArchive, LabError>;
     readonly archive: (id: string) => Effect.Effect<TraceArchive, LabError>;
+    readonly entry: (report: Report, entry: PrivateEntry) => Effect.Effect<void, LabError>;
     readonly control: (report: Report, mode: "watch" | "control") => Effect.Effect<void, LabError>;
   }
 >()("browser-speed/TraceStore") {}
@@ -183,7 +184,7 @@ export const makeTraceStore = (sql: SqlStorage, ownerId: string, bucket: R2Bucke
     return saved;
   }, uploads.withPermits(1));
 
-  const control = Effect.fnUntraced(function* (report: Report, mode: "watch" | "control") {
+  const record = Effect.fnUntraced(function* (report: Report, kind: string, data: Schema.Json) {
     const now = yield* Clock.currentTimeMillis;
 
     checkpoint(report);
@@ -198,11 +199,25 @@ export const makeTraceStore = (sql: SqlStorage, ownerId: string, bucket: R2Bucke
     sink(report.input.id).append({
       sequence,
       at: now - Date.parse(report.startedAt),
-      kind: "browser.control",
-      data: { mode },
+      kind,
+      data,
     });
     yield* archive(report.input.id);
   });
 
-  return { sink, report, reports, read, archive, control };
+  return {
+    sink,
+    report,
+    reports,
+    read,
+    archive,
+    control: (report: Report, mode: "watch" | "control") =>
+      record(report, "browser.control", { mode }),
+    entry: (report: Report, entry: PrivateEntry) =>
+      record(
+        report,
+        "private-entry." + entry.status,
+        Schema.encodeSync(Schema.toCodecJson(PrivateEntry))(entry),
+      ),
+  };
 };

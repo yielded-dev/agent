@@ -1,5 +1,13 @@
 import { InMemory } from "@yielded/agent";
 import {
+  CredentialAccessError,
+  CredentialBinding,
+  CredentialForm,
+  CredentialFillError,
+  FillCredentialRequest,
+  type CredentialAccessRequest,
+} from "@yielded/agent-platform-cloudflare/browser-credentials";
+import {
   BrowserSessionReference,
   BrowserSessions,
 } from "@yielded/agent-platform-cloudflare/browser-session";
@@ -17,6 +25,8 @@ import {
   racePrompt,
   coffeeDemo,
   Report,
+  LoginForm,
+  PrivateEntry,
   type ModelApi,
   type ModelId,
   type RunInput,
@@ -33,8 +43,26 @@ export interface VisitorKeys {
   readonly openai?: string;
 }
 
+const RetainedEntry = Schema.Struct({
+  ...PrivateEntry.fields,
+  form: LoginForm,
+  binding: CredentialBinding,
+});
+
+type RetainedEntry = typeof RetainedEntry.Type;
+
+const entrySummary = (entry: RetainedEntry): PrivateEntry => ({
+  id: entry.id,
+  runId: entry.runId,
+  target: entry.target,
+  expiresAt: entry.expiresAt,
+  status: entry.status,
+  ...(entry.outcome === undefined ? {} : { outcome: entry.outcome }),
+});
+
 export const Control = Schema.Struct({
-  version: Schema.Literal(5),
+  version: Schema.Literal(6),
+  privateEntry: Schema.NullOr(RetainedEntry),
   view: Schema.NullOr(
     Schema.Struct({
       url: Schema.String,
@@ -53,7 +81,8 @@ export const Control = Schema.Struct({
 export type Control = typeof Control.Type;
 
 export const emptyControl: Control = {
-  version: 5,
+  version: 6,
+  privateEntry: null,
   view: null,
   chatId: null,
   reference: null,
@@ -98,7 +127,7 @@ export const makeOwner = (
 ) => {
   let trace: Trace["Service"] | undefined;
   let running: Fiber.Fiber<void, LabError> | undefined;
-  let changingView = false;
+  let changingBrowser = false;
   let image: string | null = null;
   let notice: string | null = null;
   let closeKitesurf: Effect.Effect<void, LabError> | undefined;
@@ -122,11 +151,13 @@ export const makeOwner = (
 
     return {
       ready:
-        (state.reference !== null && state.reference.expiresAt > now) ||
-        closeKitesurf !== undefined,
-      busy: state.active !== null,
+        state.report?.cleanup !== "failed" &&
+        ((state.reference !== null && state.reference.expiresAt > now) ||
+          closeKitesurf !== undefined),
+      busy: state.active !== null || changingBrowser,
       canClose:
         running === undefined &&
+        !changingBrowser &&
         (state.reference !== null || state.active !== null || state.report?.cleanup === "failed"),
       model: config.model,
       browserConfigured: config.browserConfigured ?? true,
@@ -139,6 +170,16 @@ export const makeOwner = (
       public: config.public ?? false,
       chatId: state.chatId,
       viewMode: state.view?.mode ?? "watch",
+      privateEntry:
+        state.privateEntry === null
+          ? null
+          : {
+              ...entrySummary(state.privateEntry),
+              status:
+                state.privateEntry.status === "pending" && state.privateEntry.expiresAt <= now
+                  ? "expired"
+                  : state.privateEntry.status,
+            },
       report: trace?.snapshot() ?? state.report,
       liveViewUrl:
         state.reference !== null &&
@@ -156,7 +197,7 @@ export const makeOwner = (
   });
 
   const closeReference = Effect.fnUntraced(function* () {
-    patch({ chatId: null, view: null }, "chat-ended");
+    patch({ chatId: null, view: null, privateEntry: null }, "chat-ended");
     if (closeKitesurf !== undefined) {
       yield* closeKitesurf;
       closeKitesurf = undefined;
@@ -206,7 +247,13 @@ export const makeOwner = (
   const view = Effect.fnUntraced(function* (mode: typeof ViewMode.Type) {
     const state = store.read();
 
-    if (state.active !== null || running !== undefined || changingView)
+    if (
+      state.active !== null ||
+      running !== undefined ||
+      changingBrowser ||
+      state.privateEntry?.status === "pending" ||
+      state.report?.cleanup === "failed"
+    )
       return yield* LabError.make({
         code: "busy",
         message: "Wait for the agent to finish before taking over.",
@@ -216,7 +263,7 @@ export const makeOwner = (
         code: "expired",
         message: "This browser has closed. Start a new chat.",
       });
-    changingView = true;
+    changingBrowser = true;
     yield* Effect.gen(function* () {
       const traces = yield* TraceStore;
 
@@ -233,7 +280,181 @@ export const makeOwner = (
       Effect.scoped,
       Effect.ensuring(
         Effect.sync(() => {
-          changingView = false;
+          changingBrowser = false;
+        }),
+      ),
+    );
+  });
+
+  const saveEntry = Effect.fnUntraced(function* (entry: RetainedEntry, transition: string) {
+    const summary = entrySummary(entry);
+    const report = store.read().report;
+    const updated = report === null ? null : { ...report, privateEntry: summary };
+
+    patch({ privateEntry: entry, report: updated }, transition);
+    trace = undefined;
+    if (updated !== null) {
+      const traces = yield* TraceStore;
+
+      yield* traces.entry(updated, summary).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            notice = error.message;
+          }),
+        ),
+      );
+    }
+
+    return summary;
+  });
+
+  // The transient resolver is supplied by the HTTP composition root. This owner never receives values.
+  const authorizeEntry = Effect.fnUntraced(function* (
+    id: string,
+    request: CredentialAccessRequest,
+  ) {
+    const state = store.read();
+    const entry = state.privateEntry;
+
+    if (
+      !changingBrowser ||
+      state.active !== null ||
+      entry?.id !== id ||
+      entry.status !== "uncertain" ||
+      entry.expiresAt <= (yield* Clock.currentTimeMillis) ||
+      state.reference === null ||
+      state.reference.expiresAt <= (yield* Clock.currentTimeMillis) ||
+      request.credential !== id ||
+      request.kind !== "login" ||
+      request.target.topOrigin !== entry.target.topOrigin ||
+      request.target.frameOrigin !== entry.target.frameOrigin ||
+      request.target.recipientOrigin !== entry.target.recipientOrigin ||
+      request.roles.length !== entry.form.fields.length ||
+      request.roles.some((role, index) => role !== entry.form.fields[index]?.role)
+    )
+      return yield* CredentialAccessError.make({ reason: "denied" });
+  });
+
+  const cancelPrivateEntry = Effect.fnUntraced(function* (id: string) {
+    const state = store.read();
+    const entry = state.privateEntry;
+
+    if (changingBrowser || state.active !== null || running !== undefined)
+      return yield* LabError.make({
+        code: "busy",
+        message: "Wait for the current browser operation.",
+      });
+    if (entry?.id !== id)
+      return yield* LabError.make({
+        code: "expired",
+        message: "This private-entry request is no longer available.",
+      });
+
+    return entry.status === "pending"
+      ? yield* saveEntry({ ...entry, status: "cancelled" }, "entry-cancelled")
+      : entrySummary(entry);
+  });
+
+  const privateEntry = Effect.fnUntraced(function* (id: string) {
+    const state = store.read();
+    const entry = state.privateEntry;
+
+    if (changingBrowser || state.active !== null || running !== undefined)
+      return yield* LabError.make({
+        code: "busy",
+        message: "Wait for the current browser operation.",
+      });
+    if (entry?.id !== id)
+      return yield* LabError.make({
+        code: "expired",
+        message: "This private-entry request is no longer available.",
+      });
+    // Repeated submissions return the retained outcome without resolving or filling again.
+    if (entry.status !== "pending") return entrySummary(entry);
+    const now = yield* Clock.currentTimeMillis;
+
+    if (entry.expiresAt <= now || state.reference === null || state.reference.expiresAt <= now)
+      return yield* saveEntry({ ...entry, status: "expired" }, "entry-expired");
+    if (state.view?.mode === "control")
+      return yield* LabError.make({
+        code: "busy",
+        message: "Return control before filling private information.",
+      });
+
+    const reference = state.reference;
+
+    changingBrowser = true;
+
+    return yield* Effect.gen(function* () {
+      // Write uncertainty before external dispatch. A restart must never replay these values.
+      yield* saveEntry({ ...entry, status: "uncertain" }, "entry-claimed");
+      const sessions = yield* BrowserSessions;
+
+      const result = yield* sessions.attach(reference).pipe(
+        Effect.flatMap((session) =>
+          session.fillCredential(
+            FillCredentialRequest.make({
+              ...entry.form,
+              credential: entry.id,
+              binding: entry.binding,
+            }),
+          ),
+        ),
+        Effect.result,
+      );
+
+      const outcome =
+        result._tag === "Success"
+          ? result.success
+          : result.failure._tag === "CredentialFillError"
+            ? result.failure
+            : CredentialFillError.make({
+                reason: "provider",
+                dispatch: result.failure.dispatch,
+                filled: 0,
+                cleanup: result.failure.cleanup,
+              });
+
+      if ("cleanup" in outcome && outcome.cleanup !== "not-requested") {
+        const report = store.read().report;
+
+        if (outcome.cleanup === "confirmed") {
+          patch(
+            {
+              reference: null,
+              view: null,
+              report: report === null ? null : { ...report, cleanup: "closed" },
+            },
+            "entry-browser-closed",
+          );
+          yield* store.alarm(null);
+        } else {
+          patch(
+            { report: report === null ? null : { ...report, cleanup: "failed" } },
+            "entry-cleanup-failed",
+          );
+          notice = "Browser cleanup could not be confirmed. Close the browser before continuing.";
+        }
+      }
+
+      return yield* saveEntry(
+        {
+          ...entry,
+          outcome,
+          status:
+            result._tag === "Success"
+              ? "filled"
+              : outcome.dispatch === "not-dispatched"
+                ? "failed"
+                : "uncertain",
+        },
+        "entry-settled",
+      );
+    }).pipe(
+      Effect.scoped,
+      Effect.ensuring(
+        Effect.sync(() => {
+          changingBrowser = false;
         }),
       ),
     );
@@ -262,7 +483,7 @@ export const makeOwner = (
   });
 
   const close = Effect.fnUntraced(function* () {
-    if (running !== undefined || changingView)
+    if (running !== undefined || changingBrowser)
       return yield* LabError.make({
         code: "busy",
         message: "Stop the active run before closing its browser.",
@@ -371,7 +592,7 @@ export const makeOwner = (
     const state = store.read();
 
     if (
-      changingView ||
+      changingBrowser ||
       state.active !== null ||
       state.admitted.includes(input.id) ||
       input.id === state.lastRun
@@ -379,6 +600,11 @@ export const makeOwner = (
       return yield* LabError.make({
         code: "busy",
         message: "This run is active or was already admitted. It will not be replayed.",
+      });
+    if (state.privateEntry?.status === "pending")
+      return yield* LabError.make({
+        code: "busy",
+        message: "Complete or skip private entry before continuing.",
       });
     if (state.view?.mode === "control")
       return yield* LabError.make({
@@ -451,6 +677,7 @@ export const makeOwner = (
         lastRun: input.id,
         admitted: [...state.admitted, input.id],
         report: current.snapshot(),
+        privateEntry: null,
       },
       "admitted",
     );
@@ -564,6 +791,38 @@ export const makeOwner = (
         Effect.provide(input.scenario === "chat" ? config.history : InMemory.layer),
         Effect.provideService(Browser, browser),
       );
+      const entryForm = current.snapshot().handoff?.privateEntry;
+
+      if (entryForm !== null && entryForm !== undefined && "prepareCredential" in session) {
+        const prepared = yield* session
+          .prepareCredential(CredentialForm.make(entryForm))
+          .pipe(Effect.result);
+
+        if (prepared._tag === "Success") {
+          const entry: RetainedEntry = {
+            id: crypto.randomUUID(),
+            runId: input.id,
+            form: entryForm,
+            binding: prepared.success,
+            target: prepared.success.target,
+            status: "pending",
+            expiresAt: Math.min(
+              session.reference.expiresAt,
+              (yield* Clock.currentTimeMillis) + 600_000,
+            ),
+          };
+
+          patch({ privateEntry: entry }, "entry-requested");
+          current.update({ privateEntry: entrySummary(entry) });
+          current.event("private-entry.requested", entrySummary(entry));
+        } else {
+          if (prepared.failure._tag === "BrowserSessionError")
+            return yield* provider(Effect.fail(prepared.failure));
+          notice =
+            "This form does not support private entry. Take over to enter your details on the website.";
+          current.event("private-entry.unavailable", { reason: prepared.failure.reason });
+        }
+      }
       current.update({ finishedAt: current.now() });
       if (input.screenshots || input.scenario !== "chat")
         yield* browser.capture(true).pipe(
@@ -689,5 +948,5 @@ export const makeOwner = (
     return report;
   });
 
-  return { snapshot, run, stop, close, view };
+  return { snapshot, run, stop, close, view, privateEntry, cancelPrivateEntry, authorizeEntry };
 };

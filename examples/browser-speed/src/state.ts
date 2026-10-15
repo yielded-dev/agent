@@ -1,10 +1,11 @@
 import { authenticatedHttpClient, sessionObservation } from "@yielded/agent-example-auth/client";
-import { Cause, Effect, Option, Predicate, Schema } from "effect";
+import { Cause, Effect, Option, Predicate, Redacted, Schema } from "effect";
 import { AsyncResult, Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 
 import {
   LabApi,
   LabError,
+  type PrivateEntrySubmission,
   Report,
   TraceArchive,
   VisitorKey,
@@ -225,8 +226,60 @@ export const viewAtom = LabClient.runtime.fn<"watch" | "control">()(
   Effect.fnUntraced(function* (mode, get) {
     const client = yield* LabClient;
 
-    yield* Reactivity.mutation(client.lab.view({ headers, payload: { mode } }), ["lab"]);
+    const entry = Option.getOrNull(AsyncResult.value(get(snapshotAtom)))?.privateEntry;
+
+    yield* Reactivity.mutation(
+      Effect.gen(function* () {
+        if (
+          mode === "control" &&
+          entry &&
+          (entry.status === "pending" || entry.status === "expired")
+        )
+          yield* client.lab.cancelPrivateEntry({ headers, payload: { id: entry.id } });
+        yield* client.lab.view({ headers, payload: { mode } });
+      }),
+      ["lab", "lab-history"],
+    );
     get.set(selectedAtom, null);
+  }),
+);
+
+/** Only redacted, transient values cross this atom; neither inputs nor outputs are persisted. */
+export const submitPrivateEntryAtom = LabClient.runtime.fn<typeof PrivateEntrySubmission.Type>()(
+  Effect.fnUntraced(function* (input, get) {
+    const client = yield* LabClient;
+
+    return yield* Reactivity.mutation(client.lab.privateEntry({ headers, payload: input }), [
+      "lab",
+      "lab-history",
+    ]).pipe(
+      Effect.mapError(() =>
+        LabError.make({
+          code: "browser",
+          message:
+            "Private entry was not confirmed. Check the current request status before continuing.",
+        }),
+      ),
+      Effect.ensuring(
+        Effect.sync(() => {
+          Redacted.wipeUnsafe(input.username);
+          Redacted.wipeUnsafe(input.password);
+          get.refresh(snapshotQuery);
+        }),
+      ),
+      Effect.withTracerEnabled(false),
+    );
+  }),
+);
+
+export const cancelPrivateEntryAtom = LabClient.runtime.fn<string>()(
+  Effect.fnUntraced(function* (id) {
+    const client = yield* LabClient;
+
+    return yield* Reactivity.mutation(client.lab.cancelPrivateEntry({ headers, payload: { id } }), [
+      "lab",
+      "lab-history",
+    ]);
   }),
 );
 

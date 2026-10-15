@@ -139,9 +139,25 @@ already connected viewers.
 
 ## Fill login or card credentials
 
-`session.fillCredential` resolves a host-bound vault item after authorizing the actual page,
-frame, and form-recipient origins. It fills supported native controls without submitting the form.
-Authorize filling itself: input handlers may send data immediately.
+`session.fillCredential` resolves host-owned material through `BrowserCredentialAccess`, then fills
+supported native controls without submitting the form. The host authorizes the actual page, frame,
+and form-recipient origins. Authorize filling itself: input handlers may send data immediately.
+
+For private user entry, prepare the form before showing it to the user:
+
+```ts
+const binding = yield * session.prepareCredential(form);
+// Retain only form, binding, expiry, and a one-use request ID.
+// After private submission, atomically consume the request before filling.
+const result = yield * session.fillCredential({ ...form, credential: requestId, binding });
+```
+
+Accept values through a separate authenticated endpoint and supply an invocation-scoped
+`BrowserCredentialAccess` Layer there. Its resolver can use the submitted values instead of a vault.
+Keep material out of conversation input, history, checkpoints, and telemetry. The binding pins the
+page, document, form, and controls across attachments; a changed target requires a fresh request.
+The host owns request expiry and one-use consumption. Retain only the outcome after filling;
+process loss or an uncertain result never permits replaying the values.
 
 Credentials stay out of the fill API's results and telemetry, but generated page JavaScript can
 read filled fields and the website may echo values in later observations or screenshots.

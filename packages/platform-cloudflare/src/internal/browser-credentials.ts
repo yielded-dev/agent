@@ -5,6 +5,8 @@ import {
   BrowserCredentialAccess,
   type BrowserCredentialMaterial,
   CardCredential,
+  CredentialBinding,
+  CredentialForm,
   type CredentialDispatch,
   type CredentialFieldRole,
   CredentialFillError,
@@ -26,7 +28,10 @@ export class BrowserSessionPage extends Context.Service<
 >()("@effect-agent/platform-cloudflare/internal/BrowserSessionPage") {}
 
 const TargetReply = Schema.Union([
-  Schema.Struct({ action: Schema.String.check(Schema.isMaxLength(2048)) }),
+  Schema.Struct({
+    action: Schema.String.check(Schema.isMaxLength(2048)),
+    shape: Schema.String.check(Schema.isMaxLength(128 * 1024)),
+  }),
   Schema.Struct({ reason: Schema.Literals(["stale-target", "unsupported"]) }),
 ]);
 
@@ -37,7 +42,7 @@ const WriteReply = Schema.Literals([
   "unsupported",
 ]);
 
-// One invocation-local isolated-world handle. Actual nodes and fingerprints never leave the page.
+// One invocation-local isolated-world handle. Values never leave the page through this handle.
 // This program neither discovers controls nor classifies roles nor observes page content.
 const prepareFields = `(() => {
   const doc = document;
@@ -57,7 +62,7 @@ const prepareFields = `(() => {
   const validate = () => fields.length > 0 && fields.every((el, index) =>
     el.form === form && describe(el) !== null && describe(el) === snapshots[index]);
   return {
-    prepare(selectors) {
+    prepare(selectors, roles) {
       try {
         fields = selectors.map(selector => {
           const matches = doc.querySelectorAll(selector);
@@ -65,12 +70,14 @@ const prepareFields = `(() => {
         });
       } catch { return {reason: 'stale-target'}; }
       if (fields.some(el => !el) || new Set(fields).size !== fields.length) return {reason: 'stale-target'};
+      if (fields.some((el, index) => roles[index] === 'password' && el.type !== 'password')) return {reason: 'unsupported'};
       snapshots = fields.map(describe);
       form = fields[0].form;
       if (!form || snapshots.some(value => value === null) || fields.some(el => el.form !== form)) return {reason: 'unsupported'};
-      return {action: form.action};
+      return {action: form.action, shape: JSON.stringify(snapshots)};
     },
-    target() { return validate() ? {action: form.action} : {reason: 'stale-target'}; },
+    target() { return validate() ? {action: form.action, shape: JSON.stringify(snapshots)} : {reason: 'stale-target'}; },
+    node(index) { return index === 0 ? doc.documentElement : index === 1 ? form : fields[index - 2]; },
     fill(index, value) {
       if (!validate()) return 'stale-target';
       const el = fields[index];
@@ -117,40 +124,20 @@ const secretFor = (material: BrowserCredentialMaterial, role: typeof CredentialF
   }
 };
 
-/**
- * Fill explicit native fields on an existing page without submitting. The owning browser session
- * serializes operations and closes on timeout, interruption or uncertain dispatch; this function releases
- * only its local handles. Ordinary native observations remain available, including credential echoes.
- */
-export const fillCredential = Effect.fnUntraced(function* (
-  input: FillCredentialRequest,
-): Effect.fn.Return<
-  CredentialFillResult,
-  CredentialFillError,
-  BrowserCredentialAccess | BrowserSessionPage
-> {
-  const { page, commandTimeoutMillis } = yield* BrowserSessionPage;
-  let dispatch: typeof CredentialDispatch.Type = "not-dispatched";
-  let filled = 0;
+/** Acquire exact native controls for this Scope; no credential material is resolved. */
+const openForm = Effect.fnUntraced(function* (input: CredentialForm) {
+  const { page } = yield* BrowserSessionPage;
 
   const fail = (reason: CredentialFillError["reason"]) =>
-    CredentialFillError.make({ reason, dispatch, filled, cleanup: "not-requested" });
+    CredentialFillError.make({
+      reason,
+      dispatch: "not-dispatched",
+      filled: 0,
+      cleanup: "not-requested",
+    });
 
   const remote = <A>(run: (signal: AbortSignal) => Promise<A>) =>
-    Effect.tryPromise({
-      try: async (signal) => {
-        try {
-          return { ok: true as const, value: await run(signal) };
-        } catch {
-          return { ok: false as const };
-        }
-      },
-      catch: () => fail("provider"),
-    }).pipe(
-      Effect.flatMap((result) =>
-        result.ok ? Effect.succeed(result.value) : Effect.fail(fail("provider")),
-      ),
-    );
+    Effect.tryPromise({ try: run, catch: () => fail("provider") });
 
   const release = (handles: ReadonlyArray<{ dispose(): Promise<void> }>) =>
     Effect.promise(async () => {
@@ -192,66 +179,205 @@ export const fillCredential = Effect.fnUntraced(function* (
     );
   });
 
+  const request = yield* Schema.decodeEffect(CredentialForm, {
+    onExcessProperty: "error",
+  })(input).pipe(Effect.mapError(() => fail("denied")));
+
+  const roles = request.fields.map((field) => field.role);
+
+  if (
+    new Set(roles).size !== roles.length ||
+    roles.some(
+      (role) => (request.kind === "login") !== (role === "username" || role === "password"),
+    )
+  )
+    return yield* fail("denied");
+  let frame: Frame = page.mainFrame();
+
+  for (const selector of request.frame ?? []) {
+    const matches = yield* acquire(() => frame.$$(selector));
+    const element = matches[0];
+
+    if (matches.length !== 1 || element === undefined) return yield* fail("stale-target");
+    const child = yield* remote(() => element.contentFrame());
+
+    if (child === null) return yield* fail("unsupported");
+    frame = child;
+  }
+
+  const handles = yield* acquire(async () => [
+    await frame.isolatedRealm().evaluateHandle(prepareFields),
+  ]);
+
+  const held = handles[0];
+
+  if (held === undefined) return yield* fail("provider");
+
+  const inspect = (raw: unknown) =>
+    Schema.decodeUnknownEffect(TargetReply)(raw).pipe(
+      Effect.mapError(() => fail("provider")),
+      Effect.filterOrFail(
+        (reply) => "action" in reply,
+        (reply) => fail("reason" in reply ? reply.reason : "provider"),
+      ),
+    );
+
+  const prepared = yield* remote(() =>
+    held.evaluate(
+      (state, selectors, roles) => {
+        if (typeof state !== "object" || state === null) return null;
+
+        return Reflect.apply(Reflect.get(state, "prepare"), state, [selectors, roles]);
+      },
+      request.fields.map((field) => field.selector),
+      roles,
+    ),
+  ).pipe(Effect.flatMap(inspect));
+
+  const target = CredentialTarget.make({
+    topOrigin: yield* origin(page.url()),
+    frameOrigin: yield* origin(frame.url()),
+    recipientOrigin: yield* origin(prepared.action),
+  });
+
+  const validate = Effect.gen(function* () {
+    if (
+      frame.detached ||
+      (yield* origin(page.url())) !== target.topOrigin ||
+      (yield* origin(frame.url())) !== target.frameOrigin
+    )
+      return yield* fail("stale-target");
+
+    const current = yield* remote(() =>
+      held.evaluate((state) => {
+        if (typeof state !== "object" || state === null) return null;
+
+        return Reflect.apply(Reflect.get(state, "target"), state, []);
+      }),
+    ).pipe(Effect.flatMap(inspect));
+
+    if ((yield* origin(current.action)) !== target.recipientOrigin)
+      return yield* fail("stale-target");
+  });
+
+  const binding = Effect.gen(function* () {
+    const nodes: Array<number> = [];
+
+    for (let index = 0; index <= request.fields.length + 1; index++) {
+      const handles = yield* acquire(async () => [
+        await held.evaluateHandle((state, index) => {
+          if (typeof state !== "object" || state === null) return null;
+
+          return Reflect.apply(Reflect.get(state, "node"), state, [index]);
+        }, index),
+      ]);
+
+      const element = handles[0]?.asElement();
+
+      if (element === null || element === undefined) return yield* fail("stale-target");
+      nodes.push(yield* remote(() => element.backendNodeId()));
+    }
+    yield* validate;
+
+    const digest = yield* remote(() =>
+      crypto.subtle.digest("SHA-256", new TextEncoder().encode(prepared.shape)),
+    );
+
+    return CredentialBinding.make({
+      version: 1,
+      pageId: page.mainFrame()._id,
+      frameId: frame._id,
+      target,
+      nodes,
+      shape: Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join(
+        "",
+      ),
+    });
+  });
+
+  return { held, target, validate, binding };
+});
+
+/** Bind a host-owned request to this exact document and fields without reading their values. */
+export const prepareCredential = Effect.fnUntraced(
+  function* (input: CredentialForm) {
+    const form = yield* openForm(input);
+
+    return yield* form.binding;
+  },
+  Effect.scoped,
+  Effect.withTracerEnabled(false),
+);
+
+/**
+ * Fill explicit native fields on an existing page without submitting. The owning browser session
+ * serializes operations and closes on timeout, interruption or uncertain dispatch; this function releases
+ * only its local handles. Ordinary native observations remain available, including credential echoes.
+ */
+export const fillCredential = Effect.fnUntraced(function* (
+  input: FillCredentialRequest,
+): Effect.fn.Return<
+  CredentialFillResult,
+  CredentialFillError,
+  BrowserCredentialAccess | BrowserSessionPage
+> {
+  const { commandTimeoutMillis } = yield* BrowserSessionPage;
+  let dispatch: typeof CredentialDispatch.Type = "not-dispatched";
+  let filled = 0;
+
+  const fail = (reason: CredentialFillError["reason"]) =>
+    CredentialFillError.make({ reason, dispatch, filled, cleanup: "not-requested" });
+
+  const remote = <A>(run: (signal: AbortSignal) => Promise<A>) =>
+    Effect.tryPromise({
+      try: async (signal) => {
+        try {
+          return { ok: true as const, value: await run(signal) };
+        } catch {
+          return { ok: false as const };
+        }
+      },
+      catch: () => fail("provider"),
+    }).pipe(
+      Effect.flatMap((result) =>
+        result.ok ? Effect.succeed(result.value) : Effect.fail(fail("provider")),
+      ),
+    );
+
   return yield* Effect.gen(function* () {
     const request = yield* Schema.decodeEffect(FillCredentialRequest, {
       onExcessProperty: "error",
     })(input).pipe(Effect.mapError(() => fail("denied")));
 
+    const form = yield* openForm(
+      CredentialForm.make({
+        kind: request.kind,
+        fields: request.fields,
+        ...(request.frame === undefined ? {} : { frame: request.frame }),
+      }),
+    );
+
+    const { held, target } = form;
+    const validate = form.validate.pipe(Effect.mapError((error) => fail(error.reason)));
     const roles = request.fields.map((field) => field.role);
 
-    if (
-      new Set(roles).size !== roles.length ||
-      roles.some(
-        (role) => (request.kind === "login") !== (role === "username" || role === "password"),
+    if (request.binding !== undefined) {
+      const actual = yield* form.binding;
+      const expected = request.binding;
+
+      if (
+        actual.pageId !== expected.pageId ||
+        actual.frameId !== expected.frameId ||
+        actual.shape !== expected.shape ||
+        actual.nodes.length !== expected.nodes.length ||
+        actual.nodes.some((node, index) => node !== expected.nodes[index]) ||
+        actual.target.topOrigin !== expected.target.topOrigin ||
+        actual.target.frameOrigin !== expected.target.frameOrigin ||
+        actual.target.recipientOrigin !== expected.target.recipientOrigin
       )
-    )
-      return yield* fail("denied");
-    const access = yield* BrowserCredentialAccess;
-    let frame: Frame = page.mainFrame();
-
-    for (const selector of request.frame ?? []) {
-      const matches = yield* acquire(() => frame.$$(selector));
-      const element = matches[0];
-
-      if (matches.length !== 1 || element === undefined) return yield* fail("stale-target");
-      const child = yield* remote(() => element.contentFrame());
-
-      if (child === null) return yield* fail("unsupported");
-      frame = child;
+        return yield* fail("stale-target");
     }
-
-    const handles = yield* acquire(async () => [
-      await frame.isolatedRealm().evaluateHandle(prepareFields),
-    ]);
-
-    const held = handles[0];
-
-    if (held === undefined) return yield* fail("provider");
-
-    const inspect = (raw: unknown) =>
-      Schema.decodeUnknownEffect(TargetReply)(raw).pipe(
-        Effect.mapError(() => fail("provider")),
-        Effect.flatMap((reply) =>
-          "reason" in reply ? Effect.fail(fail(reply.reason)) : Effect.succeed(reply.action),
-        ),
-      );
-
-    const action = yield* remote(() =>
-      held.evaluate(
-        (state, selectors) => {
-          if (typeof state !== "object" || state === null) return null;
-
-          return Reflect.apply(Reflect.get(state, "prepare"), state, [selectors]);
-        },
-        request.fields.map((field) => field.selector),
-      ),
-    ).pipe(Effect.flatMap(inspect));
-
-    const target = CredentialTarget.make({
-      topOrigin: yield* origin(page.url()),
-      frameOrigin: yield* origin(frame.url()),
-      recipientOrigin: yield* origin(action),
-    });
+    const access = yield* BrowserCredentialAccess;
 
     const authorization: CredentialAccessRequest = {
       credential: request.credential,
@@ -263,25 +389,6 @@ export const fillCredential = Effect.fnUntraced(function* (
     const authorize = Effect.suspend(() => access.authorize(authorization)).pipe(
       Effect.mapError((error) => fail(error.reason)),
     );
-
-    const validate = Effect.gen(function* () {
-      if (
-        frame.detached ||
-        (yield* origin(page.url())) !== target.topOrigin ||
-        (yield* origin(frame.url())) !== target.frameOrigin
-      )
-        return yield* fail("stale-target");
-
-      const current = yield* remote(() =>
-        held.evaluate((state) => {
-          if (typeof state !== "object" || state === null) return null;
-
-          return Reflect.apply(Reflect.get(state, "target"), state, []);
-        }),
-      ).pipe(Effect.flatMap(inspect));
-
-      if ((yield* origin(current)) !== target.recipientOrigin) return yield* fail("stale-target");
-    });
 
     yield* authorize;
     yield* validate;

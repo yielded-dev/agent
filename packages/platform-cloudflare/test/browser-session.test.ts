@@ -59,8 +59,8 @@ vi.mock("puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js", () => ({
       };
 
       const fields = {
-        prepare: () => ({ action: "https://merchant.test/login" }),
-        target: () => ({ action: "https://merchant.test/login" }),
+        prepare: () => ({ action: "https://merchant.test/login", shape: "[]" }),
+        target: () => ({ action: "https://merchant.test/login", shape: "[]" }),
         fill: () => {
           provider.credentialWrites++;
           if (provider.lostWriteReply) throw new Error("private-write-reply");

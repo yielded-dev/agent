@@ -36,10 +36,7 @@ export class CredentialTarget extends Schema.Class<CredentialTarget>("Credential
 }) {}
 
 /** Selectors identify one native form. Roles explicitly select material; no field inference occurs. */
-export class FillCredentialRequest extends Schema.Class<FillCredentialRequest>(
-  "FillCredentialRequest",
-)({
-  credential: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
+export class CredentialForm extends Schema.Class<CredentialForm>("CredentialForm")({
   kind: CredentialKind,
   frame: Schema.optionalKey(Schema.Array(Selector).check(Schema.isMaxLength(8))),
   fields: Schema.Array(Schema.Struct({ selector: Selector, role: CredentialFieldRole })).check(
@@ -48,7 +45,35 @@ export class FillCredentialRequest extends Schema.Class<FillCredentialRequest>(
   ),
 }) {}
 
-const SecretText = Schema.Redacted(Schema.NonEmptyString.check(Schema.isMaxLength(1024)));
+/**
+ * Private, persistable evidence for an exact page, document and native form controls.
+ * Keep it with the host's one-use request, never accept a binding from a model or submitter.
+ * A detached document or replaced control requires a fresh user request.
+ */
+export class CredentialBinding extends Schema.Class<CredentialBinding>("CredentialBinding")({
+  version: Schema.Literal(1),
+  pageId: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
+  frameId: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
+  target: CredentialTarget,
+  nodes: Schema.Array(Schema.Int.check(Schema.isGreaterThan(0))).check(
+    Schema.isMinLength(3),
+    Schema.isMaxLength(10),
+  ),
+  shape: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
+}) {}
+
+export class FillCredentialRequest extends Schema.Class<FillCredentialRequest>(
+  "FillCredentialRequest",
+)({
+  ...CredentialForm.fields,
+  credential: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
+  /** Required for delayed user entry; omitted for immediate, host-authorized vault fills. */
+  binding: Schema.optionalKey(CredentialBinding),
+}) {}
+
+const SecretText = Schema.Redacted(Schema.NonEmptyString.check(Schema.isMaxLength(1024)), {
+  disallowJsonEncode: true,
+});
 
 /** Host-only material. Never return or encode it through a Tool, log, trace, or checkpoint. */
 export const LoginCredential = Schema.TaggedStruct("LoginCredential", {
@@ -59,12 +84,20 @@ export const LoginCredential = Schema.TaggedStruct("LoginCredential", {
 /** Security codes are transient; the host must not persist them. */
 export const CardCredential = Schema.TaggedStruct("CardCredential", {
   name: SecretText,
-  number: Schema.Redacted(Schema.String.check(Schema.isPattern(/^\d{12,19}$/))),
+  number: Schema.Redacted(Schema.String.check(Schema.isPattern(/^\d{12,19}$/)), {
+    disallowJsonEncode: true,
+  }),
   expiry: SecretText,
-  expiryMonth: Schema.Redacted(Schema.String.check(Schema.isPattern(/^(0[1-9]|1[0-2])$/))),
-  expiryYear: Schema.Redacted(Schema.String.check(Schema.isPattern(/^\d{4}$/))),
+  expiryMonth: Schema.Redacted(Schema.String.check(Schema.isPattern(/^(0[1-9]|1[0-2])$/)), {
+    disallowJsonEncode: true,
+  }),
+  expiryYear: Schema.Redacted(Schema.String.check(Schema.isPattern(/^\d{4}$/)), {
+    disallowJsonEncode: true,
+  }),
   securityCode: Schema.optionalKey(
-    Schema.Redacted(Schema.String.check(Schema.isPattern(/^\d{3,4}$/))),
+    Schema.Redacted(Schema.String.check(Schema.isPattern(/^\d{3,4}$/)), {
+      disallowJsonEncode: true,
+    }),
   ),
 });
 

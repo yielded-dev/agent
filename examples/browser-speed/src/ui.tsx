@@ -1,5 +1,5 @@
 import { useAtom, useAtomSet, useAtomValue } from "@effect/atom-react";
-import { Option, Predicate, Schema } from "effect";
+import { Option, Predicate, Redacted, Schema } from "effect";
 import { AsyncResult } from "effect/reactivity";
 import {
   ArrowUpRight,
@@ -36,12 +36,15 @@ import {
   ServiceTier,
   StartUrl,
   type Phase,
+  type PrivateEntry,
   type Report,
   type Scenario,
   type Span,
 } from "./contract.ts";
 import {
   accountAtom,
+  submitPrivateEntryAtom,
+  cancelPrivateEntryAtom,
   chatDraftAtom,
   chatIdAtom,
   chatTurnsAtom,
@@ -139,6 +142,114 @@ const activityName = (span: Span) => {
   }
 };
 
+const PrivateEntryForm = ({ entry, busy }: { entry: PrivateEntry; busy: boolean }) => {
+  const [open, setOpen] = useState(false);
+  const [submission, submit] = useAtom(submitPrivateEntryAtom);
+  const [cancellation, cancel] = useAtom(cancelPrivateEntryAtom);
+  const waiting = busy || submission.waiting || cancellation.waiting;
+  const failure = errorMessage(submission) ?? errorMessage(cancellation);
+
+  return (
+    <div className="private-entry">
+      <p className="private-entry-target">{entry.target.topOrigin}</p>
+      {entry.target.frameOrigin !== entry.target.topOrigin && (
+        <p className="private-entry-target">Form: {entry.target.frameOrigin}</p>
+      )}
+      {entry.target.recipientOrigin !== entry.target.topOrigin && (
+        <p className="private-entry-target">Sends to: {entry.target.recipientOrigin}</p>
+      )}
+      {entry.status === "expired" ? (
+        <p className="handoff-hint">
+          Private entry expired. Skip it to continue or request a fresh form.
+        </p>
+      ) : open ? (
+        <form
+          autoComplete="off"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const data = new FormData(event.currentTarget);
+            const username = data.get("username");
+            const password = data.get("password");
+
+            if (typeof username !== "string" || typeof password !== "string") return;
+            submit({
+              id: entry.id,
+              username: Redacted.make(username),
+              password: Redacted.make(password),
+            });
+            event.currentTarget.reset();
+          }}
+        >
+          <label>
+            Username or email
+            <input
+              name="username"
+              autoComplete="off"
+              required
+              maxLength={1024}
+              disabled={waiting}
+            />
+          </label>
+          <label>
+            Password
+            <input
+              name="password"
+              type="password"
+              autoComplete="off"
+              required
+              maxLength={1024}
+              disabled={waiting}
+            />
+          </label>
+          <button className="primary" disabled={waiting} type="submit">
+            <KeyRound size={15} aria-hidden="true" />
+            {waiting ? "Filling…" : "Fill sign-in details"}
+          </button>
+        </form>
+      ) : (
+        <button className="primary" disabled={waiting} type="button" onClick={() => setOpen(true)}>
+          <KeyRound size={15} aria-hidden="true" />
+          Enter privately
+        </button>
+      )}
+      <button
+        className="private-entry-skip"
+        disabled={waiting}
+        type="button"
+        onClick={() => cancel(entry.id)}
+      >
+        Skip private entry
+      </button>
+      <p className="handoff-hint">
+        This entry skips chat and traces. The website and browser provider receive your details. The
+        agent can still access the page afterward.
+      </p>
+      {failure && (
+        <p className="chat-status bad" role="alert">
+          {failure}
+        </p>
+      )}
+    </div>
+  );
+};
+
+const privateEntryMessage = (entry: PrivateEntry) => {
+  switch (entry.status) {
+    case "filled":
+      return "Sign-in details filled. Take over to sign in, then return control and send a message to continue.";
+    case "uncertain":
+      return "The fill could not be confirmed and will not be repeated. Take over to inspect the website before continuing.";
+    case "failed":
+      return "The form changed or could not be filled. Take over, or ask the agent to inspect it again.";
+    case "expired":
+      return "Private entry expired. Take over, or ask the agent for a fresh request.";
+    case "cancelled":
+      return "Private entry skipped. You can take over or continue the conversation.";
+    case "pending":
+      return null;
+  }
+};
+
 const HandoffCard = ({ report }: { report: Report }) => {
   const snapshot = useAtomValue(snapshotAtom);
   const turns = useAtomValue(chatTurnsAtom);
@@ -152,6 +263,11 @@ const HandoffCard = ({ report }: { report: Report }) => {
     AsyncResult.isSuccess(snapshot) &&
     remote?.ready === true &&
     remote.chatId === (report.input.chatId ?? report.input.id);
+
+  const entry = remote?.privateEntry?.runId === report.input.id ? remote.privateEntry : null;
+
+  const pendingEntry =
+    latest && connected && (entry?.status === "pending" || entry?.status === "expired");
 
   const humanControl = connected && remote.viewMode === "control";
   const busy = watching || remote?.busy === true || control.waiting;
@@ -173,7 +289,11 @@ const HandoffCard = ({ report }: { report: Report }) => {
         </div>
       </div>
       <p>{report.handoff.instructions}</p>
-      {latest && connected && (
+      {pendingEntry && <PrivateEntryForm key={entry.id} entry={entry} busy={busy} />}
+      {latest && entry && !pendingEntry && (
+        <p className="handoff-hint">{privateEntryMessage(entry)}</p>
+      )}
+      {latest && connected && !pendingEntry && (
         <button
           type="button"
           className="primary"
@@ -188,17 +308,19 @@ const HandoffCard = ({ report }: { report: Report }) => {
           {view.waiting ? "Connecting…" : humanControl ? "Return to agent" : "Take over"}
         </button>
       )}
-      <p className="handoff-hint">
-        {!latest
-          ? "See the latest message to continue."
-          : !connected
-            ? remote?.ready === false
-              ? "This browser session has ended. Start a new chat to continue."
-              : "Checking the browser connection…"
-            : busy
-              ? "Available when the agent finishes this message."
-              : "Use the browser, then return control and send a message to continue."}
-      </p>
+      {!pendingEntry && (!latest || !connected || entry === null || busy) && (
+        <p className="handoff-hint">
+          {!latest
+            ? "See the latest message to continue."
+            : !connected
+              ? remote?.ready === false
+                ? "This browser session has ended. Start a new chat to continue."
+                : "Checking the browser connection…"
+              : busy
+                ? "Available when the agent finishes this message."
+                : "Use the browser, then return control and send a message to continue."}
+        </p>
+      )}
       {failure && (
         <p className="chat-status bad" role="alert">
           {failure}
@@ -601,6 +723,10 @@ export const App = () => {
   const isStore = scenario === "coffee";
   const chatEnded = chatTurns.length > 0 && chatId === null && !busy;
   const humanControl = remote?.viewMode === "control";
+
+  const privateEntryPending =
+    remote?.privateEntry?.status === "pending" || remote?.privateEntry?.status === "expired";
+
   const conversationId = report?.input.chatId ?? report?.input.id ?? chatId;
 
   const reportsById = new Map(
@@ -667,6 +793,7 @@ export const App = () => {
   const missingNeeds = needs.filter((need) => !need.ok);
 
   const canRun =
+    !privateEntryPending &&
     !humanControl &&
     !viewResult.waiting &&
     connected &&
@@ -1218,13 +1345,15 @@ export const App = () => {
                 />
                 <div className="composer-actions">
                   <span>
-                    {humanControl
-                      ? "You control the browser. Return to the agent when finished."
-                      : chatEnded
-                        ? "This chat ended. Choose New chat to start again."
-                        : busy
-                          ? "Working in the browser. You can draft your next message."
-                          : "Enter to send · Shift+Enter for a new line"}
+                    {privateEntryPending
+                      ? "Complete or skip private entry to continue."
+                      : humanControl
+                        ? "You control the browser. Return to the agent when finished."
+                        : chatEnded
+                          ? "This chat ended. Choose New chat to start again."
+                          : busy
+                            ? "Working in the browser. You can draft your next message."
+                            : "Enter to send · Shift+Enter for a new line"}
                   </span>
                   <button className="primary" type="submit" disabled={!canRun}>
                     <Send size={15} /> Send

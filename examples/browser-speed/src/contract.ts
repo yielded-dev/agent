@@ -1,3 +1,9 @@
+import {
+  CredentialForm,
+  CredentialTarget,
+  CredentialFillResult,
+  CredentialFillError,
+} from "@yielded/agent-platform-cloudflare/browser-credentials";
 import { PageCaptureEngine } from "@yielded/agent/page-capture";
 import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
@@ -141,10 +147,43 @@ export const ModelOutput = Schema.Struct({
 
 export type ModelOutput = typeof ModelOutput.Type;
 
+/** Private entry supports native username/password forms; other steps use manual takeover. */
+export const LoginForm = Schema.Struct({
+  kind: Schema.Literal("login"),
+  frame: CredentialForm.fields.frame,
+  fields: Schema.Array(
+    Schema.Struct({
+      selector: Schema.NonEmptyString.check(Schema.isMaxLength(2048)),
+      role: Schema.Literals(["username", "password"]),
+    }),
+  ).check(Schema.isMinLength(2), Schema.isMaxLength(2)),
+});
+
+export const PrivateEntry = Schema.Struct({
+  id: Schema.String.check(Schema.isUUID()),
+  runId: Schema.String.check(Schema.isUUID()),
+  target: CredentialTarget,
+  expiresAt: Schema.Finite,
+  status: Schema.Literals(["pending", "filled", "cancelled", "expired", "failed", "uncertain"]),
+  outcome: Schema.optionalKey(Schema.Union([CredentialFillResult, CredentialFillError])),
+});
+
+export type PrivateEntry = typeof PrivateEntry.Type;
+
+// JSON encoding is intentional only at this private transport boundary.
+const EntryText = Schema.Redacted(Schema.NonEmptyString.check(Schema.isMaxLength(1024)));
+
+export const PrivateEntrySubmission = Schema.Struct({
+  id: PrivateEntry.fields.id,
+  username: EntryText,
+  password: EntryText,
+});
+
 /** A request for the user to act in the retained browser, never an automatic control transfer. */
 export const BrowserHandoff = Schema.Struct({
   title: Schema.NonEmptyString.check(Schema.isMaxLength(80)),
   instructions: Schema.NonEmptyString.check(Schema.isMaxLength(400)),
+  privateEntry: Schema.optionalKey(Schema.NullOr(LoginForm)),
 });
 
 export const Report = Schema.Struct({
@@ -160,6 +199,7 @@ export const Report = Schema.Struct({
   status: Schema.Literals(["running", "passed", "failed", "unverified", "cancelled"]),
   message: Schema.String,
   handoff: Schema.optionalKey(BrowserHandoff),
+  privateEntry: Schema.optionalKey(PrivateEntry),
   spans: Schema.Array(Span),
   /** Bounded across the whole run. Absent on reports saved before live output was captured. */
   modelOutput: Schema.optionalKey(
@@ -221,6 +261,7 @@ export const Snapshot = Schema.Struct({
   public: Schema.Boolean,
   chatId: Schema.NullOr(Schema.String),
   viewMode: ViewMode,
+  privateEntry: Schema.NullOr(PrivateEntry),
   report: Schema.NullOr(Report),
   liveViewUrl: Schema.NullOr(Schema.String),
   image: Schema.NullOr(Schema.String),
@@ -279,6 +320,18 @@ export const LabApi = HttpApi.make("BrowserSpeedLab").add(
       headers,
       payload: Schema.Struct({ mode: ViewMode }),
       success: Schema.Void,
+      error: LabError,
+    }),
+    HttpApiEndpoint.post("privateEntry", "/api/private-entry", {
+      headers,
+      payload: PrivateEntrySubmission,
+      success: PrivateEntry,
+      error: LabError,
+    }),
+    HttpApiEndpoint.post("cancelPrivateEntry", "/api/private-entry/cancel", {
+      headers,
+      payload: Schema.Struct({ id: PrivateEntry.fields.id }),
+      success: PrivateEntry,
       error: LabError,
     }),
     HttpApiEndpoint.get("reports", "/api/reports", {

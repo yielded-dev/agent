@@ -35,6 +35,7 @@ const noTraceStorage = TraceStore.of({
       LabError.make({ code: "storage", message: "No diagnostic storage in lifecycle fixture" }),
     ),
   control: () => Effect.void,
+  entry: () => Effect.void,
 });
 
 expectTypeOf<Effect.Error<ReturnType<typeof executeTask>>>().toEqualTypeOf<LabError>();
