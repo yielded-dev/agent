@@ -74,7 +74,7 @@ import {
 import type { RunStorage } from "@yielded/agent/run-storage";
 import { layer as runStorageLayer, StorageOwner } from "@yielded/agent/run-storage";
 import { SettlementPublisher, validatePublication } from "@yielded/agent/settlement-publisher";
-import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
+import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import {
   LedgerError,
   SubmissionLedger,

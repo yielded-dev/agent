@@ -91,6 +91,7 @@
     "./semantic-memory-revalidation": "./src/core/SemanticMemoryRevalidation.ts",
     "./settlement-publisher": "./src/durable/SettlementPublisher.ts",
     "./sql-memory-store": "./src/durable/SqlMemoryStore.ts",
+    "./sql-storage-owner": "./src/durable/SqlStorageOwner.ts",
     "./subagent": "./src/capabilities/Subagent.ts",
     "./subagent-contract": "./src/core/SubagentContract.ts",
     "./subagent-host": "./src/engine/SubagentHost.ts",

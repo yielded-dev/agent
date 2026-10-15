@@ -8,7 +8,7 @@ import {
   lifecyclePublicationBatchMaxFacts,
   type LifecyclePublicationStorage,
 } from "@yielded/agent/lifecycle-publication";
-import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
+import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import { Array, Cause, Context, Crypto, DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 

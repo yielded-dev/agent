@@ -1,6 +1,6 @@
 import { canonicalJson, digestCanonicalJson } from "@yielded/agent/digest";
 import { Digest, RecordJson, type CanonicalRecordPayload } from "@yielded/agent/records";
-import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
+import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import { PreparedAppend, ThreadStoreError, type AppendRequest } from "@yielded/agent/thread-store";
 import { Crypto, Effect, Result, Schema } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";

@@ -12,7 +12,7 @@ import {
   ObservationOffset,
 } from "@yielded/agent/records";
 import { StorageOwner } from "@yielded/agent/run-storage";
-import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
+import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import { MAX_ARCHIVE_RANGE_PAGE } from "@yielded/agent/thread-archive-range";
 import { ThreadImport } from "@yielded/agent/thread-import";
 import {

@@ -19,7 +19,7 @@ import {
   validateMessageDelivery,
 } from "@yielded/agent/message-delivery";
 import { ScheduleInstant } from "@yielded/agent/schedule";
-import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
+import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import { IdempotencyKey } from "@yielded/agent/submission-ledger";
 import { makeTransferFactCheck } from "@yielded/agent/thread-store";
 import { Cause, DateTime, Effect, Schema } from "effect";

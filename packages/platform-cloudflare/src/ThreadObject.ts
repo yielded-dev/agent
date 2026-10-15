@@ -897,7 +897,11 @@ export const decodeAdminExplainRequest = Schema.decodeUnknownEffect(AdminExplain
 export const decodeAdminVerifyRequest = Schema.decodeUnknownEffect(AdminVerifyRequest);
 export const decodeRetryCommand = Schema.decodeUnknownEffect(RetryCommand);
 export const decodeObligationThresholds = Schema.decodeUnknownEffect(ObligationThresholds);
-export const encodeAdminResponse = Schema.encodeEffect(AdminResponse);
+
+export const encodeAdminResponse: ReturnType<typeof Schema.encodeEffect<typeof AdminResponse>> = (
+  ...args
+) => Schema.encodeEffect(AdminResponse)(...args);
+
 export const decodeAdminResponse = Schema.decodeUnknownEffect(AdminResponse);
 
 /** Fold one admin endpoint's typed failures into the uniform `AdminResponse` envelope. */

@@ -23,7 +23,7 @@ import {
   LifecyclePublicationError,
 } from "@yielded/agent/lifecycle-publication";
 import { BatchId, CanonicalRecord, CanonicalSequence } from "@yielded/agent/records";
-import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
+import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import {
   type AppendConflict,
   AppendResult,

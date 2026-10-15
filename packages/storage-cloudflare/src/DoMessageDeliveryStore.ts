@@ -5,7 +5,7 @@ import {
   MessageDeliveryStore,
   type MessageDeliveryStoreLimits,
 } from "@yielded/agent/message-delivery";
-import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
+import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import { Effect, Layer } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 

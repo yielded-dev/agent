@@ -27,7 +27,7 @@ import {
   workerOriginRecordId,
   toolCallSettledRecordId,
 } from "@yielded/agent/run-journal";
-import { SqlStorageOwner } from "@yielded/agent/sql-memory-store";
+import { SqlStorageOwner } from "@yielded/agent/sql-storage-owner";
 import {
   submissionAbortRecordId,
   submissionInputRecordId,
