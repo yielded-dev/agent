@@ -165,11 +165,6 @@ const validateBatchShape = Schema.decodeUnknownSync(
   }),
 );
 
-const ContinuationBytes = Schema.Struct({
-  turnBytes: RunContinuation.fields.turnBytes,
-  terminalBytes: RunContinuation.fields.terminalBytes,
-});
-
 const decodeExecutionFrontier = Schema.decodeUnknownEffect(
   Schema.Struct({
     canonicalRecords: ExecutionCheckpoint.fields.canonicalRecords,
@@ -1497,29 +1492,30 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         terminalUsageBytes,
       } = next;
 
-      let continuation = yield* RunContinuation.makeEffect({
-        version: 1,
-        runId,
-        submissionId,
-        revision: (previous?.continuation.revision ?? 0) + 1,
-        recordCount: (previous?.continuation.recordCount ?? originalCount) + facts.length,
-        recordBytes: (previous?.continuation.recordBytes ?? initialBytes) + factBytes,
-        turn,
-        turnBytes: turnBase,
-        terminalUsageBytes,
-        terminalBytes: next.terminalBytes,
-        terminalRecords: next.terminalRecords,
-        originalInput,
-        ...(savedContext === undefined ? {} : { savedContext }),
-        ...(latestResponse === undefined ? {} : { latestResponse }),
-        ...(terminal === undefined ? {} : { terminal }),
-        lastFact: EvidenceReference.make({ recordId: last.recordId }),
-        position,
-        accounting,
-      }).pipe(
-        Effect.mapError(() =>
-          capacityFailure("Canonical continuation exceeds its protocol bounds"),
-        ),
+      // Facts and prior state are already checked. Validate the complete candidate at
+      // record capture, after byte accounting; preflight has its own boundary below.
+      let continuation = RunContinuation.make(
+        {
+          version: 1,
+          runId,
+          submissionId,
+          revision: (previous?.continuation.revision ?? 0) + 1,
+          recordCount: (previous?.continuation.recordCount ?? originalCount) + facts.length,
+          recordBytes: (previous?.continuation.recordBytes ?? initialBytes) + factBytes,
+          turn,
+          turnBytes: turnBase,
+          terminalUsageBytes,
+          terminalBytes: next.terminalBytes,
+          terminalRecords: next.terminalRecords,
+          originalInput,
+          ...(savedContext === undefined ? {} : { savedContext }),
+          ...(latestResponse === undefined ? {} : { latestResponse }),
+          ...(terminal === undefined ? {} : { terminal }),
+          lastFact: EvidenceReference.make({ recordId: last.recordId }),
+          position,
+          accounting,
+        },
+        { disableChecks: true },
       );
 
       const header = {
@@ -1530,7 +1526,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         deploymentId: last.deploymentId,
       };
 
-      // The validated continuation fields are JSON; only the envelope DateTime needs encoding.
+      // Continuation fields are JSON; only the envelope DateTime needs encoding.
       // Key order does not change byte width. Measure without capturing a provisional record,
       // then compare against the final Schema encoding before accepting its accounting.
       const provisional = {
@@ -1563,18 +1559,9 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         terminalBytes = nextTerminalBytes;
       }
 
-      const checkedBytes = yield* ContinuationBytes.makeEffect({
-        turnBytes,
-        terminalBytes,
-      }).pipe(
-        Effect.mapError(() =>
-          capacityFailure("Turn exceeds its incremental canonical byte budget"),
-        ),
-      );
-
-      // Every other field was checked above; byte accounting changes only these counters.
+      // Byte accounting changes only these counters; the full candidate is checked below.
       continuation = RunContinuation.make(
-        { ...continuation, ...checkedBytes },
+        { ...continuation, turnBytes, terminalBytes },
         { disableChecks: true },
       );
 
@@ -1595,8 +1582,13 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         previous?.checkpoint !== undefined &&
         facts.every(({ payload }) => payload._tag === "ModelResponseRecorded")
       ) {
-        // The payload and header are validated, and operational facts are unchanged.
-        // Dispatch needs their capacity proof; only a commit needs checkpoint wire.
+        // Preflight does not capture a record. Check its complete payload before
+        // dispatch; a commit receives the same proof from record capture below.
+        continuation = yield* RunContinuation.makeEffect({ ...continuation }).pipe(
+          Effect.mapError(() =>
+            capacityFailure("Canonical continuation exceeds its protocol bounds"),
+          ),
+        );
         yield* decodeExecutionFrontier({
           canonicalRecords,
           throughSequence: after + ownedRecords.filter((fact) => !isOperationalRecord(fact)).length,
@@ -1623,7 +1615,11 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
 
       const record = yield* Effect.fromResult(captureRecord(proposedRecord)).pipe(
         Effect.map((record) => record.canonical),
-        Effect.mapError((cause) => failure("Cannot capture canonical progress facts", cause)),
+        Effect.mapError((cause) =>
+          Schema.isSchemaError(cause.cause)
+            ? capacityFailure("Canonical continuation exceeds its protocol bounds")
+            : failure("Cannot capture canonical progress facts", cause),
+        ),
       );
 
       if (!isExecutionProgressRecord(record))
@@ -1679,7 +1675,7 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
       );
 
       const state = {
-        continuation,
+        continuation: record.payload,
         record,
         checkpoint,
         ...(response === undefined ? {} : { response }),
