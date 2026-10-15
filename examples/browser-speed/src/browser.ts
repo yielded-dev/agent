@@ -5,7 +5,7 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { Tool, Toolkit } from "effect/ai";
 import type { Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
-import { LabError, defaultChallenge, type RunInput } from "./contract.ts";
+import { LabError, browserViewport, defaultChallenge, type RunInput } from "./contract.ts";
 import { Trace } from "./telemetry.ts";
 
 export const TaskResult = Schema.Struct({ message: Schema.String });
@@ -13,7 +13,7 @@ export const TaskResult = Schema.Struct({ message: Schema.String });
 export const completionTools = Toolkit.make(
   Tool.make("finish", {
     description:
-      "Reply with findings supported by observed evidence and source URLs. Before reporting an action complete, inspect the resulting page or cart and verify it satisfies the user's explicit requirements. Explain any unmet requirement. Ask a question only when information or authorization is missing. The host checks Wikipedia arrival. Other website results are not independently verified.",
+      "Reply with findings supported by observed evidence and source URLs. Before reporting an action complete, inspect the resulting page or cart and verify it satisfies the user's explicit requirements. Leave that result visible in the browser; when required information is missing, scroll the missing field into view before calling this tool. Explain any unmet requirement. Ask a question only when information or authorization is missing. The host checks Wikipedia arrival. Other website results are not independently verified.",
     parameters: TaskResult,
     success: TaskResult,
     failure: LabError,
@@ -80,7 +80,7 @@ export const makeBrowser = Effect.fnUntraced(function* (
         "setup",
         "Open starting page",
         native(async (page) => {
-          await page.setViewport({ width: 1100, height: 740 });
+          await page.setViewport(browserViewport);
           await page.goto(
             input.scenario === "chat"
               ? (input.url ?? "about:blank")

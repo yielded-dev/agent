@@ -4,6 +4,7 @@ import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 
 export const BrowserEngine = PageCaptureEngine;
 export const browserCommandTimeoutMillis = 60_000;
+export const browserViewport = { width: 1100, height: 740 };
 
 export const Scenario = Schema.Literals(["chat", "wikipedia", "coffee"]);
 

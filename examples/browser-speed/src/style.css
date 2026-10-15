@@ -747,6 +747,18 @@ input[type="radio"] {
   background-size: 32px 32px;
 }
 
+.live-browser {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.live-browser iframe {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+}
+
 .screen-empty p {
   max-width: 30rem;
   margin: 0;

@@ -13,6 +13,10 @@ The live view stays connected between messages. **Take over** enables interactio
 agent finishes a message; **Return to agent** restores viewing and enables chat again.
 Tell the agent what changed when you send the next message. **Reconnect live view** obtains
 a fresh viewing connection without starting another agent run.
+The viewer scales the full browser viewport to fit its panel. The agent is instructed to scroll
+controls into view before interacting, fill forms one visible section at a time, and leave
+the relevant result or missing field on screen. This is model guidance, not a host-enforced
+visibility guarantee.
 Chat runs one message at a time; model and browser comparisons remain in the demos.
 If a response connection drops, chat keeps checking that run's status and restores its final
 reply and browser when confirmed. Stop ends this wait; the message is never resubmitted.

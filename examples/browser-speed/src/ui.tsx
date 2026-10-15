@@ -24,6 +24,7 @@ import { Streamdown } from "streamdown";
 import {
   ArticleTitle,
   BrowserEngine,
+  browserViewport,
   defaultChallenge,
   coffeeDemo,
   ModelId,
@@ -255,6 +256,49 @@ const seconds = (value: number | null | undefined) =>
 const benchmarkReportUrl: unknown = import.meta.env.VITE_BROWSER_BENCHMARK_REPORT_URL;
 const docsUrl = "https://yielded.dev/agent/guide/browser/";
 const sourceUrl = "https://github.com/yielded-dev/agent/tree/main/examples/browser-speed";
+
+// Cloudflare's viewer crops its canvas in small iframes. Give it the full browser
+// viewport plus room for its toolbar/padding, then fit the whole iframe locally.
+const viewerWidth = browserViewport.width + 32;
+const viewerHeight = browserViewport.height + 96;
+
+const LiveBrowser = ({ url, interactive }: { url: string; interactive: boolean }) => {
+  const container = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0);
+
+  useEffect(() => {
+    const node = container.current;
+
+    if (node === null) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry === undefined) return;
+      setScale(
+        Math.min(entry.contentRect.width / viewerWidth, entry.contentRect.height / viewerHeight),
+      );
+    });
+
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div className="live-browser" ref={container}>
+      <iframe
+        key={url}
+        title={interactive ? "Control the browser" : "Read-only view of the agent’s browser"}
+        src={url}
+        referrerPolicy="no-referrer"
+        style={{
+          width: viewerWidth,
+          height: viewerHeight,
+          transform: `translate(-50%, -50%) scale(${scale})`,
+        }}
+      />
+    </div>
+  );
+};
 
 const phaseNames: Record<Phase, string> = {
   setup: "Setup",
@@ -1184,14 +1228,7 @@ export const App = () => {
               </div>
               <div className="screen">
                 {live ? (
-                  <iframe
-                    key={live}
-                    title={
-                      humanControl ? "Control the browser" : "Read-only view of the agent’s browser"
-                    }
-                    src={live}
-                    referrerPolicy="no-referrer"
-                  />
+                  <LiveBrowser url={live} interactive={humanControl} />
                 ) : captured ? (
                   <img src={captured} alt="Latest screenshot of the agent’s browser" />
                 ) : (
