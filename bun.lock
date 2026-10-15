@@ -116,7 +116,7 @@
     "examples/shared": {
       "name": "@yielded/agent-example-auth",
       "dependencies": {
-        "@yielded/auth": "0.1.0-beta.41",
+        "@yielded/auth": "catalog:",
         "@yielded/crypto": "0.1.0-beta.41",
         "@yielded/jose": "0.1.0-beta.41",
         "effect": "catalog:",
@@ -160,6 +160,7 @@
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
         "@vitejs/plugin-react": "catalog:",
+        "@yielded/auth": "catalog:",
         "esbuild": "catalog:",
         "miniflare": "catalog:",
         "tailwindcss": "catalog:",
@@ -665,6 +666,7 @@
     "@types/react-dom": "19.2.3",
     "@types/scheduler": "0.26.0",
     "@vitejs/plugin-react": "6.0.4",
+    "@yielded/auth": "0.1.0-beta.41",
     "@yielded/starlight-theme": "0.2.2",
     "ai": "7.0.42",
     "alchemy": "2.0.0-beta.80",

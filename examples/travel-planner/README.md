@@ -4,9 +4,9 @@ An Effect Agent example for planning trips through chat or voice, researching de
 with background agents, saving itineraries, and building standalone trip websites.
 
 The hosted planner lives at <https://agent.yielded.dev/travel/>. The Yielded Site
-repository owns its deployment, sign-in gateway, identity mapping, permissions and
-administration. This example consumes signed access tokens; it does not create
-accounts or maintain a grant list. The browser-use example consumes the same
+repository owns its sign-in gateway, identity mapping, permissions and administration.
+This repository deploys the planner as an independent Worker. It consumes signed
+access tokens; it does not create accounts or maintain a grant list. The browser-use example consumes the same
 [shared integration](../shared/src/contract.ts) independently.
 
 It uses Cloudflare:
@@ -20,7 +20,8 @@ It uses Cloudflare:
 
 The app consumes the repository's Effect Agent workspace packages and uses Effect Atom for client state.
 [deployment.ts](deployment.ts) exports the configurable Cloudflare composition;
-[alchemy.run.ts](alchemy.run.ts) is its local entrypoint.
+[alchemy.run.ts](alchemy.run.ts) is its local entrypoint and
+[alchemy.production.ts](alchemy.production.ts) configures the hosted Worker.
 
 New trip sites fork an immutable starter identified by its source contents. Updating the
 starter affects new sites; existing app repositories and saved versions remain unchanged.
@@ -78,8 +79,23 @@ For the full application, configure [.env.example](.env.example) with your own
 auth host and Cloudflare credentials, then run
 `vp run -F @yielded/agent-example-travel-planner dev`. The host owns account and
 permission policy; the example requires only its verification configuration,
-private permission-check credential and persistent BYOK encryption key. Hosted
-names, routes and deployment automation belong to the deployment repository.
+private permission-check credential and persistent BYOK encryption key.
+
+Deploy the hosted planner independently with:
+
+```sh
+vp run -F @yielded/agent-example-travel-planner plan:production
+vp run -F @yielded/agent-example-travel-planner deploy:production --yes
+```
+
+Supply `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
+`AUTH_YIELDED_CLIENT_SECRET`, the existing `BYOK_ENCRYPTION_KEY`, and optionally
+`SERVER_OPENAI_KEY`. The token needs access to Workers, containers and the existing
+Alchemy state store. Keep the production stack, Worker and storage identities stable.
+The `Deploy travel planner` workflow runs on relevant changes to `main` or manual
+dispatch. Its secrets are the two Cloudflare values above,
+`TRAVEL_PLANNER_YIELDED_CLIENT_SECRET`, `TRAVEL_PLANNER_BYOK_ENCRYPTION_KEY`
+and `OPENAI_API_KEY`. The `/auth/*` route belongs to Site.
 
 The conversation loads in stages. `GetPlanner` returns messages, trips, and the latest
 source-record overview for up to eight scouts and the trip's editor without reading child

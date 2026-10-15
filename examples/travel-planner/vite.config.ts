@@ -45,6 +45,14 @@ export default defineConfig({
         dependsOn: ["build"],
         cache: false,
       },
+      "plan:production": {
+        cache: false,
+        command: "vp exec alchemy plan alchemy.production.ts --stage production",
+      },
+      "deploy:production": {
+        cache: false,
+        command: "vp exec alchemy deploy alchemy.production.ts --stage production",
+      },
       deploy: {
         cache: false,
         command: "vp exec alchemy deploy alchemy.run.ts --stage production",
@@ -92,6 +100,7 @@ export default defineConfig({
             "preview/**",
             "tsconfig.json",
             "alchemy.run.ts",
+            "alchemy.production.ts",
             "deployment.ts",
             "!*.tsbuildinfo",
           ],

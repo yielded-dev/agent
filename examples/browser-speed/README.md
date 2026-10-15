@@ -209,9 +209,21 @@ vp run -F @yielded/agent-example-browser-speed deploy
 Preview URLs are disabled. If using a custom domain instead, disable `workers_dev` and protect
 that hostname too; a custom-domain Access policy does not protect `workers.dev`.
 
-The hosted browser-use deployment is composed in the Yielded Site repository.
-It consumes the shared authentication integration directly, without a planner
-binding. Configure `AUTH_ISSUER`, `AUTH_RESOURCE`, `AUTH_JWKS_URL`,
+[wrangler.production.jsonc](wrangler.production.jsonc) configures the hosted
+`yielded-agent-browser-use` Worker, its existing `LAB` object and
+`yielded-browser-use-traces` bucket. It releases independently through the
+`Deploy browser-use` workflow on relevant changes to `main` or manual dispatch.
+The workflow uses `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and
+`TRAVEL_PLANNER_YIELDED_CLIENT_SECRET`. It updates only the Site access secret;
+existing funded-model keys remain in the Worker.
+
+```sh
+vp run -F @yielded/agent-example-browser-speed plan:production
+vp run -F @yielded/agent-example-browser-speed deploy:production
+```
+
+The production configuration uses Site's sign-in gateway and the shared
+authentication integration, without a planner binding. Configure `AUTH_ISSUER`, `AUTH_RESOURCE`, `AUTH_JWKS_URL`,
 `AUTH_REQUIRED_SCOPE` and `AUTH_HOSTED_MODEL_SCOPE` for your auth host. The
 `__Host-yielded-access` cookie supplies a signed identity and scopes; a private
 issuer check authorizes each hosted run using `AUTH_YIELDED_CLIENT_SECRET`.

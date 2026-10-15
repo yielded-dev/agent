@@ -1,0 +1,77 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "yielded-agent-browser-use",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "agent.yielded.dev/",
+      "zone_name": "yielded.dev",
+    },
+    {
+      "pattern": "agent.yielded.dev/browser-use*",
+      "zone_name": "yielded.dev",
+    },
+  ],
+  "assets": {
+    "directory": "dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/browser-use/api/*"],
+  },
+  "browser": {
+    "binding": "BROWSER",
+    "remote": true,
+  },
+  "worker_loaders": [
+    {
+      "binding": "LOADER",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "TRACES",
+      "bucket_name": "yielded-browser-use-traces",
+    },
+  ],
+  "version_metadata": {
+    "binding": "VERSION",
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "LAB",
+        "class_name": "BrowserLab",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["BrowserLab"],
+    },
+  ],
+  "ratelimits": [
+    {
+      "name": "RUN_LIMIT",
+      "namespace_id": "4401",
+      "simple": {
+        "limit": 6,
+        "period": 60,
+      },
+    },
+  ],
+  "observability": {
+    "enabled": false,
+  },
+  "vars": {
+    "AUTH_ISSUER": "https://auth.yielded.dev",
+    "AUTH_RESOURCE": "https://agent.yielded.dev",
+    "AUTH_JWKS_URL": "https://auth.yielded.dev/oauth/yielded/jwks",
+    "AUTH_REQUIRED_SCOPE": "agent:browser-use",
+    "AUTH_HOSTED_MODEL_SCOPE": "agent:hosted-model",
+    "LAB_PUBLIC": "true",
+  },
+}

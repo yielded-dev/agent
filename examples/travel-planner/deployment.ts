@@ -1,4 +1,5 @@
 import type { Sandbox } from "@cloudflare/sandbox";
+import type { OAuthScope } from "@yielded/auth";
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
 import { Config, Effect, Layer, Redacted, Schema } from "effect";
@@ -25,6 +26,13 @@ export interface PlannerDeployment {
     readonly zoneId?: string;
   }>;
   readonly workersDev?: boolean;
+  readonly auth?: {
+    readonly issuer: string;
+    readonly resource: string;
+    readonly jwksUrl: string;
+    readonly requiredScope: OAuthScope.OAuthScope;
+    readonly hostedModelScope: OAuthScope.OAuthScope;
+  };
 }
 
 /** The caller owns hosted names, routes and policy. Logical resource IDs preserve stored data. */
@@ -76,11 +84,13 @@ export const plannerStack = (deployment: PlannerDeployment) =>
             className: "PlannerThreadV3",
           }),
           AUTH_V2: Cloudflare.DurableObject("AuthV2", { className: "PlannerAuthV2" }),
-          AUTH_ISSUER: Config.NonEmptyString("AUTH_ISSUER"),
-          AUTH_RESOURCE: Config.NonEmptyString("AUTH_RESOURCE"),
-          AUTH_JWKS_URL: Config.NonEmptyString("AUTH_JWKS_URL"),
-          AUTH_REQUIRED_SCOPE: Config.NonEmptyString("AUTH_REQUIRED_SCOPE"),
-          AUTH_HOSTED_MODEL_SCOPE: Config.NonEmptyString("AUTH_HOSTED_MODEL_SCOPE"),
+          AUTH_ISSUER: deployment.auth?.issuer ?? Config.NonEmptyString("AUTH_ISSUER"),
+          AUTH_RESOURCE: deployment.auth?.resource ?? Config.NonEmptyString("AUTH_RESOURCE"),
+          AUTH_JWKS_URL: deployment.auth?.jwksUrl ?? Config.NonEmptyString("AUTH_JWKS_URL"),
+          AUTH_REQUIRED_SCOPE:
+            deployment.auth?.requiredScope ?? Config.NonEmptyString("AUTH_REQUIRED_SCOPE"),
+          AUTH_HOSTED_MODEL_SCOPE:
+            deployment.auth?.hostedModelScope ?? Config.NonEmptyString("AUTH_HOSTED_MODEL_SCOPE"),
           AUTH_YIELDED_CLIENT_SECRET: Config.schema(
             Schema.Redacted(Schema.NonEmptyString),
             "AUTH_YIELDED_CLIENT_SECRET",

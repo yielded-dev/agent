@@ -1,0 +1,52 @@
+name: Deploy travel planner
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/travel-planner/**"
+      - "examples/shared/**"
+      - "packages/**"
+      - ".github/workflows/deploy-travel-planner.yml"
+      - ".github/actions/**"
+      - "scripts/**"
+      - "patches/**"
+      - "bun.lock"
+      - "package.json"
+      - "bunfig.toml"
+      - "vite.config.ts"
+      - "tsconfig*.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-travel-planner-production
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  VP_GIT_HOOKS: "0"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-ci
+      - name: Check example
+        run: vp run -F @yielded/agent-example-travel-planner check
+      - name: Test example
+        run: vp run -F @yielded/agent-example-travel-planner test
+      - name: Deploy travel planner
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AUTH_YIELDED_CLIENT_SECRET: ${{ secrets.TRAVEL_PLANNER_YIELDED_CLIENT_SECRET }}
+          BYOK_ENCRYPTION_KEY: ${{ secrets.TRAVEL_PLANNER_BYOK_ENCRYPTION_KEY }}
+          SERVER_OPENAI_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: vp run -F @yielded/agent-example-travel-planner deploy:production --yes
