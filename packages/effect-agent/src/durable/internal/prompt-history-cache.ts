@@ -188,13 +188,11 @@ const appendedBytes = (
   suffix: { readonly bytes: number; readonly prompt: Prompt.Prompt },
 ) => prefix + suffix.bytes + 8 * suffix.prompt.content.length;
 
-/** The ordinary codec remains the oracle on canonical reconstruction and explicit verify. */
+/** Reuse only the original owned message array supplied to the engine. The ordinary codec
+ * remains the oracle for a different history, canonical reconstruction and explicit verify. */
 export const digestPromptHistory = (prompt: Prompt.Prompt, history: PromptHistory | undefined) => {
   if (history === undefined) return digestRunHistory(prompt);
-  if (
-    prompt.content.length !== history.prompt.content.length ||
-    prompt.content.some((message, index) => message !== history.prompt.content[index])
-  ) {
+  if (prompt.content !== history.prompt.content) {
     history.encoded = undefined;
     history.bytes = undefined;
     history.digest = undefined;

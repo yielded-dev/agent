@@ -5086,6 +5086,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
               priorContext,
             );
 
+      const historyBefore =
+        pending === undefined ? journal.historyBefore : resumeProjection.historyBefore;
+
       if (
         initialJournal !== undefined &&
         (journal.committedTurns !== 0 ||
@@ -5849,12 +5852,8 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 ),
               );
 
-              const history = Prompt.fromMessages(
-                initialHistory.content.slice(0, priorHistoryLength),
-              );
-
               const historyDigest = yield* withCrypto(
-                digestPromptHistory(history, initialJournal?.history),
+                digestPromptHistory(historyBefore, initialJournal?.history),
               );
 
               const retained = yield* Effect.forEach(
@@ -7700,7 +7699,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       > = {
         threadId: submission.threadId,
         runId,
-        history: pending === undefined ? journal.historyBefore : resumeProjection.historyBefore,
+        history: historyBefore,
         input,
         // Ready corrections share the next model Turn, bounded by MAX_JOIN_DRAIN.
         commandDrainPolicy: "all",
