@@ -55,7 +55,7 @@ export class HostedAccounts extends Context.Service<
           const session = yield* authenticateRequest(request, env);
 
           const funded =
-            session.scopes.includes(env.AUTH_HOSTED_MODEL_SCOPE ?? "") &&
+            session.scopes.some((scope) => scope === env.AUTH_HOSTED_MODEL_SCOPE) &&
             (yield* hostedModelAccess(session.accountId, env));
 
           return { displayName: session.displayName, funded } satisfies Account;
