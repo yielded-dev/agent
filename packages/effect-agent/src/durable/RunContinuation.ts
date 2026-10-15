@@ -862,7 +862,8 @@ const advanceFacts = Effect.fnUntraced(function* (
       if (
         result === undefined ||
         !("isFailure" in result) ||
-        ("budgetRejected" in result && result.budgetRejected === true)
+        // Only canonical application settlements carry budget-rejection authority.
+        (!call.providerExecuted && "budgetRejected" in result && result.budgetRejected === true)
       )
         continue;
       accounting.consecutiveToolFailures = result.isFailure
