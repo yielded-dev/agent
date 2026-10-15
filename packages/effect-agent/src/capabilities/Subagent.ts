@@ -1,4 +1,16 @@
-import { Cause, Clock, Duration, Effect, Exit, Layer, Option, Ref, Schema, Scope } from "effect";
+import {
+  Cause,
+  Clock,
+  DateTime,
+  Duration,
+  Effect,
+  Exit,
+  Layer,
+  Option,
+  Ref,
+  Schema,
+  Scope,
+} from "effect";
 import { Tool, Toolkit } from "effect/ai";
 
 import {
@@ -8,6 +20,7 @@ import {
   type ModelServices,
   type RunDispositionDeclaration,
 } from "../core/Agent.ts";
+import { AgentPolicyError } from "../core/AgentError.ts";
 import type { AgentPolicy } from "../core/AgentPolicy.ts";
 import { type AgentId, DelegationId, ToolCallId } from "../core/Identifiers.ts";
 import { IdGenerator } from "../core/IdGenerator.ts";
@@ -1018,6 +1031,9 @@ const boundedEventText = (text: string): string =>
 const ErrorMessage = Schema.Struct({ message: Schema.String });
 const ErrorTag = Schema.Struct({ _tag: Schema.NonEmptyString });
 
+const isDurationPolicyError = (error: unknown): boolean =>
+  Schema.is(AgentPolicyError)(error) && error.limit === "duration";
+
 const errorMessageOf = (error: unknown): string =>
   Option.match(Schema.decodeUnknownOption(ErrorMessage)(error), {
     onNone: () => String(error),
@@ -1794,8 +1810,40 @@ export function layer<
 
       const toolCallAllowance = childToolCallAllowance(parameters, policy, childPolicy);
 
+      // Preparation and waiting for a concurrency permit spend the parent's time too.
+      // Keep the reservation unchanged; settlement refunds unused execution duration.
+      const childStartedAt = yield* Clock.currentTimeMillis;
+
+      const durationMillis = Math.max(
+        0,
+        Math.min(
+          allocation.durationMillis,
+          Math.floor(
+            DateTime.toEpochMillis(spawner.durationDeadline) -
+              childStartedAt -
+              Duration.toMillis(policy.parentReserveDuration ?? Duration.zero),
+          ),
+        ),
+      );
+
+      if (durationMillis === 0) {
+        return yield* SubagentBudgetExhausted.make({
+          parentRunId,
+          dimension: "duration",
+          limitValue: 0,
+          observedValue: 0,
+        });
+      }
+
+      const durationDeadlineMillis = childStartedAt + durationMillis;
+      const durationDeadline = DateTime.makeUnsafe(durationDeadlineMillis);
+
       const childOptions: SpawnRunOptions<never, HookRequirements> = {
         ...seededChild,
+        durationDeadline:
+          seededChild?.durationDeadline === undefined
+            ? durationDeadline
+            : DateTime.min(durationDeadline, seededChild.durationDeadline),
         subagentGrant: grant,
         delegationDepth: depth,
         subagentBudget: SubagentBudgetReservation.make({
@@ -1809,7 +1857,7 @@ export function layer<
         ...(toolCallAllowance === undefined ? {} : { toolCallAllowance }),
       };
 
-      yield* Ref.set(startedAt, yield* Clock.currentTimeMillis);
+      yield* Ref.set(startedAt, childStartedAt);
 
       const childScope = yield* Scope.make();
 
@@ -1859,31 +1907,38 @@ export function layer<
       const joined = Effect.gen(function* () {
         const result = yield* child.await.pipe(
           Effect.catch((childFailure) =>
-            child.usageReport.pipe(
-              Effect.flatMap((report) =>
-                emit({
-                  _tag: "SubagentFailed",
-                  ...payload,
-                  ...report,
-                  errorTag: errorTagOf(childFailure),
-                  message: boundedEventText(errorMessageOf(childFailure)),
-                }),
-              ),
-              Effect.andThen(
-                Effect.fail(
-                  options.mapChildFailure === undefined
-                    ? executionFailure(
-                        "child-failed",
-                        errorTagOf(childFailure),
-                        "The child Run failed",
-                      )
-                    : options.mapChildFailure(childFailure),
-                ),
-              ),
-            ),
+            Effect.gen(function* () {
+              // The child's own deadline and this handler's timeout can win in either
+              // order. Both must deliver the same typed delegation duration failure.
+              if (
+                isDurationPolicyError(childFailure) &&
+                (yield* Clock.currentTimeMillis) >= durationDeadlineMillis
+              )
+                return undefined;
+
+              const report = yield* child.usageReport;
+
+              yield* emit({
+                _tag: "SubagentFailed",
+                ...payload,
+                ...report,
+                errorTag: errorTagOf(childFailure),
+                message: boundedEventText(errorMessageOf(childFailure)),
+              });
+
+              return yield* Effect.fail(
+                options.mapChildFailure === undefined
+                  ? executionFailure(
+                      "child-failed",
+                      errorTagOf(childFailure),
+                      "The child Run failed",
+                    )
+                  : options.mapChildFailure(childFailure),
+              );
+            }),
           ),
           Effect.timeoutOrElse({
-            duration: Duration.millis(allocation.durationMillis),
+            duration: Math.max(0, durationDeadlineMillis - (yield* Clock.currentTimeMillis)),
             orElse: () => Effect.succeed(undefined),
           }),
           Effect.tapCause((cause) =>
@@ -1915,14 +1970,14 @@ export function layer<
             ...payload,
             ...report,
             errorTag: "SubagentBudgetExhausted",
-            message: `Attached child exceeded its ${allocation.durationMillis}ms delegation duration budget`,
+            message: `Attached child exceeded its ${durationMillis}ms delegation duration budget`,
           });
 
           return yield* SubagentBudgetExhausted.make({
             parentRunId,
             dimension: "duration",
-            limitValue: allocation.durationMillis,
-            observedValue: allocation.durationMillis,
+            limitValue: durationMillis,
+            observedValue: durationMillis,
           });
         }
         const report = yield* child.usageReport;
