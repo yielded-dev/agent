@@ -5,6 +5,8 @@ import {
 } from "@yielded/agent-example-auth/server";
 import {
   BrowserCredentialAccess,
+  CardCredential,
+  CredentialAccessError,
   LoginCredential,
 } from "@yielded/agent-platform-cloudflare/browser-credentials";
 import { BrowserSessions } from "@yielded/agent-platform-cloudflare/browser-session";
@@ -262,31 +264,40 @@ export class BrowserLab extends DurableObject<Env> {
           this.traces.archive(params.id).pipe(Effect.catch(() => this.traces.read(params.id))),
         )
         .handle("view", ({ payload }) => this.withBrowser(this.owner.view(payload.mode)))
-        .handle("privateEntry", ({ payload }) =>
-          this.withBrowser(
+        .handle("privateEntry", ({ payload }) => {
+          const input = payload.credential;
+
+          const credential =
+            input.kind === "login"
+              ? LoginCredential.make({ username: input.username, password: input.password })
+              : CardCredential.make({
+                  name: input.name,
+                  number: Redacted.make(Redacted.value(input.number).replace(/[ -]/g, "")),
+                  expiry: input.expiry,
+                  expiryMonth: Redacted.make(Redacted.value(input.expiry).slice(0, 2)),
+                  expiryYear: Redacted.make(`20${Redacted.value(input.expiry).slice(-2)}`),
+                  securityCode: input.securityCode,
+                });
+
+          return this.withBrowser(
             this.owner.privateEntry(payload.id).pipe(
               Effect.provideService(BrowserCredentialAccess, {
                 authorize: (request) => this.owner.authorizeEntry(payload.id, request),
                 resolve: (request) =>
-                  this.owner.authorizeEntry(payload.id, request).pipe(
-                    Effect.as(
-                      LoginCredential.make({
-                        username: payload.username,
-                        password: payload.password,
-                      }),
-                    ),
-                  ),
+                  request.kind === input.kind
+                    ? this.owner.authorizeEntry(payload.id, request).pipe(Effect.as(credential))
+                    : Effect.fail(CredentialAccessError.make({ reason: "denied" })),
               }),
               Effect.ensuring(
                 Effect.sync(() => {
-                  Redacted.wipeUnsafe(payload.username);
-                  Redacted.wipeUnsafe(payload.password);
+                  for (const value of [...Object.values(input), ...Object.values(credential)])
+                    if (Redacted.isRedacted(value)) Redacted.wipeUnsafe(value);
                 }),
               ),
               Effect.withTracerEnabled(false),
             ),
-          ),
-        )
+          );
+        })
         .handle("cancelPrivateEntry", ({ payload }) =>
           this.withBrowser(this.owner.cancelPrivateEntry(payload.id)),
         )

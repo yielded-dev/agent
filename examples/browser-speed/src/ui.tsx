@@ -142,14 +142,51 @@ const activityName = (span: Span) => {
   }
 };
 
+const privateEntryFields = {
+  login: [
+    { name: "username", label: "Username or email", type: "text", maxLength: 1024 },
+    { name: "password", label: "Password", type: "password", maxLength: 1024 },
+  ],
+  card: [
+    { name: "name", label: "Name on card", type: "text", maxLength: 1024 },
+    {
+      name: "number",
+      label: "Card number",
+      type: "text",
+      inputMode: "numeric",
+      maxLength: 37,
+      pattern: "(?:[0-9][ \\-]?){11,18}[0-9]",
+    },
+    {
+      name: "expiry",
+      label: "MM/YY",
+      type: "text",
+      maxLength: 5,
+      pattern: "(0[1-9]|1[0-2])/[0-9]{2}",
+    },
+    {
+      name: "securityCode",
+      label: "CVC",
+      type: "password",
+      inputMode: "numeric",
+      maxLength: 4,
+      pattern: "[0-9]{3,4}",
+    },
+  ],
+} as const;
+
 const PrivateEntryForm = ({ entry, busy }: { entry: PrivateEntry; busy: boolean }) => {
   const [submission, submit] = useAtom(submitPrivateEntryAtom);
   const [cancellation, cancel] = useAtom(cancelPrivateEntryAtom);
   const waiting = busy || submission.waiting || cancellation.waiting;
   const failure = errorMessage(submission) ?? errorMessage(cancellation);
+  const kind = entry.kind ?? "login";
 
   return (
-    <section className="handoff-card private-entry" aria-label="Private sign-in details">
+    <section
+      className="handoff-card private-entry"
+      aria-label={kind === "card" ? "Private card details" : "Private sign-in details"}
+    >
       <div className="private-entry-heading">
         <p className="private-entry-target">{entry.target.topOrigin}</p>
         <button
@@ -179,43 +216,49 @@ const PrivateEntryForm = ({ entry, busy }: { entry: PrivateEntry; busy: boolean 
           onSubmit={(event) => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
-            const username = data.get("username");
-            const password = data.get("password");
 
-            if (typeof username !== "string" || typeof password !== "string") return;
+            const value = (name: string) => {
+              const field = data.get(name);
+
+              return Redacted.make(typeof field === "string" ? field : "");
+            };
+
             submit({
               id: entry.id,
-              username: Redacted.make(username),
-              password: Redacted.make(password),
+              credential:
+                kind === "card"
+                  ? {
+                      kind,
+                      name: value("name"),
+                      number: value("number"),
+                      expiry: value("expiry"),
+                      securityCode: value("securityCode"),
+                    }
+                  : {
+                      kind,
+                      username: value("username"),
+                      password: value("password"),
+                    },
             });
             event.currentTarget.reset();
           }}
         >
-          <label>
-            <span className="sr-only">Username or email</span>
-            <input
-              name="username"
-              placeholder="Username or email"
-              autoComplete="off"
-              required
-              maxLength={1024}
-              disabled={waiting}
-            />
-          </label>
-          <label>
-            <span className="sr-only">Password</span>
-            <input
-              name="password"
-              type="password"
-              placeholder="Password"
-              autoComplete="off"
-              required
-              maxLength={1024}
-              disabled={waiting}
-            />
-          </label>
+          <div className={`private-entry-fields ${kind}`}>
+            {privateEntryFields[kind].map(({ label, ...field }) => (
+              <label key={field.name} className={`private-entry-${field.name}`}>
+                <span className="sr-only">{label}</span>
+                <input
+                  {...field}
+                  placeholder={label}
+                  autoComplete="off"
+                  required
+                  disabled={waiting}
+                />
+              </label>
+            ))}
+          </div>
           <button className="ghost" disabled={waiting} type="submit">
-            {waiting ? "Filling…" : "Fill sign-in details"}
+            {waiting ? "Filling…" : kind === "card" ? "Fill card details" : "Fill sign-in details"}
           </button>
         </form>
       )}
@@ -231,11 +274,13 @@ const PrivateEntryForm = ({ entry, busy }: { entry: PrivateEntry; busy: boolean 
 const privateEntryMessage = (entry: PrivateEntry) => {
   switch (entry.status) {
     case "filled":
-      return "Details filled. Finish signing in on the website.";
+      return entry.kind === "card"
+        ? "Card details filled. Review payment on the website."
+        : "Details filled. Finish signing in on the website.";
     case "uncertain":
       return "Couldn't confirm the fill. Check the website before continuing.";
     case "failed":
-      return "Couldn't fill the form. Sign in on the website.";
+      return "Couldn't fill the form. Enter your details on the website.";
     case "expired":
       return "Private entry expired.";
     case "cancelled":
