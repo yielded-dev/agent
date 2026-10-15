@@ -1,5 +1,12 @@
 # @yielded/agent-pr-review
 
+## 0.1.0-beta.180
+
+### Patch Changes
+
+- Updated dependencies [[`22a7b63`](https://github.com/yielded-dev/agent/commit/22a7b63faa7593e6d74be3203fa147848a63198f), [`cfbf457`](https://github.com/yielded-dev/agent/commit/cfbf45778fe611219ac8b034c3c5d40daa339674)]:
+  - @yielded/agent@0.1.0-beta.180
+
 ## 0.1.0-beta.179
 
 ### Patch Changes
