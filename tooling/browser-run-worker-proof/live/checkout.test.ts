@@ -317,6 +317,26 @@ const proof = Effect.gen(function* () {
     return { status: response.status, evidence };
   });
 
+  // Fresh routes may be temporarily unavailable. Only reads and idempotent closure may repeat.
+  const repeatableRequest = Effect.fnUntraced(function* (operation: "evidence" | "close") {
+    return yield* request(operation).pipe(
+      Effect.timeout("10 seconds"),
+      Effect.retry({
+        schedule: Schedule.spaced("2 seconds"),
+        while: (error) =>
+          error._tag === "TimeoutError" ||
+          error.stage === operation + ":transport-or-timeout" ||
+          (error.stage === operation &&
+            error.status !== null &&
+            (error.status === 404 || (error.status >= 500 && error.status <= 599))),
+      }),
+      Effect.timeout("1 minute"),
+      Effect.mapError((error) =>
+        error._tag === "TimeoutError" ? fail(operation + ":retry-timeout") : error,
+      ),
+    );
+  });
+
   if (cleanupOnly) {
     report = yield* fs.readFileString(reportPath).pipe(
       Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(Report))),
@@ -357,12 +377,12 @@ const proof = Effect.gen(function* () {
 
       if (status === 200) {
         // Closing is idempotent; unlike /run, explicit recovery may repeat it.
-        const closed = yield* request("close");
+        const closed = yield* repeatableRequest("close");
 
         report = { ...report, evidence: publicEvidence(closed.evidence) };
         yield* save();
         if (!closed.evidence.closed) return yield* fail("cleanup:closure-unconfirmed");
-        const observed = yield* request("evidence");
+        const observed = yield* repeatableRequest("evidence");
 
         report = { ...report, evidence: publicEvidence(observed.evidence) };
         yield* save();
@@ -415,7 +435,7 @@ const proof = Effect.gen(function* () {
   const checkout = Effect.gen(function* () {
     yield* deploy;
     // Wait for the fresh namespace's authenticated receiver before the one-shot dispatch.
-    yield* request("evidence").pipe(
+    yield* repeatableRequest("evidence").pipe(
       Effect.filterOrFail(
         ({ evidence }) =>
           !evidence.started &&
@@ -427,36 +447,25 @@ const proof = Effect.gen(function* () {
           evidence.failure === null,
         () => fail("readiness:owner-not-pristine"),
       ),
-      Effect.timeout("10 seconds"),
-      Effect.retry({
-        schedule: Schedule.spaced("2 seconds"),
-        while: (error) =>
-          error._tag === "TimeoutError" ||
-          (error._tag === "CheckoutGateFailure" &&
-            (error.stage === "evidence:transport-or-timeout" ||
-              (error.stage === "evidence" &&
-                error.status !== null &&
-                (error.status === 404 || (error.status >= 500 && error.status <= 599))))),
-      }),
-      Effect.timeout("1 minute"),
-      Effect.mapError((error) =>
-        fail("readiness", error._tag === "CheckoutGateFailure" ? error.status : null),
-      ),
+      Effect.mapError((error) => fail("readiness", error.status)),
     );
     // Persist before sending. A lost response must never cause another /run.
     report = { ...report, dispatched: true };
     yield* save();
     const executed = yield* measure("checkoutMillis", request("run")).pipe(Effect.exit);
-    const observed = yield* request("evidence");
+
+    // Keep the one-shot outcome authoritative even if the subsequent observation is unavailable.
+    if (Exit.isFailure(executed)) return yield* Effect.failCause(executed.cause);
+    const runEvidence = publicEvidence(executed.value.evidence);
+
+    report = { ...report, evidence: runEvidence };
+    yield* save();
+    if (executed.value.status !== 200)
+      return yield* fail(`run:${runEvidence.phase}:${runEvidence.failure}`, executed.value.status);
+    const observed = yield* repeatableRequest("evidence");
 
     report = { ...report, evidence: publicEvidence(observed.evidence) };
     yield* save();
-    if (Exit.isFailure(executed)) return yield* safeFailure(executed.cause);
-    if (executed.value.status !== 200)
-      return yield* fail(
-        `run:${observed.evidence.phase}:${publicEvidence(observed.evidence).failure}`,
-        executed.value.status,
-      );
     const evidence = observed.evidence;
 
     if (
