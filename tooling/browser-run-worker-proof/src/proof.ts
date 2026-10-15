@@ -72,6 +72,34 @@ export const Receipt = Schema.Struct({
   paid: Schema.Boolean,
 });
 
+/** Only authored browser stages and finite classifications may enter public proof evidence. */
+export const BrowserDiagnostic = Schema.Struct({
+  operation: Schema.Literals([
+    "session.acquire",
+    "session.connect",
+    "session.page",
+    "session.target",
+    "session.command",
+    "session.close",
+    "session.disconnect",
+    "browser-use.frame.target-info",
+    "browser-use.frame.attach",
+    "browser-use.frame.send",
+  ]),
+  reason: Schema.Literals([
+    "provider",
+    "timeout",
+    "malformed",
+    "configuration",
+    "authorization",
+    "rate-limited",
+    "pending",
+  ]),
+  status: Schema.NullOr(Schema.Int.check(Schema.isBetween({ minimum: 100, maximum: 599 }))),
+});
+
+export const BrowserDiagnostics = Schema.Array(BrowserDiagnostic).check(Schema.isMaxLength(16));
+
 export const Evidence = Schema.Struct({
   phase: CheckoutPhase,
   started: Schema.Boolean,
@@ -81,6 +109,7 @@ export const Evidence = Schema.Struct({
   scrapeAttempts: Schema.Natural,
   loginRequests: Schema.Natural,
   failure: Schema.NullOr(Schema.String),
+  browserDiagnostics: BrowserDiagnostics,
 });
 
 export class CheckoutError extends Schema.TaggedError<CheckoutError>()("CheckoutError", {

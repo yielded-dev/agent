@@ -54,7 +54,7 @@ const safeFailure = <E>(cause: Cause.Cause<E>) => {
 };
 
 const Report = Schema.Struct({
-  version: Schema.Literal(3),
+  version: Schema.Literal(4),
   runId: RunId,
   workerName: Schema.String,
   sourceCommit: Commit,
@@ -63,6 +63,7 @@ const Report = Schema.Struct({
   passed: Schema.Boolean,
   evidence: Schema.NullOr(Evidence),
   failure: Schema.NullOr(Failure),
+  cleanupFailure: Schema.NullOr(Failure),
   cleanup: Schema.Literals(["pending", "browsers-closed", "confirmed", "failed"]),
   timings: Schema.Struct({
     totalMillis: Schema.Natural,
@@ -100,6 +101,7 @@ const publicEvidence = (evidence: typeof Evidence.Type): typeof Evidence.Type =>
   closed: evidence.closed,
   scrapeAttempts: evidence.scrapeAttempts,
   loginRequests: evidence.loginRequests,
+  browserDiagnostics: evidence.browserDiagnostics,
   failure:
     evidence.failure === null
       ? null
@@ -280,13 +282,13 @@ const proof = Effect.gen(function* () {
     const start = yield* Clock.monotonicTimeNanos;
 
     return yield* effect.pipe(
-      Effect.ensuring(
+      Effect.onExit(() =>
         Effect.gen(function* () {
           const millis = Number((yield* Clock.monotonicTimeNanos) - start) / 1_000_000;
 
           report = { ...report, timings: { ...report.timings, [phase]: Math.round(millis) } };
           yield* save();
-        }).pipe(Effect.orDie),
+        }),
       ),
     );
   });
@@ -355,7 +357,7 @@ const proof = Effect.gen(function* () {
     if (status !== 404) return yield* fail("worker-name:unavailable", status);
     yield* fs.makeDirectory(directory, { recursive: true });
     report = {
-      version: 3,
+      version: 4,
       runId: run,
       workerName,
       sourceCommit,
@@ -364,6 +366,7 @@ const proof = Effect.gen(function* () {
       passed: false,
       evidence: null,
       failure: null,
+      cleanupFailure: null,
       cleanup: "pending",
       timings: { totalMillis: 0, checkoutMillis: 0, cleanupMillis: 0 },
     };
@@ -414,20 +417,21 @@ const proof = Effect.gen(function* () {
       yield* save();
     }).pipe(
       Effect.timeout("5 minutes"),
-      Effect.catchCause((cause) =>
-        Effect.gen(function* () {
-          const failure = safeFailure(cause);
+      Effect.onExit((exit) =>
+        Exit.isFailure(exit)
+          ? Effect.gen(function* () {
+              const failure = safeFailure(exit.cause);
 
-          report = {
-            ...report,
-            passed: false,
-            cleanup: "failed",
-            failure: report.failure ?? failure,
-          };
-          yield* save();
-
-          return yield* failure;
-        }),
+              report = {
+                ...report,
+                passed: false,
+                cleanup: "failed",
+                failure: report.failure ?? failure,
+                cleanupFailure: failure,
+              };
+              yield* save();
+            })
+          : Effect.void,
       ),
     ),
   );
@@ -487,11 +491,11 @@ const proof = Effect.gen(function* () {
         ? Effect.gen(function* () {
             report = { ...report, passed: false, failure: safeFailure(exit.cause) };
             yield* save();
-          }).pipe(Effect.orDie)
+          })
         : Effect.void,
     ),
-    Effect.ensuring(retire.pipe(Effect.orDie)),
-    Effect.ensuring(
+    Effect.onExit(() => retire),
+    Effect.onExit(() =>
       Effect.gen(function* () {
         if (!cleanupOnly) {
           const millis = Number((yield* Clock.monotonicTimeNanos) - totalStart) / 1_000_000;
@@ -499,7 +503,7 @@ const proof = Effect.gen(function* () {
           report = { ...report, timings: { ...report.timings, totalMillis: Math.round(millis) } };
         }
         yield* save();
-      }).pipe(Effect.orDie),
+      }),
     ),
   );
   if (!cleanupOnly) {

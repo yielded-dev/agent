@@ -1,6 +1,7 @@
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import { Agent, AgentRuntime, BrowserUse, InMemory } from "@yielded/agent";
 import {
+  BrowserSessionError,
   BrowserSessions,
   BrowserSessionOptions,
 } from "@yielded/agent-platform-cloudflare/browser-session";
@@ -18,11 +19,29 @@ import {
   PageHtmlTarget,
 } from "@yielded/agent/page-capture";
 import { DurableObject } from "cloudflare:workers";
-import { Cause, Effect, Layer, Option, Redacted, Result, Schedule, Schema } from "effect";
+import {
+  Cause,
+  Effect,
+  ErrorReporter,
+  Layer,
+  Option,
+  Redacted,
+  Result,
+  Schedule,
+  Schema,
+} from "effect";
 import { Tool, Toolkit } from "effect/ai";
 import { FetchHttpClient } from "effect/http";
 
-import { CheckoutError, CheckoutPhase, Evidence, Receipt, WorkerFailure } from "./proof.ts";
+import {
+  BrowserDiagnostic,
+  BrowserDiagnostics,
+  CheckoutError,
+  CheckoutPhase,
+  Evidence,
+  Receipt,
+  WorkerFailure,
+} from "./proof.ts";
 
 type Env = Cloudflare.Env;
 const buyer = "buyer@example.test";
@@ -135,8 +154,32 @@ export class CheckoutRun extends DurableObject<Env> {
       scrapeAttempts: this.read("scrapeAttempts", Schema.Natural, 0),
       loginRequests: this.read("loginRequests", Schema.Natural, 0),
       failure: this.read("failure", Schema.NullOr(Schema.String), null),
+      browserDiagnostics: this.read("browserDiagnostics", BrowserDiagnostics, []),
     });
   }
+  private readonly reporter = ErrorReporter.layer([
+    ErrorReporter.make(({ error }) => {
+      const failure = Schema.decodeUnknownOption(
+        Schema.TaggedStruct("BrowserRunFailure", {
+          ...BrowserDiagnostic.fields,
+          status: Schema.optionalKey(BrowserDiagnostic.fields.status),
+        }),
+      )(error);
+
+      if (Option.isNone(failure)) return;
+
+      const diagnostic = {
+        operation: failure.value.operation,
+        reason: failure.value.reason,
+        status: failure.value.status ?? null,
+      };
+
+      this.ctx.storage.kv.put(
+        "browserDiagnostics",
+        [...this.read("browserDiagnostics", BrowserDiagnostics, []), diagnostic].slice(-16),
+      );
+    }),
+  ]);
   private get services() {
     return BrowserSessions.layer({
       browser: this.env.BROWSER,
@@ -228,14 +271,31 @@ export class CheckoutRun extends DurableObject<Env> {
 
     this.phase("acquire");
 
-    const session = yield* host.createAttached(
-      BrowserSessionOptions.make({ maxElapsedMillis: 240_000, commandTimeoutMillis: 15_000 }),
-      (reference) =>
-        Effect.sync(() => {
-          // Retain the exact provider identity before exposing its attachment.
-          this.ctx.storage.kv.put("session", Redacted.value(reference.sessionId));
-        }),
-    );
+    const session = yield* host
+      .createAttached(
+        BrowserSessionOptions.make({ maxElapsedMillis: 240_000, commandTimeoutMillis: 15_000 }),
+        (reference) =>
+          Effect.sync(() => {
+            // Retain the exact provider identity before exposing its attachment.
+            this.ctx.storage.kv.put("session", Redacted.value(reference.sessionId));
+          }),
+      )
+      .pipe(
+        Effect.tapCause((cause) =>
+          Effect.sync(() => {
+            if (
+              cause.reasons.length > 0 &&
+              cause.reasons.every(
+                (reason) =>
+                  Cause.isFailReason(reason) &&
+                  reason.error instanceof BrowserSessionError &&
+                  reason.error.cleanup === "confirmed",
+              )
+            )
+              this.ctx.storage.kv.put("closed", true);
+          }),
+        ),
+      );
 
     if (this.stopped) {
       yield* this.close();
@@ -522,11 +582,14 @@ export class CheckoutRun extends DurableObject<Env> {
 
           return Effect.succeed(Response.json(this.evidence(), { status: 502 }));
         }),
+        Effect.provide(this.reporter),
       ),
     );
   }
   alarm(): Promise<void> {
-    return Effect.runPromise(this.close().pipe(Effect.provide(this.services), Effect.asVoid));
+    return Effect.runPromise(
+      this.close().pipe(Effect.provide([this.services, this.reporter]), Effect.asVoid),
+    );
   }
 }
 

@@ -11,6 +11,7 @@ import {
 } from "../src/BrowserCredentials.ts";
 import {
   BrowserRunHandoffRequest,
+  BrowserSessionError,
   BrowserSessionOptions,
   BrowserSessions,
 } from "../src/BrowserSession.ts";
@@ -324,6 +325,97 @@ it.effect.each([
       ]),
     );
   },
+);
+
+// Live acquisition failed before retention, leaving the caller unable to attest cleanup.
+it.effect.each([
+  { method: "create", cleanup: "confirmed" },
+  { method: "createAttached", cleanup: "confirmed" },
+  { method: "create", cleanup: "unconfirmed" },
+  { method: "createAttached", cleanup: "unconfirmed" },
+] as const)(
+  "reports $cleanup cleanup after $method fails before retention",
+  ({ method, cleanup }) =>
+    Effect.gen(function* () {
+      const host = yield* BrowserSessions;
+
+      provider.pageFailure = true;
+      provider.cleanupPending = cleanup === "unconfirmed";
+      let retained = false;
+
+      const retain = () =>
+        Effect.sync(() => {
+          retained = true;
+        });
+
+      const attempt =
+        method === "create"
+          ? host.create(options, retain).pipe(Effect.asVoid)
+          : host.createAttached(options, retain).pipe(Effect.asVoid);
+
+      const error = yield* attempt.pipe(Effect.flip);
+
+      expect(error).toMatchObject({ reason: "provider", dispatch: "not-dispatched", cleanup });
+      expect(ErrorReporter.isIgnored(error)).toBe(true);
+      expect(provider.closed).toEqual([id]);
+      expect(retained).toBe(false);
+    }).pipe(Effect.scoped, Effect.provide(layer)),
+);
+
+it.effect("preserves the whole failed retention cause when annotating allocation cleanup", () =>
+  Effect.gen(function* () {
+    const host = yield* BrowserSessions;
+
+    const original = BrowserSessionError.make({
+      reason: "provider",
+      dispatch: "not-dispatched",
+      cleanup: "not-requested",
+    });
+
+    const defect = new Error("private-retention-defect");
+
+    const failed = yield* host
+      .createAttached(options, () =>
+        Effect.failCause(Cause.combine(Cause.fail(original), Cause.die(defect))),
+      )
+      .pipe(Effect.exit);
+
+    expect(failed._tag).toBe("Failure");
+    if (failed._tag !== "Failure") return;
+    expect(failed.cause.reasons).toHaveLength(2);
+    expect(Cause.findErrorOption(failed.cause)).toMatchObject({ value: { cleanup: "confirmed" } });
+    expect(Cause.findDefect(failed.cause)).toMatchObject({ success: defect });
+    expect(provider.closed).toEqual([id]);
+  }).pipe(Effect.scoped, Effect.provide(layer)),
+);
+
+it.effect("preserves acquisition finalizer defects when creation times out", () =>
+  Effect.gen(function* () {
+    const host = yield* BrowserSessions;
+    const started = yield* Deferred.make<void>();
+    const defect = new Error("private-retention-finalizer");
+
+    const fiber = yield* host
+      .create(options, () =>
+        Effect.addFinalizer(() => Effect.die(defect)).pipe(
+          Effect.andThen(Deferred.succeed(started, undefined)),
+          Effect.andThen(Effect.never),
+        ),
+      )
+      .pipe(Effect.exit, Effect.forkChild);
+
+    yield* Deferred.await(started);
+    yield* TestClock.adjust(30_000);
+    const failed = yield* Fiber.join(fiber);
+
+    expect(failed._tag).toBe("Failure");
+    if (failed._tag !== "Failure") return;
+    expect(Cause.findErrorOption(failed.cause)).toMatchObject({
+      value: { reason: "timeout", cleanup: "confirmed" },
+    });
+    expect(Cause.findDefect(failed.cause)).toMatchObject({ success: defect });
+    expect(provider.closed).toEqual([id]);
+  }).pipe(Effect.scoped, Effect.provide(layer)),
 );
 
 it.effect("closes a late allocation reply without retaining or connecting it", () =>
