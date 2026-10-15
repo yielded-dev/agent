@@ -147,7 +147,8 @@
     "astro": "7.3.5",
     "expressive-code-twoslash": "0.6.1",
     "starlight-links-validator": "0.26.0",
-    "satteri": "0.10.5"
+    "satteri": "0.10.5",
+    "@yielded/auth": "0.1.0-beta.41"
   },
   "catalogs": {
     "docs": {

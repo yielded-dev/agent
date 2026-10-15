@@ -15,6 +15,7 @@
     "preview/**/*.ts",
     "vite.config.ts",
     "alchemy.run.ts",
+    "alchemy.production.ts",
     "deployment.ts"
   ]
 }

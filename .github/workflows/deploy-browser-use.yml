@@ -1,0 +1,58 @@
+name: Deploy browser-use
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/browser-speed/**"
+      - "examples/shared/**"
+      - "packages/**"
+      - ".github/workflows/deploy-browser-use.yml"
+      - ".github/actions/**"
+      - "scripts/**"
+      - "patches/**"
+      - "bun.lock"
+      - "package.json"
+      - "bunfig.toml"
+      - "vite.config.ts"
+      - "tsconfig*.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-browser-use-production
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  VP_GIT_HOOKS: "0"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-ci
+      - name: Check example
+        run: vp run -F @yielded/agent-example-browser-speed check
+      - name: Test example
+        run: vp run -F @yielded/agent-example-browser-speed test
+      - name: Configure Site access
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AUTH_YIELDED_CLIENT_SECRET: ${{ secrets.TRAVEL_PLANNER_YIELDED_CLIENT_SECRET }}
+        run: |
+          test -n "$AUTH_YIELDED_CLIENT_SECRET"
+          jq -cn '{AUTH_YIELDED_CLIENT_SECRET: env.AUTH_YIELDED_CLIENT_SECRET}' | \
+            vp exec wrangler secret bulk --config examples/browser-speed/wrangler.production.jsonc
+      - name: Deploy browser-use
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: vp run -F @yielded/agent-example-browser-speed deploy:production

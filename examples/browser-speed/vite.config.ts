@@ -56,7 +56,8 @@ export default defineConfig({
         },
       },
       build: {
-        command: "vp build && wrangler deploy --dry-run",
+        command:
+          "vp build && wrangler deploy --dry-run && wrangler deploy --config wrangler.production.jsonc --dry-run",
         cache: {
           input: [
             { auto: true },
@@ -79,6 +80,14 @@ export default defineConfig({
       },
       worker: {
         command: "wrangler dev --port 8791",
+        cache: false,
+      },
+      "plan:production": {
+        command: "vp build && wrangler deploy --config wrangler.production.jsonc --dry-run",
+        cache: false,
+      },
+      "deploy:production": {
+        command: "vp build && wrangler deploy --config wrangler.production.jsonc",
         cache: false,
       },
       deploy: {

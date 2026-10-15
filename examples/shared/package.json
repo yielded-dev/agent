@@ -8,7 +8,7 @@
     "./server": "./src/server.ts"
   },
   "dependencies": {
-    "@yielded/auth": "0.1.0-beta.41",
+    "@yielded/auth": "catalog:",
     "@yielded/crypto": "0.1.0-beta.41",
     "@yielded/jose": "0.1.0-beta.41",
     "effect": "catalog:"
