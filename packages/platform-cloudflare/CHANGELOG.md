@@ -1,5 +1,17 @@
 # @yielded/agent-platform-cloudflare
 
+## 0.1.0-beta.178
+
+### Patch Changes
+
+- [#965](https://github.com/yielded-dev/agent/pull/965) [`007f63f`](https://github.com/yielded-dev/agent/commit/007f63f5a09e8e749203066ec8e124896d9140ec) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Preserve structured host-failure details when generated code catches and stringifies an error.
+
+- [#963](https://github.com/yielded-dev/agent/pull/963) [`367fd0e`](https://github.com/yielded-dev/agent/commit/367fd0e77ac486e3e37474c0ec49b1a5859dac50) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce Cloudflare client imports and validate submission envelopes once. Expose scoped live-text bytes for forwarding and validate frames at the final consumer with `decodeLiveText`.
+- Updated dependencies [[`007f63f`](https://github.com/yielded-dev/agent/commit/007f63f5a09e8e749203066ec8e124896d9140ec), [`7e904df`](https://github.com/yielded-dev/agent/commit/7e904df67f5ca9fb8a1eaa04c14b4947ae0dcc9f), [`36954c7`](https://github.com/yielded-dev/agent/commit/36954c75ae6190ff7d2872a065bc5b10c40b1823), [`9441dec`](https://github.com/yielded-dev/agent/commit/9441dece81f72f9a3fe2e58fd0241a5cfff997a9)]:
+  - @yielded/agent@0.1.0-beta.178
+  - @yielded/agent-storage-sql@0.1.0-beta.178
+  - @yielded/agent-storage-cloudflare@0.1.0-beta.178
+
 ## 0.1.0-beta.177
 
 ### Patch Changes

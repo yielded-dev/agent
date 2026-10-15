@@ -1,5 +1,7 @@
 ---
 "@yielded/agent-platform-cloudflare": patch
+"@yielded/agent-testing": patch
+"@yielded/agent": patch
 ---
 
-Report recognized Browser Run navigation timeouts with their provider limit and distinguish Quick Action API statuses from destination page statuses.
+Preserve structured host-failure details when generated code catches and stringifies an error.
