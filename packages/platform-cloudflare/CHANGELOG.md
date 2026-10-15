@@ -1,5 +1,15 @@
 # @yielded/agent-platform-cloudflare
 
+## 0.1.0-beta.180
+
+### Patch Changes
+
+- [#971](https://github.com/yielded-dev/agent/pull/971) [`cfbf457`](https://github.com/yielded-dev/agent/commit/cfbf45778fe611219ac8b034c3c5d40daa339674) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Avoid loading the optional memory adapter for Thread storage ownership, and derive archive, remote-port, and admin encoders only when used.
+- Updated dependencies [[`22a7b63`](https://github.com/yielded-dev/agent/commit/22a7b63faa7593e6d74be3203fa147848a63198f), [`cfbf457`](https://github.com/yielded-dev/agent/commit/cfbf45778fe611219ac8b034c3c5d40daa339674)]:
+  - @yielded/agent@0.1.0-beta.180
+  - @yielded/agent-storage-sql@0.1.0-beta.180
+  - @yielded/agent-storage-cloudflare@0.1.0-beta.180
+
 ## 0.1.0-beta.179
 
 ### Patch Changes

@@ -1,5 +1,9 @@
 # @yielded/agent-ai-decision
 
+## 0.1.0-beta.180
+
+No changes in this release.
+
 ## 0.1.0-beta.179
 
 No changes in this release.

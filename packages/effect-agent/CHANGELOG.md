@@ -1,5 +1,13 @@
 # @yielded/agent
 
+## 0.1.0-beta.180
+
+### Patch Changes
+
+- [#976](https://github.com/yielded-dev/agent/pull/976) [`22a7b63`](https://github.com/yielded-dev/agent/commit/22a7b63faa7593e6d74be3203fa147848a63198f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reject missing or inconsistent frame routing before browser commands are dispatched, with guidance for inspecting cross-origin frames without losing the browser session.
+
+- [#971](https://github.com/yielded-dev/agent/pull/971) [`cfbf457`](https://github.com/yielded-dev/agent/commit/cfbf45778fe611219ac8b034c3c5d40daa339674) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Avoid loading the optional memory adapter for Thread storage ownership, and derive archive, remote-port, and admin encoders only when used.
+
 ## 0.1.0-beta.179
 
 ### Patch Changes
