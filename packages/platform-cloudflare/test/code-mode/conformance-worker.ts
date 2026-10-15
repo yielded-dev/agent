@@ -119,6 +119,28 @@ const runAllChecks = (env: WorkerEnv): Effect.Effect<ReadonlyArray<string>> =>
     // End-to-end host composition through the real Worker Loader RPC.
     const namespace = CodeExecutionNamespace.make({ name: "warehouse", methods: ["query"] });
 
+    // Regression: https://github.com/yielded-dev/agent/commit/1dd006748
+    // Run through Worker Loader: JSON transport erases an Error's string conversion,
+    // hiding the host's recovery instruction when generated code catches String(error).
+    const failure = { _tag: "PolicyDenied", message: "Observe again", dispatch: "not-dispatched" };
+
+    const caught = yield* runOutcome(
+      request(
+        "async () => { try { await warehouse.query({}); } catch (error) { return { caught: error, display: String(error) }; } }",
+        { namespaces: [namespace] },
+      ),
+      layer,
+      { call: () => Effect.succeed(CodeHostCallFailure.make({ error: failure })) },
+    );
+
+    if (
+      caught.tag !== "success" ||
+      !Predicate.isObject(caught.detail) ||
+      JSON.stringify(caught.detail.value) !==
+        JSON.stringify({ caught: failure, display: JSON.stringify(failure) })
+    )
+      failures.push(`caught host failure lost its recovery details: ${JSON.stringify(caught)}`);
+
     const resultLimit = CodeExecutionLimits.make({
       ...baseLimits,
       maxHostCallResultBytes: 128,

@@ -18,7 +18,7 @@ import {
   type CodeExecutionRequest,
 } from "@yielded/agent/code-executor";
 import { SandboxImplementation } from "@yielded/agent/sandbox";
-import { Clock, Duration, Effect, Fiber, Layer, Option, Queue, Schema } from "effect";
+import { Clock, Duration, Effect, Fiber, Layer, Option, Predicate, Queue, Schema } from "effect";
 
 /**
  * The deterministic in-process executor substitute (C1 of ADR-0017). It runs
@@ -322,7 +322,14 @@ const serveHostCalls = (
         });
       }
       if (outcome.value._tag === "CodeHostCallFailure") {
-        pending.reject(outcome.value.error);
+        const error = structuredClone(outcome.value.error);
+
+        if (Predicate.isObject(error)) {
+          const display = JSON.stringify(error);
+
+          Object.defineProperty(error, Symbol.toPrimitive, { value: () => display });
+        }
+        pending.reject(error);
         continue;
       }
       const resultBytes = encodedJsonByteLength(outcome.value.value);
