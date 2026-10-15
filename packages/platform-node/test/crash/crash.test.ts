@@ -560,7 +560,7 @@ layer(NodeFileSystem.layer, { excludeTestServices: true })(
 
               expect(payload?._tag).toBe("ModelResponseRecorded");
               if (payload?._tag === "ModelResponseRecorded") {
-                const messages = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(payload.messages);
+                const messages = yield* Schema.decodeEffect(Prompt.Prompt)(payload.messages);
 
                 const text = messages.content
                   .filter((message) => message.role === "assistant")
