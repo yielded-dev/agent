@@ -1,5 +1,13 @@
 # @yielded/agent-storage-postgres
 
+## 0.1.0-beta.179
+
+### Patch Changes
+
+- Updated dependencies [[`a25ebd4`](https://github.com/yielded-dev/agent/commit/a25ebd49fd150098ee616afd20c9f8796fd4bd34)]:
+  - @yielded/agent@0.1.0-beta.179
+  - @yielded/agent-storage-sql@0.1.0-beta.179
+
 ## 0.1.0-beta.178
 
 ### Patch Changes
