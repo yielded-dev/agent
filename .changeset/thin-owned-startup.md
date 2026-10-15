@@ -4,4 +4,4 @@
 "@yielded/agent-storage-cloudflare": patch
 ---
 
-Start fresh durable Runs with less work before the first model request.
+Reduce fresh durable Run preparation by reading root identity and empty execution evidence together under the current owner. Reuse captured startup and checkpoint values while preserving recovery validation and atomic persistence before model dispatch.
