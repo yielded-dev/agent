@@ -1,4 +1,4 @@
 ---
 ---
 
-Allow deployed benchmark recovery to inspect and reset stale Effect AI floor Objects before restoring them.
+Allow deployed Effect AI floor comparisons to recover after build changes.

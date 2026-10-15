@@ -575,7 +575,12 @@ export const run = Effect.fnUntraced(function* (options: Options, resumed?: Resu
       });
 
       for (const label of labels) preparedByBuild.set(label, prepared);
-      for (const job of yield* ordered(jobs, "build-restore", jobKey))
+      // The floor restores its ephemeral Prompt through the measurement implementation.
+      for (const job of yield* ordered(
+        jobs.filter((job) => job.target !== "effect-ai-floor"),
+        "build-restore",
+        jobKey,
+      ))
         restoreBuilds.set(
           jobKey(job),
           yield* build(
