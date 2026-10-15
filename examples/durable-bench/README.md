@@ -288,9 +288,9 @@ Default mode emits text only after the eight tool calls, so **first text (final 
 measures the final reply. Streaming mode's **first text** measures submit to the first visible
 preamble token, including framework publication and transport. Tardie shows `n/a`:
 its existing adapter exposes completed method calls, and connecting its separate execution
-stream is outside this small harness change. Missing first text or observation failure before
-it invalidates the sample. `Object → model` measures submission-handler entry to the first
-outgoing model request on the Object's clock. It excludes driver transport and routing before
+stream is outside this small harness change. Missing first text or any observation failure before
+cancellation invalidates the sample, including failure after first text or settlement.
+`Object → model` measures submission-handler entry to the first outgoing model request on the Object's clock. It excludes driver transport and routing before
 that Object; short intervals may resolve to zero. Object/driver clock offsets are not request latency.
 
 `--cold` includes the first turn after acknowledged `storage.sync()` + `ctx.abort()`;
