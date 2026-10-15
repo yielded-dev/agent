@@ -1,5 +1,15 @@
 # @yielded/agent-platform-cloudflare
 
+## 0.1.0-beta.185
+
+### Patch Changes
+
+- [#1000](https://github.com/yielded-dev/agent/pull/1000) [`252b88a`](https://github.com/yielded-dev/agent/commit/252b88a66de7ebcbf5286e0d72258c8f8e291c78) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Prepare credential fills bound to an exact browser document and form for private user entry across attachments. Reject changed targets and prevent credential material from being JSON encoded.
+- Updated dependencies []:
+  - @yielded/agent@0.1.0-beta.185
+  - @yielded/agent-storage-cloudflare@0.1.0-beta.185
+  - @yielded/agent-storage-sql@0.1.0-beta.185
+
 ## 0.1.0-beta.184
 
 ### Patch Changes
