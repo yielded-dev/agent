@@ -183,7 +183,6 @@ export const PrivateEntrySubmission = Schema.Struct({
 export const BrowserHandoff = Schema.Struct({
   title: Schema.NonEmptyString.check(Schema.isMaxLength(80)),
   instructions: Schema.NonEmptyString.check(Schema.isMaxLength(400)),
-  privateEntry: Schema.optionalKey(Schema.NullOr(LoginForm)),
 });
 
 export const Report = Schema.Struct({

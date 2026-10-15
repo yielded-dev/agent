@@ -267,4 +267,6 @@ export const executeTask = Effect.fnUntraced(function* (
         ? `Arrival checked in the browser. ${result.output.message} Link-only play is not enforced by the Code Mode capability.`
         : result.output.message,
   });
+
+  return result.output;
 }, Effect.scoped);

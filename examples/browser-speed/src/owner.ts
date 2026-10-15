@@ -780,7 +780,8 @@ export const makeOwner = (
         notice =
           "Kitesurf has no persistent Live View. Enable screenshots to see action snapshots.";
       if (input.scenario === "chat" && !continuing) patch({ chatId: input.id }, "chat-started");
-      yield* executeTask(
+
+      const result = yield* executeTask(
         input,
         selectedModel.model,
         modelKey,
@@ -791,7 +792,8 @@ export const makeOwner = (
         Effect.provide(input.scenario === "chat" ? config.history : InMemory.layer),
         Effect.provideService(Browser, browser),
       );
-      const entryForm = current.snapshot().handoff?.privateEntry;
+
+      const entryForm = result.handoff?.privateEntry;
 
       if (entryForm !== null && entryForm !== undefined && "prepareCredential" in session) {
         const prepared = yield* session
