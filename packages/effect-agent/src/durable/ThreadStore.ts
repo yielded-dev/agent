@@ -836,6 +836,11 @@ export class ThreadIdentityRequest extends Schema.Class<ThreadIdentityRequest>(
   "@effect-agent/thread/ThreadIdentityRequest",
 )({ threadId: ThreadId }) {}
 
+export class FreshRunRead extends Schema.Class<FreshRunRead>("@effect-agent/thread/FreshRunRead")({
+  threadId: ThreadId,
+  submissionId: SubmissionId,
+}) {}
+
 /**
  * One consistent snapshot: Thread ID, canonical tail, admission presence, first record,
  * exact worker origin, then exact subagent lineage. A row selected twice appears only
@@ -1246,6 +1251,12 @@ export class ThreadStore extends Context.Service<
     readonly readIdentity: (
       request: ThreadIdentityRequest,
     ) => Effect.Effect<ThreadIdentity, ThreadStoreError | ThreadNotMaterialized>;
+    /** Owner-held preparation for an admitted root Run. Some proves an initialized root
+     * identity and no checkpoint, Run membership or exact input/abort/settlement record.
+     * None requires ordinary recovery; it never authorizes overwriting existing evidence. */
+    readonly readFreshRun?: (
+      request: FreshRunRead,
+    ) => Effect.Effect<Option.Option<ThreadIdentity>, ThreadStoreError | ThreadNotMaterialized>;
     readonly readWorkerCapacity?: (
       request: ThreadWorkerCapacityRequest,
     ) => Effect.Effect<ThreadWorkerCapacity, ThreadStoreError | ThreadNotMaterialized>;

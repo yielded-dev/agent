@@ -17,6 +17,8 @@ import {
   type Claim,
   type ClaimRequest,
   type InputAppliedMarker,
+  type RecoverySnapshot,
+  RecoverySnapshotRequest,
   LedgerError,
   MarkInputAppliedRequest,
   MarkJoinedRequest,
@@ -34,6 +36,8 @@ import {
   type CommitBatch,
   type ExecutionUpdate,
   PreparedAppend,
+  FreshRunRead,
+  type ThreadIdentity,
   ThreadMaterialization,
   ThreadNotMaterialized,
   ThreadStore,
@@ -115,11 +119,12 @@ export interface RunStorageSession extends RunWriter, RunOwnership {
   readonly claim: Claim;
   /** Atomic original input/context plus the ledger marker, when the adapter supports it. */
   readonly appendInput?: RunWriter["append"];
-  /** Library-only initialization, before application/model IO. Hold progress before mutation
-   * so the captured controls and this owner's acknowledged input remain one read view. */
-  readonly withInitialization?: <A, E, R>(
-    effect: Effect.Effect<A, E, R>,
-  ) => Effect.Effect<A, E | OwnershipLost, R>;
+  /** Read current controls, root identity and empty-Run evidence under this owner.
+   * Its tail is adopted by the writer; append still checks the tail and revision. */
+  readonly prepareStart?: Effect.Effect<
+    { readonly snapshot: RecoverySnapshot; readonly identity: ThreadIdentity } | undefined,
+    LedgerError | ThreadStoreFailure
+  >;
   readonly refresh: Effect.Effect<void, ThreadStoreFailure>;
   readonly publishSettlement: (
     batch: CanonicalBatch,
@@ -343,8 +348,44 @@ export const make = Effect.gen(function* () {
               ...writer,
               claim: claimed,
               ...(appendInput === undefined ? {} : { appendInput }),
-              withInitialization: (effect) =>
-                owner.withProgress(request.threadId, generation.use(effect)),
+              ...(store.readFreshRun === undefined || appendInput === undefined
+                ? {}
+                : {
+                    prepareStart: owner.withProgress(
+                      request.threadId,
+                      generation.use(
+                        Effect.gen(function* () {
+                          const snapshot = yield* ledger.loadRecoverySnapshot(
+                            RecoverySnapshotRequest.make({ submissionId: claimed.submissionId }),
+                          );
+                          const submission = snapshot.submission;
+
+                          if (
+                            submission.threadId !== request.threadId ||
+                            submission.state !== "ready" ||
+                            submission.workerAdmission !== undefined ||
+                            submission.messageAdmission !== undefined ||
+                            submission.parentLinkage !== undefined ||
+                            snapshot.inputApplied !== undefined ||
+                            snapshot.abortIntent !== undefined ||
+                            snapshot.approvalDecisions.length !== 0
+                          )
+                            return undefined;
+                          const identity = yield* store.readFreshRun!(
+                            FreshRunRead.make({
+                              threadId: request.threadId,
+                              submissionId: claimed.submissionId,
+                            }),
+                          );
+
+                          if (Option.isNone(identity)) return undefined;
+                          adoptTail(identity.value.tailSequence);
+
+                          return { snapshot, identity: identity.value };
+                        }),
+                      ),
+                    ),
+                  }),
               release: generation.release,
               refresh: writer.refresh,
               markInputApplied: (marker) =>

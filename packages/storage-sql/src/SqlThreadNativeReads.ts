@@ -44,6 +44,7 @@ import {
   PROMPT_EVIDENCE_TAGS,
   ThreadIdentity,
   ThreadIdentityRequest,
+  FreshRunRead,
   ThreadNotMaterialized,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
@@ -186,6 +187,7 @@ const failure = (operation: string, cause?: unknown) =>
   });
 
 const decodeIdentityRequest = Schema.decodeEffect(Schema.toType(ThreadIdentityRequest));
+const decodeFreshRunRead = Schema.decodeEffect(Schema.toType(FreshRunRead));
 
 const decodeAdmissionPresence = Schema.decodeUnknownEffect(
   Schema.Array(
@@ -1225,6 +1227,73 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
     ),
   );
 
+  const readFreshRun: NonNullable<ThreadStore["Service"]["readFreshRun"]> = Effect.fnUntraced(
+    function* (input) {
+      const request = yield* decodeFreshRunRead(input);
+
+      return yield* snapshot(
+        Effect.gen(function* () {
+          const tail = yield* requireThread(request.threadId);
+
+          if (tail.tail_sequence === 0) return Option.none();
+          const runId = JSON.stringify(runIdForSubmission(request.submissionId));
+          const excluded = [
+            workerOriginRecordId(request.threadId),
+            subagentLineageRecordId(request.threadId),
+            submissionInputRecordId(request.submissionId),
+            submissionAbortRecordId(request.submissionId),
+            submissionSettlementRecordId(request.submissionId),
+          ].map((id) => JSON.stringify(id));
+
+          // A single bounded read proves the same absence as RunEvidence plus readExecution.
+          // Any retained evidence selects recovery, including a locator with a missing payload.
+          const rows = yield* decodeRows(
+            yield* sql`SELECT thread_id, sequence, record_id, ${recordBatchId(sql, namespace)} AS batch_id, ${recordJson} AS record_json
+              FROM ${relation("effect_agent_canonical_records")}
+              WHERE thread_id=${request.threadId} AND sequence=1
+                AND EXISTS (SELECT 1 FROM ${relation("effect_agent_submissions")}
+                  WHERE thread_id=${request.threadId} AND submission_id=${request.submissionId})
+                AND NOT EXISTS (SELECT 1 FROM ${relation("effect_agent_executions")}
+                  WHERE thread_id=${request.threadId} AND run_id=${runId})
+                AND NOT EXISTS (SELECT 1 FROM ${relation("effect_agent_record_runs")}
+                  WHERE thread_id=${request.threadId}
+                    AND run_id=${runKey(sql, sql`${request.threadId}`, sql`${runId}`, namespace)})
+                AND NOT EXISTS (SELECT 1 FROM ${relation("effect_agent_canonical_records")}
+                  WHERE thread_id=${request.threadId} AND ${sql.in("record_id", excluded)})`.pipe(
+              execute,
+            ),
+          );
+
+          if (rows.length === 0) return Option.none();
+          const records = yield* Effect.forEach(rows, (row) =>
+            envelope(row).pipe(
+              Effect.filterOrFail(
+                (value) => value.record.recordId === row.record_id,
+                () => failure("fresh Run identity locator"),
+              ),
+            ),
+          );
+
+          if (records[0]?.record.payload._tag !== "ThreadCreated")
+            return yield* failure("fresh Run identity");
+          const identity = yield* ThreadIdentity.makeEffect({
+            threadId: request.threadId,
+            tailSequence: tail.tail_sequence,
+            hasAdmissions: true,
+            records,
+          });
+
+          return Option.some(identity);
+        }),
+      );
+    },
+    Effect.mapError((cause) =>
+      cause._tag === "ThreadNotMaterialized" || cause._tag === "ThreadStoreError"
+        ? cause
+        : failure("readFreshRun", cause),
+    ),
+  );
+
   const readIdentity: ThreadStore["Service"]["readIdentity"] = Effect.fnUntraced(
     function* (request) {
       yield* decodeIdentityRequest(request);
@@ -1379,5 +1448,5 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
       ),
     );
 
-  return { read, readPrompt, countPeerMessages, readIdentity, readWorkerCapacity };
+  return { read, readPrompt, countPeerMessages, readIdentity, readFreshRun, readWorkerCapacity };
 });

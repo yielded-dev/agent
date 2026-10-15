@@ -597,6 +597,7 @@ const makeServices = Effect.fnUntraced(function* () {
       ? {}
       : { lifecyclePublications: journal.lifecycle.storage }),
     readIdentity: selectedReads.readIdentity,
+    readFreshRun: selectedReads.readFreshRun,
     readExecution: (request) =>
       journal.state.read(
         requireThread(journal, request.threadId).pipe(

@@ -243,6 +243,7 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
     export: (request) => bind(rawStore.export(request)),
     inspectTail: (request) => bind(rawStore.inspectTail(request)),
     readIdentity: (request) => bind(rawStore.readIdentity(request)),
+    readFreshRun: (request) => bind(rawStore.readFreshRun!(request)),
     readExecution: (request) => bind(rawStore.readExecution(request)),
     countPeerMessages:
       countPeerMessages === undefined ? undefined : (request) => bind(countPeerMessages(request)),

@@ -214,7 +214,9 @@ export const ownedRows = <A, I>(
       matching(
         JSON.stringify([field, value]),
         (row) => row[field] === value,
-        sql`SELECT ${projection(sql)} FROM ${sql(table)} WHERE ${sql(field)} = ${value}`,
+        Effect.suspend(
+          () => sql`SELECT ${projection(sql)} FROM ${sql(table)} WHERE ${sql(field)} = ${value}`,
+        ),
       );
 
     // Only a source mutation proving the complete result may seed a view. This must run
@@ -226,7 +228,10 @@ export const ownedRows = <A, I>(
       matching(
         JSON.stringify(fields),
         (row) => fields.every(([field, value]) => row[field] === value),
-        sql`SELECT ${projection(sql)} FROM ${sql(table)} WHERE ${sql.and(fields.map(([field, value]) => sql`${sql(field)} = ${value}`))}`,
+        Effect.suspend(
+          () =>
+            sql`SELECT ${projection(sql)} FROM ${sql(table)} WHERE ${sql.and(fields.map(([field, value]) => sql`${sql(field)} = ${value}`))}`,
+        ),
       );
 
     const apply =

@@ -174,6 +174,7 @@ import {
   type CommittedPromptSuffix,
   type PromptHistory,
 } from "./internal/prompt-history-cache.ts";
+import { captureRecord } from "./internal/record-encoding.ts";
 import { RunContextReader } from "./internal/run-context-reader.ts";
 import { readRunContext } from "./internal/run-context.ts";
 import * as ThreadInitialization from "./internal/thread-initialization.ts";
@@ -403,7 +404,6 @@ import {
   getRunInput,
   ThreadReader,
   MAX_THREAD_EXPORT_PAGE_BYTES,
-  PreparedAppend,
   type CommitBatch,
   type ExecutionUpdate,
 } from "./ThreadStore.ts";
@@ -4918,6 +4918,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       progressThrough: CanonicalSequence | undefined,
       continuation: RunContinuation | undefined,
       priorContext: RunJournalContext | undefined,
+      operational: ReadonlyArray<RecordEnvelope>,
       journalMetadata: JournalMetadata | undefined,
       lineage: AttemptLineage,
       approvalDecisions: ReadonlyArray<ApprovalDecisionIntent>,
@@ -5453,13 +5454,9 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           );
         });
 
-      const activeExecution = yield* reader.readExecution({ threadId: ctx.threadId, runId });
-
-      const recordedCompletion = Option.isSome(activeExecution)
-        ? activeExecution.value.operational.find(
-            (record) => record.recordId === runCompletedRecordId(runId),
-          )?.payload
-        : undefined;
+      const recordedCompletion = operational.find(
+        (record) => record.recordId === runCompletedRecordId(runId),
+      )?.payload;
 
       if (recordedCompletion !== undefined) {
         if (recordedCompletion._tag !== "RunCompleted" || recordedCompletion.runId !== runId) {
@@ -8301,136 +8298,61 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       const { claim, threadId } = session;
       const submissionId = claim.submissionId;
 
-      // The hint only selects this preparation. A real claim, current controls, exact
-      // evidence and checkpoint absence are verified under its owner before any reuse.
-      // No binding, instructions, model, Tool or cross-Thread operation runs in the window.
-      let prepared =
-        freshlyAdmitted && session.withInitialization !== undefined
-          ? yield* session.withInitialization(
-              Effect.gen(function* () {
-                const snapshot = yield* ledger.loadRecoverySnapshot(
-                  RecoverySnapshotRequest.make({ submissionId }),
-                );
+      // The hint selects a read under the existing owner. Only exact empty-Run evidence
+      // permits startup; the initial commit still checks its tail and revision-zero CAS.
+      const preparation = freshlyAdmitted ? yield* session.prepareStart ?? Effect.void : undefined;
+      let prepared:
+        | {
+            snapshot: RecoverySnapshot;
+            through: CanonicalSequence;
+            view: Omit<Effect.Success<ReturnType<typeof recoveryView>>, "records"> & {
+              readonly records: ReadonlyArray<CanonicalRecordEnvelope>;
+            };
+            start: Effect.Success<ReturnType<typeof makeRunStart>>;
+            input: InitialContextInput;
+          }
+        | undefined;
 
-                const submission = snapshot.submission;
+      if (preparation !== undefined) {
+        const { snapshot, identity } = preparation;
+        const before = identity.tailSequence;
+        const captured = yield* Effect.fromResult(
+          captureRecord(yield* prepareOriginalInput(snapshot.submission)),
+        ).pipe(
+          Effect.mapError((cause) =>
+            ThreadStoreError.make({
+              operation: "capture startup input",
+              message: cause.message,
+              cause,
+            }),
+          ),
+        );
+        const record = captured.canonical;
 
-                if (
-                  submission.state !== "ready" ||
-                  submission.workerAdmission !== undefined ||
-                  submission.messageAdmission !== undefined ||
-                  submission.parentLinkage !== undefined ||
-                  snapshot.inputApplied !== undefined ||
-                  snapshot.abortIntent !== undefined ||
-                  snapshot.approvalDecisions.length !== 0
-                )
-                  return undefined;
-                yield* ensureThreadCreated(threadId, submission.agentId, submission.agentDigests);
-                yield* session.refresh;
-                const before = (yield* session.tail).sequence;
+        if (!isOriginalInputRecord(record))
+          return yield* RunJournalError.make({ message: "Captured startup has no original input" });
+        pendingOriginal = {
+          threadId,
+          sequence: CanonicalSequence.make(before + 1),
+          record,
+        };
+        const view = {
+          records: identity.records,
+          context: undefined,
+          progress: undefined,
+          progressThrough: undefined,
+          operational: [],
+        };
+        const start = yield* makeRunStart(
+          snapshot.submission,
+          Duration.toMillis(registeredAgent.definition.policy.maxDuration),
+          view.records,
+          view.operational,
+          record,
+        ).pipe(Effect.provideService(CurrentRunWriter, session));
 
-                const view = yield* recoveryView(
-                  threadId,
-                  before,
-                  [submissionId],
-                  runIdForSubmission(submissionId),
-                );
-
-                if (
-                  view.progress !== undefined ||
-                  view.context !== undefined ||
-                  view.operational.length !== 0 ||
-                  view.records.some(({ record }) => record.payload._tag !== "ThreadCreated")
-                )
-                  return undefined;
-                if (session.appendInput !== undefined) {
-                  const captured = yield* PreparedAppend.capture(
-                    AppendRequest.make({
-                      threadId,
-                      expectedTailSequence: before,
-                      batch: CanonicalBatch.make({
-                        batchId: submissionInputBatchId(submissionId),
-                        producerId: config.producerId,
-                        records: [yield* prepareOriginalInput(submission)],
-                      }),
-                    }),
-                  );
-
-                  const record = captured.records[0]!.canonical;
-
-                  if (!isOriginalInputRecord(record))
-                    return yield* RunJournalError.make({
-                      message: "Captured startup has no original input",
-                    });
-                  pendingOriginal = {
-                    threadId,
-                    sequence: CanonicalSequence.make(before + 1),
-                    record,
-                  };
-
-                  const start = yield* makeRunStart(
-                    submission,
-                    Duration.toMillis(registeredAgent.definition.policy.maxDuration),
-                    view.records,
-                    view.operational,
-                    record,
-                  ).pipe(Effect.provideService(CurrentRunWriter, session));
-
-                  return { snapshot, through: before, view, start, input: pendingOriginal };
-                }
-                const progress = progressWriters.get(session);
-
-                const applyInput = applyCanonicalInput(
-                  session,
-                  submission,
-                  session,
-                  view.records,
-                  undefined,
-                );
-
-                yield* progress === undefined
-                  ? applyInput
-                  : progress
-                      .withVerifiedEmptyRun(runIdForSubmission(submissionId), before, applyInput)
-                      .pipe(Effect.provideService(CurrentRunWriter, promptSession));
-                const through = (yield* session.tail).sequence;
-                const added = yield* selectedRange(threadId, [submissionId], through, before);
-                const records = [...view.records, ...added];
-
-                const accepted = progressWriters
-                  .get(session)
-                  ?.acceptedCheckpoint(runIdForSubmission(submissionId));
-
-                if (
-                  accepted === undefined ||
-                  accepted.throughSequence !== through ||
-                  accepted.progress.runId !== runIdForSubmission(submissionId) ||
-                  accepted.progress.submissionId !== submissionId
-                )
-                  return undefined;
-
-                const start = yield* makeRunStart(
-                  submission,
-                  Duration.toMillis(registeredAgent.definition.policy.maxDuration),
-                  records,
-                  view.operational,
-                ).pipe(Effect.provideService(CurrentRunWriter, session));
-
-                return {
-                  snapshot,
-                  through,
-                  view: {
-                    ...view,
-                    records,
-                    progress: accepted.progress,
-                    progressThrough: accepted.throughSequence,
-                    operational: accepted.operational,
-                  },
-                  start,
-                  input: undefined,
-                };
-              }),
-            )
-          : undefined;
+        prepared = { snapshot, through: before, view, start, input: pendingOriginal };
+      }
 
       const preparedInput = prepared !== undefined;
 
@@ -8941,6 +8863,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           view.progressThrough,
           view.progress,
           view.context,
+          view.operational,
           takeJournalMetadata(),
           lineage,
           approvalDecisionIntents,
