@@ -3353,9 +3353,13 @@ const decodeUsageTotal = Schema.decodeEffect(Schema.Natural);
 const decodeProviderUsage = Schema.decodeEffect(ProviderUsage);
 
 const decodeProviderUsageTotal = (value: number): Effect.Effect<number, ModelProtocolError> =>
-  decodeUsageTotal(value).pipe(Effect.mapError(() => invalidProviderUsage()));
+  decodeUsageTotal(value).pipe(Effect.mapErrorEager(() => invalidProviderUsage()));
 
-const consumeUsage = <AgentValue extends Agent.Any, HookError, HookRequirements>(
+const consumeUsage = Effect.fnUntracedEager(function* <
+  AgentValue extends Agent.Any,
+  HookError,
+  HookRequirements,
+>(
   agent: AgentValue,
   context: RunContext,
   usage: Response.Usage | undefined,
@@ -3366,337 +3370,332 @@ const consumeUsage = <AgentValue extends Agent.Any, HookError, HookRequirements>
     RunCostEstimateRequest,
     "response" | "finishMetadata" | "purpose" | "webSearchCalls"
   > = {},
-): Effect.Effect<
+): Effect.fn.Return<
   ConsumedUsage,
   AgentPolicyError | ModelProtocolError | HookError,
   HookRequirements | Model.ProviderName | Model.ModelName
-> =>
-  Effect.gen(function* () {
-    if (usage === undefined) {
-      return yield* AgentPolicyError.make({
-        limit: "usage",
-        message: "A completed model response did not report usage",
-      });
-    }
-
-    const webSearchCalls = yield* decodeProviderUsageTotal(response.webSearchCalls ?? 0);
-
-    const providerUsage = yield* decodeProviderUsage(usage).pipe(
-      Effect.mapError(() => invalidProviderUsage()),
-    );
-
-    const reportedUncached = providerUsage.inputTokens.uncached ?? 0;
-    const cacheRead = providerUsage.inputTokens.cacheRead ?? 0;
-    const cacheWrite = providerUsage.inputTokens.cacheWrite ?? 0;
-    const reportedText = providerUsage.outputTokens.text ?? 0;
-    const reasoning = providerUsage.outputTokens.reasoning ?? 0;
-    // Gross token accounting never discounts cache activity. An omitted
-    // aggregate is derived from present components; an omitted component may
-    // receive the aggregate remainder. Explicitly contradictory fields fail.
-    // Some providers include cache writes in `uncached` while also reporting
-    // them separately. Separate that overlap before constructing the canonical,
-    // additive input components, but retain the raw provider usage for pricing.
-    const reportedInputTotal = providerUsage.inputTokens.total;
-    const reportedInputWithoutWrite = reportedUncached + cacheRead;
-
-    const cacheWriteOverlapsUncached =
-      reportedInputTotal !== undefined &&
-      providerUsage.inputTokens.uncached !== undefined &&
-      providerUsage.inputTokens.cacheWrite !== undefined &&
-      cacheWrite <= reportedUncached &&
-      reportedInputWithoutWrite <= reportedInputTotal &&
-      cacheWrite > reportedInputTotal - reportedInputWithoutWrite;
-
-    const disjointReportedUncached =
-      reportedUncached - (cacheWriteOverlapsUncached ? cacheWrite : 0);
-
-    const reportedInputComponents = disjointReportedUncached + cacheRead + cacheWrite;
-
-    const allInputComponentsReported =
-      providerUsage.inputTokens.uncached !== undefined &&
-      providerUsage.inputTokens.cacheRead !== undefined &&
-      providerUsage.inputTokens.cacheWrite !== undefined;
-
-    if (
-      reportedInputTotal !== undefined &&
-      (reportedInputTotal < reportedInputComponents ||
-        (allInputComponentsReported && reportedInputTotal !== reportedInputComponents))
-    ) {
-      return yield* invalidProviderUsage();
-    }
-    const inputTokens = reportedInputTotal ?? reportedInputComponents;
-    const reportedOutputComponents = reportedText + reasoning;
-    const reportedOutputTotal = providerUsage.outputTokens.total;
-
-    const allOutputComponentsReported =
-      providerUsage.outputTokens.text !== undefined &&
-      providerUsage.outputTokens.reasoning !== undefined;
-
-    if (
-      reportedOutputTotal !== undefined &&
-      (reportedOutputTotal < reportedOutputComponents ||
-        (allOutputComponentsReported && reportedOutputTotal !== reportedOutputComponents))
-    ) {
-      return yield* invalidProviderUsage();
-    }
-    const outputTokens = reportedOutputTotal ?? reportedOutputComponents;
-    // When a provider reports only aggregates, classify the unexplained input
-    // conservatively as uncached and non-reasoning output as text when those
-    // fields are absent. If either was explicit, assign the remainder to the
-    // first genuinely omitted component so no provider-supplied value changes.
-    const inputRemainder = inputTokens - reportedInputComponents;
-    const outputRemainder = outputTokens - reportedOutputComponents;
-
-    const uncached =
-      disjointReportedUncached +
-      (providerUsage.inputTokens.uncached === undefined ? inputRemainder : 0);
-
-    const normalizedCacheRead =
-      cacheRead +
-      (providerUsage.inputTokens.uncached !== undefined &&
-      providerUsage.inputTokens.cacheRead === undefined
-        ? inputRemainder
-        : 0);
-
-    const normalizedCacheWrite =
-      cacheWrite +
-      (providerUsage.inputTokens.uncached !== undefined &&
-      providerUsage.inputTokens.cacheRead !== undefined &&
-      providerUsage.inputTokens.cacheWrite === undefined
-        ? inputRemainder
-        : 0);
-
-    const text =
-      reportedText + (providerUsage.outputTokens.text === undefined ? outputRemainder : 0);
-
-    const normalizedReasoning =
-      reasoning +
-      (providerUsage.outputTokens.text !== undefined &&
-      providerUsage.outputTokens.reasoning === undefined
-        ? outputRemainder
-        : 0);
-
-    // Validate the complete additive components before pricing or staging usage.
-    const inputUsage = yield* InputTokenUsage.makeEffect({
-      total: inputTokens,
-      uncached,
-      cacheRead: normalizedCacheRead,
-      cacheWrite: normalizedCacheWrite,
-    }).pipe(Effect.mapError(() => invalidProviderUsage()));
-
-    const outputUsage = yield* OutputTokenUsage.makeEffect({
-      total: outputTokens,
-      text,
-      reasoning: normalizedReasoning,
-    }).pipe(Effect.mapError(() => invalidProviderUsage()));
-
-    const totalTokens = yield* decodeProviderUsageTotal(inputTokens + outputTokens);
-    const provider = yield* Model.ProviderName;
-    const model = yield* Model.ModelName;
-
-    const estimate =
-      options.estimateCostMicrousd === undefined
-        ? 0
-        : yield* options.estimateCostMicrousd(usage, {
-            provider,
-            model,
-            usage,
-            ...response,
-            webSearchCalls,
-          });
-
-    const costMicrousd = typeof estimate === "number" ? estimate : estimate.costMicrousd;
-
-    if (!Number.isSafeInteger(costMicrousd) || costMicrousd < 0) {
-      return yield* AgentPolicyError.make({
-        limit: "cost",
-        message: "Model cost estimation must produce a non-negative integer number of microdollars",
-      });
-    }
-    const serviceTier = typeof estimate === "number" ? undefined : estimate.serviceTier;
-    const pricingVersion = typeof estimate === "number" ? undefined : estimate.pricingVersion;
-
-    const pricingStatus =
-      options.estimateCostMicrousd === undefined
-        ? "unknown"
-        : typeof estimate === "number"
-          ? "estimated"
-          : (estimate.pricingStatus ?? "estimated");
-
-    const validPricingIdentity = (value: string | undefined): boolean =>
-      value === undefined || (value.length > 0 && value.length <= 256);
-
-    if (!validPricingIdentity(serviceTier) || !validPricingIdentity(pricingVersion)) {
-      return yield* AgentPolicyError.make({
-        limit: "cost",
-        message: "Model cost estimation returned an invalid service tier or pricing version",
-      });
-    }
-
-    const modelUsage = ModelCallUsage.make({
-      webSearchCalls,
-      provider,
-      model,
-      ...(response.response === undefined
-        ? {}
-        : { response: ModelResponseIdentity.make(response.response) }),
-      purpose: response.purpose ?? "turn",
-      usageStatus:
-        Object.values(providerUsage.inputTokens).every((value) => value === undefined) &&
-        Object.values(providerUsage.outputTokens).every((value) => value === undefined)
-          ? "unknown"
-          : [
-                providerUsage.inputTokens.uncached,
-                providerUsage.inputTokens.cacheRead,
-                providerUsage.inputTokens.cacheWrite,
-                providerUsage.outputTokens.text,
-                providerUsage.outputTokens.reasoning,
-              ].every((value) => value !== undefined)
-            ? "complete"
-            : "partial",
-      pricingStatus,
-      ...(serviceTier === undefined ? {} : { serviceTier }),
-      ...(pricingVersion === undefined ? {} : { pricingVersion }),
-      inputTokens: inputUsage,
-      outputTokens: outputUsage,
-      costMicrousd,
+> {
+  if (usage === undefined) {
+    return yield* AgentPolicyError.make({
+      limit: "usage",
+      message: "A completed model response did not report usage",
     });
+  }
 
-    const modelCalls = yield* decodeProviderUsageTotal(context.modelCalls + 1);
+  const webSearchCalls = yield* decodeProviderUsageTotal(response.webSearchCalls ?? 0);
 
-    const cumulativeWebSearchCalls =
-      context.webSearchCalls === undefined
-        ? undefined
-        : yield* decodeProviderUsageTotal(context.webSearchCalls + webSearchCalls);
+  const providerUsage = yield* decodeProviderUsage(usage).pipe(
+    Effect.mapErrorEager(() => invalidProviderUsage()),
+  );
 
-    const cumulativeInputTokens = yield* decodeProviderUsageTotal(
-      context.inputTokens + inputTokens,
-    );
+  const reportedUncached = providerUsage.inputTokens.uncached ?? 0;
+  const cacheRead = providerUsage.inputTokens.cacheRead ?? 0;
+  const cacheWrite = providerUsage.inputTokens.cacheWrite ?? 0;
+  const reportedText = providerUsage.outputTokens.text ?? 0;
+  const reasoning = providerUsage.outputTokens.reasoning ?? 0;
+  // Gross token accounting never discounts cache activity. An omitted
+  // aggregate is derived from present components; an omitted component may
+  // receive the aggregate remainder. Explicitly contradictory fields fail.
+  // Some providers include cache writes in `uncached` while also reporting
+  // them separately. Separate that overlap before constructing the canonical,
+  // additive input components, but retain the raw provider usage for pricing.
+  const reportedInputTotal = providerUsage.inputTokens.total;
+  const reportedInputWithoutWrite = reportedUncached + cacheRead;
 
-    const cumulativeOutputTokens = yield* decodeProviderUsageTotal(
-      context.outputTokens + outputTokens,
-    );
+  const cacheWriteOverlapsUncached =
+    reportedInputTotal !== undefined &&
+    providerUsage.inputTokens.uncached !== undefined &&
+    providerUsage.inputTokens.cacheWrite !== undefined &&
+    cacheWrite <= reportedUncached &&
+    reportedInputWithoutWrite <= reportedInputTotal &&
+    cacheWrite > reportedInputTotal - reportedInputWithoutWrite;
 
-    const cumulativeCostMicrousd = context.costMicrousd + costMicrousd;
+  const disjointReportedUncached = reportedUncached - (cacheWriteOverlapsUncached ? cacheWrite : 0);
 
-    if (!Number.isSafeInteger(cumulativeCostMicrousd)) {
+  const reportedInputComponents = disjointReportedUncached + cacheRead + cacheWrite;
+
+  const allInputComponentsReported =
+    providerUsage.inputTokens.uncached !== undefined &&
+    providerUsage.inputTokens.cacheRead !== undefined &&
+    providerUsage.inputTokens.cacheWrite !== undefined;
+
+  if (
+    reportedInputTotal !== undefined &&
+    (reportedInputTotal < reportedInputComponents ||
+      (allInputComponentsReported && reportedInputTotal !== reportedInputComponents))
+  ) {
+    return yield* invalidProviderUsage();
+  }
+  const inputTokens = reportedInputTotal ?? reportedInputComponents;
+  const reportedOutputComponents = reportedText + reasoning;
+  const reportedOutputTotal = providerUsage.outputTokens.total;
+
+  const allOutputComponentsReported =
+    providerUsage.outputTokens.text !== undefined &&
+    providerUsage.outputTokens.reasoning !== undefined;
+
+  if (
+    reportedOutputTotal !== undefined &&
+    (reportedOutputTotal < reportedOutputComponents ||
+      (allOutputComponentsReported && reportedOutputTotal !== reportedOutputComponents))
+  ) {
+    return yield* invalidProviderUsage();
+  }
+  const outputTokens = reportedOutputTotal ?? reportedOutputComponents;
+  // When a provider reports only aggregates, classify the unexplained input
+  // conservatively as uncached and non-reasoning output as text when those
+  // fields are absent. If either was explicit, assign the remainder to the
+  // first genuinely omitted component so no provider-supplied value changes.
+  const inputRemainder = inputTokens - reportedInputComponents;
+  const outputRemainder = outputTokens - reportedOutputComponents;
+
+  const uncached =
+    disjointReportedUncached +
+    (providerUsage.inputTokens.uncached === undefined ? inputRemainder : 0);
+
+  const normalizedCacheRead =
+    cacheRead +
+    (providerUsage.inputTokens.uncached !== undefined &&
+    providerUsage.inputTokens.cacheRead === undefined
+      ? inputRemainder
+      : 0);
+
+  const normalizedCacheWrite =
+    cacheWrite +
+    (providerUsage.inputTokens.uncached !== undefined &&
+    providerUsage.inputTokens.cacheRead !== undefined &&
+    providerUsage.inputTokens.cacheWrite === undefined
+      ? inputRemainder
+      : 0);
+
+  const text = reportedText + (providerUsage.outputTokens.text === undefined ? outputRemainder : 0);
+
+  const normalizedReasoning =
+    reasoning +
+    (providerUsage.outputTokens.text !== undefined &&
+    providerUsage.outputTokens.reasoning === undefined
+      ? outputRemainder
+      : 0);
+
+  // Validate the complete additive components before pricing or staging usage.
+  const inputUsage = yield* InputTokenUsage.makeEffect({
+    total: inputTokens,
+    uncached,
+    cacheRead: normalizedCacheRead,
+    cacheWrite: normalizedCacheWrite,
+  }).pipe(Effect.mapErrorEager(() => invalidProviderUsage()));
+
+  const outputUsage = yield* OutputTokenUsage.makeEffect({
+    total: outputTokens,
+    text,
+    reasoning: normalizedReasoning,
+  }).pipe(Effect.mapErrorEager(() => invalidProviderUsage()));
+
+  const totalTokens = yield* decodeProviderUsageTotal(inputTokens + outputTokens);
+  const provider = yield* Model.ProviderName;
+  const model = yield* Model.ModelName;
+
+  const estimate =
+    options.estimateCostMicrousd === undefined
+      ? 0
+      : yield* options.estimateCostMicrousd(usage, {
+          provider,
+          model,
+          usage,
+          ...response,
+          webSearchCalls,
+        });
+
+  const costMicrousd = typeof estimate === "number" ? estimate : estimate.costMicrousd;
+
+  if (!Number.isSafeInteger(costMicrousd) || costMicrousd < 0) {
+    return yield* AgentPolicyError.make({
+      limit: "cost",
+      message: "Model cost estimation must produce a non-negative integer number of microdollars",
+    });
+  }
+  const serviceTier = typeof estimate === "number" ? undefined : estimate.serviceTier;
+  const pricingVersion = typeof estimate === "number" ? undefined : estimate.pricingVersion;
+
+  const pricingStatus =
+    options.estimateCostMicrousd === undefined
+      ? "unknown"
+      : typeof estimate === "number"
+        ? "estimated"
+        : (estimate.pricingStatus ?? "estimated");
+
+  const validPricingIdentity = (value: string | undefined): boolean =>
+    value === undefined || (value.length > 0 && value.length <= 256);
+
+  if (!validPricingIdentity(serviceTier) || !validPricingIdentity(pricingVersion)) {
+    return yield* AgentPolicyError.make({
+      limit: "cost",
+      message: "Model cost estimation returned an invalid service tier or pricing version",
+    });
+  }
+
+  const modelUsage = ModelCallUsage.make({
+    webSearchCalls,
+    provider,
+    model,
+    ...(response.response === undefined
+      ? {}
+      : { response: ModelResponseIdentity.make(response.response) }),
+    purpose: response.purpose ?? "turn",
+    usageStatus:
+      Object.values(providerUsage.inputTokens).every((value) => value === undefined) &&
+      Object.values(providerUsage.outputTokens).every((value) => value === undefined)
+        ? "unknown"
+        : [
+              providerUsage.inputTokens.uncached,
+              providerUsage.inputTokens.cacheRead,
+              providerUsage.inputTokens.cacheWrite,
+              providerUsage.outputTokens.text,
+              providerUsage.outputTokens.reasoning,
+            ].every((value) => value !== undefined)
+          ? "complete"
+          : "partial",
+    pricingStatus,
+    ...(serviceTier === undefined ? {} : { serviceTier }),
+    ...(pricingVersion === undefined ? {} : { pricingVersion }),
+    inputTokens: inputUsage,
+    outputTokens: outputUsage,
+    costMicrousd,
+  });
+
+  const modelCalls = yield* decodeProviderUsageTotal(context.modelCalls + 1);
+
+  const cumulativeWebSearchCalls =
+    context.webSearchCalls === undefined
+      ? undefined
+      : yield* decodeProviderUsageTotal(context.webSearchCalls + webSearchCalls);
+
+  const cumulativeInputTokens = yield* decodeProviderUsageTotal(context.inputTokens + inputTokens);
+
+  const cumulativeOutputTokens = yield* decodeProviderUsageTotal(
+    context.outputTokens + outputTokens,
+  );
+
+  const cumulativeCostMicrousd = context.costMicrousd + costMicrousd;
+
+  if (!Number.isSafeInteger(cumulativeCostMicrousd)) {
+    return yield* AgentPolicyError.make({
+      limit: "cost",
+      message: "Cumulative model cost exceeds safe-integer accounting capacity",
+    });
+  }
+  const firstObserved = context.modelCalls === 0 && context.unobservedModelCalls === 0;
+
+  const combineStatus = (
+    prior: typeof UsageCompleteness.Type,
+    next: typeof UsageCompleteness.Type,
+  ) => (firstObserved && prior === "complete" ? next : prior === next ? prior : "partial");
+
+  context.usageStatus = combineStatus(context.usageStatus, modelUsage.usageStatus ?? "unknown");
+  context.pricingStatus = combineStatus(
+    context.pricingStatus,
+    pricingStatus === "estimated" ? "complete" : "unknown",
+  );
+  context.modelCalls = modelCalls;
+  context.webSearchCalls = cumulativeWebSearchCalls;
+  context.inputTokens = cumulativeInputTokens;
+  context.outputTokens = cumulativeOutputTokens;
+  context.lastInputTokens = inputTokens;
+  context.lastOutputTokens = outputTokens;
+  context.costMicrousd = cumulativeCostMicrousd;
+  context.lastCostMicrousd = costMicrousd;
+
+  if (options.durability !== undefined) {
+    // Stage before enforcing hard rails: a response that spends past the
+    // cost/token budget still becomes auditable in its canonical Turn and
+    // terminal settlement.
+    yield* options.durability.noteTurnUsage({ turn, usage: modelUsage });
+  }
+
+  const policy = agent.definition.policy;
+  const consumedTokens = context.inputTokens + context.outputTokens;
+  const tokenBudget = policy.tokenBudget;
+  let breach: AgentPolicyError | undefined;
+
+  if (
+    !context.finalizing &&
+    !context.tokenExhausted &&
+    tokenBudget !== undefined &&
+    consumedTokens > tokenBudget
+  ) {
+    breach = AgentPolicyError.make({
+      limit: "tokens",
+      message: `Agent exceeded its ${tokenBudget} token budget`,
+    });
+    // Fail mode rejects before any declared application Handler starts.
+    if (policy.onExhaustion === "fail") {
+      return yield* breach;
+    }
+    // One-shot (RUN-025): the flag joins the final-answer derivation so the
+    // grace Turn's own usage accumulates and charges without re-breaching.
+    context.tokenExhausted = true;
+    context.exhaustedDimension ??= "tokens";
+  }
+  // Cost is an unconditional hard rail (runtime spec §3): it is enforced on
+  // every response, including one that just soft-breached the token budget —
+  // a simultaneous breach fails typed instead of soft-landing on overspend.
+  const costBudget = policy.costBudgetMicrousd;
+
+  if (costBudget !== undefined) {
+    if (options.estimateCostMicrousd === undefined) {
       return yield* AgentPolicyError.make({
         limit: "cost",
-        message: "Cumulative model cost exceeds safe-integer accounting capacity",
+        message: "Agent cost budget requires a model cost estimator",
       });
     }
-    const firstObserved = context.modelCalls === 0 && context.unobservedModelCalls === 0;
-
-    const combineStatus = (
-      prior: typeof UsageCompleteness.Type,
-      next: typeof UsageCompleteness.Type,
-    ) => (firstObserved && prior === "complete" ? next : prior === next ? prior : "partial");
-
-    context.usageStatus = combineStatus(context.usageStatus, modelUsage.usageStatus ?? "unknown");
-    context.pricingStatus = combineStatus(
-      context.pricingStatus,
-      pricingStatus === "estimated" ? "complete" : "unknown",
-    );
-    context.modelCalls = modelCalls;
-    context.webSearchCalls = cumulativeWebSearchCalls;
-    context.inputTokens = cumulativeInputTokens;
-    context.outputTokens = cumulativeOutputTokens;
-    context.lastInputTokens = inputTokens;
-    context.lastOutputTokens = outputTokens;
-    context.costMicrousd = cumulativeCostMicrousd;
-    context.lastCostMicrousd = costMicrousd;
-
-    if (options.durability !== undefined) {
-      // Stage before enforcing hard rails: a response that spends past the
-      // cost/token budget still becomes auditable in its canonical Turn and
-      // terminal settlement.
-      yield* options.durability.noteTurnUsage({ turn, usage: modelUsage });
+    if (pricingStatus === "unknown") {
+      return yield* AgentPolicyError.make({
+        limit: "cost",
+        message: "Agent cost budget requires a known model cost estimate",
+      });
     }
+    if (context.costMicrousd > costBudget) {
+      // Cost is spend, not context: it never earns a grace Turn.
+      return yield* AgentPolicyError.make({
+        limit: "cost",
+        message: `Agent exceeded its ${costBudget} microdollar cost budget`,
+      });
+    }
+  }
+  if (options.budget !== undefined) {
+    const delta: RunUsageDelta = {
+      modelCalls: 1,
+      inputTokens,
+      outputTokens,
+      totalTokens,
+      toolCalls: toolCallCount,
+      costMicrousd,
+      usage,
+      modelUsage,
+    };
 
-    const policy = agent.definition.policy;
-    const consumedTokens = context.inputTokens + context.outputTokens;
-    const tokenBudget = policy.tokenBudget;
-    let breach: AgentPolicyError | undefined;
+    yield* options.budget.consume(delta);
+  }
+  const warnings: Array<RunEvent> | undefined = context.publish === undefined ? undefined : [];
 
-    if (
-      !context.finalizing &&
-      !context.tokenExhausted &&
-      tokenBudget !== undefined &&
-      consumedTokens > tokenBudget
-    ) {
-      breach = AgentPolicyError.make({
+  if (
+    tokenBudget !== undefined &&
+    !context.warnedLimits.has("tokens") &&
+    nearingLimit(consumedTokens, tokenBudget)
+  ) {
+    context.warnedLimits.add("tokens");
+    warnings?.push(
+      BudgetWarning.make({
+        ...(yield* eventBase(context)),
         limit: "tokens",
-        message: `Agent exceeded its ${tokenBudget} token budget`,
-      });
-      // Fail mode rejects before any declared application Handler starts.
-      if (policy.onExhaustion === "fail") {
-        return yield* breach;
-      }
-      // One-shot (RUN-025): the flag joins the final-answer derivation so the
-      // grace Turn's own usage accumulates and charges without re-breaching.
-      context.tokenExhausted = true;
-      context.exhaustedDimension ??= "tokens";
-    }
-    // Cost is an unconditional hard rail (runtime spec §3): it is enforced on
-    // every response, including one that just soft-breached the token budget —
-    // a simultaneous breach fails typed instead of soft-landing on overspend.
-    const costBudget = policy.costBudgetMicrousd;
+        consumed: consumedTokens,
+        limitValue: tokenBudget,
+      }),
+    );
+  }
 
-    if (costBudget !== undefined) {
-      if (options.estimateCostMicrousd === undefined) {
-        return yield* AgentPolicyError.make({
-          limit: "cost",
-          message: "Agent cost budget requires a model cost estimator",
-        });
-      }
-      if (pricingStatus === "unknown") {
-        return yield* AgentPolicyError.make({
-          limit: "cost",
-          message: "Agent cost budget requires a known model cost estimate",
-        });
-      }
-      if (context.costMicrousd > costBudget) {
-        // Cost is spend, not context: it never earns a grace Turn.
-        return yield* AgentPolicyError.make({
-          limit: "cost",
-          message: `Agent exceeded its ${costBudget} microdollar cost budget`,
-        });
-      }
-    }
-    if (options.budget !== undefined) {
-      const delta: RunUsageDelta = {
-        modelCalls: 1,
-        inputTokens,
-        outputTokens,
-        totalTokens,
-        toolCalls: toolCallCount,
-        costMicrousd,
-        usage,
-        modelUsage,
-      };
-
-      yield* options.budget.consume(delta);
-    }
-    const warnings: Array<RunEvent> | undefined = context.publish === undefined ? undefined : [];
-
-    if (
-      tokenBudget !== undefined &&
-      !context.warnedLimits.has("tokens") &&
-      nearingLimit(consumedTokens, tokenBudget)
-    ) {
-      context.warnedLimits.add("tokens");
-      warnings?.push(
-        BudgetWarning.make({
-          ...(yield* eventBase(context)),
-          limit: "tokens",
-          consumed: consumedTokens,
-          limitValue: tokenBudget,
-        }),
-      );
-    }
-
-    return { breach, warnings: warnings ?? noEvents, modelUsage };
-  });
+  return { breach, warnings: warnings ?? noEvents, modelUsage };
+});
 
 // `Effect.fnUntraced`: this helper runs for every streamed Response Part, so a
 // named span here would emit one span per TextDelta/ReasoningDelta. Spans stay
