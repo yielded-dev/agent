@@ -8301,6 +8301,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       // The hint selects a read under the existing owner. Only exact empty-Run evidence
       // permits startup; the initial commit still checks its tail and revision-zero CAS.
       const preparation = freshlyAdmitted ? yield* session.prepareStart ?? Effect.void : undefined;
+
       let prepared:
         | {
             snapshot: RecoverySnapshot;
@@ -8316,6 +8317,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
       if (preparation !== undefined) {
         const { snapshot, identity } = preparation;
         const before = identity.tailSequence;
+
         const captured = yield* Effect.fromResult(
           captureRecord(yield* prepareOriginalInput(snapshot.submission)),
         ).pipe(
@@ -8327,6 +8329,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
             }),
           ),
         );
+
         const record = captured.canonical;
 
         if (!isOriginalInputRecord(record))
@@ -8336,6 +8339,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           sequence: CanonicalSequence.make(before + 1),
           record,
         };
+
         const view = {
           records: identity.records,
           context: undefined,
@@ -8343,6 +8347,7 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
           progressThrough: undefined,
           operational: [],
         };
+
         const start = yield* makeRunStart(
           snapshot.submission,
           Duration.toMillis(registeredAgent.definition.policy.maxDuration),

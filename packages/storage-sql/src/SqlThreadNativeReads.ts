@@ -1237,6 +1237,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
 
           if (tail.tail_sequence === 0) return Option.none();
           const runId = JSON.stringify(runIdForSubmission(request.submissionId));
+
           const excluded = [
             workerOriginRecordId(request.threadId),
             subagentLineageRecordId(request.threadId),
@@ -1265,6 +1266,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
           );
 
           if (rows.length === 0) return Option.none();
+
           const records = yield* Effect.forEach(rows, (row) =>
             envelope(row).pipe(
               Effect.filterOrFail(
@@ -1276,6 +1278,7 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
 
           if (records[0]?.record.payload._tag !== "ThreadCreated")
             return yield* failure("fresh Run identity");
+
           const identity = yield* ThreadIdentity.makeEffect({
             threadId: request.threadId,
             tailSequence: tail.tail_sequence,

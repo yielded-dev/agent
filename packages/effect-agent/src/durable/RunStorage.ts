@@ -358,6 +358,7 @@ export const make = Effect.gen(function* () {
                           const snapshot = yield* ledger.loadRecoverySnapshot(
                             RecoverySnapshotRequest.make({ submissionId: claimed.submissionId }),
                           );
+
                           const submission = snapshot.submission;
 
                           if (
@@ -371,6 +372,7 @@ export const make = Effect.gen(function* () {
                             snapshot.approvalDecisions.length !== 0
                           )
                             return undefined;
+
                           const identity = yield* store.readFreshRun!(
                             FreshRunRead.make({
                               threadId: request.threadId,
