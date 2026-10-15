@@ -56,12 +56,14 @@ export const transferPageFits = (threadId: ThreadId, factBytes = 0): boolean =>
 
 /** Check a complete retained fact before fresh acceptance; existing replays keep their identity. */
 export const makeTransferFactCheck = <A, I>(schema: Schema.Codec<A, I>) => {
-  const encode = Schema.encodeResult(Schema.fromJsonString(schema));
+  const encode = Schema.encodeSync(Schema.fromJsonString(schema));
 
   return (threadId: ThreadId, fact: A): boolean => {
-    const encoded = encode(fact);
-
-    return Result.isSuccess(encoded) && transferPageFits(threadId, utf8ByteLength(encoded.success));
+    try {
+      return transferPageFits(threadId, utf8ByteLength(encode(fact)));
+    } catch {
+      return false;
+    }
   };
 };
 
