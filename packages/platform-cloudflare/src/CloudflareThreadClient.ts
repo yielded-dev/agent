@@ -61,6 +61,7 @@ import {
   isBoundedEvent,
   MAX_DRAFT_PARTS,
   MAX_FRAME_BYTES,
+  Observation as LiveTextObservation,
   Request as WatchTextRequest,
 } from "./internal/live-text-protocol.ts";
 
@@ -815,8 +816,19 @@ export class CloudflareThreadClient extends Context.Service<
 
               received = undefined;
 
-              return value instanceof ReadableStream && !value.locked
-                ? value.cancel().catch(() => undefined)
+              const observation = Schema.is(LiveTextObservation)(value) ? value : undefined;
+
+              // Native RPC disposes the capability with the request; also release
+              // it for application-owned endpoints and late opening responses.
+              try {
+                observation?.lifetime[Symbol.dispose]();
+              } catch {
+                // A request disposer may already have revoked this stub.
+              }
+              const stream = observation?.stream ?? value;
+
+              return stream instanceof ReadableStream && !stream.locked
+                ? stream.cancel().catch(() => undefined)
                 : Promise.resolve();
             };
 
@@ -865,9 +877,11 @@ export class CloudflareThreadClient extends Context.Service<
               Effect.tapCause(() => RpcTargets.invalidate(target)),
             );
 
-            if (raw instanceof ReadableStream)
+            const stream = Schema.is(LiveTextObservation)(raw) ? raw.stream : raw;
+
+            if (stream instanceof ReadableStream)
               return Stream.fromReadableStream<Uint8Array, ThreadClientError>({
-                evaluate: () => raw,
+                evaluate: () => stream,
                 // The subscription Scope cancels after the reader releases its lock.
                 releaseLockOnEnd: true,
                 onError: (cause) =>
