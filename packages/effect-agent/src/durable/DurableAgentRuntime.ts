@@ -6192,17 +6192,31 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                         ? undefined
                         : {
                             ...input.usage,
+                            // These usage values were validated by the engine. Copy their
+                            // owned fields without repeating the same constructor checks.
                             modelUsage: input.usage.modelUsage?.map((usage) =>
-                              ModelCallUsage.make({
-                                ...usage,
-                                ...(usage.response === undefined
-                                  ? {}
-                                  : {
-                                      response: ModelResponseIdentity.make({ ...usage.response }),
-                                    }),
-                                inputTokens: InputTokenUsage.make({ ...usage.inputTokens }),
-                                outputTokens: OutputTokenUsage.make({ ...usage.outputTokens }),
-                              }),
+                              ModelCallUsage.make(
+                                {
+                                  ...usage,
+                                  ...(usage.response === undefined
+                                    ? {}
+                                    : {
+                                        response: ModelResponseIdentity.make(
+                                          { ...usage.response },
+                                          { disableChecks: true },
+                                        ),
+                                      }),
+                                  inputTokens: InputTokenUsage.make(
+                                    { ...usage.inputTokens },
+                                    { disableChecks: true },
+                                  ),
+                                  outputTokens: OutputTokenUsage.make(
+                                    { ...usage.outputTokens },
+                                    { disableChecks: true },
+                                  ),
+                                },
+                                { disableChecks: true },
+                              ),
                             ),
                           },
                   }),
