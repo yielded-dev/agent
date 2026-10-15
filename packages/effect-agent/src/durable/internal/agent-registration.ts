@@ -1,4 +1,16 @@
-import { Crypto, Option, Scope, Context, Effect, Layer, References, Schema, Tracer } from "effect";
+import {
+  Crypto,
+  Option,
+  Scope,
+  Context,
+  Duration,
+  Effect,
+  Exit,
+  Layer,
+  References,
+  Schema,
+  Tracer,
+} from "effect";
 import { Tool } from "effect/ai";
 
 import type * as Agent from "../../core/Agent.ts";
@@ -549,15 +561,37 @@ export type AgentRegistration<A extends ExecutableAgentBinding = ExecutableAgent
   readonly continuity?: {
     readonly versions: ReplayVersions;
   };
-  /**
-   * Build fresh services for exactly one fenced Attempt, across all its Tool/model turns.
-   * Finalizes on completion, suspension, failure and interruption. Never reused after eviction.
-   * Resolve invocation authority from the trusted claim identity, not captured caller state.
-   * Keep fallible resource acquisition lazy in typed Tool operations; this Layer cannot fail.
-   * Provide DurableApprovalSuspension here when resources need retention before approval waits.
-   */
-  readonly attemptLayer?: (context: AgentAttemptContext) => Layer.Layer<never, never, unknown>;
-};
+} & (
+    | {
+        /** Build the bound model graph afresh for each Run execution (the default). */
+        readonly modelLifetime?: "run";
+        /**
+         * Build fresh services for exactly one fenced Attempt, across all its Tool/model turns.
+         * Finalizes on completion, suspension, failure and interruption. Never reused after eviction.
+         * Resolve invocation authority from the trusted claim identity, not captured caller state.
+         * Keep fallible resource acquisition lazy in typed Tool operations; this Layer cannot fail.
+         * Provide DurableApprovalSuspension here when resources need retention before approval waits.
+         */
+        readonly attemptLayer?: (
+          context: AgentAttemptContext,
+        ) => Layer.Layer<never, never, unknown>;
+      }
+    | {
+        /**
+         * Lazily acquire this registration's bound model graph once in the registration Scope.
+         * On a Thread Object that is one incarnation; on other hosts it is the runtime lifetime.
+         * All resources acquired by the graph, including user Layers, outlive individual Runs.
+         * Acquisition must be independent of Run identity, caller authority and changing config.
+         * Keep such dependencies at Run lifetime, or select a distinct registered Binding.
+         * Thread model resolution and prepared per-call model Layers retain their own lifetimes.
+         * Failed/interrupted acquisition closes partial resources and may retry on the next Run;
+         * a model request failure does not rebuild an already-acquired graph. Orderly Scope closure
+         * releases it; process loss cannot guarantee finalization. No state survives eviction.
+         */
+        readonly modelLifetime: "runtime";
+        readonly attemptLayer?: never;
+      }
+  );
 
 type EntryWorkerRequirements<Entry> = Entry extends {
   readonly agent: infer A extends ExecutableAgentBinding;
@@ -579,10 +613,16 @@ type AttemptLayerRequirements<Requirements, AttemptLayer> = AttemptLayer extends
 // Conditional options retain every service they may consume. An absent attempt Layer
 // still needs the original worker services; only a definite Layer can remove them.
 type EntryRequirements<Entry> = Entry extends unknown
-  ? AttemptLayerRequirements<
-      EntryWorkerRequirements<Entry>,
-      "attemptLayer" extends keyof Entry ? Entry["attemptLayer"] : undefined
-    >
+  ?
+      | AttemptLayerRequirements<
+          EntryWorkerRequirements<Entry>,
+          "attemptLayer" extends keyof Entry ? Entry["attemptLayer"] : undefined
+        >
+      | ("modelLifetime" extends keyof Entry
+          ? "runtime" extends Entry["modelLifetime"]
+            ? Scope.Scope
+            : never
+          : never)
   : never;
 
 type RegistrationRequirements<Entries extends ReadonlyArray<AgentRegistration>> = EntryRequirements<
@@ -662,6 +702,26 @@ const registrationDefinitions = (entry: AgentRegistration): DefinitionDigestInpu
   };
 };
 
+/** One lazy acquisition per registration; no global cache or cross-registration sharing. */
+const residentModel = Effect.fnUntraced(function* <Provides, Requires>(
+  model: Layer.Layer<Provides, never, Requires>,
+) {
+  const owner = yield* Scope.Scope;
+
+  const services = yield* Effect.cachedWithTTL(
+    Effect.gen(function* () {
+      const scope = yield* Scope.fork(owner, "sequential");
+
+      return yield* Layer.buildWithScope(Layer.fresh(model), scope).pipe(
+        Effect.onExit((exit) => (Exit.isFailure(exit) ? Scope.close(scope, exit) : Effect.void)),
+      );
+    }),
+    (exit) => (Exit.isSuccess(exit) ? Duration.infinity : Duration.zero),
+  );
+
+  return Layer.effectContext(services);
+});
+
 // The public signature distributes over descriptors, including optional attempt Layers.
 // The implementation consumes their erased union and captures the selected Layer's context.
 function compileRegistration<Entry extends AgentRegistration>(
@@ -676,10 +736,15 @@ function compileRegistration(entry: AgentRegistration) {
     }),
     (definitions) =>
       Effect.gen(function* () {
-        const agent =
+        const selected =
           // The heterogeneous descriptor erases model services; the overload retains EntryRequirements.
           // @effect-diagnostics-next-line anyUnknownInErrorContext:off
           entry.model === undefined ? entry.agent : { definition: entry.agent, model: entry.model };
+
+        const agent =
+          entry.modelLifetime === "runtime"
+            ? { definition: selected.definition, model: yield* residentModel(selected.model) }
+            : selected;
 
         // Omitted attempt services need no Layer construction or provisioning scope.
         const binding = yield* entry.attemptLayer === undefined
