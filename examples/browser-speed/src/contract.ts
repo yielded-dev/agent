@@ -147,21 +147,11 @@ export const ModelOutput = Schema.Struct({
 
 export type ModelOutput = typeof ModelOutput.Type;
 
-/** Private entry supports native username/password forms; other steps use manual takeover. */
-export const LoginForm = Schema.Struct({
-  kind: Schema.Literal("login"),
-  frame: CredentialForm.fields.frame,
-  fields: Schema.Array(
-    Schema.Struct({
-      selector: Schema.NonEmptyString.check(Schema.isMaxLength(2048)),
-      role: Schema.Literals(["username", "password"]),
-    }),
-  ).check(Schema.isMinLength(2), Schema.isMaxLength(2)),
-});
-
 export const PrivateEntry = Schema.Struct({
   id: Schema.String.check(Schema.isUUID()),
   runId: Schema.String.check(Schema.isUUID()),
+  /** Absent on previously saved login requests. */
+  kind: Schema.optionalKey(CredentialForm.fields.kind),
   target: CredentialTarget,
   expiresAt: Schema.Finite,
   status: Schema.Literals(["pending", "filled", "cancelled", "expired", "failed", "uncertain"]),
@@ -175,8 +165,20 @@ const EntryText = Schema.Redacted(Schema.NonEmptyString.check(Schema.isMaxLength
 
 export const PrivateEntrySubmission = Schema.Struct({
   id: PrivateEntry.fields.id,
-  username: EntryText,
-  password: EntryText,
+  credential: Schema.Union([
+    Schema.Struct({
+      kind: Schema.Literal("login"),
+      username: EntryText,
+      password: EntryText,
+    }),
+    Schema.Struct({
+      kind: Schema.Literal("card"),
+      name: EntryText,
+      number: Schema.Redacted(Schema.String.check(Schema.isPattern(/^(?:\d[ -]?){11,18}\d$/))),
+      expiry: Schema.Redacted(Schema.String.check(Schema.isPattern(/^(0[1-9]|1[0-2])\/\d{2}$/))),
+      securityCode: Schema.Redacted(Schema.String.check(Schema.isPattern(/^\d{3,4}$/))),
+    }),
+  ]),
 });
 
 /** A request for the user to act in the retained browser, never an automatic control transfer. */

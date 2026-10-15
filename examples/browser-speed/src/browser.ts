@@ -1,3 +1,4 @@
+import { CredentialForm } from "@yielded/agent-platform-cloudflare/browser-credentials";
 import type { BrowserSession } from "@yielded/agent-platform-cloudflare/browser-session";
 import * as NativeBrowser from "@yielded/agent-platform-cloudflare/browser-use";
 import * as BrowserUse from "@yielded/agent/browser-use";
@@ -5,13 +6,7 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { Tool, Toolkit } from "effect/ai";
 import type { Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
-import {
-  BrowserHandoff,
-  LoginForm,
-  LabError,
-  defaultChallenge,
-  type RunInput,
-} from "./contract.ts";
+import { BrowserHandoff, LabError, defaultChallenge, type RunInput } from "./contract.ts";
 import { Trace } from "./telemetry.ts";
 
 export const TaskResult = Schema.Struct({
@@ -19,7 +14,7 @@ export const TaskResult = Schema.Struct({
   handoff: Schema.NullOr(
     BrowserHandoff.mapFields((fields) => ({
       ...fields,
-      privateEntry: Schema.NullOr(LoginForm),
+      privateEntry: Schema.NullOr(CredentialForm),
     })),
   ),
 });

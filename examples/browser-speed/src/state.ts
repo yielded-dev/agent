@@ -262,8 +262,8 @@ export const submitPrivateEntryAtom = LabClient.runtime.fn<typeof PrivateEntrySu
       ),
       Effect.ensuring(
         Effect.sync(() => {
-          Redacted.wipeUnsafe(input.username);
-          Redacted.wipeUnsafe(input.password);
+          for (const value of Object.values(input.credential))
+            if (Redacted.isRedacted(value)) Redacted.wipeUnsafe(value);
           get.refresh(snapshotQuery);
         }),
       ),

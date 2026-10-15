@@ -25,7 +25,6 @@ import {
   racePrompt,
   coffeeDemo,
   Report,
-  LoginForm,
   PrivateEntry,
   type ModelApi,
   type ModelId,
@@ -45,7 +44,7 @@ export interface VisitorKeys {
 
 const RetainedEntry = Schema.Struct({
   ...PrivateEntry.fields,
-  form: LoginForm,
+  form: CredentialForm,
   binding: CredentialBinding,
 });
 
@@ -54,6 +53,7 @@ type RetainedEntry = typeof RetainedEntry.Type;
 const entrySummary = (entry: RetainedEntry): PrivateEntry => ({
   id: entry.id,
   runId: entry.runId,
+  kind: entry.form.kind,
   target: entry.target,
   expiresAt: entry.expiresAt,
   status: entry.status,
@@ -325,7 +325,7 @@ export const makeOwner = (
       state.reference === null ||
       state.reference.expiresAt <= (yield* Clock.currentTimeMillis) ||
       request.credential !== id ||
-      request.kind !== "login" ||
+      request.kind !== entry.form.kind ||
       request.target.topOrigin !== entry.target.topOrigin ||
       request.target.frameOrigin !== entry.target.frameOrigin ||
       request.target.recipientOrigin !== entry.target.recipientOrigin ||
