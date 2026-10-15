@@ -72,6 +72,15 @@ export const Receipt = Schema.Struct({
   paid: Schema.Boolean,
 });
 
+export const CaptureFailure = Schema.Struct({
+  httpStatus: Schema.NullOr(Schema.Int.check(Schema.isBetween({ minimum: 100, maximum: 599 }))),
+  transport: Schema.NullOr(
+    Schema.Literals(["ECONNRESET", "EPIPE", "UND_ERR_SOCKET", "connection-reset"]),
+  ),
+  defect: Schema.Boolean,
+  interrupted: Schema.Boolean,
+});
+
 export const Evidence = Schema.Struct({
   phase: CheckoutPhase,
   started: Schema.Boolean,
@@ -79,6 +88,7 @@ export const Evidence = Schema.Struct({
   receipt: Schema.NullOr(Receipt),
   closed: Schema.Boolean,
   scrapeAttempts: Schema.Natural,
+  captureFailure: Schema.optionalKey(Schema.NullOr(CaptureFailure)),
   loginRequests: Schema.Natural,
   failure: Schema.NullOr(Schema.String),
 });
@@ -86,4 +96,5 @@ export const Evidence = Schema.Struct({
 export class CheckoutError extends Schema.TaggedError<CheckoutError>()("CheckoutError", {
   stage: Schema.String,
   message: Schema.String,
+  cause: Schema.optionalKey(Schema.Defect()),
 }) {}

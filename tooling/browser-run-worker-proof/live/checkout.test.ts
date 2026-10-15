@@ -63,6 +63,8 @@ const Report = Schema.Struct({
   passed: Schema.Boolean,
   evidence: Schema.NullOr(Evidence),
   failure: Schema.NullOr(Failure),
+  runStatus: Schema.optionalKey(Schema.NullOr(Schema.Int)),
+  observationFailure: Schema.optionalKey(Schema.NullOr(Failure)),
   cleanup: Schema.Literals(["pending", "browsers-closed", "confirmed", "failed"]),
   timings: Schema.Struct({
     totalMillis: Schema.Natural,
@@ -99,6 +101,7 @@ const publicEvidence = (evidence: typeof Evidence.Type): typeof Evidence.Type =>
   receipt: receiptMatches(evidence) ? evidence.receipt : null,
   closed: evidence.closed,
   scrapeAttempts: evidence.scrapeAttempts,
+  captureFailure: evidence.captureFailure ?? null,
   loginRequests: evidence.loginRequests,
   failure:
     evidence.failure === null
@@ -317,6 +320,28 @@ const proof = Effect.gen(function* () {
     return { status: response.status, evidence };
   });
 
+  const observe = request("evidence").pipe(
+    Effect.timeout("10 seconds"),
+    Effect.retry({
+      schedule: Schedule.spaced("2 seconds"),
+      while: (error) =>
+        error._tag === "TimeoutError" ||
+        (error._tag === "CheckoutGateFailure" &&
+          (error.stage === "evidence:transport-or-timeout" ||
+            (error.stage === "evidence" &&
+              error.status !== null &&
+              (error.status === 404 || (error.status >= 500 && error.status <= 599))))),
+    }),
+    Effect.timeout("1 minute"),
+    Effect.catchCause((cause) =>
+      Effect.failCause(
+        Cause.map(cause, (error) =>
+          error._tag === "CheckoutGateFailure" ? error : fail("evidence:transport-or-timeout"),
+        ),
+      ),
+    ),
+  );
+
   if (cleanupOnly) {
     report = yield* fs.readFileString(reportPath).pipe(
       Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(Report))),
@@ -362,7 +387,7 @@ const proof = Effect.gen(function* () {
         report = { ...report, evidence: publicEvidence(closed.evidence) };
         yield* save();
         if (!closed.evidence.closed) return yield* fail("cleanup:closure-unconfirmed");
-        const observed = yield* request("evidence");
+        const observed = yield* observe;
 
         report = { ...report, evidence: publicEvidence(observed.evidence) };
         yield* save();
@@ -415,7 +440,7 @@ const proof = Effect.gen(function* () {
   const checkout = Effect.gen(function* () {
     yield* deploy;
     // Wait for the fresh namespace's authenticated receiver before the one-shot dispatch.
-    yield* request("evidence").pipe(
+    yield* observe.pipe(
       Effect.filterOrFail(
         ({ evidence }) =>
           !evidence.started &&
@@ -427,37 +452,53 @@ const proof = Effect.gen(function* () {
           evidence.failure === null,
         () => fail("readiness:owner-not-pristine"),
       ),
-      Effect.timeout("10 seconds"),
-      Effect.retry({
-        schedule: Schedule.spaced("2 seconds"),
-        while: (error) =>
-          error._tag === "TimeoutError" ||
-          (error._tag === "CheckoutGateFailure" &&
-            (error.stage === "evidence:transport-or-timeout" ||
-              (error.stage === "evidence" &&
-                error.status !== null &&
-                (error.status === 404 || (error.status >= 500 && error.status <= 599))))),
-      }),
-      Effect.timeout("1 minute"),
-      Effect.mapError((error) =>
-        fail("readiness", error._tag === "CheckoutGateFailure" ? error.status : null),
+      Effect.catchCause((cause) =>
+        Effect.failCause(Cause.map(cause, (error) => fail("readiness", error.status))),
       ),
     );
     // Persist before sending. A lost response must never cause another /run.
     report = { ...report, dispatched: true };
     yield* save();
     const executed = yield* measure("checkoutMillis", request("run")).pipe(Effect.exit);
-    const observed = yield* request("evidence");
 
-    report = { ...report, evidence: publicEvidence(observed.evidence) };
+    const runFailure = Exit.isFailure(executed)
+      ? executed.cause
+      : executed.value.status === 200
+        ? undefined
+        : Cause.fail(
+            fail(
+              `run:${executed.value.evidence.phase}:${publicEvidence(executed.value.evidence).failure}`,
+              executed.value.status,
+            ),
+          );
+
+    report = {
+      ...report,
+      runStatus: Exit.isSuccess(executed)
+        ? executed.value.status
+        : safeFailure(executed.cause).status,
+      evidence: Exit.isSuccess(executed)
+        ? publicEvidence(executed.value.evidence)
+        : report.evidence,
+      failure: runFailure === undefined ? null : safeFailure(runFailure),
+    };
     yield* save();
-    if (Exit.isFailure(executed)) return yield* safeFailure(executed.cause);
-    if (executed.value.status !== 200)
-      return yield* fail(
-        `run:${observed.evidence.phase}:${publicEvidence(observed.evidence).failure}`,
-        executed.value.status,
+    const observed = yield* observe.pipe(Effect.exit);
+
+    report = {
+      ...report,
+      evidence: Exit.isSuccess(observed)
+        ? publicEvidence(observed.value.evidence)
+        : report.evidence,
+      observationFailure: Exit.isFailure(observed) ? safeFailure(observed.cause) : null,
+    };
+    yield* save();
+    if (runFailure !== undefined)
+      return yield* Effect.failCause(
+        Exit.isFailure(observed) ? Cause.combine(runFailure, observed.cause) : runFailure,
       );
-    const evidence = observed.evidence;
+    if (Exit.isFailure(observed)) return yield* Effect.failCause(observed.cause);
+    const evidence = observed.value.evidence;
 
     if (
       !evidence.started ||
@@ -476,7 +517,11 @@ const proof = Effect.gen(function* () {
     Effect.onExit((exit) =>
       Exit.isFailure(exit)
         ? Effect.gen(function* () {
-            report = { ...report, passed: false, failure: safeFailure(exit.cause) };
+            report = {
+              ...report,
+              passed: false,
+              failure: report.failure ?? safeFailure(exit.cause),
+            };
             yield* save();
           }).pipe(Effect.orDie)
         : Effect.void,

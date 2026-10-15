@@ -22,7 +22,14 @@ import { Cause, Effect, Layer, Option, Redacted, Result, Schedule, Schema } from
 import { Tool, Toolkit } from "effect/ai";
 import { FetchHttpClient } from "effect/http";
 
-import { CheckoutError, CheckoutPhase, Evidence, Receipt, WorkerFailure } from "./proof.ts";
+import {
+  CaptureFailure,
+  CheckoutError,
+  CheckoutPhase,
+  Evidence,
+  Receipt,
+  WorkerFailure,
+} from "./proof.ts";
 
 type Env = Cloudflare.Env;
 const buyer = "buyer@example.test";
@@ -86,16 +93,16 @@ const html = (body: string, status = 200) =>
     },
   );
 
-const transient = (cause: unknown): boolean => {
-  const diagnostic = Schema.Struct({
-    code: Schema.optionalKey(Schema.String),
-    message: Schema.optionalKey(Schema.String),
-    httpStatus: Schema.optionalKey(Schema.Int),
-    cause: Schema.optionalKey(Schema.Unknown),
-  });
+const CaptureCauseMetadata = Schema.Struct({
+  code: Schema.optionalKey(Schema.String),
+  message: Schema.optionalKey(Schema.String),
+  httpStatus: Schema.optionalKey(Schema.Int),
+  cause: Schema.optionalKey(Schema.Unknown),
+});
 
+const transient = (cause: unknown): boolean => {
   for (let depth = 0; depth < 4; depth++) {
-    const parsed = Schema.decodeUnknownOption(diagnostic)(cause);
+    const parsed = Schema.decodeUnknownOption(CaptureCauseMetadata)(cause);
 
     if (Option.isNone(parsed)) return false;
     const value = parsed.value;
@@ -110,6 +117,45 @@ const transient = (cause: unknown): boolean => {
   }
 
   return false;
+};
+
+const captureFailure = (cause: Cause.Cause<unknown>): typeof CaptureFailure.Type => {
+  let value = Result.getOrElse(Cause.findError(cause), () =>
+    Result.getOrElse(Cause.findDefect(cause), () => undefined),
+  );
+
+  let httpStatus: number | null = null;
+  let transport: (typeof CaptureFailure.Type)["transport"] = null;
+
+  for (let depth = 0; depth < 5; depth++) {
+    const parsed = Schema.decodeUnknownOption(CaptureCauseMetadata)(value);
+
+    if (Option.isNone(parsed)) break;
+    const metadata = parsed.value;
+
+    if (
+      metadata.httpStatus !== undefined &&
+      metadata.httpStatus >= 100 &&
+      metadata.httpStatus <= 599
+    )
+      httpStatus = metadata.httpStatus;
+    if (
+      metadata.code === "ECONNRESET" ||
+      metadata.code === "EPIPE" ||
+      metadata.code === "UND_ERR_SOCKET"
+    )
+      transport = metadata.code;
+    else if (/ECONNRESET|connection reset|socket hang up/i.test(metadata.message ?? ""))
+      transport ??= "connection-reset";
+    value = metadata.cause;
+  }
+
+  return {
+    httpStatus,
+    transport,
+    defect: Cause.hasDies(cause),
+    interrupted: Cause.hasInterrupts(cause),
+  };
 };
 
 /** One owner retains only the dispatch fence, receipt, and private exact-session cleanup ID. */
@@ -133,6 +179,7 @@ export class CheckoutRun extends DurableObject<Env> {
       receipt: this.read("receipt", Schema.NullOr(Receipt), null),
       closed: this.read("closed", Schema.Boolean, true),
       scrapeAttempts: this.read("scrapeAttempts", Schema.Natural, 0),
+      captureFailure: this.read("captureFailure", Schema.NullOr(CaptureFailure), null),
       loginRequests: this.read("loginRequests", Schema.Natural, 0),
       failure: this.read("failure", Schema.NullOr(Schema.String), null),
     });
@@ -192,8 +239,21 @@ export class CheckoutRun extends DurableObject<Env> {
         schedule: Schedule.exponential("2 seconds"),
         while: (error) => "cause" in error && transient(error.cause),
       }),
-      Effect.mapError((error) =>
-        CheckoutError.make({ stage: `scrape:${error._tag}`, message: error._tag }),
+      Effect.tapCause((cause) =>
+        Effect.sync(() => {
+          this.ctx.storage.kv.put("captureFailure", captureFailure(cause));
+        }),
+      ),
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, (error) =>
+            CheckoutError.make({
+              stage: `scrape:${error._tag}`,
+              message: error._tag,
+              cause: error,
+            }),
+          ),
+        ),
       ),
     );
 
