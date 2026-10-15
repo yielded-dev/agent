@@ -5,15 +5,18 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { Tool, Toolkit } from "effect/ai";
 import type { Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
-import { LabError, defaultChallenge, type RunInput } from "./contract.ts";
+import { BrowserHandoff, LabError, defaultChallenge, type RunInput } from "./contract.ts";
 import { Trace } from "./telemetry.ts";
 
-export const TaskResult = Schema.Struct({ message: Schema.String });
+export const TaskResult = Schema.Struct({
+  message: Schema.String,
+  handoff: Schema.NullOr(BrowserHandoff),
+});
 
 export const completionTools = Toolkit.make(
   Tool.make("finish", {
     description:
-      "Reply with findings supported by observed evidence and source URLs. Before reporting an action complete, inspect the resulting page or cart and verify it satisfies the user's explicit requirements. Explain any unmet requirement. Ask a question only when information or authorization is missing. The host checks Wikipedia arrival. Other website results are not independently verified.",
+      "Reply with findings supported by observed evidence and source URLs. Before reporting an action complete, inspect the resulting page or cart and verify it satisfies the user's explicit requirements. Explain any unmet requirement. Ask a question only when information or authorization is missing. When the user must act in the browser, set handoff to a short action title and concise instructions; the UI provides Take over and Return to agent buttons. Keep message to a brief progress summary without repeating the instructions. Use handoff: null for ordinary replies, questions answerable in chat, and when takeover is unavailable. The host checks Wikipedia arrival. Other website results are not independently verified.",
     parameters: TaskResult,
     success: TaskResult,
     failure: LabError,

@@ -128,6 +128,10 @@ cancellation; deadlines and alarms still apply. Unresolved requests stay fenced.
 Taking over is available between messages, never concurrently with agent work. The lab rejects
 run requests while human control is selected. Returning control replaces the embedded viewer;
 it cannot revoke an interactive connection copied elsewhere. Closing the browser ends access.
+When the agent needs you to act in the browser, it can show a handoff card with instructions
+and a **Take over** button. Complete the step, choose **Return to agent**, then send a message
+to continue. Ordinary questions stay in chat. Handoff cards remain in the conversation and
+its traces; only the latest request can offer control of the current browser.
 
 Provider keys stay in the Worker unless visitors supply their own. Visitor keys are sent only
 on run requests and excluded from stored owner state and reports. The UI keeps keys for the
