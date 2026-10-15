@@ -1,5 +1,6 @@
 import { type ThreadId } from "@yielded/agent/identifiers";
 import { Publisher, type Event } from "@yielded/agent/provisional-text";
+import { RpcTarget } from "cloudflare:workers";
 import { Context, Effect, Exit, Layer, Schema } from "effect";
 import * as Response from "effect/ai/Response";
 
@@ -14,7 +15,21 @@ import {
   MAX_FRAME_BYTES,
   MAX_ID_LENGTH,
   MAX_OBSERVERS,
+  Observation,
 } from "./live-text-protocol.ts";
+
+class ObservationLifetime extends RpcTarget {
+  readonly #close: () => void;
+
+  constructor(close: () => void) {
+    super();
+    this.#close = close;
+  }
+
+  [Symbol.dispose]() {
+    this.#close();
+  }
+}
 
 type TextEvent = Extract<Event, { readonly _tag: "Text" }>;
 
@@ -36,7 +51,7 @@ export class LiveTextHub extends Context.Service<
   {
     readonly open: (
       threadId: ThreadId,
-    ) => Effect.Effect<ReadableStream<Uint8Array>, HostProtocolError>;
+    ) => Effect.Effect<typeof Observation.Type, HostProtocolError>;
   }
 >()("@effect-agent/platform-cloudflare/LiveTextHub") {
   static readonly layer: Layer.Layer<LiveTextHub> = Layer.effectContext(
@@ -274,7 +289,7 @@ export class LiveTextHub extends Context.Service<
           }
         };
 
-        return new ReadableStream<Uint8Array>({
+        const stream = new ReadableStream<Uint8Array>({
           start(value) {
             controller = value;
             observers.add(observer);
@@ -282,6 +297,14 @@ export class LiveTextHub extends Context.Service<
           },
           pull: flush,
           cancel: dispose,
+        });
+
+        // An idle RPC stream may not receive source cancellation until its next
+        // enqueue. The returned capability also releases it when the caller's
+        // RPC scope ends, without requiring another Frame or producer work.
+        return Observation.make({
+          stream,
+          lifetime: new ObservationLifetime(() => observer.close()),
         });
       });
 

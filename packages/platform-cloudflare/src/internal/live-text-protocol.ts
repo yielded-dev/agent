@@ -1,6 +1,7 @@
 import { ThreadId } from "@yielded/agent/identifiers";
 import { Event } from "@yielded/agent/provisional-text";
 import { Schema } from "effect";
+import { Rpc } from "effect-cf";
 
 export const MAX_FRAME_BYTES = 32 * 1_024;
 export const MAX_ID_LENGTH = 256;
@@ -13,6 +14,12 @@ export const MAX_DRAFT_LENGTH = 2 * 1_024 * 1_024;
 const streamId = Schema.NonEmptyString.check(Schema.isMaxLength(MAX_ID_LENGTH));
 
 export const Request = Schema.Struct({ schemaVersion: Schema.Literal(1) });
+
+/** The RPC lifetime survives an idle byte stream and is disposed on caller disconnect. */
+export const Observation = Schema.Struct({
+  stream: Schema.instanceOf(ReadableStream<Uint8Array>),
+  lifetime: Schema.declare(Rpc.isDisposable),
+});
 
 /**
  * Reset replaces all drafts with a snapshot, streamed as native Text parts before live deltas.
