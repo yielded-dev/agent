@@ -1074,16 +1074,18 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
         Layer.provide(threadPortTransportLayer),
       );
 
-      const runtimeStack = application.pipe(
-        Layer.provideMerge(runStorageLayer()),
-        Layer.provide(
-          cloudflarePreparedInputAdmissionLayer.pipe(Layer.provide(CloudflareThreadClient.layer)),
+      const runtimeStack = Layer.suspend(() =>
+        application.pipe(
+          Layer.provideMerge(runStorageLayer()),
+          Layer.provide(
+            cloudflarePreparedInputAdmissionLayer.pipe(Layer.provide(CloudflareThreadClient.layer)),
+          ),
+          Layer.provideMerge(routedMessages),
+          Layer.provideMerge(routedPorts),
+          Layer.provideMerge(wakes),
+          Layer.provideMerge(base),
+          Layer.provideMerge(portsEndpointLayer),
         ),
-        Layer.provideMerge(routedMessages),
-        Layer.provideMerge(routedPorts),
-        Layer.provideMerge(wakes),
-        Layer.provideMerge(base),
-        Layer.provideMerge(portsEndpointLayer),
       );
 
       const maintenanceRuntime =
