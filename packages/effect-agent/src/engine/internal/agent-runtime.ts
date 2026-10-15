@@ -5774,13 +5774,6 @@ const makeTurn = <
 
       const started = Effect.gen(function* () {
         yield* Metric.update(modelCounter, 1);
-        yield* Effect.logDebug("agent model call started").pipe(
-          Effect.annotateLogs({
-            agentId: context.agentId,
-            runId: context.runId,
-            turnId,
-          }),
-        );
 
         if (context.publish === undefined) return;
 
@@ -5800,7 +5793,7 @@ const makeTurn = <
         ]);
 
         return;
-      }).pipe(Effect.withLogSpan("AgentRuntime.model"));
+      });
 
       // Final-answer mode (RUN-018/RUN-019, extended to tokens by RUN-025):
       // once the Turn, Tool Call, or token budget is
@@ -8876,13 +8869,10 @@ function executeWithCompletion<
 
           const started = Effect.gen(function* () {
             yield* Metric.update(runCounter, 1);
-            yield* Effect.logDebug("agent run started").pipe(
-              Effect.annotateLogs({ agentId: context.agentId, runId: context.runId }),
-            );
             yield* publishEvent(context, () =>
               eventBase(context).pipe(Effect.map((base) => RunStarted.make(base))),
             );
-          }).pipe(Effect.withLogSpan("AgentRuntime.run"));
+          });
 
           const execution = Effect.flatten(
             Effect.gen(function* () {
