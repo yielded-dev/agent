@@ -1868,6 +1868,108 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
       }),
   );
 
+  it.effect("recovers a refused four-write batch without replaying its calls", () =>
+    Effect.gen(function* () {
+      // Regression: d95dbb3c4 reserves supplier truth for every ordinary declaration, so four
+      // small writes exhaust dispatch capacity. A crash must retain their atomic refusal.
+      yield* resetReconciler;
+      yield* clearFailpoint;
+      const authorization = yield* ToolAuthorizationTestControl;
+
+      yield* authorization.reset;
+      const runtime = yield* DurableAgentRuntime;
+      const desk = yield* makeBookDesk(bookTools);
+      const refs = ["a", "b", "c", "d"];
+
+      const scripted = yield* makeScriptedModel((call) =>
+        call === 0
+          ? toolTurn(...refs.map((ref) => toolCall(`refused-${ref}`, "book", { ref })))
+          : call <= 2
+            ? toolTurn(
+                ...refs
+                  .slice((call - 1) * 2, call * 2)
+                  .map((ref) => toolCall(`accepted-${ref}`, "book", { ref })),
+              )
+            : finalParts('{"answer":"finished"}'),
+      );
+
+      const agent = Agent.withModel(
+        Agent.make("durable-capacity-correction", {
+          input: bookDefinition.input,
+          output: bookDefinition.output,
+          instructions: "Book all four references; split a refused batch into smaller batches.",
+          toolkit: bookTools,
+          policy: { ...policy, maxTurns: 4, maxToolCalls: 8, repeatedFailureLimit: 1 },
+        }),
+        scripted.model,
+      );
+
+      const thread = "thread-durable-capacity-correction";
+
+      yield* runtime.submit(agent, { question: "book a, b, c, d" }, submitOptions(thread, thread));
+      yield* armFailpoint("turn:after-canonical-append");
+
+      const interrupted = yield* runtime
+        .processThread(agent, decodeThreadId(thread))
+        .pipe(Effect.provide(desk.toolLayer), Effect.exit);
+
+      expect(failureTag(interrupted)).toBe("DurableRuntimeFailpointError");
+      expect(yield* authorization.requests).toHaveLength(0);
+      for (const ref of refs) expect(yield* desk.count(ref)).toBe(0);
+
+      const refusedLog = yield* readLog(thread);
+
+      const refusal = refusedLog.filter(
+        ({ record }) =>
+          record.payload._tag === "ModelResponseRecorded" ||
+          record.payload._tag === "ToolCallSettled",
+      );
+
+      expect(refusal).toHaveLength(5);
+      expect(new Set(refusal.map((record) => record.batchId)).size).toBe(1);
+      expect(
+        refusal.flatMap(({ record }) =>
+          record.payload._tag === "ToolCallSettled" ? [record.payload] : [],
+        ),
+      ).toEqual(
+        refs.map((ref) =>
+          expect.objectContaining({
+            toolCallId: `refused-${ref}`,
+            isFailure: true,
+            budgetRejected: true,
+            result: expect.objectContaining({
+              _tag: "AgentPersistenceCapacityError",
+              message: expect.stringContaining("not dispatched"),
+            }),
+          }),
+        ),
+      );
+
+      yield* clearFailpoint;
+
+      const completed = yield* runtime
+        .processThread(agent, decodeThreadId(thread))
+        .pipe(Effect.provide(desk.toolLayer));
+
+      expect(completed[0]?.outcome).toBe("completed");
+      for (const ref of refs) expect(yield* desk.count(ref)).toBe(1);
+      expect(scripted.prompts).toHaveLength(4);
+      expect(
+        scripted.prompts[1]?.content.flatMap((message) =>
+          message.role === "tool" ? message.content : [],
+        ),
+      ).toEqual(
+        refs.map((ref) => expect.objectContaining({ id: `refused-${ref}`, isFailure: true })),
+      );
+      expect((yield* authorization.requests).map(({ call }) => call.toolCallId)).toEqual(
+        refs.map((ref) => `accepted-${ref}`),
+      );
+      const reconciler = yield* ReconcilerTestControl;
+
+      expect(yield* reconciler.consultations).toBe(0);
+    }).pipe(Effect.ensuring(clearFailpoint)),
+  );
+
   for (const fault of ["result-capacity", "step-envelope"]) {
     it.effect(`settles capacity refusal before executing ${fault}`, () =>
       Effect.gen(function* () {

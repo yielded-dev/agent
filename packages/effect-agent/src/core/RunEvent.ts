@@ -122,7 +122,7 @@ export class ToolCallFailed extends Schema.TaggedClass<ToolCallFailed>()("ToolCa
   failureMode: Schema.optionalKey(Schema.Literals(["error", "return"])),
   /** Actual route at this boundary. Absence on older events means unknown, never recoverable. */
   failureHandling: Schema.optionalKey(ToolFailureHandling),
-  /** Synthetic policy rejection; no handler ran and the failure streak is unchanged. */
+  /** Synthetic policy or capacity rejection; no handler ran and the failure streak is unchanged. */
   budgetRejected: Schema.optionalKey(Schema.Literal(true)),
 }) {}
 

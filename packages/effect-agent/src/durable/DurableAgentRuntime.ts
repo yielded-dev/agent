@@ -6150,6 +6150,28 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 return "committed" as const;
               }
 
+              if (commit._tag === "Response" && response !== undefined && progress !== undefined) {
+                // Only this read-only preflight can prove that no append or Tool dispatch began.
+                // Append failures and recovered declarations retain their existing uncertainty.
+                const admissible = yield* progress.preflight(yield* turnResponseBatch(input)).pipe(
+                  Effect.provideService(CurrentRunWriter, ctx),
+                  Effect.as(true),
+                  Effect.catchCauseIf(
+                    (cause) =>
+                      cause.reasons.length > 0 &&
+                      cause.reasons.every(
+                        (reason) =>
+                          Cause.isFailReason(reason) &&
+                          reason.error instanceof ThreadStoreError &&
+                          reason.error.cause instanceof AgentPersistenceCapacityError,
+                      ),
+                    () => Effect.succeed(false),
+                  ),
+                );
+
+                if (!admissible) return "capacity-refused" as const;
+              }
+
               if (commit._tag === "Response" && commit.defer === true) {
                 if (
                   toolOperations.length === 0 ||
