@@ -47,7 +47,11 @@ import { DurableObjectAlarm, DurableObjectStorage } from "effect-cf";
 import { SqlClient } from "effect/sql/SqlClient";
 import { SqlError, UnknownError } from "effect/sql/SqlError";
 
-import { DurableObjectContext, ThreadObjectPlacement } from "./CloudflareBindings.ts";
+import {
+  DurableAlarmError,
+  DurableObjectContext,
+  ThreadObjectPlacement,
+} from "./CloudflareBindings.ts";
 import { AuxiliaryDispatchMillis, CloudflareDurableRuntimeConfig } from "./CloudflareConfig.ts";
 import { safeCauseMessage } from "./internal/boundary.ts";
 import * as DueQueue from "./internal/due-queue.ts";
@@ -62,15 +66,7 @@ import * as DueQueue from "./internal/due-queue.ts";
  * restores the alarm atomically.
  */
 
-/** The Durable Object alarm API failed; surfaces on host entry points as a typed refusal. */
-export class DurableAlarmError extends Schema.TaggedError<DurableAlarmError>()(
-  "DurableAlarmError",
-  {
-    operation: Schema.String,
-    message: Schema.String,
-    cause: Schema.optionalKey(Schema.Defect()),
-  },
-) {}
+export { DurableAlarmError } from "./CloudflareBindings.ts";
 
 /** Content-free operational notice: pending work now retries at the hourly ceiling. */
 class MaintenanceRetryParked extends Schema.TaggedError<MaintenanceRetryParked>()(

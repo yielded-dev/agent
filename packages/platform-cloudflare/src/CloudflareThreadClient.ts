@@ -1,7 +1,6 @@
 import { AgentInputError } from "@yielded/agent/agent-error";
 import { DigestError } from "@yielded/agent/digest";
 import {
-  Receipt,
   type DurableSubmitAgent,
   type DurableSubmitOptions,
 } from "@yielded/agent/durable-agent-runtime";
@@ -9,6 +8,7 @@ import { DurableRuntimeFailpointError } from "@yielded/agent/durable-failpoint";
 import { AgentId, type ThreadId } from "@yielded/agent/identifiers";
 import { InputMessage } from "@yielded/agent/messaging";
 import { OperationDenied } from "@yielded/agent/operation-authorizer";
+import { Receipt } from "@yielded/agent/receipt";
 import {
   CanonicalRecordEnvelope,
   CanonicalSequence,
@@ -47,9 +47,9 @@ import {
 import { Context, Crypto, Duration, Effect, Layer, Predicate, Schema, Stream } from "effect";
 import { RpcTargets, RpcTracing } from "effect-cf";
 
-import { DurableAlarmError } from "./Alarm.ts";
 import {
   callThreadObject,
+  DurableAlarmError,
   ThreadObjectNamespace,
   type ThreadObjectRpc,
 } from "./CloudflareBindings.ts";

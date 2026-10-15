@@ -206,3 +206,13 @@ export class ThreadObjectPlacement extends Context.Service<
     readonly threadId?: ThreadId;
   }
 >()("@effect-agent/platform-cloudflare/ThreadObjectPlacement") {}
+
+/** The Durable Object alarm API failed; surfaces on host entry points as a typed refusal. */
+export class DurableAlarmError extends Schema.TaggedError<DurableAlarmError>()(
+  "DurableAlarmError",
+  {
+    operation: Schema.String,
+    message: Schema.String,
+    cause: Schema.optionalKey(Schema.Defect()),
+  },
+) {}
