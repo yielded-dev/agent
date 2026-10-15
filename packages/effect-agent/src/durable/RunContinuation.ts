@@ -1615,8 +1615,10 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
 
       const record = yield* Effect.fromResult(captureRecord(proposedRecord)).pipe(
         Effect.map((record) => record.canonical),
-        Effect.mapError(() =>
-          capacityFailure("Canonical continuation exceeds its protocol bounds"),
+        Effect.mapError((cause) =>
+          Schema.isSchemaError(cause.cause)
+            ? capacityFailure("Canonical continuation exceeds its protocol bounds")
+            : failure("Cannot capture canonical progress facts", cause),
         ),
       );
 
