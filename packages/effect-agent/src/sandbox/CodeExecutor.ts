@@ -159,7 +159,9 @@ export class CodeHostCallSuccess extends Schema.TaggedClass<CodeHostCallSuccess>
 /**
  * A host call settled with a Schema-encoded typed failure envelope. Inside the
  * generated program the call's Promise rejects with the envelope value, so a
- * program can catch and branch on expected failures.
+ * program can catch and branch on expected failures. Object and array failures
+ * stringify to their encoded JSON, preserving recovery details in String(error)
+ * without changing the enumerable fields returned or rethrown by the program.
  */
 export class CodeHostCallFailure extends Schema.TaggedClass<CodeHostCallFailure>()(
   "CodeHostCallFailure",

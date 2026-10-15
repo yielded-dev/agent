@@ -147,6 +147,10 @@ export default class CodeModeHarness extends WorkerEntrypoint {
         return outcome.value;
       }
       if (outcome !== null && typeof outcome === "object" && outcome._tag === "CodeHostCallFailure") {
+        if (outcome.error !== null && typeof outcome.error === "object") {
+          const display = JSON.stringify(outcome.error);
+          Object.defineProperty(outcome.error, Symbol.toPrimitive, { value: () => display });
+        }
         throw outcome.error;
       }
       fatal = fatal ?? { _tag: "protocol", message: "host returned an unrecognized outcome" };
