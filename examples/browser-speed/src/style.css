@@ -1445,9 +1445,9 @@ tr.selected td {
   padding-top: 12px;
 }
 .handoff-card {
-  margin-top: 14px;
-  padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-raised);
 }
@@ -1455,53 +1455,30 @@ tr.selected td {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
-}
-.handoff-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-.handoff-eyebrow {
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 .handoff-heading h3 {
-  margin: 2px 0 0;
-  font-size: 16px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
   font-weight: 500;
-  line-height: 1.3;
+  line-height: 1.4;
 }
 .handoff-card > p {
+  margin-top: 8px;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 13px;
 }
-.handoff-card > button {
-  width: 100%;
-  margin-top: 16px;
-  justify-content: center;
+.handoff-card .ghost {
+  flex: none;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 13px;
 }
 .handoff-card .handoff-hint {
   margin-top: 10px;
   font-size: 12px;
-}
-.handoff-notes {
-  margin-top: 14px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 13px;
-}
-.handoff-notes summary {
-  cursor: pointer;
 }
 .chat-activity {
   display: flex;
@@ -1626,4 +1603,42 @@ tr.selected td {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: 0 0 16px;
+}
+
+.private-entry {
+  display: grid;
+  gap: 8px;
+}
+.private-entry-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.private-entry form {
+  display: grid;
+  gap: 8px;
+}
+.private-entry input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--bg-sunken);
+  color: var(--text);
+  font: inherit;
+}
+.private-entry .private-entry-target {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.private-entry-skip {
+  flex: none;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
 }

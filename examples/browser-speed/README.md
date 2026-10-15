@@ -133,6 +133,13 @@ and a **Take over** button. Complete the step, choose **Return to agent**, then 
 to continue. Ordinary questions stay in chat. Handoff cards remain in the conversation and
 its traces; only the latest request can offer control of the current browser.
 
+For native forms with username and password fields, the card can show a private sign-in form.
+The entry goes directly to the host's credential-fill operation, outside conversation input
+and trace payloads. A request can fill only its original form and is consumed before dispatch;
+changed, expired, or uncertain requests are never automatically repeated. After filling, take
+over to finish signing in. Dismiss the form to continue manually. The website and
+browser provider receive these values, and later agent page access can still expose them.
+
 Provider keys stay in the Worker unless visitors supply their own. Visitor keys are sent only
 on run requests and excluded from stored owner state and reports. The UI keeps keys for the
 browser session, or on the device when explicitly selected. Live View URLs and screenshots

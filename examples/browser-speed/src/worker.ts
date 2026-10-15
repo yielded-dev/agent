@@ -3,6 +3,10 @@ import {
   hostedModelAccess,
   type AuthEnvironment,
 } from "@yielded/agent-example-auth/server";
+import {
+  BrowserCredentialAccess,
+  LoginCredential,
+} from "@yielded/agent-platform-cloudflare/browser-credentials";
 import { BrowserSessions } from "@yielded/agent-platform-cloudflare/browser-session";
 import { dynamicWorkerCodeExecutorLayer } from "@yielded/agent-platform-cloudflare/cloudflare-code-mode";
 import * as DoThreadStore from "@yielded/agent-storage-cloudflare/do-thread-store";
@@ -94,7 +98,7 @@ export class BrowserLab extends DurableObject<Env> {
         const previous = Schema.decodeSync(
           Schema.fromJsonString(
             Schema.Struct({
-              ...Control.mapFields(Struct.omit(["chatId", "view"])).fields,
+              ...Control.mapFields(Struct.omit(["chatId", "view", "privateEntry"])).fields,
               version: Schema.Literals([1, 2, 3]),
               report: Schema.NullOr(Schema.Json),
             }),
@@ -105,7 +109,8 @@ export class BrowserLab extends DurableObject<Env> {
           "UPDATE browser_lab SET value=? WHERE id=1",
           Schema.encodeSync(codec)({
             ...previous,
-            version: 5,
+            version: 6,
+            privateEntry: null,
             chatId: null,
             view: null,
             report:
@@ -118,7 +123,7 @@ export class BrowserLab extends DurableObject<Env> {
         const previous = Schema.decodeSync(
           Schema.fromJsonString(
             Schema.Struct({
-              ...Control.mapFields(Struct.omit(["view"])).fields,
+              ...Control.mapFields(Struct.omit(["view", "privateEntry"])).fields,
               version: Schema.Literal(4),
             }),
           ),
@@ -126,7 +131,21 @@ export class BrowserLab extends DurableObject<Env> {
 
         ctx.storage.sql.exec(
           "UPDATE browser_lab SET value=? WHERE id=1",
-          Schema.encodeSync(codec)({ ...previous, version: 5, view: null }),
+          Schema.encodeSync(codec)({ ...previous, version: 6, privateEntry: null, view: null }),
+        );
+      } else if (version === 5) {
+        const previous = Schema.decodeSync(
+          Schema.fromJsonString(
+            Schema.Struct({
+              ...Control.mapFields(Struct.omit(["privateEntry"])).fields,
+              version: Schema.Literal(5),
+            }),
+          ),
+        )(row.value);
+
+        ctx.storage.sql.exec(
+          "UPDATE browser_lab SET value=? WHERE id=1",
+          Schema.encodeSync(codec)({ ...previous, version: 6, privateEntry: null }),
         );
       } else {
         // Refuse unsupported versions before mutating stored ownership.
@@ -243,6 +262,34 @@ export class BrowserLab extends DurableObject<Env> {
           this.traces.archive(params.id).pipe(Effect.catch(() => this.traces.read(params.id))),
         )
         .handle("view", ({ payload }) => this.withBrowser(this.owner.view(payload.mode)))
+        .handle("privateEntry", ({ payload }) =>
+          this.withBrowser(
+            this.owner.privateEntry(payload.id).pipe(
+              Effect.provideService(BrowserCredentialAccess, {
+                authorize: (request) => this.owner.authorizeEntry(payload.id, request),
+                resolve: (request) =>
+                  this.owner.authorizeEntry(payload.id, request).pipe(
+                    Effect.as(
+                      LoginCredential.make({
+                        username: payload.username,
+                        password: payload.password,
+                      }),
+                    ),
+                  ),
+              }),
+              Effect.ensuring(
+                Effect.sync(() => {
+                  Redacted.wipeUnsafe(payload.username);
+                  Redacted.wipeUnsafe(payload.password);
+                }),
+              ),
+              Effect.withTracerEnabled(false),
+            ),
+          ),
+        )
+        .handle("cancelPrivateEntry", ({ payload }) =>
+          this.withBrowser(this.owner.cancelPrivateEntry(payload.id)),
+        )
         .handle("run", ({ payload, headers }) =>
           Effect.gen({ self: this }, function* () {
             // Lab keys fill only what the visitor left out, and only for same-origin requests.
@@ -285,6 +332,12 @@ export class BrowserLab extends DurableObject<Env> {
         );
 
         const response = yield* Effect.promise(() => web.handler(request));
+
+        if (new URL(request.url).pathname === "/api/private-entry" && !response.ok)
+          return errorResponse(
+            "Private entry could not be accepted. Check the request status before trying again.",
+            response.status,
+          );
         const body = yield* Effect.promise(() => response.arrayBuffer());
 
         return new Response(body.byteLength === 0 ? null : body, {

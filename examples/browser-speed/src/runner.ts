@@ -38,7 +38,7 @@ const makeAgent = (search: boolean, takeover: boolean) =>
 Keep the user informed with brief assistant text alongside tool calls: say what you are about to check and share useful findings or obstacles as they emerge. Describe actions and observed evidence, without revealing private reasoning or narrating every command. Continue working after a progress update; use finish for the final reply.
 ${
   takeover
-    ? "The user can take over the browser between messages. When progress requires their browser interaction (such as signing in, completing verification, or entering private payment details), call finish with a handoff card explaining the specific action. Never ask them to send passwords, verification codes, or payment credentials in chat. The card offers Take over; control changes only when the user clicks it. After they return control and send a message, inspect the current browser state before continuing. For missing non-sensitive information or decisions that can be answered in chat, ask normally with handoff: null."
+    ? "The user can take over the browser between messages. When progress requires their browser interaction (such as signing in, completing verification, or entering private payment details), call finish with a handoff card explaining the specific action. Use a short title and one brief instruction. Omit generic directions about taking over or returning control. Never ask them to send passwords, verification codes, or payment credentials in chat. For a native login form with both username and password fields, set handoff.privateEntry to {kind:'login', fields:[{selector,role:'username'},{selector,role:'password'}], frame?:[iframe selectors from outermost to innermost]}. Inspect the actual selectors first. This requests private entry; never read, return, or invent the user's password. Use privateEntry:null for other handoffs, including verification codes, payment details, unsupported controls, and password-only forms. The host validates the form and shows the actual destination. The card offers Take over; control changes only when the user clicks it. After they return control and send a message, inspect the current browser state before continuing. For missing non-sensitive information or decisions that can be answered in chat, ask normally with handoff: null."
     : "Browser takeover is unavailable for this run. Always set handoff: null."
 }
 ${
@@ -267,4 +267,6 @@ export const executeTask = Effect.fnUntraced(function* (
         ? `Arrival checked in the browser. ${result.output.message} Link-only play is not enforced by the Code Mode capability.`
         : result.output.message,
   });
+
+  return result.output;
 }, Effect.scoped);
