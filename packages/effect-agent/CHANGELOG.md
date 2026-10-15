@@ -1,5 +1,11 @@
 # @yielded/agent
 
+## 0.1.0-beta.182
+
+### Patch Changes
+
+- [#985](https://github.com/yielded-dev/agent/pull/985) [`0499026`](https://github.com/yielded-dev/agent/commit/0499026905364b68aff14e9d2392789de8bbdd26) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Return explicit not-dispatched tool results when a fresh durable batch exceeds result capacity, so the agent can continue with smaller batches. Preserve atomic refusal and existing recovery guarantees for already admitted operations.
+
 ## 0.1.0-beta.181
 
 ### Patch Changes
