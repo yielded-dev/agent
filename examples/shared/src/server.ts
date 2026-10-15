@@ -37,9 +37,8 @@ const unavailable = () =>
 const unauthorized = () =>
   AccountError.make({ code: "unauthorized", message: "Sign in to continue." });
 
-type Verifier = Effect.Success<ReturnType<typeof OAuthServer.makeAccessTokenVerifier>>;
 type KeySnapshot = {
-  readonly verifier: Verifier;
+  readonly publicKeys: typeof KeySet.Type.keys;
   readonly kids: ReadonlyArray<string | undefined>;
   readonly expiresAt: number;
 };
@@ -49,21 +48,21 @@ type KeyCache = {
   nextAttemptAt: number;
 };
 // Only trusted deployment configuration selects an entry. Tokens and authorization are never cached.
-const verifiers = new Map<string, KeyCache>();
+const keyCaches = new Map<string, KeyCache>();
 
-const verifierFor = Effect.fnUntraced(function* (config: typeof Configuration.Type, kid: string) {
+const keysFor = Effect.fnUntraced(function* (config: typeof Configuration.Type, kid: string) {
   const key = JSON.stringify([config.AUTH_ISSUER, config.AUTH_RESOURCE, config.AUTH_JWKS_URL]);
-  let cache = verifiers.get(key);
+  let cache = keyCaches.get(key);
 
   if (cache === undefined) {
     cache = { gate: Semaphore.makeUnsafe(1), nextAttemptAt: 0 };
-    verifiers.set(key, cache);
+    keyCaches.set(key, cache);
   }
   const current = cache;
   const now = yield* Clock.currentTimeMillis;
 
   if (current.snapshot && current.snapshot.expiresAt > now && current.snapshot.kids.includes(kid))
-    return current.snapshot.verifier;
+    return current.snapshot.publicKeys;
 
   return yield* current.gate.withPermits(1)(
     Effect.gen(function* () {
@@ -71,9 +70,9 @@ const verifierFor = Effect.fnUntraced(function* (config: typeof Configuration.Ty
       const previous = current.snapshot;
 
       if (previous && previous.expiresAt > now && previous.kids.includes(kid))
-        return previous.verifier;
+        return previous.publicKeys;
       if (current.nextAttemptAt > now) {
-        if (previous && previous.expiresAt > now) return previous.verifier;
+        if (previous && previous.expiresAt > now) return previous.publicKeys;
 
         return yield* unavailable();
       }
@@ -87,33 +86,27 @@ const verifierFor = Effect.fnUntraced(function* (config: typeof Configuration.Ty
         if (response.status !== 200) return yield* unavailable();
         const keys = yield* response.json.pipe(Effect.flatMap(Schema.decodeUnknownEffect(KeySet)));
 
-        const verifier = yield* OAuthServer.makeAccessTokenVerifier({
-          issuer: config.AUTH_ISSUER,
-          resource: config.AUTH_RESOURCE,
-          publicKeys: keys.keys,
-        });
-
         current.snapshot = {
-          verifier,
+          publicKeys: keys.keys,
           kids: keys.keys.map((key) => key.kid),
           expiresAt: now + 300_000,
         };
 
-        return verifier;
+        return keys.keys;
       }).pipe(
         Effect.scoped,
         Effect.timeout("5 seconds"),
         Effect.mapError(unavailable),
         Effect.catch((error) =>
           previous && previous.expiresAt > now
-            ? Effect.succeed(previous.verifier)
+            ? Effect.succeed(previous.publicKeys)
             : Effect.fail(error),
         ),
         Effect.provideService(FetchHttpClient.RequestInit, {
           redirect: "manual",
           credentials: "omit",
         }),
-        Effect.provide([FetchHttpClient.layer, Portable.layerWithoutKdf(globalThis.crypto.subtle)]),
+        Effect.provide(FetchHttpClient.layer),
       );
     }),
   );
@@ -147,7 +140,17 @@ export const authenticateRequest = Effect.fnUntraced(function* (
     Effect.mapError(unauthorized),
   );
 
-  const verifier = yield* verifierFor(config, hint.kid);
+  const publicKeys = yield* keysFor(config, hint.kid);
+
+  // Verifiers capture Effect services; keep that context inside the current Worker request.
+  const verifier = yield* OAuthServer.makeAccessTokenVerifier({
+    issuer: config.AUTH_ISSUER,
+    resource: config.AUTH_RESOURCE,
+    publicKeys,
+  }).pipe(
+    Effect.provide(Portable.layerWithoutKdf(globalThis.crypto.subtle)),
+    Effect.mapError(unavailable),
+  );
 
   const access = yield* verifier
     .verify(Redacted.make(credential))
