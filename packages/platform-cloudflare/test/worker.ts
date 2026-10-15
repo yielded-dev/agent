@@ -108,6 +108,7 @@ const baseOptions: ThreadObject.Options = {
   settlementPollInterval: 25,
   abortPollInterval: 25,
   alarmBackoffBase: 10,
+  recoveryWindowMillis: 10,
   projectionDispatchTimeoutMillis: 1_000,
   alarmBackoffCap: 100,
   observationPollInterval: 10,

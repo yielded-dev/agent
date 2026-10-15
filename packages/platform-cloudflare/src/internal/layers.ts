@@ -110,6 +110,7 @@ import {
   Semaphore,
   Option,
 } from "effect";
+import { DurableObjectAlarm } from "effect-cf";
 import { SqlClient } from "effect/sql/SqlClient";
 
 import {
@@ -158,6 +159,8 @@ export interface CloudflareDurableRuntimeOptions {
   readonly deploymentId: string;
   /** Head of the minted producer identity `{producerPrefix}:{threadId}`. */
   readonly producerPrefix: string;
+  /** Recovery-only window in milliseconds; default 60000. Zero disables idle retention. */
+  readonly recoveryWindowMillis?: number | undefined;
   /** Milliseconds; default 100. */
   readonly alarmBackoffBase?: number | undefined;
   /** Failed/no-progress exponential backoff ceiling in milliseconds; default 5000. */
@@ -284,6 +287,8 @@ const configFromOptions = (
   decodeConfigValue({
     deploymentId: options.deploymentId,
     producerPrefix: options.producerPrefix,
+    recoveryWindowMillis:
+      options.recoveryWindowMillis ?? CLOUDFLARE_RUNTIME_DEFAULTS.recoveryWindowMillis,
     alarmBackoffBase: options.alarmBackoffBase ?? CLOUDFLARE_RUNTIME_DEFAULTS.alarmBackoffBase,
     alarmBackoffCap: options.alarmBackoffCap ?? CLOUDFLARE_RUNTIME_DEFAULTS.alarmBackoffCap,
     settlementPollInterval:
@@ -624,6 +629,7 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
       const { ctx } = yield* DurableObjectContext;
       const config = yield* CloudflareDurableRuntimeConfig;
       const placement = yield* ThreadObjectPlacement;
+      const scheduling = yield* DurableObjectAlarm.ScheduleConfiguration;
       const { ownsThread } = placement;
 
       const storageOptions: DoStorageOptions = {
@@ -1049,7 +1055,10 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
             | MessageDeliveryStore
             | WakeScheduler
             | DurableRuntimeFailpoint
-          >();
+          >().pipe(
+            // The request's effective scheduling policy is installed after the ports build.
+            Effect.map(Context.omit(DurableObjectAlarm.ScheduleConfiguration)),
+          );
 
           const lookupSubmission = makeLocalSubmissionLookup({ ownsThread });
 
@@ -1192,6 +1201,12 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
         Layer.provideMerge(sourceOwner),
         Layer.provideMerge(ThreadMutationGate.layer),
         Layer.provideMerge(infrastructure),
+        Layer.provideMerge(
+          Layer.succeed(DurableObjectAlarm.ScheduleConfiguration, {
+            ...scheduling,
+            inFlightRecovery: config.recoveryWindowMillis || (scheduling.inFlightRecovery ?? 1_000),
+          }),
+        ),
       );
     }),
   );

@@ -979,6 +979,7 @@ export class ThreadMutationGate extends Context.Service<
       });
 
       const minimumAlarmDelay = Math.max(1, Math.ceil(config.alarmBackoffBase / 2));
+      const recoveryDelay = config.recoveryWindowMillis || minimumAlarmDelay;
 
       const runTransaction = yield* makeStorageOperation;
       const { run: runAlarmTransaction, withTransaction } = yield* makeAlarmOperation;
@@ -1010,6 +1011,7 @@ export class ThreadMutationGate extends Context.Service<
       ) {
         yield* validateSourceBoundary;
         const now = yield* Clock.currentTimeMillis;
+        const scheduling = yield* DurableObjectAlarm.ScheduleConfiguration;
 
         const enroll = async (transaction: MaintenanceStorage, checkpoint: CheckpointIntent) => {
           if (progressCursor === undefined) dueQueue.dirty(id, dueAt);
@@ -1033,7 +1035,13 @@ export class ThreadMutationGate extends Context.Service<
           }
           const next = DueQueue.next(dueQueue.read());
 
-          if (Number.isFinite(next)) checkpoint.earlier(Math.max(next, now + minimumAlarmDelay));
+          if (Number.isFinite(next))
+            checkpoint.earlier(
+              Math.max(
+                next,
+                now + (scheduling.dispatchAfterEvent === true ? 0 : minimumAlarmDelay),
+              ),
+            );
         };
 
         yield* runAlarmTransaction("schedule maintenance lane", enroll);
@@ -1072,12 +1080,12 @@ export class ThreadMutationGate extends Context.Service<
                     }),
                   ),
                 );
-              // The earliest configured retry bounds a newly actionable mutation without relying
-              // on its best-effort immediate wake hint.
+              // Commit recovery before the producer. Source progress separately starts work
+              // promptly; a retained earlier wake already covers this recovery window.
               const deadline = DueQueue.next(dueQueue.read());
 
               if (Number.isFinite(deadline))
-                checkpoint.earlier(Math.max(deadline, now + minimumAlarmDelay));
+                checkpoint.earlier(Math.max(deadline, now + recoveryDelay));
             },
           );
         yield* failpoint.hit("maintenance:dirty:after");
@@ -3242,6 +3250,13 @@ export class ThreadMaintenance extends Context.Service<
 
                 if (Number.isFinite(next)) {
                   checkpoint.at(Math.max(now + minimumAlarmDelay, next));
+
+                  return "rearmed" as const;
+                }
+                // A productive event retains one recovery opportunity for nearby ingress.
+                // Its later empty delivery has no charged work and removes the checkpoint.
+                if (config.recoveryWindowMillis > 0 && observed.charged.size > 0) {
+                  checkpoint.at(now + config.recoveryWindowMillis);
 
                   return "rearmed" as const;
                 }

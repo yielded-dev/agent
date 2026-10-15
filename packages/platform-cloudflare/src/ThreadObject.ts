@@ -1290,10 +1290,12 @@ export const make = <
     | AlarmServices
   > = Layer.flatMap(application, (applicationServices) => {
     const scheduling = Context.get(applicationServices, DurableObjectAlarm.ScheduleConfiguration);
+    const config = Context.get(applicationServices, CloudflareDurableRuntimeConfig);
 
     const services = Context.add(applicationServices, DurableObjectAlarm.ScheduleConfiguration, {
       ...scheduling,
       dispatchAfterEvent: scheduling.dispatchAfterEvent ?? true,
+      inFlightRecovery: config.recoveryWindowMillis || (scheduling.inFlightRecovery ?? 1_000),
     });
 
     return Layer.effectContext(gateEndpoint.pipe(Effect.provide(services), Effect.as(services)));

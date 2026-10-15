@@ -244,6 +244,7 @@ describe("Thread Object message maintenance", () => {
       const now = initialNow + 5;
 
       await drainAlarmsUntil(source, allSettled(source));
+      await advance(10);
       await drainAlarmsUntil(source, async () => (await scheduledAlarm(source)) === null);
       await enqueue(source, destination, now, "message", approvalDefinition.id);
       await runDurableObjectAlarm(stubFor(source));
@@ -253,9 +254,12 @@ describe("Thread Object message maintenance", () => {
       expect(accepted?.parkReason).toBe("awaiting-settlement");
       expect(accepted?.receipt).not.toBeNull();
       expect(await allSettled(source)()).toBe(true);
+      await advance(10);
+      await runDurableObjectAlarm(stubFor(source));
       expect(await scheduledAlarm(source)).toBeNull();
       await advance(5);
       await drainAlarmsUntil(destination, anyInState(destination, "suspended"));
+      await advance(10);
       await drainAlarmsUntil(destination, async () => (await scheduledAlarm(destination)) === null);
       expect(supplierCountsFor(destination)).toEqual({});
 
@@ -302,6 +306,8 @@ describe("Thread Object message maintenance", () => {
       expect(processed?.status).toBe("processed");
       expect(processed?.receipt).toEqual(accepted?.receipt);
       expect(supplierCountsFor(destination)).toEqual({ book: 1 });
+      await advance(10);
+      await runDurableObjectAlarm(stubFor(source));
       expect(await scheduledAlarm(source)).toBeNull();
     }));
 
@@ -368,6 +374,8 @@ describe("Thread Object message maintenance", () => {
       }
       expect(await allSettled(source)()).toBe(true);
       expect([await read(source), await read(source, "late-8")]).toEqual(before);
+      await advance(10);
+      await runDurableObjectAlarm(stubFor(source));
       expect(await scheduledAlarm(source)).toBeNull();
       await advance(300_000);
       expect([await read(source), await read(source, "late-8")]).toEqual(before);

@@ -56,6 +56,7 @@ const baseClass = ThreadObject.make(
     settlementPollInterval: 25,
     abortPollInterval: 25,
     alarmBackoffBase: 10,
+    recoveryWindowMillis: 10,
     alarmBackoffCap: 100,
     observationPollInterval: 10,
     toolReconciler: phase6SupplierReconcilerLayer,

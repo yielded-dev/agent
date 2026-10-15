@@ -133,7 +133,7 @@ loading and sending the model's conversation still grows with its size.
 ## The host keeps work moving
 
 Node hosts own scoped workers and recovery scans. Cloudflare Thread Objects use requests
-and alarms to resume eligible work; idle Objects need no alarm. Applications own reply delivery,
+and alarms to resume eligible work; an idle recovery wake clears itself. Applications own reply delivery,
 query views, and optional memory processing. These have distinct obligations from running the
 model. Required custom publication can delay native execution; choose it deliberately.
 

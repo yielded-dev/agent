@@ -109,14 +109,22 @@ write the raw alarm slot or replace its handler.
 `dispatchAfterEvent` defaults to **true**, starting due work sooner but potentially delaying
 cold receipts. To opt out, provide `DurableObjectAlarm.ScheduleConfiguration` with
 `{ dispatchAfterEvent: false }` through `Layer.provideMerge` on the application Layer.
-Native alarms remain the recovery driver.
+In that mode, alarms still start work promptly; the recovery window does not delay execution.
 
-| Setting                          | Default                     |
-| -------------------------------- | --------------------------- |
-| Admission queue depth per Thread | 256 nonterminal Submissions |
-| Encoded input limit              | 1,900,000 bytes             |
-| Database admission ceiling       | 9,000,000,000 bytes         |
-| Failed/no-progress pass backoff  | 100 ms base, 5 seconds cap  |
+`recoveryWindowMillis` controls recovery after interruption without another client request.
+After activity, the Object retains one wake for this window and reuses it for nearby requests.
+An empty wake clears itself. A longer window can avoid an alarm write before the first model
+request, in exchange for slower recovery without a client. Reopening an Object with pending
+work still schedules prompt recovery. Set the window to `0` to restore the short recovery
+deadlines and immediate idle cancellation.
+
+| Setting                                  | Default                     |
+| ---------------------------------------- | --------------------------- |
+| Admission queue depth per Thread         | 256 nonterminal Submissions |
+| Encoded input limit                      | 1,900,000 bytes             |
+| Database admission ceiling               | 9,000,000,000 bytes         |
+| Failed/no-progress pass backoff          | 100 ms base, 5 seconds cap  |
+| Recovery window (`recoveryWindowMillis`) | 60,000 ms (60 seconds)      |
 
 An alarm has a ten-minute cooperative yield boundary and fourteen-minute watchdog.
 These are event limits; agent `maxDuration` applies to each active durable Attempt
