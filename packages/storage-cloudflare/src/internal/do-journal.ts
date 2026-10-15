@@ -1000,7 +1000,7 @@ const makeJournal = Effect.fnUntraced(function* (
     if (request.records.length > 0) {
       const workFields = yield* work
         .apply(
-          yield* Schema.decodeEffect(ThreadId)(request.threadId).pipe(Effect.mapError(workFailure)),
+          request.threadId,
           firstSequence,
           request.records.map((record) => record.canonical),
         )
