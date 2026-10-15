@@ -36,6 +36,7 @@ import { FetchHttpClient } from "effect/http";
 import {
   BrowserDiagnostic,
   BrowserDiagnostics,
+  BrowserErrorName,
   CheckoutError,
   CheckoutPhase,
   Evidence,
@@ -168,10 +169,15 @@ export class CheckoutRun extends DurableObject<Env> {
 
       if (Option.isNone(failure)) return;
 
+      const cause = Schema.decodeUnknownOption(Schema.Struct({ name: BrowserErrorName }))(
+        error.cause,
+      );
+
       const diagnostic = {
         operation: failure.value.operation,
         reason: failure.value.reason,
         status: failure.value.status ?? null,
+        ...(Option.isSome(cause) ? { errorName: cause.value.name } : {}),
       };
 
       this.ctx.storage.kv.put(
@@ -356,12 +362,14 @@ export class CheckoutRun extends DurableObject<Env> {
         }),
       );
 
-    this.phase("credential");
+    this.phase("credential-email");
     // Authentication is host-owned and complete before generated code receives the page.
     yield* session
       .run(authorize, async (page) => {
         await page.type('input[type="email"]', buyer);
+        this.phase("credential-password");
         await page.type('input[type="password"]', this.env.CHECKOUT_PASSWORD);
+        this.phase("credential-submit");
         await Promise.all([
           page.waitForNavigation({ waitUntil: "domcontentloaded" }),
           page.click("#login button"),

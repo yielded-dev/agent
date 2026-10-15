@@ -49,7 +49,9 @@ export const CheckoutPhase = Schema.Literals([
   "agent",
   "observe",
   "act",
-  "credential",
+  "credential-email",
+  "credential-password",
+  "credential-submit",
   "submit",
   "receipt",
   "close",
@@ -71,6 +73,17 @@ export const Receipt = Schema.Struct({
   currency: Schema.String,
   paid: Schema.Boolean,
 });
+
+export const BrowserErrorName = Schema.Literals([
+  "TypeError",
+  "RangeError",
+  "SyntaxError",
+  "TimeoutError",
+  "SchemaError",
+  "ProtocolError",
+  "TargetCloseError",
+  "ConnectionClosedError",
+]);
 
 /** Only authored browser stages and finite classifications may enter public proof evidence. */
 export const BrowserDiagnostic = Schema.Struct({
@@ -96,6 +109,7 @@ export const BrowserDiagnostic = Schema.Struct({
     "pending",
   ]),
   status: Schema.NullOr(Schema.Int.check(Schema.isBetween({ minimum: 100, maximum: 599 }))),
+  errorName: Schema.optionalKey(BrowserErrorName),
 });
 
 export const BrowserDiagnostics = Schema.Array(BrowserDiagnostic).check(Schema.isMaxLength(16));
