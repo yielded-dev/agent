@@ -92,6 +92,17 @@ export default router<Bindings>("yielded", {
         const cached = getClient(env);
         cached.observations?.set(query.storageObject ?? query.object, query);
         const { client } = await cached.ready;
+        if (typeof client.watchTextBytes === "function") {
+          const body = await cached.runtime.runPromise(client.watchTextBytes(ThreadId.make(query.storageObject ?? query.object)).pipe(
+            Stream.toReadableStreamEffect,
+          ));
+
+          return new Response(body, {
+            headers: { "content-type": "application/x-ndjson", "cache-control": "no-store", "x-yielded-text-format": "frame-v1" },
+          });
+        }
+
+        // Reference revisions predate the byte API; keep their measured bridge intact.
         const encoder = new TextEncoder();
         const body = await cached.runtime.runPromise(client.watchText(ThreadId.make((query.storageObject ?? query.object))).pipe(
           Stream.map((frame): readonly TextObservation[] => {

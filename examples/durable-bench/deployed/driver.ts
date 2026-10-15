@@ -1,3 +1,5 @@
+import { decodeLiveText } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
+import { ThreadId } from "@yielded/agent/identifiers";
 import { Cause, Clock, Deferred, Effect, Option, Schema, Stream } from "effect";
 import { Ndjson } from "effect/encoding";
 
@@ -383,12 +385,35 @@ const operation = {
               if (!body)
                 return yield* ObservationError.make({ message: "Missing text observation body." });
 
-              yield* Stream.fromReadableStream({
+              const bytes = Stream.fromReadableStream({
                 evaluate: () => body,
                 onError: (cause) =>
                   ObservationError.make({ message: "Text observation disconnected.", cause }),
-              }).pipe(
-                Stream.pipeThroughChannel(Ndjson.decodeSchema(TextObservation)()),
+              });
+
+              const observations =
+                query.target === "yielded" &&
+                response.headers.get("x-yielded-text-format") === "frame-v1"
+                  ? decodeLiveText(ThreadId.make(query.storageObject ?? query.object), bytes).pipe(
+                      Stream.flatMap((frame) => {
+                        if (frame._tag === "Reset")
+                          return Stream.succeed<TextObservation>({ _tag: "Ready" });
+                        const event = frame.event;
+
+                        return event._tag === "Text" &&
+                          event.part.type === "text-delta" &&
+                          event.part.delta
+                          ? Stream.succeed<TextObservation>({
+                              _tag: "Text",
+                              input: event.submissionId,
+                              text: event.part.delta,
+                            })
+                          : Stream.empty;
+                      }),
+                    )
+                  : bytes.pipe(Stream.pipeThroughChannel(Ndjson.decodeSchema(TextObservation)()));
+
+              yield* observations.pipe(
                 Stream.concat(
                   Stream.fail(
                     ObservationError.make({
