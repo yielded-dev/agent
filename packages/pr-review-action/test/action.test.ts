@@ -1,6 +1,7 @@
 import { NodeServices } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
 import { Cause, ConfigProvider, Deferred, Effect, Exit, Fiber, Option, Ref, Schema } from "effect";
+import { Base64 } from "effect/encoding";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { TestClock } from "effect/testing";
 
@@ -74,8 +75,9 @@ const pullRequestWire = (title: string, base: string, head: string, draft = fals
   body: null,
   draft,
   html_url: "https://github.test/reve-ai/example/pull/12",
-  base: { sha: base },
-  head: { sha: head },
+  user: { type: "User" },
+  base: { sha: base, ref: "main", repo: { full_name: "reve-ai/example" } },
+  head: { sha: head, ref: "feature", repo: { full_name: "reve-ai/example" } },
 });
 
 const reviewHistoryWire = (
@@ -340,6 +342,129 @@ describe("PR commit review checks", () => {
         }),
     };
   };
+
+  // PR #991 exhausted automatic reviews on generated Changesets updates. Use
+  // the Action boundary: live release branches cannot safely carry script edits
+  // or reliably move between classification and check publication.
+  it.effect.each([
+    "generated",
+    "script",
+    "archive",
+    "ordinary",
+    "blocked",
+    "moved",
+    "unreadable",
+  ] as const)("recognizes generated releases before the automatic quota: %s", (scenario) =>
+    Effect.gen(function* () {
+      const sources = new Map([
+        ["config", "{}"],
+        ["changeset", '---\n"example": patch\n---\nFix a bug.\n'],
+        ["changed-archive", "An edited changeset.\n"],
+        ["old-manifest", '{"name":"example","version":"1.0.0"}\n'],
+        [
+          "new-manifest",
+          scenario === "script"
+            ? '{"name":"example","version":"1.0.1","scripts":{"postinstall":"execute"}}\n'
+            : '{"name":"example","version":"1.0.1"}\n',
+        ],
+      ]);
+
+      const entry = (path: string, sha: string) => ({
+        path,
+        sha,
+        type: "blob",
+        mode: "100644",
+        size: sources.get(sha)?.length ?? 0,
+      });
+
+      const history = Array.from({ length: 5 }, (_, index) =>
+        reviewHistoryWire(index + 1, reviewMarker(true), `old-${String(index)}`, null),
+      );
+
+      if (scenario === "blocked") history.push(blocked);
+      let pullReads = 0;
+
+      const test = fixture(history, (request, url) => {
+        let body: unknown;
+
+        if (url.pathname.endsWith("/pulls/12")) {
+          pullReads += 1;
+
+          const pull = pullRequestWire(
+            "Version packages",
+            "base",
+            scenario === "moved" && pullReads > 1 ? "new-head" : "head",
+          );
+
+          body = {
+            ...pull,
+            user: { type: scenario === "ordinary" ? "User" : "Bot" },
+            head: { ...pull.head, ref: "changeset-release/main" },
+          };
+        } else if (url.pathname.includes("/compare/")) {
+          body = { merge_base_commit: { sha: "base" } };
+        } else if (url.pathname.includes("/git/commits/")) {
+          const sha = url.pathname.split("/").at(-1);
+
+          body = { sha, tree: { sha: `${sha}-tree` } };
+        } else if (url.pathname.includes("/git/trees/")) {
+          const base = url.pathname.endsWith("/base-tree");
+
+          body = {
+            sha: base ? "base-tree" : "head-tree",
+            truncated: false,
+            tree: [
+              entry(".changeset/config.json", "config"),
+              entry(
+                base ? ".changeset/fix.md" : ".changeset/pre/fix.md",
+                !base && scenario === "archive" ? "changed-archive" : "changeset",
+              ),
+              entry("packages/example/package.json", base ? "old-manifest" : "new-manifest"),
+              ...(!base ? [entry("packages/example/CHANGELOG.md", "changelog")] : []),
+            ],
+          };
+        } else if (url.pathname.includes("/git/blobs/")) {
+          const sha = url.pathname.split("/").at(-1) ?? "";
+          const source = sources.get(sha);
+
+          if (source === undefined) return Effect.die("Unexpected blob read");
+          // Review 5538954882: an oversized blob must retain normal check reporting.
+          body = {
+            sha,
+            size: scenario === "unreadable" ? 2_100_000 : source.length,
+            encoding: "base64",
+            content: Base64.encode(source),
+          };
+        } else return undefined;
+
+        return Effect.succeed(jsonResponse(request, body));
+      });
+
+      const exit = yield* test
+        .run({
+          PR_REVIEW_AUTOMATIC_LIMIT: "5",
+          PR_REVIEW_IGNORE: "**/CHANGELOG.md",
+        })
+        .pipe(Effect.exit);
+
+      expect(Exit.isSuccess(exit)).toBe(scenario !== "moved");
+      expect(test.writes.at(-1)?.body).toMatchObject({
+        conclusion:
+          scenario === "generated"
+            ? "success"
+            : scenario === "moved"
+              ? "cancelled"
+              : scenario === "blocked"
+                ? "failure"
+                : "action_required",
+      });
+      if (scenario === "generated") {
+        expect(test.writes.at(-1)?.body).toMatchObject({
+          output: { title: "Generated Changesets release" },
+        });
+      }
+    }),
+  );
 
   // PR #679: fixed/refuted bot reviews stayed blocking. Exercise dismissal and
   // reconciliation together; live GitHub cannot reliably reproduce command edits
