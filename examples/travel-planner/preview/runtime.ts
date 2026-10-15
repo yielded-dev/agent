@@ -1,3 +1,4 @@
+import { generateKeyPairSync, sign } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 import { Effect, FileSystem, Schema } from "effect";
@@ -10,7 +11,6 @@ export class PreviewError extends Schema.TaggedError<PreviewError>()("PreviewErr
 }) {}
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const key = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
 
 /** A fresh, loopback-only runtime. No deployed bindings or credentials are read. */
 export const localPreview = Effect.fn("localPreview")(function* (
@@ -56,17 +56,80 @@ export const localPreview = Effect.fn("localPreview")(function* (
     catch: (cause) => PreviewError.make({ message: "Could not build the offline planner.", cause }),
   });
 
+  const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+
+  const jwks = {
+    keys: [{ ...keys.publicKey.export({ format: "jwk" }), kid: "preview", alg: "RS256" }],
+  };
+
+  const claims = {
+    accountId: "00000000-0000-4000-8000-000000000001",
+    displayName: "Local preview",
+  };
+
+  const scopes = ["preview:planner"];
+
   const bindings = {
-    AUTH_ORIGIN: origin,
-    AUTH_BINDING_KEY: key(),
-    AUTH_PROOF_KEY: key(),
-    AUTH_TRANSACTION_KEY: key(),
-    AUTH_GITHUB_CLIENT_ID: "local-preview",
-    AUTH_GITHUB_CLIENT_SECRET: "local-preview",
-    AUTH_YIELDED_ISSUER: "https://auth.yielded.dev",
+    AUTH_ISSUER: origin,
+    AUTH_RESOURCE: origin,
+    AUTH_JWKS_URL: `${origin}/jwks`,
+    AUTH_REQUIRED_SCOPE: scopes[0],
+    AUTH_HOSTED_MODEL_SCOPE: "preview:hosted-model",
     AUTH_YIELDED_CLIENT_SECRET: "local-preview",
-    AUTH_EMAIL_FROM: "signin@preview.invalid",
     BYOK_ENCRYPTION_KEY: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64"),
+  };
+
+  // Explicit loopback fixture: its ephemeral signing key never reaches a production bundle.
+  const authResponse = (request: Request) => {
+    const path = new URL(request.url).pathname;
+
+    if (path === "/auth/logout")
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "set-cookie": "__Host-yielded-access=; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
+        },
+      });
+    if (path === "/auth/session" && !request.headers.get("cookie")) return Response.json(null);
+    if (!["/auth/login", "/auth/session", "/auth/refresh"].includes(path))
+      return new Response("Not found", { status: 404 });
+    const now = Math.floor(Date.now() / 1000);
+
+    const header = Buffer.from(
+      JSON.stringify({ alg: "RS256", typ: "at+jwt", kid: "preview" }),
+    ).toString("base64url");
+
+    const payload = Buffer.from(
+      JSON.stringify({
+        iss: origin,
+        sub: "local-preview",
+        aud: origin,
+        iat: now,
+        exp: now + 300,
+        jti: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
+        grant_id: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
+        client_id: "preview",
+        scope: scopes.join(" "),
+        auth_time: now,
+        sid: "preview",
+        claims,
+      }),
+    ).toString("base64url");
+
+    const input = `${header}.${payload}`;
+    const token = `${input}.${Buffer.from(sign("RSA-SHA256", Buffer.from(input), keys.privateKey)).toString("base64url")}`;
+
+    const headers = {
+      "set-cookie": `__Host-yielded-access=${token}; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=300`,
+      "cache-control": "no-store",
+    };
+
+    return path === "/auth/login"
+      ? new Response(null, { status: 303, headers: { ...headers, location: "/travel/" } })
+      : Response.json(
+          { subjectId: "local-preview", ...claims, scopes, expiresAtMillis: (now + 300) * 1000 },
+          { headers },
+        );
   };
 
   const preview = yield* Effect.acquireRelease(
@@ -80,6 +143,13 @@ export const localPreview = Effect.fn("localPreview")(function* (
             rootPath: directory,
             resourceTmpPath: directory,
             workers: [
+              {
+                name: "preview-gateway",
+                modules: true,
+                script:
+                  'export default { fetch(request, env) { return new URL(request.url).pathname.startsWith("/auth/") ? env.AUTH.fetch(request) : env.APP.fetch(request) } }',
+                serviceBindings: { AUTH: authResponse, APP: "preview-ui" },
+              },
               {
                 name: "preview-ui",
                 modules,
@@ -95,15 +165,16 @@ export const localPreview = Effect.fn("localPreview")(function* (
                     useSQLite: true,
                   },
                 },
-                email: { send_email: [{ name: "AUTH_EMAIL" }] },
                 assets: {
                   directory: publicDirectory,
                   binding: "ASSETS",
                   run_worker_first: true,
                   routerConfig: { has_user_worker: true },
                 },
-                outboundService: () =>
-                  new Response("Unavailable in local preview", { status: 503 }),
+                outboundService: (request) =>
+                  request.url === `${origin}/jwks`
+                    ? Response.json(jwks)
+                    : new Response("Unavailable in local preview", { status: 503 }),
               },
               {
                 name: "preview-planner",

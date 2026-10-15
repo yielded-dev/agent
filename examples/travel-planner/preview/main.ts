@@ -12,8 +12,7 @@ Effect.gen(function* () {
   const { origin } = yield* localPreview(port);
 
   yield* Console.log(`Local travel preview: ${origin}/travel/
-Accept the local HTTPS certificate, then create an email account.
-Verification emails are saved locally; their file paths appear in this terminal.
+Accept the local HTTPS certificate. The preview gateway supplies a temporary test account.
 Use sk-preview-local for the offline planner and send: complete travel cards fixture
 This preview uses test data, makes no provider calls, and resets when stopped.`);
 

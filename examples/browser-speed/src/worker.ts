@@ -1,3 +1,8 @@
+import {
+  authenticateRequest,
+  hostedModelAccess,
+  type AuthEnvironment,
+} from "@yielded/agent-example-auth/server";
 import { BrowserSessions } from "@yielded/agent-platform-cloudflare/browser-session";
 import { dynamicWorkerCodeExecutorLayer } from "@yielded/agent-platform-cloudflare/cloudflare-code-mode";
 import * as DoThreadStore from "@yielded/agent-storage-cloudflare/do-thread-store";
@@ -12,7 +17,8 @@ import { type Account, LabApi, LabError, ModelApi, modelChoices } from "./contra
 import { connectKitesurf } from "./kitesurf.ts";
 import { Control, emptyControl, makeOwner } from "./owner.ts";
 
-export interface Env {
+export interface Env extends AuthEnvironment {
+  readonly AUTH_YIELDED_CLIENT_SECRET?: string;
   readonly LAB: DurableObjectNamespace<BrowserLab>;
   readonly BROWSER: BrowserRun;
   readonly LOADER: WorkerLoader;
@@ -27,8 +33,6 @@ export interface Env {
   readonly LAB_PUBLIC?: string;
   /** Per-address run admission for public labs. */
   readonly RUN_LIMIT?: RateLimit;
-  /** The travel planner's auth on this origin; its allowlisted accounts run on FUNDED_* keys. */
-  readonly AUTH?: DurableObjectNamespace;
   readonly FUNDED_OPENAI_API_KEY?: string;
 }
 
@@ -37,48 +41,24 @@ const basePath = "/browser-use";
 
 const codec = Schema.fromJsonString(Control);
 
-const PlannerSession = Schema.Struct({
-  subjectId: Schema.String.check(Schema.isUUID()),
-  displayName: Schema.String,
-});
-
-const PlannerFunding = Schema.Struct({ allowed: Schema.Boolean });
-
-/** Reads the request's travel planner session. Any failure reads as signed out. */
-/** The travel planner's sign-in, read from a request's same-origin session cookie. */
-export class PlannerAccounts extends Context.Service<
-  PlannerAccounts,
-  { readonly read: (request: Request) => Effect.Effect<Account | null> }
->()("browser-speed/PlannerAccounts") {
-  /** Reads through the planner's auth Durable Object. Without it, or on any failure: anonymous. */
-  static readonly layer = (auth: DurableObjectNamespace | undefined) =>
-    Layer.succeed(PlannerAccounts, {
+/** The Site cookie supplies identity; hosted funding remains an issuer-owned decision. */
+export class HostedAccounts extends Context.Service<
+  HostedAccounts,
+  {
+    readonly read: (request: Request) => Effect.Effect<Account | null>;
+  }
+>()("browser-speed/HostedAccounts") {
+  static readonly layer = (env: Env) =>
+    Layer.succeed(HostedAccounts, {
       read: Effect.fnUntraced(
         function* (request: Request) {
-          const cookie = request.headers.get("cookie");
+          const session = yield* authenticateRequest(request, env);
 
-          if (auth === undefined || !cookie) return null;
-          const planner = auth.getByName("auth-v1");
+          const funded =
+            session.scopes.includes(env.AUTH_HOSTED_MODEL_SCOPE ?? "") &&
+            (yield* hostedModelAccess(session.accountId, env));
 
-          const read = Effect.fnUntraced(function* (path: string, headers: HeadersInit = {}) {
-            const response = yield* Effect.tryPromise(() =>
-              planner.fetch(new Request(new URL(path, request.url), { headers })),
-            );
-
-            if (!response.ok) return yield* Effect.fail(response.status);
-
-            return yield* Effect.tryPromise(() => response.json());
-          });
-
-          const session = yield* read("/_internal/session", { cookie }).pipe(
-            Effect.flatMap(Schema.decodeUnknownEffect(PlannerSession)),
-          );
-
-          const funding = yield* read(`/_internal/funding/${session.subjectId}`).pipe(
-            Effect.flatMap(Schema.decodeUnknownEffect(PlannerFunding)),
-          );
-
-          return { displayName: session.displayName, funded: funding.allowed } satisfies Account;
+          return { displayName: session.displayName, funded } satisfies Account;
         },
         Effect.catch(() => Effect.succeed(null)),
       ),
@@ -232,7 +212,7 @@ export class BrowserLab extends DurableObject<Env> {
       group
         .handle("account", () =>
           Effect.gen(function* () {
-            return yield* (yield* PlannerAccounts).read(request);
+            return yield* (yield* HostedAccounts).read(request);
           }),
         )
         .handle("snapshot", () => this.owner.snapshot())
@@ -241,7 +221,7 @@ export class BrowserLab extends DurableObject<Env> {
             // Lab keys fill only what the visitor left out, and only for same-origin requests.
             const funded =
               request.headers.get("origin") === new URL(request.url).origin &&
-              (yield* (yield* PlannerAccounts).read(request))?.funded === true;
+              (yield* (yield* HostedAccounts).read(request))?.funded === true;
 
             if (this.env.LAB_PUBLIC === "true" && payload.scenario === "coffee" && !funded)
               return yield* LabError.make({
@@ -266,7 +246,7 @@ export class BrowserLab extends DurableObject<Env> {
 
     const routes = HttpApiBuilder.layer(LabApi).pipe(
       Layer.provide(handlers),
-      HttpRouter.provideRequest(PlannerAccounts.layer(this.env.AUTH)),
+      HttpRouter.provideRequest(HostedAccounts.layer(this.env)),
       Layer.provide(HttpServer.layerServices),
     );
 

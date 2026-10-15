@@ -1,0 +1,196 @@
+import * as OAuthServer from "@yielded/auth/OAuthServer";
+import * as Portable from "@yielded/crypto/Portable";
+import { Jwk } from "@yielded/jose";
+import { Clock, Effect, Redacted, Schema, Semaphore } from "effect";
+import { Base64Url } from "effect/encoding";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+
+import { AccountClaims, AccountError } from "./contract";
+
+export interface AuthEnvironment {
+  readonly AUTH_ISSUER?: string;
+  readonly AUTH_RESOURCE?: string;
+  readonly AUTH_JWKS_URL?: string;
+  readonly AUTH_REQUIRED_SCOPE?: string;
+  readonly AUTH_HOSTED_MODEL_SCOPE?: string;
+}
+
+const Configuration = Schema.Struct({
+  AUTH_ISSUER: Schema.NonEmptyString,
+  AUTH_RESOURCE: Schema.NonEmptyString,
+  AUTH_JWKS_URL: Schema.NonEmptyString,
+  AUTH_REQUIRED_SCOPE: Schema.NonEmptyString,
+  AUTH_HOSTED_MODEL_SCOPE: Schema.NonEmptyString,
+});
+
+const KeySet = Schema.Struct({
+  keys: Schema.NonEmptyArray(Jwk.PublicJwk).check(Schema.isMaxLength(16)),
+});
+
+const KeyHint = Schema.fromJsonString(
+  Schema.Struct({ kid: Schema.NonEmptyString.check(Schema.isMaxLength(256)) }),
+);
+
+const unavailable = () =>
+  AccountError.make({ code: "unavailable", message: "Authentication is temporarily unavailable." });
+
+const unauthorized = () =>
+  AccountError.make({ code: "unauthorized", message: "Sign in to continue." });
+
+type Verifier = Effect.Success<ReturnType<typeof OAuthServer.makeAccessTokenVerifier>>;
+type KeySnapshot = {
+  readonly verifier: Verifier;
+  readonly kids: ReadonlyArray<string | undefined>;
+  readonly expiresAt: number;
+};
+type KeyCache = {
+  readonly gate: Semaphore.Semaphore;
+  snapshot?: KeySnapshot;
+  nextAttemptAt: number;
+};
+// Only trusted deployment configuration selects an entry. Tokens and authorization are never cached.
+const verifiers = new Map<string, KeyCache>();
+
+const verifierFor = Effect.fnUntraced(function* (config: typeof Configuration.Type, kid: string) {
+  const key = JSON.stringify([config.AUTH_ISSUER, config.AUTH_RESOURCE, config.AUTH_JWKS_URL]);
+  let cache = verifiers.get(key);
+
+  if (cache === undefined) {
+    cache = { gate: Semaphore.makeUnsafe(1), nextAttemptAt: 0 };
+    verifiers.set(key, cache);
+  }
+  const current = cache;
+  const now = yield* Clock.currentTimeMillis;
+
+  if (current.snapshot && current.snapshot.expiresAt > now && current.snapshot.kids.includes(kid))
+    return current.snapshot.verifier;
+
+  return yield* current.gate.withPermits(1)(
+    Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis;
+      const previous = current.snapshot;
+
+      if (previous && previous.expiresAt > now && previous.kids.includes(kid))
+        return previous.verifier;
+      if (current.nextAttemptAt > now) {
+        if (previous && previous.expiresAt > now) return previous.verifier;
+
+        return yield* unavailable();
+      }
+      // A token may suggest a key ID, never a URL. Unknown IDs trigger at most one fetch per 30s.
+      current.nextAttemptAt = now + 30_000;
+
+      return yield* Effect.gen(function* () {
+        const http = yield* HttpClient.HttpClient;
+        const response = yield* http.get(config.AUTH_JWKS_URL);
+
+        if (response.status !== 200) return yield* unavailable();
+        const keys = yield* response.json.pipe(Effect.flatMap(Schema.decodeUnknownEffect(KeySet)));
+
+        const verifier = yield* OAuthServer.makeAccessTokenVerifier({
+          issuer: config.AUTH_ISSUER,
+          resource: config.AUTH_RESOURCE,
+          publicKeys: keys.keys,
+        });
+
+        current.snapshot = {
+          verifier,
+          kids: keys.keys.map((key) => key.kid),
+          expiresAt: now + 300_000,
+        };
+
+        return verifier;
+      }).pipe(
+        Effect.scoped,
+        Effect.timeout("5 seconds"),
+        Effect.mapError(unavailable),
+        Effect.catch((error) =>
+          previous && previous.expiresAt > now
+            ? Effect.succeed(previous.verifier)
+            : Effect.fail(error),
+        ),
+        Effect.provideService(FetchHttpClient.RequestInit, {
+          redirect: "manual",
+          credentials: "omit",
+        }),
+        Effect.provide([FetchHttpClient.layer, Portable.layerWithoutKdf(globalThis.crypto.subtle)]),
+      );
+    }),
+  );
+});
+
+/** Verify the host's HttpOnly access cookie locally; no account or permission store exists here. */
+export const authenticateRequest = Effect.fnUntraced(function* (
+  request: Request,
+  env: AuthEnvironment,
+) {
+  const cookie = request.headers.get("cookie") ?? "";
+
+  const values = cookie
+    .split(";")
+    .map((value) => value.trim())
+    .filter((value) => value.startsWith("__Host-yielded-access="));
+
+  if (values.length !== 1) return yield* unauthorized();
+
+  const config = yield* Schema.decodeUnknownEffect(Configuration)(env).pipe(
+    Effect.mapError(unavailable),
+  );
+
+  const credential = values[0]!.slice("__Host-yielded-access=".length);
+
+  if (credential.length > 16_384) return yield* unauthorized();
+
+  // This untrusted hint only selects keys from the configured issuer's JWKS.
+  const hint = yield* Effect.fromResult(Base64Url.decodeString(credential.split(".")[0]!)).pipe(
+    Effect.flatMap(Schema.decodeUnknownEffect(KeyHint)),
+    Effect.mapError(unauthorized),
+  );
+
+  const verifier = yield* verifierFor(config, hint.kid);
+
+  const access = yield* verifier
+    .verify(Redacted.make(credential))
+    .pipe(
+      Effect.mapError((error) =>
+        error._tag === "OAuthServerInvalidToken" ? unauthorized() : unavailable(),
+      ),
+    );
+
+  if (!access.scopes.includes(config.AUTH_REQUIRED_SCOPE)) return yield* unauthorized();
+
+  const claims = yield* Schema.decodeUnknownEffect(AccountClaims)(access.claims).pipe(
+    Effect.mapError(unauthorized),
+  );
+
+  return { subjectId: access.subjectId, ...claims, scopes: access.scopes };
+});
+
+/** Durable work asks the issuer for current funding; access-token snapshots cannot authorize recovery. */
+export const hostedModelAccess = Effect.fnUntraced(
+  function* (
+    accountId: string,
+    env: AuthEnvironment & { readonly AUTH_YIELDED_CLIENT_SECRET?: string },
+  ) {
+    if (!env.AUTH_ISSUER || !env.AUTH_YIELDED_CLIENT_SECRET) return yield* unavailable();
+    const http = yield* HttpClient.HttpClient;
+
+    const request = yield* HttpClientRequest.post(`${env.AUTH_ISSUER}/internal/agent/access`).pipe(
+      HttpClientRequest.bearerToken(Redacted.make(env.AUTH_YIELDED_CLIENT_SECRET)),
+      HttpClientRequest.bodyJson({ accountId }),
+    );
+
+    const response = yield* http.execute(request);
+
+    if (response.status !== 200) return yield* unavailable();
+
+    return (yield* response.json.pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(Schema.Struct({ allowed: Schema.Boolean }))),
+    )).allowed;
+  },
+  Effect.scoped,
+  Effect.timeout("5 seconds"),
+  Effect.mapError(unavailable),
+  Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual", credentials: "omit" }),
+  Effect.provide(FetchHttpClient.layer),
+);

@@ -1,6 +1,7 @@
+import { authenticatedHttpClient } from "@yielded/agent-example-auth/client";
 import type { Redacted } from "effect";
 import { Data, Effect, Exit, Layer, Option, Schedule, Schema, Semaphore, Stream } from "effect";
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+import { HttpClient, HttpClientRequest } from "effect/http";
 import { AsyncResult, Atom, AtomRpc, Reactivity } from "effect/reactivity";
 import { RpcClient, RpcSerialization } from "effect/rpc";
 
@@ -92,7 +93,7 @@ export class PlannerClient extends AtomRpc.Service<PlannerClient>()("travel-plan
             AsyncResult.getOrElse(get.once(sessionAtom), () => null)?.subjectId ?? "",
           ),
         ),
-    }).pipe(Layer.provide([RpcSerialization.layerNdjson, FetchHttpClient.layer])),
+    }).pipe(Layer.provide([RpcSerialization.layerNdjson, authenticatedHttpClient])),
 }) {}
 
 const connectionQuery = Atom.family((subjectId: string) =>
@@ -350,7 +351,7 @@ export class ProgressClient extends AtomRpc.Service<ProgressClient>()(
               AsyncResult.getOrElse(get.once(sessionAtom), () => null)?.subjectId ?? "",
             ),
           ),
-      }).pipe(Layer.provide([RpcSerialization.layerNdjson, FetchHttpClient.layer])),
+      }).pipe(Layer.provide([RpcSerialization.layerNdjson, authenticatedHttpClient])),
   },
 ) {}
 

@@ -72,7 +72,7 @@ export const serveProgress = Effect.fn("serveProgress")(
     const scope = yield* Scope.make();
 
     const response = yield* Effect.gen(function* () {
-      const owner = yield* plannerOwner(session.subjectId);
+      const owner = yield* plannerOwner(session.accountId);
 
       const handlers = ProgressRpcs.toLayer({
         WatchProgress: ({ conversationId }) =>

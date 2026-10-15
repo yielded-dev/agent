@@ -14,7 +14,7 @@ const unavailable = () =>
 /** Authenticated ingress supplies the owner. No key or provider body reaches the browser. */
 export const createVoiceSession = Effect.fn("createVoiceSession")(
   function* (offer: typeof VoiceOffer.Type, session: AccountSession) {
-    const owner = yield* plannerOwner(session.subjectId);
+    const owner = yield* plannerOwner(session.accountId);
     const key = yield* credentialForOwner(owner);
     const http = yield* HttpClient.HttpClient;
 
