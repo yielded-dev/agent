@@ -1,7 +1,6 @@
 import { AgentInputError } from "@yielded/agent/agent-error";
 import { DigestError } from "@yielded/agent/digest";
 import {
-  Receipt,
   type DurableSubmitAgent,
   type DurableSubmitOptions,
 } from "@yielded/agent/durable-agent-runtime";
@@ -9,6 +8,7 @@ import { DurableRuntimeFailpointError } from "@yielded/agent/durable-failpoint";
 import { AgentId, type ThreadId } from "@yielded/agent/identifiers";
 import { InputMessage } from "@yielded/agent/messaging";
 import { OperationDenied } from "@yielded/agent/operation-authorizer";
+import { Receipt } from "@yielded/agent/receipt";
 import {
   CanonicalRecordEnvelope,
   CanonicalSequence,
@@ -47,9 +47,9 @@ import {
 import { Context, Crypto, Duration, Effect, Layer, Predicate, Schema, Stream } from "effect";
 import { RpcTargets, RpcTracing } from "effect-cf";
 
-import { DurableAlarmError } from "./Alarm.ts";
 import {
   callThreadObject,
+  DurableAlarmError,
   ThreadObjectNamespace,
   type ThreadObjectRpc,
 } from "./CloudflareBindings.ts";
@@ -284,7 +284,9 @@ export type HostResponse = typeof HostResponse.Type;
 // ---------------------------------------------------------------------------
 
 export const decodeSubmitRequest = Schema.decodeUnknownEffect(SubmitRequest);
-export const encodeSubmitRequest = Schema.encodeEffect(SubmitRequest);
+// Encode the caller's fields directly: constructing a Class first would validate the
+// same envelope twice. The Object still decodes its untrusted request independently.
+export const encodeSubmitRequest = Schema.encodeEffect(Schema.Struct(SubmitRequest.fields));
 export const decodeReceipt = Schema.decodeUnknownEffect(Receipt);
 export const encodeReceipt = Schema.encodeEffect(Receipt);
 export const decodeAwaitSettlementRequest = Schema.decodeUnknownEffect(AwaitSettlementRequest);
@@ -388,10 +390,14 @@ const liveTextProtocolFailure = () =>
 
 const decodeLiveTextFrame = Schema.decodeUnknownSync(Schema.fromJsonString(LiveTextFrame));
 
-const decodeLiveText = (
+/**
+ * Validate untrusted NDJSON at the final consumer, including frame bounds, thread,
+ * sequence and text lifecycle. Stream loss invalidates all provisional drafts.
+ */
+export const decodeLiveText = <E, R>(
   threadId: ThreadId,
-  source: ReadableStream<unknown>,
-): Stream.Stream<LiveTextFrame, HostProtocolError | ThreadClientError> =>
+  source: Stream.Stream<Uint8Array, E, R>,
+): Stream.Stream<LiveTextFrame, E | HostProtocolError, R> =>
   Stream.suspend(() => {
     const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false });
     let pending = "";
@@ -459,17 +465,7 @@ const decodeLiveText = (
       return true;
     });
 
-    return Stream.fromReadableStream({
-      evaluate: () => source,
-      // The subscription Scope owns the single bounded cancellation after this reader unlocks.
-      releaseLockOnEnd: true,
-      onError: (cause) =>
-        ThreadClientError.make({
-          threadId,
-          message: "Provisional text disconnected; discard drafts and read canonical records",
-          cause,
-        }),
-    }).pipe(
+    return source.pipe(
       Stream.mapEffect(
         Effect.fnUntraced(function* (chunk) {
           if (!(chunk instanceof Uint8Array)) return yield* liveTextProtocolFailure();
@@ -573,6 +569,14 @@ export class CloudflareThreadClient extends Context.Service<
      * Scope the stream: interruption cancels its remote subscription.
      */
     readonly watchText: (threadId: ThreadId) => Stream.Stream<LiveTextFrame, ClientObserveFailure>;
+    /**
+     * Forward producer NDJSON bytes without decoding or re-encoding frames.
+     * The final consumer must use `decodeLiveText` to validate untrusted frames.
+     * Interruption cancels the remote subscription; buffers remain producer-bounded.
+     */
+    readonly watchTextBytes: (
+      threadId: ThreadId,
+    ) => Stream.Stream<Uint8Array, ClientObserveFailure>;
     /** One bounded page of canonical records. */
     readonly readPage: (
       threadId: ThreadId,
@@ -780,6 +784,115 @@ export class CloudflareThreadClient extends Context.Service<
         );
       });
 
+      const watchTextBytes = (
+        threadId: ThreadId,
+      ): Stream.Stream<Uint8Array, ClientObserveFailure> =>
+        Stream.unwrap(
+          Effect.gen(function* () {
+            const traceArgs =
+              rpcTracing === undefined ? [] : yield* RpcTracing.withRpcTraceContext([]);
+
+            const openingFailure = (cause: unknown) =>
+              ThreadClientError.make({
+                threadId,
+                message: "Provisional text observation could not reach the Thread Object",
+                cause,
+                ...cloudflareFailureSignals(cause),
+              });
+
+            // Retain the original RPC promise: resolving through callThreadObject would
+            // erase its optional native disposer before an interrupted opening can use it.
+            const target = yield* RpcTargets.get(namespace, threadId, () =>
+              namespace.get(threadId),
+            ).pipe(Effect.mapError(openingFailure));
+
+            let request: Promise<unknown> | undefined;
+            let received: unknown;
+            let closed = false;
+
+            const cancel = () => {
+              const value = received;
+
+              received = undefined;
+
+              return value instanceof ReadableStream && !value.locked
+                ? value.cancel().catch(() => undefined)
+                : Promise.resolve();
+            };
+
+            // Install ownership before invoking foreign code, not after its promise settles.
+            yield* Effect.addFinalizer(() =>
+              Effect.try({
+                try: () => {
+                  closed = true;
+                  if (Predicate.hasProperty(request, Symbol.dispose)) {
+                    const dispose = request[Symbol.dispose];
+
+                    if (typeof dispose === "function") dispose.call(request);
+                  }
+                },
+                catch: () => undefined,
+              }).pipe(
+                Effect.ignore,
+                Effect.andThen(
+                  Effect.tryPromise({ try: cancel, catch: () => undefined }).pipe(
+                    Effect.interruptible,
+                    Effect.timeout(PROGRESS_CANCELLATION_TIMEOUT),
+                    Effect.ignore,
+                  ),
+                ),
+              ),
+            );
+
+            const raw = yield* Effect.tryPromise({
+              try: () => {
+                request = target.watchTextEncoded(
+                  Schema.encodeSync(WatchTextRequest)({ schemaVersion: 1 }),
+                  ...traceArgs,
+                );
+
+                return request.then((value) => {
+                  received = value;
+
+                  // A custom endpoint may return a plain, non-cancellable promise. Keep
+                  // late cleanup on that native promise chain; it starts no Effect fiber.
+                  return closed ? cancel().then(() => value) : value;
+                });
+              },
+              catch: openingFailure,
+            }).pipe(
+              Effect.interruptible,
+              Effect.tapCause(() => RpcTargets.invalidate(target)),
+            );
+
+            if (raw instanceof ReadableStream)
+              return Stream.fromReadableStream<Uint8Array, ThreadClientError>({
+                evaluate: () => raw,
+                // The subscription Scope cancels after the reader releases its lock.
+                releaseLockOnEnd: true,
+                onError: (cause) =>
+                  ThreadClientError.make({
+                    threadId,
+                    message:
+                      "Provisional text disconnected; discard drafts and read canonical records",
+                    cause,
+                  }),
+              });
+
+            const response = yield* decodeHostResponse(raw).pipe(
+              Effect.mapError(liveTextProtocolFailure),
+            );
+
+            if (
+              response._tag === "HostFailed" &&
+              Schema.is(ClientObserveHostFailure)(response.failure)
+            )
+              return yield* response.failure;
+
+            return yield* liveTextProtocolFailure();
+          }),
+        );
+
       return CloudflareThreadClient.of({
         submit: Effect.fnUntraced(function* <InputSchema extends Schema.Top>(
           agent: DurableSubmitAgent<InputSchema>,
@@ -802,7 +915,7 @@ export class CloudflareThreadClient extends Context.Service<
             ),
           );
 
-          const request = SubmitRequest.make({
+          const request = {
             agentId: agent.definition.id,
             principal: options.principal,
             idempotencyKey: options.idempotencyKey,
@@ -820,7 +933,7 @@ export class CloudflareThreadClient extends Context.Service<
               : { messageAdmission: options.messageAdmission }),
             definitions: options.definitions,
             inputPayload,
-          });
+          };
 
           const encoded = yield* encodeSubmitRequest(request).pipe(
             Effect.mapError((error) =>
@@ -925,100 +1038,8 @@ export class CloudflareThreadClient extends Context.Service<
           yield* attempt(0).pipe(Effect.onInterrupt(() => cancelProgress(threadId, waiterId)));
         }),
 
-        watchText: (threadId) =>
-          Stream.unwrap(
-            Effect.gen(function* () {
-              const traceArgs =
-                rpcTracing === undefined ? [] : yield* RpcTracing.withRpcTraceContext([]);
-
-              const openingFailure = (cause: unknown) =>
-                ThreadClientError.make({
-                  threadId,
-                  message: "Provisional text observation could not reach the Thread Object",
-                  cause,
-                  ...cloudflareFailureSignals(cause),
-                });
-
-              // Retain the original RPC promise: resolving through callThreadObject would
-              // erase its optional native disposer before an interrupted opening can use it.
-              const target = yield* RpcTargets.get(namespace, threadId, () =>
-                namespace.get(threadId),
-              ).pipe(Effect.mapError(openingFailure));
-
-              let request: Promise<unknown> | undefined;
-              let received: unknown;
-              let closed = false;
-
-              const cancel = () => {
-                const value = received;
-
-                received = undefined;
-
-                return value instanceof ReadableStream && !value.locked
-                  ? value.cancel().catch(() => undefined)
-                  : Promise.resolve();
-              };
-
-              // Install ownership before invoking foreign code, not after its promise settles.
-              yield* Effect.addFinalizer(() =>
-                Effect.try({
-                  try: () => {
-                    closed = true;
-                    if (Predicate.hasProperty(request, Symbol.dispose)) {
-                      const dispose = request[Symbol.dispose];
-
-                      if (typeof dispose === "function") dispose.call(request);
-                    }
-                  },
-                  catch: () => undefined,
-                }).pipe(
-                  Effect.ignore,
-                  Effect.andThen(
-                    Effect.tryPromise({ try: cancel, catch: () => undefined }).pipe(
-                      Effect.interruptible,
-                      Effect.timeout(PROGRESS_CANCELLATION_TIMEOUT),
-                      Effect.ignore,
-                    ),
-                  ),
-                ),
-              );
-
-              const raw = yield* Effect.tryPromise({
-                try: () => {
-                  request = target.watchTextEncoded(
-                    Schema.encodeSync(WatchTextRequest)({ schemaVersion: 1 }),
-                    ...traceArgs,
-                  );
-
-                  return request.then((value) => {
-                    received = value;
-
-                    // A custom endpoint may return a plain, non-cancellable promise. Keep
-                    // late cleanup on that native promise chain; it starts no Effect fiber.
-                    return closed ? cancel().then(() => value) : value;
-                  });
-                },
-                catch: openingFailure,
-              }).pipe(
-                Effect.interruptible,
-                Effect.tapCause(() => RpcTargets.invalidate(target)),
-              );
-
-              if (raw instanceof ReadableStream) return decodeLiveText(threadId, raw);
-
-              const response = yield* decodeHostResponse(raw).pipe(
-                Effect.mapError(liveTextProtocolFailure),
-              );
-
-              if (
-                response._tag === "HostFailed" &&
-                Schema.is(ClientObserveHostFailure)(response.failure)
-              )
-                return yield* response.failure;
-
-              return yield* liveTextProtocolFailure();
-            }),
-          ),
+        watchText: (threadId) => decodeLiveText(threadId, watchTextBytes(threadId)),
+        watchTextBytes,
 
         readPage,
 
