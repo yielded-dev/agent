@@ -1,7 +1,7 @@
 import { type ThreadId } from "@yielded/agent/identifiers";
 import { Publisher, type Event } from "@yielded/agent/provisional-text";
 import { RpcTarget } from "cloudflare:workers";
-import { Context, Effect, Exit, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 import * as Response from "effect/ai/Response";
 
 import { HostProtocolError } from "../CloudflareThreadClient.ts";
@@ -65,7 +65,7 @@ export class LiveTextHub extends Context.Service<
         | { readonly error: HostProtocolError; readonly attemptId: Event["attemptId"] }
         | undefined;
 
-      const encode = Schema.encodeExit(Schema.fromJsonString(Frame));
+      const encode = Schema.encodeSync(Frame);
       const encoder = new TextEncoder();
 
       yield* Effect.addFinalizer(() =>
@@ -265,16 +265,18 @@ export class LiveTextHub extends Context.Service<
               value = frame(event);
             }
 
-            const json = encode(value);
+            let json: string;
 
-            if (Exit.isFailure(json)) {
+            try {
+              json = JSON.stringify(encode(value));
+            } catch {
               observer.close(
                 HostProtocolError.make({ message: "Provisional text frame is invalid" }),
               );
 
               return;
             }
-            const bytes = encoder.encode(json.value + "\n");
+            const bytes = encoder.encode(json + "\n");
 
             if (bytes.byteLength > MAX_FRAME_BYTES) {
               observer.close(
