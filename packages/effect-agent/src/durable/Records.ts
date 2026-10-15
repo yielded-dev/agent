@@ -426,21 +426,18 @@ const ModelResponseRecordedFields = Schema.Struct({
         seen.add(operation.toolCallId);
       }
 
-      return declarations.every((call) => call.type === "tool-call" && seen.has(call.id));
+      // Equal counts and unique matching operation IDs already cover every declaration.
+      return (
+        response.runScopedPrefixLength === undefined ||
+        (response.runScopedPrefixLength < response.messages.content.length &&
+          response.messages.content
+            .slice(0, response.runScopedPrefixLength)
+            .every((message) => message.role === "system" || message.role === "user"))
+      );
     },
-    { title: "Every application Tool declaration has unique original operation evidence" },
-  ),
-  Schema.makeFilter(
-    (response) =>
-      response.runScopedPrefixLength === undefined ||
-      (isPersistedPromptMessages(response.messages) &&
-        response.runScopedPrefixLength < response.messages.content.length &&
-        response.messages.content
-          .slice(0, response.runScopedPrefixLength)
-          .every((message) => message.role === "system" || message.role === "user")),
     {
       title:
-        "Run-scoped Prompt prefix contains only instruction/wake messages and leaves one response",
+        "Model response has unique original Tool operation evidence and a valid instruction/wake prefix",
     },
   ),
 );

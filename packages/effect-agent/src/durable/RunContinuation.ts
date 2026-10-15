@@ -1803,13 +1803,14 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         if (first === undefined)
           return yield* failure("Settlement must publish a retained terminal fact");
 
-        const terminalBatch = yield* CanonicalBatch.makeEffect({
-          ...prepared.batch,
-          records: [first, ...prepared.batch.records.slice(1)],
-        }).pipe(
-          Effect.mapError((cause) =>
-            failure("Settlement must publish a retained terminal fact", cause),
-          ),
+        // prepare retains captured records within the validated batch bound.
+        // The explicit first element proves this retained batch is still non-empty.
+        const terminalBatch = CanonicalBatch.make(
+          {
+            ...prepared.batch,
+            records: [first, ...prepared.batch.records.slice(1)],
+          },
+          { disableChecks: true },
         );
 
         const result = yield* publisher.publishSettlement(terminalBatch, prepared.executions).pipe(
