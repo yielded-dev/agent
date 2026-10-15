@@ -1,4 +1,15 @@
-import { Context, Effect, Layer, Option, Result, Schema, Stream, Struct } from "effect";
+import {
+  Context,
+  Effect,
+  Layer,
+  Option,
+  Result,
+  Schema,
+  SchemaIssue,
+  SchemaParser,
+  Stream,
+  Struct,
+} from "effect";
 
 import { ReceiptId, RunId, SubmissionId, ThreadId, ToolCallId } from "../core/Identifiers.ts";
 import { utf8ByteLength } from "../core/internal/utf8.ts";
@@ -56,12 +67,15 @@ export const transferPageFits = (threadId: ThreadId, factBytes = 0): boolean =>
 
 /** Check a complete retained fact before fresh acceptance; existing replays keep their identity. */
 export const makeTransferFactCheck = <A, I>(schema: Schema.Codec<A, I>) => {
-  const encode = Schema.encodeSync(Schema.fromJsonString(schema));
+  const encode = SchemaParser.encodeSync(Schema.fromJsonString(schema));
 
   return (threadId: ThreadId, fact: A): boolean => {
     try {
       return transferPageFits(threadId, utf8ByteLength(encode(fact)));
-    } catch {
+    } catch (cause) {
+      // oxlint-disable-next-line effect/no-untyped-throw -- This synchronous predicate preserves codec defects; only schema mismatches are size refusals.
+      if (!(cause instanceof Error && SchemaIssue.isIssue(cause.cause))) throw cause;
+
       return false;
     }
   };
