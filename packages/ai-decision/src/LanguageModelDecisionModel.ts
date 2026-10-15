@@ -17,7 +17,7 @@ const answerSchema = (decision: Decision.Any) =>
       Schema.TaggedStruct("Rate", {
         rating: Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: criteria.length - 1 })),
         probabilities: Schema.Struct(
-          Object.fromEntries(criteria.map((label) => [label, Probability])),
+          Object.fromEntries(criteria.map(({ label }) => [label, Probability])),
         ),
       }),
     ),
@@ -32,6 +32,7 @@ const answerSchema = (decision: Decision.Any) =>
  *
  * Requires a model supporting generateObject. All decisions share one request; native
  * DecisionModel validation rejects invalid distributions without normalization or retry.
+ * Rating probability keys use criterion labels; structured descriptions remain in the prompt.
  * Probabilities are LLM estimates, not calibrated confidence scores. Provider errors,
  * defects, and interruption propagate; callers own retry, timeout, and fallback policies.
  */
