@@ -28,8 +28,29 @@ import {
   type SubagentReservationView,
 } from "@yielded/agent/subagent-reservations";
 import { ThreadHistory } from "@yielded/agent/thread-history";
-import { Context, Deferred, Effect, Fiber, Layer, Ref, Schema, Stream } from "effect";
-import { type AiError, LanguageModel, Model, type Response, Tool, Toolkit } from "effect/ai";
+import {
+  Cause,
+  Context,
+  DateTime,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Ref,
+  Schema,
+  Stream,
+} from "effect";
+import {
+  type AiError,
+  LanguageModel,
+  Model,
+  type Prompt,
+  type Response,
+  Tool,
+  Toolkit,
+} from "effect/ai";
+import { TestClock } from "effect/testing";
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2
@@ -246,6 +267,232 @@ const expectSettledOnce = (view: SubagentReservationView | undefined): void => {
 };
 
 layer(TestServices)("Subagent.layer S1 attached delegation", (it) => {
+  // Regression: https://github.com/yielded-dev/agent/issues/961
+  it.effect("bounds late children by the parent deadline and leaves time to finish", () =>
+    Effect.gen(function* () {
+      const childCalls = yield* Ref.make(0);
+      const lateTurnStarted = yield* Deferred.make<void>();
+      const slowChildStarted = yield* Deferred.make<void>();
+      const slowChildReleased = yield* Deferred.make<void>();
+      const finalPrompt = yield* Ref.make<Prompt.Prompt | undefined>(undefined);
+
+      const child = Agent.make("deadline-child", {
+        input: ChildInput,
+        output: ChildOutput,
+        instructions: "Answer as JSON.",
+        toolkit: Toolkit.empty,
+        policy: AgentPolicy.make({ ...childPolicy, maxDuration: "4 minutes" }),
+      });
+
+      const delegation = Subagent.make("delegate_deadline", {
+        target: child,
+        failureMode: "return",
+        policy: SubagentPolicy.make({
+          ...researchPolicy,
+          maxChildren: 3,
+          maxConcurrency: 1,
+          maxDuration: "4 minutes",
+          parentReserveDuration: "30 seconds",
+        }),
+      });
+
+      const childModel = Model.make(
+        "scripted",
+        "deadline-child",
+        Layer.effect(
+          LanguageModel.LanguageModel,
+          LanguageModel.make({
+            generateText: () => Effect.succeed([]),
+            streamText: () =>
+              Stream.unwrap(
+                Effect.gen(function* () {
+                  const call = yield* Ref.getAndUpdate(childCalls, (count) => count + 1);
+
+                  if (call === 0)
+                    return Stream.fromIterable(finalParts('{"answer":"retained finding"}'));
+                  yield* Deferred.succeed(slowChildStarted, undefined);
+
+                  return Stream.never.pipe(
+                    Stream.ensuring(Deferred.succeed(slowChildReleased, undefined)),
+                  );
+                }),
+              ),
+          }),
+        ),
+      );
+
+      const turn = yield* Ref.make(0);
+
+      const parentModel = Model.make(
+        "scripted",
+        "deadline-parent",
+        Layer.effect(
+          LanguageModel.LanguageModel,
+          LanguageModel.make({
+            generateText: () => Effect.succeed([]),
+            streamText: (options) =>
+              Stream.unwrap(
+                Effect.gen(function* () {
+                  const current = yield* Ref.getAndUpdate(turn, (count) => count + 1);
+
+                  if (current === 2) {
+                    yield* Ref.set(finalPrompt, options.prompt);
+                    yield* Effect.sleep("15 seconds");
+
+                    return Stream.fromIterable(
+                      finalParts('{"report":"finished with earlier findings"}'),
+                    );
+                  }
+                  if (current === 1) {
+                    yield* Deferred.succeed(lateTurnStarted, undefined);
+                    yield* Effect.sleep("8 minutes");
+                  }
+                  const calls = current === 0 ? ["early"] : ["late", "queued"];
+
+                  return Stream.fromIterable<Response.StreamPartEncoded>([
+                    ...calls.map((id): Response.StreamPartEncoded => ({
+                      type: "tool-call",
+                      id,
+                      name: delegation.name,
+                      params: { question: id },
+                      providerExecuted: false,
+                    })),
+                    { type: "finish", reason: "tool-calls", usage },
+                  ]);
+                }),
+              ),
+          }),
+        ),
+      );
+
+      const parent = Agent.withModel(
+        Agent.make("deadline-parent", {
+          input: Schema.Struct({ mission: Schema.String }),
+          output: Schema.Struct({ report: Schema.String }),
+          instructions: "Delegate, then answer as JSON.",
+          toolkit: Toolkit.make(delegation.tool),
+          policy: AgentPolicy.make({
+            ...parentPolicy,
+            maxTurns: 3,
+            maxToolCalls: 3,
+            maxDuration: "20 minutes",
+          }),
+        }),
+        parentModel,
+      );
+
+      const runId = decodeRunId("parent-run-deadline");
+      const durationDeadline = DateTime.addDuration(yield* DateTime.now, "10 minutes");
+
+      const fiber = yield* AgentRuntime.run(
+        parent,
+        { mission: "m" },
+        { runId, durationDeadline },
+      ).pipe(
+        Effect.provide(Subagent.layer(delegation, Agent.withModel(child, childModel))),
+        Effect.scoped,
+        Effect.forkChild,
+      );
+
+      yield* Deferred.await(lateTurnStarted);
+      yield* TestClock.adjust("8 minutes");
+      yield* Deferred.await(slowChildStarted);
+      yield* TestClock.adjust("2 minutes");
+      const result = yield* Fiber.join(fiber);
+
+      expect(result.output).toEqual({ report: "finished with earlier findings" });
+      expect(yield* Ref.get(childCalls)).toBe(2);
+      expect(yield* Deferred.isDone(slowChildReleased)).toBe(true);
+
+      const results = (yield* Ref.get(finalPrompt))?.content.flatMap((message) =>
+        message.role === "tool" ? message.content : [],
+      );
+
+      expect(results).toEqual([
+        expect.objectContaining({
+          id: "early",
+          isFailure: false,
+          result: { output: { answer: "retained finding" }, budgetExhausted: false },
+        }),
+        expect.objectContaining({
+          id: "late",
+          isFailure: false,
+          result: expect.objectContaining({
+            _tag: "SubagentBudgetExhausted",
+            dimension: "duration",
+            limitValue: 90_000,
+          }),
+        }),
+        expect.objectContaining({
+          id: "queued",
+          isFailure: false,
+          result: expect.objectContaining({
+            _tag: "SubagentBudgetExhausted",
+            dimension: "duration",
+          }),
+        }),
+      ]);
+      const reservations = yield* SubagentReservations;
+      const snapshot = yield* reservations.parentSnapshot(runId);
+
+      snapshot.reservations.forEach(expectSettledOnce);
+    }),
+  );
+
+  it.effect("preserves a tighter supplied child deadline and its failure mapping", () =>
+    Effect.gen(function* () {
+      const modelStarted = yield* Deferred.make<void>();
+
+      const model = Model.make(
+        "scripted",
+        "short-child-deadline",
+        Layer.effect(
+          LanguageModel.LanguageModel,
+          LanguageModel.make({
+            generateText: () => Effect.succeed([]),
+            streamText: () =>
+              Stream.unwrap(
+                Deferred.succeed(modelStarted, undefined).pipe(Effect.andThen(Effect.never)),
+              ),
+          }),
+        ),
+      );
+
+      const parent = Agent.withModel(
+        coordinatorDefinition,
+        delegatingModel(
+          "parent-child-deadline",
+          "delegate_research",
+          [{ id: "short", params: { topic: "short" } }],
+          '{"report":"unreached"}',
+        ),
+      );
+
+      const durationDeadline = DateTime.addDuration(yield* DateTime.now, "2 seconds");
+
+      const fiber = yield* AgentRuntime.run(parent, { mission: "m" }).pipe(
+        Effect.provide(
+          Subagent.layer(researchDelegation, Agent.withModel(childDefinition, model), {
+            mapChildFailure,
+            child: { durationDeadline },
+          }),
+        ),
+        Effect.scoped,
+        Effect.exit,
+        Effect.forkChild,
+      );
+
+      yield* Deferred.await(modelStarted);
+      yield* TestClock.adjust("2 seconds");
+      const exit = yield* Fiber.join(fiber);
+
+      expect(Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined).toMatchObject({
+        _tag: "ResearchDelegationFailed",
+        childErrorTag: "AgentPolicyError",
+      });
+    }),
+  );
+
   it.effect("settles the reservation when parent interruption reaches the child", () =>
     Effect.gen(function* () {
       const modelStarted = yield* Deferred.make<void>();

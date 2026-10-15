@@ -9186,6 +9186,7 @@ function executeWithCompletion<
               history,
               preparation,
               agent.definition.policy,
+              DateTime.makeUnsafe(context.durationDeadlineMillis),
               options.subagentGrant,
               options.subagentBudget,
               options.subagentBudgetScope,
@@ -11121,6 +11122,8 @@ const spawnWithParent = (
 export interface AgentSpawnerService {
   /** Resolved defaults for this parent Run; never includes its tools or handlers. */
   readonly policy: AgentPolicy;
+  /** Effective deadline of this active parent execution, including RunOptions.durationDeadline. */
+  readonly durationDeadline: DateTime.Utc;
   readonly depth: number;
   readonly grant?: SubagentGrant;
   readonly budget?: SubagentBudgetReservation;
@@ -11229,6 +11232,7 @@ const makeAgentSpawner = (
   history: ThreadHistory["Service"],
   preparation: RunContextPreparation["Service"],
   policy: AgentPolicy,
+  durationDeadline: DateTime.Utc,
   grant?: SubagentGrant,
   budget?: SubagentBudgetReservation,
   budgetScope?: WorkerBudgetScope,
@@ -11238,6 +11242,7 @@ const makeAgentSpawner = (
   ...(budget === undefined ? {} : { budget }),
   ...(budgetScope === undefined ? {} : { budgetScope }),
   policy,
+  durationDeadline,
   depth,
   parent,
   spawn: spawnWithParent(parent, depth, history, preparation, onChild),
