@@ -1,5 +1,14 @@
 # @yielded/agent-platform-node
 
+## 0.1.0-beta.181
+
+### Patch Changes
+
+- Updated dependencies [[`f14a1a7`](https://github.com/yielded-dev/agent/commit/f14a1a7623d5d27ee7f89942289a09ec3cdc1f42)]:
+  - @yielded/agent@0.1.0-beta.181
+  - @yielded/agent-storage-sqlite@0.1.0-beta.181
+  - @yielded/agent-workflow@0.1.0-beta.181
+
 ## 0.1.0-beta.180
 
 ### Patch Changes
