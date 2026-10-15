@@ -118,14 +118,14 @@ const capturePayload = (payload: CanonicalRecordPayload) => {
   Object.setPrototypeOf(copy, Object.getPrototypeOf(payload));
   const copies = new WeakMap<object, object>([[payload, copy]]);
 
-  const pending: Array<object> = [copy];
-
   const owned: Array<object> = [copy];
 
-  while (pending.length > 0) {
-    const next = pending.pop()!;
+  for (let index = 0; index < owned.length; index++) {
+    const next = owned[index]!;
 
-    for (const [key, value] of Object.entries(next)) {
+    for (const key of Object.keys(next)) {
+      const value = Reflect.get(next, key);
+
       if (!Predicate.isObjectOrArray(value)) continue;
       let child = copies.get(value);
 
@@ -134,7 +134,6 @@ const capturePayload = (payload: CanonicalRecordPayload) => {
 
         copies.set(value, created);
         owned.push(created);
-        pending.push(created);
         child = created;
       }
       setOwn(next, key, child);
@@ -152,7 +151,9 @@ const ownWire = <Wire extends RecordJson>(wire: Wire, copies: WeakMap<object, ob
   while (pending.length > 0) {
     const next = pending.pop()!;
 
-    for (const [key, value] of Object.entries(next)) {
+    for (const key of Object.keys(next)) {
+      const value = Reflect.get(next, key);
+
       if (!Predicate.isObjectOrArray(value)) continue;
       const copy = copies.get(value);
 

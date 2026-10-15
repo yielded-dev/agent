@@ -187,14 +187,12 @@ const makeWriter = Effect.fnUntraced(function* (threadId: ThreadId) {
     const publisher = yield* ThreadStore;
 
     const append: RunWriter["append"] = Effect.fnUntraced(function* (batch, executions) {
-      const captured = yield* PreparedAppend.capture(
-        AppendRequest.make({
-          threadId,
-          expectedTailSequence: tail.sequence,
-          batch,
-          ...(executions === undefined ? {} : { executions }),
-        }),
-      ).pipe(
+      const captured = yield* PreparedAppend.capture({
+        threadId,
+        expectedTailSequence: tail.sequence,
+        batch,
+        ...(executions === undefined ? {} : { executions }),
+      }).pipe(
         Effect.mapError((cause) =>
           ThreadStoreError.make({
             operation: "capture append",

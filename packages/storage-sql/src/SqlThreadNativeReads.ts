@@ -1267,24 +1267,30 @@ export const makeSelectedReads = Effect.fnUntraced(function* (
 
           if (rows.length === 0) return Option.none();
 
-          const records = yield* Effect.forEach(rows, (row) =>
-            envelope(row).pipe(
-              Effect.filterOrFail(
-                (value) => value.record.recordId === row.record_id,
-                () => failure("fresh Run identity locator"),
-              ),
-            ),
-          );
+          if (rows.length !== 1) return yield* failure("fresh Run identity count");
+          const row = rows[0]!;
+          const root = yield* envelope(row);
 
-          if (records[0]?.record.payload._tag !== "ThreadCreated")
+          if (
+            row.thread_id !== request.threadId ||
+            root.threadId !== request.threadId ||
+            root.sequence !== 1 ||
+            root.record.recordId !== row.record_id ||
+            root.record.payload._tag !== "ThreadCreated"
+          )
             return yield* failure("fresh Run identity");
 
-          const identity = yield* ThreadIdentity.makeEffect({
-            threadId: request.threadId,
-            tailSequence: tail.tail_sequence,
-            hasAdmissions: true,
-            records,
-          });
+          // The row decoder and envelope boundary proved the values; the single root above
+          // establishes ordering, uniqueness and membership without decoding the record again.
+          const identity = ThreadIdentity.make(
+            {
+              threadId: request.threadId,
+              tailSequence: tail.tail_sequence,
+              hasAdmissions: true,
+              records: [root],
+            },
+            { disableChecks: true },
+          );
 
           return Option.some(identity);
         }),

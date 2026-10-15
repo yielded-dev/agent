@@ -184,18 +184,25 @@ const captureFacts = (batch: CommitBatch) =>
       Result.gen(function* () {
         const inputs = batch.records;
 
-        const { batchId, producerId } = validateBatchShape({
+        const {
+          batchId,
+          producerId,
+          records: slots,
+        } = validateBatchShape({
           batchId: batch.batchId,
           producerId: batch.producerId,
           records: inputs,
         });
 
-        const encodings = yield* Result.all(inputs.map(captureRecord));
-        const records = encodings.map((record) => record.canonical);
+        const first = yield* captureRecord(inputs[0]!);
+        const records: [RecordEnvelope, ...Array<RecordEnvelope>] = [first.canonical];
+
+        for (let index = 1; index < slots.length; index++)
+          records.push((yield* captureRecord(inputs[index]!)).canonical);
 
         return Object.freeze(
           CanonicalBatch.make(
-            { batchId, producerId, records: [records[0]!, ...records.slice(1)] },
+            { batchId, producerId, records: Object.freeze(records) },
             { disableChecks: true },
           ),
         );
