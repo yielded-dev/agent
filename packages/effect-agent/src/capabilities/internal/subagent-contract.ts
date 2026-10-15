@@ -15,6 +15,14 @@ const FinitePositiveDuration = Schema.Duration.pipe(
   ),
 );
 
+const FiniteNonNegativeDuration = Schema.Duration.pipe(
+  Schema.refine(
+    (duration): duration is Duration.Duration =>
+      Duration.isFinite(duration) && !Duration.isNegative(duration),
+    { expected: "a finite nonnegative duration" },
+  ),
+);
+
 const SubagentPolicyFields = Schema.Struct({
   /** Total invocation slots, including reserved descendants, available through this delegation budget. */
   maxChildren: PositiveInt,
@@ -28,6 +36,11 @@ const SubagentPolicyFields = Schema.Struct({
   maxToolCalls: PositiveInt,
   /** Wall-clock duration reserved for each child invocation. */
   maxDuration: FinitePositiveDuration,
+  /**
+   * Time held back before the in-process parent's deadline; omitted reserves zero.
+   * Does not apply to durable attached children or background workers.
+   */
+  parentReserveDuration: Schema.optionalKey(FiniteNonNegativeDuration),
   maxInputTokens: Schema.optionalKey(PositiveInt),
   maxOutputTokens: Schema.optionalKey(PositiveInt),
   maxCostMicrousd: Schema.optionalKey(Natural),
@@ -38,9 +51,11 @@ type SubagentPolicyFields = typeof SubagentPolicyFields.Type;
 
 /** Inputs normalized and validated by `SubagentPolicy.make`. */
 export type SubagentPolicyInput = Readonly<
-  Omit<SubagentPolicyFields, "maxDuration"> & {
+  Omit<SubagentPolicyFields, "maxDuration" | "parentReserveDuration"> & {
     /** Finite, positive wall-clock duration accepted in any Effect Duration input form. */
     readonly maxDuration: Duration.Input;
+    /** Finite, nonnegative time reserved for the in-process parent to finish. */
+    readonly parentReserveDuration?: Duration.Input;
   }
 >;
 
@@ -55,9 +70,14 @@ export class SubagentPolicy extends Schema.Class<SubagentPolicy>(
 )(SubagentPolicyFields) {
   /** Normalize and validate finite delegation bounds, throwing on invalid input. */
   static override make(input: SubagentPolicyInput): SubagentPolicy {
+    const { maxDuration, parentReserveDuration, ...bounds } = input;
+
     return super.make({
-      ...input,
-      maxDuration: Duration.fromInputUnsafe(input.maxDuration),
+      ...bounds,
+      maxDuration: Duration.fromInputUnsafe(maxDuration),
+      ...(parentReserveDuration === undefined
+        ? {}
+        : { parentReserveDuration: Duration.fromInputUnsafe(parentReserveDuration) }),
     });
   }
 }

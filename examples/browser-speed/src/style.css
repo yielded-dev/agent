@@ -1532,3 +1532,39 @@ tr.selected td {
     align-items: flex-end;
   }
 }
+.viewer-controls,
+.trace-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.trace-actions {
+  margin: 0 0 20px;
+}
+
+.conversation-trace + .conversation-trace {
+  margin-top: 32px;
+}
+
+.conversation-trace h3 {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 8px;
+}
+
+.conversation-trace h3 small,
+.trace-prompt {
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.trace-prompt {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0 0 16px;
+}

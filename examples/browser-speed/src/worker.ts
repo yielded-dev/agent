@@ -16,6 +16,7 @@ import { HttpApiBuilder } from "effect/http-api";
 import { type Account, LabApi, LabError, ModelApi, modelChoices } from "./contract.ts";
 import { connectKitesurf } from "./kitesurf.ts";
 import { Control, emptyControl, makeOwner } from "./owner.ts";
+import { makeTraceStore, TraceStore } from "./trace-store.ts";
 
 export interface Env extends AuthEnvironment {
   readonly AUTH_YIELDED_CLIENT_SECRET?: string;
@@ -34,6 +35,8 @@ export interface Env extends AuthEnvironment {
   /** Per-address run admission for public labs. */
   readonly RUN_LIMIT?: RateLimit;
   readonly FUNDED_OPENAI_API_KEY?: string;
+  readonly TRACES?: R2Bucket;
+  readonly VERSION?: WorkerVersionMetadata;
 }
 
 /** Served under this path on agent.yielded.dev; the unprefixed API remains for local tools. */
@@ -67,6 +70,7 @@ export class HostedAccounts extends Context.Service<
 
 export class BrowserLab extends DurableObject<Env> {
   private readonly owner;
+  private readonly traces;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -90,7 +94,7 @@ export class BrowserLab extends DurableObject<Env> {
         const previous = Schema.decodeSync(
           Schema.fromJsonString(
             Schema.Struct({
-              ...Control.mapFields(Struct.omit(["chatId"])).fields,
+              ...Control.mapFields(Struct.omit(["chatId", "view"])).fields,
               version: Schema.Literals([1, 2, 3]),
               report: Schema.NullOr(Schema.Json),
             }),
@@ -101,19 +105,35 @@ export class BrowserLab extends DurableObject<Env> {
           "UPDATE browser_lab SET value=? WHERE id=1",
           Schema.encodeSync(codec)({
             ...previous,
-            version: 4,
+            version: 5,
             chatId: null,
+            view: null,
             report:
               version === 3
                 ? Schema.decodeUnknownSync(Control.fields.report)(previous.report)
                 : null,
           }),
         );
+      } else if (version === 4) {
+        const previous = Schema.decodeSync(
+          Schema.fromJsonString(
+            Schema.Struct({
+              ...Control.mapFields(Struct.omit(["view"])).fields,
+              version: Schema.Literal(4),
+            }),
+          ),
+        )(row.value);
+
+        ctx.storage.sql.exec(
+          "UPDATE browser_lab SET value=? WHERE id=1",
+          Schema.encodeSync(codec)({ ...previous, version: 5, view: null }),
+        );
       } else {
         // Refuse unsupported versions before mutating stored ownership.
         Schema.decodeSync(codec)(row.value);
       }
     });
+    this.traces = makeTraceStore(ctx.storage.sql, ctx.id.toString(), env.TRACES);
     this.owner = makeOwner(
       {
         read: () => {
@@ -172,6 +192,7 @@ export class BrowserLab extends DurableObject<Env> {
           apiType: id.startsWith("@cf/") ? "chat-completions" : "responses",
         })),
         public: env.LAB_PUBLIC === "true",
+        build: env.VERSION,
         kitesurf: (retainClose) =>
           connectKitesurf(
             {
@@ -195,9 +216,10 @@ export class BrowserLab extends DurableObject<Env> {
     }).pipe(Layer.provide(FetchHttpClient.layer));
   }
 
-  private withBrowser<A>(effect: Effect.Effect<A, LabError, BrowserSessions>) {
+  private withBrowser<A>(effect: Effect.Effect<A, LabError, BrowserSessions | TraceStore>) {
     return effect.pipe(
       Effect.provide(this.sessions),
+      Effect.provideService(TraceStore, this.traces),
       Effect.catchTag("BrowserRunCleanupError", () =>
         LabError.make({
           code: "configuration",
@@ -216,6 +238,11 @@ export class BrowserLab extends DurableObject<Env> {
           }),
         )
         .handle("snapshot", () => this.owner.snapshot())
+        .handle("reports", () => this.traces.reports)
+        .handle("trace", ({ params }) =>
+          this.traces.archive(params.id).pipe(Effect.catch(() => this.traces.read(params.id))),
+        )
+        .handle("view", ({ payload }) => this.withBrowser(this.owner.view(payload.mode)))
         .handle("run", ({ payload, headers }) =>
           Effect.gen({ self: this }, function* () {
             // Lab keys fill only what the visitor left out, and only for same-origin requests.
@@ -312,6 +339,8 @@ export default {
     if (
       url.pathname !== "/api/snapshot" &&
       url.pathname !== "/api/account" &&
+      url.pathname !== "/api/reports" &&
+      !url.pathname.startsWith("/api/traces/") &&
       (!env.CLOUDFLARE_ACCOUNT_ID || !env.BROWSER_RENDERING_API_TOKEN)
     )
       return errorResponse(

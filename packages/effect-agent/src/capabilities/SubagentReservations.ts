@@ -120,7 +120,10 @@ export class SubagentParentBudgetView extends Schema.Class<SubagentParentBudgetV
   reservations: Schema.Array(SubagentReservationView),
 }) {}
 
-/** All-or-nothing admission failed: one dimension cannot cover the requested allocation. */
+/**
+ * Delegation admission or execution exhausted a bound. A child refused at the
+ * in-process parent's reserved finish window reports zero duration limit and usage.
+ */
 export class SubagentBudgetExhausted extends Schema.TaggedError<SubagentBudgetExhausted>()(
   "SubagentBudgetExhausted",
   {
