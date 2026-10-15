@@ -2,4 +2,4 @@
 "@yielded/agent-platform-cloudflare": patch
 ---
 
-Reduce Cloudflare client imports and encode submission envelopes in one pass while preserving caller validation.
+Reduce Cloudflare client imports and validate submission envelopes once. Expose scoped live-text bytes for forwarding and validate frames at the final consumer with `decodeLiveText`.
