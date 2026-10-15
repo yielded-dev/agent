@@ -1,5 +1,11 @@
 # @yielded/agent-ai-decision
 
+## 0.1.0-beta.184
+
+### Patch Changes
+
+- [#1003](https://github.com/yielded-dev/agent/pull/1003) [`03066c6`](https://github.com/yielded-dev/agent/commit/03066c600441c19c585e0e8f5daaed4b3ed333b2) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Support labeled rating criteria and structured descriptions in the language-model decision adapter. Require Effect 4.0.5 or later.
+
 ## 0.1.0-beta.183
 
 No changes in this release.

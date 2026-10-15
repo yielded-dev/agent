@@ -1,5 +1,14 @@
 # @yielded/agent-platform-node
 
+## 0.1.0-beta.184
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @yielded/agent@0.1.0-beta.184
+  - @yielded/agent-storage-sqlite@0.1.0-beta.184
+  - @yielded/agent-workflow@0.1.0-beta.184
+
 ## 0.1.0-beta.183
 
 ### Patch Changes
