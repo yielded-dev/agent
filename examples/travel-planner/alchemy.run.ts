@@ -1,126 +1,15 @@
 import { fileURLToPath } from "node:url";
 
-import type { Sandbox } from "@cloudflare/sandbox";
-import * as Alchemy from "alchemy";
-import * as Cloudflare from "alchemy/Cloudflare";
-import { Config, Effect, Layer, Redacted, Schema } from "effect";
+import { plannerStack } from "./deployment";
 
-const state = Layer.unwrap(
-  Config.Boolean("ALCHEMY_LOCAL_STATE").pipe(
-    Config.withDefault(false),
-    Effect.map((local) => (local ? Alchemy.localState() : Cloudflare.state())),
-    Effect.orDie,
-  ),
-);
-
-// A separate stack keeps application deployments independent of the docs site.
-export default Alchemy.Stack(
-  "effect-agent-travel-planner",
-  {
-    providers: Cloudflare.providers(),
-    state,
-  },
-  Effect.gen(function* () {
-    const { accountId } = yield* yield* Cloudflare.CloudflareEnvironment;
-
-    const serverOpenAiKey = yield* Config.Redacted("SERVER_OPENAI_KEY").pipe(
-      Config.withDefault(Redacted.make("")),
-    );
-
-    const artifacts = yield* Cloudflare.Artifacts.Namespace("ARTIFACTS", {
-      namespace: "effect-agent-travel-planner-auth-v1",
-    });
-
-    const zoneId = "9662e63e42d87b741fbcae6b65506924";
-
-    yield* Cloudflare.DNS.Record("TripAppsWildcard", {
-      zoneId,
-      name: "*.effect-agent.com",
-      type: "A",
-      content: "192.0.2.1",
-      proxied: true,
-      ttl: "1",
-    });
-    const builds = yield* Cloudflare.R2.Bucket("TripAppBuilds");
-
-    const app = yield* Cloudflare.Website.Vite("Planner", {
-      name: "effect-agent-travel-planner",
-      domain: "travel.effect-agent.com",
-      routes: [
-        { pattern: "agent.yielded.dev/travel*", zoneName: "yielded.dev" },
-        { pattern: "agent.yielded.dev/auth/*", zoneName: "yielded.dev" },
-        { pattern: "*-trip.effect-agent.com/*", zoneId },
-      ],
-      workersDev: { enabled: false, previewsEnabled: false },
-      rootDir: fileURLToPath(new URL(".", import.meta.url)),
-      main: "src/worker.ts",
-      compatibility: { date: "2026-07-01", flags: ["nodejs_compat"] },
-      assets: { runWorkerFirst: true },
-      env: {
-        ...(Redacted.value(serverOpenAiKey) ? { SERVER_OPENAI_KEY: serverOpenAiKey } : {}),
-        // New binding keys AND classes create empty namespaces. A class-only
-        // rename under the old key preserves data. Removed bindings delete it.
-        PLANNER_THREADS_V3: Cloudflare.DurableObject("PlannerThreadsV3", {
-          className: "PlannerThreadV3",
-        }),
-        AUTH_V2: Cloudflare.DurableObject("AuthV2", { className: "PlannerAuthV2" }),
-        AUTH_EMAIL: Cloudflare.Email.SendEmail("AuthEmail", {
-          allowedSenderAddresses: [yield* Config.NonEmptyString("AUTH_EMAIL_FROM")],
-        }),
-        AUTH_ORIGIN: Config.NonEmptyString("AUTH_ORIGIN"),
-        AUTH_EMAIL_FROM: Config.NonEmptyString("AUTH_EMAIL_FROM"),
-        AUTH_GITHUB_CLIENT_ID: Config.NonEmptyString("AUTH_GITHUB_CLIENT_ID"),
-        AUTH_YIELDED_ISSUER: Config.NonEmptyString("AUTH_YIELDED_ISSUER"),
-        AUTH_YIELDED_CLIENT_SECRET: Config.schema(
-          Schema.Redacted(Schema.NonEmptyString),
-          "AUTH_YIELDED_CLIENT_SECRET",
-        ),
-        AUTH_GITHUB_CLIENT_SECRET: Config.schema(
-          Schema.Redacted(Schema.NonEmptyString),
-          "AUTH_GITHUB_CLIENT_SECRET",
-        ),
-        AUTH_BINDING_KEY: Config.schema(Schema.Redacted(Schema.NonEmptyString), "AUTH_BINDING_KEY"),
-        AUTH_PROOF_KEY: Config.schema(Schema.Redacted(Schema.NonEmptyString), "AUTH_PROOF_KEY"),
-        AUTH_TRANSACTION_KEY: Config.schema(
-          Schema.Redacted(Schema.NonEmptyString),
-          "AUTH_TRANSACTION_KEY",
-        ),
-        ARTIFACTS: artifacts,
-        APP_BUILDS: builds,
-        APP_LOADER: Cloudflare.WorkerLoader("APP_LOADER"),
-        APP_DOMAIN: "effect-agent.com",
-        SITE_BUILD: Cloudflare.Workflow("SiteBuild", { className: "SiteBuild" }),
-        APP_SANDBOX: Cloudflare.Container<Sandbox>("AppSandbox", {
-          className: "Sandbox",
-          context: "./site-builder",
-          // Explicit standard-3 resources: the named tier alone did not resize
-          // the deployed application through the current Alchemy provider.
-          vcpu: 2,
-          memory: "8GiB",
-          disk: { size_mb: 16000 },
-          maxInstances: 4,
-        }),
-        ARTIFACTS_GIT_BASE: `https://${accountId}.artifacts.cloudflare.net/git/${artifacts.namespace}`,
-        BROWSER: Cloudflare.Browser(),
-        BYOK_ENCRYPTION_KEY: Config.schema(
-          Schema.Redacted(Schema.NonEmptyString),
-          "BYOK_ENCRYPTION_KEY",
-        ),
-      },
-      // The deploy workflow verifies query-string redaction before enabling traces.
-      // Keep collection off here until Alchemy's SDK supports redact_query_string.
-      observability: {
-        enabled: true,
-        logs: { enabled: true, invocationLogs: false },
-        traces: { enabled: false },
-      },
-      logpush: false,
-      memo: {
-        include: ["src/**", "site-builder/**", "vite.config.ts", "package.json"],
-        lockfile: true,
-      },
-    });
-
-    return { url: app.url };
-  }),
-);
+// Hosted compositions provide their own explicit names, routes and policy.
+export default plannerStack({
+  stackName: process.env.PLANNER_STACK_NAME ?? "travel-planner-local",
+  workerName: process.env.PLANNER_WORKER_NAME ?? "travel-planner-local",
+  rootDir: fileURLToPath(new URL(".", import.meta.url)),
+  artifactsNamespace: process.env.PLANNER_ARTIFACTS_NAMESPACE ?? "travel-planner-local",
+  appDomain: process.env.PLANNER_APP_DOMAIN ?? "localhost",
+  ...(process.env.PLANNER_APP_ZONE_ID ? { appZoneId: process.env.PLANNER_APP_ZONE_ID } : {}),
+  ...(process.env.PLANNER_DOMAIN ? { domain: process.env.PLANNER_DOMAIN } : {}),
+  workersDev: true,
+});

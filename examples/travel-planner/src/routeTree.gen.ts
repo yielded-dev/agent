@@ -9,30 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthLoginRouteImport } from './routes/auth.login'
 import { Route as TravelIndexRouteImport } from './routes/travel.index'
-import { Route as AuthGithubCallbackRouteImport } from './routes/auth.github.callback'
-import { Route as AuthYieldedCallbackRouteImport } from './routes/auth.yielded.callback'
 import { Route as TravelConversationsConversationIdRouteImport } from './routes/travel.conversations.$conversationId'
 
-const AuthLoginRoute = AuthLoginRouteImport.update({
-  id: '/auth/login',
-  path: '/auth/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const TravelIndexRoute = TravelIndexRouteImport.update({
   id: '/travel/',
   path: '/travel/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthGithubCallbackRoute = AuthGithubCallbackRouteImport.update({
-  id: '/auth/github/callback',
-  path: '/auth/github/callback',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthYieldedCallbackRoute = AuthYieldedCallbackRouteImport.update({
-  id: '/auth/yielded/callback',
-  path: '/auth/yielded/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TravelConversationsConversationIdRoute =
@@ -43,87 +25,38 @@ const TravelConversationsConversationIdRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
-  '/auth/login': typeof AuthLoginRoute
   '/travel/': typeof TravelIndexRoute
-  '/auth/github/callback': typeof AuthGithubCallbackRoute
-  '/auth/yielded/callback': typeof AuthYieldedCallbackRoute
   '/travel/conversations/$conversationId': typeof TravelConversationsConversationIdRoute
 }
 export interface FileRoutesByTo {
-  '/auth/login': typeof AuthLoginRoute
   '/travel': typeof TravelIndexRoute
-  '/auth/github/callback': typeof AuthGithubCallbackRoute
-  '/auth/yielded/callback': typeof AuthYieldedCallbackRoute
   '/travel/conversations/$conversationId': typeof TravelConversationsConversationIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/auth/login': typeof AuthLoginRoute
   '/travel/': typeof TravelIndexRoute
-  '/auth/github/callback': typeof AuthGithubCallbackRoute
-  '/auth/yielded/callback': typeof AuthYieldedCallbackRoute
   '/travel/conversations/$conversationId': typeof TravelConversationsConversationIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/auth/login'
-    | '/travel/'
-    | '/auth/github/callback'
-    | '/auth/yielded/callback'
-    | '/travel/conversations/$conversationId'
+  fullPaths: '/travel/' | '/travel/conversations/$conversationId'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/auth/login'
-    | '/travel'
-    | '/auth/github/callback'
-    | '/auth/yielded/callback'
-    | '/travel/conversations/$conversationId'
-  id:
-    | '__root__'
-    | '/auth/login'
-    | '/travel/'
-    | '/auth/github/callback'
-    | '/auth/yielded/callback'
-    | '/travel/conversations/$conversationId'
+  to: '/travel' | '/travel/conversations/$conversationId'
+  id: '__root__' | '/travel/' | '/travel/conversations/$conversationId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  AuthLoginRoute: typeof AuthLoginRoute
   TravelIndexRoute: typeof TravelIndexRoute
-  AuthGithubCallbackRoute: typeof AuthGithubCallbackRoute
-  AuthYieldedCallbackRoute: typeof AuthYieldedCallbackRoute
   TravelConversationsConversationIdRoute: typeof TravelConversationsConversationIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/auth/login': {
-      id: '/auth/login'
-      path: '/auth/login'
-      fullPath: '/auth/login'
-      preLoaderRoute: typeof AuthLoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/travel/': {
       id: '/travel/'
       path: '/travel'
       fullPath: '/travel/'
       preLoaderRoute: typeof TravelIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth/github/callback': {
-      id: '/auth/github/callback'
-      path: '/auth/github/callback'
-      fullPath: '/auth/github/callback'
-      preLoaderRoute: typeof AuthGithubCallbackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth/yielded/callback': {
-      id: '/auth/yielded/callback'
-      path: '/auth/yielded/callback'
-      fullPath: '/auth/yielded/callback'
-      preLoaderRoute: typeof AuthYieldedCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/travel/conversations/$conversationId': {
@@ -137,10 +70,7 @@ declare module '@tanstack/react-router' {
 }
 
 const rootRouteChildren: RootRouteChildren = {
-  AuthLoginRoute: AuthLoginRoute,
   TravelIndexRoute: TravelIndexRoute,
-  AuthGithubCallbackRoute: AuthGithubCallbackRoute,
-  AuthYieldedCallbackRoute: AuthYieldedCallbackRoute,
   TravelConversationsConversationIdRoute:
     TravelConversationsConversationIdRoute,
 }

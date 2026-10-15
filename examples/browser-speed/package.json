@@ -12,6 +12,7 @@
     "@fontsource-variable/ibm-plex-sans": "catalog:",
     "@fontsource/ibm-plex-mono": "catalog:",
     "@yielded/agent": "workspace:*",
+    "@yielded/agent-example-auth": "workspace:*",
     "@yielded/agent-platform-cloudflare": "workspace:*",
     "@yielded/agent-storage-cloudflare": "workspace:*",
     "effect": "catalog:",

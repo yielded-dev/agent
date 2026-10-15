@@ -1,3 +1,4 @@
+import { fetchWithSession } from "@yielded/agent-example-auth/client";
 import { Cause, Effect, Queue, Schema, Stream } from "effect";
 
 import { LiveEvent, VoiceAnswer, VoiceError, type VoiceOffer } from "./protocol.ts";
@@ -125,16 +126,12 @@ export const connectBrowserVoice = Effect.fn("connectBrowserVoice")(function* (
     Effect.sync(() => new AbortController()),
     (controller) =>
       Effect.gen(function* () {
-        const response = yield* Effect.tryPromise({
-          try: () =>
-            fetch("/travel/api/voice", {
-              method: "POST",
-              headers: { "content-type": "application/json", "x-elsewhere-account": subjectId },
-              body: JSON.stringify({ sdp, history }),
-              signal: controller.signal,
-            }),
-          catch: failed,
-        });
+        const response = yield* fetchWithSession("/travel/api/voice", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-elsewhere-account": subjectId },
+          body: JSON.stringify({ sdp, history }),
+          signal: controller.signal,
+        }).pipe(Effect.mapError(failed));
 
         if (!response.ok) return yield* failed();
 

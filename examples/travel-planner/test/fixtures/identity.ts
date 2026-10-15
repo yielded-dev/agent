@@ -14,6 +14,7 @@ export const fixtureSubject = (label: string) =>
 
 export const fixtureSession = (label = ownerEmail) => ({
   subjectId: fixtureSubject(label),
+  accountId: fixtureSubject(label),
   displayName: label,
 });
 

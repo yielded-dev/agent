@@ -1,7 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
 
-// Served at agent.yielded.dev/browser-use. Files keep that prefix inside dist so Workers
+// Files keep the example prefix inside dist so Workers
 // static assets match request paths directly.
 export default defineConfig({
   base: "/browser-use/",
@@ -83,10 +83,6 @@ export default defineConfig({
       },
       deploy: {
         command: "vp build && wrangler deploy",
-        cache: false,
-      },
-      "deploy:public": {
-        command: "vp build && wrangler deploy --env public",
         cache: false,
       },
     },

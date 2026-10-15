@@ -1,3 +1,4 @@
+import { hostedModelAccess, type AuthEnvironment } from "@yielded/agent-example-auth/server";
 import { Context, DateTime, Effect, Layer, Redacted, Schema } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 import { SqlClient } from "effect/sql/SqlClient";
@@ -6,17 +7,13 @@ import type { OpenAiConnection } from "../credential-domain.ts";
 import { PlannerError } from "../domain.ts";
 import { ownerOfThread } from "./tenancy.ts";
 
-export interface CredentialEnvironment {
+export interface CredentialEnvironment extends AuthEnvironment {
+  readonly AUTH_YIELDED_CLIENT_SECRET?: string;
   readonly BYOK_ENCRYPTION_KEY?: string;
   readonly SERVER_OPENAI_KEY?: string;
 }
 
 export interface CredentialBindings extends CredentialEnvironment {
-  readonly AUTH_V2?: {
-    readonly getByName: (name: string) => {
-      readonly fetch: (request: Request) => Promise<Response>;
-    };
-  };
   readonly PLANNER_THREADS_V3: {
     readonly getByName: (owner: string) => {
       readonly modelCredential: () => Promise<string>;
@@ -67,29 +64,8 @@ export const credentialSourceLayer = (env: CredentialBindings) =>
       function* (owner) {
         if (!env.SERVER_OPENAI_KEY) return false;
         const id = ownerOfThread(owner).slice("account-".length);
-        const auth = env.AUTH_V2;
 
-        if (!auth) return yield* unavailable();
-
-        const response = yield* Effect.tryPromise({
-          try: (signal) =>
-            auth
-              .getByName("auth-v1")
-              .fetch(new Request(`https://auth.internal/_internal/funding/${id}`, { signal })),
-          catch: unavailable,
-        });
-
-        if (!response.ok) return yield* unavailable();
-
-        const status = yield* Effect.tryPromise({
-          try: () => response.json(),
-          catch: unavailable,
-        }).pipe(
-          Effect.flatMap(Schema.decodeUnknownEffect(Schema.Struct({ allowed: Schema.Boolean }))),
-          Effect.mapError(unavailable),
-        );
-
-        return status.allowed;
+        return yield* hostedModelAccess(id, env).pipe(Effect.mapError(unavailable));
       },
       (effect) => effect.pipe(Effect.timeout("10 seconds"), Effect.mapError(unavailable)),
     ),

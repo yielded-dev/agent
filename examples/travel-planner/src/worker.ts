@@ -1,11 +1,10 @@
 import type { Sandbox } from "@cloudflare/sandbox";
 import start from "@tanstack/react-start/server-entry";
+import type { AuthEnvironment } from "@yielded/agent-example-auth/server";
 import { Effect, Layer, Schema } from "effect";
 import { CloudflareTracer, Worker, WorkerEnvironment } from "effect-cf";
 
 import { artifactsLayer } from "./artifacts";
-import { captureCallbackScript } from "./auth/callback";
-import type { AuthConfiguration } from "./auth/server";
 import { authenticate, type PlannerAuthV2 } from "./auth/worker";
 import { Trip, TripId, TripSiteStore, type AppBuildRequest } from "./domain";
 import { makeTravelPlannerThread } from "./server/cloudflare";
@@ -30,9 +29,8 @@ export class PlannerThreadV3 extends makeTravelPlannerThread(
 
 declare global {
   namespace Cloudflare {
-    interface Env extends AuthConfiguration, CredentialEnvironment {
+    interface Env extends AuthEnvironment, CredentialEnvironment {
       AUTH_V2: DurableObjectNamespace<PlannerAuthV2>;
-      AUTH_EMAIL: SendEmail;
       PLANNER_THREADS_V3: DurableObjectNamespace<PlannerThreadV3>;
       ARTIFACTS: Artifacts;
       ARTIFACTS_GIT_BASE: string;
@@ -116,19 +114,10 @@ export const handleRequest = (verify = authenticate) =>
     ctx?: ExecutionContext,
   ) {
     const url = new URL(request.url);
-    const appName = appNameFromHost(url.hostname, env.APP_DOMAIN ?? "effect-agent.com");
+    const appName = appNameFromHost(url.hostname, env.APP_DOMAIN ?? "localhost");
 
     if (url.pathname.split("/").includes("_internal"))
       return new Response("Not found", { status: 404 });
-
-    if (url.hostname === "travel.effect-agent.com") {
-      url.hostname = "agent.yielded.dev";
-      url.protocol = "https:";
-      url.port = "";
-      url.pathname = `/travel${url.pathname}`;
-
-      return Response.redirect(url.href, 301);
-    }
 
     if (url.hostname.includes("-trip.") && appName === null)
       return new Response("Not found", { status: 404 });
@@ -152,50 +141,6 @@ export const handleRequest = (verify = authenticate) =>
     }
     const pageRequest = request;
 
-    // Auth routes own their Origin/CSRF and body-size checks. Callback GET only renders.
-    if (
-      url.pathname === "/auth/login" ||
-      url.pathname === "/auth/github/callback" ||
-      url.pathname === "/auth/yielded/callback"
-    ) {
-      if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
-      const pageUrl = new URL(pageRequest.url);
-
-      pageUrl.search = "";
-
-      const response = yield* Effect.promise(async () =>
-        start.fetch(new Request(pageUrl, pageRequest)),
-      );
-
-      const headers = new Headers(response.headers);
-
-      headers.set("cache-control", "no-store");
-      headers.set("referrer-policy", "no-referrer");
-
-      const page = new Response(response.body, { status: response.status, headers });
-
-      return url.pathname === "/auth/github/callback" || url.pathname === "/auth/yielded/callback"
-        ? new HTMLRewriter()
-            .on("head", {
-              element: (head) => {
-                head.prepend(`<script>${captureCallbackScript}</script>`, { html: true });
-              },
-            })
-            .transform(page)
-        : page;
-    }
-    if (url.pathname.startsWith("/auth/")) {
-      return yield* Effect.tryPromise({
-        try: () => env.AUTH_V2.getByName("auth-v1").fetch(pageRequest),
-        catch: () => "AuthUnavailable" as const,
-      }).pipe(
-        Effect.catch(() =>
-          Effect.succeed(
-            new Response("Authentication is temporarily unavailable.", { status: 503 }),
-          ),
-        ),
-      );
-    }
     if (!url.pathname.startsWith("/travel/")) return new Response("Not found", { status: 404 });
 
     // Page and asset URLs keep their public paths; planner APIs are root-relative internally.
@@ -222,7 +167,7 @@ export const handleRequest = (verify = authenticate) =>
         return new Response(null, {
           status: 303,
           headers: {
-            location: "/auth/login?provider=yielded&return=%2Ftravel%2F",
+            location: "/auth/login?return=%2Ftravel%2F",
             "cache-control": "no-store",
           },
         });
@@ -234,23 +179,6 @@ export const handleRequest = (verify = authenticate) =>
     }
     if (url.pathname === "/api/access" || url.pathname.startsWith("/api/access/"))
       return new Response("Not found", { status: 404 });
-    if (url.pathname.startsWith("/api/funding/")) {
-      return yield* Effect.tryPromise({
-        try: () => env.AUTH_V2.getByName("auth-v1").fetch(request),
-        catch: () => "FundingUnavailable" as const,
-      }).pipe(
-        Effect.map((response) => {
-          const headers = new Headers(response.headers);
-
-          headers.set("cache-control", "no-store");
-
-          return new Response(response.body, { status: response.status, headers });
-        }),
-        Effect.catch(() =>
-          Effect.succeed(new Response("Funding access is unavailable.", { status: 503 })),
-        ),
-      );
-    }
     if (url.pathname.startsWith("/trips/")) return yield* publishedResponse(request, env);
     if (
       ["/api/voice", "/api/rpc", "/api/rpc/", "/api/progress", "/api/progress/"].includes(
@@ -308,7 +236,7 @@ export const handleRequest = (verify = authenticate) =>
             );
           if (url.pathname.startsWith("/api/progress"))
             return yield* serveProgress(bounded, env, identity.session);
-          const owner = yield* plannerOwner(identity.session.subjectId);
+          const owner = yield* plannerOwner(identity.session.accountId);
 
           return yield* Effect.promise(async () => {
             using response = await env.PLANNER_THREADS_V3.getByName(owner).plannerFetch(bounded);

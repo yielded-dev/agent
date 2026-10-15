@@ -7,7 +7,7 @@ import {
   useAtomSet,
   useAtomValue,
 } from "@effect/atom-react";
-import { Link, Navigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Option } from "effect";
 import { AsyncResult } from "effect/reactivity";
 import { ArrowUp, ArrowUpRight, Clock3, Map, Menu, Plus, X } from "lucide-react";
@@ -68,7 +68,11 @@ export function Planner({ conversationId }: { readonly conversationId: string })
   const signOut = useAtomSet(auth.signOut);
 
   if (AsyncResult.isSuccess(session) && session.value === null)
-    return <Navigate to="/auth/login" replace />;
+    return (
+      <main className="empty">
+        <a href="/auth/login?return=%2Ftravel%2F">Sign in to continue</a>
+      </main>
+    );
   if (
     !AsyncResult.isSuccess(session) ||
     session.value === null ||
@@ -88,7 +92,8 @@ export function Planner({ conversationId }: { readonly conversationId: string })
         conversationId={conversationId}
         session={{
           subjectId: session.value.subjectId,
-          displayName: session.value.claims.displayName,
+          accountId: session.value.accountId,
+          displayName: session.value.displayName,
         }}
         signOut={() => signOut()}
       />

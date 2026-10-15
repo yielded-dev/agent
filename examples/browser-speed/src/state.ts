@@ -1,5 +1,5 @@
+import { authenticatedHttpClient, sessionObservation } from "@yielded/agent-example-auth/client";
 import { Cause, Effect, Option, Predicate, Schema } from "effect";
-import { FetchHttpClient } from "effect/http";
 import { AsyncResult, Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 
 import {
@@ -17,7 +17,7 @@ import {
 
 export class LabClient extends AtomHttpApi.Service<LabClient>()("browser-speed/client", {
   api: LabApi,
-  httpClient: FetchHttpClient.layer,
+  httpClient: authenticatedHttpClient,
   baseUrl: import.meta.env.BASE_URL.replace(/\/$/, ""),
 }) {}
 
@@ -119,10 +119,16 @@ export const validKey = (value: string) => Schema.is(VisitorKey)(value.trim());
 const keyHeaders = (keys: ProviderKeys) =>
   validKey(keys.openai) ? { "x-lab-openai-key": keys.openai.trim() } : {};
 
-export const accountAtom = LabClient.query("lab", "account", { headers });
+const accountQuery = LabClient.query("lab", "account", { headers });
+
+export const accountAtom = Atom.make((get) => {
+  get.mount(sessionObservation);
+
+  return get(accountQuery);
+});
 
 /** Shared Agent sign-in returns visitors to the lab. */
-export const signInUrl = `/auth/login?provider=yielded&return=${encodeURIComponent(import.meta.env.BASE_URL)}`;
+export const signInUrl = `/auth/login?return=${encodeURIComponent(import.meta.env.BASE_URL)}`;
 
 const snapshotQuery = LabClient.query("lab", "snapshot", {
   headers,

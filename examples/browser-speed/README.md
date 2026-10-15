@@ -166,13 +166,11 @@ exceeds 1 MB, subsequent diagnostic text is omitted. Live browser return values 
 Website content and user-entered personal data can still appear in prompts, generated code and results. Review downloaded files before sharing.
 Trace downloads require the owning lab session; the bucket has no public download route.
 
-R2 keys use `browser-use/v1/<owner>/<conversation>/<run>.json`. Create the private environment's
-`effect-agent-browser-traces` bucket and the public environment's `yielded-browser-use-traces`
-bucket before deploying, for example from this directory:
+R2 keys use `browser-use/v1/<owner>/<conversation>/<run>.json`. Create the configured
+`effect-agent-browser-traces` bucket before deploying this example:
 
 ```sh
 vp exec wrangler r2 bucket create effect-agent-browser-traces
-vp exec wrangler r2 bucket create yielded-browser-use-traces
 ```
 
 Local development uses emulated R2. Hosts without a `TRACES` binding keep downloadable SQLite
@@ -200,18 +198,11 @@ vp run -F @yielded/agent-example-browser-speed deploy
 Preview URLs are disabled. If using a custom domain instead, disable `workers_dev` and protect
 that hostname too; a custom-domain Access policy does not protect `workers.dev`.
 
-The `public` environment remains `yielded-agent-browser-use`, serving
-`agent.yielded.dev/browser-use`. It rate-limits runs to six per minute per address. Visitors
-supply an OpenAI key; same-origin travel planner accounts on the funding allowlist can use
-`FUNDED_OPENAI_API_KEY`. Auth recognizes the shared Yielded owner and direct GitHub owner,
-and checks active identities and funding grants for each run. Auth lookup failures leave
-the request unfunded. The setup lists only missing requirements.
-
-Every push to `main` runs [Deploy Agent demos](../../.github/workflows/deploy-travel-planner.yml),
-which checks both applications and deploys the planner before the browser lab. Automatic
-deployment uses the repository variable `TRAVEL_PLANNER_DEPLOY_ENABLED=true` and the existing
-Cloudflare secrets. For a manual deployment of the lab alone:
-
-```sh
-vp run -F @yielded/agent-example-browser-speed deploy:public
-```
+The hosted browser-use deployment is composed in the Yielded Site repository.
+It consumes the shared authentication integration directly, without a planner
+binding. Configure `AUTH_ISSUER`, `AUTH_RESOURCE`, `AUTH_JWKS_URL`,
+`AUTH_REQUIRED_SCOPE` and `AUTH_HOSTED_MODEL_SCOPE` for your auth host. The
+`__Host-yielded-access` cookie supplies a signed identity and scopes; a private
+issuer check authorizes each hosted run using `AUTH_YIELDED_CLIENT_SECRET`.
+Allowed accounts can use `FUNDED_OPENAI_API_KEY`; other visitors supply their
+own key. Authentication or permission lookup failures never fund a request.

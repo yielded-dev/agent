@@ -19,35 +19,4 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BrowserLab"] }],
   "observability": { "enabled": false },
   "version_metadata": { "binding": "VERSION" },
-  "env": {
-    // Public lab at agent.yielded.dev/browser-use: visitor keys, rate-limited runs. Travel
-    // planner accounts on its allowlist (same origin, so the same session) run on FUNDED_* keys.
-    "public": {
-      "name": "yielded-agent-browser-use",
-      "workers_dev": false,
-      // The bare root redirects to the lab; nothing else is served on agent.yielded.dev yet.
-      "routes": [
-        { "pattern": "agent.yielded.dev/", "zone_name": "yielded.dev" },
-        { "pattern": "agent.yielded.dev/browser-use*", "zone_name": "yielded.dev" },
-      ],
-      "vars": { "LAB_PUBLIC": "true" },
-      "version_metadata": { "binding": "VERSION" },
-      "browser": { "binding": "BROWSER", "remote": true },
-      "worker_loaders": [{ "binding": "LOADER" }],
-      "r2_buckets": [{ "binding": "TRACES", "bucket_name": "yielded-browser-use-traces" }],
-      "durable_objects": {
-        "bindings": [
-          { "name": "LAB", "class_name": "BrowserLab" },
-          {
-            "name": "AUTH",
-            "class_name": "PlannerAuthV2",
-            "script_name": "effect-agent-travel-planner",
-          },
-        ],
-      },
-      "ratelimits": [
-        { "name": "RUN_LIMIT", "namespace_id": "4401", "simple": { "limit": 6, "period": 60 } },
-      ],
-    },
-  },
 }

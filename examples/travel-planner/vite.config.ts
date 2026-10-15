@@ -92,6 +92,7 @@ export default defineConfig({
             "preview/**",
             "tsconfig.json",
             "alchemy.run.ts",
+            "deployment.ts",
             "!*.tsbuildinfo",
           ],
           output: [{ auto: true }, "!*.tsbuildinfo"],
