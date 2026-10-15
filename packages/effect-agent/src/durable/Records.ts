@@ -285,6 +285,14 @@ export class RunDurationExhausted extends Schema.TaggedClass<RunDurationExhauste
 const PersistedPromptMessages = Schema.toEncoded(Prompt.Prompt);
 const isPersistedPromptMessages = Schema.is(PersistedPromptMessages);
 
+// Carry the existing native Prompt proof through record capture without decoding it again.
+const PersistedResponseMessages = PersistedJson.pipe(
+  Schema.refine(
+    (input): input is Schema.Json & Prompt.PromptEncoded => isPersistedPromptMessages(input),
+    { expected: "persisted Effect AI Prompt messages" },
+  ),
+);
+
 /**
  * Final model output. Immediate history records the successful Run's source messages for
  * recall and a full retained model-context snapshot for the next Run. Durable execution
@@ -377,7 +385,7 @@ const ModelResponseRecordedFields = Schema.Struct({
   runId: RunId,
   turnId: TurnId,
   turn: TurnNumber,
-  messages: PersistedJson,
+  messages: PersistedResponseMessages,
   /**
    * Number of leading messages that belong only to this Run's evaluated instructions and wake
    * input. They remain canonical. An unfinished Run retains this exact evaluated prefix;
@@ -399,8 +407,6 @@ const ModelResponseRecordedFields = Schema.Struct({
 }).check(
   Schema.makeFilter(
     (response) => {
-      if (!isPersistedPromptMessages(response.messages)) return false;
-
       const declarations = response.messages.content.flatMap((message) =>
         message.role === "assistant" && typeof message.content !== "string"
           ? message.content.filter(
