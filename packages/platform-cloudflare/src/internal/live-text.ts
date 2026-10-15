@@ -1,6 +1,6 @@
 import { type ThreadId } from "@yielded/agent/identifiers";
 import { Publisher, type Event } from "@yielded/agent/provisional-text";
-import { Cause, Context, Effect, Exit, Fiber, Layer, Queue, Schema, Scope, Stream } from "effect";
+import { Context, Effect, Exit, Layer, Schema } from "effect";
 import * as Response from "effect/ai/Response";
 
 import { HostProtocolError } from "../CloudflareThreadClient.ts";
@@ -26,10 +26,8 @@ interface Draft {
 
 interface Observer {
   readonly threadId: ThreadId;
-  readonly queue: Queue.Queue<Event | undefined, HostProtocolError>;
-  snapshot: boolean;
-  streamId: string;
-  sequence: number;
+  readonly offer: (event: Event) => void;
+  readonly close: (error?: HostProtocolError) => void;
 }
 
 /** One Object incarnation; owns drafts and subscriptions independently of RPC event scopes. */
@@ -43,19 +41,25 @@ export class LiveTextHub extends Context.Service<
 >()("@effect-agent/platform-cloudflare/LiveTextHub") {
   static readonly layer: Layer.Layer<LiveTextHub> = Layer.effectContext(
     Effect.gen(function* () {
-      const owner = yield* Effect.scope;
       const observers = new Set<Observer>();
       const drafts = new Map<string, Draft>();
       let length = 0;
+      let stopped = false;
 
       let unavailable:
         | { readonly error: HostProtocolError; readonly attemptId: Event["attemptId"] }
         | undefined;
 
-      const encode = Schema.encodeEffect(Schema.fromJsonString(Frame));
+      const encode = Schema.encodeExit(Schema.fromJsonString(Frame));
       const encoder = new TextEncoder();
 
-      yield* Effect.addFinalizer(() => Effect.sync(() => drafts.clear()));
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          stopped = true;
+          drafts.clear();
+          for (const observer of observers) observer.close();
+        }),
+      );
 
       const fail = (attemptId: Event["attemptId"]) => {
         const error = HostProtocolError.make({
@@ -66,11 +70,7 @@ export class LiveTextHub extends Context.Service<
         unavailable = { error, attemptId };
         drafts.clear();
         length = 0;
-        for (const observer of observers) {
-          observer.snapshot = true;
-          Queue.failCauseUnsafe(observer.queue, Cause.fail(error));
-          Queue.shutdownUnsafe(observer.queue);
-        }
+        for (const observer of observers) observer.close(error);
 
         return false;
       };
@@ -78,6 +78,7 @@ export class LiveTextHub extends Context.Service<
       const offerUnsafe = (event: Event): boolean => {
         // Retain drafts even without subscribers. Invalid input disables previews until an
         // offending Attempt ends; canonical execution never depends on the observer's state.
+        if (stopped) return false;
         if (event._tag === "AttemptEnded" && event.attemptId === unavailable?.attemptId)
           unavailable = undefined;
         if (unavailable !== undefined) return false;
@@ -133,69 +134,77 @@ export class LiveTextHub extends Context.Service<
           }
         }
 
-        // No snapshot copying, encoding, I/O or awaited work on the producer's path.
+        // Fulfill native demand inline. A slow reader only fills its bounded buffer;
+        // canonical execution never waits for a pull or a transport acknowledgement.
         for (const observer of observers) {
-          if (observer.threadId !== event.threadId) continue;
-          if (!Queue.offerUnsafe(observer.queue, event)) observer.snapshot = true;
+          if (observer.threadId === event.threadId) observer.offer(event);
         }
 
         return true;
       };
 
       const open = Effect.fnUntraced(function* (threadId: ThreadId) {
+        if (stopped)
+          return yield* HostProtocolError.make({ message: "Provisional text owner is closed" });
         if (unavailable !== undefined) return yield* unavailable.error;
         if (threadId.length > MAX_ID_LENGTH || observers.size >= MAX_OBSERVERS)
           return yield* HostProtocolError.make({
             message: "Provisional text observation capacity exceeded",
           });
-        const scope = yield* Scope.fork(owner);
-        const queue = yield* Queue.dropping<Event | undefined, HostProtocolError>(BUFFER_SIZE);
+        const buffer: Event[] = [];
+        let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
+        let pending: Generator<Frame> | undefined;
+        let snapshotNeeded = true;
+        let streamId = "";
+        let sequence = 0;
+        let closed = false;
+
+        const dispose = () => {
+          closed = true;
+          buffer.length = 0;
+          pending = undefined;
+          observers.delete(observer);
+        };
 
         const observer: Observer = {
           threadId,
-          queue,
-          snapshot: true,
-          streamId: "",
-          sequence: 0,
+          offer(event) {
+            if (buffer.length === BUFFER_SIZE) snapshotNeeded = true;
+            else buffer.push(event);
+            flush();
+          },
+          close(error) {
+            if (closed) return;
+            dispose();
+            if (error === undefined) controller?.close();
+            else controller?.error(error);
+          },
         };
-
-        const close = Scope.close(scope, Exit.void);
-
-        yield* Scope.addFinalizer(
-          scope,
-          Effect.sync(() => {
-            observer.snapshot = true;
-            observers.delete(observer);
-            Queue.shutdownUnsafe(queue);
-          }),
-        );
-        observers.add(observer);
-        Queue.offerUnsafe(queue, undefined);
 
         const frame = (event: Event): Frame => ({
           _tag: "Event",
           schemaVersion: 1,
-          streamId: observer.streamId,
-          sequence: ++observer.sequence,
+          streamId,
+          sequence: ++sequence,
           event,
         });
 
         const snapshot = function* (): Generator<Frame> {
           // Capture immutable strings once, then encode bounded slices on consumer pulls.
-          // Queue drain and capture are synchronous so no delta can straddle the snapshot.
-          while (Queue.sizeUnsafe(queue) > 0) Queue.takeUnsafe(queue);
+          // Buffer drain and capture are synchronous so no delta can straddle the snapshot.
+          buffer.length = 0;
 
           const current = Array.from(drafts.values())
             .filter((draft) => draft.start.threadId === threadId)
             .map((draft) => ({ ...draft }));
 
-          observer.snapshot = false;
-          observer.streamId = crypto.randomUUID();
-          observer.sequence = 0;
+          snapshotNeeded = false;
+          streamId = crypto.randomUUID();
+          sequence = 0;
           yield {
             _tag: "Reset",
             schemaVersion: 1,
-            streamId: observer.streamId,
+            streamId,
             threadId,
             sequence: 0,
           };
@@ -218,58 +227,62 @@ export class LiveTextHub extends Context.Service<
           }
         };
 
-        const toBytes = Effect.fnUntraced(function* (value: Frame) {
-          const json = yield* encode(value).pipe(
-            Effect.mapError(() =>
-              HostProtocolError.make({ message: "Provisional text frame is invalid" }),
-            ),
-          );
+        const flush = () => {
+          if (closed || controller === undefined) return;
+          // Native demand and one queued Frame bound this loop. There is no
+          // scheduled consumer fiber between an offered part and its enqueue.
+          while (controller.desiredSize !== null && controller.desiredSize > 0) {
+            if (snapshotNeeded) pending = snapshot();
+            let value: Frame;
 
-          const bytes = encoder.encode(json + "\n");
+            if (pending !== undefined) {
+              const next = pending.next();
 
-          if (bytes.byteLength > MAX_FRAME_BYTES)
-            return yield* HostProtocolError.make({
-              message: "Provisional text frame exceeds its wire bound",
-            });
+              if (next.done) {
+                pending = undefined;
+                continue;
+              }
+              value = next.value;
+            } else {
+              const event = buffer.shift();
 
-          return bytes;
+              if (event === undefined) return;
+              value = frame(event);
+            }
+
+            const json = encode(value);
+
+            if (Exit.isFailure(json)) {
+              observer.close(
+                HostProtocolError.make({ message: "Provisional text frame is invalid" }),
+              );
+
+              return;
+            }
+            const bytes = encoder.encode(json.value + "\n");
+
+            if (bytes.byteLength > MAX_FRAME_BYTES) {
+              observer.close(
+                HostProtocolError.make({
+                  message: "Provisional text frame exceeds its wire bound",
+                }),
+              );
+
+              return;
+            }
+            controller.enqueue(bytes);
+          }
+        };
+
+        return new ReadableStream<Uint8Array>({
+          start(value) {
+            controller = value;
+            observers.add(observer);
+            flush();
+          },
+          pull: flush,
+          cancel: dispose,
         });
-
-        const frames = Stream.fromPull(
-          Effect.withFiber((fiber) => {
-            // The native ReadableStream bridge can wait on consumer demand outside
-            // the queue. Its fiber belongs to the owner, not the child it closes.
-            Fiber.runIn(fiber, owner);
-            let pending: Generator<Frame> | undefined;
-            const take = Queue.take(queue);
-
-            return Effect.succeed(
-              Effect.gen(function* () {
-                for (;;) {
-                  if (pending !== undefined) {
-                    const next = pending.next();
-
-                    if (!next.done && !observer.snapshot) return [yield* toBytes(next.value)];
-                    pending = undefined;
-                  }
-
-                  // Keep one frame per pull: the ReadableStream bridge prefetches chunks,
-                  // so batching here would delay overflow resets behind buffered frames.
-                  const event = yield* take;
-
-                  if (observer.snapshot || event === undefined) {
-                    pending = snapshot();
-                    continue;
-                  }
-
-                  return [yield* toBytes(frame(event))];
-                }
-              }),
-            );
-          }),
-        ).pipe(Stream.ensuring(close));
-
-        return yield* Stream.toReadableStreamEffect(frames);
       });
 
       return Context.make(LiveTextHub, { open }).pipe(Context.add(Publisher, { offerUnsafe }));
