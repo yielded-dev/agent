@@ -3,12 +3,16 @@
 Chat with an agent in a real Cloudflare browser, or try two quick demos: a **Wikipedia race**
 (default **Mars → Nelson Mandela**) and a **coffee checkout**. The model writes JavaScript
 through `browser_execute`, using CDP to inspect websites and choose interactions. Watch the
-browser, follow up in chat, and expand run details to inspect timing or download reports.
+browser, follow up in chat, and expand conversation details to inspect timing or download traces.
 
 **Chat with the agent** accepts an optional starting URL and messages up to 8,000 characters.
 The agent can choose where to browse, answer questions, and ask for clarification. Follow-up
 messages share the same Chromium browser and persisted Thread history. Press Enter to send,
 Shift+Enter for a new line, and **New chat** to close the browser and clear the conversation.
+The live view stays connected between messages. **Take over** enables interaction after the
+agent finishes a message; **Return to agent** restores viewing and enables chat again.
+Tell the agent what changed when you send the next message. **Reconnect live view** obtains
+a fresh viewing connection without starting another agent run.
 Chat runs one message at a time; model and browser comparisons remain in the demos.
 If a response connection drops, chat keeps checking that run's status and restores its final
 reply and browser when confirmed. Stop ends this wait; the message is never resubmitted.
@@ -19,7 +23,7 @@ JSON arguments are not rendered while streaming. You can draft the next message 
 agent works. Scrolling up pauses automatic scrolling; **Jump to latest** resumes it.
 
 Intermediate text stays visible after completion, failure or Stop. Live output is limited to
-64,000 characters and 256 text/summary blocks per run; the chat keeps the latest 50 messages
+64,000 characters and 256 text/summary blocks per run; the chat keeps the session's messages
 and shows the latest 20 actions per message. Full action diagnostics remain in run details.
 These display limits do not change the Thread history used for follow-ups.
 
@@ -62,9 +66,11 @@ vp run -F @yielded/agent-example-browser-speed build
 
 Fill the ignored `.dev.vars` file with `CLOUDFLARE_ACCOUNT_ID`,
 `BROWSER_RENDERING_API_TOKEN` (Browser Run Write), and `OPENAI_API_KEY`.
-The project's Infisical `dev` folder `/browser-use` holds the browser token and its
-matching account ID; the OpenAI key is in `/`. Use the same Cloudflare account for Wrangler's
-remote browser binding and the session credentials.
+The project's Infisical `dev` folder `/browser-use` holds `BROWSER_USE_DEV_API_TOKEN` and
+`BROWSER_USE_DEV_ACCOUNT_ID` for remote development; the OpenAI key is in `/`. Use the development
+token for both Wrangler's `CLOUDFLARE_API_TOKEN` and the Worker's `BROWSER_RENDERING_API_TOKEN`,
+and its account ID for `CLOUDFLARE_ACCOUNT_ID`. The remote browser binding and session credentials
+must use the same Cloudflare account.
 
 `WORKERS_AI_API_KEY` enables the optional Workers AI model. The `LOADER` Worker Loader
 binding is configured in Wrangler for both environments and runs generated code in isolated
@@ -73,13 +79,15 @@ Dynamic Workers. Wrangler also needs the appropriate Cloudflare login or deploym
 In separate terminals:
 
 ```sh
-vp run -F @yielded/agent-example-browser-speed worker
+vp run -F @yielded/agent-example-browser-speed worker --name effect-agent-browser-dev
 vp run -F @yielded/agent-example-browser-speed dev
 ```
 
 Open **http://127.0.0.1:5191/browser-use/** and send a message, or choose a demo.
 Browser and model calls use real services. `worker --local` is useful for API checks but
 disables the remote browser binding.
+Use a separate development Worker name to keep its remote proxy session independent of the
+deployed application's hostname and Cloudflare Access policy.
 
 The OpenAI model picker offers GPT-6 Astra, GPT-6.1 Sol and GPT-6 Luna. Runs default to Fast
 processing; Standard is also available. Ultrafast is available for Astra and Sol. Comparing
@@ -107,7 +115,8 @@ for up to one hour, with ten minutes of idle time between messages. Completed me
 in the owner’s SQLite storage, so an idle Worker restart preserves the conversation and browser.
 Chat captures screenshots only when requested. If the final screenshot fails, the chat ends
 and browser cleanup runs.
-Reloading the page starts a new UI session. An expired chat refuses follow-up input; choose
+Reloading the page restores this tab's session, saved reports and active conversation.
+An expired chat refuses follow-up input; choose
 **New chat** to start again. A failed or interrupted message is never replayed after restart.
 
 Fresh browser preparation may retry once after confirmed cleanup. Follow-up attachment,
@@ -116,17 +125,58 @@ closes its browser; failed runs also close it. **Close browser** (or **New chat*
 cleanup or releases a recovered browser. Leaving the page does not guarantee immediate
 cancellation; deadlines and alarms still apply. Unresolved requests stay fenced.
 
+Taking over is available between messages, never concurrently with agent work. The lab rejects
+run requests while human control is selected. Returning control replaces the embedded viewer;
+it cannot revoke an interactive connection copied elsewhere. Closing the browser ends access.
+
 Provider keys stay in the Worker unless visitors supply their own. Visitor keys are sent only
 on run requests and excluded from stored owner state and reports. The UI keeps keys for the
 browser session, or on the device when explicitly selected. Live View URLs and screenshots
 are transient and excluded from exports. Goals and model output may still contain sensitive
 website data; review exports before sharing them.
 
-Run history and comparisons stay in the tab; the Durable Object keeps completed chat history,
-its latest report and admission state.
-Export before reloading. The report's timestamps use one admission-relative Worker clock;
-work time starts after the initial page is loaded. CDP timing includes reads as well as writes.
-These reports do not establish a comparative performance claim.
+**Conversation details and traces** shows every message's timeline and cumulative active time,
+excluding time waiting for the user. Each message's timestamps use its own admission-relative
+Worker clock; work time starts after the initial page is loaded. CDP timing includes reads as
+well as writes. These reports do not establish a comparative performance claim.
+
+## Debug traces
+
+Each admitted run saves diagnostic events incrementally in the owner's SQLite storage, then
+archives a JSON file to the private `TRACES` R2 bucket on completion. R2 failure leaves the
+SQLite copy available; downloading retries the upload. **Download conversation trace** exports
+all messages together for another person or agent to inspect, without granting browser access.
+Downloads write one run at a time to a temporary file in browser storage, requiring sufficient
+disk space and a browser with the Origin Private File System enabled. The file remains until
+the next download replaces it or the site's browser storage is cleared.
+Each archive includes the report, prompts and native response metadata, provider request metadata,
+generated JavaScript, CDP arguments/results, execution logs, failures, control transfers, agent
+events and the deployed Worker version.
+Its `otlp` array contains standard OTLP/JSON trace export bodies from Effect, including span
+identities, parents, attributes, events and timing. These can be submitted to a collector's
+`/v1/traces` endpoint individually. Interrupted requests retain incremental evidence; a report
+still marked running is unresolved, not proof of completion.
+
+Trace capture has a 32 MiB event budget per run and a 1 MB payload limit per event. Oversized
+events carry a truncation marker and original size; the archive records dropped-event counts.
+Raw model deltas retain metadata only; completed content is in model output and agent events.
+Provider credentials, credential fields (including CDP cookies) and viewer URLs are redacted;
+screenshot payloads are omitted from diagnostic copies. If the run's sensitive-value index
+exceeds 1 MB, subsequent diagnostic text is omitted. Live browser return values are unchanged.
+Website content and user-entered personal data can still appear in prompts, generated code and results. Review downloaded files before sharing.
+Trace downloads require the owning lab session; the bucket has no public download route.
+
+R2 keys use `browser-use/v1/<owner>/<conversation>/<run>.json`. Create the private environment's
+`effect-agent-browser-traces` bucket and the public environment's `yielded-browser-use-traces`
+bucket before deploying, for example from this directory:
+
+```sh
+vp exec wrangler r2 bucket create effect-agent-browser-traces
+vp exec wrangler r2 bucket create yielded-browser-use-traces
+```
+
+Local development uses emulated R2. Hosts without a `TRACES` binding keep downloadable SQLite
+traces. Each lab session admits at most 100 runs; open a fresh tab for another session.
 
 ## Validate and deploy
 
