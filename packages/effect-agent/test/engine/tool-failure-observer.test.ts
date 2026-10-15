@@ -206,9 +206,16 @@ const testLayer = Layer.mergeAll(
 );
 
 layer(testLayer)("RUN-036 trusted Tool failure observation", (it) => {
-  it.effect("observes a direct declared failure once on early close, without its payload", () =>
+  // Explicit regression request: exercise the live direct and broker observer bridges before
+  // declared failures lose their ErrorReporter annotation during encoding/tag projection.
+  it.effect.each([false, true])("honors ignored=%s on direct declared failures", (ignored) =>
     Effect.gen(function* () {
       {
+        const declared = Object.assign(
+          QueryFailure.make({ message: "Query rejected", privateDetail: "DECLARED_SECRET" }),
+          { [ErrorReporter.ignore]: ignored },
+        );
+
         const observations: Array<ToolFailureObservation> = [];
         const stream = AgentRuntime.stream(binding(returns, [call("returned")]), "go");
 
@@ -217,23 +224,27 @@ layer(testLayer)("RUN-036 trusted Tool failure observation", (it) => {
           .pipe(
             Stream.runCollect,
             Effect.provide([
-              returns.toLayer({ returned: () => Effect.fail(failure) }),
+              returns.toLayer({ returned: () => Effect.fail(declared) }),
               toolFailureObserverLayer(collect(observations)),
             ]),
           );
 
-        expect(observations).toEqual([
-          {
-            ...identity,
-            threadId: events[0]?.threadId,
-            _tag: "ModelToolFailure",
-            kind: "declared-failure",
-            toolCallId: outerId,
-            toolName: "returned",
-            executionClass: "idempotent",
-            tag: "QueryFailure",
-          },
-        ]);
+        expect(observations).toEqual(
+          ignored
+            ? []
+            : [
+                {
+                  ...identity,
+                  threadId: events[0]?.threadId,
+                  _tag: "ModelToolFailure",
+                  kind: "declared-failure",
+                  toolCallId: outerId,
+                  toolName: "returned",
+                  executionClass: "idempotent",
+                  tag: "QueryFailure",
+                },
+              ],
+        );
         expect(events.filter((event) => event._tag === "ToolCallFailed")).toHaveLength(1);
         expect(events.at(-1)?._tag).toBe("ToolCallFailed");
         expect(JSON.stringify(events)).not.toContain("DECLARED_SECRET");
@@ -241,20 +252,91 @@ layer(testLayer)("RUN-036 trusted Tool failure observation", (it) => {
     }),
   );
 
+  it.effect.each([false, true])("honors ignored=%s on programmatic declared failures", (ignored) =>
+    Effect.gen(function* () {
+      const declared = Object.assign(
+        QueryFailure.make({ message: "Query rejected", privateDetail: "DECLARED_SECRET" }),
+        { [ErrorReporter.ignore]: ignored },
+      );
+
+      const inner = yield* returns.pipe(
+        Effect.provide(returns.toLayer({ returned: () => Effect.fail(declared) })),
+      );
+
+      const observations: Array<ToolFailureObservation> = [];
+
+      const events = yield* runPass(inner, (pass) =>
+        Effect.gen(function* () {
+          const result = yield* pass.invoke({
+            toolName: "returned",
+            encodedArguments: { value: 1 },
+          });
+
+          expect(result).toEqual({
+            _tag: "ProgrammaticCallFailure",
+            index: 0,
+            encodedResult: {
+              _tag: "QueryFailure",
+              message: "Query rejected",
+              privateDetail: "DECLARED_SECRET",
+            },
+          });
+
+          return null;
+        }),
+      ).pipe(Effect.provide(toolFailureObserverLayer(collect(observations))));
+
+      expect(events.at(-1)?._tag).toBe("RunCompleted");
+      expect(observations).toEqual(
+        ignored
+          ? []
+          : [
+              {
+                ...identity,
+                threadId: events[0]?.threadId,
+                _tag: "ProgrammaticToolFailure",
+                kind: "declared-failure",
+                toolCallId: `${outerId}#0`,
+                parentToolCallId: outerId,
+                sequenceIndex: 0,
+                toolName: "returned",
+                executionClass: "idempotent",
+                tag: "QueryFailure",
+              },
+            ],
+      );
+      expect(JSON.stringify(events)).not.toContain("DECLARED_SECRET");
+    }),
+  );
+
   it.effect(
-    "preserves the exact broker Cause, Reasons and annotations while the Run completes",
+    "preserves a mixed broker Cause after an ignored terminal result while the Run completes",
     () =>
       Effect.gen(function* () {
+        const ignored = Object.assign(
+          QueryFailure.make({ message: "query failed", privateDetail: "CAUSE_SECRET" }),
+          { [ErrorReporter.ignore]: true },
+        );
+
+        const defect = new Error("stream fault");
+
         const original = Cause.fromReasons([
-          Cause.makeFailReason(
-            QueryFailure.make({ message: "query failed", privateDetail: "CAUSE_SECRET" }),
-          ),
+          Cause.makeFailReason(ignored),
           Cause.makeFailReason(failure),
+          Cause.makeDieReason(defect),
         ]).pipe(Cause.annotate(Context.make(DiagnosticSource, "REASON_SECRET")));
 
         const inner: Toolkit.WithHandler<Record<string, typeof Query>> = {
           tools: queries.tools,
-          handle: () => Effect.succeed(Stream.failCause(original)),
+          handle: () =>
+            Effect.succeed(
+              Stream.succeed({
+                result: ignored,
+                encodedResult: Schema.encodeSync(QueryFailure)(ignored),
+                isFailure: true,
+                preliminary: false,
+              }).pipe(Stream.concat(Stream.failCause(original))),
+            ),
         };
 
         const observations: Array<ToolFailureObservation> = [];
@@ -280,7 +362,8 @@ layer(testLayer)("RUN-036 trusted Tool failure observation", (it) => {
         ]);
         const observedCause = observations[0]?.cause;
 
-        expect(observedCause?.reasons).toHaveLength(2);
+        expect(observedCause?.reasons).toHaveLength(3);
+        expect(observedCause?.reasons.filter(Cause.isDieReason)[0]?.defect).toBe(defect);
         expect(observedCause?.reasons.filter(Cause.isFailReason)[0]?.error).toBe(
           original.reasons.filter(Cause.isFailReason)[0]?.error,
         );

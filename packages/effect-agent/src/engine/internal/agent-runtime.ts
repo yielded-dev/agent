@@ -17,6 +17,7 @@ import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
+import * as ErrorReporter from "effect/ErrorReporter";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -2349,7 +2350,12 @@ const executePreparedToolCall = Effect.fnUntraced(function* <
       result.isFailure ? "returned-to-model" : undefined,
     );
     // Derivatives finish before optional publication, under the same call permit.
-    if (observer !== undefined && result.isFailure && rejection === undefined)
+    if (
+      observer !== undefined &&
+      result.isFailure &&
+      rejection === undefined &&
+      !ErrorReporter.isIgnored(result.result)
+    )
       yield* prepareWithinDeadline(
         context,
         deliverToolFailure(observer, {
@@ -10321,6 +10327,7 @@ const makeToolBrokerService = Effect.fnUntraced(function* <HookError, HookRequir
                 | {
                     readonly encodedResult: unknown;
                     readonly isFailure: boolean;
+                    readonly ignored: boolean;
                     readonly tag: string | undefined;
                   }
                 | undefined;
@@ -10346,6 +10353,10 @@ const makeToolBrokerService = Effect.fnUntraced(function* <HookError, HookRequir
                       terminal = {
                         encodedResult: toolResultForJson(tool, result),
                         isFailure: result.isFailure,
+                        ignored:
+                          observer !== undefined &&
+                          result.isFailure &&
+                          ErrorReporter.isIgnored(result.result),
                         tag:
                           observer === undefined || !result.isFailure
                             ? undefined
@@ -10398,7 +10409,7 @@ const makeToolBrokerService = Effect.fnUntraced(function* <HookError, HookRequir
                 );
               }
               if (terminal.isFailure) {
-                if (observer !== undefined) {
+                if (observer !== undefined && !terminal.ignored) {
                   failureObservation = {
                     _tag: "ProgrammaticToolFailure",
                     agentId: binding.context.agentId,
