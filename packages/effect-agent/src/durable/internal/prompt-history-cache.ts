@@ -25,7 +25,7 @@ import {
 } from "../ThreadStore.ts";
 import { HistoryMessage, restoreHistoryMessage } from "./history-prompt.ts";
 import type { InitialContextInput } from "./initial-context.ts";
-import type { JournalRecordEnvelope } from "./journal-metadata.ts";
+import { makeJournalMetadata, type JournalRecordEnvelope } from "./journal-metadata.ts";
 import { promptJsonFootprint } from "./prompt-footprint.ts";
 import { captureRecord } from "./record-encoding.ts";
 import { digestRunHistory } from "./run-context.ts";
@@ -340,6 +340,7 @@ const readSuffix = Effect.fnUntraced(function* (
 ) {
   const store = yield* ThreadStore;
   const records: Array<JournalRecordEnvelope> = [];
+  const metadata = makeJournalMetadata(undefined);
   let after = from;
   let remaining = allowance;
   let active: RunId | undefined;
@@ -402,6 +403,7 @@ const readSuffix = Effect.fnUntraced(function* (
       if (footprint === undefined) return undefined;
       remaining -= 32 * footprint;
       records.push(entry);
+      metadata.add(entry);
       after = entry.sequence;
     }
     if (page.length === 0) break;
@@ -415,6 +417,8 @@ const readSuffix = Effect.fnUntraced(function* (
     (boundary) => {
       if (boundary.incomplete) incomplete = true;
     },
+    undefined,
+    metadata.finish(),
   );
 
   if (incomplete || delta.prompt.content.length > MAX_ENTRIES) return undefined;
