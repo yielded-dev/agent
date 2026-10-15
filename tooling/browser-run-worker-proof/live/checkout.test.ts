@@ -102,6 +102,8 @@ const publicEvidence = (evidence: typeof Evidence.Type): typeof Evidence.Type =>
   scrapeAttempts: evidence.scrapeAttempts,
   loginRequests: evidence.loginRequests,
   browserDiagnostics: evidence.browserDiagnostics,
+  loginCalls: evidence.loginCalls,
+  loginSessionFailure: evidence.loginSessionFailure,
   failure:
     evidence.failure === null
       ? null

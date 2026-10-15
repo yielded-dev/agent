@@ -40,6 +40,8 @@ import {
   CheckoutPhase,
   Evidence,
   Receipt,
+  LoginCall,
+  LoginCalls,
   WorkerFailure,
 } from "./proof.ts";
 
@@ -155,6 +157,12 @@ export class CheckoutRun extends DurableObject<Env> {
       loginRequests: this.read("loginRequests", Schema.Natural, 0),
       failure: this.read("failure", Schema.NullOr(Schema.String), null),
       browserDiagnostics: this.read("browserDiagnostics", BrowserDiagnostics, []),
+      loginCalls: this.read("loginCalls", LoginCalls, []),
+      loginSessionFailure: this.read(
+        "loginSessionFailure",
+        Evidence.fields.loginSessionFailure,
+        null,
+      ),
     });
   }
   private readonly reporter = ErrorReporter.layer([
@@ -360,16 +368,71 @@ export class CheckoutRun extends DurableObject<Env> {
     // Authentication is host-owned and complete before generated code receives the page.
     yield* session
       .run(authorize, async (page) => {
-        await page.type('input[type="email"]', buyer);
-        await page.type('input[type="password"]', this.env.CHECKOUT_PASSWORD);
+        const tracked = async <A>(call: typeof LoginCall.Type.call, action: () => Promise<A>) => {
+          const start = Date.now();
+
+          const record = (
+            state: typeof LoginCall.Type.state,
+            errorName: typeof LoginCall.Type.errorName = null,
+          ) => {
+            this.ctx.storage.kv.put(
+              "loginCalls",
+              [
+                ...this.read("loginCalls", LoginCalls, []),
+                {
+                  call,
+                  state,
+                  elapsedMillis: Date.now() - start,
+                  errorName,
+                },
+              ].slice(-8),
+            );
+          };
+
+          record("started");
+          try {
+            const result = await action();
+
+            record("succeeded");
+
+            return result;
+          } catch (cause) {
+            const name = cause instanceof Error ? cause.name : "unknown";
+            const errorName = Schema.decodeUnknownOption(LoginCall.fields.errorName)(name);
+
+            record(
+              "failed",
+              Option.getOrElse(errorName, () => "unknown"),
+            );
+            // oxlint-disable-next-line effect/no-untyped-throw -- Temporary native diagnostics must rethrow the unchanged SDK failure to its existing Effect owner.
+            throw cause;
+          }
+        };
+
+        await tracked("email-type", () => page.type('input[type="email"]', buyer));
+        await tracked("password-type", () =>
+          page.type('input[type="password"]', this.env.CHECKOUT_PASSWORD),
+        );
         await Promise.all([
-          page.waitForNavigation({ waitUntil: "domcontentloaded" }),
-          page.click("#login button"),
+          tracked("wait-navigation", () =>
+            page.waitForNavigation({ waitUntil: "domcontentloaded" }),
+          ),
+          tracked("click-login", () => page.click("#login button")),
         ]);
 
         return page.url() === `${origin}/shop/product`;
       })
       .pipe(
+        Effect.tapError((error) =>
+          Effect.sync(() => {
+            if (error instanceof BrowserSessionError)
+              this.ctx.storage.kv.put("loginSessionFailure", {
+                reason: error.reason,
+                dispatch: error.dispatch,
+                cleanup: error.cleanup,
+              });
+          }),
+        ),
         Effect.filterOrFail(Boolean, () =>
           BrowserUse.BrowserUseError.make({ code: "browser", message: "Fixture login failed" }),
         ),

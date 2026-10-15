@@ -100,6 +100,25 @@ export const BrowserDiagnostic = Schema.Struct({
 
 export const BrowserDiagnostics = Schema.Array(BrowserDiagnostic).check(Schema.isMaxLength(16));
 
+export const LoginCall = Schema.Struct({
+  call: Schema.Literals(["email-type", "password-type", "wait-navigation", "click-login"]),
+  state: Schema.Literals(["started", "succeeded", "failed"]),
+  elapsedMillis: Schema.Natural,
+  errorName: Schema.NullOr(
+    Schema.Literals([
+      "Error",
+      "ProtocolError",
+      "TargetCloseError",
+      "TimeoutError",
+      "ConnectionClosedError",
+      "TypeError",
+      "unknown",
+    ]),
+  ),
+});
+
+export const LoginCalls = Schema.Array(LoginCall).check(Schema.isMaxLength(8));
+
 export const Evidence = Schema.Struct({
   phase: CheckoutPhase,
   started: Schema.Boolean,
@@ -110,6 +129,10 @@ export const Evidence = Schema.Struct({
   loginRequests: Schema.Natural,
   failure: Schema.NullOr(Schema.String),
   browserDiagnostics: BrowserDiagnostics,
+  loginCalls: LoginCalls,
+  loginSessionFailure: Schema.NullOr(
+    Schema.Struct({ reason: Schema.String, dispatch: Schema.String, cleanup: Schema.String }),
+  ),
 });
 
 export class CheckoutError extends Schema.TaggedError<CheckoutError>()("CheckoutError", {
