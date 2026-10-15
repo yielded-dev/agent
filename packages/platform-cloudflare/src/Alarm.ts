@@ -178,15 +178,20 @@ export class DurableAlarmService extends Context.Service<
               ? Effect.void
               : wrap(
                   "hint maintenance checkpoint",
-                  alarms.transaction((tx) =>
-                    Effect.gen(function* () {
-                      const now = yield* Clock.currentTimeMillis;
-                      const next = DueQueue.next(DueQueue.make(ctx.storage).read());
+                  Effect.gen(function* () {
+                    const now = yield* Clock.currentTimeMillis;
+                    const next = DueQueue.next(DueQueue.make(ctx.storage).read());
 
-                      if (Number.isFinite(next))
-                        yield* tx.scheduleAlarmEarlier(maintenanceAlarmInput(Math.max(now, next)));
-                    }),
-                  ),
+                    if (!Number.isFinite(next)) return;
+                    const at = Math.max(now, next);
+                    const scheduled = yield* alarms.getAlarmStatus(maintenanceAlarmRef);
+
+                    // Fresh progress already carries its prompt checkpoint. Replays still
+                    // advance the pre-arm when no source transaction recorded new progress.
+                    if (scheduled !== undefined && DateTime.toEpochMillis(scheduled.runAt) <= at)
+                      return;
+                    yield* alarms.scheduleAlarmEarlier(maintenanceAlarmInput(at));
+                  }),
                 ),
           ),
         ),
@@ -1169,6 +1174,7 @@ export class ThreadMutationGate extends Context.Service<
         if (affected.size === 0) return;
         const now = yield* Clock.currentTimeMillis;
         const nativeSource = yield* CurrentNativeSource;
+        const scheduling = yield* DurableObjectAlarm.ScheduleConfiguration;
 
         yield* runAlarmTransaction(
           "record maintenance producer progress",
@@ -1195,7 +1201,12 @@ export class ThreadMutationGate extends Context.Service<
                   ),
                 );
             }
-            checkpoint.earlier(now + minimumAlarmDelay);
+            // New source work is eligible for the configured post-response dispatcher.
+            // Native progress and alarm-only hosts retain their ordinary recovery delay.
+            checkpoint.earlier(
+              now +
+                (scheduling.dispatchAfterEvent === true && !nativeSource ? 0 : minimumAlarmDelay),
+            );
           },
         );
         // Maintenance already awaits this native fiber's completion. With one Thread,
