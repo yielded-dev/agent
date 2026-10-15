@@ -140,11 +140,20 @@ export const Identity = Schema.Struct({
   isolate: Schema.NonEmptyString,
   incarnation: Schema.NonEmptyString,
   constructedMs: Schema.Number,
+  isolateConstruction: Schema.optionalKey(Schema.Natural),
   firstEntry: Schema.Boolean,
   priorAlarms: Schema.Natural,
 });
 
 export type Identity = typeof Identity.Type;
+
+/** First authenticated fetch of this router isolate; RTT also includes transport. */
+export const WorkerStart = Schema.Struct({
+  ok: Schema.Literal(true),
+  build: Schema.NonEmptyString,
+  isolate: Schema.NonEmptyString,
+  firstFetch: Schema.Boolean,
+});
 
 export const SeedBatch = Schema.Struct({
   from: Schema.Natural,
@@ -200,12 +209,20 @@ export const ObjectIdentity = Schema.Struct({
   directory: Schema.optionalKey(Identity),
 });
 
+export const MaintenanceStatus = Schema.Struct({
+  logical: Schema.NullOr(Schema.Struct({ attempts: Schema.Natural, parked: Schema.Boolean })),
+  native: Schema.NullOr(Schema.Number),
+});
+
 export const ColdResult = Schema.Struct({
   ok: Schema.Boolean,
   before: Identity,
   directoryBefore: Schema.optionalKey(Identity),
   threadAborted: Schema.Boolean,
   directoryAborted: Schema.optionalKey(Schema.Boolean),
+  maintenanceBefore: Schema.optionalKey(MaintenanceStatus),
+  maintenanceAfter: Schema.optionalKey(MaintenanceStatus),
+  maintenancePolls: Schema.optionalKey(Schema.Natural),
 });
 
 export type ColdResult = typeof ColdResult.Type;

@@ -86,6 +86,19 @@ export const command = Command.make(
       Flag.withDefault(false),
       Flag.withDescription("Include the first turn after Object abort, before warmup"),
     ),
+    isolateCold: Flag.Boolean("isolate-cold").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription(
+        "Upload a fresh version before each cold boundary without readiness probes",
+      ),
+    ),
+    coldSamples: Flag.Int("cold-samples").pipe(
+      Flag.withSchema(Schema.Int.check(Schema.isBetween({ minimum: 2, maximum: 12 }))),
+      Flag.withDefault(2),
+      Flag.withDescription(
+        "Cold turns per Object/epoch with --isolate-cold; extra cold turns follow the warm batch",
+      ),
+    ),
     cpu: Flag.Boolean("cpu").pipe(
       Flag.withDefault(false),
       Flag.withDescription(
@@ -99,7 +112,7 @@ export const command = Command.make(
       ),
       Flag.atLeast(0),
       Flag.withDescription(
-        "Capture cpu or memory profiles of one Object per cell; repeat or comma-separate",
+        "Snapshot: one diagnostic cpu capture at first cold open; history: cpu or memory with --profile-after",
       ),
     ),
     profileAfter: positive("profile-after").pipe(
@@ -192,19 +205,49 @@ export const command = Command.make(
 
     const profiles = [...new Set(flags.profile.flat())];
 
+    if (flags.coldSamples !== 2 && !flags.isolateCold)
+      return yield* BenchError.make({ message: "Extra cold samples require --isolate-cold." });
+
     if (
-      !flags.buildHistory &&
-      (profiles.length > 0 || Option.getOrElse(flags.restoreEachPass, () => true) === false)
+      flags.isolateCold &&
+      (flags.buildHistory ||
+        flags.verifyIncarnationRecovery ||
+        profiles.length > 0 ||
+        targets.some((target) => target !== "yielded" && target !== "pi"))
     )
       return yield* BenchError.make({
         message:
-          "Comparison requires identical restored histories and no profiling; profile a separate --build-history run.",
+          "--isolate-cold requires an unprofiled Yielded/pi snapshot comparison without recovery diagnostics.",
+      });
+
+    if (!flags.buildHistory && Option.getOrElse(flags.restoreEachPass, () => true) === false)
+      return yield* BenchError.make({
+        message: "Snapshot runs require identical restored histories.",
       });
     const profileAfter = Option.getOrUndefined(flags.profileAfter);
 
     const objects = Option.getOrElse(flags.objects, () =>
       flags.buildHistory ? 2 : rigorous ? 30 : 12,
     );
+
+    if (
+      !flags.buildHistory &&
+      profiles.length > 0 &&
+      (profiles.length !== 1 ||
+        profiles[0] !== "cpu" ||
+        targets.length !== 1 ||
+        !["yielded", "pi"].includes(targets[0]) ||
+        sizes.length !== 1 ||
+        ttft.length !== 1 ||
+        objects !== 2 ||
+        rigorous ||
+        flags.cpu ||
+        profileAfter !== undefined)
+    )
+      return yield* BenchError.make({
+        message:
+          "Snapshot --profile cpu requires one Yielded/pi target, size and TTFT, --objects 2, quick mode, no --cpu and no --profile-after; it stops after the selected candidate Object's first cold turn.",
+      });
 
     if (!flags.buildHistory && objects % 2 !== 0)
       return yield* BenchError.make({
@@ -267,6 +310,8 @@ export const command = Command.make(
       concurrency,
       buildConcurrency,
       cold: true,
+      isolateCold: flags.isolateCold,
+      coldSamples: flags.coldSamples,
       cpu: flags.cpu,
       profiles,
       ...(profileAfter === undefined ? {} : { profileAfter }),

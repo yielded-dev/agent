@@ -354,6 +354,7 @@ export const deployments = Effect.gen(function* () {
     workers: readonly string[],
     workerBuilds: Readonly<Record<string, WorkerBuild>>,
     persistent = false,
+    probe = true,
   ) {
     yield* Schema.decodeEffect(Name)(name);
     const names = yield* Schema.decodeUnknownEffect(ownedWorkers(name))(workers);
@@ -385,11 +386,18 @@ export const deployments = Effect.gen(function* () {
       if (!file) {
         const destination = join(privateDirectory, name, "bundles", assigned.build);
 
-        file = persistent ? join(destination, basename(assigned.bundle)) : assigned.bundle;
-        if (persistent) {
+        file =
+          persistent || !probe ? join(destination, basename(assigned.bundle)) : assigned.bundle;
+        if (persistent || !probe) {
           yield* fs.makeDirectory(destination, { recursive: true });
           yield* fs.copyFile(assigned.bundle, file);
           yield* fs.copyFile(assigned.bundle + ".map", file + ".map");
+          if (!probe)
+            yield* fs.writeFileString(
+              file,
+              (yield* fs.readFileString(file)) +
+                `\n;globalThis[Symbol.for("durable-bench/deployment")] = ${JSON.stringify(assigned.build)};\n`,
+            );
         }
         copied.set(assigned.build, file);
       }
@@ -420,18 +428,24 @@ export const deployments = Effect.gen(function* () {
 
     const health = readyTargets(names, retainedBuilds);
 
-    const readyEvents = yield* health.pipe(
-      Effect.catchTag("BenchError", () =>
-        Effect.gen(function* () {
-          yield* Console.error(
-            "Target endpoint unavailable; reconciling its Alchemy deployment once…",
-          );
-          yield* alchemy(stack, "deploy", true);
+    const readyEvents = probe
+      ? yield* health.pipe(
+          Effect.catchTag("BenchError", () =>
+            Effect.gen(function* () {
+              yield* Console.error(
+                "Target endpoint unavailable; reconciling its Alchemy deployment once…",
+              );
+              yield* alchemy(stack, "deploy", true);
 
-          return yield* health;
-        }),
-      ),
-    );
+              return yield* health;
+            }),
+          ),
+        )
+      : Object.entries(retainedBuilds).map(([worker, assigned]) => ({
+          worker,
+          build: assigned.build,
+          probes: 0,
+        }));
 
     const endpoints: Readonly<Record<string, string>> = Object.fromEntries(
       names.map((worker) => [worker, url(worker)]),
@@ -445,7 +459,16 @@ export const deployments = Effect.gen(function* () {
         if (uploadedMs === undefined)
           return yield* BenchError.make({ message: "Missing target upload chronology." });
 
-        return { ...event, uploadedMs };
+        const assigned = retainedBuilds[event.worker];
+
+        if (!assigned) return yield* BenchError.make({ message: "Missing deployed executable." });
+
+        return {
+          ...event,
+          uploadedMs,
+          unprobed: !probe,
+          executableSha256: hash(yield* fs.readFile(assigned.bundle)),
+        };
       }),
     );
 

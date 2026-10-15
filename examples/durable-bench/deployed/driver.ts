@@ -31,6 +31,9 @@ import {
   TextObservation,
   TransientObjectTransport,
   UnknownOutcome,
+  WorkerStart,
+  ObjectIdentity,
+  type Identity,
 } from "./worker/protocol.ts";
 
 class ObservationError extends Schema.TaggedError<ObservationError>()("ObservationError", {
@@ -336,7 +339,7 @@ const operation = {
         });
       }
 
-      const { observeText, cold, expectedDriverBuild, quiescent, resetBeforeMetrics } =
+      const { observeText, cold, isolateCold, expectedDriverBuild, quiescent, resetBeforeMetrics } =
         Schema.decodeUnknownSync(MeasureRequest)(input);
 
       if (expectedDriverBuild !== env.BUILD)
@@ -352,6 +355,24 @@ const operation = {
       return Response.json(
         await Effect.runPromise(
           Effect.gen(function* () {
+            const coldStartedMs = yield* Clock.currentTimeMillis;
+
+            const workerStart = isolateCold
+              ? yield* invokeJson(WorkerStart, "/worker-start")
+              : undefined;
+
+            const workerStartMs = workerStart
+              ? (yield* Clock.currentTimeMillis) - coldStartedMs
+              : undefined;
+
+            if (
+              workerStart &&
+              (!workerStart.firstFetch || workerStart.build !== query.expectedBuild)
+            )
+              return yield* ObservationError.make({
+                message:
+                  "Cold Worker was already visited or reported another build; no input was sent.",
+              });
             const primeAt = yield* Clock.currentTimeMillis;
 
             const primed = cold ? yield* invokeJson(PrimeResult, "/prime") : undefined;
@@ -464,6 +485,25 @@ const operation = {
               observationMs = (yield* Clock.currentTimeMillis) - observerOpenedMs;
             }
 
+            let coldObjectIdentity: Identity | undefined;
+
+            if (isolateCold) {
+              const opened = yield* invokeJson(ObjectIdentity, "/identity");
+
+              coldObjectIdentity = opened.identity;
+
+              if (
+                opened.identity.build !== query.expectedBuild ||
+                opened.identity.isolateConstruction !== 1 ||
+                !opened.identity.firstEntry ||
+                opened.identity.priorAlarms !== 0
+              )
+                return yield* ObservationError.make({
+                  message:
+                    "Cold Object opening was contaminated or reported another build; no input was sent.",
+                });
+            }
+
             const startedMs = yield* Clock.currentTimeMillis;
             const metricStartMs = startedMs - constructorAndProbeMs;
             let admissionMs: number | undefined;
@@ -529,6 +569,17 @@ const operation = {
 
             return {
               ok: true,
+              ...(workerStart === undefined
+                ? {}
+                : {
+                    workerStart,
+                    coldObjectIdentity,
+                    workerStartMs,
+                    coldStartToCompletionMs: observedMs - coldStartedMs,
+                    ...(text === undefined
+                      ? {}
+                      : { coldStartToFirstTextMs: text.atMs - coldStartedMs }),
+                  }),
               metrics,
               driverMs: observedMs - metricStartMs,
               observedMs,

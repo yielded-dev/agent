@@ -34,6 +34,9 @@ const Token = Schema.Struct({
 const meters = new WeakMap<DurableObjectStorage, Observation>();
 // Lazily draw randomness in a request context, then retain one token per Worker isolate.
 let isolate: string | undefined;
+let constructions = 0;
+
+export const isolateIdentity = () => (isolate ??= crypto.randomUUID());
 
 export const observation = (storage: DurableObjectStorage): Observation => {
   const meter = meters.get(storage);
@@ -57,6 +60,7 @@ export const attach = (
 };
 
 export class Observation {
+  readonly isolateConstruction = ++constructions;
   readonly incarnation = crypto.randomUUID();
   private entries = 0;
   private alarms = 0;
@@ -98,9 +102,10 @@ export class Observation {
   identity(): Identity {
     return {
       build: this.env.BUILD,
-      isolate: (isolate ??= crypto.randomUUID()),
+      isolate: isolateIdentity(),
       incarnation: this.incarnation,
       constructedMs: this.constructedMs,
+      isolateConstruction: this.isolateConstruction,
       firstEntry: this.entries === 0,
       priorAlarms: this.alarms,
     };
@@ -108,7 +113,9 @@ export class Observation {
   assertBuild(query: Query) {
     if (query.expectedBuild !== this.env.BUILD)
       // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- Native Object RPC hooks reject mismatched builds before admitting input.
-      throw new Error("Benchmark Object build mismatch; input was not admitted");
+      throw new Error(
+        `Benchmark Object build mismatch; input was not admitted; actualBuild=${this.env.BUILD}; expectedBuild=${query.expectedBuild}; versionId=${this.env.VERSION?.id ?? "unavailable"}; isolate=${isolateIdentity()}; incarnation=${this.incarnation}`,
+      );
   }
   begin(query: Query) {
     for (const sample of this.cpuInvocations?.keys() ?? []) {

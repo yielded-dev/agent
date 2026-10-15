@@ -21,7 +21,7 @@ DURABLE_BENCH_PREFIX=bench-change vp run -F @yielded/agent-example-durable-bench
 ```
 
 Quick defaults to Yielded, 1,000 historical turns, TTFT 0 and 12 Objects. Each build
-runs one excluded preparation turn, resets the isolate, then measures a cold turn,
+runs one excluded preparation turn, restarts the Object, then measures a cold turn,
 twelve sequential warm turns and a second cold turn after another reset. Preparation
 awaits native post-settlement writers so revision-specific derived state exists. Both builds
 measure the same Objects. Within each target/history/TTFT cell, quick randomly assigns half
@@ -41,6 +41,9 @@ measurement receipts. Immediately before each deploy, a live
 account inventory requires at least 100 spare namespace slots, waiting 60 seconds between
 checks for up to 30 minutes. Each prefix is limited to 40 namespaces; split larger cell grids
 into separate runs with a single target (for example, `--targets pi`).
+For parallel runs, set `DURABLE_BENCH_OWNER_PREFIX` to their shared parent prefix
+to enforce the 40-namespace cap across all of them. Cleanup still uses only
+the individual `DURABLE_BENCH_PREFIX`.
 Every run clears and restores
 its Objects before every pass, so both revisions start
 from identical saved state on those same Objects; earlier samples are never reused.
@@ -156,7 +159,34 @@ The mode excludes text observation and A/B redeployment; use the original mode f
 workflows. Deployed absolute times include network hops and cannot be
 compared with Miniflare timings; compare ratios within a matched deployment.
 
-Profiling is separate from comparison cohorts. Use `--build-history --profile cpu|memory`
+Profiling is diagnostic and separate from timing comparisons. With saved snapshots,
+`--profile cpu` requires one Yielded/pi target, size and TTFT, `--objects 2`, and quick mode.
+It excludes `--isolate-cold`, `--cpu`, `--profile-after` and recovery diagnostics.
+After snapshot restore and measurement deployment, it waits 180 seconds before preparation.
+Both Objects run their preparation turn; only the epoch-zero candidate Object then runs
+its first cold turn. After native maintenance becomes quiescent, the controller sends
+read-only identity traffic for 60 seconds to aid profiler discovery, requiring a stable
+build, module and Object incarnation. It then rechecks quiescence and identity and issues
+one 50-second capture against that Object's loaded isolate immediately before resetting it.
+It waits for capture completion after the turn and stops, without warm turns, another pass,
+native sample recovery or another capture request.
+
+```sh
+vp run deployed -- --targets yielded --sizes 1000 --ttft 0 --objects 2 --profile cpu --candidate HEAD --fixture-directory /path/to/saved-fixtures
+```
+
+The issuance hook confirms only that the capture POST was issued, not profiler attachment.
+JSON's `diagnostic` records the discovery interval, request count and identities,
+selected query, epoch, pre-capture and reopened identities,
+request, reset and turn chronology; the profile retains its version, sample, request/response
+times and source map. Changed module identity is labeled `cold-work-not-captured`.
+Matching identity is `same-isolate-unverified`: `ctx.abort()` may detach profiling, and
+sampling may miss construction. Inspect constructor/opening frames before claiming coverage.
+This cannot capture earlier module evaluation. The report has no inferential tables;
+`diagnostic.complete` means the diagnostic finished, while comparison `complete` stays false.
+All recorded timings are diagnostic only.
+
+Use `--build-history --profile cpu|memory`
 with `--profile-after <turns>` to start a ten-second capture
 after a verified checkpoint while subsequent batches continue. This requires one target,
 size, TTFT and Object, with both concurrency limits set to one. The checkpoint must be a
@@ -169,8 +199,9 @@ vp run deployed -- --build-history --targets pi --sizes 3500 --objects 1 --concu
 
 Profile requests, downloads and file writes are outside the turn timers, but profiling adds
 runtime overhead and can extend the run. Use unprofiled runs for timing comparisons.
-Profiled Object batches are serialized and paced to five captures per five minutes;
-quota waits happen before warmup. Other account activity can still cause HTTP 429; wait
+Profiled Object batches are serialized with five minutes between captures;
+quota waits happen before warmup. The snapshot diagnostic makes only one capture request.
+Other account activity can still cause HTTP 429; wait
 for the reported `Retry-After` before rerunning.
 The token needs Workers Scripts Read permission and the account must support profiling.
 Saved `.pprof` paths are printed at completion; filenames and result JSON identify
@@ -264,7 +295,11 @@ that Object; short intervals may resolve to zero. Object/driver clock offsets ar
 
 `--cold` includes the first turn after acknowledged `storage.sync()` + `ctx.abort()`;
 tardie's Actor directory and Thread are both restarted. It verifies a new instance, no
-earlier alarm entry, and a first request. This is a cold Object over retained storage,
+earlier alarm entry, and a first request. Before resetting Yielded or pi, the router waits
+for native alarm absence; Yielded also requires effect-cf’s logical maintenance alarm to
+be absent. Normal effect-cf dispatch drains the work, with a bounded wait that fails closed.
+No alarms are manually deleted. Each sample’s `coldBoundary` retains initial/final alarm
+status and poll count. This is a cold Object over retained storage,
 not a cold isolate, cold disk, or newly seeded conversation. Warm samples require the
 same live instance as the preceding verified turn.
 The driver collects metrics after its timer endpoints, before closing the text observer.
@@ -318,7 +353,12 @@ For Yielded and pi, pre-subscription opens the new Object before a cold turn's s
 after restart with observation prepared, and are not comparable to earlier unobserved cold
 completion timings. Tardie's cold timer still includes opening its native reference.
 
-Cold completion, first text and admission receipt share the logical start `driver submit start − constructorAndProbeMs`; the constructor/probe interval is also reported separately, while priming transport and observer attachment remain excluded.
+In `--build-history` mode only, cold completion and admission use the logical start
+`driver submit start − constructorAndProbeMs`. That interval includes a provider-health
+round trip used to advance the Object clock; it is not pure construction CPU. Normal
+comparisons do not prime: use observer-open endpoints to include Object opening.
+Health and readiness have already evaluated the Worker module before these cold turns;
+none of these fields measures fresh-isolate startup.
 
 Request decoding, transcript normalization and fingerprinting run in the provider Worker,
 not the measured Object. The Object records response chunks and timestamps; it validates
@@ -430,3 +470,36 @@ Dependency installs publish immutable complete directories atomically. Build/cac
 seeded and cache-hit receipts are retained. Import, recovery,
 transcript, build or residency failures invalidate the affected Object; the command never
 bypasses durability checks to force a comparison.
+
+## Fresh-deployment cold requests
+
+`--isolate-cold` uploads a fresh executable version onto the same prepared storage
+before each cold position. Yielded and pi must be quiescent before that upload.
+After restoring snapshots, it also waits 180 seconds after the measurement deployment
+before any preparation readiness checks or resets.
+The executable differs only by a recorded deployment nonce; source-bundle hashes
+and uploaded-executable hashes remain separate. The harness skips readiness probes
+for this upload, waits a fixed 180 seconds for propagation, then measures the first request.
+The delay does not guarantee Worker/Object version convergence. A stale build or contaminated
+first use fails the attempt without retrying an input. Recovery attempts use distinct deployment nonces.
+Use this mode only with snapshot-backed Yielded/pi comparisons. It pairs the two
+targets on the same Object index, AB/BA assignment and measurement wave.
+`--cold-samples 6` adds four more fresh-version cold turns after the usual second
+cold turn (default two; maximum twelve). Each advances history by one turn, equally
+for both targets. Extra cold positions remain separately labeled in the report.
+
+The driver starts before a Worker-only `/worker-start` request, then attaches the
+text observer, checks the opened Object's identity, and submits the turn. JSON records:
+
+- `workerStartMs`: first Worker request, including routing and any startup incurred.
+- `observationMs`: Object open and subscription, including any startup incurred.
+- `coldStartToFirstTextMs` and `coldStartToCompletionMs`: the full staged request,
+  including the identity check. These are directly measured intervals, not sums of medians.
+
+The router must report its first authenticated fetch. The Object must report its first
+construction in a new module instance, fresh incarnation, no preceding alarm and the
+expected build. Router and Object module tokens are recorded separately; equal tokens
+mean the ping already evaluated their shared module. Cloudflare may evaluate code before
+traffic, so these measurements do not isolate pure module-evaluation time. Keep both cold
+positions separate: their histories differ by the intervening turns. Production CPU
+profiles attach to already-loaded isolates and cannot recover earlier startup work.

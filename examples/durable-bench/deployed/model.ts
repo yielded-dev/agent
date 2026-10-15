@@ -2,6 +2,7 @@ import { Schema } from "effect";
 
 import {
   Counts,
+  ColdResult,
   Failure,
   FixtureCompatibility,
   MetricsResult,
@@ -14,6 +15,7 @@ import {
   SeedCheckpoint,
   SeedResult,
   Target,
+  WorkerStart,
 } from "./worker/protocol.ts";
 
 export const DriverRequestId = Schema.NonEmptyString.check(Schema.isMaxLength(512));
@@ -34,7 +36,11 @@ export const Profile = Schema.Struct({
   history: Query.fields.history,
   ttftMs: Query.fields.ttftMs,
   build: Query.fields.expectedBuild,
+  sample: Schema.optionalKey(Query.fields.sample),
   durationMs: Schema.Int,
+  versionId: Schema.optionalKey(Schema.String),
+  requestedMs: Schema.optionalKey(Schema.Number),
+  receivedMs: Schema.optionalKey(Schema.Number),
   afterHistoryTurns: Schema.optionalKey(Schema.Natural),
   completedAtEnd: Schema.optionalKey(Schema.Natural),
   file: Schema.String,
@@ -59,6 +65,8 @@ export const Options = Schema.Struct({
   concurrency: History,
   buildConcurrency: History,
   cold: Schema.Boolean,
+  isolateCold: Schema.optionalKey(Schema.Boolean),
+  coldSamples: Schema.optionalKey(History),
   cpu: Schema.Boolean,
   profiles: Schema.Array(ProfileType),
   profileAfter: Schema.optionalKey(Schema.Int),
@@ -134,6 +142,12 @@ export const Sample = Schema.Struct({
   repeat: Schema.Natural,
   state: Schema.Literals(["cold", "warmup", "warm", "preparation", "recovery"]),
   preparationTables: Schema.optionalKey(Counts),
+  coldBoundary: Schema.optionalKey(ColdResult),
+  workerStart: Schema.optionalKey(WorkerStart),
+  coldObjectIdentity: Schema.optionalKey(Identity),
+  workerStartMs: Schema.optionalKey(Schema.Number),
+  coldStartToFirstTextMs: Schema.optionalKey(Schema.Number),
+  coldStartToCompletionMs: Schema.optionalKey(Schema.Number),
   status: Schema.Literals(["running", "ok", "failed", "invalidated"]),
   driverMs: Schema.optionalKey(Schema.Number),
   firstTextMs: Schema.optionalKey(Schema.NullOr(Schema.Number)),
@@ -259,7 +273,9 @@ export const Result = Schema.Struct({
         worker: Schema.String,
         build: Schema.String,
         uploadedMs: Schema.Number,
-        readyMs: Schema.Number,
+        executableSha256: Schema.optionalKey(Schema.String),
+        unprobed: Schema.optionalKey(Schema.Boolean),
+        readyMs: Schema.optionalKey(Schema.Number),
         probes: Schema.Natural,
       }),
     ),
@@ -379,6 +395,35 @@ export const Result = Schema.Struct({
   kept: Schema.Boolean,
   workerPool: Schema.optionalKey(Schema.String),
   complete: Schema.Boolean,
+  diagnostic: Schema.optionalKey(
+    Schema.Struct({
+      kind: Schema.Literal("snapshot-cpu"),
+      epoch: Schema.Literal(0),
+      complete: Schema.Boolean,
+      query: Schema.optionalKey(Query),
+      before: Schema.optionalKey(Identity),
+      after: Schema.optionalKey(Identity),
+      discovery: Schema.optionalKey(
+        Schema.Struct({
+          durationMs: Schema.Number,
+          startedMs: Schema.Number,
+          completedMs: Schema.Number,
+          requests: Schema.Natural,
+          first: Identity,
+          last: Identity,
+        }),
+      ),
+      versionId: Schema.optionalKey(Schema.String),
+      requestedMs: Schema.optionalKey(Schema.Number),
+      resetCompletedMs: Schema.optionalKey(Schema.Number),
+      turnCompletedMs: Schema.optionalKey(Schema.Number),
+      coverage: Schema.Literals([
+        "unverified",
+        "same-isolate-unverified",
+        "cold-work-not-captured",
+      ]),
+    }),
+  ),
 });
 
 export type Result = typeof Result.Type;
@@ -402,6 +447,7 @@ export const MeasureRequest = Schema.Struct({
   ...DriverRequest.fields,
   observeText: Schema.Boolean,
   cold: Schema.Boolean,
+  isolateCold: Schema.optionalKey(Schema.Boolean),
   quiescent: Schema.Boolean,
   resetBeforeMetrics: Schema.optionalKey(Schema.Boolean),
 });
@@ -409,6 +455,11 @@ export const MeasureRequest = Schema.Struct({
 export type MeasureRequest = typeof MeasureRequest.Type;
 
 export const MeasureResponse = Schema.Struct({
+  workerStart: Schema.optionalKey(WorkerStart),
+  coldObjectIdentity: Schema.optionalKey(Identity),
+  workerStartMs: Schema.optionalKey(Schema.Number),
+  coldStartToFirstTextMs: Schema.optionalKey(Schema.Number),
+  coldStartToCompletionMs: Schema.optionalKey(Schema.Number),
   driverIdentity: Schema.optionalKey(DriverIdentity),
   metrics: MetricsResult,
   ok: Schema.Literal(true),

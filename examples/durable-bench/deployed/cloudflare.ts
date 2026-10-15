@@ -72,6 +72,16 @@ const connect = Effect.gen(function* () {
     "DURABLE_BENCH_PREFIX",
   ).pipe(Config.withDefault("durable-bench"));
 
+  const ownerPrefix = yield* Config.schema(
+    Schema.String.check(Schema.isPattern(/^[a-z][a-z0-9-]{0,23}$/)),
+    "DURABLE_BENCH_OWNER_PREFIX",
+  ).pipe(Config.withDefault(prefix));
+
+  if (prefix !== ownerPrefix && !prefix.startsWith(ownerPrefix + "-"))
+    return yield* BenchError.make({
+      message: "The deployment prefix must belong to DURABLE_BENCH_OWNER_PREFIX.",
+    });
+
   const accountId = Redacted.value(yield* Config.Redacted("CLOUDFLARE_ACCOUNT_ID"));
   const apiToken = Redacted.value(yield* Config.Redacted("CLOUDFLARE_API_TOKEN"));
 
@@ -195,7 +205,9 @@ const connect = Effect.gen(function* () {
     const additional = required.filter((name) => !existing.has(name)).length;
     const free = 500 - namespaces.length - additional;
 
-    const owned = namespaces.filter((namespace) => namespace.name.startsWith(prefix + "-")).length;
+    const owned = namespaces.filter((namespace) =>
+      namespace.name.startsWith(ownerPrefix + "-"),
+    ).length;
 
     return {
       existing: namespaces.length,

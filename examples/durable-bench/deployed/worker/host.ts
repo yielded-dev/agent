@@ -5,6 +5,7 @@ import { CYCLE, history, MEASURED_TOOLS, turn } from "../../src/plan.ts";
 import { tables } from "../../src/serve.ts";
 import { attach, type Observation } from "./observe.ts";
 import {
+  type MaintenanceStatus,
   errorText,
   Failure,
   readQuery,
@@ -55,6 +56,7 @@ export class Host {
     handlers: {
       run?: (input: { id: string; text: string }, query: Query) => Promise<void>;
       close?: () => Promise<void>;
+      maintenance?: () => Promise<typeof MaintenanceStatus.Type>;
       restored?: () => Promise<void>;
       directoryUsed?: boolean;
     },
@@ -65,6 +67,15 @@ export class Host {
     // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native Object fetch entrypoint rejects routing to the wrong benchmark target.
     if (query.target !== this.target) throw new Error("Target mismatch");
     if (url.pathname === "/identity") return Response.json(this.meter.identity());
+    if (url.pathname === "/maintenance-status") {
+      await handlers.close?.();
+
+      return Response.json(
+        handlers.maintenance
+          ? await handlers.maintenance()
+          : { logical: null, native: await this.ctx.storage.getAlarm() },
+      );
+    }
     if (url.pathname === "/profile-target") {
       this.meter.assertBuild(query);
 
