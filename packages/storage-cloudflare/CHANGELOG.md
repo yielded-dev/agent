@@ -1,5 +1,16 @@
 # @yielded/agent-storage-cloudflare
 
+## 0.1.0-beta.178
+
+### Patch Changes
+
+- [#962](https://github.com/yielded-dev/agent/pull/962) [`36954c7`](https://github.com/yielded-dev/agent/commit/36954c75ae6190ff7d2872a065bc5b10c40b1823) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce fresh durable Run preparation by reading root identity and empty execution evidence together under the current owner. Reuse captured startup and checkpoint values while preserving recovery validation and atomic persistence before model dispatch.
+
+- [#964](https://github.com/yielded-dev/agent/pull/964) [`9441dec`](https://github.com/yielded-dev/agent/commit/9441dece81f72f9a3fe2e58fd0241a5cfff997a9) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Start fresh durable Runs with less work before the first model request.
+- Updated dependencies [[`007f63f`](https://github.com/yielded-dev/agent/commit/007f63f5a09e8e749203066ec8e124896d9140ec), [`7e904df`](https://github.com/yielded-dev/agent/commit/7e904df67f5ca9fb8a1eaa04c14b4947ae0dcc9f), [`36954c7`](https://github.com/yielded-dev/agent/commit/36954c75ae6190ff7d2872a065bc5b10c40b1823), [`9441dec`](https://github.com/yielded-dev/agent/commit/9441dece81f72f9a3fe2e58fd0241a5cfff997a9)]:
+  - @yielded/agent@0.1.0-beta.178
+  - @yielded/agent-storage-sql@0.1.0-beta.178
+
 ## 0.1.0-beta.177
 
 ### Patch Changes
