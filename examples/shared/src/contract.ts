@@ -1,4 +1,4 @@
-import { Scope } from "@yielded/auth";
+import { OAuthScope } from "@yielded/auth";
 import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 
@@ -10,7 +10,7 @@ export const AccountClaims = Schema.Struct({
 export const Session = Schema.Struct({
   subjectId: Schema.NonEmptyString,
   ...AccountClaims.fields,
-  scopes: Schema.Array(Scope.Scope),
+  scopes: Schema.Array(OAuthScope.OAuthScope),
   expiresAtMillis: Schema.Natural,
 });
 

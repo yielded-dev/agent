@@ -1,4 +1,4 @@
-import { OAuthServer, Scope } from "@yielded/auth";
+import { OAuthScope, OAuthServer } from "@yielded/auth";
 import * as Portable from "@yielded/crypto/Portable";
 import { Jwk } from "@yielded/jose";
 import { Clock, Effect, Redacted, Schema, Semaphore } from "effect";
@@ -19,8 +19,8 @@ const Configuration = Schema.Struct({
   AUTH_ISSUER: Schema.NonEmptyString,
   AUTH_RESOURCE: Schema.NonEmptyString,
   AUTH_JWKS_URL: Schema.NonEmptyString,
-  AUTH_REQUIRED_SCOPE: Scope.Scope,
-  AUTH_HOSTED_MODEL_SCOPE: Scope.Scope,
+  AUTH_REQUIRED_SCOPE: OAuthScope.OAuthScope,
+  AUTH_HOSTED_MODEL_SCOPE: OAuthScope.OAuthScope,
 });
 
 const KeySet = Schema.Struct({
