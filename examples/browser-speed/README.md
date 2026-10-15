@@ -146,7 +146,10 @@ Each admitted run saves diagnostic events incrementally in the owner's SQLite st
 archives a JSON file to the private `TRACES` R2 bucket on completion. R2 failure leaves the
 SQLite copy available; downloading retries the upload. **Download conversation trace** exports
 all messages together for another person or agent to inspect, without granting browser access.
-Each archive includes the report, prompts and native response parts, provider request metadata,
+Downloads write one run at a time to a temporary file in browser storage, requiring sufficient
+disk space and a browser with the Origin Private File System enabled. The file remains until
+the next download replaces it or the site's browser storage is cleared.
+Each archive includes the report, prompts and native response metadata, provider request metadata,
 generated JavaScript, CDP arguments/results, execution logs, failures, control transfers, agent
 events and the deployed Worker version.
 Its `otlp` array contains standard OTLP/JSON trace export bodies from Effect, including span
@@ -156,9 +159,11 @@ still marked running is unresolved, not proof of completion.
 
 Trace capture has a 32 MiB event budget per run and a 1 MB payload limit per event. Oversized
 events carry a truncation marker and original size; the archive records dropped-event counts.
-UI display limits do not limit this capture. Provider credentials, credential fields and viewer
-URLs are redacted; screenshots are omitted. Website content and user-entered personal data can
-still appear in prompts, generated code and results. Review downloaded files before sharing.
+Raw model deltas retain metadata only; completed content is in model output and agent events.
+Provider credentials, credential fields (including CDP cookies) and viewer URLs are redacted;
+screenshot payloads are omitted from diagnostic copies. If the run's sensitive-value index
+exceeds 1 MB, subsequent diagnostic text is omitted. Live browser return values are unchanged.
+Website content and user-entered personal data can still appear in prompts, generated code and results. Review downloaded files before sharing.
 Trace downloads require the owning lab session; the bucket has no public download route.
 
 R2 keys use `browser-use/v1/<owner>/<conversation>/<run>.json`. Create the private environment's

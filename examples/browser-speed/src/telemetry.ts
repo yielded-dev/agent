@@ -15,6 +15,7 @@ import {
 import { LanguageModel, Telemetry, type Response } from "effect/ai";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { OtlpSerialization, OtlpTracer } from "effect/observability";
+import * as RegExp from "effect/RegExp";
 
 import {
   browserCommandTimeoutMillis,
@@ -27,7 +28,7 @@ import {
   type RunInput,
   type Span,
 } from "./contract.ts";
-import type { TraceSink } from "./trace-store.ts";
+import { TraceStore } from "./trace-store.ts";
 
 type Details = Partial<
   Pick<
@@ -46,9 +47,9 @@ type Details = Partial<
 export const makeTrace = Effect.fnUntraced(function* (
   input: RunInput,
   model: string,
-  sink?: TraceSink,
   secrets: ReadonlyArray<string> = [],
 ) {
+  const sink = (yield* TraceStore).sink(input.id);
   const clock = yield* Clock.Clock;
   const origin = clock.monotonicTimeNanosUnsafe();
   const startedAt = DateTime.formatIso(yield* DateTime.now);
@@ -61,43 +62,134 @@ export const makeTrace = Effect.fnUntraced(function* (
   let sequence = 0;
   const now = () => Number(clock.monotonicTimeNanosUnsafe() - origin) / 1_000_000;
 
-  // Retain website observations and generated source, never provider or viewer credentials.
+  // Remember sensitive CDP values before returning them to generated code. Subsequent
+  // code/model/OTLP copies may have lost their original field names or JSON shape.
+  const sensitive = new Map(secrets.filter(Boolean).map((value) => [value, "[redacted]"]));
+  let sensitiveBytes = 0;
+  let omitText = false;
+  let sensitivePattern: globalThis.RegExp | undefined;
+
+  const remember = (value: string, replacement: string) => {
+    if (!value || sensitive.has(value) || omitText) return;
+    sensitiveBytes += value.length;
+    sensitivePattern = undefined;
+    // Do not let repeated screenshots turn the redaction index into an unbounded buffer.
+    if (sensitiveBytes > 1_000_000) {
+      sensitive.clear();
+      omitText = true;
+    } else sensitive.set(value, replacement);
+  };
+
+  const cookieValues = Schema.decodeUnknownOption(
+    Schema.Struct({ cookies: Schema.Array(Schema.Struct({ value: Schema.String })) }),
+  );
+
+  const imageData = Schema.decodeUnknownOption(Schema.Struct({ data: Schema.String }));
+  const jsonValue = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Json));
+
+  const credentialField =
+    /^(authorization|cookie|cookies|set-cookie|password|api[-_]?key|access[-_]?token|refresh[-_]?token|encrypted_content|devtoolsFrontendUrl|webSocketDebuggerUrl)$/i;
+
+  const learn = (value: unknown) => {
+    const seen = new WeakSet<object>();
+
+    JSON.stringify(value, (key, value: unknown) => {
+      if (typeof value === "bigint") return String(value);
+      if (typeof value === "object" && value !== null) {
+        if (seen.has(value)) return undefined;
+        seen.add(value);
+        const cookies = cookieValues(value);
+
+        if (Option.isSome(cookies))
+          for (const cookie of cookies.value.cookies) remember(cookie.value, "[redacted]");
+      }
+      if (typeof value === "string") {
+        if (credentialField.test(key)) remember(value, "[redacted]");
+        if (/^\s*[[{]/.test(value)) {
+          const decoded = jsonValue(value);
+
+          if (Option.isSome(decoded)) learn(decoded.value);
+        }
+      }
+
+      return value;
+    });
+  };
+
+  const redactText = (value: string) => {
+    if (omitText) return "[text omitted: redaction index limit]";
+    let text = value;
+
+    if (sensitive.size > 0) {
+      try {
+        // One pass prevents a short cookie from expanding an earlier redaction marker.
+        // Include JSON escapes because prompts can contain serialized CDP responses.
+        sensitivePattern ??= new globalThis.RegExp(
+          [
+            ...new Set(
+              [...sensitive.keys()].flatMap((value) => [value, JSON.stringify(value).slice(1, -1)]),
+            ),
+          ]
+            .sort((left, right) => right.length - left.length)
+            .map(RegExp.escape)
+            .join("|"),
+          "g",
+        );
+        text = text.replace(sensitivePattern, (match) => sensitive.get(match) ?? "[redacted]");
+      } catch {
+        omitText = true;
+        sensitive.clear();
+
+        return "[text omitted: redaction index limit]";
+      }
+    }
+
+    return text
+      .replace(/data:image\/[^\s"<>]+/gi, "[image omitted]")
+      .replace(/(?:iVBORw0KGgo|\/9j\/|UklGR)[A-Za-z0-9+/]*={0,2}/g, "[image omitted]")
+      .replace(
+        /(?:https?|wss?):\/\/(?:live\.browser\.run|[^\s"<>]+[?&](?:jwt|token|api_key|signature)=)[^\s"<>]*/gi,
+        "[redacted capability]",
+      )
+      .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+/gi, "Bearer [redacted]");
+  };
+
   const redact = (value: unknown): Schema.Json => {
+    learn(value);
     const seen = new WeakSet<object>();
 
     const json = JSON.stringify(value, (key, value: unknown) => {
-      if (
-        /^(authorization|cookie|set-cookie|password|api[-_]?key|access[-_]?token|refresh[-_]?token|encrypted_content|devtoolsFrontendUrl|webSocketDebuggerUrl)$/i.test(
-          key,
-        )
-      )
-        return "[redacted]";
+      if (credentialField.test(key)) return "[redacted]";
       if (typeof value === "bigint") return String(value);
       if (typeof value === "object" && value !== null) {
         if (seen.has(value)) return "[repeated reference]";
         seen.add(value);
       }
-      if (typeof value !== "string") return value;
-      let text = value;
 
-      if (text.startsWith("data:image/")) return "[image omitted]";
-
-      for (const secret of secrets)
-        if (secret.length >= 8) text = text.replaceAll(secret, "[redacted]");
-
-      return text
-        .replace(
-          /(?:https?|wss?):\/\/(?:live\.browser\.run|[^\s"<>]+[?&](?:jwt|token|api_key|signature)=)[^\s"<>]*/gi,
-          "[redacted capability]",
-        )
-        .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+/gi, "Bearer [redacted]");
+      return typeof value === "string" ? redactText(value) : value;
     });
 
     return Schema.decodeSync(Schema.fromJsonString(Schema.Json))(json ?? "null");
   };
 
+  // A stream may end a snapshot in the middle of a known secret. Hide that suffix
+  // until later deltas disambiguate it; raw deltas are never persisted separately.
+  const redactStreamingText = (value: string) => {
+    let end = value.length;
+
+    for (const [secret, replacement] of sensitive)
+      // Image encodings are already removed by their format prefix, even when incomplete.
+      if (replacement === "[redacted]")
+        for (let length = Math.min(secret.length - 1, value.length); length > 0; length--)
+          if (value.endsWith(secret.slice(0, length))) {
+            end = Math.min(end, value.length - length);
+            break;
+          }
+
+    return redactText(value.slice(0, end));
+  };
+
   const event = (kind: string, value: unknown) => {
-    if (sink === undefined) return;
     const data = redact(value);
     const json = JSON.stringify(data);
     const bytes = new TextEncoder().encode(json).byteLength;
@@ -137,13 +229,29 @@ export const makeTrace = Effect.fnUntraced(function* (
 
   const snapshot = (): Report => ({
     ...report,
-    spans: [...spans],
-    modelOutput: [...modelOutput],
+    input: { ...report.input, prompt: redactText(report.input.prompt).slice(0, 8_000) },
+    message: redactText(report.message),
+    ...(report.finalUrl === undefined ? {} : { finalUrl: redactText(report.finalUrl) }),
+    spans: spans.map((span) => ({
+      ...span,
+      name: redactText(span.name),
+      ...(span.error === undefined ? {} : { error: redactText(span.error) }),
+      ...(span.reasoningSummary === undefined
+        ? {}
+        : { reasoningSummary: redactText(span.reasoningSummary) }),
+    })),
+    modelOutput: modelOutput.map((part) => ({
+      ...part,
+      text: (part.complete ? redactText(part.text) : redactStreamingText(part.text)).slice(
+        0,
+        modelOutputLimit,
+      ),
+    })),
     outputTruncated,
     elapsed: report.status === "running" ? now() : report.elapsed,
   });
 
-  sink?.checkpoint(snapshot());
+  sink.checkpoint(snapshot());
   event("run.input", { input, model });
 
   const begin = (phase: Phase, name: string) => {
@@ -179,7 +287,7 @@ export const makeTrace = Effect.fnUntraced(function* (
         ...spans[id],
         ...(Exit.isFailure(exit) ? { cause: Cause.pretty(exit.cause) } : {}),
       });
-      sink?.checkpoint(snapshot());
+      sink.checkpoint(snapshot());
     };
 
     return {
@@ -254,7 +362,7 @@ export const makeTrace = Effect.fnUntraced(function* (
     snapshot,
     update: (patch: Partial<Report>) => {
       report = { ...report, ...patch };
-      sink?.checkpoint(snapshot());
+      sink.checkpoint(snapshot());
     },
     measure: Effect.fnUntraced(function* <A, E, R>(
       phase: Phase,
@@ -270,6 +378,15 @@ export const makeTrace = Effect.fnUntraced(function* (
       return yield* effect.pipe(
         Effect.onExit((exit) =>
           Effect.sync(() => {
+            if (
+              Exit.isSuccess(exit) &&
+              (phase === "capture" || name === "Page.captureScreenshot")
+            ) {
+              const image = imageData(exit.value);
+
+              if (Option.isSome(image)) remember(image.value.data, "[image omitted]");
+              else if (typeof exit.value === "string") remember(exit.value, "[image omitted]");
+            }
             event("operation.output", {
               name,
               ...(Exit.isSuccess(exit)
@@ -294,7 +411,7 @@ export class Trace extends Context.Service<Trace, Effect.Success<ReturnType<type
 ) {}
 
 /** Use Effect's actual OTLP serializer; the transport writes locally instead of making HTTP calls. */
-export const traceOtlp = (trace: Trace["Service"], runId: string) =>
+export const traceOtlp = (runId: string) =>
   OtlpTracer.layer({
     url: "https://trace.invalid/v1/traces",
     resource: { serviceName: "browser-use", attributes: { "run.id": runId } },
@@ -303,21 +420,25 @@ export const traceOtlp = (trace: Trace["Service"], runId: string) =>
   }).pipe(
     Layer.provide(OtlpSerialization.layerJson),
     Layer.provide(
-      Layer.succeed(
+      Layer.effect(
         HttpClient.HttpClient,
-        HttpClient.make((request) =>
-          Effect.sync(() => {
-            if (request.body._tag === "Uint8Array")
-              trace.event(
-                "otlp",
-                Schema.decodeSync(Schema.fromJsonString(Schema.Json))(
-                  new TextDecoder().decode(request.body.body),
-                ),
-              );
+        Effect.gen(function* () {
+          const trace = yield* Trace;
 
-            return HttpClientResponse.fromWeb(request, new globalThis.Response("{}"));
-          }).pipe(Effect.withTracerEnabled(false)),
-        ),
+          return HttpClient.make((request) =>
+            Effect.sync(() => {
+              if (request.body._tag === "Uint8Array")
+                trace.event(
+                  "otlp",
+                  Schema.decodeSync(Schema.fromJsonString(Schema.Json))(
+                    new TextDecoder().decode(request.body.body),
+                  ),
+                );
+
+              return HttpClientResponse.fromWeb(request, new globalThis.Response("{}"));
+            }).pipe(Effect.withTracerEnabled(false)),
+          );
+        }),
       ),
     ),
   );
@@ -341,7 +462,12 @@ export const traceModelStream = <Services, E, R>(
           return model.streamText(options).pipe(
             Stream.tap((part) =>
               Effect.sync(() => {
-                trace.event("model.part", part);
+                trace.event(
+                  "model.part",
+                  "delta" in part
+                    ? { ...part, delta: "[streamed content in completed model output]" }
+                    : part,
+                );
                 if (
                   part.type === "text-delta" ||
                   part.type === "reasoning-delta" ||

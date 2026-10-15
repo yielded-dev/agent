@@ -11,7 +11,7 @@ import { HttpApiBuilder } from "effect/http-api";
 import { type Account, LabApi, LabError, ModelApi, modelChoices } from "./contract.ts";
 import { connectKitesurf } from "./kitesurf.ts";
 import { Control, emptyControl, makeOwner } from "./owner.ts";
-import { makeTraceStore } from "./trace-store.ts";
+import { makeTraceStore, TraceStore } from "./trace-store.ts";
 
 export interface Env {
   readonly LAB: DurableObjectNamespace<BrowserLab>;
@@ -212,7 +212,6 @@ export class BrowserLab extends DurableObject<Env> {
           apiType: id.startsWith("@cf/") ? "chat-completions" : "responses",
         })),
         public: env.LAB_PUBLIC === "true",
-        traces: this.traces,
         build: env.VERSION,
         kitesurf: (retainClose) =>
           connectKitesurf(
@@ -237,9 +236,10 @@ export class BrowserLab extends DurableObject<Env> {
     }).pipe(Layer.provide(FetchHttpClient.layer));
   }
 
-  private withBrowser<A>(effect: Effect.Effect<A, LabError, BrowserSessions>) {
+  private withBrowser<A>(effect: Effect.Effect<A, LabError, BrowserSessions | TraceStore>) {
     return effect.pipe(
       Effect.provide(this.sessions),
+      Effect.provideService(TraceStore, this.traces),
       Effect.catchTag("BrowserRunCleanupError", () =>
         LabError.make({
           code: "configuration",

@@ -19,6 +19,23 @@ import type { executeTask } from "../src/runner.ts";
 import { fromReady, runOutcome, verifiedMillis } from "../src/state.ts";
 import type { traceModels, Trace } from "../src/telemetry.ts";
 import { makeTrace } from "../src/telemetry.ts";
+import { TraceStore } from "../src/trace-store.ts";
+
+// These lifecycle cases deliberately omit diagnostic persistence.
+const noTraceStorage = TraceStore.of({
+  sink: () => ({ append: () => {}, checkpoint: () => {} }),
+  report: () => Effect.succeed(null),
+  reports: Effect.succeed([]),
+  read: () =>
+    Effect.fail(
+      LabError.make({ code: "storage", message: "No diagnostic storage in lifecycle fixture" }),
+    ),
+  archive: () =>
+    Effect.fail(
+      LabError.make({ code: "storage", message: "No diagnostic storage in lifecycle fixture" }),
+    ),
+  control: () => Effect.void,
+});
 
 expectTypeOf<Effect.Error<ReturnType<typeof executeTask>>>().toEqualTypeOf<LabError>();
 expectTypeOf<Effect.Services<ReturnType<typeof executeTask>>>().toEqualTypeOf<
@@ -123,6 +140,7 @@ it.effect(
         assert.isFalse((yield* owner.snapshot()).ready);
       }
     }).pipe(
+      Effect.provideService(TraceStore, noTraceStorage),
       Effect.provideService(CodeExecutor, {
         execute: () => Effect.die("This lifecycle test must not execute generated code"),
       }),
@@ -205,6 +223,7 @@ it.effect(
         }).pipe(Effect.provideService(BrowserSessions, services));
       }
     }).pipe(
+      Effect.provideService(TraceStore, noTraceStorage),
       Effect.provideService(CodeExecutor, {
         execute: () => Effect.die("This lifecycle test must not execute generated code"),
       }),
@@ -264,6 +283,7 @@ it.effect(
         }),
       );
     }).pipe(
+      Effect.provideService(TraceStore, noTraceStorage),
       Effect.provideService(CodeExecutor, {
         execute: () => Effect.die("This lifecycle test must not execute generated code"),
       }),
@@ -290,6 +310,7 @@ it.effect(
       assert.strictEqual(trace.snapshot().spans[0]?.outcome, "failure");
       assert.strictEqual(trace.snapshot().firstActionAt, null);
     }).pipe(
+      Effect.provideService(TraceStore, noTraceStorage),
       Effect.provideService(CodeExecutor, {
         execute: () => Effect.die("This lifecycle test must not execute generated code"),
       }),
@@ -419,6 +440,7 @@ it.effect(
         }
       assert.strictEqual(reached.size, transitions.length * 2);
     }).pipe(
+      Effect.provideService(TraceStore, noTraceStorage),
       Effect.provideService(CodeExecutor, {
         execute: () => Effect.die("This lifecycle test must not execute generated code"),
       }),
@@ -449,6 +471,7 @@ it.effect(
       assert.strictEqual(report.elapsed, 53_000, "Keep full request evidence separately");
       assert.strictEqual(runOutcome(report), "passed");
     }).pipe(
+      Effect.provideService(TraceStore, noTraceStorage),
       Effect.provideService(CodeExecutor, {
         execute: () => Effect.die("This lifecycle test must not execute generated code"),
       }),

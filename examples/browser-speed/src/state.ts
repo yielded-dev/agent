@@ -227,21 +227,62 @@ export const downloadTraceAtom = LabClient.runtime.fn<ReadonlyArray<string>>()(
   Effect.fnUntraced(function* (ids) {
     const client = yield* LabClient;
 
-    const traces = yield* Effect.forEach(ids, (id) =>
-      client.lab.trace({ headers, params: { id } }),
+    const fileError = () =>
+      LabError.make({
+        code: "storage",
+        message: "Could not save the trace. Allow browser storage and free disk space, then retry.",
+      });
+
+    // OPFS keeps the aggregate on disk. Only one bounded run is decoded/encoded at
+    // a time; a Blob assembled from all runs would still retain the conversation.
+    const directory = yield* Effect.tryPromise({
+      try: () => navigator.storage.getDirectory(),
+      catch: fileError,
+    });
+
+    const file = yield* Effect.tryPromise({
+      try: () => directory.getFileHandle("browser-trace-download.json", { create: true }),
+      catch: fileError,
+    });
+
+    const writer = yield* Effect.acquireRelease(
+      Effect.tryPromise({ try: () => file.createWritable(), catch: fileError }),
+      (writer) => Effect.tryPromise(() => writer.abort()).pipe(Effect.ignore),
     );
 
+    let conversationId = "conversation";
+
+    yield* Effect.tryPromise({ try: () => writer.write("["), catch: fileError });
+    for (const [index, id] of ids.entries()) {
+      const trace = yield* client.lab.trace({ headers, params: { id } });
+
+      if (index === 0) conversationId = trace.conversationId;
+      const json = Schema.encodeSync(Schema.fromJsonString(TraceArchive))(trace);
+
+      yield* Effect.tryPromise({
+        try: () => writer.write(`${index === 0 ? "" : ","}${json}`),
+        catch: fileError,
+      });
+    }
+    yield* Effect.tryPromise({
+      try: async () => {
+        await writer.write("]");
+        await writer.close();
+      },
+      catch: fileError,
+    });
+    const saved = yield* Effect.tryPromise({ try: () => file.getFile(), catch: fileError });
+
     yield* Effect.sync(() => {
-      const json = Schema.encodeSync(Schema.fromJsonString(Schema.Array(TraceArchive)))(traces);
-      const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+      const url = URL.createObjectURL(saved);
       const link = document.createElement("a");
 
       link.href = url;
-      link.download = `browser-trace-${traces[0]?.conversationId ?? "conversation"}.json`;
+      link.download = `browser-trace-${conversationId}.json`;
       link.click();
       URL.revokeObjectURL(url);
     });
-  }),
+  }, Effect.scoped),
 );
 
 export const runAtom = LabClient.runtime.fn<

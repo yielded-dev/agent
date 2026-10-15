@@ -2,7 +2,6 @@ import { InMemory } from "@yielded/agent";
 import {
   BrowserSessionReference,
   BrowserSessions,
-  type BrowserSession,
 } from "@yielded/agent-platform-cloudflare/browser-session";
 import { ThreadId } from "@yielded/agent/identifiers";
 import type { ThreadHistory } from "@yielded/agent/thread-history";
@@ -27,7 +26,7 @@ import {
 import type { connectKitesurf } from "./kitesurf.ts";
 import { executeTask } from "./runner.ts";
 import { makeTrace, traceOtlp, Trace } from "./telemetry.ts";
-import type { makeTraceStore } from "./trace-store.ts";
+import { TraceStore } from "./trace-store.ts";
 
 /** Validated provider keys for one run: the visitor's, or the lab's for a funded account. */
 export interface VisitorKeys {
@@ -91,7 +90,6 @@ export const makeOwner = (
     }>;
     /** Public labs use visitor keys or same-origin funded credentials. */
     public?: boolean;
-    traces?: ReturnType<typeof makeTraceStore>;
     build?: { readonly id: string; readonly tag: string; readonly timestamp: string };
     kitesurf?: (
       retainClose: Parameters<typeof connectKitesurf>[1],
@@ -174,10 +172,16 @@ export const makeOwner = (
     yield* store.alarm(null);
   });
 
-  const setView = Effect.fnUntraced(function* (
-    session: BrowserSession,
-    mode: typeof ViewMode.Type,
-  ) {
+  const setView = Effect.fnUntraced(function* (mode: typeof ViewMode.Type) {
+    const sessions = yield* BrowserSessions;
+    const reference = store.read().reference;
+
+    if (reference === null)
+      return yield* LabError.make({
+        code: "expired",
+        message: "This browser has closed. Start a new chat.",
+      });
+    const session = yield* provider(sessions.attach(reference));
     const now = yield* Clock.currentTimeMillis;
     const expiresInMs = Math.max(60_000, Math.min(3_600_000, session.reference.expiresAt - now));
 
@@ -197,7 +201,7 @@ export const makeOwner = (
       },
       "view-changed",
     );
-  });
+  }, Effect.scoped);
 
   const view = Effect.fnUntraced(function* (mode: typeof ViewMode.Type) {
     const state = store.read();
@@ -213,15 +217,12 @@ export const makeOwner = (
         message: "This browser has closed. Start a new chat.",
       });
     changingView = true;
-    const reference = state.reference;
-
     yield* Effect.gen(function* () {
-      const sessions = yield* BrowserSessions;
-      const session = yield* provider(sessions.attach(reference));
+      const traces = yield* TraceStore;
 
-      yield* setView(session, mode);
-      if (state.report !== null && config.traces !== undefined)
-        yield* config.traces.control(state.report, mode).pipe(
+      yield* setView(mode);
+      if (state.report !== null)
+        yield* traces.control(state.report, mode).pipe(
           Effect.catch((error) =>
             Effect.sync(() => {
               notice = error.message;
@@ -266,31 +267,38 @@ export const makeOwner = (
         code: "busy",
         message: "Stop the active run before closing its browser.",
       });
-    yield* closeReference();
+    const traces = yield* TraceStore;
     const state = store.read();
+
+    const latest =
+      state.report === null
+        ? null
+        : ((yield* traces.report(state.report.input.id)) ?? state.report);
+
+    yield* closeReference();
 
     patch(
       {
         active: null,
         report:
-          state.report?.status === "running"
+          latest?.status === "running"
             ? {
-                ...state.report,
+                ...latest,
                 status: "cancelled",
                 cleanup: "closed",
                 message: "Lost request closed. No actions were replayed.",
               }
-            : state.report === null
+            : latest === null
               ? null
-              : { ...state.report, cleanup: "closed" },
+              : { ...latest, cleanup: "closed" },
       },
       "released",
     );
     const closedReport = store.read().report;
 
-    if (closedReport !== null && config.traces !== undefined) {
-      config.traces.sink(closedReport.input.id).checkpoint(closedReport);
-      yield* config.traces.archive(closedReport.input.id).pipe(
+    if (closedReport !== null) {
+      traces.sink(closedReport.input.id).checkpoint(closedReport);
+      yield* traces.archive(closedReport.input.id).pipe(
         Effect.catch((error) =>
           Effect.sync(() => {
             notice = error.message;
@@ -427,7 +435,9 @@ export const makeOwner = (
           ? "This model is not available in the lab."
           : "Add your OpenAI key to run the agent.",
       });
-    trace = yield* makeTrace(input, selectedModel.model, config.traces?.sink(input.id), [modelKey]);
+    const traces = yield* TraceStore;
+
+    trace = yield* makeTrace(input, selectedModel.model, [modelKey]);
     const current = trace;
 
     current.event("runtime.build", config.build ?? { id: "development" });
@@ -532,15 +542,13 @@ export const makeOwner = (
         "getReadOnlyLiveView" in session &&
         (store.read().view?.expiresAt ?? 0) <= (yield* Clock.currentTimeMillis)
       )
-        yield* current
-          .measure("setup", "Connect read-only Live View", setView(session, "watch"))
-          .pipe(
-            Effect.catch(() =>
-              Effect.sync(() => {
-                notice = "Live View is unavailable. Enable screenshots to see action snapshots.";
-              }),
-            ),
-          );
+        yield* current.measure("setup", "Connect read-only Live View", setView("watch")).pipe(
+          Effect.catch(() =>
+            Effect.sync(() => {
+              notice = "Live View is unavailable. Enable screenshots to see action snapshots.";
+            }),
+          ),
+        );
       else if (input.liveView && !("getReadOnlyLiveView" in session))
         notice =
           "Kitesurf has no persistent Live View. Enable screenshots to see action snapshots.";
@@ -633,7 +641,8 @@ export const makeOwner = (
         Effect.withSpan("browser-use.run", {
           attributes: { "run.id": input.id, "conversation.id": input.chatId ?? input.id },
         }),
-        Effect.provide(traceOtlp(current, input.id)),
+        Effect.provide(traceOtlp(input.id)),
+        Effect.provideService(Trace, current),
       ),
     );
 
@@ -669,14 +678,13 @@ export const makeOwner = (
     const report = current.snapshot();
 
     patch({ active: null, report }, "settled");
-    if (config.traces !== undefined)
-      yield* config.traces.archive(input.id).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            notice = error.message;
-          }),
-        ),
-      );
+    yield* traces.archive(input.id).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          notice = error.message;
+        }),
+      ),
+    );
 
     return report;
   });

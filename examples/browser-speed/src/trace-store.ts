@@ -1,4 +1,4 @@
-import { Clock, Effect, Schema, Semaphore } from "effect";
+import { Clock, Context, Effect, Schema, Semaphore } from "effect";
 
 import { LabError, Report, TraceArchive, TraceEvent } from "./contract.ts";
 
@@ -6,6 +6,19 @@ export interface TraceSink {
   readonly append: (event: TraceEvent) => void;
   readonly checkpoint: (report: Report) => void;
 }
+
+/** Diagnostic storage is acquired by consumers and supplied by the host. */
+export class TraceStore extends Context.Service<
+  TraceStore,
+  {
+    readonly sink: (id: string) => TraceSink;
+    readonly report: (id: string) => Effect.Effect<Report | null, LabError>;
+    readonly reports: Effect.Effect<ReadonlyArray<Report>, LabError>;
+    readonly read: (id: string) => Effect.Effect<TraceArchive, LabError>;
+    readonly archive: (id: string) => Effect.Effect<TraceArchive, LabError>;
+    readonly control: (report: Report, mode: "watch" | "control") => Effect.Effect<void, LabError>;
+  }
+>()("browser-speed/TraceStore") {}
 
 const reportCodec = Schema.fromJsonString(Report);
 const eventCodec = Schema.fromJsonString(TraceEvent);
@@ -59,6 +72,19 @@ export const makeTraceStore = (sql: SqlStorage, ownerId: string, bucket: R2Bucke
         .map((row) => Schema.decodeSync(reportCodec)(row.report)),
     catch: () => LabError.make({ code: "storage", message: "Could not load saved reports." }),
   });
+
+  const report = (id: string) =>
+    Effect.try({
+      try: () => {
+        const row = sql
+          .exec<{ report: string }>("SELECT report FROM lab_traces WHERE id=?", id)
+          .toArray()[0];
+
+        return row === undefined ? null : Schema.decodeSync(reportCodec)(row.report);
+      },
+      catch: () =>
+        LabError.make({ code: "storage", message: "Could not load the latest trace checkpoint." }),
+    });
 
   const read = Effect.fnUntraced(function* (id: string) {
     return yield* Effect.try({
@@ -178,5 +204,5 @@ export const makeTraceStore = (sql: SqlStorage, ownerId: string, bucket: R2Bucke
     yield* archive(report.input.id);
   });
 
-  return { sink, reports, read, archive, control };
+  return { sink, report, reports, read, archive, control };
 };
