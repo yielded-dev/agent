@@ -1970,7 +1970,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
     }).pipe(Effect.ensuring(clearFailpoint)),
   );
 
-  for (const fault of ["result-capacity", "step-envelope"]) {
+  for (const fault of ["result-capacity", "deferred-reservation", "step-envelope"]) {
     it.effect(`settles capacity refusal before executing ${fault}`, () =>
       Effect.gen(function* () {
         // Refusing dispatch must preserve settlement, including oversized progress envelopes.
@@ -2009,7 +2009,13 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
           policy: {
             ...policy,
             toolResultBounds: ToolResultBounds.make({
-              maxBytes: fault === "result-capacity" ? 1024 * 1024 : 50 * 1024,
+              // 3a875512 checked the response but missed the larger deferred reservation.
+              maxBytes:
+                fault === "deferred-reservation"
+                  ? 963_000
+                  : fault === "result-capacity"
+                    ? 1024 * 1024
+                    : 50 * 1024,
             }),
           },
         });
@@ -2019,7 +2025,7 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
         const scripted = yield* makeScriptedModel((call) =>
           call === 0
             ? toolTurn(
-                ...Array.from({ length: fault === "result-capacity" ? 4 : 1 }, (_, index) =>
+                ...Array.from({ length: fault === "step-envelope" ? 1 : 4 }, (_, index) =>
                   toolCall(`${callId}-${index}`, "probe", {}),
                 ),
               )
@@ -2042,6 +2048,8 @@ layer(testLayer)("DUR P5 durable Tools (prepared/settled, reconciliation, unknow
         expect(yield* Ref.get(executed)).toBe(0);
         expect(Exit.isSuccess(processed)).toBe(true);
         expect(yield* lookupState(receipt.submissionId)).toBe("settled");
+        if (fault === "deferred-reservation" && Exit.isSuccess(processed))
+          expect(processed.value[0]?.outcome).toBe("completed");
         if (fault === "step-envelope") {
           const records = yield* readLog(thread);
 
