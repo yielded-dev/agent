@@ -1,4 +1,4 @@
-import { Context, DateTime, Effect, Result, Schema } from "effect";
+import { Context, DateTime, Effect, type Redacted, Result, Schema } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 
 import { FundingError, FundingGrant, GrantFunding, RevokeFunding } from "../funding-domain";
@@ -60,9 +60,14 @@ const GithubUser = Schema.Struct({
   login: GithubLogin,
 });
 
+const YieldedIdentities = Schema.Struct({
+  githubIds: Schema.Array(Schema.String.check(Schema.isPattern(/^[0-9]{1,20}$/))),
+});
+
 /** Auth-owned funding grants refer only to verified, active identities. No credential is returned. */
 export const makeFundingStore = Effect.fn("Funding.store")(function* (
   storage: DurableObjectStorage,
+  yielded: { readonly issuer: string; readonly clientSecret: Redacted.Redacted<string> },
 ) {
   const failpoint = yield* FundingFailpoint;
 
@@ -146,6 +151,9 @@ export const makeFundingStore = Effect.fn("Funding.store")(function* (
       ...subject,
       emails,
       githubIds,
+      yieldedSubjects: oauthIdentities
+        .filter((identity) => identity.provider === "yielded" && identity.issuer === yielded.issuer)
+        .map((identity) => identity.subject),
       admin:
         githubIds.includes(fundingAdminGithubId) ||
         oauthIdentities.some(
@@ -154,6 +162,60 @@ export const makeFundingStore = Effect.fn("Funding.store")(function* (
             identity.issuer === yieldedOwner.issuer &&
             identity.subject === yieldedOwner.subject,
         ),
+    };
+  });
+
+  const currentGithubIds = Effect.fn("Funding.yieldedIdentities")(
+    function* (subjectId: string) {
+      const http = yield* HttpClient.HttpClient;
+
+      const request = yield* HttpClientRequest.post(
+        `${yielded.issuer}/internal/agent/identities`,
+      ).pipe(
+        HttpClientRequest.bearerToken(yielded.clientSecret),
+        HttpClientRequest.bodyJson({ subjectId }),
+      );
+
+      const response = yield* HttpClient.withScope(http).execute(request);
+
+      if (response.status !== 200) return yield* unavailable();
+
+      return yield* response.json.pipe(
+        Effect.flatMap(Schema.decodeUnknownEffect(YieldedIdentities)),
+        Effect.map((value) => value.githubIds),
+      );
+    },
+    Effect.scoped,
+    Effect.timeout("5 seconds"),
+    Effect.mapError(unavailable),
+    Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual", credentials: "omit" }),
+    Effect.provide(FetchHttpClient.layer),
+  );
+
+  // Resolve current issuer-owned links per request. Persisted profile claims can outlive unlinking.
+  // Keep this separate from the synchronous local authority checks used by grant transactions.
+  const fundingIdentity = Effect.fnUntraced(function* (subjectId: string) {
+    const local = yield* identities(subjectId);
+
+    if (local.admin || local.yieldedSubjects.length === 0) return local;
+
+    const linked = yield* Effect.forEach(local.yieldedSubjects, (subject) =>
+      currentGithubIds(subject).pipe(Effect.map((githubIds) => ({ subject, githubIds }))),
+    );
+
+    // An Agent credential can be revoked while the issuer lookup is in flight.
+    const current = yield* identities(subjectId);
+
+    return {
+      ...current,
+      githubIds: [
+        ...new Set([
+          ...current.githubIds,
+          ...linked
+            .filter((identity) => current.yieldedSubjects.includes(identity.subject))
+            .flatMap((identity) => identity.githubIds),
+        ]),
+      ],
     };
   });
 
@@ -191,7 +253,14 @@ export const makeFundingStore = Effect.fn("Funding.store")(function* (
     );
 
   const status = Effect.fnUntraced(function* (subjectId: string) {
-    const identity = yield* identities(subjectId);
+    const local = yield* identities(subjectId);
+    const entries = yield* grants;
+
+    if (allowed(local, entries)) return { admin: local.admin, allowed: true };
+    if (!entries.some((grant) => grant.kind === "github"))
+      return { admin: local.admin, allowed: false };
+
+    const identity = yield* fundingIdentity(subjectId);
 
     return { admin: identity.admin, allowed: allowed(identity, yield* grants) };
   });
@@ -233,10 +302,18 @@ export const makeFundingStore = Effect.fn("Funding.store")(function* (
     const users = yield* Effect.forEach(
       rows.slice(0, 25),
       Effect.fnUntraced(function* (row) {
-        const identity = yield* identities(row.subjectId);
+        const identity = yield* fundingIdentity(row.subjectId);
 
-        return { ...identity, allowed: allowed(identity, entries) };
+        return {
+          subjectId: identity.subjectId,
+          displayName: identity.displayName,
+          emails: identity.emails,
+          githubIds: identity.githubIds,
+          admin: identity.admin,
+          allowed: allowed(identity, entries),
+        };
       }),
+      { concurrency: 5 },
     );
 
     return { grants: entries, users, next: rows.length > 25 ? rows[24]!.subjectId : null };

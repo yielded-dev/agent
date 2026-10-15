@@ -77,7 +77,8 @@ export const subjectId = {
 };
 
 export const requirement: AuthenticationRequirement = {
-  maximumAgeMillis: 300_000,
+  // Ordinary sign-in shares the registration library's maximum evidence window.
+  maximumAgeMillis: 30 * 60_000,
   alternatives: [
     {
       factors: ["possession"],

@@ -43,6 +43,11 @@ export const makeAuthHost = Effect.fn("Auth.host")(function* (
   yield* initializeAuthStorage(storage);
   const { AppAuth, http, security, providers } = makeAuth(config);
 
+  const yielded = {
+    issuer: config.AUTH_YIELDED_ISSUER,
+    clientSecret: Redacted.make(config.AUTH_YIELDED_CLIENT_SECRET),
+  };
+
   const database = persistenceLayer(AppAuth).pipe(
     Layer.provideMerge(Drizzle.databaseLayer),
     Layer.provide(SqliteClient.layer({ storage })),
@@ -81,7 +86,7 @@ export const makeAuthHost = Effect.fn("Auth.host")(function* (
     FundingApi,
     "funding",
     Effect.fn(function* (handlers) {
-      const store = yield* makeFundingStore(storage);
+      const store = yield* makeFundingStore(storage, yielded);
 
       const actor = Effect.gen(function* () {
         const auth = yield* AppAuth;
@@ -156,7 +161,7 @@ export const makeAuthHost = Effect.fn("Auth.host")(function* (
           url.pathname.slice("/_internal/funding/".length),
         );
 
-        const store = yield* makeFundingStore(storage);
+        const store = yield* makeFundingStore(storage, yielded);
 
         return Response.json(yield* store.status(id));
       }

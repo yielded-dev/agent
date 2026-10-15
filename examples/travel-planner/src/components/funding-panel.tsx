@@ -74,8 +74,9 @@ export function FundingPanel() {
         </div>
       </form>
       <p className="settings-help">
-        Email grants apply after email-code verification. GitHub grants follow the verified GitHub
-        account, even if its username changes.
+        Add a GitHub username before their first sign-in. Access follows the verified GitHub account
+        through Yielded or direct GitHub sign-in, even if its username changes. Email grants apply
+        after email-code verification.
       </p>
       {AsyncResult.isSuccess(result) && !result.waiting && <p role="status">Access updated.</p>}
       {error && (

@@ -77,10 +77,11 @@ provider, returned flow ID and return target for callback completion. Effect Ato
 owns this workflow, registration and query invalidation; React dispatches and renders.
 **Continue with Yielded** reuses the current Auth account automatically, then
 verifies issuer, audience, nonce, PKCE and the signed identity before establishing
-an Agent session. Agent requests `max_age=240` so authentication stays within its
-five-minute evidence policy, including time to complete the callback. Auth starts
-GitHub sign-in automatically when its session is absent or older than that limit;
-the original `auth_time` is preserved. App sign-in links start Yielded authentication directly. `/auth/login` offers
+an Agent session. Agent accepts authentication from the past thirty minutes and requests
+`max_age=1740`, leaving one minute to complete the callback. Auth starts GitHub sign-in
+automatically when its session is absent or older than that limit; the original `auth_time`
+is preserved. OAuth flows and registration intents still expire after five minutes.
+App sign-in links start Yielded authentication directly. `/auth/login` offers
 account switching and the existing direct GitHub/email methods. Confirmed OAuth
 registration establishes the Agent session without another provider round trip. **Use another Yielded account** explicitly requests account selection; new permissions require
 consent. Cancelling returns to login with a retry action. Auth
@@ -91,6 +92,11 @@ Sync and docs are not connected by this change.
 Auth owns the funding allowlist. The verified shared Yielded owner and direct GitHub owner
 can administer grants and use server OpenAI keys in both demos. Funding checks read active
 identities and current grants on each request; the session cookie identifies the account.
+Add a GitHub username before the person's first sign-in to allow server-funded access.
+The grant stores GitHub's stable user ID and applies through direct GitHub sign-in or a
+currently linked GitHub identity on their Yielded account. Agent checks those links with Auth
+on each funding request; unlinking removes that identity's access unless another grant applies.
+Server-funded requests that depend on those links stop when Auth cannot verify them.
 
 Each new provider identity creates a separate Agent account; email and display name
 never link existing accounts. Auth starts from one initial schema with no old-data

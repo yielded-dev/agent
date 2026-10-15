@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Schema } from "effect";
 import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { afterAll, beforeAll, expect, it } from "vite-plus/test";
@@ -11,6 +12,8 @@ const email = "00000000-0000-0000-0000-000000000002";
 let mf: Miniflare;
 let directory: string;
 let script: string;
+let linkedGithubIds = ["424242"];
+let identityLookupUnavailable = false;
 
 const start = () =>
   new Miniflare(
@@ -22,6 +25,23 @@ const start = () =>
       compatibilityFlags: ["nodejs_compat"],
       durableObjects: { STORE: { className: "FundingFixture", useSQLite: true } },
       resourcePersistencePath: directory,
+      outboundService: async (request) => {
+        if (request.url === "https://api.github.com/users/fixture-reader")
+          return Response.json({ id: 424242, login: "fixture-reader" });
+        if (
+          request.url === "https://auth.yielded.dev/internal/agent/identities" &&
+          request.method === "POST" &&
+          request.headers.get("authorization") === "Bearer fixture-yielded-client-secret" &&
+          Schema.decodeUnknownSync(Schema.Struct({ subjectId: Schema.String }))(
+            await request.json(),
+          ).subjectId === "yielded-reader"
+        )
+          return identityLookupUnavailable
+            ? new Response("Unavailable", { status: 503 })
+            : Response.json({ githubIds: linkedGithubIds });
+
+        return new Response("Unexpected provider request", { status: 500 });
+      },
     }),
   );
 
@@ -73,6 +93,27 @@ it("funds the verified Yielded owner and rejects the same subject from another i
   });
   expect(await json("shared-sign-in", "/resolve", undefined, owner)).toEqual({ lastFour: "9876" });
   expect((await request("shared-sign-in", "/resolve", undefined, otherIssuer)).status).toBe(403);
+});
+
+// The current-link and outage transitions require controlled issuer responses at the funding boundary.
+it("applies pre-registration GitHub grants through Yielded only while the identity is linked", async () => {
+  const reader = "00000000-0000-0000-0000-000000000005";
+
+  await json("preapproved", "/seed");
+  await json("preapproved", "/grant", { kind: "github", value: "fixture-reader" });
+  await json("preapproved", "/register-yielded");
+  expect(await json("preapproved", "/status", undefined, reader)).toEqual({
+    admin: false,
+    allowed: true,
+  });
+  expect(await json("preapproved", "/resolve", undefined, reader)).toEqual({ lastFour: "9876" });
+
+  linkedGithubIds = [];
+  expect((await request("preapproved", "/resolve", undefined, reader)).status).toBe(403);
+  linkedGithubIds = ["424242"];
+  identityLookupUnavailable = true;
+  expect((await request("preapproved", "/resolve", undefined, reader)).status).toBe(403);
+  identityLookupUnavailable = false;
 });
 
 it("resolves server credentials only while a current grant applies, including after object restart", async () => {

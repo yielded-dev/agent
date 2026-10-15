@@ -1,3 +1,4 @@
+import { generateKeyPairSync, sign } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,6 +19,9 @@ const githubName = "River Traveler";
 let githubUserId = 424242;
 let githubLogin = "fixture-traveler";
 const githubIssuer = "https://github.com/login/oauth";
+const yieldedIssuer = "https://auth.yielded.dev";
+const yieldedKeys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const yieldedCodes = new Map<string, { nonce: string; subject: string; authenticatedAt: number }>();
 
 beforeAll(async () => {
   const bundle = await build({
@@ -52,6 +56,64 @@ beforeAll(async () => {
       },
       durableObjectsPersist: directory,
       outboundService: async (request) => {
+        if (request.url === `${yieldedIssuer}/.well-known/openid-configuration`)
+          return Response.json({
+            issuer: yieldedIssuer,
+            authorization_endpoint: `${yieldedIssuer}/authorize`,
+            token_endpoint: `${yieldedIssuer}/token`,
+            jwks_uri: `${yieldedIssuer}/jwks`,
+            response_types_supported: ["code"],
+            subject_types_supported: ["public"],
+            id_token_signing_alg_values_supported: ["RS256"],
+            token_endpoint_auth_methods_supported: ["client_secret_basic"],
+            code_challenge_methods_supported: ["S256"],
+            authorization_response_iss_parameter_supported: true,
+          });
+        if (request.url === `${yieldedIssuer}/jwks`)
+          return Response.json({
+            keys: [
+              { ...yieldedKeys.publicKey.export({ format: "jwk" }), kid: "fixture", alg: "RS256" },
+            ],
+          });
+        if (request.url === `${yieldedIssuer}/token`) {
+          const code = new URLSearchParams(await request.text()).get("code") ?? "";
+          const identity = yieldedCodes.get(code);
+
+          if (identity === undefined) return new Response("Unknown code", { status: 400 });
+          yieldedCodes.delete(code);
+          const now = Math.floor(Date.now() / 1000);
+
+          const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "fixture" })).toString(
+            "base64url",
+          );
+
+          const claims = Buffer.from(
+            JSON.stringify({
+              iss: yieldedIssuer,
+              sub: identity.subject,
+              aud: "yielded-agent",
+              nonce: identity.nonce,
+              iat: now,
+              exp: now + 300,
+              auth_time: identity.authenticatedAt,
+              name: "Yielded reader",
+            }),
+          ).toString("base64url");
+
+          const input = `${header}.${claims}`;
+
+          const signature = Buffer.from(
+            sign("RSA-SHA256", Buffer.from(input), yieldedKeys.privateKey),
+          ).toString("base64url");
+
+          return Response.json({
+            access_token: "fixture-yielded-access",
+            token_type: "Bearer",
+            expires_in: 300,
+            id_token: `${input}.${signature}`,
+            scope: "openid profile",
+          });
+        }
         if (request.url === "https://github.com/login/oauth/access_token") {
           githubExchanges++;
 
@@ -245,6 +307,63 @@ it("rejects invalid and replayed GitHub callbacks before exchanging another toke
   expect(githubExchanges).toBe(count + 1);
   expect((await client.raw("completeSignIn", valid)).status).toBe(400);
   expect(githubExchanges).toBe(count + 1);
+});
+
+// Signed issuer responses exercise the application's real OIDC verification and registration boundary.
+it("reuses a ten-minute-old Yielded session for registration and sign-in but rejects expired evidence", async () => {
+  const start = async (client: ReturnType<typeof makeClient>, ageMinutes: number) => {
+    const authorization = Schema.decodeUnknownSync(OAuthSignInAuthorization)(
+      await client.call("signIn", { provider: "yielded", returnTarget: "/travel/" }),
+    );
+
+    const url = new URL(Redacted.value(authorization.authorizationUrl));
+    const code = crypto.randomUUID();
+
+    yieldedCodes.set(code, {
+      subject: "ordinary-yielded-reader",
+      nonce: Schema.decodeUnknownSync(Schema.NonEmptyString)(url.searchParams.get("nonce")),
+      authenticatedAt: Math.floor(Date.now() / 1000) - ageMinutes * 60,
+    });
+
+    return {
+      flowId: authorization.flowId,
+      provider: "yielded",
+      callbackId: "yielded",
+      response: { _tag: "Code", state: url.searchParams.get("state"), code, issuer: yieldedIssuer },
+    };
+  };
+
+  const client = makeClient();
+  const first = await start(client, 10);
+
+  const registration = Schema.decodeUnknownSync(OAuthRegistrationRequired)(
+    await client.call("completeSignIn", first),
+  );
+
+  await client.call("register", {
+    flowId: first.flowId,
+    commandId: crypto.randomUUID(),
+    reference: registration.reference,
+    registration: { displayName: "Yielded reader" },
+  });
+
+  const account = Schema.decodeUnknownSync(Schema.Struct({ subjectId: Schema.String }))(
+    await client.call("getSession"),
+  );
+
+  const funding = await client.request("/travel/api/funding/status", {
+    headers: { "x-elsewhere-account": account.subjectId },
+  });
+
+  expect(await funding.json()).toMatchObject({ admin: false, allowed: false });
+  const returning = makeClient();
+
+  await returning.call("completeSignIn", await start(returning, 10));
+  expect(await returning.call("getSession")).toMatchObject({ subjectId: account.subjectId });
+  const expired = makeClient();
+
+  expect((await expired.raw("completeSignIn", await start(expired, 31))).status).toBe(400);
+  expect(await expired.call("getSession")).toBeNull();
 });
 
 it("keeps credential-bearing callback GET inert and rejects unauthorized requests", async () => {

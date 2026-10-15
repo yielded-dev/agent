@@ -84,7 +84,7 @@ export const makeAuth = (config: AuthConfiguration) => {
         },
         registrationPolicy: {
           lifetimeMillis: 300_000,
-          maximumVerificationAgeMillis: 300_000,
+          maximumVerificationAgeMillis: requirement.maximumAgeMillis,
           retentionMillis: 600_000,
         },
       }),
@@ -142,7 +142,7 @@ export const makeAuth = (config: AuthConfiguration) => {
                 clientSecret: Redacted.make(config.AUTH_YIELDED_CLIENT_SECRET),
                 redirectUri: `${config.AUTH_ORIGIN}/auth/yielded/callback`,
                 scopes: ["openid", "profile"],
-                // Refresh old issuer sessions before returning; leave a minute for completion.
+                // Reuse recent issuer sessions; leave a minute for callback completion.
                 maxAgeSeconds: Math.floor(requirement.maximumAgeMillis / 1000) - 60,
               },
             ],

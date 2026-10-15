@@ -10,6 +10,7 @@ const adminId = "00000000-0000-0000-0000-000000000001";
 const emailId = "00000000-0000-0000-0000-000000000002";
 const yieldedId = "00000000-0000-0000-0000-000000000003";
 const otherIssuerId = "00000000-0000-0000-0000-000000000004";
+const yieldedReaderId = "00000000-0000-0000-0000-000000000005";
 
 export class FundingFixture extends DurableObject {
   fetch(request: Request) {
@@ -63,7 +64,35 @@ export class FundingFixture extends DurableObject {
             );
           });
         }
-        const store = yield* makeFundingStore(this.ctx.storage);
+        if (url.pathname === "/register-yielded") {
+          this.ctx.storage.transactionSync(() => {
+            sql.exec(
+              "insert into auth_subject values (?,1,'revision','Yielded reader')",
+              yieldedReaderId,
+            );
+            sql.exec(
+              "insert into auth_credential values (?,?,'revision',1)",
+              yieldedReaderId,
+              yieldedReaderId,
+            );
+            sql.exec(
+              "insert into auth_oauth_identity values (?,'yielded','https://auth.yielded.dev','yielded-reader',?)",
+              yieldedReaderId,
+              yieldedReaderId,
+            );
+            sql.exec(
+              "insert into auth_oauth_credential values ('travel-planner/oauth',?,?,?,'revision',1)",
+              yieldedReaderId,
+              yieldedReaderId,
+              yieldedReaderId,
+            );
+          });
+        }
+
+        const store = yield* makeFundingStore(this.ctx.storage, {
+          issuer: "https://auth.yielded.dev",
+          clientSecret: Redacted.make("fixture-yielded-client-secret"),
+        });
 
         if (url.pathname === "/grant") {
           const input = yield* Effect.promise(() => request.json()).pipe(
@@ -91,7 +120,7 @@ export class FundingFixture extends DurableObject {
             return Effect.fail(FundingError.make({ message: "Injected lost response" }));
           },
         }),
-        Effect.timeout("100 millis"),
+        Effect.timeout("1 second"),
         Effect.catchCause(() =>
           Effect.succeed(Response.json({ error: "Rejected" }, { status: 400 })),
         ),
