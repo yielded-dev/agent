@@ -176,7 +176,7 @@
         "vitest": "catalog:",
       },
       "peerDependencies": {
-        "effect": "^4.0.0",
+        "effect": "^4.0.5",
       },
     },
     "packages/effect-agent": {
