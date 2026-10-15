@@ -7,7 +7,7 @@ import {
   SendRequest,
   Tab,
 } from "@yielded/agent/browser-use";
-import { Effect, Layer, Schema, Semaphore } from "effect";
+import { Cause, Effect, Layer, Schema, Semaphore } from "effect";
 import type {
   CDPSession,
   Frame,
@@ -15,6 +15,11 @@ import type {
 } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
 import type { BrowserSession, BrowserSessionError } from "./BrowserSession.ts";
+import {
+  browserFailure,
+  reportBrowserCause,
+  reportedBrowserError,
+} from "./internal/browser-failure.ts";
 
 export type Command =
   | { readonly kind: "connect" | "tabs" | "new-tab" }
@@ -252,6 +257,8 @@ export const make = Effect.fnUntraced(function* <R>(
           invalid("Browser lifecycle commands belong to the host; use the tab helpers"),
         );
 
+      const runReport = Effect.runPromiseWith(yield* Effect.context<never>());
+
       const result: unknown = yield* run(
         { kind: "send", request: value },
         async ({ cdp, page }, frame): Promise<unknown> => {
@@ -269,10 +276,42 @@ export const make = Effect.fnUntraced(function* <R>(
               const connection = source.connection();
 
               if (connection === undefined) return invalid("Frame connection is closed");
-              const { targetInfo } = await source.send("Target.getTargetInfo");
+
+              let lookup: Awaited<ReturnType<typeof source.send<"Target.getTargetInfo">>>;
+
+              try {
+                lookup = await source.send("Target.getTargetInfo");
+              } catch (cause) {
+                await runReport(
+                  reportBrowserCause("browser-use.frame.target-info", Cause.fail(cause)),
+                );
+
+                return reportedBrowserError(
+                  BrowserUseError.make({
+                    code: "browser",
+                    message: "Frame inspection failed before the requested command was sent",
+                    dispatch: "not-dispatched",
+                  }),
+                );
+              }
 
               // Keep arbitrary commands off Puppeteer's own event-tracking session.
-              target = await connection.createSession(targetInfo);
+              let attached: CDPSession;
+
+              try {
+                attached = await connection.createSession(lookup.targetInfo);
+              } catch (cause) {
+                await runReport(reportBrowserCause("browser-use.frame.attach", Cause.fail(cause)));
+
+                return reportedBrowserError(
+                  BrowserUseError.make({
+                    code: "browser",
+                    message: "Frame attachment failed before the requested command was sent",
+                    dispatch: "not-dispatched",
+                  }),
+                );
+              }
+              target = attached;
               connections.set(source, target);
             }
             if (
@@ -286,7 +325,15 @@ export const make = Effect.fnUntraced(function* <R>(
           }
 
           // Bind the native receiver explicitly; decode the foreign response below.
-          return Reflect.apply(target.send.bind(target), undefined, [value.method, value.params]);
+          try {
+            return await Reflect.apply(target.send.bind(target), undefined, [
+              value.method,
+              value.params,
+            ]);
+          } catch (cause) {
+            // oxlint-disable-next-line effect/no-untyped-throw -- This native Promise preserves existing tab failures and reports sanitized frame stages through BrowserSession.run.
+            throw frame === undefined ? cause : browserFailure("browser-use.frame.send", cause);
+          }
         },
         value.targetId,
         value.frameId,

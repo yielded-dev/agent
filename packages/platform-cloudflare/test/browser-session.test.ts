@@ -1,5 +1,5 @@
 import { expect, it } from "@effect/vitest";
-import { Deferred, Effect, Fiber, Layer, Redacted } from "effect";
+import { Cause, Deferred, Effect, ErrorReporter, Fiber, Layer, Redacted } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
 import { beforeEach, vi } from "vite-plus/test";
@@ -14,6 +14,7 @@ import {
   BrowserSessionOptions,
   BrowserSessions,
 } from "../src/BrowserSession.ts";
+import * as BrowserUse from "../src/BrowserUse.ts";
 import { BrowserRunBinding } from "../src/internal/browser-binding.ts";
 import { BrowserRunReadonlyLiveView } from "../src/internal/browser-readonly-live-view.ts";
 import {
@@ -39,6 +40,8 @@ const provider = vi.hoisted(() => ({
   retirements: 0,
   delayRetirement: undefined as (() => void) | undefined,
   acknowledgeRetirement: undefined as (() => void) | undefined,
+  frameFailure: undefined as "target-info" | "attach" | "send" | undefined,
+  synchronousTargetFailure: false,
 }));
 
 // Substitute only the SDK/provider seam. The real attachment transport, scopes, authority,
@@ -66,8 +69,44 @@ vi.mock("puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js", () => ({
       };
 
       const frame = {
+        _id: "checkout-frame",
         detached: false,
         url: () => "https://merchant.test/login",
+        client: {
+          send: () => {
+            if (provider.frameFailure === "target-info") {
+              const error = Object.assign(new Error("private-provider-url-and-credential"), {
+                name: provider.synchronousTargetFailure ? "ConnectionClosedError" : "ProtocolError",
+              });
+
+              if (provider.synchronousTargetFailure) throw error;
+
+              return Promise.reject(error);
+            }
+
+            return Promise.resolve({ targetInfo: { targetId: "checkout-target" } });
+          },
+          connection: () => ({
+            createSession: async () => {
+              if (provider.frameFailure === "attach")
+                throw Object.assign(new Error("private-provider-url-and-credential"), {
+                  name: "TargetCloseError",
+                });
+
+              return {
+                send: async () => {
+                  if (provider.frameFailure === "send")
+                    throw Object.assign(new Error("private-provider-url-and-credential"), {
+                      name: "ProtocolError",
+                    });
+
+                  return {};
+                },
+                detach: async () => {},
+              };
+            },
+          }),
+        },
         isolatedRealm: () => ({
           evaluateHandle: async () => ({
             evaluate: async (callback: (...args: unknown[]) => unknown, ...args: unknown[]) =>
@@ -82,6 +121,8 @@ vi.mock("puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js", () => ({
       const page = {
         url: frame.url,
         mainFrame: () => frame,
+        frames: () => [frame],
+        isClosed: () => false,
         browserContext: () => ({ id: "owner-context" }),
         title: async () => provider.title,
         goto: async (url: string) => {
@@ -206,7 +247,83 @@ beforeEach(() =>
     retirements: 0,
     delayRetirement: undefined,
     acknowledgeRetirement: undefined,
+    frameFailure: undefined,
+    synchronousTargetFailure: false,
   }),
+);
+
+// https://github.com/yielded-dev/agent/commit/0090e61f
+// An unpredictable provider rejection must retain its stage without SDK content.
+it.effect.each([
+  { stage: "target-info", synchronous: false },
+  { stage: "target-info", synchronous: true },
+  { stage: "attach", synchronous: false },
+  { stage: "send", synchronous: false },
+] as const)(
+  "preserves the private frame $stage failure stage and precise dispatch evidence (synchronous=$synchronous)",
+  ({ stage, synchronous }) => {
+    const reports: Array<Cause.Cause<unknown>> = [];
+    const attachmentReports: Array<Cause.Cause<unknown>> = [];
+
+    return Effect.gen(function* () {
+      const host = yield* BrowserSessions;
+      const reference = yield* host.create(options, () => Effect.void);
+      const session = yield* host.attach(reference);
+
+      const { client } = yield* BrowserUse.make(session, {
+        authorize: () => Effect.void,
+        maxCommands: 10,
+        maxReturnedBytes: 4096,
+      });
+
+      provider.frameFailure = stage;
+      provider.synchronousTargetFailure = synchronous;
+
+      const error = yield* client
+        .send({
+          method: "Runtime.evaluate",
+          frameId: "checkout-frame",
+          params: { expression: "private-provider-url-and-credential" },
+        })
+        .pipe(
+          Effect.provide(
+            ErrorReporter.layer([ErrorReporter.make(({ cause }) => reports.push(cause))]),
+          ),
+          Effect.flip,
+        );
+
+      expect(error).toMatchObject({
+        code: "browser",
+        dispatch: stage === "send" ? "possibly-dispatched" : "not-dispatched",
+      });
+      expect(provider.closed).toEqual([]);
+      expect(reports).toHaveLength(1);
+      expect(attachmentReports).toHaveLength(0);
+      expect(ErrorReporter.isIgnored(error)).toBe(stage !== "send");
+      expect(Cause.findErrorOption(reports[0])).toMatchObject({
+        value: {
+          _tag: "BrowserRunFailure",
+          operation: `browser-use.frame.${stage}`,
+          reason: "provider",
+          cause: {
+            name: synchronous
+              ? "ConnectionClosedError"
+              : stage === "attach"
+                ? "TargetCloseError"
+                : "ProtocolError",
+          },
+        },
+      });
+      expect(JSON.stringify(reports)).not.toContain("private-provider-url-and-credential");
+      expect(JSON.stringify(error)).not.toContain("private-provider-url-and-credential");
+    }).pipe(
+      Effect.scoped,
+      Effect.provide([
+        layer,
+        ErrorReporter.layer([ErrorReporter.make(({ cause }) => attachmentReports.push(cause))]),
+      ]),
+    );
+  },
 );
 
 it.effect("closes a late allocation reply without retaining or connecting it", () =>
