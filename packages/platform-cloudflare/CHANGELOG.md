@@ -1,5 +1,19 @@
 # @yielded/agent-platform-cloudflare
 
+## 0.1.0-beta.183
+
+### Patch Changes
+
+- [#992](https://github.com/yielded-dev/agent/pull/992) [`8ed9324`](https://github.com/yielded-dev/agent/commit/8ed932428c30cf12f9efded4af095c0db5b26ee0) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Release provisional text observers when their RPC scope ends. BEHAVIOR CHANGE: Deploy the Cloudflare client and Thread Object together; direct `watchTextEncoded` callers must read `stream` and dispose the returned `lifetime`.
+
+- [#990](https://github.com/yielded-dev/agent/pull/990) [`d2d952f`](https://github.com/yielded-dev/agent/commit/d2d952f6d8eb76c71c7f20f35ca9d660b30ed8f4) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Deliver provisional text directly to ready Cloudflare stream readers while retaining bounded buffering and overflow snapshots.
+
+- [#993](https://github.com/yielded-dev/agent/pull/993) [`d231018`](https://github.com/yielded-dev/agent/commit/d2310188598258083c287b646d70af12bf7807a3) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce provisional text encoding overhead while preserving Schema validation, frame bytes, and wire bounds.
+- Updated dependencies [[`4d89b3d`](https://github.com/yielded-dev/agent/commit/4d89b3d70c61d5f9e070c586729e724dd278a329), [`e8c7dc5`](https://github.com/yielded-dev/agent/commit/e8c7dc52ca1f4ed5075a1cc6ba3ceb49dc9da2e4), [`07edb0e`](https://github.com/yielded-dev/agent/commit/07edb0ea3856d9cb05048b1f79531588f1fad0d7), [`35940af`](https://github.com/yielded-dev/agent/commit/35940afbde243fff4a9f5e10093e01e23050f545), [`016b10a`](https://github.com/yielded-dev/agent/commit/016b10a2353959fa5acde797e2e5b7c124761578), [`5a7b1f0`](https://github.com/yielded-dev/agent/commit/5a7b1f02dcb1b24586ee59f859bb19a2e0e9c8e3)]:
+  - @yielded/agent@0.1.0-beta.183
+  - @yielded/agent-storage-cloudflare@0.1.0-beta.183
+  - @yielded/agent-storage-sql@0.1.0-beta.183
+
 ## 0.1.0-beta.182
 
 ### Patch Changes

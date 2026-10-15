@@ -1,5 +1,21 @@
 # @yielded/agent
 
+## 0.1.0-beta.183
+
+### Patch Changes
+
+- [#977](https://github.com/yielded-dev/agent/pull/977) [`4d89b3d`](https://github.com/yielded-dev/agent/commit/4d89b3d70c61d5f9e070c586729e724dd278a329) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Cap in-process attached child execution at the parent's remaining deadline. Add `SubagentPolicy.parentReserveDuration` so callers can leave time to handle a typed child duration failure and finish.
+
+- [#988](https://github.com/yielded-dev/agent/pull/988) [`e8c7dc5`](https://github.com/yielded-dev/agent/commit/e8c7dc52ca1f4ed5075a1cc6ba3ceb49dc9da2e4) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce per-part model response processing and repeated checks when capturing validated usage, preserving stream ordering and durable record bytes.
+
+- [#989](https://github.com/yielded-dev/agent/pull/989) [`07edb0e`](https://github.com/yielded-dev/agent/commit/07edb0ea3856d9cb05048b1f79531588f1fad0d7) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Remove duplicate Run and model-start debug logs and their temporary log spans. Use lifecycle events, metrics, or tracing to observe execution starts.
+
+- [#983](https://github.com/yielded-dev/agent/pull/983) [`35940af`](https://github.com/yielded-dev/agent/commit/35940afbde243fff4a9f5e10093e01e23050f545) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce per-turn overhead when recording durable Run progress.
+
+- [#978](https://github.com/yielded-dev/agent/pull/978) [`016b10a`](https://github.com/yielded-dev/agent/commit/016b10a2353959fa5acde797e2e5b7c124761578) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce cold Thread startup work while preserving existing persisted history.
+
+- [#986](https://github.com/yielded-dev/agent/pull/986) [`5a7b1f0`](https://github.com/yielded-dev/agent/commit/5a7b1f02dcb1b24586ee59f859bb19a2e0e9c8e3) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce durable response capture and progress-accounting work while preserving canonical record bytes and recovery validation. BEHAVIOR CHANGE: `ModelResponseRecorded.messages` is now typed as encoded Prompt messages; encode a `Prompt` before constructing the record.
+
 ## 0.1.0-beta.182
 
 ### Patch Changes
