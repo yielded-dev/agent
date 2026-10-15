@@ -783,6 +783,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
     countPeerMessages: selectedReads.countPeerMessages,
     readWorkerCapacity: selectedReads.readWorkerCapacity,
     readIdentity: selectedReads.readIdentity,
+    readFreshRun: selectedReads.readFreshRun,
     readExecution: (request) =>
       requireThread(journal, request.threadId).pipe(Effect.andThen(readExecution(request))),
     append: makeAppend(journal.append, true),

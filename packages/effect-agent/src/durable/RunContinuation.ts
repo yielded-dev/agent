@@ -1646,25 +1646,30 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         operational.set(fact.recordId, fact);
       }
 
-      const checkpoint = yield* ExecutionCheckpoint.makeEffect({
-        version: 2,
-        progressRecord: record,
-        operational: [...operational.values()],
-        canonicalRecords,
-        originalSequence:
-          originalSequence ??
-          CanonicalSequence.make(
-            after +
-              ownedRecords
-                .filter((fact) => !isOperationalRecord(fact))
-                .findIndex((fact) => fact.recordId === originalInput.recordId) +
-              1,
+      // The records above already belong to this writer. PreparedAppend captures the
+      // complete update at the storage boundary, preserving their private encodings.
+      const checkpoint = ExecutionCheckpoint.make(
+        {
+          version: 2,
+          progressRecord: record,
+          operational: [...operational.values()],
+          canonicalRecords,
+          originalSequence:
+            originalSequence ??
+            CanonicalSequence.make(
+              after +
+                ownedRecords
+                  .filter((fact) => !isOperationalRecord(fact))
+                  .findIndex((fact) => fact.recordId === originalInput.recordId) +
+                1,
+            ),
+          throughSequence: CanonicalSequence.make(
+            after + ownedRecords.filter((fact) => !isOperationalRecord(fact)).length,
           ),
-        throughSequence: CanonicalSequence.make(
-          after + ownedRecords.filter((fact) => !isOperationalRecord(fact)).length,
-        ),
-        batchId: batch.batchId,
-      }).pipe(Effect.mapError((cause) => failure("Active execution exceeds its bounds", cause)));
+          batchId: batch.batchId,
+        },
+        { disableChecks: true },
+      );
 
       const state = {
         continuation,
@@ -1687,13 +1692,16 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         );
       yield* checkFutureShapes(state);
       executions.push(
-        ExecutionUpdate.make({
-          previousRevision: previous?.continuation.revision ?? 0,
-          checkpoint,
-          facts: changed,
-          // Pending operations and handoffs retain their own recovery rows and original facts.
-          retire: position === "settled",
-        }),
+        ExecutionUpdate.make(
+          {
+            previousRevision: previous?.continuation.revision ?? 0,
+            checkpoint,
+            facts: changed,
+            // Pending operations and handoffs retain their own recovery rows and original facts.
+            retire: position === "settled",
+          },
+          { disableChecks: true },
+        ),
       );
       accepted.set(runId, state);
     }
@@ -1940,9 +1948,6 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
     reserve,
     defer,
     check,
-    /** Internal read view immediately after this writer's acknowledged commit, while
-     * holding its initialization gates. Never authority across ownership or writes. */
-    acceptedCheckpoint: (runId: RunId) => cached.get(runId)?.checkpoint,
     /** Scope a verified empty execution/evidence view to one owned initialization body.
      * The caller holds progress+mutation gates; a changed writer or tail never reuses it. */
     withVerifiedEmptyRun: <A, E, R>(

@@ -1004,6 +1004,10 @@ const makeRoutedStoreServices = Effect.fnUntraced(function* (options: RoutedPort
   };
 
   const routed = ThreadStore.of({
+    readFreshRun: (request) =>
+      options.ownsThread(request.threadId) && local.readFreshRun !== undefined
+        ? local.readFreshRun(request)
+        : Effect.succeed(Option.none()),
     readExecution: (request) =>
       options.ownsThread(request.threadId)
         ? local.readExecution(request)
