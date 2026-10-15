@@ -564,19 +564,27 @@ const operation = {
                 });
             }
 
-            // Capture volatile evidence before cancelling the observer, after both timer endpoints.
-            const metrics = yield* invokeJson(
-              MetricsResult,
-              quiescent ? "/metrics?quiescent=true" : "/metrics",
-            );
-
-            if (observer !== undefined) {
+            const stopObserver = Effect.gen(function* () {
+              if (observer === undefined) return;
               yield* Fiber.interrupt(observer);
               const exit = yield* Fiber.await(observer);
 
               if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause))
                 return yield* Effect.failCause(exit.cause);
-            }
+            });
+
+            // Pi quiescence closes its Harness, including its text watch. Validate and
+            // stop that watch before intentional shutdown, after both timer endpoints.
+            const closesObserver = quiescent && query.target === "pi";
+
+            if (closesObserver) yield* stopObserver;
+
+            const metrics = yield* invokeJson(
+              MetricsResult,
+              quiescent ? "/metrics?quiescent=true" : "/metrics",
+            );
+
+            if (!closesObserver) yield* stopObserver;
 
             return {
               ok: true,
