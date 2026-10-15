@@ -134,7 +134,9 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
             BrowserUse.layer.pipe(
               Layer.provide(
                 Layer.succeed(BrowserUse.BrowserCdp, {
-                  send: Effect.fnUntraced(function* (request) {
+                  send: Effect.fnUntraced(function* (
+                    request: typeof BrowserUse.SendRequest.Type,
+                  ): Effect.fn.Return<Schema.Json, BrowserUse.BrowserUsePolicyError> {
                     sends.push(request);
 
                     if (request.params?.expression === "guardedMutation()") return yield* refusal;
@@ -169,15 +171,15 @@ layer(testLayer, { excludeTestServices: true })("Code Mode failure reporting", (
 
         yield* Effect.gen(function* () {
           const result = yield* AgentRuntime.run(definition, "inspect").pipe(
-            Effect.provide(handlers),
-            Effect.provide(
+            Effect.provide([
+              handlers,
               toolFailureObserverLayer({
                 observe: (observation) =>
                   Effect.sync(() => {
                     observations.push(observation);
                   }),
               }),
-            ),
+            ]),
           );
 
           const script = yield* ScriptedModel;
