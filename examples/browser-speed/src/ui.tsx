@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Circle,
   Download,
+  Hand,
   KeyRound,
   LogIn,
   Play,
@@ -50,6 +51,9 @@ import {
   controlAtom,
   errorMessage,
   exportAtom,
+  downloadTraceAtom,
+  viewAtom,
+  viewRequest,
   flowStarted,
   fromReady,
   historyAtom,
@@ -286,7 +290,7 @@ const Mark = () => (
   </svg>
 );
 
-const Steps = ({ report }: { report: Report | null }) => {
+const RunSteps = ({ report }: { report: Report }) => {
   const [expanded, setExpanded] = useState<number | null>(null);
 
   const extent = Math.max(
@@ -298,14 +302,7 @@ const Steps = ({ report }: { report: Report | null }) => {
   const ready = report?.readyAt ?? null;
 
   return (
-    <section className="section" aria-labelledby="steps-title">
-      <div className="section-head">
-        <h2 id="steps-title">Every step</h2>
-        <p>
-          The full trace of the selected run, including browser preparation. The flow clock starts
-          at the marker, when the starting page is ready.
-        </p>
-      </div>
+    <div className="turn-steps">
       {!report?.spans.length ? (
         <div className="empty">
           Run a task to see each model call, browser action and screenshot here.
@@ -389,9 +386,34 @@ const Steps = ({ report }: { report: Report | null }) => {
           </ol>
         </div>
       )}
-    </section>
+    </div>
   );
 };
+
+const Steps = ({ reports }: { reports: ReadonlyArray<Report> }) => (
+  <section className="section" aria-labelledby="steps-title">
+    <div className="section-head">
+      <h2 id="steps-title">Every step</h2>
+      <p>
+        All messages in this conversation, including browser preparation. Each timeline starts when
+        its message was sent; the marker shows when the page was ready.
+      </p>
+    </div>
+    {reports.length === 0 && <div className="empty">Send a message to see its trace here.</div>}
+    {reports.map((report, index) => (
+      <div key={report.input.id} className="conversation-trace">
+        <h3>
+          Message {index + 1}{" "}
+          <small className="mono">
+            {seconds(report.elapsed)} s · {runOutcome(report)}
+          </small>
+        </h3>
+        <p className="trace-prompt">{report.input.prompt}</p>
+        <RunSteps report={report} />
+      </div>
+    ))}
+  </section>
+);
 
 const KeyField = ({
   id,
@@ -461,13 +483,15 @@ export const App = () => {
   const saveKeys = useAtomSet(saveKeysAtom);
   const [run, start] = useAtom(runAtom);
   const [control, act] = useAtom(controlAtom);
+  const [viewResult, changeView] = useAtom(viewAtom);
+  const [traceResult, downloadTrace] = useAtom(downloadTraceAtom);
   const snapshot = useAtomValue(snapshotAtom);
   const history = useAtomValue(historyAtom);
   const watching = useAtomValue(watchingAtom);
   const progress = useAtomValue(progressAtom);
   const [selected, select] = useAtom(selectedAtom);
   const download = useAtomSet(exportAtom);
-  const remote = AsyncResult.isSuccess(snapshot) ? snapshot.value : null;
+  const remote = Option.getOrNull(AsyncResult.value(snapshot));
   const selectedSample = history.find(({ report }) => report.input.id === selected);
   const latestReport = remote?.report ?? history.at(-1)?.report ?? null;
 
@@ -489,12 +513,34 @@ export const App = () => {
     errorMessage(control) ??
     errorMessage(snapshot);
 
-  const chatControlFailure = errorMessage(control) ?? errorMessage(snapshot);
+  const chatControlFailure =
+    errorMessage(control) ?? errorMessage(viewResult) ?? errorMessage(snapshot);
 
   const isWiki = scenario === "wikipedia";
   const isChat = scenario === "chat";
   const isStore = scenario === "coffee";
   const chatEnded = chatTurns.length > 0 && chatId === null && !busy;
+  const humanControl = remote?.viewMode === "control";
+  const conversationId = report?.input.chatId ?? report?.input.id ?? chatId;
+
+  const reportsById = new Map(
+    history
+      .filter(
+        ({ report: value }) =>
+          isChat &&
+          !selected &&
+          value.input.scenario === "chat" &&
+          (value.input.chatId ?? value.input.id) === conversationId,
+      )
+      .map(({ report: value }) => [value.input.id, value]),
+  );
+
+  if (report) reportsById.set(report.input.id, report);
+  const inspectedReports = [...reportsById.values()];
+  const conversation = isChat && !selected;
+  const totalElapsed = inspectedReports.reduce((sum, value) => sum + value.elapsed, 0);
+  const preparationElapsed = inspectedReports.reduce((sum, value) => sum + (value.readyAt ?? 0), 0);
+
   const effectiveReasoning = reasoning === "none" && requiresReasoning(model) ? "low" : reasoning;
 
   const effectiveServiceTier =
@@ -541,6 +587,8 @@ export const App = () => {
   const missingNeeds = needs.filter((need) => !need.ok);
 
   const canRun =
+    !humanControl &&
+    !viewResult.waiting &&
     connected &&
     remote.browserConfigured &&
     !busy &&
@@ -567,7 +615,7 @@ export const App = () => {
     !selected && busy && (Predicate.isNullish(remote?.report?.readyAt) || !remote?.busy);
 
   const showingActive = !selected && busy;
-  const live = !selected && report !== null && remote?.liveViewUrl;
+  const live = !selected && remote?.liveViewUrl;
   const captured = !selected && report !== null && remote?.image;
   const lastHop = report?.race?.path.at(-1);
 
@@ -577,7 +625,18 @@ export const App = () => {
       ? (verifiedMillis(report) ?? fromReady(report, report.finishedAt ?? report.elapsed))
       : null;
 
-  const count = (phase: Phase) => report?.spans.filter((span) => span.phase === phase).length ?? 0;
+  const count = (phase: Phase) =>
+    inspectedReports.reduce(
+      (sum, value) => sum + value.spans.filter((span) => span.phase === phase).length,
+      0,
+    );
+
+  const conversationFlow = conversation
+    ? inspectedReports.reduce(
+        (sum, value) => sum + (fromReady(value, value.finishedAt ?? value.elapsed) ?? 0),
+        0,
+      )
+    : flow;
 
   const openKeys = () => {
     setDraft(keys);
@@ -951,19 +1010,21 @@ export const App = () => {
             <span
               className={`clock-value mono ${showingActive && !preparing ? "ticking" : flow === null ? "idle" : ""}`}
             >
-              {flow === null ? "0.00" : seconds(flow)}
+              {conversationFlow === null ? "0.00" : seconds(conversationFlow)}
               <small>s</small>
             </span>
             <span className="clock-label">
-              {showingActive
-                ? preparing
-                  ? "Preparing the browser · clock starts when the page is ready"
-                  : "Page ready → now"
-                : report?.verifiedAt !== null && report?.verifiedAt !== undefined
-                  ? "Page ready → verified"
-                  : report
-                    ? "Page ready → stopped"
-                    : "Page ready → verified"}
+              {conversation
+                ? "Conversation work time · excludes waiting for you"
+                : showingActive
+                  ? preparing
+                    ? "Preparing the browser · clock starts when the page is ready"
+                    : "Page ready → now"
+                  : report?.verifiedAt !== null && report?.verifiedAt !== undefined
+                    ? "Page ready → verified"
+                    : report
+                      ? "Page ready → stopped"
+                      : "Page ready → verified"}
             </span>
           </div>
           <div className="hud-stats">
@@ -1077,11 +1138,13 @@ export const App = () => {
                 />
                 <div className="composer-actions">
                   <span>
-                    {chatEnded
-                      ? "This chat ended. Choose New chat to start again."
-                      : busy
-                        ? "Working in the browser. You can draft your next message."
-                        : "Enter to send · Shift+Enter for a new line"}
+                    {humanControl
+                      ? "You control the browser. Return to the agent when finished."
+                      : chatEnded
+                        ? "This chat ended. Choose New chat to start again."
+                        : busy
+                          ? "Working in the browser. You can draft your next message."
+                          : "Enter to send · Shift+Enter for a new line"}
                   </span>
                   <button className="primary" type="submit" disabled={!canRun}>
                     <Send size={15} /> Send
@@ -1107,7 +1170,9 @@ export const App = () => {
                 </span>
                 <span className={`view-label mono ${live ? "live" : ""}`}>
                   {live
-                    ? "LIVE"
+                    ? humanControl
+                      ? "YOU HAVE CONTROL"
+                      : "LIVE"
                     : captured
                       ? "SCREENSHOT"
                       : showingActive
@@ -1121,7 +1186,9 @@ export const App = () => {
                 {live ? (
                   <iframe
                     key={live}
-                    title="Read-only view of the agent’s browser"
+                    title={
+                      humanControl ? "Control the browser" : "Read-only view of the agent’s browser"
+                    }
                     src={live}
                     referrerPolicy="no-referrer"
                   />
@@ -1144,7 +1211,38 @@ export const App = () => {
                 )}
               </div>
             </div>
-            {live && (
+            {isChat && !selected && remote?.ready && (
+              <div className="viewer-controls">
+                <button
+                  className="ghost small"
+                  disabled={busy || viewResult.waiting}
+                  title={busy ? "Available when the agent finishes this message" : undefined}
+                  onClick={() => changeView(viewRequest(humanControl ? "watch" : "control"))}
+                >
+                  <Hand size={14} />{" "}
+                  {viewResult.waiting
+                    ? "Connecting…"
+                    : humanControl
+                      ? "Return to agent"
+                      : "Take over"}
+                </button>
+                {!humanControl && (
+                  <button
+                    className="ghost small"
+                    disabled={busy || viewResult.waiting}
+                    onClick={() => changeView(viewRequest("watch"))}
+                  >
+                    Reconnect live view
+                  </button>
+                )}
+              </div>
+            )}
+            {humanControl && (
+              <p className="fine">
+                Use the browser above, then return control and tell the agent what changed.
+              </p>
+            )}
+            {live && !humanControl && (
               <a className="fine-link" href={live} target="_blank" rel="noreferrer">
                 Open live view in a new tab <ArrowUpRight size={13} />
               </a>
@@ -1199,24 +1297,51 @@ export const App = () => {
       )}
 
       <details className="run-inspector">
-        <summary>Run details and comparisons</summary>
+        <summary>
+          {conversation ? "Conversation details and traces" : "Run details and comparisons"}
+        </summary>
         {report && (
           <section className="section" aria-label="Run details">
-            <p className={report.status === "failed" ? "message bad" : "message"}>
-              {report.message}
-            </p>
+            {!conversation && (
+              <p className={report.status === "failed" ? "message bad" : "message"}>
+                {report.message}
+              </p>
+            )}
+            <div className="trace-actions">
+              <button
+                className="ghost small"
+                disabled={busy || traceResult.waiting}
+                onClick={() => downloadTrace(inspectedReports.map((value) => value.input.id))}
+              >
+                <Download size={14} />{" "}
+                {traceResult.waiting
+                  ? "Downloading…"
+                  : conversation
+                    ? "Download conversation trace"
+                    : "Download debug trace"}
+              </button>
+              {errorMessage(traceResult) && <p className="bad">{errorMessage(traceResult)}</p>}
+              <span className="fine">
+                Saved automatically. Includes page content and model messages; review before
+                sharing.
+              </span>
+            </div>
             <div className="stats">
               <div>
-                <span>Total elapsed</span>
-                <b className="mono">{seconds(report.elapsed)} s</b>
+                <span>{conversation ? "Total active time" : "Total elapsed"}</span>
+                <b className="mono">{seconds(totalElapsed)} s</b>
               </div>
               <div>
                 <span>Page preparation</span>
-                <b className="mono">{seconds(report.readyAt)} s</b>
+                <b className="mono">{seconds(preparationElapsed)} s</b>
               </div>
               <div>
-                <span>First action after ready</span>
-                <b className="mono">{seconds(fromReady(report, report.firstActionAt))} s</b>
+                <span>{conversation ? "Messages" : "First action after ready"}</span>
+                <b className="mono">
+                  {conversation
+                    ? inspectedReports.length
+                    : `${seconds(fromReady(report, report.firstActionAt))} s`}
+                </b>
               </div>
               <div>
                 <span>Cleanup</span>
@@ -1230,7 +1355,7 @@ export const App = () => {
             )}
           </section>
         )}
-        <Steps key={report?.input.id ?? "empty"} report={report} />
+        <Steps reports={inspectedReports} />
 
         <section className="section" aria-labelledby="compare-title">
           <div className="section-head">

@@ -169,7 +169,12 @@ export const executeTask = Effect.fnUntraced(function* (
     Layer.provide(
       Layer.succeed(CodeExecutor, {
         execute: (request) =>
-          executor.execute(request).pipe(Effect.ensuring(browser.capture().pipe(Effect.ignore))),
+          Effect.sync(() => trace.event("code.request", { source: request.source })).pipe(
+            Effect.andThen(executor.execute(request)),
+            Effect.tap((result) => Effect.sync(() => trace.event("code.result", result))),
+            Effect.tapCause((cause) => Effect.sync(() => trace.event("code.failure", cause))),
+            Effect.ensuring(browser.capture().pipe(Effect.ignore)),
+          ),
       }),
     ),
   );
@@ -188,6 +193,12 @@ export const executeTask = Effect.fnUntraced(function* (
     }).pipe(
       Effect.flatMap((handle) =>
         handle.await.pipe(
+          Effect.onExit(() =>
+            handle.events.pipe(
+              Effect.tap((events) => Effect.sync(() => trace.event("agent.events", events))),
+              Effect.ignore,
+            ),
+          ),
           Effect.catch((error) =>
             Effect.gen(function* () {
               if (

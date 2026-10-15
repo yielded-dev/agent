@@ -6,6 +6,7 @@ import {
   LabApi,
   LabError,
   Report,
+  TraceArchive,
   VisitorKey,
   requiresReasoning,
   serviceTierForModel,
@@ -20,20 +21,40 @@ export class LabClient extends AtomHttpApi.Service<LabClient>()("browser-speed/c
   baseUrl: import.meta.env.BASE_URL.replace(/\/$/, ""),
 }) {}
 
-const sessionId = crypto.randomUUID();
+const sessionId = (() => {
+  try {
+    const key = "yielded-browser-use-session";
+    const previous = sessionStorage.getItem(key);
+
+    if (previous !== null && Schema.is(Schema.String.check(Schema.isUUID()))(previous))
+      return previous;
+    const id = crypto.randomUUID();
+
+    sessionStorage.setItem(key, id);
+
+    return id;
+  } catch {
+    return crypto.randomUUID();
+  }
+})();
 
 export const watchingAtom = Atom.make(false);
 const stopRequestedAtom = Atom.make(false);
 
 export const progressAtom = Atom.make({ current: 0, total: 0 });
 
-export const ClientSample = Schema.Struct({ report: Report, clientElapsedMillis: Schema.Finite });
+export const ClientSample = Schema.Struct({
+  report: Report,
+  clientElapsedMillis: Schema.NullOr(Schema.Finite),
+});
+
 export type ClientSample = typeof ClientSample.Type;
-export const historyAtom = Atom.make<ReadonlyArray<ClientSample>>([]);
+const localHistoryAtom = Atom.make<ReadonlyArray<ClientSample>>([]).pipe(Atom.keepAlive);
+
 export const selectedAtom = Atom.make<string | null>(null);
 
 export const chatDraftAtom = Atom.make("").pipe(Atom.keepAlive);
-export const chatIdAtom = Atom.make<string | null>(null).pipe(Atom.keepAlive);
+const localChatIdAtom = Atom.make<string | null | undefined>(undefined).pipe(Atom.keepAlive);
 
 export interface ChatTurn {
   readonly id: string;
@@ -44,7 +65,7 @@ export interface ChatTurn {
   readonly error?: string;
 }
 
-export const chatTurnsAtom = Atom.make<ReadonlyArray<ChatTurn>>([]).pipe(Atom.keepAlive);
+const localChatTurnsAtom = Atom.make<ReadonlyArray<ChatTurn>>([]).pipe(Atom.keepAlive);
 
 const headers = { "x-lab-session": sessionId };
 
@@ -110,14 +131,118 @@ const snapshotQuery = LabClient.query("lab", "snapshot", {
 });
 
 const pollingSnapshot = snapshotQuery.pipe(Atom.withRefresh("300 millis"));
+const idleSnapshot = snapshotQuery.pipe(Atom.withRefresh("10 seconds"));
 
 export const snapshotAtom = Atom.make((get) => {
   const snapshot = get(snapshotQuery);
   const remote = Option.getOrNull(AsyncResult.value(snapshot));
 
   // A lost POST does not imply the Worker stopped. Keep its status and Stop control live.
-  return get(watchingAtom) || remote?.busy ? get(pollingSnapshot) : snapshot;
+  return get(watchingAtom) || remote?.busy
+    ? get(pollingSnapshot)
+    : remote?.ready
+      ? get(idleSnapshot)
+      : snapshot;
 });
+
+const savedReportsAtom = LabClient.query("lab", "reports", {
+  headers,
+  reactivityKeys: ["lab-history"],
+});
+
+export const historyAtom = Atom.make((get): ReadonlyArray<ClientSample> => {
+  const saved = Option.getOrElse(AsyncResult.value(get(savedReportsAtom)), () => []);
+
+  const byId = new Map<string, ClientSample>(
+    saved.map((report) => [report.input.id, { report, clientElapsedMillis: null }]),
+  );
+
+  for (const sample of get(localHistoryAtom)) byId.set(sample.report.input.id, sample);
+
+  return [...byId.values()].sort((a, b) => a.report.startedAt.localeCompare(b.report.startedAt));
+});
+
+export const chatIdAtom = Atom.make((get) => {
+  const local = get(localChatIdAtom);
+
+  return local !== undefined
+    ? local
+    : (Option.getOrNull(AsyncResult.value(get(snapshotAtom)))?.chatId ?? null);
+});
+
+export const chatTurnsAtom = Atom.make((get): ReadonlyArray<ChatTurn> => {
+  const local = get(localChatTurnsAtom);
+  const chatId = get(chatIdAtom);
+
+  const saved =
+    chatId === null
+      ? []
+      : get(historyAtom).filter(
+          ({ report }) =>
+            report.input.scenario === "chat" && (report.input.chatId ?? report.input.id) === chatId,
+        );
+
+  const turns = new Map<string, ChatTurn>(
+    saved.map(({ report }) => [
+      report.input.id,
+      {
+        id: report.input.id,
+        prompt: report.input.prompt,
+        pending: false,
+        report,
+      },
+    ]),
+  );
+
+  for (const turn of local) turns.set(turn.id, turn);
+  const remote = Option.getOrNull(AsyncResult.value(get(snapshotAtom)));
+  const report = remote?.report;
+
+  if (report && (report.input.chatId ?? report.input.id) === chatId) {
+    const existing = turns.get(report.input.id);
+
+    // A reload has no sending workflow to subscribe to progress. Restore that message
+    // from the owner without resubmitting it or overriding a newer local response.
+    if (existing === undefined || !local.some((turn) => turn.id === report.input.id))
+      turns.set(report.input.id, {
+        id: report.input.id,
+        prompt: report.input.prompt,
+        pending: remote.busy && !remote.canClose,
+        report,
+      });
+  }
+
+  return [...turns.values()];
+});
+
+export const viewAtom = LabClient.mutation("lab", "view");
+
+export const viewRequest = (mode: "watch" | "control") => ({
+  headers,
+  payload: { mode },
+  reactivityKeys: ["lab"],
+});
+
+export const downloadTraceAtom = LabClient.runtime.fn<ReadonlyArray<string>>()(
+  Effect.fnUntraced(function* (ids) {
+    const client = yield* LabClient;
+
+    const traces = yield* Effect.forEach(ids, (id) =>
+      client.lab.trace({ headers, params: { id } }),
+    );
+
+    yield* Effect.sync(() => {
+      const json = Schema.encodeSync(Schema.fromJsonString(Schema.Array(TraceArchive)))(traces);
+      const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = `browser-trace-${traces[0]?.conversationId ?? "conversation"}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    });
+  }),
+);
 
 export const runAtom = LabClient.runtime.fn<
   Omit<RunInput, "id"> & {
@@ -188,10 +313,10 @@ export const runAtom = LabClient.runtime.fn<
           ["lab"],
         );
 
-        get.set(chatIdAtom, null);
-        get.set(chatTurnsAtom, []);
+        get.set(localChatIdAtom, null);
+        get.set(localChatTurnsAtom, []);
         get.set(
-          historyAtom,
+          localHistoryAtom,
           [
             ...get(historyAtom),
             {
@@ -210,7 +335,7 @@ export const runAtom = LabClient.runtime.fn<
     }).pipe(
       Effect.ensuring(
         Effect.sync(() => get.set(watchingAtom, false)).pipe(
-          Effect.andThen(Reactivity.invalidate(["lab"])),
+          Effect.andThen(Reactivity.invalidate(["lab", "lab-history"])),
         ),
       ),
     );
@@ -223,7 +348,7 @@ export const controlAtom = LabClient.runtime.fn<"stop" | "close">()(
 
     if (action === "stop") {
       get.set(stopRequestedAtom, true);
-      get.set(chatIdAtom, null);
+      get.set(localChatIdAtom, null);
     }
     if (action === "close") get.set(chatDraftAtom, "");
     yield* Reactivity.mutation(
@@ -231,8 +356,8 @@ export const controlAtom = LabClient.runtime.fn<"stop" | "close">()(
       ["lab"],
     );
     if (action === "close") {
-      get.set(chatIdAtom, null);
-      get.set(chatTurnsAtom, []);
+      get.set(localChatIdAtom, null);
+      get.set(localChatTurnsAtom, []);
     }
   }),
 );
@@ -256,7 +381,7 @@ export const sendChatAtom = LabClient.runtime.fn<
     get.set(stopRequestedAtom, false);
     get.set(selectedAtom, null);
     get.set(progressAtom, { current: 1, total: 1 });
-    get.set(chatTurnsAtom, [...get(chatTurnsAtom), { id, prompt, pending: true }].slice(-50));
+    get.set(localChatTurnsAtom, [...get(chatTurnsAtom), { id, prompt, pending: true }]);
     get.set(chatDraftAtom, "");
 
     return yield* Effect.gen(function* () {
@@ -270,7 +395,7 @@ export const sendChatAtom = LabClient.runtime.fn<
 
             if (report?.input.id !== id) return;
             get.set(
-              chatTurnsAtom,
+              localChatTurnsAtom,
               get(chatTurnsAtom).map((turn) =>
                 turn.id === id &&
                 turn.pending &&
@@ -308,7 +433,7 @@ export const sendChatAtom = LabClient.runtime.fn<
           () =>
             Effect.gen(function* () {
               get.set(
-                chatTurnsAtom,
+                localChatTurnsAtom,
                 get(chatTurnsAtom).map((turn) =>
                   turn.id === id ? { ...turn, connectionLost: true } : turn,
                 ),
@@ -363,17 +488,17 @@ export const sendChatAtom = LabClient.runtime.fn<
       );
 
       get.set(
-        chatIdAtom,
+        localChatIdAtom,
         !get(stopRequestedAtom) && report.cleanup === "retained" ? (chatId ?? id) : null,
       );
       get.set(
-        chatTurnsAtom,
+        localChatTurnsAtom,
         get(chatTurnsAtom).map((turn) =>
           turn.id === id ? { ...turn, report, pending: false, connectionLost: false } : turn,
         ),
       );
       get.set(
-        historyAtom,
+        localHistoryAtom,
         [
           ...get(historyAtom),
           {
@@ -393,9 +518,9 @@ export const sendChatAtom = LabClient.runtime.fn<
           const uncertain = get(chatTurnsAtom).find((turn) => turn.id === id)?.connectionLost;
 
           if (uncertain || (Option.isSome(error) && error.value.code === "expired"))
-            get.set(chatIdAtom, null);
+            get.set(localChatIdAtom, null);
           get.set(
-            chatTurnsAtom,
+            localChatTurnsAtom,
             get(chatTurnsAtom).map((turn) =>
               turn.id === id
                 ? {
@@ -411,7 +536,7 @@ export const sendChatAtom = LabClient.runtime.fn<
       ),
       Effect.ensuring(
         Effect.sync(() => get.set(watchingAtom, false)).pipe(
-          Effect.andThen(Reactivity.invalidate(["lab"])),
+          Effect.andThen(Reactivity.invalidate(["lab", "lab-history"])),
         ),
       ),
       Effect.scoped,

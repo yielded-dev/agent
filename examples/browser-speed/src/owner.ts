@@ -2,6 +2,7 @@ import { InMemory } from "@yielded/agent";
 import {
   BrowserSessionReference,
   BrowserSessions,
+  type BrowserSession,
 } from "@yielded/agent-platform-cloudflare/browser-session";
 import { ThreadId } from "@yielded/agent/identifiers";
 import type { ThreadHistory } from "@yielded/agent/thread-history";
@@ -21,10 +22,12 @@ import {
   type ModelId,
   type RunInput,
   type Snapshot,
+  type ViewMode,
 } from "./contract.ts";
 import type { connectKitesurf } from "./kitesurf.ts";
 import { executeTask } from "./runner.ts";
-import { makeTrace, Trace } from "./telemetry.ts";
+import { makeTrace, traceOtlp, Trace } from "./telemetry.ts";
+import type { makeTraceStore } from "./trace-store.ts";
 
 /** Validated provider keys for one run: the visitor's, or the lab's for a funded account. */
 export interface VisitorKeys {
@@ -32,7 +35,14 @@ export interface VisitorKeys {
 }
 
 export const Control = Schema.Struct({
-  version: Schema.Literal(4),
+  version: Schema.Literal(5),
+  view: Schema.NullOr(
+    Schema.Struct({
+      url: Schema.String,
+      mode: Schema.Literals(["watch", "control"]),
+      expiresAt: Schema.Finite,
+    }),
+  ),
   chatId: Schema.NullOr(Schema.String),
   reference: Schema.NullOr(Schema.toCodecJson(BrowserSessionReference)),
   active: Schema.NullOr(Schema.String),
@@ -44,7 +54,8 @@ export const Control = Schema.Struct({
 export type Control = typeof Control.Type;
 
 export const emptyControl: Control = {
-  version: 4,
+  version: 5,
+  view: null,
   chatId: null,
   reference: null,
   active: null,
@@ -80,6 +91,8 @@ export const makeOwner = (
     }>;
     /** Public labs use visitor keys or same-origin funded credentials. */
     public?: boolean;
+    traces?: ReturnType<typeof makeTraceStore>;
+    build?: { readonly id: string; readonly tag: string; readonly timestamp: string };
     kitesurf?: (
       retainClose: Parameters<typeof connectKitesurf>[1],
     ) => ReturnType<typeof connectKitesurf>;
@@ -87,7 +100,7 @@ export const makeOwner = (
 ) => {
   let trace: Trace["Service"] | undefined;
   let running: Fiber.Fiber<void, LabError> | undefined;
-  let liveViewUrl: string | null = null;
+  let changingView = false;
   let image: string | null = null;
   let notice: string | null = null;
   let closeKitesurf: Effect.Effect<void, LabError> | undefined;
@@ -126,8 +139,16 @@ export const makeOwner = (
         configured: apiKey.length > 0,
       })),
       public: config.public ?? false,
+      chatId: state.chatId,
+      viewMode: state.view?.mode ?? "watch",
       report: trace?.snapshot() ?? state.report,
-      liveViewUrl,
+      liveViewUrl:
+        state.reference !== null &&
+        state.reference.expiresAt > now &&
+        state.view !== null &&
+        state.view.expiresAt > now
+          ? state.view.url
+          : null,
       image,
       notice:
         state.active !== null && running === undefined
@@ -137,7 +158,7 @@ export const makeOwner = (
   });
 
   const closeReference = Effect.fnUntraced(function* () {
-    patch({ chatId: null }, "chat-ended");
+    patch({ chatId: null, view: null }, "chat-ended");
     if (closeKitesurf !== undefined) {
       yield* closeKitesurf;
       closeKitesurf = undefined;
@@ -150,8 +171,71 @@ export const makeOwner = (
       yield* provider(sessions.close(reference.sessionId));
       patch({ reference: null }, "closed");
     }
-    liveViewUrl = null;
     yield* store.alarm(null);
+  });
+
+  const setView = Effect.fnUntraced(function* (
+    session: BrowserSession,
+    mode: typeof ViewMode.Type,
+  ) {
+    const now = yield* Clock.currentTimeMillis;
+    const expiresInMs = Math.max(60_000, Math.min(3_600_000, session.reference.expiresAt - now));
+
+    const view = yield* provider(
+      mode === "control"
+        ? session.getLiveView(Effect.void, { mode: "tab", expiresInMs })
+        : session.getReadOnlyLiveView(Effect.void, { mode: "tab", expiresInMs }),
+    );
+
+    patch(
+      {
+        view: {
+          mode,
+          url: Redacted.value(view.devtoolsFrontendUrl),
+          expiresAt: now + expiresInMs,
+        },
+      },
+      "view-changed",
+    );
+  });
+
+  const view = Effect.fnUntraced(function* (mode: typeof ViewMode.Type) {
+    const state = store.read();
+
+    if (state.active !== null || running !== undefined || changingView)
+      return yield* LabError.make({
+        code: "busy",
+        message: "Wait for the agent to finish before taking over.",
+      });
+    if (state.chatId === null || state.reference === null)
+      return yield* LabError.make({
+        code: "expired",
+        message: "This browser has closed. Start a new chat.",
+      });
+    changingView = true;
+    const reference = state.reference;
+
+    yield* Effect.gen(function* () {
+      const sessions = yield* BrowserSessions;
+      const session = yield* provider(sessions.attach(reference));
+
+      yield* setView(session, mode);
+      if (state.report !== null && config.traces !== undefined)
+        yield* config.traces.control(state.report, mode).pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              notice = error.message;
+            }),
+          ),
+        );
+    }).pipe(
+      Effect.scoped,
+      Effect.ensuring(
+        Effect.sync(() => {
+          changingView = false;
+        }),
+      ),
+    );
   });
 
   const allocate = Effect.fnUntraced(function* () {
@@ -177,7 +261,7 @@ export const makeOwner = (
   });
 
   const close = Effect.fnUntraced(function* () {
-    if (running !== undefined)
+    if (running !== undefined || changingView)
       return yield* LabError.make({
         code: "busy",
         message: "Stop the active run before closing its browser.",
@@ -202,6 +286,18 @@ export const makeOwner = (
       },
       "released",
     );
+    const closedReport = store.read().report;
+
+    if (closedReport !== null && config.traces !== undefined) {
+      config.traces.sink(closedReport.input.id).checkpoint(closedReport);
+      yield* config.traces.archive(closedReport.input.id).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            notice = error.message;
+          }),
+        ),
+      );
+    }
     trace = undefined;
     image = null;
   });
@@ -266,16 +362,26 @@ export const makeOwner = (
 
     const state = store.read();
 
-    if (state.active !== null || state.admitted.includes(input.id) || input.id === state.lastRun)
+    if (
+      changingView ||
+      state.active !== null ||
+      state.admitted.includes(input.id) ||
+      input.id === state.lastRun
+    )
       return yield* LabError.make({
         code: "busy",
         message: "This run is active or was already admitted. It will not be replayed.",
+      });
+    if (state.view?.mode === "control")
+      return yield* LabError.make({
+        code: "busy",
+        message: "Return control to the agent before sending a message.",
       });
     if (state.admitted.length >= 100)
       return yield* LabError.make({
         code: "invalid",
         message:
-          "This tab has reached its 100-run limit. Close the browser, export your results, and reload to start a new session.",
+          "This tab has reached its 100-run limit. Close the browser, export your results, and open a fresh tab to start a new session.",
       });
     if (state.report?.cleanup === "failed")
       return yield* LabError.make({
@@ -321,13 +427,14 @@ export const makeOwner = (
           ? "This model is not available in the lab."
           : "Add your OpenAI key to run the agent.",
       });
-    trace = yield* makeTrace(input, selectedModel.model);
+    trace = yield* makeTrace(input, selectedModel.model, config.traces?.sink(input.id), [modelKey]);
     const current = trace;
+
+    current.event("runtime.build", config.build ?? { id: "development" });
     let retainChat = input.scenario === "chat";
 
     image = null;
     notice = null;
-    liveViewUrl = null;
     patch(
       {
         active: input.id,
@@ -420,28 +527,21 @@ export const makeOwner = (
             "The provider returned a different browser engine. The requested engine will not be replaced.",
         });
 
-      if (input.liveView && "getReadOnlyLiveView" in session)
+      if (
+        input.liveView &&
+        "getReadOnlyLiveView" in session &&
+        (store.read().view?.expiresAt ?? 0) <= (yield* Clock.currentTimeMillis)
+      )
         yield* current
-          .measure(
-            "setup",
-            "Connect read-only Live View",
-            provider(
-              session.getReadOnlyLiveView(Effect.void, { mode: "tab", expiresInMs: 300_000 }),
-            ),
-          )
+          .measure("setup", "Connect read-only Live View", setView(session, "watch"))
           .pipe(
-            Effect.tap((view) =>
-              Effect.sync(() => {
-                liveViewUrl = Redacted.value(view.devtoolsFrontendUrl);
-              }),
-            ),
             Effect.catch(() =>
               Effect.sync(() => {
                 notice = "Live View is unavailable. Enable screenshots to see action snapshots.";
               }),
             ),
           );
-      else if (input.liveView)
+      else if (input.liveView && !("getReadOnlyLiveView" in session))
         notice =
           "Kitesurf has no persistent Live View. Enable screenshots to see action snapshots.";
       if (input.scenario === "chat" && !continuing) patch({ chatId: input.id }, "chat-started");
@@ -528,7 +628,14 @@ export const makeOwner = (
       }),
     );
 
-    const child = yield* Effect.forkChild(work);
+    const child = yield* Effect.forkChild(
+      work.pipe(
+        Effect.withSpan("browser-use.run", {
+          attributes: { "run.id": input.id, "conversation.id": input.chatId ?? input.id },
+        }),
+        Effect.provide(traceOtlp(current, input.id)),
+      ),
+    );
 
     running = child;
 
@@ -558,12 +665,21 @@ export const makeOwner = (
       });
     }
     current.update({ elapsed: current.now() });
+    current.event("run.settled", current.snapshot());
     const report = current.snapshot();
 
     patch({ active: null, report }, "settled");
+    if (config.traces !== undefined)
+      yield* config.traces.archive(input.id).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            notice = error.message;
+          }),
+        ),
+      );
 
     return report;
   });
 
-  return { snapshot, run, stop, close };
+  return { snapshot, run, stop, close, view };
 };

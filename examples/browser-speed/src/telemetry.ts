@@ -13,6 +13,8 @@ import {
   Tracer,
 } from "effect";
 import { LanguageModel, Telemetry, type Response } from "effect/ai";
+import { HttpClient, HttpClientResponse } from "effect/http";
+import { OtlpSerialization, OtlpTracer } from "effect/observability";
 
 import {
   browserCommandTimeoutMillis,
@@ -25,6 +27,7 @@ import {
   type RunInput,
   type Span,
 } from "./contract.ts";
+import type { TraceSink } from "./trace-store.ts";
 
 type Details = Partial<
   Pick<
@@ -40,7 +43,12 @@ type Details = Partial<
   >
 >;
 
-export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: string) {
+export const makeTrace = Effect.fnUntraced(function* (
+  input: RunInput,
+  model: string,
+  sink?: TraceSink,
+  secrets: ReadonlyArray<string> = [],
+) {
   const clock = yield* Clock.Clock;
   const origin = clock.monotonicTimeNanosUnsafe();
   const startedAt = DateTime.formatIso(yield* DateTime.now);
@@ -50,7 +58,64 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
   let outputLength = 0;
   let outputTruncated = false;
   let turn = 0;
+  let sequence = 0;
   const now = () => Number(clock.monotonicTimeNanosUnsafe() - origin) / 1_000_000;
+
+  // Retain website observations and generated source, never provider or viewer credentials.
+  const redact = (value: unknown): Schema.Json => {
+    const seen = new WeakSet<object>();
+
+    const json = JSON.stringify(value, (key, value: unknown) => {
+      if (
+        /^(authorization|cookie|set-cookie|password|api[-_]?key|access[-_]?token|refresh[-_]?token|encrypted_content|devtoolsFrontendUrl|webSocketDebuggerUrl)$/i.test(
+          key,
+        )
+      )
+        return "[redacted]";
+      if (typeof value === "bigint") return String(value);
+      if (typeof value === "object" && value !== null) {
+        if (seen.has(value)) return "[repeated reference]";
+        seen.add(value);
+      }
+      if (typeof value !== "string") return value;
+      let text = value;
+
+      if (text.startsWith("data:image/")) return "[image omitted]";
+
+      for (const secret of secrets)
+        if (secret.length >= 8) text = text.replaceAll(secret, "[redacted]");
+
+      return text
+        .replace(
+          /(?:https?|wss?):\/\/(?:live\.browser\.run|[^\s"<>]+[?&](?:jwt|token|api_key|signature)=)[^\s"<>]*/gi,
+          "[redacted capability]",
+        )
+        .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+/gi, "Bearer [redacted]");
+    });
+
+    return Schema.decodeSync(Schema.fromJsonString(Schema.Json))(json ?? "null");
+  };
+
+  const event = (kind: string, value: unknown) => {
+    if (sink === undefined) return;
+    const data = redact(value);
+    const json = JSON.stringify(data);
+    const bytes = new TextEncoder().encode(json).byteLength;
+
+    sink.append({
+      sequence: sequence++,
+      at: now(),
+      kind,
+      data:
+        bytes <= 1_000_000
+          ? data
+          : {
+              truncated: true,
+              originalBytes: bytes,
+              preview: json.slice(0, 200_000),
+            },
+    });
+  };
 
   let report: Report = {
     version: 3,
@@ -70,6 +135,17 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
     cleanup: "pending",
   };
 
+  const snapshot = (): Report => ({
+    ...report,
+    spans: [...spans],
+    modelOutput: [...modelOutput],
+    outputTruncated,
+    elapsed: report.status === "running" ? now() : report.elapsed,
+  });
+
+  sink?.checkpoint(snapshot());
+  event("run.input", { input, model });
+
   const begin = (phase: Phase, name: string) => {
     if (phase === "model") turn++;
     const id = spans.length;
@@ -77,6 +153,7 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
     const spanTurn = turn;
 
     spans.push({ id, phase, name, start, duration: null, outcome: "running", turn: spanTurn });
+    event("step.started", spans[id]);
 
     const end = (exit: Exit.Exit<unknown, unknown>, details: Details = {}) => {
       const failure = Exit.isFailure(exit)
@@ -98,6 +175,11 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
       };
       if (phase === "action" && Exit.isSuccess(exit) && report.firstActionAt === null)
         report = { ...report, firstActionAt: now() };
+      event("step.finished", {
+        ...spans[id],
+        ...(Exit.isFailure(exit) ? { cause: Cause.pretty(exit.cause) } : {}),
+      });
+      sink?.checkpoint(snapshot());
     };
 
     return {
@@ -113,6 +195,7 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
   return {
     now,
     begin,
+    event,
     // The demo admits one model call at a time. Native IDs are scoped to that span;
     // repeated IDs in later model turns must never overwrite earlier text.
     modelPart: (
@@ -168,27 +251,38 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
 
       if (index >= 0) spans[index] = { ...spans[index], ...details };
     },
-    snapshot: (): Report => ({
-      ...report,
-      spans: [...spans],
-      modelOutput: [...modelOutput],
-      outputTruncated,
-      elapsed: report.status === "running" ? now() : report.elapsed,
-    }),
+    snapshot,
     update: (patch: Partial<Report>) => {
       report = { ...report, ...patch };
+      sink?.checkpoint(snapshot());
     },
     measure: Effect.fnUntraced(function* <A, E, R>(
       phase: Phase,
       name: string,
       effect: Effect.Effect<A, E, R>,
       details?: (value: A) => Details,
+      input?: unknown,
     ) {
       const { end } = begin(phase, name);
 
+      event("operation.input", { name, input });
+
       return yield* effect.pipe(
         Effect.onExit((exit) =>
-          Effect.sync(() => end(exit, Exit.isSuccess(exit) ? details?.(exit.value) : undefined)),
+          Effect.sync(() => {
+            event("operation.output", {
+              name,
+              ...(Exit.isSuccess(exit)
+                ? {
+                    output:
+                      phase === "capture" || name === "Page.captureScreenshot"
+                        ? "[image omitted]"
+                        : exit.value,
+                  }
+                : { cause: Cause.pretty(exit.cause) }),
+            });
+            end(exit, Exit.isSuccess(exit) ? details?.(exit.value) : undefined);
+          }),
         ),
       );
     }),
@@ -198,6 +292,35 @@ export const makeTrace = Effect.fnUntraced(function* (input: RunInput, model: st
 export class Trace extends Context.Service<Trace, Effect.Success<ReturnType<typeof makeTrace>>>()(
   "browser-speed/Trace",
 ) {}
+
+/** Use Effect's actual OTLP serializer; the transport writes locally instead of making HTTP calls. */
+export const traceOtlp = (trace: Trace["Service"], runId: string) =>
+  OtlpTracer.layer({
+    url: "https://trace.invalid/v1/traces",
+    resource: { serviceName: "browser-use", attributes: { "run.id": runId } },
+    maxBatchSize: 16,
+    exportInterval: "1 second",
+  }).pipe(
+    Layer.provide(OtlpSerialization.layerJson),
+    Layer.provide(
+      Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.make((request) =>
+          Effect.sync(() => {
+            if (request.body._tag === "Uint8Array")
+              trace.event(
+                "otlp",
+                Schema.decodeSync(Schema.fromJsonString(Schema.Json))(
+                  new TextDecoder().decode(request.body.body),
+                ),
+              );
+
+            return HttpClientResponse.fromWeb(request, new globalThis.Response("{}"));
+          }).pipe(Effect.withTracerEnabled(false)),
+        ),
+      ),
+    ),
+  );
 
 /** Observe native parts for every provider; the final finish-tool message remains report.message. */
 export const traceModelStream = <Services, E, R>(
@@ -212,19 +335,24 @@ export const traceModelStream = <Services, E, R>(
       // The no-error/no-requirement tap preserves every native overload's tool,
       // error and service types; parameters and response parts pass through unchanged.
       const streamText = ((options: Parameters<typeof model.streamText>[0]) =>
-        model.streamText(options).pipe(
-          Stream.tap((part) =>
-            Effect.sync(() => {
-              if (
-                part.type === "text-delta" ||
-                part.type === "reasoning-delta" ||
-                part.type === "text-end" ||
-                part.type === "reasoning-end"
-              )
-                trace.modelPart(part);
-            }),
-          ),
-        )) as typeof model.streamText;
+        Stream.suspend(() => {
+          trace.event("model.request", { prompt: options.prompt });
+
+          return model.streamText(options).pipe(
+            Stream.tap((part) =>
+              Effect.sync(() => {
+                trace.event("model.part", part);
+                if (
+                  part.type === "text-delta" ||
+                  part.type === "reasoning-delta" ||
+                  part.type === "text-end" ||
+                  part.type === "reasoning-end"
+                )
+                  trace.modelPart(part);
+              }),
+            ),
+          );
+        })) as typeof model.streamText;
 
       return LanguageModel.LanguageModel.of({
         ...model,
@@ -292,7 +420,8 @@ export const traceOpenAiClient = Effect.gen(function* () {
   return OpenAiClient.OpenAiClient.of({
     ...client,
     createResponse: (input) =>
-      client.createResponse(input).pipe(
+      Effect.sync(() => trace.event("provider.request", input)).pipe(
+        Effect.andThen(client.createResponse(input)),
         Effect.tap(([response]) =>
           Effect.sync(() => {
             if (response.service_tier !== undefined)
@@ -303,7 +432,17 @@ export const traceOpenAiClient = Effect.gen(function* () {
         ),
       ),
     createResponseStream: (input) =>
-      client.createResponseStream(input).pipe(
+      Effect.sync(() => trace.event("provider.request", input)).pipe(
+        Effect.andThen(client.createResponseStream(input)),
+        Effect.tap(([response]) =>
+          Effect.sync(() =>
+            trace.event("provider.response", {
+              status: response.status,
+              requestId: response.headers["x-request-id"],
+              processingMillis: response.headers["openai-processing-ms"],
+            }),
+          ),
+        ),
         Effect.map(
           ([response, events]) =>
             [

@@ -172,6 +172,32 @@ export const Report = Schema.Struct({
 
 export type Report = typeof Report.Type;
 
+/** Debug evidence is separate from the bounded live UI and never contains viewer capabilities. */
+export const TraceEvent = Schema.Struct({
+  sequence: Schema.Natural,
+  at: Schema.Finite,
+  kind: Schema.String,
+  data: Schema.Json,
+});
+
+export type TraceEvent = typeof TraceEvent.Type;
+
+export const TraceArchive = Schema.Struct({
+  version: Schema.Literal(1),
+  runId: Schema.String,
+  conversationId: Schema.String,
+  report: Report,
+  events: Schema.Array(TraceEvent),
+  /** OTLP/JSON ExportTraceServiceRequest bodies, directly importable into a collector. */
+  otlp: Schema.Array(Schema.Json),
+  droppedEvents: Schema.Natural,
+  storage: Schema.Literals(["durable-object", "r2"]),
+});
+
+export type TraceArchive = typeof TraceArchive.Type;
+
+export const ViewMode = Schema.Literals(["watch", "control"]);
+
 export const ModelApi = Schema.Literals(["responses", "chat-completions"]);
 
 // Viewing capabilities and images are transient: never part of exported benchmark reports.
@@ -186,6 +212,8 @@ export const Snapshot = Schema.Struct({
     Schema.Struct({ id: ModelId, label: Schema.String, configured: Schema.Boolean }),
   ),
   public: Schema.Boolean,
+  chatId: Schema.NullOr(Schema.String),
+  viewMode: ViewMode,
   report: Schema.NullOr(Report),
   liveViewUrl: Schema.NullOr(Schema.String),
   image: Schema.NullOr(Schema.String),
@@ -240,5 +268,22 @@ export const LabApi = HttpApi.make("BrowserSpeedLab").add(
     }),
     HttpApiEndpoint.post("stop", "/api/stop", { headers, success: Schema.Void, error: LabError }),
     HttpApiEndpoint.post("close", "/api/close", { headers, success: Schema.Void, error: LabError }),
+    HttpApiEndpoint.post("view", "/api/view", {
+      headers,
+      payload: Schema.Struct({ mode: ViewMode }),
+      success: Schema.Void,
+      error: LabError,
+    }),
+    HttpApiEndpoint.get("reports", "/api/reports", {
+      headers,
+      success: Schema.Array(Report),
+      error: LabError,
+    }),
+    HttpApiEndpoint.get("trace", "/api/traces/:id", {
+      headers,
+      params: { id: RunInput.fields.id },
+      success: TraceArchive,
+      error: LabError,
+    }),
   ),
 );

@@ -61,12 +61,14 @@ export const makeBrowser = Effect.fnUntraced(function* (
       : Effect.void;
 
   const client: BrowserUse.BrowserCdp["Service"] = {
-    send: (request) => trace.measure("action", request.method, controller.client.send(request)),
+    send: (request) =>
+      trace.measure("action", request.method, controller.client.send(request), undefined, request),
     tabs: trace.measure("action", "List tabs", controller.client.tabs),
-    frames: (request) => trace.measure("action", "List frames", controller.client.frames(request)),
+    frames: (request) =>
+      trace.measure("action", "List frames", controller.client.frames(request), undefined, request),
     newTab: trace.measure("action", "New tab", controller.client.newTab),
     closeTab: (request) =>
-      trace.measure("action", "Close tab", controller.client.closeTab(request)),
+      trace.measure("action", "Close tab", controller.client.closeTab(request), undefined, request),
   };
 
   return {
