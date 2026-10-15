@@ -314,6 +314,8 @@ it("retries an accepted abort after transient recovery failure while its binding
       });
 
       yield* run(pass);
+      yield* TestClock.adjust(10);
+      yield* run(pass);
       expect(yield* Effect.promise(() => scheduledAlarm(owner))).toBeNull();
       yield* run(
         ThreadMaintenance.use((maintenance) =>
@@ -347,6 +349,8 @@ it("retries an accepted abort after transient recovery failure while its binding
         yield* run(DurableAgentRuntime.use((runtime) => runtime.submissionStatus(receipt))),
       ).toMatchObject({ _tag: "settled", settlement: { outcome: "aborted" } });
       expect(yield* retainedFault(owner, owner)).toEqual(Option.none());
+      yield* TestClock.adjust(10);
+      yield* run(pass);
       expect(yield* Effect.promise(() => scheduledAlarm(owner))).toBeNull();
     }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
   ));
@@ -728,6 +732,8 @@ describe("recovery faults independent of execution history", () => {
 
         // The expired retained delivery is a stable external wait, not another native retry loop.
         expect(delivery).toMatchObject({ status: "parked", parkReason: "deadline" });
+        yield* TestClock.adjust(10);
+        yield* Effect.promise(() => runDurableObjectAlarm(stubFor(owner)));
         expect(yield* Effect.promise(() => scheduledAlarm(owner))).toBeNull();
         expect(
           yield* run(DurableAgentRuntime.use((runtime) => runtime.submissionStatus(receipt))),

@@ -14,6 +14,9 @@ const PositiveMillis = Schema.Int.check(Schema.isGreaterThan(0));
 export const AuxiliaryDispatchMillis = PositiveMillis.check(Schema.isLessThanOrEqualTo(300_000));
 const NonNegativeMillis = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
+/** Recovery coverage retained after activity; independent of work-start and retry deadlines. */
+export const DEFAULT_RECOVERY_WINDOW_MILLIS = 60_000;
+
 /** The supplied Cloudflare durable runtime configuration failed validation (DEPLOY-003). */
 export class CloudflarePlatformConfigError extends Schema.TaggedError<CloudflarePlatformConfigError>()(
   "CloudflarePlatformConfigError",
@@ -87,10 +90,12 @@ export class CloudflareDurableRuntimeConfigValue extends Schema.Class<Cloudflare
   deploymentId: DeploymentId,
   /** Head of the minted producer identity `{producerPrefix}:{threadId}`. */
   producerPrefix: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
+  /** Recovery-only window. Zero restores immediate idle cancellation and the short guards. */
+  recoveryWindowMillis: NonNegativeMillis,
   /**
    * Base delay of exponential backoff when a pass fails or makes no progress.
-   * Half this delay (rounded up, at least 1ms) also pre-arms mutations, including
-   * healthy admissions. `alarmBackoffCap` does not cap that pre-arm delay.
+   * Half this delay (rounded up, at least 1ms) starts alarm-driven work and recovers
+   * startup work. It also pre-arms mutations when the recovery window is disabled.
    */
   alarmBackoffBase: PositiveMillis,
   /** Ceiling of exponential backoff after failed or no-progress maintenance passes. */
@@ -121,6 +126,7 @@ export class CloudflareDurableRuntimeConfig extends Context.Service<
 
 /** Documented production defaults applied by `ThreadObject.layer`. */
 export const CLOUDFLARE_RUNTIME_DEFAULTS = {
+  recoveryWindowMillis: DEFAULT_RECOVERY_WINDOW_MILLIS,
   alarmBackoffBase: 100,
   alarmBackoffCap: 5_000,
   settlementPollInterval: 500,

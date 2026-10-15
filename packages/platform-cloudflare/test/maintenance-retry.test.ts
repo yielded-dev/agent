@@ -271,6 +271,8 @@ describe("maintenance retry deadlines", () => {
                   yield* Effect.promise(() => adjust(deadline! - clock.currentTimeMillisUnsafe()));
                   yield* maintenance.pass;
                   expect(calls).toBe(parkedCalls + 9);
+                  yield* Effect.promise(() => adjust(10));
+                  yield* maintenance.pass;
                   expect(yield* Effect.promise(() => context.ctx.storage.getAlarm())).toBeNull();
                   expect(reports).toHaveLength(2);
                 }).pipe(
@@ -1088,6 +1090,8 @@ describe("maintenance retry deadlines", () => {
           hostFailure = false;
           yield* TestClock.adjust("1 second");
           expect(Exit.isSuccess(yield* run(pass))).toBe(true);
+          yield* TestClock.adjust(10);
+          expect(Exit.isSuccess(yield* run(pass))).toBe(true);
           expect(yield* Effect.promise(() => scheduledAlarm(thread))).toBeNull();
           expect(yield* snapshot).toEqual(parked);
           // Regression: https://github.com/yielded-dev/agent/commit/35b5e858
@@ -1139,6 +1143,8 @@ describe("maintenance retry deadlines", () => {
           expect(settlement.outcome).toBe("completed");
           expect((yield* snapshot).submission.agentDigests).toEqual(parked.submission.agentDigests);
           expect((yield* snapshot).submission.receiptId).toBe(parked.submission.receiptId);
+          yield* TestClock.adjust(10);
+          expect(Exit.isSuccess(yield* run(pass))).toBe(true);
           expect(yield* Effect.promise(() => scheduledAlarm(thread))).toBeNull();
         }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
         { signal },
