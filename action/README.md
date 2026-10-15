@@ -134,7 +134,7 @@ automatic review allowance. Other manifest edits and unresolved review blockers
 still require review. Keep generated changelogs and lockfiles in `ignore`;
 `@effect-agent review full` still requests a model review.
 Detection is limited to 100 changed paths and 16 MB of manifests; larger releases
-follow the normal review policy.
+and unreadable metadata follow the normal review policy.
 
 Symlink changes are reviewed as committed target text with Git mode metadata,
 including additions, deletions, retargeting, renames, and conversions to or from

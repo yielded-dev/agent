@@ -48,10 +48,10 @@ import {
   isBinaryAssetPath,
   makeExactPatch,
   makeGitHubClient,
+  type PullRequestView,
   type RepositorySnapshot,
   type ReviewCheckCompletion,
   StaleReviewHead,
-  type TreeComparisonView,
 } from "./github.ts";
 import {
   type ReviewCostEstimate,
@@ -428,7 +428,11 @@ const ReleaseManifest = Schema.fromJsonString(
  * keep their usual meaning. Unknown paths, modes or formats need review.
  */
 const isGeneratedChangesetRelease = Effect.fnUntraced(
-  function* ({ base, head, changedPaths }: TreeComparisonView, ignore: ReadonlyArray<string>) {
+  function* (pull: PullRequestView, ignore: ReadonlyArray<string>) {
+    const github = yield* GitHubClient;
+    const mergeBase = yield* github.getMergeBase(pull.baseRevision, pull.headRevision);
+    const { base, head, changedPaths } = yield* github.compareTrees(mergeBase, pull.headRevision);
+
     if (
       base.entry(".changeset/config.json")?.mode !== "100644" ||
       changedPaths.length > MAX_GENERATED_CLASSIFICATIONS
@@ -498,6 +502,11 @@ const isGeneratedChangesetRelease = Effect.fnUntraced(
     return versionChanged && changesetConsumed;
   },
   Effect.catchTag("BinaryBlob", () => Effect.succeed(false)),
+  Effect.catchTag("GitHubApiFailure", (error) =>
+    Effect.logWarning("Release classification unavailable; applying normal review policy", {
+      operation: error.operation,
+    }).pipe(Effect.as(false)),
+  ),
 );
 
 // Spend limited review capacity on implementation and configuration before prose
@@ -1174,12 +1183,8 @@ const prepareReview = Effect.gen(function* () {
     mode === "auto" &&
     pull.changesetReleaseCandidate &&
     selectUnresolvedChangeRequests({ reviewAuthor, history }).length === 0 &&
-    (yield* isGeneratedChangesetRelease(
-      yield* github.compareTrees(
-        yield* github.getMergeBase(pull.baseRevision, pull.headRevision),
-        pull.headRevision,
-      ),
-      ignore,
+    (yield* isGeneratedChangesetRelease(pull, ignore).pipe(
+      Effect.provideService(GitHubClient, github),
     ));
 
   const selection: ReviewSelection = generatedRelease
