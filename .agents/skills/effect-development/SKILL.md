@@ -1,6 +1,6 @@
 ---
 name: effect-development
-description: Set up Effect, implement Atom React state, HTTP APIs or CLIs, and review Effect architecture.
+description: Set up Effect, implement Atom React state, HTTP APIs or CLIs, and review architecture and error handling.
 ---
 
 # Effect development
@@ -14,6 +14,7 @@ Read only the guide for the requested boundary:
 - React queries, mutations, shared state, workflows, or SSR: [Effect Atom](references/atom/index.md).
 - HTTP contracts, handlers, middleware, or server runtimes: [HTTP APIs](references/api/index.md).
 - Scripts, CI automation, or command-line applications: [CLIs](references/cli/index.md).
+- Error propagation, recovery, reporting, or cleanup failures: [error handling](references/errors.md).
 - A requested architecture review or service-boundary refactor: [architecture](references/architecture/index.md).
 - Adding Effect dependencies or its agent guidance: [setup](references/setup.md).
 
