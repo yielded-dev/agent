@@ -43,6 +43,9 @@ const failureNames = new Set([
   "SyntaxError",
   "TimeoutError",
   "SchemaError",
+  "ProtocolError",
+  "TargetCloseError",
+  "ConnectionClosedError",
 ]);
 
 export const browserFailure = (operation: string, cause?: unknown): BrowserRunFailure =>
