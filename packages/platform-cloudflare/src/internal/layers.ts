@@ -1074,16 +1074,20 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
         Layer.provide(threadPortTransportLayer),
       );
 
-      const runtimeStack = application.pipe(
-        Layer.provideMerge(runStorageLayer()),
-        Layer.provide(
-          cloudflarePreparedInputAdmissionLayer.pipe(Layer.provide(CloudflareThreadClient.layer)),
+      // Application and maintenance share this composition, including its intermediate contexts.
+      // The Object's MemoMap owns the build; services and finalizers remain incarnation-local.
+      const runtimeStack = Layer.suspend(() =>
+        application.pipe(
+          Layer.provideMerge(runStorageLayer()),
+          Layer.provide(
+            cloudflarePreparedInputAdmissionLayer.pipe(Layer.provide(CloudflareThreadClient.layer)),
+          ),
+          Layer.provideMerge(routedMessages),
+          Layer.provideMerge(routedPorts),
+          Layer.provideMerge(wakes),
+          Layer.provideMerge(base),
+          Layer.provideMerge(portsEndpointLayer),
         ),
-        Layer.provideMerge(routedMessages),
-        Layer.provideMerge(routedPorts),
-        Layer.provideMerge(wakes),
-        Layer.provideMerge(base),
-        Layer.provideMerge(portsEndpointLayer),
       );
 
       const maintenanceRuntime =

@@ -1275,9 +1275,8 @@ export const make = <
     Layer.provideMerge(effectCfPlatformLayer(options.namespaceBinding, options.rpcTracing)),
   );
 
-  // The storage/config Layer must acquire inside Cloudflare's constructor gate. effect-cf owns
-  // the ManagedRuntime, while this effectContext ensures its first Layer build enters the gate
-  // before migration, compatibility checks, or alarm inspection touch Object storage.
+  // effect-cf builds this entire Layer inside its constructor gate. Keep alarm inspection in
+  // that build, after application acquisition, using the same per-Object MemoMap and Scope.
   const runtime: Layer.Layer<
     RuntimeServices | ApplicationServices,
     ThreadObjectInitializationError | ApplicationError,
@@ -1285,36 +1284,16 @@ export const make = <
     | WorkerEnvironment
     | ThreadMaintenanceAlarm
     | AlarmServices
-  > = Layer.effectContext(
-    Effect.gen(function* () {
-      const state = yield* EffectCfDurableObjectState.DurableObjectState;
-      const scope = yield* Effect.scope;
+  > = Layer.flatMap(application, (applicationServices) => {
+    const scheduling = Context.get(applicationServices, DurableObjectAlarm.ScheduleConfiguration);
 
-      return yield* state.blockConcurrencyWhile(
-        Effect.gen(function* () {
-          const applicationServices = yield* Layer.buildWithScope(application, scope);
+    const services = Context.add(applicationServices, DurableObjectAlarm.ScheduleConfiguration, {
+      ...scheduling,
+      dispatchAfterEvent: scheduling.dispatchAfterEvent ?? true,
+    });
 
-          const scheduling = Context.get(
-            applicationServices,
-            DurableObjectAlarm.ScheduleConfiguration,
-          );
-
-          const services = Context.add(
-            applicationServices,
-            DurableObjectAlarm.ScheduleConfiguration,
-            {
-              ...scheduling,
-              dispatchAfterEvent: scheduling.dispatchAfterEvent ?? true,
-            },
-          );
-
-          yield* gateEndpoint.pipe(Effect.provide(services));
-
-          return services;
-        }),
-      );
-    }),
-  );
+    return Layer.effectContext(gateEndpoint.pipe(Effect.provide(services), Effect.as(services)));
+  });
 
   const rpc = {
     ...threadRpc,
