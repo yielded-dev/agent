@@ -660,41 +660,40 @@ export const App = () => {
         </nav>
       </header>
 
-      <section className="hero">
-        <p className="kicker mono">Code Mode · live in a Cloudflare browser</p>
-        <h1>Watch an agent drive a real browser.</h1>
-        <p className="lede">
-          Give it a goal, ask a question, then follow up. Watch the browser as it works, or try a
-          Wikipedia race and a coffee checkout demo.
-        </p>
-      </section>
+      <h1 className="sr-only">Browser use</h1>
 
       <main className="stage">
-        <aside className="controls" aria-label="Run setup">
-          <fieldset className="group">
-            <legend>Try it</legend>
-            <div className="mode-list">
-              {modes.map((mode) => (
-                <label key={mode.id} className={`mode ${scenario === mode.id ? "selected" : ""}`}>
-                  <input
-                    type="radio"
-                    name="mode"
-                    value={mode.id}
-                    checked={scenario === mode.id}
-                    disabled={busy}
-                    onChange={() => {
-                      setScenario(mode.id);
-                      if (mode.id === "chat") {
-                        setEngine("chromium");
-                        if (model === "all") setModel("gpt-6-luna");
-                      }
-                    }}
-                  />
-                  <span className="mode-title">{mode.title}</span>
-                  <span className="mode-detail">{mode.detail}</span>
-                </label>
-              ))}
-            </div>
+        <section className="controls" aria-label="Run setup">
+          <div className="setup-row">
+            <fieldset className="group">
+              <legend className="sr-only">Demo</legend>
+              <div className="mode-list">
+                {modes.map((mode) => (
+                  <label
+                    key={mode.id}
+                    title={mode.detail}
+                    className={`mode ${scenario === mode.id ? "selected" : ""}`}
+                  >
+                    <input
+                      className="sr-only"
+                      type="radio"
+                      name="mode"
+                      value={mode.id}
+                      checked={scenario === mode.id}
+                      disabled={busy}
+                      onChange={() => {
+                        setScenario(mode.id);
+                        if (mode.id === "chat") {
+                          setEngine("chromium");
+                          if (model === "all") setModel("gpt-6-luna");
+                        }
+                      }}
+                    />
+                    <span className="mode-title">{mode.title}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             {isWiki ? (
               <div className="race-inputs">
                 <label>
@@ -722,7 +721,7 @@ export const App = () => {
             ) : isChat ? (
               <div className="browse-inputs">
                 <label>
-                  <span>
+                  <span className="sr-only">
                     Starting URL <small>optional</small>
                   </span>
                   <input
@@ -730,79 +729,80 @@ export const App = () => {
                     value={url}
                     disabled={busy || chatTurns.length > 0}
                     maxLength={2000}
-                    placeholder="Let the agent choose, or paste a URL"
+                    placeholder="Starting URL (optional)"
                     onChange={(event) => setUrl(event.target.value)}
                   />
                 </label>
               </div>
-            ) : (
-              <p className="prompt-preview">{effectivePrompt}</p>
-            )}
-          </fieldset>
-
-          <p className="fine">
-            {isWiki
-              ? "The host verifies arrival and records page navigations. Link-only racing rules are not enforced."
-              : isStore
-                ? "The agent is instructed to stop before payment. There is no hard payment guard; real purchases are possible."
-                : "The agent can take real actions on websites. Results are agent-reported. Chat keeps the same Chromium browser between messages."}
-          </p>
-
-          {missingNeeds.length > 0 && (
-            <div className="needs">
-              <span>Needs</span>
-              {missingNeeds.map((need) => (
-                <span key={need.label} className="missing">
-                  <X size={13} /> {need.label}
-                </span>
-              ))}
-              {needsAccount && !funded ? (
-                account === null ? (
-                  <a className="link-button" href={signInUrl}>
-                    Sign in
-                  </a>
-                ) : (
-                  <small className="needs-note">this account isn’t allowlisted</small>
-                )
-              ) : (
-                <button className="link-button" onClick={openKeys}>
-                  Add keys
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="run-row">
-            {busy ? (
-              <button
-                className="primary stop"
-                onClick={() => act("stop")}
-                disabled={control.waiting}
-              >
-                <Square size={13} fill="currentColor" /> Stop run
-                {progress.total > 1 ? ` · ${progress.current}/${progress.total}` : ""}
-              </button>
-            ) : !isChat ? (
-              <button className="primary" disabled={!canRun} onClick={startRun}>
-                <Play size={15} fill="currentColor" /> {isWiki ? "Start race" : "Start demo"}
-              </button>
             ) : null}
-            <button
-              className="ghost"
-              disabled={
-                watching ||
-                (remote?.busy && !remote.canClose) ||
-                (!remote?.canClose && !chatTurns.length) ||
-                control.waiting
-              }
-              onClick={() => act("close")}
-            >
-              {isChat ? "New chat" : "Close browser"}
-            </button>
+
+            <div className="run-row">
+              {busy ? (
+                <button
+                  className="primary stop"
+                  onClick={() => act("stop")}
+                  disabled={control.waiting}
+                >
+                  <Square size={13} fill="currentColor" /> Stop run
+                  {progress.total > 1 ? ` · ${progress.current}/${progress.total}` : ""}
+                </button>
+              ) : !isChat ? (
+                <button className="primary" disabled={!canRun} onClick={startRun}>
+                  <Play size={15} fill="currentColor" /> {isWiki ? "Start race" : "Start demo"}
+                </button>
+              ) : null}
+              <button
+                className="ghost"
+                disabled={
+                  watching ||
+                  (remote?.busy && !remote.canClose) ||
+                  (!remote?.canClose && !chatTurns.length) ||
+                  control.waiting
+                }
+                onClick={() => act("close")}
+              >
+                {isChat ? "New chat" : "Close browser"}
+              </button>
+            </div>
           </div>
-          <p className="fine budget-note">
-            120 model turns · 300 tool calls · 10 minutes per {isChat ? "message" : "run"}
-          </p>
+          <div className="setup-meta">
+            <p className="fine">
+              {isWiki
+                ? "The host verifies arrival and records page navigations. Link-only racing rules are not enforced."
+                : isStore
+                  ? "The agent is instructed to stop before payment. There is no hard payment guard; real purchases are possible."
+                  : "Real browser actions. Agent-reported results. Follow up in the same browser."}
+            </p>
+
+            {missingNeeds.length > 0 && (
+              <div className="needs">
+                <span>Needs</span>
+                {missingNeeds.map((need) => (
+                  <span key={need.label} className="missing">
+                    <X size={13} /> {need.label}
+                  </span>
+                ))}
+                {needsAccount && !funded ? (
+                  account === null ? (
+                    <a className="link-button" href={signInUrl}>
+                      Sign in
+                    </a>
+                  ) : (
+                    <small className="needs-note">this account isn’t allowlisted</small>
+                  )
+                ) : (
+                  <button className="link-button" onClick={openKeys}>
+                    Add keys
+                  </button>
+                )}
+              </div>
+            )}
+
+            <p className="fine budget-note">
+              120 model turns · 300 tool calls · 10 minutes per {isChat ? "message" : "run"}
+            </p>
+          </div>
+          {isStore && <p className="prompt-preview">{effectivePrompt}</p>}
 
           <details className="settings">
             <summary>
@@ -944,13 +944,59 @@ export const App = () => {
               </p>
             )}
           </details>
-        </aside>
+        </section>
 
-        <section className="viewer" aria-label="Browser">
+        <div className="hud">
+          <div className="clock">
+            <span
+              className={`clock-value mono ${showingActive && !preparing ? "ticking" : flow === null ? "idle" : ""}`}
+            >
+              {flow === null ? "0.00" : seconds(flow)}
+              <small>s</small>
+            </span>
+            <span className="clock-label">
+              {showingActive
+                ? preparing
+                  ? "Preparing the browser · clock starts when the page is ready"
+                  : "Page ready → now"
+                : report?.verifiedAt !== null && report?.verifiedAt !== undefined
+                  ? "Page ready → verified"
+                  : report
+                    ? "Page ready → stopped"
+                    : "Page ready → verified"}
+            </span>
+          </div>
+          <div className="hud-stats">
+            <span>
+              <b className="mono">{count("model")}</b> model calls
+            </span>
+            <span>
+              <b className="mono">{count("action")}</b> actions
+            </span>
+            <span className={`status ${showingActive ? "running" : (report?.status ?? "idle")}`}>
+              {report?.status === "passed" && !showingActive ? (
+                <Check size={13} />
+              ) : (
+                <Circle size={9} fill="currentColor" />
+              )}
+              {showingActive
+                ? preparing
+                  ? "preparing"
+                  : "running"
+                : report
+                  ? report.race && report.status === "passed"
+                    ? "arrival verified"
+                    : runOutcome(report)
+                  : "ready"}
+            </span>
+          </div>
+        </div>
+
+        <div className={`workspace ${isChat ? "with-chat" : ""}`}>
           {isChat && (
             <section className="chat-panel card" aria-label="Chat">
               <div className="chat-heading">
-                <MessageSquare size={17} /> <h2>Chat with the agent</h2>
+                <MessageSquare size={17} /> <h2>Chat</h2>
                 <span className="mono">{chatId ? "Browser connected" : "Open-ended browsing"}</span>
               </div>
               <div
@@ -1044,160 +1090,113 @@ export const App = () => {
               </form>
             </section>
           )}
-          <div className="hud">
-            <div className="clock">
-              <span
-                className={`clock-value mono ${showingActive && !preparing ? "ticking" : flow === null ? "idle" : ""}`}
-              >
-                {flow === null ? "0.00" : seconds(flow)}
-                <small>s</small>
-              </span>
-              <span className="clock-label">
-                {showingActive
-                  ? preparing
-                    ? "Preparing the browser · clock starts when the page is ready"
-                    : "Page ready → now"
-                  : report?.verifiedAt !== null && report?.verifiedAt !== undefined
-                    ? "Page ready → verified"
-                    : report
-                      ? "Page ready → stopped"
-                      : "Page ready → verified"}
-              </span>
-            </div>
-            <div className="hud-stats">
-              <span>
-                <b className="mono">{count("model")}</b> model calls
-              </span>
-              <span>
-                <b className="mono">{count("action")}</b> actions
-              </span>
-              <span className={`status ${showingActive ? "running" : (report?.status ?? "idle")}`}>
-                {report?.status === "passed" && !showingActive ? (
-                  <Check size={13} />
-                ) : (
-                  <Circle size={9} fill="currentColor" />
-                )}
-                {showingActive
-                  ? preparing
-                    ? "preparing"
-                    : "running"
-                  : report
-                    ? report.race && report.status === "passed"
-                      ? "arrival verified"
-                      : runOutcome(report)
-                    : "ready"}
-              </span>
-            </div>
-          </div>
-
-          <div className="browser">
-            <div className="chrome">
-              <span className="lights" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-              </span>
-              <span className="address mono">
-                {displayedScenario === "wikipedia" || report?.race
-                  ? (lastHop?.url.replace("https://", "") ?? "en.wikipedia.org")
-                  : displayedScenario === "chat"
-                    ? hostOf(report?.finalUrl ?? report?.input.url ?? (url || "about:blank"))
-                    : "www.hedge.coffee"}
-              </span>
-              <span className={`view-label mono ${live ? "live" : ""}`}>
-                {live
-                  ? "LIVE"
-                  : captured
-                    ? "SCREENSHOT"
-                    : showingActive
-                      ? "CONNECTING"
-                      : selected
-                        ? "SAVED"
-                        : "IDLE"}
-              </span>
-            </div>
-            <div className="screen">
-              {live ? (
-                <iframe
-                  key={live}
-                  title="Read-only view of the agent’s browser"
-                  src={live}
-                  referrerPolicy="no-referrer"
-                />
-              ) : captured ? (
-                <img src={captured} alt="Latest screenshot of the agent’s browser" />
-              ) : (
-                <div className="screen-empty">
-                  <p>
-                    {showingActive
-                      ? "Connecting to the Cloudflare browser…"
-                      : selected
-                        ? "Saved run selected. Inspect its route, report and timeline below. Screenshots and live view are transient."
-                        : isWiki
-                          ? `A Cloudflare browser opens ${wikiStart || "the start article"} on Wikipedia and tries to reach ${wikiTarget || "the destination"}. Arrival is verified; link-only racing rules are not enforced.`
-                          : isStore
-                            ? "The agent opens the store, finds the item and prepares checkout. It is instructed to stop before payment, but there is no hard payment guard. Results are agent-reported."
-                            : "Send a message below. The agent can choose a website, explore, and answer your questions. Follow up in the same browser."}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-          {live && (
-            <a className="fine-link" href={live} target="_blank" rel="noreferrer">
-              Open live view in a new tab <ArrowUpRight size={13} />
-            </a>
-          )}
-
-          {report?.race && (
-            <div className="route-summary">
-              <p className="fine">
-                {report.race.start} → {report.race.target} ·{" "}
-                {Math.max(0, report.race.path.length - 1)} navigations
-                {report.status === "passed" ? " · arrival verified" : " · arrival not verified"}.
-                Link-only rules are not enforced.
-              </p>
-              {report.race.ruleViolation && <p className="bad">{report.race.ruleViolation}</p>}
-              <ol className="route" aria-label="Route">
-                {report.race.path.map((hop, index) => (
-                  <li
-                    key={`${index}-${hop.url}`}
-                    title={hop.via ? `Via ${hop.via.label}` : undefined}
-                  >
-                    <a href={hop.url} target="_blank" rel="noreferrer">
-                      {hop.title}
-                    </a>
-                    <small className="mono">
-                      {index === 0 ? "start" : `${seconds(fromReady(report, hop.at))} s`}
-                    </small>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
-
-          {(!isChat || remote?.notice || chatControlFailure) &&
-            (failure || remote?.notice || busy || report) && (
-              <div
-                className={`message ${failure || report?.status === "failed" ? "bad" : ""}`}
-                role="status"
-              >
-                {(isChat ? (chatControlFailure ?? remote?.notice) : failure) ??
-                  (selected ? report?.message : remote?.notice) ??
-                  (busy
-                    ? preparing
-                      ? "Preparing the starting page."
-                      : (report?.message ?? "Running.")
-                    : (report?.message ?? ""))}
+          <section className="viewer" aria-label="Browser">
+            <div className="browser">
+              <div className="chrome">
+                <span className="lights" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <span className="address mono">
+                  {displayedScenario === "wikipedia" || report?.race
+                    ? (lastHop?.url.replace("https://", "") ?? "en.wikipedia.org")
+                    : displayedScenario === "chat"
+                      ? hostOf(report?.finalUrl ?? report?.input.url ?? (url || "about:blank"))
+                      : "www.hedge.coffee"}
+                </span>
+                <span className={`view-label mono ${live ? "live" : ""}`}>
+                  {live
+                    ? "LIVE"
+                    : captured
+                      ? "SCREENSHOT"
+                      : showingActive
+                        ? "CONNECTING"
+                        : selected
+                          ? "SAVED"
+                          : "IDLE"}
+                </span>
               </div>
-            )}
-          {connected && !remote.browserConfigured && (
-            <div className="message bad" role="alert">
-              This lab has no Cloudflare browser configured.
+              <div className="screen">
+                {live ? (
+                  <iframe
+                    key={live}
+                    title="Read-only view of the agent’s browser"
+                    src={live}
+                    referrerPolicy="no-referrer"
+                  />
+                ) : captured ? (
+                  <img src={captured} alt="Latest screenshot of the agent’s browser" />
+                ) : (
+                  <div className="screen-empty">
+                    <p>
+                      {showingActive
+                        ? "Connecting to the Cloudflare browser…"
+                        : selected
+                          ? "Saved run selected. Inspect its route, report and timeline below. Screenshots and live view are transient."
+                          : isWiki
+                            ? `A Cloudflare browser opens ${wikiStart || "the start article"} on Wikipedia and tries to reach ${wikiTarget || "the destination"}. Arrival is verified; link-only racing rules are not enforced.`
+                            : isStore
+                              ? "The agent opens the store, finds the item and prepares checkout. It is instructed to stop before payment, but there is no hard payment guard. Results are agent-reported."
+                              : "Send a message in chat to open a website and start exploring."}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </section>
+            {live && (
+              <a className="fine-link" href={live} target="_blank" rel="noreferrer">
+                Open live view in a new tab <ArrowUpRight size={13} />
+              </a>
+            )}
+          </section>
+        </div>
       </main>
+
+      {report?.race && (
+        <div className="route-summary">
+          <p className="fine">
+            {report.race.start} → {report.race.target} · {Math.max(0, report.race.path.length - 1)}{" "}
+            navigations
+            {report.status === "passed" ? " · arrival verified" : " · arrival not verified"}.
+            Link-only rules are not enforced.
+          </p>
+          {report.race.ruleViolation && <p className="bad">{report.race.ruleViolation}</p>}
+          <ol className="route" aria-label="Route">
+            {report.race.path.map((hop, index) => (
+              <li key={`${index}-${hop.url}`} title={hop.via ? `Via ${hop.via.label}` : undefined}>
+                <a href={hop.url} target="_blank" rel="noreferrer">
+                  {hop.title}
+                </a>
+                <small className="mono">
+                  {index === 0 ? "start" : `${seconds(fromReady(report, hop.at))} s`}
+                </small>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {(!isChat || remote?.notice || chatControlFailure) &&
+        (failure || remote?.notice || busy || report) && (
+          <div
+            className={`message ${failure || report?.status === "failed" ? "bad" : ""}`}
+            role="status"
+          >
+            {(isChat ? (chatControlFailure ?? remote?.notice) : failure) ??
+              (selected ? report?.message : remote?.notice) ??
+              (busy
+                ? preparing
+                  ? "Preparing the starting page."
+                  : (report?.message ?? "Running.")
+                : (report?.message ?? ""))}
+          </div>
+        )}
+      {connected && !remote.browserConfigured && (
+        <div className="message bad" role="alert">
+          This lab has no Cloudflare browser configured.
+        </div>
+      )}
 
       <details className="run-inspector">
         <summary>Run details and comparisons</summary>
