@@ -141,6 +141,12 @@ export const ModelOutput = Schema.Struct({
 
 export type ModelOutput = typeof ModelOutput.Type;
 
+/** A request for the user to act in the retained browser, never an automatic control transfer. */
+export const BrowserHandoff = Schema.Struct({
+  title: Schema.NonEmptyString.check(Schema.isMaxLength(80)),
+  instructions: Schema.NonEmptyString.check(Schema.isMaxLength(400)),
+});
+
 export const Report = Schema.Struct({
   version: Schema.Literal(3),
   fixture: Schema.Literals(["wikipedia-race-v1", "website"]),
@@ -153,6 +159,7 @@ export const Report = Schema.Struct({
   startedAt: Schema.String,
   status: Schema.Literals(["running", "passed", "failed", "unverified", "cancelled"]),
   message: Schema.String,
+  handoff: Schema.optionalKey(BrowserHandoff),
   spans: Schema.Array(Span),
   /** Bounded across the whole run. Absent on reports saved before live output was captured. */
   modelOutput: Schema.optionalKey(

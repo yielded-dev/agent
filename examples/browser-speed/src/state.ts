@@ -221,13 +221,14 @@ export const chatTurnsAtom = Atom.make((get): ReadonlyArray<ChatTurn> => {
   return [...turns.values()];
 });
 
-export const viewAtom = LabClient.mutation("lab", "view");
+export const viewAtom = LabClient.runtime.fn<"watch" | "control">()(
+  Effect.fnUntraced(function* (mode, get) {
+    const client = yield* LabClient;
 
-export const viewRequest = (mode: "watch" | "control") => ({
-  headers,
-  payload: { mode },
-  reactivityKeys: ["lab"],
-});
+    yield* Reactivity.mutation(client.lab.view({ headers, payload: { mode } }), ["lab"]);
+    get.set(selectedAtom, null);
+  }),
+);
 
 export const downloadTraceAtom = LabClient.runtime.fn<ReadonlyArray<string>>()(
   Effect.fnUntraced(function* (ids) {

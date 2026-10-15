@@ -231,6 +231,14 @@ export const makeTrace = Effect.fnUntraced(function* (
     ...report,
     input: { ...report.input, prompt: redactText(report.input.prompt).slice(0, 8_000) },
     message: redactText(report.message),
+    ...(report.handoff === undefined
+      ? {}
+      : {
+          handoff: {
+            title: redactText(report.handoff.title).slice(0, 80),
+            instructions: redactText(report.handoff.instructions).slice(0, 400),
+          },
+        }),
     ...(report.finalUrl === undefined ? {} : { finalUrl: redactText(report.finalUrl) }),
     spans: spans.map((span) => ({
       ...span,

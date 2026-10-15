@@ -53,7 +53,6 @@ import {
   exportAtom,
   downloadTraceAtom,
   viewAtom,
-  viewRequest,
   flowStarted,
   fromReady,
   historyAtom,
@@ -140,6 +139,81 @@ const activityName = (span: Span) => {
   }
 };
 
+const HandoffCard = ({ report }: { report: Report }) => {
+  const snapshot = useAtomValue(snapshotAtom);
+  const turns = useAtomValue(chatTurnsAtom);
+  const watching = useAtomValue(watchingAtom);
+  const control = useAtomValue(controlAtom);
+  const [view, changeView] = useAtom(viewAtom);
+  const remote = Option.getOrNull(AsyncResult.value(snapshot));
+  const latest = turns.at(-1)?.id === report.input.id;
+
+  const connected =
+    AsyncResult.isSuccess(snapshot) &&
+    remote?.ready === true &&
+    remote.chatId === (report.input.chatId ?? report.input.id);
+
+  const humanControl = connected && remote.viewMode === "control";
+  const busy = watching || remote?.busy === true || control.waiting;
+  const failure = latest ? errorMessage(view) : null;
+
+  if (report.handoff === undefined) return null;
+
+  return (
+    <section className="handoff-card" aria-label={report.handoff.title}>
+      <div className="handoff-heading">
+        <span className="handoff-icon">
+          <Hand size={19} aria-hidden="true" />
+        </span>
+        <div>
+          <span className="handoff-eyebrow">
+            {!latest ? "Earlier request" : humanControl ? "You have control" : "Your turn"}
+          </span>
+          <h3>{report.handoff.title}</h3>
+        </div>
+      </div>
+      <p>{report.handoff.instructions}</p>
+      {latest && connected && (
+        <button
+          type="button"
+          className="primary"
+          disabled={busy || view.waiting}
+          onClick={() => changeView(humanControl ? "watch" : "control")}
+        >
+          {humanControl ? (
+            <Play size={15} aria-hidden="true" />
+          ) : (
+            <Hand size={15} aria-hidden="true" />
+          )}
+          {view.waiting ? "Connecting…" : humanControl ? "Return to agent" : "Take over"}
+        </button>
+      )}
+      <p className="handoff-hint">
+        {!latest
+          ? "See the latest message to continue."
+          : !connected
+            ? remote?.ready === false
+              ? "This browser session has ended. Start a new chat to continue."
+              : "Checking the browser connection…"
+            : busy
+              ? "Available when the agent finishes this message."
+              : "Use the browser, then return control and send a message to continue."}
+      </p>
+      {failure && (
+        <p className="chat-status bad" role="alert">
+          {failure}
+        </p>
+      )}
+      {report.message && (
+        <details className="handoff-notes">
+          <summary>Agent notes</summary>
+          <Reply text={report.message} />
+        </details>
+      )}
+    </section>
+  );
+};
+
 const ChatResponse = ({ turn }: { turn: ChatTurn }) => {
   const { report } = turn;
   const active = turn.pending && (report === undefined || report.status === "running");
@@ -206,8 +280,14 @@ const ChatResponse = ({ turn }: { turn: ChatTurn }) => {
       )}
       {completed && (
         <div className="chat-final">
-          <span className="chat-label">Final answer</span>
-          <Reply text={report.message} />
+          {report.handoff === undefined ? (
+            <>
+              <span className="chat-label">Final answer</span>
+              <Reply text={report.message} />
+            </>
+          ) : (
+            <HandoffCard report={report} />
+          )}
         </div>
       )}
       {active && (
@@ -1217,7 +1297,7 @@ export const App = () => {
                   className="ghost small"
                   disabled={busy || viewResult.waiting}
                   title={busy ? "Available when the agent finishes this message" : undefined}
-                  onClick={() => changeView(viewRequest(humanControl ? "watch" : "control"))}
+                  onClick={() => changeView(humanControl ? "watch" : "control")}
                 >
                   <Hand size={14} />{" "}
                   {viewResult.waiting
@@ -1230,7 +1310,7 @@ export const App = () => {
                   <button
                     className="ghost small"
                     disabled={busy || viewResult.waiting}
-                    onClick={() => changeView(viewRequest("watch"))}
+                    onClick={() => changeView("watch")}
                   >
                     Reconnect live view
                   </button>

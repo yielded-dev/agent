@@ -29,13 +29,18 @@ const browserCode = BrowserUse.make({
   }),
 });
 
-const makeAgent = (search: boolean) =>
+const makeAgent = (search: boolean, takeover: boolean) =>
   Agent.make("browser-lab", {
     input: Schema.String,
     inputPrompt: (input: string) => input,
     output: TaskResult,
     instructions: `Help the user in the browser using browser_execute. Write JavaScript that calls the cdp globals to inspect and operate websites. Inspect before acting; use Runtime.evaluate, DOM, Input, Page and other page-scoped CDP commands as needed. Return concise JSON observations. Use cdp.tabs({}) and cdp.newTab({}) to list and create tabs; use targetId for a specific tab. Browser.* and Target.* are host-only.
 Keep the user informed with brief assistant text alongside tool calls: say what you are about to check and share useful findings or obstacles as they emerge. Describe actions and observed evidence, without revealing private reasoning or narrating every command. Continue working after a progress update; use finish for the final reply.
+${
+  takeover
+    ? "The user can take over the browser between messages. When progress requires their browser interaction (such as signing in, completing verification, or entering private payment details), call finish with a handoff card explaining the specific action. Never ask them to send passwords, verification codes, or payment credentials in chat. The card offers Take over; control changes only when the user clicks it. After they return control and send a message, inspect the current browser state before continuing. For missing non-sensitive information or decisions that can be answered in chat, ask normally with handoff: null."
+    : "Browser takeover is unavailable for this run. Always set handoff: null."
+}
 ${
   search
     ? "For discovery, research, comparisons and recommendations, use OpenAiWebSearch rather than navigating to search-engine results pages. Gather current evidence before choosing a website or claiming an option is best. Compare plausible candidates and cite the sources that support your choice. Then use the browser to inspect the selected website and verify product details and availability before acting. A user-supplied URL or a follow-up on the current page can be opened directly. If search fails, explain the failure; do not present remembered URLs as search findings."
@@ -116,6 +121,7 @@ export const executeTask = Effect.fnUntraced(function* (
   const browser = yield* Browser;
   const trace = yield* Trace;
   const executor = yield* CodeExecutor;
+  const takeover = input.scenario === "chat" && (input.engine ?? "chromium") === "chromium";
 
   if (input.chatId === undefined) yield* browser.prepare(input);
 
@@ -188,9 +194,13 @@ export const executeTask = Effect.fnUntraced(function* (
       : input.prompt);
 
   const result = yield* traceModels(
-    AgentRuntime.start(makeAgent(input.scenario === "chat" && apiType === "responses"), prompt, {
-      threadId,
-    }).pipe(
+    AgentRuntime.start(
+      makeAgent(input.scenario === "chat" && apiType === "responses", takeover),
+      prompt,
+      {
+        threadId,
+      },
+    ).pipe(
       Effect.flatMap((handle) =>
         handle.await.pipe(
           Effect.onExit(() =>
@@ -251,6 +261,7 @@ export const executeTask = Effect.fnUntraced(function* (
   trace.update({
     finalUrl,
     status: race !== undefined ? "passed" : "unverified",
+    ...(takeover && result.output.handoff !== null ? { handoff: result.output.handoff } : {}),
     message:
       race !== undefined
         ? `Arrival checked in the browser. ${result.output.message} Link-only play is not enforced by the Code Mode capability.`
