@@ -6170,7 +6170,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 const admissible = yield* progress.preflight(yield* turnResponseBatch(input)).pipe(
                   Effect.provideService(CurrentRunWriter, ctx),
                   Effect.as(true),
-                  Effect.catchCauseIf(isPersistenceCapacityCause, () => Effect.succeed(false)),
+                  Effect.catchCauseIf(
+                    (cause) => isPersistenceCapacityCause(cause),
+                    () => Effect.succeed(false),
+                  ),
                 );
 
                 if (!admissible) return "capacity-refused" as const;
@@ -6245,7 +6248,10 @@ const make = Effect.fnUntraced(function* (bindings: ReadonlyArray<ResolvedBindin
                 const batch = yield* progress.defer(candidate.batch).pipe(
                   Effect.provideService(CurrentRunWriter, ctx),
                   Effect.asSome,
-                  Effect.catchCauseIf(isPersistenceCapacityCause, () => Effect.succeedNone),
+                  Effect.catchCauseIf(
+                    (cause) => isPersistenceCapacityCause(cause),
+                    () => Effect.succeedNone,
+                  ),
                 );
 
                 // Deferral does not append, and installs its reservation only after every check.
