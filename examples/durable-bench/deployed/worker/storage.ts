@@ -127,7 +127,7 @@ const appendYielded = (result: Message[], record: typeof RecordEnvelope.Type) =>
   if (p._tag === "UserInputRecorded") result.push({ role: "user", text: string(p.input) });
   if (p._tag === "ToolCallSettled") result.push({ role: "tool", text: string(p.result) });
   if (p._tag !== "ModelResponseRecorded") return;
-  for (const message of Schema.decodeUnknownSync(Prompt.Prompt)(p.messages).content) {
+  for (const message of Schema.decodeSync(Prompt.Prompt)(p.messages).content) {
     if (message.role !== "assistant") continue;
 
     const calls = message.content.flatMap((part) =>
