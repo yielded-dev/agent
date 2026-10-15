@@ -297,8 +297,9 @@ describe("addressed review verification", () => {
                     body: null,
                     draft: false,
                     html_url: "https://github.test/pr/12",
-                    base: { sha: baseRevision },
-                    head: { sha: headRevision },
+                    user: { type: "User" },
+                    base: { sha: baseRevision, ref: "main", repo: { full_name: repository } },
+                    head: { sha: headRevision, ref: "feature", repo: { full_name: repository } },
                   };
 
           return Effect.succeed(

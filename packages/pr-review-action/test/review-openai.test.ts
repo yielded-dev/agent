@@ -699,8 +699,9 @@ describe("review provider boundary", () => {
                 body: null,
                 draft: false,
                 html_url: "https://github.test/fixtures/example/pull/12",
-                base: { sha: "base" },
-                head: { sha: "head" },
+                user: { type: "User" },
+                base: { sha: "base", ref: "main", repo: { full_name: "fixtures/example" } },
+                head: { sha: "head", ref: "feature", repo: { full_name: "fixtures/example" } },
               });
             if (httpRequest.method === "GET" && url.pathname.endsWith("/pulls/12/reviews"))
               return json(httpRequest, [

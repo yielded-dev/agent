@@ -126,6 +126,16 @@ but the check could not refresh, repeat the command or use `@effect-agent review
 
 ## Review behavior
 
+Automatic reviews recognize bot-authored Changesets release PRs from the same
+repository (`changeset-release/<base-branch>`). If the complete diff contains only
+package version values, deleted or unchanged archived changesets, and configured
+ignored files, the review check passes without a model call or consuming the
+automatic review allowance. Other manifest edits and unresolved review blockers
+still require review. Keep generated changelogs and lockfiles in `ignore`;
+`@effect-agent review full` still requests a model review.
+Detection is limited to 100 changed paths and 16 MB of manifests; larger releases
+follow the normal review policy.
+
 Symlink changes are reviewed as committed target text with Git mode metadata,
 including additions, deletions, retargeting, renames, and conversions to or from
 regular files. Targets are never followed. Binary filename extensions do not hide
@@ -221,7 +231,7 @@ GitHub still accepts review comments, so it consumes the automatic allowance. Re
 review or inspect and dismiss manually.
 
 Automatic waves use the configured limit, defaulting to two; this repository allows five.
-Zero disables automatic reviews. Rerunning the workflow can retry an incomplete review on the same
+Zero disables automatic model reviews. Rerunning the workflow can retry an incomplete review on the same
 head while automatic attempts remain. Each published attempt consumes that allowance; incomplete
 attempts never become incremental baselines. Once the allowance is exhausted, an incomplete head
 continues to fail until a manual review completes. Automatic mode still skips completed heads.

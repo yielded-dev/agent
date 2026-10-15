@@ -66,6 +66,7 @@ export type ReviewSelection =
   | {
       readonly _tag: "skip";
       readonly reason:
+        | "generated-changeset-release"
         | "head-already-reviewed"
         | "head-review-incomplete"
         | "head-not-reviewed"

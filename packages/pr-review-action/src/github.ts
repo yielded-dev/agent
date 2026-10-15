@@ -58,8 +58,17 @@ const PullRequestWire = Schema.Struct({
   body: Schema.NullOr(Schema.String.check(Schema.isMaxLength(100_000))),
   draft: Schema.Boolean,
   html_url: ShortString,
-  base: Schema.Struct({ sha: Revision }),
-  head: Schema.Struct({ sha: Revision }),
+  user: Schema.Struct({ type: ShortString }),
+  base: Schema.Struct({
+    sha: Revision,
+    ref: ShortString,
+    repo: Schema.Struct({ full_name: ShortString }),
+  }),
+  head: Schema.Struct({
+    sha: Revision,
+    ref: ShortString,
+    repo: Schema.NullOr(Schema.Struct({ full_name: ShortString })),
+  }),
 });
 
 const ChangedFileWire = Schema.Struct({
@@ -300,6 +309,7 @@ export interface PullRequestView {
   readonly url: string;
   readonly baseRevision: string;
   readonly headRevision: string;
+  readonly changesetReleaseCandidate: boolean;
 }
 
 export interface ChangedFile {
@@ -552,6 +562,11 @@ export const makeGitHubClient = Effect.fnUntraced(function* (options: {
       url: wire.html_url,
       baseRevision: wire.base.sha,
       headRevision: wire.head.sha,
+      changesetReleaseCandidate:
+        wire.user.type === "Bot" &&
+        wire.base.repo.full_name === options.repository &&
+        wire.head.repo?.full_name === options.repository &&
+        wire.head.ref === `changeset-release/${wire.base.ref}`,
     })),
   );
 

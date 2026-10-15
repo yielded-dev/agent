@@ -51,6 +51,7 @@ import {
   type RepositorySnapshot,
   type ReviewCheckCompletion,
   StaleReviewHead,
+  type TreeComparisonView,
 } from "./github.ts";
 import {
   type ReviewCostEstimate,
@@ -243,6 +244,13 @@ const reviewCheckCompletion = (
       `${failureSummary ?? "The review could not finish."} See the workflow logs for diagnostics and request another review to retry.`,
     );
   }
+  if (selection._tag === "skip" && selection.reason === "generated-changeset-release") {
+    return result(
+      "success",
+      "Generated Changesets release",
+      "Only package versions, consumed changesets, and configured ignored files changed. No model review was needed.",
+    );
+  }
   if (selection._tag !== "review" && selection.reason !== "head-already-reviewed") {
     return result("action_required", "Review required");
   }
@@ -404,6 +412,93 @@ const matchesIgnore = (path: string, rawPattern: string): boolean => {
 
   return false;
 };
+
+const ReleaseManifest = Schema.fromJsonString(
+  Schema.Struct({
+    version: Schema.String.check(
+      Schema.isPattern(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/),
+    ),
+  }),
+);
+
+/**
+ * Recognize release metadata from complete immutable trees, independently of
+ * the review quota. Only the root version value may change in a manifest;
+ * archived changesets must retain their original blob. Configured ignores
+ * keep their usual meaning. Unknown paths, modes or formats need review.
+ */
+const isGeneratedChangesetRelease = Effect.fnUntraced(
+  function* ({ base, head, changedPaths }: TreeComparisonView, ignore: ReadonlyArray<string>) {
+    if (
+      base.entry(".changeset/config.json")?.mode !== "100644" ||
+      changedPaths.length > MAX_GENERATED_CLASSIFICATIONS
+    )
+      return false;
+    let versionChanged = false;
+    let changesetConsumed = false;
+    let bytes = 0;
+
+    for (const path of changedPaths) {
+      if (ignore.some((pattern) => matchesIgnore(path, pattern))) continue;
+      const before = base.entry(path);
+      const after = head.entry(path);
+
+      if (
+        (before !== undefined && before.mode !== "100644") ||
+        (after !== undefined && after.mode !== "100644")
+      )
+        return false;
+
+      if (/(^|\/)package\.json$/.test(path) && before !== undefined && after !== undefined) {
+        bytes +=
+          (before.size ?? MAX_HYDRATED_SOURCE_BYTES) + (after.size ?? MAX_HYDRATED_SOURCE_BYTES);
+        if (bytes > MAX_HYDRATED_SOURCE_BYTES) return false;
+
+        const [oldText, newText] = yield* Effect.all(
+          [base.readTextFile(path), head.readTextFile(path)],
+          { concurrency: 2 },
+        );
+
+        const oldManifest = Schema.decodeOption(ReleaseManifest)(oldText);
+        const newManifest = Schema.decodeOption(ReleaseManifest)(newText);
+
+        if (
+          Option.isNone(oldManifest) ||
+          Option.isNone(newManifest) ||
+          oldManifest.value.version === newManifest.value.version ||
+          oldText.replace(
+            /("version"\s*:\s*)"(?:[^"\\]|\\.)*"/,
+            `$1"${newManifest.value.version}"`,
+          ) !== newText
+        )
+          return false;
+        versionChanged = true;
+      } else if (
+        /^\.changeset\/(?!README\.md$)[^/]+\.md$/.test(path) &&
+        before !== undefined &&
+        after === undefined
+      ) {
+        changesetConsumed = true;
+      } else if (
+        /^\.changeset\/pre\/[^/]+\.md$/.test(path) &&
+        before === undefined &&
+        after !== undefined
+      ) {
+        const source = path.replace(".changeset/pre/", ".changeset/");
+
+        if (
+          base.entry(source)?.mode !== "100644" ||
+          base.entry(source)?.sha !== after.sha ||
+          head.entry(source) !== undefined
+        )
+          return false;
+      } else return false;
+    }
+
+    return versionChanged && changesetConsumed;
+  },
+  Effect.catchTag("BinaryBlob", () => Effect.succeed(false)),
+);
 
 // Spend limited review capacity on implementation and configuration before prose
 // and documentation assets. Preserve alphabetical order within each group.
@@ -1075,13 +1170,27 @@ const prepareReview = Effect.gen(function* () {
     });
   }
 
-  const selection = selectReview({
-    mode,
-    currentHead: pull.headRevision,
-    reviewAuthor,
-    automaticReviewLimit,
-    history,
-  });
+  const generatedRelease =
+    mode === "auto" &&
+    pull.changesetReleaseCandidate &&
+    selectUnresolvedChangeRequests({ reviewAuthor, history }).length === 0 &&
+    (yield* isGeneratedChangesetRelease(
+      yield* github.compareTrees(
+        yield* github.getMergeBase(pull.baseRevision, pull.headRevision),
+        pull.headRevision,
+      ),
+      ignore,
+    ));
+
+  const selection: ReviewSelection = generatedRelease
+    ? { _tag: "skip", reason: "generated-changeset-release" }
+    : selectReview({
+        mode,
+        currentHead: pull.headRevision,
+        reviewAuthor,
+        automaticReviewLimit,
+        history,
+      });
 
   return {
     repository,
@@ -1132,6 +1241,17 @@ const reviewPullRequest = Effect.fnUntraced(function* (
   let unresolvedReviews = selectUnresolvedChangeRequests({ reviewAuthor, history });
 
   if (selection._tag === "skip" || selection._tag === "reconcile") {
+    if (selection.reason === "generated-changeset-release") {
+      const current = yield* github.getPullRequest;
+
+      if (current.headRevision !== pull.headRevision) {
+        return yield* StaleReviewHead.make({
+          inspectedHead: pull.headRevision,
+          currentHead: current.headRevision,
+        });
+      }
+      if (!current.changesetReleaseCandidate) return yield* ReviewRequired.make({});
+    }
     yield* skip(selection.reason, undefined, unresolvedReviews.length);
     if (selection.reason === "head-review-incomplete") {
       return yield* ReviewAttemptIncomplete.make({});
