@@ -1,5 +1,11 @@
 # @yielded/agent
 
+## 0.1.0-beta.179
+
+### Patch Changes
+
+- [#972](https://github.com/yielded-dev/agent/pull/972) [`a25ebd4`](https://github.com/yielded-dev/agent/commit/a25ebd49fd150098ee616afd20c9f8796fd4bd34) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Preserve host-confirmed, pre-dispatch browser policy refusals as `BrowserUsePolicyError` through BrowserUse and Code Mode. Let failure observers distinguish these refusals by tag without receiving page or provider content.
+
 ## 0.1.0-beta.178
 
 ### Patch Changes

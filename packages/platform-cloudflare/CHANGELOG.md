@@ -1,5 +1,17 @@
 # @yielded/agent-platform-cloudflare
 
+## 0.1.0-beta.179
+
+### Patch Changes
+
+- [#970](https://github.com/yielded-dev/agent/pull/970) [`d1bad35`](https://github.com/yielded-dev/agent/commit/d1bad358b9f9028e4ed5a228179a29fcd6c054a7) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Reduce Thread Object initialization work by sharing runtime assembly with maintenance and using effect-cf's constructor gate.
+
+- [#967](https://github.com/yielded-dev/agent/pull/967) [`3507d9a`](https://github.com/yielded-dev/agent/commit/3507d9a5a217d2aedc76bb75432b30d7c1f83be5) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Coalesce admission wake hints into source transactions to reduce work before dispatch.
+- Updated dependencies [[`a25ebd4`](https://github.com/yielded-dev/agent/commit/a25ebd49fd150098ee616afd20c9f8796fd4bd34)]:
+  - @yielded/agent@0.1.0-beta.179
+  - @yielded/agent-storage-cloudflare@0.1.0-beta.179
+  - @yielded/agent-storage-sql@0.1.0-beta.179
+
 ## 0.1.0-beta.178
 
 ### Patch Changes
