@@ -285,11 +285,14 @@ export class RunDurationExhausted extends Schema.TaggedClass<RunDurationExhauste
 const PersistedPromptMessages = Schema.toEncoded(Prompt.Prompt);
 const isPersistedPromptMessages = Schema.is(PersistedPromptMessages);
 
-// Carry the existing native Prompt proof through record capture without decoding it again.
+// Carry the native Prompt proof while preserving the existing JSON wire identity.
 const PersistedResponseMessages = PersistedJson.pipe(
   Schema.refine(
     (input): input is Schema.Json & Prompt.PromptEncoded => isPersistedPromptMessages(input),
-    { expected: "persisted Effect AI Prompt messages" },
+    {
+      identifier: "@effect-agent/thread/PersistedJson",
+      expected: "persisted Effect AI Prompt messages",
+    },
   ),
 );
 
