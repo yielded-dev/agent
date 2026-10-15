@@ -35,21 +35,39 @@ export class BrowserUseError extends Schema.TaggedError<BrowserUseError>()("Brow
   dispatch: Schema.optionalKey(Schema.Literals(["not-dispatched", "possibly-dispatched"])),
 }) {}
 
+/**
+ * A host-confirmed policy refusal before dispatch. Hosts must establish that the
+ * entire Cause is expected before using this error; never hide mixed failures,
+ * defects or interruption behind it. Fields contain no provider or page content.
+ */
+export class BrowserUsePolicyError extends Schema.TaggedError<BrowserUsePolicyError>()(
+  "BrowserUsePolicyError",
+  {
+    reason: Schema.Literal("observation-required"),
+    dispatch: Schema.Literal("not-dispatched"),
+    nextStep: Schema.Literal("fresh-observation"),
+    message: Schema.Literal("Inspect the current page before attempting this browser action."),
+  },
+) {}
+
+export const BrowserUseFailure = Schema.Union([BrowserUseError, BrowserUsePolicyError]);
+export type BrowserUseFailure = typeof BrowserUseFailure.Type;
+
 /** Host-owned CDP transport. The host authorizes every call and owns browser lifetime and limits. */
 export class BrowserCdp extends Context.Service<
   BrowserCdp,
   {
     readonly send: (
       request: typeof SendRequest.Type,
-    ) => Effect.Effect<Schema.Json, BrowserUseError>;
-    readonly tabs: Effect.Effect<ReadonlyArray<typeof Tab.Type>, BrowserUseError>;
+    ) => Effect.Effect<Schema.Json, BrowserUseFailure>;
+    readonly tabs: Effect.Effect<ReadonlyArray<typeof Tab.Type>, BrowserUseFailure>;
     readonly frames: (
       request: typeof FramesRequest.Type,
-    ) => Effect.Effect<ReadonlyArray<typeof FrameInfo.Type>, BrowserUseError>;
-    readonly newTab: Effect.Effect<typeof Tab.Type, BrowserUseError>;
+    ) => Effect.Effect<ReadonlyArray<typeof FrameInfo.Type>, BrowserUseFailure>;
+    readonly newTab: Effect.Effect<typeof Tab.Type, BrowserUseFailure>;
     readonly closeTab: (
       request: typeof CloseTabRequest.Type,
-    ) => Effect.Effect<void, BrowserUseError>;
+    ) => Effect.Effect<void, BrowserUseFailure>;
   }
 >()("@effect-agent/BrowserUse/BrowserCdp") {}
 
@@ -59,21 +77,21 @@ const tools = Toolkit.make(
       "Send a Chrome DevTools Protocol command to a page. Browser and Target lifecycle commands are reserved for the host. A protocol error or lost response never authorizes retrying a mutation.",
     parameters: SendRequest,
     success: Schema.Json,
-    failure: BrowserUseError,
+    failure: BrowserUseFailure,
     failureMode: "return",
   }),
   Tool.make("browser_tabs", {
     description: "List pages in this session's browser context, including popups.",
     parameters: Tool.EmptyParams,
     success: Schema.Array(Tab),
-    failure: BrowserUseError,
+    failure: BrowserUseFailure,
     failureMode: "return",
   }),
   Tool.make("browser_new_tab", {
     description: "Create a blank page in this session's browser context.",
     parameters: Tool.EmptyParams,
     success: Tab,
-    failure: BrowserUseError,
+    failure: BrowserUseFailure,
     failureMode: "return",
   }),
   Tool.make("browser_frames", {
@@ -81,7 +99,7 @@ const tools = Toolkit.make(
       "List frames in a page, including out-of-process cross-origin frames. Omit targetId for the original page.",
     parameters: FramesRequest,
     success: Schema.Array(FrameInfo),
-    failure: BrowserUseError,
+    failure: BrowserUseFailure,
     failureMode: "return",
   }),
   Tool.make("browser_close_tab", {
@@ -89,7 +107,7 @@ const tools = Toolkit.make(
       "Close a page in this session's browser context. The original page belongs to the host and cannot be closed here.",
     parameters: CloseTabRequest,
     success: Schema.Null,
-    failure: BrowserUseError,
+    failure: BrowserUseFailure,
     failureMode: "return",
   }),
 );
