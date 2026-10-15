@@ -284,7 +284,9 @@ export type HostResponse = typeof HostResponse.Type;
 // ---------------------------------------------------------------------------
 
 export const decodeSubmitRequest = Schema.decodeUnknownEffect(SubmitRequest);
-export const encodeSubmitRequest = Schema.encodeEffect(SubmitRequest);
+// Encode the caller's fields directly: constructing a Class first would validate the
+// same envelope twice. The Object still decodes its untrusted request independently.
+export const encodeSubmitRequest = Schema.encodeEffect(Schema.Struct(SubmitRequest.fields));
 export const decodeReceipt = Schema.decodeUnknownEffect(Receipt);
 export const encodeReceipt = Schema.encodeEffect(Receipt);
 export const decodeAwaitSettlementRequest = Schema.decodeUnknownEffect(AwaitSettlementRequest);
@@ -802,7 +804,7 @@ export class CloudflareThreadClient extends Context.Service<
             ),
           );
 
-          const request = SubmitRequest.make({
+          const request = {
             agentId: agent.definition.id,
             principal: options.principal,
             idempotencyKey: options.idempotencyKey,
@@ -820,7 +822,7 @@ export class CloudflareThreadClient extends Context.Service<
               : { messageAdmission: options.messageAdmission }),
             definitions: options.definitions,
             inputPayload,
-          });
+          };
 
           const encoded = yield* encodeSubmitRequest(request).pipe(
             Effect.mapError((error) =>
