@@ -1,5 +1,17 @@
 # @yielded/agent-platform-cloudflare
 
+## 0.1.0-beta.184
+
+### Patch Changes
+
+- [#1006](https://github.com/yielded-dev/agent/pull/1006) [`ea396e5`](https://github.com/yielded-dev/agent/commit/ea396e5a06a3db8e16bb200c00e56858b3e982a3) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Report confirmed cleanup when browser allocation fails before ownership is retained. Preserve uncertain acquisition and caller-owned sessions without claiming closure.
+
+- [#1001](https://github.com/yielded-dev/agent/pull/1001) [`6322968`](https://github.com/yielded-dev/agent/commit/63229687687573c578f1870e364b83f28b48daf0) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Preserve the failed frame operation and safe SDK error name in private browser diagnostics without exposing provider messages. Mark settled frame lookup and attachment rejections as not dispatched; keep requested-command failures uncertain.
+- Updated dependencies []:
+  - @yielded/agent@0.1.0-beta.184
+  - @yielded/agent-storage-cloudflare@0.1.0-beta.184
+  - @yielded/agent-storage-sql@0.1.0-beta.184
+
 ## 0.1.0-beta.183
 
 ### Patch Changes
