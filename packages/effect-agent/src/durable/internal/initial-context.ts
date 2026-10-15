@@ -145,7 +145,7 @@ export const initialContext = Effect.fnUntraced(function* (original: InitialCont
     )
       return yield* invalid("Late Tool result differs from its original declaration identity");
 
-    const prompt = yield* Schema.decodeUnknownEffect(Prompt.Prompt)(response.messages).pipe(
+    const prompt = yield* Schema.decodeEffect(Prompt.Prompt)(response.messages).pipe(
       Effect.mapError(() => invalid("Late Tool declaration messages are malformed")),
     );
 

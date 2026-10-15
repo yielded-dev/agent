@@ -302,7 +302,7 @@ it("settles a large replacement declaration with an existing operation origin", 
             ],
           }),
         ]),
-      );
+      ).pipe(Effect.flatMap(Schema.decodeEffect(ModelResponseRecorded.fields.messages)));
 
       const input = yield* Schema.encodeEffect(Schema.toCodecJson(Prompt.Prompt))(
         Prompt.make([

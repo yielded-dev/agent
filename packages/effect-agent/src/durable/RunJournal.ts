@@ -8,7 +8,6 @@ import {
   ToolCallId,
   type SubmissionId,
 } from "../core/Identifiers.ts";
-import { copyJson } from "../core/internal/json.ts";
 import { type ExhaustedLimit } from "../core/RunEvent.ts";
 import { RunPolicyUsage } from "../core/RunPolicyUsage.ts";
 import { type Selection, type Snapshot } from "../core/ToolExposure.ts";
@@ -37,7 +36,7 @@ import {
   CanonicalBatch,
   ModelResponseRecorded,
   MAX_PERSISTED_JSON_BYTES,
-  PersistedJson,
+  type PersistedJson,
   RecordEnvelope,
   RunCompleted,
   ToolCallSettled,
@@ -1697,7 +1696,6 @@ export interface TurnCommitInput {
     | undefined;
 }
 
-const decodePersistedJson = Schema.decodeUnknownEffect(PersistedJson);
 const decodeModelResponse = Schema.decodeUnknownEffect(ModelResponseRecorded);
 const decodeToolSettled = Schema.decodeUnknownEffect(ToolCallSettled);
 const encodePrompt = Schema.encodeEffect(Prompt.Prompt);
@@ -1739,14 +1737,8 @@ const modelResponseRecord = Effect.fnUntraced(function* (
     Effect.mapErrorEager((cause) => journalError("Turn Prompt messages failed to encode", cause)),
   );
 
-  const messages = yield* decodePersistedJson(encodedMessages).pipe(
-    Effect.mapEager(copyJson),
-    Effect.mapErrorEager((cause) =>
-      journalError("Turn Prompt messages exceed canonical persistence bounds", cause),
-    ),
-  );
-
-  // Validate the detached messages and usage together; no mutable caller data is trusted.
+  // Validate messages and usage together. The progress writer captures the complete record
+  // before acquiring its mutation gate; a separate JSON copy here adds no ownership proof.
   const modelUsage = input.usage?.modelUsage;
 
   const payload = yield* decodeModelResponse({
@@ -1761,7 +1753,7 @@ const modelResponseRecord = Effect.fnUntraced(function* (
     runId: input.runId,
     turnId: input.turnId,
     turn: input.turn,
-    messages,
+    messages: encodedMessages,
     ...(runScopedPrefixLength === undefined ? {} : { runScopedPrefixLength }),
     ...(modelUsage === undefined ? {} : { modelUsage }),
     ...(input.unobservedModelCalls === undefined || input.unobservedModelCalls === 0

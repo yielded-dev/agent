@@ -128,7 +128,7 @@ export const plannerActivity = (
         });
         break;
       case "ModelResponseRecorded": {
-        const prompt = Schema.decodeUnknownOption(Prompt.Prompt)(payload.messages);
+        const prompt = Schema.decodeOption(Prompt.Prompt)(payload.messages);
         const response: unknown[] = [];
 
         const providerResults: Array<{

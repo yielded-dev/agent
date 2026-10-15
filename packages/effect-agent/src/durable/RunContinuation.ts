@@ -1,5 +1,4 @@
 import { Context, DateTime, Effect, Option, Result, Schema, Semaphore, Stream } from "effect";
-import { Prompt } from "effect/ai";
 
 import { AgentPersistenceCapacityError } from "../core/AgentError.ts";
 import type { RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";
@@ -117,45 +116,6 @@ const isExecutionProgressRecord = (
   record: RecordEnvelope,
 ): record is RecordEnvelope & { readonly payload: RunContinuation } =>
   record.payload._tag === "RunContinuation";
-
-const decodeResponsePrompt = Schema.decodeUnknownEffect(Prompt.Prompt);
-// The decoded Prompt stays private. Progress and capacity are recomputed on every invocation.
-const responsePrompts = new WeakMap<ModelResponseRecorded, Prompt.Prompt>();
-
-/** Cache eligibility only: freezing does not make accessors or custom iterators immutable. */
-const isFrozenJsonData = (input: Schema.Json): boolean => {
-  const pending: Array<unknown> = [input];
-  const seen = new WeakSet<object>();
-
-  while (pending.length > 0) {
-    const value = pending.pop();
-
-    if (value === null) continue;
-    if (typeof value !== "object") {
-      if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean")
-        return false;
-      continue;
-    }
-    if (seen.has(value)) continue;
-    seen.add(value);
-    const prototype = Object.getPrototypeOf(value);
-
-    if (
-      !Object.isFrozen(value) ||
-      (prototype !== null && prototype !== Object.prototype && prototype !== Array.prototype)
-    )
-      return false;
-    for (const key of Reflect.ownKeys(value)) {
-      if (typeof key !== "string") return false;
-      const descriptor = Object.getOwnPropertyDescriptor(value, key);
-
-      if (descriptor === undefined || !("value" in descriptor)) return false;
-      pending.push(descriptor.value);
-    }
-  }
-
-  return true;
-};
 
 const validateBatchShape = Schema.decodeUnknownSync(
   Schema.Struct({
@@ -709,7 +669,6 @@ const advanceFacts = Effect.fnUntraced(function* (
   let terminal = previous?.continuation.terminal;
   let position = previous?.continuation.position ?? "starting";
   let response = previous?.response;
-  let responsePrompt: Prompt.Prompt | undefined;
   let results = new Map(previous?.results);
   let childResults = new Map(previous?.childResults);
   let completionBytes = previous?.completionBytes;
@@ -751,31 +710,10 @@ const advanceFacts = Effect.fnUntraced(function* (
         if (payload.turn !== accounting.committedTurns + 1)
           return yield* failure("Canonical Turn progress must advance once");
 
-        const promptInput = payload.messages;
-        const retainedPrompt = responsePrompts.get(payload);
-
-        const messages =
-          retainedPrompt ??
-          (yield* decodeResponsePrompt(promptInput).pipe(
-            Effect.mapError((cause) => failure("Invalid model evidence", cause)),
-          ));
-
-        if (retainedPrompt === undefined) {
-          const property = Object.getOwnPropertyDescriptor(payload, "messages");
-
-          if (
-            Object.isFrozen(payload) &&
-            property !== undefined &&
-            "value" in property &&
-            property.value === promptInput &&
-            isFrozenJsonData(promptInput)
-          )
-            responsePrompts.set(payload, messages);
-        }
-        responsePrompt = messages;
+        const messages = payload.messages;
 
         const calls = messages.content.flatMap((message) =>
-          message.role === "assistant"
+          message.role === "assistant" && typeof message.content !== "string"
             ? message.content.filter((part) => part.type === "tool-call")
             : [],
         );
@@ -905,15 +843,8 @@ const advanceFacts = Effect.fnUntraced(function* (
     response.turn > accounting.accountedToolTurn &&
     response.toolOperations.every((operation) => results.has(operation.toolCallId))
   ) {
-    const messages =
-      responsePrompt ??
-      responsePrompts.get(response) ??
-      (yield* decodeResponsePrompt(response.messages).pipe(
-        Effect.mapError((cause) => failure("Invalid batch evidence", cause)),
-      ));
-
-    const parts = messages.content.flatMap((message) =>
-      message.role === "assistant" ? message.content : [],
+    const parts = response.messages.content.flatMap((message) =>
+      message.role === "assistant" && typeof message.content !== "string" ? message.content : [],
     );
 
     for (const call of parts) {
@@ -926,7 +857,8 @@ const advanceFacts = Effect.fnUntraced(function* (
       if (
         result === undefined ||
         !("isFailure" in result) ||
-        ("budgetRejected" in result && result.budgetRejected === true)
+        // Only canonical application settlements carry budget-rejection authority.
+        (!call.providerExecuted && "budgetRejected" in result && result.budgetRejected === true)
       )
         continue;
       accounting.consecutiveToolFailures = result.isFailure
@@ -1799,13 +1731,14 @@ export const makeProgressWriter = Effect.fnUntraced(function* (
         if (first === undefined)
           return yield* failure("Settlement must publish a retained terminal fact");
 
-        const terminalBatch = yield* CanonicalBatch.makeEffect({
-          ...prepared.batch,
-          records: [first, ...prepared.batch.records.slice(1)],
-        }).pipe(
-          Effect.mapError((cause) =>
-            failure("Settlement must publish a retained terminal fact", cause),
-          ),
+        // prepare retains captured records within the validated batch bound.
+        // The explicit first element proves this retained batch is still non-empty.
+        const terminalBatch = CanonicalBatch.make(
+          {
+            ...prepared.batch,
+            records: [first, ...prepared.batch.records.slice(1)],
+          },
+          { disableChecks: true },
         );
 
         const result = yield* publisher.publishSettlement(terminalBatch, prepared.executions).pipe(

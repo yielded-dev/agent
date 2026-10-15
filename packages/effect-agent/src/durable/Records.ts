@@ -285,6 +285,17 @@ export class RunDurationExhausted extends Schema.TaggedClass<RunDurationExhauste
 const PersistedPromptMessages = Schema.toEncoded(Prompt.Prompt);
 const isPersistedPromptMessages = Schema.is(PersistedPromptMessages);
 
+// Carry the native Prompt proof while preserving the existing JSON wire identity.
+const PersistedResponseMessages = PersistedJson.pipe(
+  Schema.refine(
+    (input): input is Schema.Json & Prompt.PromptEncoded => isPersistedPromptMessages(input),
+    {
+      identifier: "@effect-agent/thread/PersistedJson",
+      expected: "persisted Effect AI Prompt messages",
+    },
+  ),
+);
+
 /**
  * Final model output. Immediate history records the successful Run's source messages for
  * recall and a full retained model-context snapshot for the next Run. Durable execution
@@ -377,7 +388,7 @@ const ModelResponseRecordedFields = Schema.Struct({
   runId: RunId,
   turnId: TurnId,
   turn: TurnNumber,
-  messages: PersistedJson,
+  messages: PersistedResponseMessages,
   /**
    * Number of leading messages that belong only to this Run's evaluated instructions and wake
    * input. They remain canonical. An unfinished Run retains this exact evaluated prefix;
@@ -399,8 +410,6 @@ const ModelResponseRecordedFields = Schema.Struct({
 }).check(
   Schema.makeFilter(
     (response) => {
-      if (!isPersistedPromptMessages(response.messages)) return false;
-
       const declarations = response.messages.content.flatMap((message) =>
         message.role === "assistant" && typeof message.content !== "string"
           ? message.content.filter(
@@ -426,21 +435,18 @@ const ModelResponseRecordedFields = Schema.Struct({
         seen.add(operation.toolCallId);
       }
 
-      return declarations.every((call) => call.type === "tool-call" && seen.has(call.id));
+      // Equal counts and unique matching operation IDs already cover every declaration.
+      return (
+        response.runScopedPrefixLength === undefined ||
+        (response.runScopedPrefixLength < response.messages.content.length &&
+          response.messages.content
+            .slice(0, response.runScopedPrefixLength)
+            .every((message) => message.role === "system" || message.role === "user"))
+      );
     },
-    { title: "Every application Tool declaration has unique original operation evidence" },
-  ),
-  Schema.makeFilter(
-    (response) =>
-      response.runScopedPrefixLength === undefined ||
-      (isPersistedPromptMessages(response.messages) &&
-        response.runScopedPrefixLength < response.messages.content.length &&
-        response.messages.content
-          .slice(0, response.runScopedPrefixLength)
-          .every((message) => message.role === "system" || message.role === "user")),
     {
       title:
-        "Run-scoped Prompt prefix contains only instruction/wake messages and leaves one response",
+        "Model response has unique original Tool operation evidence and a valid instruction/wake prefix",
     },
   ),
 );
