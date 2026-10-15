@@ -146,7 +146,9 @@ export class EffectAiFloorDO extends DurableObject<Env> {
     const url = new URL(request.url);
     const query = readQuery(url);
 
-    this.host.meter.assertBuild(query);
+    // Shared setup routes inspect and retire stale incarnations before imports or inputs.
+    if (!["/identity", "/cold", "/maintenance-status"].includes(url.pathname))
+      this.host.meter.assertBuild(query);
     // oxlint-disable-next-line effect/no-untyped-throw, effect/no-native-error -- The native Object fetch entrypoint rejects routing to the wrong benchmark target.
     if (query.target !== "effect-ai-floor") throw new Error("Target mismatch");
     if (["/seed", "/seed-progress"].includes(url.pathname))
