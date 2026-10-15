@@ -143,15 +143,26 @@ const activityName = (span: Span) => {
 };
 
 const PrivateEntryForm = ({ entry, busy }: { entry: PrivateEntry; busy: boolean }) => {
-  const [open, setOpen] = useState(false);
   const [submission, submit] = useAtom(submitPrivateEntryAtom);
   const [cancellation, cancel] = useAtom(cancelPrivateEntryAtom);
   const waiting = busy || submission.waiting || cancellation.waiting;
   const failure = errorMessage(submission) ?? errorMessage(cancellation);
 
   return (
-    <div className="private-entry">
-      <p className="private-entry-target">{entry.target.topOrigin}</p>
+    <section className="handoff-card private-entry" aria-label="Private sign-in details">
+      <div className="private-entry-heading">
+        <p className="private-entry-target">{entry.target.topOrigin}</p>
+        <button
+          className="private-entry-skip"
+          disabled={waiting}
+          type="button"
+          aria-label="Skip private entry"
+          title="Skip private entry"
+          onClick={() => cancel(entry.id)}
+        >
+          <X size={16} aria-hidden="true" />
+        </button>
+      </div>
       {entry.target.frameOrigin !== entry.target.topOrigin && (
         <p className="private-entry-target">Form: {entry.target.frameOrigin}</p>
       )}
@@ -162,7 +173,7 @@ const PrivateEntryForm = ({ entry, busy }: { entry: PrivateEntry; busy: boolean 
         <p className="handoff-hint">
           Private entry expired. Skip it to continue or request a fresh form.
         </p>
-      ) : open ? (
+      ) : (
         <form
           autoComplete="off"
           onSubmit={(event) => {
@@ -181,9 +192,10 @@ const PrivateEntryForm = ({ entry, busy }: { entry: PrivateEntry; busy: boolean 
           }}
         >
           <label>
-            Username or email
+            <span className="sr-only">Username or email</span>
             <input
               name="username"
+              placeholder="Username or email"
               autoComplete="off"
               required
               maxLength={1024}
@@ -191,60 +203,42 @@ const PrivateEntryForm = ({ entry, busy }: { entry: PrivateEntry; busy: boolean 
             />
           </label>
           <label>
-            Password
+            <span className="sr-only">Password</span>
             <input
               name="password"
               type="password"
+              placeholder="Password"
               autoComplete="off"
               required
               maxLength={1024}
               disabled={waiting}
             />
           </label>
-          <button className="primary" disabled={waiting} type="submit">
-            <KeyRound size={15} aria-hidden="true" />
+          <button className="ghost" disabled={waiting} type="submit">
             {waiting ? "Filling…" : "Fill sign-in details"}
           </button>
         </form>
-      ) : (
-        <button className="primary" disabled={waiting} type="button" onClick={() => setOpen(true)}>
-          <KeyRound size={15} aria-hidden="true" />
-          Enter privately
-        </button>
       )}
-      <button
-        className="private-entry-skip"
-        disabled={waiting}
-        type="button"
-        onClick={() => cancel(entry.id)}
-      >
-        Skip private entry
-      </button>
-      <p className="handoff-hint">
-        This entry skips chat and traces. The website and browser provider receive your details. The
-        agent can still access the page afterward.
-      </p>
       {failure && (
         <p className="chat-status bad" role="alert">
           {failure}
         </p>
       )}
-    </div>
+    </section>
   );
 };
 
 const privateEntryMessage = (entry: PrivateEntry) => {
   switch (entry.status) {
     case "filled":
-      return "Sign-in details filled. Take over to sign in, then return control and send a message to continue.";
+      return "Details filled. Finish signing in on the website.";
     case "uncertain":
-      return "The fill could not be confirmed and will not be repeated. Take over to inspect the website before continuing.";
+      return "Couldn't confirm the fill. Check the website before continuing.";
     case "failed":
-      return "The form changed or could not be filled. Take over, or ask the agent to inspect it again.";
+      return "Couldn't fill the form. Sign in on the website.";
     case "expired":
-      return "Private entry expired. Take over, or ask the agent for a fresh request.";
+      return "Private entry expired.";
     case "cancelled":
-      return "Private entry skipped. You can take over or continue the conversation.";
     case "pending":
       return null;
   }
@@ -274,63 +268,39 @@ const HandoffCard = ({ report }: { report: Report }) => {
   const failure = latest ? errorMessage(view) : null;
 
   if (report.handoff === undefined) return null;
+  if (pendingEntry) return <PrivateEntryForm key={entry.id} entry={entry} busy={busy} />;
 
   return (
     <section className="handoff-card" aria-label={report.handoff.title}>
       <div className="handoff-heading">
-        <span className="handoff-icon">
-          <Hand size={19} aria-hidden="true" />
-        </span>
-        <div>
-          <span className="handoff-eyebrow">
-            {!latest ? "Earlier request" : humanControl ? "You have control" : "Your turn"}
-          </span>
-          <h3>{report.handoff.title}</h3>
-        </div>
+        <h3>{report.handoff.title}</h3>
+        {latest && connected && (
+          <button
+            type="button"
+            className="ghost"
+            disabled={busy || view.waiting}
+            onClick={() => changeView(humanControl ? "watch" : "control")}
+          >
+            {view.waiting ? "Connecting…" : humanControl ? "Return to agent" : "Take over"}
+          </button>
+        )}
       </div>
-      <p>{report.handoff.instructions}</p>
-      {pendingEntry && <PrivateEntryForm key={entry.id} entry={entry} busy={busy} />}
-      {latest && entry && !pendingEntry && (
-        <p className="handoff-hint">{privateEntryMessage(entry)}</p>
-      )}
-      {latest && connected && !pendingEntry && (
-        <button
-          type="button"
-          className="primary"
-          disabled={busy || view.waiting}
-          onClick={() => changeView(humanControl ? "watch" : "control")}
-        >
-          {humanControl ? (
-            <Play size={15} aria-hidden="true" />
-          ) : (
-            <Hand size={15} aria-hidden="true" />
-          )}
-          {view.waiting ? "Connecting…" : humanControl ? "Return to agent" : "Take over"}
-        </button>
-      )}
-      {!pendingEntry && (!latest || !connected || entry === null || busy) && (
+      <p>{(latest && entry && privateEntryMessage(entry)) || report.handoff.instructions}</p>
+      {(!latest || !connected || busy) && (
         <p className="handoff-hint">
           {!latest
             ? "See the latest message to continue."
             : !connected
               ? remote?.ready === false
-                ? "This browser session has ended. Start a new chat to continue."
+                ? "Browser session ended. Start a new chat."
                 : "Checking the browser connection…"
-              : busy
-                ? "Available when the agent finishes this message."
-                : "Use the browser, then return control and send a message to continue."}
+              : "Available when the agent finishes."}
         </p>
       )}
       {failure && (
         <p className="chat-status bad" role="alert">
           {failure}
         </p>
-      )}
-      {report.message && (
-        <details className="handoff-notes">
-          <summary>Agent notes</summary>
-          <Reply text={report.message} />
-        </details>
       )}
     </section>
   );
