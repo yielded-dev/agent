@@ -1074,6 +1074,8 @@ const sharedLayer = <A, E, R, PE = never, PR = never>(
         Layer.provide(threadPortTransportLayer),
       );
 
+      // Application and maintenance share this composition, including its intermediate contexts.
+      // The Object's MemoMap owns the build; services and finalizers remain incarnation-local.
       const runtimeStack = Layer.suspend(() =>
         application.pipe(
           Layer.provideMerge(runStorageLayer()),
