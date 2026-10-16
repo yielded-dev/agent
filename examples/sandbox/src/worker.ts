@@ -10,7 +10,7 @@ import { ThreadId, SubmissionId } from "@yielded/agent/identifiers";
 import { CanonicalSequence, type CanonicalRecordEnvelope } from "@yielded/agent/records";
 import { AbortCommand, Principal, IdempotencyKey } from "@yielded/agent/submission-ledger";
 import { makeSandboxAgentContainer, makeSandboxAgentOutbound } from "@yielded/sandbox/cloudflare";
-import { Effect, Layer, Schema, Stream } from "effect";
+import { Deferred, Effect, Layer, Schema, Stream } from "effect";
 import { Worker, WorkerEnvironment } from "effect-cf";
 import { Prompt } from "effect/ai";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
@@ -291,6 +291,8 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
         Number(url.searchParams.get("after") ?? "0"),
       );
 
+      const bodyClosed = yield* Deferred.make<void>();
+
       const pages = Stream.unwrap(
         Effect.gen(function* () {
           const client = yield* CloudflareThreadClient;
@@ -330,9 +332,34 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
             `${Schema.encodeSync(Schema.fromJsonString(EventPage))(page)}\n`,
           ),
         ),
+        // Both sources emit complete NDJSON lines; idle writes expose disconnects.
+        Stream.merge(
+          Stream.tick("15 seconds").pipe(
+            Stream.drop(1),
+            Stream.map(() => new Uint8Array([10])),
+          ),
+          { haltStrategy: "left" },
+        ),
+        // The Worker response bridge does not forward the native request signal.
+        Stream.interruptWhen(
+          Effect.callback<void>((resume) => {
+            const onAbort = () => resume(Effect.void);
+
+            if (request.signal.aborted) onAbort();
+            else request.signal.addEventListener("abort", onAbort, { once: true });
+
+            return Effect.sync(() => request.signal.removeEventListener("abort", onAbort));
+          }),
+        ),
+        Stream.onExit(() => Deferred.succeed(bodyClosed, undefined)),
       );
 
-      return new Response(Stream.toReadableStream(pages), {
+      const context = yield* Worker.WorkerContext;
+
+      // Retain the request while body cleanup cancels the outstanding progress RPC.
+      yield* context.waitUntil(Deferred.await(bodyClosed));
+
+      return HttpServerResponse.stream(pages, {
         headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" },
       });
     }

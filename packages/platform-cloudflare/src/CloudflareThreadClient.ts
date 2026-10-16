@@ -438,6 +438,7 @@ export class CloudflareThreadClient extends Context.Service<
     readonly watchText: (threadId: ThreadId) => Stream.Stream<LiveTextFrame, ClientObserveFailure>;
     /**
      * Forward producer NDJSON bytes without decoding or re-encoding frames.
+     * Blank keepalive lines every 15 seconds expose idle transport disconnects.
      * The final consumer must use `decodeLiveText` to validate untrusted frames.
      * Interruption cancels the remote subscription; buffers remain producer-bounded.
      */

@@ -177,9 +177,11 @@ export class LiveTextHub extends Context.Service<
         let streamId = "";
         let sequence = 0;
         let closed = false;
+        let keepalive: ReturnType<typeof setInterval> | undefined;
 
         const dispose = () => {
           closed = true;
+          clearInterval(keepalive);
           buffer.length = 0;
           pending = undefined;
           observers.delete(observer);
@@ -305,6 +307,12 @@ export class LiveTextHub extends Context.Service<
           start(value) {
             controller = value;
             observers.add(observer);
+            // Write only between complete frames, before RPC can split their bytes.
+            // Idle writes expose disconnected consumers without growing the native queue.
+            keepalive = setInterval(() => {
+              if (closed || value.desiredSize === null || value.desiredSize <= 0) return;
+              value.enqueue(new Uint8Array([10]));
+            }, 15_000);
             flush();
           },
           pull: flush,

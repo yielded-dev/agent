@@ -19,7 +19,8 @@ const decodeLiveTextFrame = Schema.decodeUnknownSync(Schema.fromJsonString(LiveT
 
 /**
  * Validate untrusted NDJSON at the final consumer, including frame bounds, thread,
- * sequence and text lifecycle. Stream loss invalidates all provisional drafts.
+ * sequence and text lifecycle. Bounded blank keepalive lines are ignored.
+ * Stream loss invalidates all provisional drafts.
  */
 export const decodeLiveText = <E, R>(
   threadId: ThreadId,
@@ -116,13 +117,17 @@ export const decodeLiveText = <E, R>(
             offset = end + 1;
             if (newline < 0) break;
 
-            const frame = yield* Effect.try({
-              try: () => decodeLiveTextFrame(pending),
-              catch: liveTextProtocolFailure,
-            });
+            const line = pending;
 
             pending = "";
             pendingBytes = 0;
+            if (line.trim().length === 0) continue;
+
+            const frame = yield* Effect.try({
+              try: () => decodeLiveTextFrame(line),
+              catch: liveTextProtocolFailure,
+            });
+
             if (yield* accept(frame)) frames.push(frame);
           }
 
