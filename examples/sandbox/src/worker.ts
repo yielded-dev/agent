@@ -259,6 +259,7 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
       .pipe(Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed([])));
   });
 
+  // Legacy titles use recorded user messages and saved commands.
   const rememberHistory = Effect.fnUntraced(function* (
     id: string,
     records: ReadonlyArray<CanonicalRecordEnvelope>,

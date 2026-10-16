@@ -2,7 +2,7 @@
 
 A signed-in coding workspace at `agent.yielded.dev/sandbox/<workspace-id>`.
 Opening `/sandbox/` lists the account's saved workspaces, newest first, across browsers
-and devices. Each has a permanent link and a title from its first request.
+and devices. Each has a permanent link and a short descriptive title.
 Workspace links select within that account; knowing an ID does not grant access.
 
 `@yielded/agent` runs the conversation and tools in a durable Thread Object.
