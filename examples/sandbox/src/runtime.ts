@@ -13,7 +13,7 @@ import { Model } from "effect/ai";
 import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 
 import { codingAgent, definitions } from "./agent.ts";
-import { SandboxError } from "./contract.ts";
+import { MAX_INPUT_BYTES, SandboxError } from "./contract.ts";
 import { codingToolsLive } from "./tools.ts";
 import { Workspace } from "./workspace.ts";
 
@@ -98,7 +98,7 @@ export class CodingThread extends ThreadObject.make(application, {
   deploymentId: "sandbox-v1",
   producerPrefix: "sandbox",
   maxQueueDepthPerLane: 2,
-  maxInputBytes: 16 * 1024,
+  maxInputBytes: MAX_INPUT_BYTES,
 }) {
   files(path: string) {
     return this[DurableObject.RunSymbol](

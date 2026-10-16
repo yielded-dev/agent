@@ -15,7 +15,14 @@ import { Worker, WorkerEnvironment } from "effect-cf";
 import { Prompt } from "effect/ai";
 
 import { codingAgent, definitions } from "./agent.ts";
-import { CodingInput, EventPage, MessageInput, WorkspaceId, type Entry } from "./contract.ts";
+import {
+  CodingInput,
+  EventPage,
+  MAX_INPUT_BYTES,
+  MessageInput,
+  WorkspaceId,
+  type Entry,
+} from "./contract.ts";
 import { CodingThread } from "./runtime.ts";
 
 export { CodingThread };
@@ -62,7 +69,7 @@ const boundedBody = Effect.fn("Sandbox.body")(function* (request: Request) {
 
           if (next.done) return text + decoder.decode();
           bytes += next.value.byteLength;
-          if (bytes > 40 * 1024) return yield* Effect.fail("body-too-large" as const);
+          if (bytes > MAX_INPUT_BYTES) return yield* Effect.fail("body-too-large" as const);
           text += decoder.decode(next.value, { stream: true });
         }
       }),
@@ -291,21 +298,29 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
 export default Worker.make(Layer.empty, {
   fetch: handle().pipe(
-    Effect.catchTag("AccountError", (error) =>
-      Effect.succeed(json({ message: error.message }, error.code === "unauthorized" ? 401 : 503)),
-    ),
-    Effect.catchTag("SchemaError", () =>
-      Effect.succeed(json({ message: "Invalid request." }, 400)),
-    ),
-    Effect.catch(() =>
-      Effect.succeed(
-        json(
-          {
-            message:
-              "The request could not be completed. Reconnect to check its state before retrying.",
-          },
-          503,
+    Effect.catchTags({
+      AccountError: (error) =>
+        Effect.succeed(json({ message: error.message }, error.code === "unauthorized" ? 401 : 503)),
+      SchemaError: () => Effect.succeed(json({ message: "Invalid request." }, 400)),
+      AdmissionLimitExceeded: (error) =>
+        Effect.succeed(
+          json(
+            { message: "The request exceeds this workspace's limits." },
+            error.limit === "input-bytes" ? 413 : 429,
+          ),
         ),
+    }),
+    Effect.catch((error) =>
+      Effect.succeed(
+        error === "body-too-large"
+          ? json({ message: "Request body too large." }, 413)
+          : json(
+              {
+                message:
+                  "The request could not be completed. Reconnect to check its state before retrying.",
+              },
+              503,
+            ),
       ),
     ),
   ),

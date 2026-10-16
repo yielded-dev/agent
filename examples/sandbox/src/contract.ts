@@ -1,5 +1,8 @@
 import { Schema } from "effect";
 
+// Covers JSON escaping of an 8,000-character prompt plus its identifiers.
+export const MAX_INPUT_BYTES = 64 * 1024;
+
 export const WorkspaceId = Schema.String.check(Schema.isUUID());
 
 export const CodingInput = Schema.Struct({
