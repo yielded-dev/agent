@@ -154,9 +154,11 @@ export const workspaceList = Atom.family((subject: string) => {
         if (previous !== null) params.set("previous", previous);
         const result = yield* json(`workspaces?${params}`, WorkspacePage);
 
-        // Retire the browser-only pointer only after the server has recovered its history.
-        if (previous !== null)
-          yield* Effect.try(() => localStorage.removeItem(storageKey(subject))).pipe(Effect.ignore);
+        // A successful list can precede recovery of an admitted workspace's history.
+        if (previous !== null && result.entries.some((entry) => entry.id === previous))
+          yield* Effect.try(() => {
+            if (storedWorkspace(subject) === previous) localStorage.removeItem(storageKey(subject));
+          }).pipe(Effect.ignore);
 
         return result;
       });
