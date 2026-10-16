@@ -1,3 +1,4 @@
+import { DurableAlarmService } from "@yielded/agent-platform-cloudflare/alarm";
 import { CloudflareThreadClient } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
 import { type Receipt } from "@yielded/agent/durable-agent-runtime";
@@ -10,7 +11,7 @@ import {
   SubmissionLookupByKey,
 } from "@yielded/agent/submission-ledger";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Effect } from "effect";
+import { Deferred, Effect, Option } from "effect";
 import { DurableObject } from "effect-cf";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -21,6 +22,7 @@ import {
   armedEvictionsRemaining,
   decodeThreadId,
   lostBookReplies,
+  maintenanceFinishObservers,
   supplierCountsFor,
   submitOptions,
 } from "./fixtures.ts";
@@ -132,7 +134,7 @@ describe("Cross-Object child admission, wake, and abort ownership", () => {
     await coordinatorEvictionRow("subagent:after-admit");
   }, 40_000);
 
-  it("a child never runs a Turn before its lineage record is canonical", async () => {
+  it("a child never runs a Turn before its lineage record is canonical", async ({ signal }) => {
     // The child admission is durable at after-admit, before lineage or readiness. Arm the
     // transport fault at that exact hit, then evict the real parent Object before it proceeds.
     const location: DurableRuntimeFailpointLocation = "subagent:after-admit";
@@ -179,28 +181,41 @@ describe("Cross-Object child admission, wake, and abort ownership", () => {
         reason: expect.stringContaining("injected transport fault"),
       });
 
-      // Await the child's maintenance owner before observing quiescence: an automatic
-      // alarm delivery can temporarily clear the slot while its pass is still running.
-      // The transport fault prevents parent establishment throughout these safety checks.
-      await waitFor(async () => {
-        let completed = true;
+      // A consumed native alarm slot can be empty while maintenance is still running.
+      // Wait for its named checkpoint to retire, then join the event's cleanup.
+      const quiesced = Deferred.makeUnsafe<void>();
 
-        try {
-          await runInDurableObject(stubFor(child, SUBAGENTS), (instance) =>
-            Promise.resolve(instance.alarm()),
-          );
-        } catch {
-          // A parent hint can race its doomed incarnation; retained work must still quiesce.
-          completed = false;
-        }
-        const rows = await laneRows(child, SUBAGENTS);
+      try {
+        await runInDurableObject(stubFor(child, SUBAGENTS), (instance) =>
+          instance[DurableObject.RunSymbol](
+            Effect.gen(function* () {
+              const alarm = yield* DurableAlarmService;
 
-        expect(rows).toHaveLength(1);
-        expect(rows[0]?.state, "child state before parent establishment").toBe("admitted");
-        expect(childModelInvocations(ref)).toBe(0);
+              const observe = alarm.scheduled.pipe(
+                Effect.flatMap((scheduled) =>
+                  Option.isNone(scheduled)
+                    ? Deferred.succeed(quiesced, undefined).pipe(Effect.asVoid)
+                    : Effect.void,
+                ),
+                Effect.orDie,
+              );
 
-        return completed && (await scheduledAlarm(child, SUBAGENTS)) === null;
-      }, "child maintenance to quiesce while awaiting parent establishment");
+              maintenanceFinishObservers.set(child, observe);
+              yield* observe;
+            }),
+          ),
+        );
+        await Effect.runPromise(Deferred.await(quiesced), { signal });
+        await runInDurableObject(stubFor(child, SUBAGENTS), (instance) =>
+          Promise.resolve(instance.alarm()),
+        );
+      } finally {
+        maintenanceFinishObservers.delete(child);
+      }
+      const rows = await laneRows(child, SUBAGENTS);
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.state, "child state before parent establishment").toBe("admitted");
       expect(childModelInvocations(ref)).toBe(0);
       expect(
         await scheduledAlarm(child, SUBAGENTS),

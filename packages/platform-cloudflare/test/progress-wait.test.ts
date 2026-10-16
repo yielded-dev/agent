@@ -78,8 +78,15 @@ const awaitProgressEffect = Effect.fnUntraced(function* (
   afterSequence: CanonicalSequence,
 ) {
   const client = yield* CloudflareThreadClient;
+  const threadId = decodeThreadId(thread);
 
-  yield* client.awaitProgress(decodeThreadId(thread), afterSequence);
+  // A maintenance hint may leave canonical history unchanged.
+  for (;;) {
+    yield* client.awaitProgress(threadId, afterSequence);
+    const records = yield* client.readPage(threadId, { afterSequence, limit: 1 });
+
+    if (records.length > 0) return;
+  }
 });
 
 const runTrackedClientFiber = <A, E>(effect: Effect.Effect<A, E, CloudflareThreadClient>) => {
