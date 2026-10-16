@@ -1,5 +1,4 @@
-import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
-import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
+import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import { NodeDurableAgentRuntime } from "@yielded/agent-platform-node/node-durable-agent-runtime";
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
@@ -17,19 +16,20 @@ import { memoryStoreLayer } from "@yielded/agent/sql-memory-store";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import * as ThreadContextHistory from "@yielded/agent/thread-context-history";
 import { ExecutionCheckpoint, ThreadStore } from "@yielded/agent/thread-store";
-import * as IdGenerator from "effect/ai/IdGenerator";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Clock from "effect/Clock";
-import * as Console from "effect/Console";
-import * as DateTime from "effect/DateTime";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Path from "effect/Path";
-import * as Ref from "effect/Ref";
-import * as Schema from "effect/Schema";
+import {
+  Clock,
+  Console,
+  DateTime,
+  Effect,
+  Exit,
+  FileSystem,
+  Layer,
+  Option,
+  Path,
+  Ref,
+  Schema,
+} from "effect";
+import { IdGenerator, Toolkit } from "effect/ai";
 
 import {
   check,

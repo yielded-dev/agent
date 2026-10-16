@@ -1,10 +1,6 @@
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as Argument from "effect/cli/Argument";
-import * as Command from "effect/cli/Command";
-import * as Console from "effect/Console";
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
+import { NodeRuntime, NodeServices } from "@effect/platform-node";
+import { Console, Effect, Schema } from "effect";
+import { Argument, Command } from "effect/cli";
 
 import { NodeSample } from "./heap-contracts.ts";
 import { measureNode } from "./heap-node.ts";

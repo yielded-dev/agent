@@ -1,6 +1,5 @@
-import * as Context from "effect/Context";
-import type * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
+import type { Effect } from "effect";
+import { Context, Schema } from "effect";
 
 import type { BenchmarkError } from "./contracts.js";
 import type { prepareSeeds } from "./diagnostic-aging.js";

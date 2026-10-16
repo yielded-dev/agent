@@ -1,10 +1,7 @@
 import { assert, it } from "@effect/vitest";
-import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as Redacted from "effect/Redacted";
-import * as Result from "effect/Result";
-import * as TestClock from "effect/testing/TestClock";
+import { Effect, Fiber, Redacted, Result } from "effect";
+import { FetchHttpClient } from "effect/http";
+import { TestClock } from "effect/testing";
 
 import { request } from "../live/request.ts";
 

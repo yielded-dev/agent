@@ -1,6 +1,5 @@
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as Console from "effect/Console";
-import * as Effect from "effect/Effect";
+import { NodeRuntime } from "@effect/platform-node";
+import { Console, Effect } from "effect";
 
 import { program } from "./delegation-live.ts";
 

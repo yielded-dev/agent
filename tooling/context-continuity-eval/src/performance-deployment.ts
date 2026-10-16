@@ -1,15 +1,6 @@
-import * as Config from "effect/Config";
-import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import * as Path from "effect/Path";
-import * as ChildProcess from "effect/process/ChildProcess";
-import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
-import * as Redacted from "effect/Redacted";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
+import { Config, Context, Effect, FileSystem, Path, Redacted, Schema, Stream } from "effect";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { type PerformanceBuild } from "./build-performance-cloudflare.ts";
 import { EvaluationError } from "./contracts.ts";

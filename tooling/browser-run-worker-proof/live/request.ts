@@ -1,11 +1,5 @@
-import * as Clock from "effect/Clock";
-import * as Effect from "effect/Effect";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import * as Option from "effect/Option";
-import type * as Redacted from "effect/Redacted";
-import * as Schedule from "effect/Schedule";
-import * as Schema from "effect/Schema";
+import { Clock, Effect, Option, type Redacted, Schedule, Schema } from "effect";
+import { HttpClient, HttpClientRequest } from "effect/http";
 
 import { Evidence, workerRunHeader } from "../src/proof.ts";
 

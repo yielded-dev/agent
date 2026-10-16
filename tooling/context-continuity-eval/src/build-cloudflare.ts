@@ -1,10 +1,6 @@
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Path from "effect/Path";
-import * as ChildProcess from "effect/process/ChildProcess";
-import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import { NodeRuntime, NodeServices } from "@effect/platform-node";
+import { Effect, FileSystem, Path } from "effect";
+import { ChildProcessSpawner, ChildProcess } from "effect/process";
 import { build } from "esbuild";
 
 import { EvaluationError } from "./contracts.ts";

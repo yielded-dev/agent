@@ -1,6 +1,6 @@
 import { Agent, Subagent } from "@yielded/agent";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
+import { Toolkit } from "effect/ai";
 
 export const Summarize = Subagent.make("summarize", {
   description: "Summarize a support case in three sentences.",

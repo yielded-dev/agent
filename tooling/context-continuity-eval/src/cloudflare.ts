@@ -3,18 +3,18 @@ import { digestDefinition } from "@yielded/agent/digest";
 import { Receipt } from "@yielded/agent/durable-agent-runtime";
 import { CanonicalRecordEnvelope } from "@yielded/agent/records";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
-import * as Clock from "effect/Clock";
-import * as Config from "effect/Config";
-import * as Crypto from "effect/Crypto";
-import * as DateTime from "effect/DateTime";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import * as HttpClientResponse from "effect/http/HttpClientResponse";
-import * as Path from "effect/Path";
-import * as Redacted from "effect/Redacted";
-import * as Schema from "effect/Schema";
+import {
+  Clock,
+  Config,
+  Crypto,
+  DateTime,
+  Effect,
+  FileSystem,
+  Path,
+  Redacted,
+  Schema,
+} from "effect";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import { CloudflareIdentity, CloudflareSnapshot } from "./cloudflare-contracts.ts";
 import { EvaluationError, EvaluationReport, ProjectStatus } from "./contracts.ts";

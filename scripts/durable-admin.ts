@@ -1,5 +1,4 @@
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as NodeServices from "@effect/platform-node/NodeServices";
+import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { NodeDurableAgentRuntime } from "@yielded/agent-platform-node/node-durable-agent-runtime";
 import * as SqliteThreadStore from "@yielded/agent-storage-sqlite/sqlite-thread-store";
 import {
@@ -23,14 +22,8 @@ import {
   MAX_THREAD_EXPORT_PAGE_BYTES,
   streamExport,
 } from "@yielded/agent/thread-store";
-import * as CliCommand from "effect/cli/Command";
-import * as Flag from "effect/cli/Flag";
-import * as Console from "effect/Console";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
+import { Console, Effect, FileSystem, Option, Schema, Stream } from "effect";
+import { Command as CliCommand, Flag } from "effect/cli";
 
 /**
  * P7 operator CLI (plan §3): explain | verify | retry | wake | obligations over the DN

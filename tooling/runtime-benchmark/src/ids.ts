@@ -1,9 +1,7 @@
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { RunId, ThreadId, TurnId } from "@yielded/agent/identifiers";
-import * as EffectAiIdGenerator from "effect/ai/IdGenerator";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
+import { Effect, Layer, Schema } from "effect";
+import { IdGenerator as EffectAiIdGenerator } from "effect/ai";
 
 /** Supply the same identity authority to current code and releases predating default IDs. */
 export const BenchmarkIdsLive = Layer.succeed(IdGenerator, {

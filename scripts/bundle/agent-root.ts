@@ -1,6 +1,6 @@
 import { Agent } from "@yielded/agent";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
+import { Toolkit } from "effect/ai";
 
 export const agent = Agent.make("bundle-probe", {
   input: Schema.String,

@@ -1,5 +1,5 @@
-import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
-import * as NodeServices from "@effect/platform-node/NodeServices";
+import { OpenAiClient } from "@effect/ai-openai";
+import { NodeServices } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
 import {
   ReviewChange,
@@ -8,20 +8,21 @@ import {
   ReviewReport,
   ReviewRequest,
 } from "@yielded/agent-pr-review/review";
-import * as ConfigProvider from "effect/ConfigProvider";
-import * as Deferred from "effect/Deferred";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientResponse from "effect/http/HttpClientResponse";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as PlatformError from "effect/PlatformError";
-import * as Redacted from "effect/Redacted";
-import * as Ref from "effect/Ref";
-import * as Schema from "effect/Schema";
-import type * as Scope from "effect/Scope";
-import * as Stream from "effect/Stream";
+import {
+  ConfigProvider,
+  Deferred,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  PlatformError,
+  Redacted,
+  Ref,
+  Schema,
+  type Scope,
+  Stream,
+} from "effect";
+import { HttpClient, HttpClientResponse } from "effect/http";
 
 import {
   decodeObservationLines,

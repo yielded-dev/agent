@@ -1,10 +1,5 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as ConfigProvider from "effect/ConfigProvider";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
-import * as Path from "effect/Path";
-import * as Schema from "effect/Schema";
+import { NodeServices } from "@effect/platform-node";
+import { ConfigProvider, Effect, FileSystem, Layer, Path, Schema } from "effect";
 import { expect, it } from "vite-plus/test";
 
 import { RunContinuationEvidence } from "../src/contracts.ts";

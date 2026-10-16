@@ -6,16 +6,8 @@ import {
 } from "@yielded/agent-testing/scripted-model";
 import { ModelCallContext } from "@yielded/agent/context-window";
 import { RunContextPreparation, RunToolAuthorization } from "@yielded/agent/run-options";
-import * as AiError from "effect/ai/AiError";
-import type * as LanguageModel from "effect/ai/LanguageModel";
-import * as Model from "effect/ai/Model";
-import * as Tool from "effect/ai/Tool";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Clock from "effect/Clock";
-import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
+import { Clock, Context, Effect, Layer, Schema } from "effect";
+import { AiError, type LanguageModel, Model, Tool, Toolkit } from "effect/ai";
 
 import { BenchmarkError, check } from "./contracts.js";
 import { policyCases } from "./diagnostic-cases.js";

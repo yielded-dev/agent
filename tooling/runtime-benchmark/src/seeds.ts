@@ -1,10 +1,5 @@
-import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
-import * as Path from "effect/Path";
-import type * as PlatformError from "effect/PlatformError";
-import * as Schema from "effect/Schema";
+import { Context, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import type { PlatformError } from "effect/PlatformError";
 
 import type { BenchmarkError } from "./contracts.js";
 import { check } from "./contracts.js";
@@ -28,9 +23,7 @@ export class SeedInitializer extends Context.Service<
 export class SeedTemplates extends Context.Service<
   SeedTemplates,
   {
-    readonly copy: (
-      request: SeedRequest,
-    ) => Effect.Effect<void, PlatformError.PlatformError | BenchmarkError>;
+    readonly copy: (request: SeedRequest) => Effect.Effect<void, PlatformError | BenchmarkError>;
   }
 >()("runtime-benchmark/SeedTemplates") {
   /** Worker-local, revision-local templates, removed when their Layer closes. */

@@ -1,4 +1,4 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
+import { NodeServices } from "@effect/platform-node";
 import { Agent } from "@yielded/agent";
 import { NodeDurableAgentRuntime } from "@yielded/agent-platform-node/node-durable-agent-runtime";
 import { ScriptedModel } from "@yielded/agent-testing/scripted-model";
@@ -6,13 +6,8 @@ import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { DeploymentId, DefinitionDigests, Digest, ProducerId } from "@yielded/agent/records";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
-import * as Model from "effect/ai/Model";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
+import { Effect, Exit, FileSystem, Layer, Schema } from "effect";
+import { Model, Toolkit } from "effect/ai";
 import { expect, it } from "vite-plus/test";
 
 import { assertRecoveryFault } from "../src/fixture.ts";

@@ -33,8 +33,8 @@ children can inherit the parent's policy within their delegation ceilings.
 
 ```ts twoslash
 import { Agent } from "@yielded/agent";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
+import { Toolkit } from "effect/ai";
 // ---cut---
 const researcher = Agent.make("researcher", {
   input: Schema.String,

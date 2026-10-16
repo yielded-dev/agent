@@ -1,6 +1,4 @@
-import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
-import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
-import * as OpenAiTool from "@effect/ai-openai/OpenAiTool";
+import { OpenAiClient, OpenAiLanguageModel, OpenAiTool } from "@effect/ai-openai";
 import {
   makeReviewOpenAi,
   reviewCostLimitMicrousd,
@@ -18,13 +16,9 @@ import {
   type ReviewRequest,
 } from "@yielded/agent-pr-review/review";
 import { type ReviewRepository } from "@yielded/agent-pr-review/review-repository";
-import * as AiError from "effect/ai/AiError";
-import * as Config from "effect/Config";
-import * as Effect from "effect/Effect";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
+import { Config, Effect, Layer, Option, Schema } from "effect";
+import { AiError } from "effect/ai";
+import { FetchHttpClient } from "effect/http";
 
 import {
   EvalReviewerFailure,

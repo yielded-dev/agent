@@ -1,9 +1,8 @@
 import { fileURLToPath } from "node:url";
 
-import * as NodeServices from "@effect/platform-node/NodeServices";
+import { NodeServices } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
+import { Effect, FileSystem } from "effect";
 
 import { loadEvalSuite } from "../src/index.ts";
 

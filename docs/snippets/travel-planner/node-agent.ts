@@ -1,11 +1,8 @@
-import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
-import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
+import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import { Agent } from "@yielded/agent";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Config from "effect/Config";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
+import { Config, Layer, Schema } from "effect";
+import { Toolkit } from "effect/ai";
+import { FetchHttpClient } from "effect/http";
 
 export const planner = Agent.make("trip-planner", {
   input: Schema.String,

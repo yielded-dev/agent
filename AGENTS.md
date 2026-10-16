@@ -8,7 +8,7 @@ Before writing any Effect code, first read `node_modules/effect/AGENTS.md`
 If you need to learn more about particular Effect apis and concepts that the
 guide doesn't cover, search through the source code in `node_modules/effect/src`.
 
-Outside `examples/`, import Effect modules through namespace subpaths, for example
+In `packages/*`, import Effect modules through namespace subpaths, for example
 `import * as Effect from "effect/Effect"`. The shared TypeScript configuration
 enforces this with `preferNamespaceImport`.
 

@@ -1,17 +1,7 @@
 import process from "node:process";
 
-import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as Cause from "effect/Cause";
-import * as Clock from "effect/Clock";
-import * as Config from "effect/Config";
-import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
+import { NodeCrypto, NodeRuntime, NodeServices } from "@effect/platform-node";
+import { Cause, Clock, Config, Context, Effect, Exit, FileSystem, Layer, Schema } from "effect";
 
 import { BenchmarkError, check, selectCaseNames } from "./contracts.js";
 import { runCapabilityCase } from "./diagnostic-capabilities.js";

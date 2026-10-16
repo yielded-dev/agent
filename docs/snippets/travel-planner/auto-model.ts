@@ -1,17 +1,12 @@
 // #region catalog
 
-import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
-import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
-import * as TypeSafeClient from "@effect/ai-typesafe/TypeSafeClient";
-import * as TypeSafeDecisionModel from "@effect/ai-typesafe/TypeSafeDecisionModel";
+import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
+import { TypeSafeClient, TypeSafeDecisionModel } from "@effect/ai-typesafe";
 import { Agent, AgentRuntime, Identifiers, InMemory, Subagent } from "@yielded/agent";
 import { AutoModel } from "@yielded/agent-ai-decision";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Config from "effect/Config";
-import * as Effect from "effect/Effect";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
+import { Config, Effect, Layer, Schema } from "effect";
+import { Toolkit } from "effect/ai";
+import { FetchHttpClient } from "effect/http";
 
 // ---cut---
 export const ThreadModels = AutoModel.make({

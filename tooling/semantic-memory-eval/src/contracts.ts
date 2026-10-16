@@ -1,6 +1,6 @@
 import * as MemoryNamespace from "@yielded/agent/memory-namespace";
 import { MemoryScope } from "@yielded/agent/memory-store";
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 export const MODEL_ID = "onnx-community/all-MiniLM-L6-v2-ONNX";
 export const MODEL_REVISION = "aff7a1dc4e8a1ea593e6ea21e95c22ef0a25966f";

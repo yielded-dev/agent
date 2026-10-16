@@ -1,7 +1,6 @@
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
-import * as Config from "effect/Config";
-import * as Effect from "effect/Effect";
+import { Config, Effect } from "effect";
 
 import { ReplayCpuStage } from "./replay-cpu-contracts.ts";
 

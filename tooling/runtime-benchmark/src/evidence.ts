@@ -1,8 +1,5 @@
-import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
-import type * as PlatformError from "effect/PlatformError";
+import { Context, Effect, FileSystem, Layer } from "effect";
+import type { PlatformError } from "effect/PlatformError";
 
 import type { SampleProgress } from "./contracts.js";
 
@@ -10,7 +7,7 @@ import type { SampleProgress } from "./contracts.js";
 export class BenchmarkProgress extends Context.Service<
   BenchmarkProgress,
   {
-    readonly record: (progress: SampleProgress) => Effect.Effect<void, PlatformError.PlatformError>;
+    readonly record: (progress: SampleProgress) => Effect.Effect<void, PlatformError>;
   }
 >()("runtime-benchmark/BenchmarkProgress") {
   static readonly silent = Layer.succeed(BenchmarkProgress, { record: () => Effect.void });

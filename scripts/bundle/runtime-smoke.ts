@@ -21,13 +21,8 @@ import { layer as persistentHistoryLayer } from "@yielded/agent/persistent-histo
 import * as DirectSubagent from "@yielded/agent/subagent";
 import * as DirectThread from "@yielded/agent/thread";
 import { layer as historyLayer } from "@yielded/agent/thread-history";
-import * as Model from "effect/ai/Model";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Console from "effect/Console";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Ref from "effect/Ref";
-import * as Schema from "effect/Schema";
+import { Console, Effect, Layer, Ref, Schema } from "effect";
+import { Model, Toolkit } from "effect/ai";
 
 import { loadRuntime } from "./lazy-module.ts";
 

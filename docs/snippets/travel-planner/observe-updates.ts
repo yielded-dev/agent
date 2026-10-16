@@ -1,6 +1,5 @@
 import { AgentRuntime, AgentUpdates } from "@yielded/agent";
-import * as Effect from "effect/Effect";
-import * as Stream from "effect/Stream";
+import { Effect, Stream } from "effect";
 
 import { HotelResearcher } from "./background-updates.ts";
 

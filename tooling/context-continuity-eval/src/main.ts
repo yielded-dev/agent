@@ -1,11 +1,6 @@
-import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as Command from "effect/cli/Command";
-import * as Console from "effect/Console";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
+import { NodeCrypto, NodeRuntime, NodeServices } from "@effect/platform-node";
+import { Console, Effect, Layer, Schema } from "effect";
+import { Command } from "effect/cli";
 
 import { command } from "./command.ts";
 import { EvaluationError } from "./contracts.ts";

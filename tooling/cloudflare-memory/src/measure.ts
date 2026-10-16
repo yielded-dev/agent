@@ -1,15 +1,6 @@
-import * as Command from "effect/cli/Command";
-import * as Flag from "effect/cli/Flag";
-import * as Clock from "effect/Clock";
-import * as Config from "effect/Config";
-import * as Console from "effect/Console";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import * as HttpClientResponse from "effect/http/HttpClientResponse";
-import * as Schema from "effect/Schema";
+import { Clock, Config, Console, Effect, FileSystem, Schema } from "effect";
+import { Command, Flag } from "effect/cli";
+import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import { BenchmarkCase, cases, Sample } from "./contracts.ts";
 

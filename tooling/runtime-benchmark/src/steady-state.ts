@@ -10,21 +10,9 @@ import {
   submissionSettlementRecordId,
 } from "@yielded/agent/submission-ledger";
 import { getRecord } from "@yielded/agent/thread-store";
-import * as AiError from "effect/ai/AiError";
-import * as LanguageModel from "effect/ai/LanguageModel";
-import * as Model from "effect/ai/Model";
-import type * as Response from "effect/ai/Response";
-import * as Tool from "effect/ai/Tool";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Clock from "effect/Clock";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import type * as PlatformError from "effect/PlatformError";
-import * as References from "effect/References";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
+import { Clock, Effect, FileSystem, Layer, Option, References, Schema, Stream } from "effect";
+import { AiError, LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
+import type { PlatformError } from "effect/PlatformError";
 
 import {
   BenchmarkError,
@@ -38,10 +26,7 @@ import { makeCpuProfiler } from "./cpu-profile.js";
 /** A native provider with bounded counters, without retaining every normalized prompt. */
 export const runSteadyState = Effect.fn("benchmark.steadyState")(function* (
   filename: string | undefined,
-  onWarmed: (
-    operations: number,
-    elapsedMs: number,
-  ) => Effect.Effect<void, PlatformError.PlatformError>,
+  onWarmed: (operations: number, elapsedMs: number) => Effect.Effect<void, PlatformError>,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const directory = yield* fs.makeTempDirectoryScoped({ prefix: "runtime-steady-state-" });

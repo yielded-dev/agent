@@ -1,13 +1,7 @@
-import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
-import * as OpenAiSchema from "@effect/ai-openai/OpenAiSchema";
-import * as AiError from "effect/ai/AiError";
-import * as Effect from "effect/Effect";
-import * as HttpBody from "effect/http/HttpBody";
-import * as HttpClientResponse from "effect/http/HttpClientResponse";
-import * as Ref from "effect/Ref";
-import * as Schema from "effect/Schema";
-import * as Semaphore from "effect/Semaphore";
-import * as Stream from "effect/Stream";
+import { OpenAiClient, OpenAiSchema } from "@effect/ai-openai";
+import { Effect, Ref, Schema, Semaphore, Stream } from "effect";
+import { AiError } from "effect/ai";
+import { HttpBody, HttpClientResponse } from "effect/http";
 
 import { type ModelUsage, type ServiceTier } from "./contracts.ts";
 import { MAX_COST_MICROUSD } from "./profiles.ts";

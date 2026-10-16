@@ -1,25 +1,24 @@
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 
-import * as NodeServices from "@effect/platform-node/NodeServices";
+import { NodeServices } from "@effect/platform-node";
 import { it } from "@effect/vitest";
-import * as Cause from "effect/Cause";
-import * as Clock from "effect/Clock";
-import * as Config from "effect/Config";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as FileSystem from "effect/FileSystem";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as ChildProcess from "effect/process/ChildProcess";
-import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
-import * as Redacted from "effect/Redacted";
-import * as Schedule from "effect/Schedule";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
+import {
+  Cause,
+  Clock,
+  Config,
+  Effect,
+  Exit,
+  FileSystem,
+  Layer,
+  Option,
+  Redacted,
+  Schedule,
+  Schema,
+  Stream,
+} from "effect";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { Evidence, type Receipt, RunId, WorkerFailure } from "../src/proof.ts";
 import { Failure, GateFailure, fail, request as checkoutRequest } from "./request.ts";

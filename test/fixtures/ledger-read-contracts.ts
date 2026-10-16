@@ -38,15 +38,9 @@ import {
   ThreadStore,
   ThreadTailRequest,
 } from "@yielded/agent/thread-store";
-import * as Cause from "effect/Cause";
-import * as DateTime from "effect/DateTime";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
+import { Cause, DateTime, Effect, Exit, Option, Schema, Stream } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
-import * as Statement from "effect/sql/Statement";
-import * as Stream from "effect/Stream";
+import { CurrentTransformer } from "effect/sql/Statement";
 import { expect } from "vite-plus/test";
 
 /** Give a native ledger command the actual scoped Run owner and materialized Thread. */
@@ -339,7 +333,7 @@ export const ledgerReadCases = (invalidateReadState: Effect.Effect<void> = Effec
       yield* invalidateReadState;
 
       const result = yield* ledger.finalizeSettlement(request).pipe(
-        Effect.provideService(Statement.CurrentTransformer, () => Effect.interrupt),
+        Effect.provideService(CurrentTransformer, () => Effect.interrupt),
         Effect.exit,
       );
 

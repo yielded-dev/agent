@@ -1,8 +1,6 @@
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as Command from "effect/cli/Command";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
+import { NodeRuntime, NodeServices } from "@effect/platform-node";
+import { Effect, Layer } from "effect";
+import { Command } from "effect/cli";
 
 import { command, measurementHttpLayer } from "./measure.ts";
 

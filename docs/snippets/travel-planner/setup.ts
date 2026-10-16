@@ -1,8 +1,7 @@
-import * as AnthropicClient from "@effect/ai-anthropic/AnthropicClient";
+import { AnthropicClient } from "@effect/ai-anthropic";
 import { InMemory } from "@yielded/agent";
-import * as Config from "effect/Config";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as Layer from "effect/Layer";
+import { Config, Layer } from "effect";
+import { FetchHttpClient } from "effect/http";
 
 import { TravelToolsLive } from "./tools";
 

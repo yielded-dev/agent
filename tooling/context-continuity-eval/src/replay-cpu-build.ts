@@ -1,18 +1,8 @@
-import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as Command from "effect/cli/Command";
-import * as Flag from "effect/cli/Flag";
-import * as Console from "effect/Console";
-import * as Crypto from "effect/Crypto";
-import * as Effect from "effect/Effect";
-import * as Hex from "effect/encoding/Hex";
-import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
-import * as Path from "effect/Path";
-import * as ChildProcess from "effect/process/ChildProcess";
-import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
-import * as Schema from "effect/Schema";
+import { NodeCrypto, NodeRuntime, NodeServices } from "@effect/platform-node";
+import { Console, Crypto, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { Command, Flag } from "effect/cli";
+import { Hex } from "effect/encoding";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { build } from "esbuild";
 
 import { ReplayCpuBuild, ReplayCpuError } from "./replay-cpu-contracts.ts";

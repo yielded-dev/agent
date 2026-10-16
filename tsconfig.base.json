@@ -19,7 +19,6 @@
     "plugins": [
       {
         "name": "@effect/language-service",
-        "namespaceImportPackages": ["effect", "@effect/*"],
         "effectFn": ["span", "untraced"],
         "allowedUnstableApis": [
           "@effect/ai-anthropic",
@@ -72,7 +71,6 @@
           "nestedEffectGenYield": "suggestion",
           "newSchemaClass": "error",
           "optionMatchToFromOption": "warning",
-          "preferNamespaceImport": "error",
           "preferSchemaTypeProperty": "suggestion",
           "preferTypedSchemaDecoder": "warning",
           "provideLayerSucceedToProvideService": "warning",
@@ -86,11 +84,11 @@
         },
         "overrides": [
           {
-            "include": ["examples/**/*", "../examples/**/*", "../../examples/**/*"],
+            "include": ["packages/**/*", "../packages/**/*", "../../packages/**/*"],
             "options": {
-              "namespaceImportPackages": [],
+              "namespaceImportPackages": ["effect", "@effect/*"],
               "diagnosticSeverity": {
-                "preferNamespaceImport": "off"
+                "preferNamespaceImport": "error"
               }
             }
           },

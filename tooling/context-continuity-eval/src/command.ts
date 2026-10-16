@@ -1,18 +1,18 @@
-import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
-import * as Command from "effect/cli/Command";
-import * as Flag from "effect/cli/Flag";
-import * as Config from "effect/Config";
-import * as ConfigProvider from "effect/ConfigProvider";
-import * as Console from "effect/Console";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Path from "effect/Path";
-import * as ChildProcess from "effect/process/ChildProcess";
-import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
-import * as Schema from "effect/Schema";
+import { OpenAiClient } from "@effect/ai-openai";
+import {
+  Config,
+  ConfigProvider,
+  Console,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  Path,
+  Schema,
+} from "effect";
+import { Command, Flag } from "effect/cli";
+import { FetchHttpClient } from "effect/http";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { runCloudflareEvaluation } from "./cloudflare.ts";
 import { EvaluationError, EvaluationReport } from "./contracts.ts";

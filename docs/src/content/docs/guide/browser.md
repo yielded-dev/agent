@@ -22,7 +22,7 @@ Your application owns destination access, credentials, and cleanup.
 
 ```ts twoslash
 import { WebCapture } from "@yielded/agent";
-import * as Toolkit from "effect/ai/Toolkit";
+import { Toolkit } from "effect/ai";
 
 const ReadPage = WebCapture.make("read_page", {
   description: "Read example.com as rendered Markdown.",
@@ -63,7 +63,7 @@ elements are actionable.
 
 ```ts twoslash
 import { BrowserUse } from "@yielded/agent";
-import * as Toolkit from "effect/ai/Toolkit";
+import { Toolkit } from "effect/ai";
 
 const browser = BrowserUse.make();
 const tools = Toolkit.make(browser.tool);

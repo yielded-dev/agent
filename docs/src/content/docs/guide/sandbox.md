@@ -15,9 +15,7 @@ for generated JavaScript over allowlisted tools, and [browser services](/guide/b
 // @types: node
 import { LocalSandbox } from "@yielded/agent-sandbox-local";
 import { NetworkDisabled, Sandbox, SandboxRequest } from "@yielded/agent/sandbox";
-import * as Duration from "effect/Duration";
-import * as Effect from "effect/Effect";
-import * as Stream from "effect/Stream";
+import { Duration, Effect, Stream } from "effect";
 
 const program = Effect.gen(function* () {
   const sandbox = yield* Sandbox;

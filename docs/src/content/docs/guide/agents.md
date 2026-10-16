@@ -9,8 +9,8 @@ supplies those services when the definition runs.
 
 ```ts twoslash
 import { Agent, AgentRuntime } from "@yielded/agent";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
+import { Toolkit } from "effect/ai";
 
 const triage = Agent.make("triage", {
   input: Schema.String,

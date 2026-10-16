@@ -5,7 +5,7 @@ import {
   type MemoryLookup,
 } from "@yielded/agent/memory-reference";
 import { MemoryScope, MemoryWrite } from "@yielded/agent/memory-store";
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 export const Projects = MemoryNamespace.define({
   name: "benchmark/projects",

@@ -3,8 +3,7 @@ import { CanonicalBatch } from "@yielded/agent/records";
 import { RunStorage } from "@yielded/agent/run-storage";
 import { ClaimRequest } from "@yielded/agent/submission-ledger";
 import type { AppendRequest } from "@yielded/agent/thread-store";
-import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
+import { Effect, Option } from "effect";
 
 import { BenchmarkError } from "./contracts.js";
 

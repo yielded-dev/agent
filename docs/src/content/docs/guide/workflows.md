@@ -14,9 +14,9 @@ canonical outcome. Your host supplies the Workflow engine, storage, and repair s
 ```ts twoslash
 import { Agent } from "@yielded/agent";
 import { AgentWorkflow } from "@yielded/agent-workflow";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Schema from "effect/Schema";
-import * as Workflow from "effect/workflow/Workflow";
+import { Schema } from "effect";
+import { Toolkit } from "effect/ai";
+import { Workflow } from "effect/workflow";
 
 const triage = Agent.make("triage", {
   input: Schema.String,

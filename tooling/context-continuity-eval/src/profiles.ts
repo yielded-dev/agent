@@ -1,4 +1,4 @@
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 export const PROFILE_IDS = [
   "explicit-rollover-sqlite-v1",

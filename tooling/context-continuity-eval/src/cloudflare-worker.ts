@@ -1,6 +1,5 @@
-import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
-import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
-import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
+import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
+import { BrowserCrypto } from "@effect/platform-browser";
 import {
   DurableObjectContext,
   ThreadObjectIdentity,
@@ -23,15 +22,10 @@ import { memoryStoreLayer } from "@yielded/agent/sql-memory-store";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import * as ThreadContextHistory from "@yielded/agent/thread-context-history";
 import { ExecutionCheckpoint } from "@yielded/agent/thread-store";
+import { Context, Effect, Layer, Redacted, Ref, Schema } from "effect";
 import { DurableObject, WorkerEnvironment } from "effect-cf";
-import * as IdGenerator from "effect/ai/IdGenerator";
-import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as Layer from "effect/Layer";
-import * as Redacted from "effect/Redacted";
-import * as Ref from "effect/Ref";
-import * as Schema from "effect/Schema";
+import { IdGenerator } from "effect/ai";
+import { FetchHttpClient } from "effect/http";
 
 import {
   cloudflareDefinition,

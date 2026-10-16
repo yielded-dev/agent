@@ -1,15 +1,9 @@
 import process from "node:process";
 
-import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
-import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as Config from "effect/Config";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
+import { OpenAiClient } from "@effect/ai-openai";
+import { NodeCrypto, NodeRuntime, NodeServices } from "@effect/platform-node";
+import { Config, Effect, FileSystem, Layer, Schema } from "effect";
+import { FetchHttpClient } from "effect/http";
 
 import { EvaluationError } from "./contracts.ts";
 import { runEvaluation } from "./evaluate.ts";

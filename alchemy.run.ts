@@ -1,9 +1,7 @@
 import * as Alchemy from "alchemy";
 import { adopt } from "alchemy/AdoptPolicy";
 import * as Cloudflare from "alchemy/Cloudflare";
-import * as Config from "effect/Config";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
+import { Config, Effect, Layer } from "effect";
 
 // Deploys run against the account-wide Cloudflare state store so CI runs
 // share one state history; ALCHEMY_LOCAL_STATE=true keeps dry runs and local

@@ -1,7 +1,5 @@
-import * as Tool from "effect/ai/Tool";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
+import { Effect, Schema } from "effect";
+import { Tool, Toolkit } from "effect/ai";
 
 const SearchActivities = Tool.make("search_activities", {
   description: "Find activities in a city.",

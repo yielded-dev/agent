@@ -1,20 +1,8 @@
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as Cause from "effect/Cause";
-import * as CliCommand from "effect/cli/Command";
-import * as Flag from "effect/cli/Flag";
-import * as Config from "effect/Config";
-import * as Console from "effect/Console";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as FileSystem from "effect/FileSystem";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientResponse from "effect/http/HttpClientResponse";
-import * as Option from "effect/Option";
-import * as Path from "effect/Path";
-import * as ChildProcess from "effect/process/ChildProcess";
-import * as Schema from "effect/Schema";
+import { NodeRuntime, NodeServices } from "@effect/platform-node";
+import { Cause, Config, Console, Effect, Exit, FileSystem, Option, Path, Schema } from "effect";
+import { Command as CliCommand, Flag } from "effect/cli";
+import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/http";
+import { ChildProcess } from "effect/process";
 
 import { downloadReleaseBuild, restoreReleaseBuild } from "./release-build.ts";
 import { readCommand, verifyMainBuild } from "./release-ci.ts";

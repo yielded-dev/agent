@@ -10,10 +10,7 @@ import {
   ThreadTailRequest,
   type ExecutionCheckpoint,
 } from "@yielded/agent/thread-store";
-import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
+import { Effect, Option, Schema, Stream } from "effect";
 
 import { EvaluationError, type RunContinuationEvidence } from "./contracts.ts";
 

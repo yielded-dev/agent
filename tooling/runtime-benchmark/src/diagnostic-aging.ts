@@ -45,24 +45,22 @@ import {
 import * as ThreadStorage from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import * as LanguageModel from "effect/ai/LanguageModel";
-import * as Model from "effect/ai/Model";
-import type * as Response from "effect/ai/Response";
-import * as Tool from "effect/ai/Tool";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Cause from "effect/Cause";
-import * as Clock from "effect/Clock";
-import * as DateTime from "effect/DateTime";
-import * as Deferred from "effect/Deferred";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as Fiber from "effect/Fiber";
-import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/sql/SqlClient";
-import * as Stream from "effect/Stream";
+import {
+  Cause,
+  Clock,
+  DateTime,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  Layer,
+  Option,
+  Schema,
+  Stream,
+} from "effect";
+import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
+import { SqlClient } from "effect/sql/SqlClient";
 
 import { BenchmarkError, check } from "./contracts.js";
 import { AgingSeeds, DiagnosticProgress, type DiagnosticResult } from "./diagnostic-contracts.js";
@@ -337,7 +335,7 @@ export const prepareSeeds = Effect.fn("diagnostic.aging.prepareSeeds")(function*
   const retained = yield* Effect.gen(function* () {
     const raw = yield* ThreadStore;
     const ledger = yield* SubmissionLedger;
-    const sql = yield* SqlClient.SqlClient;
+    const sql = yield* SqlClient;
     const runtime = yield* makeRuntime(false);
 
     const submit = (input: string) =>

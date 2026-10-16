@@ -35,23 +35,17 @@ import {
   ThreadTailRequest,
   type ExecutionCheckpoint,
 } from "@yielded/agent/thread-store";
+import { Cause, Context, Crypto, DateTime, Effect, Layer, Option, Schema, Stream } from "effect";
 import { DurableObject, WorkerEnvironment } from "effect-cf";
-import * as AiError from "effect/ai/AiError";
-import * as LanguageModel from "effect/ai/LanguageModel";
-import * as Model from "effect/ai/Model";
-import * as Prompt from "effect/ai/Prompt";
-import type * as AiResponse from "effect/ai/Response";
-import * as Tool from "effect/ai/Tool";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Cause from "effect/Cause";
-import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
-import * as DateTime from "effect/DateTime";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
+import {
+  AiError,
+  LanguageModel,
+  Model,
+  Prompt,
+  Tool,
+  Toolkit,
+  type Response as AiResponse,
+} from "effect/ai";
 
 import {
   currentLargePhase,

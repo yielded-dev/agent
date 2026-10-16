@@ -1,4 +1,4 @@
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 export const REPLAY_CPU_PROTOCOL = "replay-cpu-v2";
 

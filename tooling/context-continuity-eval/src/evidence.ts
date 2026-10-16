@@ -1,7 +1,6 @@
 import { ContextHistoryHit, ContextHistoryPage } from "@yielded/agent/context-history";
 import type { CanonicalRecordEnvelope } from "@yielded/agent/records";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
+import { Option, Schema } from "effect";
 
 const referencesRecord = (text: string, recordId: string): boolean => {
   const literal = recordId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

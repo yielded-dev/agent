@@ -1,7 +1,6 @@
-import * as AnthropicLanguageModel from "@effect/ai-anthropic/AnthropicLanguageModel";
+import { AnthropicLanguageModel } from "@effect/ai-anthropic";
 import { Agent, AgentRuntime } from "@yielded/agent";
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
+import { Effect, Schema } from "effect";
 
 import { AppLive } from "./setup";
 import { TravelTools } from "./tools";

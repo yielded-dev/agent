@@ -30,25 +30,21 @@ import { toRunThreadOptions } from "@yielded/agent/run-hooks";
 import * as Subagent from "@yielded/agent/subagent";
 import * as Reservations from "@yielded/agent/subagent-reservations";
 import * as Thread from "@yielded/agent/thread";
-import * as AiError from "effect/ai/AiError";
-import * as Model from "effect/ai/Model";
-import * as Prompt from "effect/ai/Prompt";
-import * as Tool from "effect/ai/Tool";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Clock from "effect/Clock";
-import * as Deferred from "effect/Deferred";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as Fiber from "effect/Fiber";
-import * as FileSystem from "effect/FileSystem";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import * as HttpClientResponse from "effect/http/HttpClientResponse";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
-import * as Scope from "effect/Scope";
-import * as Stream from "effect/Stream";
-import * as Tracer from "effect/Tracer";
+import {
+  Clock,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  Layer,
+  Schema,
+  Scope,
+  Stream,
+  Tracer,
+} from "effect";
+import { AiError, Model, Prompt, Tool, Toolkit } from "effect/ai";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import { BenchmarkError, check } from "./contracts.js";
 import { capabilityCases } from "./diagnostic-cases.js";

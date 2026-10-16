@@ -2,7 +2,7 @@ import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
 import { CanonicalRecordEnvelope, DefinitionDigestInput } from "@yielded/agent/records";
 import { ExecutionCheckpoint } from "@yielded/agent/thread-store";
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 import {
   CompactionEvidence,

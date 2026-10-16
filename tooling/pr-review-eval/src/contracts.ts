@@ -10,7 +10,7 @@ import {
   ReviewRequest,
   ReviewSeverity,
 } from "@yielded/agent-pr-review/review";
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 const BoundedIdentifier = Schema.NonEmptyString.check(
   Schema.isMaxLength(128),

@@ -1,6 +1,6 @@
 import type { PersistedJson } from "@yielded/agent/records";
 import { CanonicalRecordEnvelope } from "@yielded/agent/records";
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { hasSearchPathToRead, originalArchiveRecord } from "../src/evidence.ts";

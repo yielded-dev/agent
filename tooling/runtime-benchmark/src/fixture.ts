@@ -44,26 +44,24 @@ import {
   submissionSettlementRecordId,
 } from "@yielded/agent/submission-ledger";
 import * as ThreadStorage from "@yielded/agent/thread-store";
-import * as AiError from "effect/ai/AiError";
-import type * as LanguageModel from "effect/ai/LanguageModel";
-import * as Model from "effect/ai/Model";
-import * as Prompt from "effect/ai/Prompt";
-import * as Tool from "effect/ai/Tool";
-import * as Toolkit from "effect/ai/Toolkit";
-import * as Cause from "effect/Cause";
-import * as Clock from "effect/Clock";
-import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
-import * as DateTime from "effect/DateTime";
-import type * as Duration from "effect/Duration";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as References from "effect/References";
-import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
+import {
+  Cause,
+  Clock,
+  Context,
+  Crypto,
+  DateTime,
+  type Duration,
+  Effect,
+  Exit,
+  FileSystem,
+  Layer,
+  Option,
+  References,
+  Schema,
+  Stream,
+} from "effect";
+import type { LanguageModel } from "effect/ai";
+import { AiError, Model, Prompt, Tool, Toolkit } from "effect/ai";
 
 import { BenchmarkError, check, type Case, type Sample, type SamplePhase } from "./contracts.js";
 import { BenchmarkProgress } from "./evidence.js";

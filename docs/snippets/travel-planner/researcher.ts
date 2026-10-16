@@ -1,5 +1,5 @@
 import { Agent } from "@yielded/agent";
-import * as Schema from "effect/Schema";
+import { Schema } from "effect";
 
 import { TravelTools } from "./tools.ts";
 
