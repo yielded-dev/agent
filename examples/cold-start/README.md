@@ -62,20 +62,25 @@ the Object marker. That is about **7.4×** the local evaluation gap of 25.6 ms, 
 elapsed startup with local CPU; transport, scheduling, parsing and compilation are
 not separated, so it is not a measured CPU slowdown factor.
 
-The empty Object also exposes a startup gap without a framework host or turn:
-**953 [130, 2,494] ms** between the Worker and Object markers. One Yielded probe took
-9.6 seconds; it remains included and makes this estimate imprecise. This establishes
-that a full agent turn is not necessary to observe the extra delay.
+The empty Object exposes a startup gap without a framework host or turn. For the
+time between Worker and Object markers, the **Yielded minus pi paired gap** has a
+mean of **953 [130, 2,494] ms** and a median of **240 ms**. A full agent turn is not
+necessary to observe the extra delay.
 
-The **297 ms thin-front first-turn gap remains unattributed**. It includes Object
-startup and host initialization: the gap between the Object marker and first text
-is **0 [−26, 24] ms**. These probes do not isolate a separate first-execution CPU
-residual, and the whole gap cannot be assigned to Schema construction.
+One Yielded empty-Object marker arrived after **9.6 seconds** (9,654 ms from request
+start; 9,597 ms after its Worker marker). This sample remains in the data and widens
+the mean's interval.
+
+In the thin-front layout, the time from the Object's first marker to first text is
+level: the Yielded minus pi gap is **0 [−26, 24] ms**. Marker delivery waits behind
+synchronous work, so this cannot split Object startup from first-turn work. The
+**297 ms total gap remains unattributed**; it cannot all be assigned to Schema
+construction.
 
 ## Run
 
 Use a Workers Paid account with `workers.dev` enabled, Node compatible with the
-repository, Python 3, and Vite+.
+repository, and Vite+.
 The API token needs **Account / Workers Scripts / Edit** for the selected account,
 including script/version reads, namespace metadata, and profiling. Set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in your environment.
 Keep output outside the checkout: it contains deployment identifiers and source maps.
@@ -104,7 +109,7 @@ all targets untouched for at least 180 seconds after the final upload, confirms 
 active versions through the management API, then sends one request per target.
 Only the provider and driver receive readiness requests.
 
-Every run removes its scripts in `finally` and checks the API for remaining scripts,
+Every run releases its scripts on completion or interruption and checks the API for remaining scripts,
 namespaces, and uploaded versions. After a hard interruption, finish cleanup with the
 same output directory and account:
 
