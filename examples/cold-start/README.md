@@ -80,7 +80,8 @@ construction.
 ## Run
 
 Use a Workers Paid account with `workers.dev` enabled, Node compatible with the
-repository, and Vite+.
+repository, and Vite+. The `local` command needs Node **22.19+** (or a supported
+newer release) for `process.threadCpuUsage`; Node 22.18 cannot run it.
 The API token needs **Account / Workers Scripts / Edit** for the selected account,
 including script/version reads, namespace metadata, and profiling. Set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in your environment.
 Keep output outside the checkout: it contains deployment identifiers and source maps.

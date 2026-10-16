@@ -100,17 +100,10 @@ const Summary = Schema.Struct({
 
 const launch = Effect.fn("local.launch")(function* <
   S extends Schema.Top & { readonly DecodingServices: never; readonly Type: typeof Timing.Type },
->(out: string, reuse: boolean, arm: Framework, mode: Mode, sample: number, schema: S) {
+>(out: string, arm: Framework, mode: Mode, sample: number, schema: S) {
   const path = yield* Path.Path;
   const file = path.join(out, `${arm}-${mode}-${sample}.json`);
 
-  if (reuse) {
-    const value = yield* read(file, schema);
-
-    yield* check(value.arm === arm, "Saved capture belongs to another framework");
-
-    return value;
-  }
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
   const child = yield* spawner.spawn(
@@ -149,28 +142,16 @@ const launch = Effect.fn("local.launch")(function* <
   return value;
 }, Effect.scoped);
 
-/** Fresh child captures, or exact replay of saved captures after checking bundle hashes. */
-export const local = Effect.fn("local")(function* (directory: string, reuse = false) {
+/** Capture every sample in a fresh child process. */
+export const local = Effect.fn("local")(function* (directory: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const out = path.resolve(directory);
-  const previous = reuse ? yield* read(path.join(out, "summary.json"), Summary) : undefined;
-
-  if (previous) {
-    for (const arm of frameworks) {
-      const bytes = yield* fs.readFile(path.join(workspace, `dist/${arm}.mjs`));
-
-      yield* check(
-        previous.arms[arm].sha256 === hash(bytes),
-        "Saved capture belongs to another bundle",
-      );
-    }
-  }
   const runs: Record<Framework, (typeof Timing.Type)[]> = { yielded: [], pi: [] };
 
   for (let sample = 0; sample < 12; sample++) {
     for (const arm of sample % 2 ? (["pi", "yielded"] as const) : frameworks)
-      runs[arm].push(yield* launch(out, reuse, arm, "timing", sample, Timing));
+      runs[arm].push(yield* launch(out, arm, "timing", sample, Timing));
   }
   const summaries: Partial<Record<Framework, typeof ArmSummary.Type>> = {};
 
@@ -204,7 +185,7 @@ export const local = Effect.fn("local")(function* (directory: string, reuse = fa
     const countRuns = [];
 
     for (let sample = 0; sample < 3; sample++) {
-      const capture = yield* launch(out, reuse, arm, "coverage", sample, Coverage);
+      const capture = yield* launch(out, arm, "coverage", sample, Coverage);
       const coverage = capture.evidence.result.find((entry) => entry.url === `target://${arm}`);
 
       if (!coverage)
@@ -237,7 +218,7 @@ export const local = Effect.fn("local")(function* (directory: string, reuse = fa
     const groups: Record<string, number> = {};
 
     for (let sample = 0; sample < 7; sample++) {
-      const { evidence: profile } = yield* launch(out, reuse, arm, "profile", sample, Profile);
+      const { evidence: profile } = yield* launch(out, arm, "profile", sample, Profile);
 
       yield* check(
         profile.samples.length === profile.timeDeltas.length,
@@ -278,8 +259,7 @@ export const local = Effect.fn("local")(function* (directory: string, reuse = fa
       sampledSelfMs: groups,
     };
   }
-  // Replay preserves the machine provenance of the captures, even on another host.
-  const metadata = previous ?? (yield* Effect.sync(environment));
+  const metadata = yield* Effect.sync(environment);
 
   const summary = yield* Schema.decodeUnknownEffect(Summary)({
     node: metadata.node,
@@ -299,13 +279,9 @@ export const command = Command.make(
   "local",
   {
     out: Flag.String("out").pipe(Flag.withDescription("Private capture directory")),
-    reuse: Flag.Boolean("reuse").pipe(
-      Flag.withDescription("Replay saved captures after verifying bundle hashes"),
-      Flag.withDefault(false),
-    ),
   },
-  Effect.fn(function* ({ out, reuse }) {
-    yield* Console.log(JSON.stringify(yield* local(out, reuse), null, 2));
+  Effect.fn(function* ({ out }) {
+    yield* Console.log(JSON.stringify(yield* local(out), null, 2));
   }),
 ).pipe(
   Command.withDescription("Measure fresh module evaluation CPU, coverage, and sampled self time."),

@@ -1,7 +1,7 @@
 import { Cause, Clock, Console, Effect, Exit, Fiber, FileSystem, Schema } from "effect";
 import { Command, Flag } from "effect/cli";
 
-import { type Run, withRun } from "./cloudflare.ts";
+import { Cloudflare, type Run, withRun } from "./cloudflare.ts";
 import { Frame, Identity } from "./evidence.ts";
 import { BenchError, check, gunzip, save } from "./platform.ts";
 
@@ -30,19 +30,20 @@ const Settings = Schema.Struct({
 const seconds = Clock.currentTimeMillis.pipe(Effect.map((ms) => ms / 1000));
 
 const capture = Effect.fnUntraced(function* (
-  run: Run,
+  run: Pick<Run, "out" | "uploads" | "redact">,
   name: string,
   label: string,
   namespace?: string,
   actor?: string,
 ) {
+  const cf = yield* Cloudflare;
   const fs = yield* FileSystem.FileSystem;
   const version = run.uploads[name]!.version;
   const startedAt = yield* seconds;
 
   const request = yield* Effect.exit(
     Effect.gen(function* () {
-      const response = yield* run.cf.profile(name, version, {
+      const response = yield* cf.profile(name, version, {
         duration_ms: 5000,
         profile_type: "cpu",
         ...(namespace ? { namespace_id: namespace, actor_id: actor! } : {}),
@@ -90,6 +91,7 @@ const capture = Effect.fnUntraced(function* (
 const profile = (out: string) =>
   withRun(out, (run) =>
     Effect.gen(function* () {
+      const cf = yield* Cloudflare;
       const results: (typeof ProfileResult.Type)[] = [];
 
       yield* run.initialize;
@@ -109,7 +111,7 @@ const profile = (out: string) =>
       yield* Effect.sleep("180 seconds");
       for (const { arm, name } of targets) {
         yield* check(
-          (yield* run.cf.version(name)) === run.uploads[name]!.version,
+          (yield* cf.version(name)) === run.uploads[name]!.version,
           "Deployed version does not match upload",
         );
         results.push(yield* capture(run, name, arm + "-before-module-load"));
@@ -120,7 +122,7 @@ const profile = (out: string) =>
           Schema.Struct({ actorId: Schema.NonEmptyString }),
         );
 
-        const settings = yield* run.cf.api(`workers/scripts/${name}/settings`, Settings);
+        const settings = yield* cf.api(`workers/scripts/${name}/settings`, Settings);
 
         const namespace = settings.bindings.find(
           (binding) => binding.name === "THREAD",

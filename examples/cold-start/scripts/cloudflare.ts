@@ -502,7 +502,6 @@ export const makeRun = Effect.fnUntraced(function* (directory: string, existing 
     out,
     prefix,
     uploads,
-    cf,
     redact,
     initialize,
     upload,
