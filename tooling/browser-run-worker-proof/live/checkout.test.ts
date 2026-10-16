@@ -21,11 +21,12 @@ import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { Evidence, type Receipt, RunId, WorkerFailure } from "../src/proof.ts";
+import { Failure, GateFailure, fail, request as checkoutRequest } from "./request.ts";
 
 const Commit = Schema.String.check(Schema.isPattern(/^[a-f0-9]{40}$/));
-const Failure = Schema.Struct({ stage: Schema.String, status: Schema.NullOr(Schema.Int) });
 
 const WorkerBindings = Schema.Struct({
+  CHECKOUT_RUN_ID: RunId,
   CHECKOUT_TOKEN: Schema.String,
   CHECKOUT_PASSWORD: Schema.String,
   CHECKOUT_MODEL: Schema.String,
@@ -38,12 +39,6 @@ const AccountSubdomain = Schema.Struct({
   success: Schema.Literal(true),
   result: Schema.Struct({ subdomain: Schema.String }),
 });
-
-class GateFailure extends Schema.TaggedError<GateFailure>()(
-  "CheckoutGateFailure",
-  Failure.fields,
-) {}
-const fail = (stage: string, status: number | null = null) => GateFailure.make({ stage, status });
 
 const safeFailure = <E>(cause: Cause.Cause<E>) => {
   const error = Cause.findErrorOption(cause);
@@ -213,6 +208,7 @@ const proof = Effect.gen(function* () {
     const secretsPath = temporary + "/bindings.json";
 
     const bindings = yield* Schema.encodeEffect(Schema.fromJsonString(WorkerBindings))({
+      CHECKOUT_RUN_ID: run,
       CHECKOUT_TOKEN: Redacted.value(token),
       CHECKOUT_PASSWORD: Redacted.value(yield* Config.Redacted("CHECKOUT_PASSWORD")),
       CHECKOUT_MODEL: model,
@@ -293,36 +289,20 @@ const proof = Effect.gen(function* () {
     );
   });
 
-  const request = Effect.fnUntraced(function* (operation: "run" | "evidence" | "close") {
-    const response = yield* client
-      .execute(
-        HttpClientRequest.make(operation === "evidence" ? "GET" : "POST")(
-          origin + "/" + operation,
-        ).pipe(HttpClientRequest.bearerToken(token)),
-      )
-      .pipe(
-        Effect.timeout(operation === "run" ? "8 minutes" : "1 minute"),
-        Effect.mapError(() => fail(operation + ":transport-or-timeout")),
-      );
-
-    if (response.status !== 200 && !(operation === "run" && response.status === 502))
-      return yield* fail(operation, response.status);
-
-    const body = yield* response.text.pipe(
-      Effect.mapError(() => fail(operation + ":transport-or-timeout", response.status)),
-    );
-
-    const evidence = yield* Schema.decodeEffect(Schema.fromJsonString(Evidence))(body).pipe(
-      Effect.mapError(() => fail(operation + ":invalid-evidence", response.status)),
-    );
-
-    return { status: response.status, evidence };
-  });
+  const request = (operation: "run" | "evidence" | "close") =>
+    checkoutRequest({ operation, origin, token, runId: run });
 
   // Fresh routes may be temporarily unavailable. Only reads and idempotent closure may repeat.
   const repeatableRequest = Effect.fnUntraced(function* (operation: "evidence" | "close") {
+    let lastFailure: GateFailure | undefined;
+
     return yield* request(operation).pipe(
       Effect.timeout("10 seconds"),
+      Effect.tapError((error) =>
+        Effect.sync(() => {
+          if (Schema.is(GateFailure)(error)) lastFailure = error;
+        }),
+      ),
       Effect.retry({
         schedule: Schedule.spaced("2 seconds"),
         while: (error) =>
@@ -334,7 +314,9 @@ const proof = Effect.gen(function* () {
       }),
       Effect.timeout("1 minute"),
       Effect.mapError((error) =>
-        error._tag === "TimeoutError" ? fail(operation + ":retry-timeout") : error,
+        error._tag === "TimeoutError"
+          ? fail(operation + ":retry-timeout", lastFailure?.status, lastFailure?.response)
+          : error,
       ),
     );
   });
@@ -451,21 +433,32 @@ const proof = Effect.gen(function* () {
           evidence.failure === null,
         () => fail("readiness:owner-not-pristine"),
       ),
-      Effect.mapError((error) => fail("readiness", error.status)),
+      Effect.mapError((error) => fail("readiness", error.status, error.response)),
     );
-    // Persist before sending. A lost response must never cause another /run.
+    // Conservatively persist before sending, including throughout edge-only admission retries.
     report = { ...report, dispatched: true };
     yield* save();
     const executed = yield* measure("checkoutMillis", request("run")).pipe(Effect.exit);
 
     // Keep the one-shot outcome authoritative even if the subsequent observation is unavailable.
-    if (Exit.isFailure(executed)) return yield* Effect.failCause(executed.cause);
+    if (Exit.isFailure(executed)) {
+      if (safeFailure(executed.cause).stage === "run:not-dispatched") {
+        report = { ...report, dispatched: false };
+        yield* save();
+      }
+
+      return yield* Effect.failCause(executed.cause);
+    }
     const runEvidence = publicEvidence(executed.value.evidence);
 
     report = { ...report, evidence: runEvidence };
     yield* save();
     if (executed.value.status !== 200)
-      return yield* fail(`run:${runEvidence.phase}:${runEvidence.failure}`, executed.value.status);
+      return yield* fail(
+        `run:${runEvidence.phase}:${runEvidence.failure}`,
+        executed.value.status,
+        executed.value.response,
+      );
     const observed = yield* repeatableRequest("evidence");
 
     report = { ...report, evidence: publicEvidence(observed.evidence) };

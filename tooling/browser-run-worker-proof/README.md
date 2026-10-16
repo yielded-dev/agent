@@ -50,8 +50,12 @@ A read-only scrape of inline fixture HTML runs before browser creation, avoiding
 propagation of a new public route to the Quick Actions browser. Transient 5xx/reset
 failures of that preflight may retry, at most twice. After login, generated code
 inspects the page and performs the purchase without an automatic action retry.
-The runner never retries `POST /run` or a purchase. Lost responses remain unresolved, and the Durable Object's persisted
-started fence refuses a replacement run. Closure persists a stop fence before
+Every Worker response carries `x-checkout-run-id` with the deployment's run ID.
+Only a `POST /run` 404 with that header absent may repeat, every two seconds within
+one minute: it never reached the Worker. Any stamped response, including a wrong
+run ID, ends dispatch retries. Browser failures, other HTTP failures, and lost
+responses remain hard failures. The Durable Object's persisted started fence
+refuses a replacement run. Closure persists a stop fence before
 acknowledgement so a suspended preflight cannot allocate a browser afterward.
 
 The host fills and submits the login form before giving generated code the signed-in
@@ -101,9 +105,14 @@ its output is not published.
 The ignored `.checkout-proof/<run>/report.json` in this workspace retains the commit,
 Worker name, dispatch status, sanitized independent evidence, allowlisted Worker failure codes,
 the last checkout operation, login request count, failure stage/status,
-up to sixteen sanitized browser operation/reason/status diagnostics with a safe SDK error name when available, separate cleanup failure, cleanup result, and total, checkout, and cleanup milliseconds. Total time includes
-deployment and retirement. Checkout time measures the single run request; cleanup time
-measures closure, its independent confirmation, and Worker retirement. Evidence is
+up to sixteen sanitized browser operation/reason/status diagnostics with a safe SDK error name when available, separate cleanup failure, cleanup result, and total, checkout, and cleanup milliseconds.
+HTTP failures include allowlisted response headers (including `cf-ray` and the
+deployment stamp) and a short recognized body excerpt or sanitized evidence summary.
+Unrecognized bodies and foreign stamp values are redacted; cookies and locations
+are omitted. A `cf-ray` identifies edge traffic, not Worker execution.
+Total time includes deployment and retirement. Checkout time measures dispatch,
+including any pre-dispatch 404 retries; cleanup time measures closure, its independent
+confirmation, and Worker retirement. Evidence is
 written atomically. A mismatched receipt is omitted rather than publishing unexpected
 identity or payload values.
 

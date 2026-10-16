@@ -2,6 +2,9 @@ import { Schema } from "effect";
 
 export const RunId = Schema.String.check(Schema.isPattern(/^[a-z0-9-]{1,24}$/));
 
+/** Every response leaving the deployed checkout Worker identifies its deployment. */
+export const workerRunHeader = "x-checkout-run-id";
+
 /** Source-authored diagnostics only; never publish provider text or session capabilities. */
 export const WorkerFailure = Schema.Literals([
   "scrape:PageCaptureNavigationError",
