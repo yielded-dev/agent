@@ -19,6 +19,8 @@ import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { codingAgent, definitions } from "./agent.ts";
 import {
   CodingInput,
+  CommandAccepted,
+  CommandInput,
   EventPage,
   LIVE_TEXT_THREAD_HEADER,
   MAX_INPUT_BYTES,
@@ -26,6 +28,7 @@ import {
   WorkspaceId,
   type Entry,
 } from "./contract.ts";
+import { workspaceIdFromPath } from "./location.ts";
 import { CodingThread } from "./runtime.ts";
 
 export { CodingThread };
@@ -86,7 +89,7 @@ const boundedBody = Effect.fn("Sandbox.body")(function* (request: Request) {
 const FailedWorkspaceOperation = Schema.Struct({ errorTag: Schema.Literal("CodingToolError") });
 
 /** Project canonical records; the UI owns no second execution journal. */
-const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
+const entriesForRecord = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
   const id = String(sequence);
   const p = record.payload;
 
@@ -193,6 +196,9 @@ const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
   }
 };
 
+const entriesFor = (record: CanonicalRecordEnvelope): Entry[] =>
+  entriesForRecord(record).map((entry) => ({ ...entry, sequence: record.sequence }));
+
 const handle = Effect.fn("Sandbox.fetch")(function* () {
   const request = yield* Worker.NativeRequest;
   const env = yield* WorkerEnvironment;
@@ -201,7 +207,14 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
   if (url.pathname === "/sandbox") return Response.redirect(`${url.origin}/sandbox/`, 308);
   if (!url.pathname.startsWith("/sandbox/")) return new Response("Not found", { status: 404 });
   if (!url.pathname.startsWith("/sandbox/api/")) {
-    const asset = yield* Effect.promise(() => env.ASSETS.fetch(request));
+    const document = url.pathname === "/sandbox/" || workspaceIdFromPath(url.pathname) !== null;
+
+    if (!document && !url.pathname.startsWith("/sandbox/assets/"))
+      return new Response("Workspace not found", { status: 404 });
+    const assetUrl = new URL(request.url);
+
+    if (document) assetUrl.pathname = "/sandbox/";
+    const asset = yield* Effect.promise(() => env.ASSETS.fetch(new Request(assetUrl, request)));
     const headers = new Headers(asset.headers);
 
     headers.set("x-content-type-options", "nosniff");
@@ -221,6 +234,38 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
   const address = (id: string) =>
     ThreadId.make(`${session.accountId.toLowerCase()}--${id.toLowerCase()}`);
+
+  if (request.method === "POST" && url.pathname === "/sandbox/api/commands") {
+    const input = yield* Schema.decodeEffect(
+      Schema.fromJsonString(Schema.Struct({ workspaceId: WorkspaceId, ...CommandInput.fields })),
+    )(yield* boundedBody(request));
+
+    const limit = yield* Effect.promise(() => env.RUN_LIMIT.limit({ key: session.accountId }));
+
+    if (!limit.success)
+      return json({ message: "Please wait a moment before running another command." }, 429);
+
+    const reply = yield* Effect.tryPromise(
+      async () => await env.THREADS.getByName(address(input.workspaceId)).command(input),
+    );
+
+    const decoded = yield* Schema.decodeEffect(CommandAccepted)(reply);
+
+    return "error" in decoded
+      ? json({ message: decoded.error.message }, decoded.error.status)
+      : json(decoded.command, 202);
+  }
+  if (request.method === "POST" && url.pathname === "/sandbox/api/stop-command") {
+    const input = yield* Schema.decodeEffect(
+      Schema.fromJsonString(Schema.Struct({ workspaceId: WorkspaceId, requestId: WorkspaceId })),
+    )(yield* boundedBody(request));
+
+    const stopped = yield* Effect.tryPromise(() =>
+      env.THREADS.getByName(address(input.workspaceId)).stopCommand(input.requestId),
+    );
+
+    return stopped ? json({}) : json({ message: "The command has not been accepted yet." }, 409);
+  }
 
   if (request.method === "POST" && url.pathname === "/sandbox/api/messages") {
     const input = yield* Schema.decodeEffect(Schema.fromJsonString(MessageInput))(
@@ -279,6 +324,18 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
     );
 
     const threadId = address(workspaceId);
+
+    if (url.pathname === "/sandbox/api/commands")
+      return json(yield* Effect.tryPromise(() => env.THREADS.getByName(threadId).commands()));
+    if (url.pathname === "/sandbox/api/command-result") {
+      const requestId = yield* Schema.decodeEffect(WorkspaceId)(
+        url.searchParams.get("requestId") ?? "",
+      );
+
+      return json(
+        yield* Effect.tryPromise(() => env.THREADS.getByName(threadId).commandResult(requestId)),
+      );
+    }
 
     if (url.pathname === "/sandbox/api/text") {
       const text = Stream.unwrap(
@@ -393,6 +450,18 @@ export default Worker.make(Layer.empty, {
           json(
             { message: "The request exceeds this workspace's limits." },
             error.limit === "input-bytes" ? 413 : 429,
+          ),
+        ),
+      AdmissionPolicyError: (error) =>
+        Effect.succeed(
+          json(
+            {
+              message:
+                error.code === "sandbox-shell-active"
+                  ? "Wait for the current command to finish before messaging the agent."
+                  : "This workspace is not accepting new work.",
+            },
+            error.reason === "unavailable" ? 503 : 409,
           ),
         ),
     }),

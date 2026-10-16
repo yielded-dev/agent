@@ -13,7 +13,8 @@ import { Model } from "effect/ai";
 import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 
 import { codingAgent, definitions } from "./agent.ts";
-import { MAX_INPUT_BYTES, SandboxError } from "./contract.ts";
+import { commandAdmission, commandMaintenance, ShellCommands } from "./commands.ts";
+import { CommandInput, MAX_INPUT_BYTES, SandboxError, WorkspaceId } from "./contract.ts";
 import { codingToolsLive } from "./tools.ts";
 import { Workspace } from "./workspace.ts";
 
@@ -77,9 +78,13 @@ const registered = DurableAgentRuntime.layerRegistered([
 ]).pipe(Layer.provide(codingToolsLive));
 
 // Share the owner's existing storage with tools; alarms use the registered runtime.
-const owner = ThreadWorkDiscovery.layer.pipe(Layer.provideMerge(ThreadObject.layer([])));
+const owner = ThreadWorkDiscovery.layer.pipe(
+  Layer.provideMerge(ThreadObject.layer([]).pipe(Layer.provide(commandAdmission))),
+);
 
 const application = Layer.fresh(ThreadMaintenance.layer).pipe(
+  Layer.provideMerge(commandMaintenance),
+  Layer.provideMerge(ShellCommands.layer),
   Layer.provideMerge(registered),
   Layer.provideMerge(owner),
   Layer.provideMerge(Workspace.layer),
@@ -100,6 +105,39 @@ export class CodingThread extends ThreadObject.make(application, {
   maxQueueDepthPerLane: 2,
   maxInputBytes: MAX_INPUT_BYTES,
 }) {
+  command(input: unknown) {
+    return this[DurableObject.RunSymbol](
+      Effect.gen(function* () {
+        const decoded = yield* Schema.decodeUnknownEffect(CommandInput)(input);
+        const command = yield* (yield* ShellCommands).accept(decoded);
+
+        return { command };
+      }).pipe(Effect.catchTag("CommandRejected", (error) => Effect.succeed({ error }))),
+    );
+  }
+  commands() {
+    return this[DurableObject.RunSymbol](
+      Effect.flatMap(ShellCommands, (commands) => commands.list),
+    );
+  }
+  commandResult(id: string) {
+    return this[DurableObject.RunSymbol](
+      Effect.gen(function* () {
+        const requestId = yield* Schema.decodeEffect(WorkspaceId)(id);
+
+        return yield* (yield* ShellCommands).wait(requestId);
+      }),
+    );
+  }
+  stopCommand(id: string) {
+    return this[DurableObject.RunSymbol](
+      Effect.gen(function* () {
+        const requestId = yield* Schema.decodeEffect(WorkspaceId)(id);
+
+        return yield* (yield* ShellCommands).stop(requestId);
+      }),
+    );
+  }
   files(path: string) {
     return this[DurableObject.RunSymbol](
       Effect.gen(function* () {
@@ -112,10 +150,13 @@ export class CodingThread extends ThreadObject.make(application, {
         if (!description.running) return [];
         const entries = yield* sandbox.readDirectory(directory);
 
-        return entries.slice(0, 200).map((entry) => ({
-          path: `${path ? `${path}/` : ""}${entry.name}`,
-          directory: entry.type === "directory",
-        }));
+        return entries
+          .filter((entry) => !entry.name.startsWith(".sandbox-agent"))
+          .slice(0, 200)
+          .map((entry) => ({
+            path: `${path ? `${path}/` : ""}${entry.name}`,
+            directory: entry.type === "directory",
+          }));
       }),
     );
   }

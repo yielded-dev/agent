@@ -20,10 +20,10 @@ import { AsyncResult } from "effect/reactivity";
 import { Check, LoaderCircle } from "lucide-react";
 import { useMemo } from "react";
 
-import { type Entry } from "./contract";
+import { type Entry, type ShellCommand } from "./contract";
+import { signIn } from "./location";
 import { newWorkspace, workspace, workspaceId } from "./state";
 
-const signIn = "/auth/login?return=%2Fsandbox%2F";
 const workspaceDescription = "Files live in a temporary, isolated workspace.";
 
 const Brand = () => (
@@ -37,6 +37,7 @@ export function App() {
   const session = useAtomValue(auth.session);
   const account = useAtomValue(accountLifetime);
   const signOut = useAtomSet(auth.signOut);
+  const login = useAtomSet(signIn);
 
   if (
     !AsyncResult.isSuccess(session) ||
@@ -52,13 +53,16 @@ export function App() {
         <p>Give the agent a coding task. Follow its commands and inspect the files.</p>
         {AsyncResult.isFailure(session) ? (
           <p role="alert">
-            Could not check your session. <a href={signIn}>Sign in again</a>
+            Could not check your session.{" "}
+            <Button variant="ghost" onClick={() => login()}>
+              Sign in again
+            </Button>
           </p>
         ) : AsyncResult.isSuccess(session) &&
           (!session.value || !session.value.scopes.some((scope) => scope === "agent:sandbox")) ? (
-          <a className="primary" href={signIn}>
+          <Button onClick={() => login()}>
             {session.value ? "Sign in again to open Sandbox →" : "Sign in to start →"}
-          </a>
+          </Button>
         ) : (
           <p role="status">Checking your session…</p>
         )}
@@ -79,6 +83,30 @@ export function App() {
 
 function Account({ subject, signOut }: { subject: string; signOut: () => void }) {
   const id = useAtomValue(workspaceId(subject));
+  const create = useAtomSet(newWorkspace);
+
+  if (id === null)
+    return (
+      <main className="gate">
+        <Brand />
+        <h1>This workspace link is invalid.</h1>
+        <p>Open a saved workspace link or start a new one.</p>
+        <Button onClick={() => create(subject)}>New workspace</Button>
+      </main>
+    );
+
+  return <AccountWorkspace key={id} id={id} subject={subject} signOut={signOut} />;
+}
+
+function AccountWorkspace({
+  id,
+  subject,
+  signOut,
+}: {
+  id: string;
+  subject: string;
+  signOut: () => void;
+}) {
   // Atom.family caches bundles weakly; retain this workspace while it is mounted.
   const atoms = useMemo(() => workspace(id), [id]);
   const state = useAtomValue(atoms.state);
@@ -117,10 +145,12 @@ function Workspace({ id }: { id: string }) {
   const atoms = workspace(id);
 
   useAtomMount(atoms.events);
+  useAtomMount(atoms.commandEvents);
   const state = useAtomValue(atoms.state);
   const [draft, setDraft] = useAtom(atoms.draft);
   const [sent, send] = useAtom(atoms.send);
   const [stopped, stop] = useAtom(atoms.stop);
+  const reconnectCommand = useAtomSet(atoms.reconnectCommand);
 
   const { entries, results } = useMemo(() => {
     const calls = new Set(state.entries.filter((entry) => entry.kind === "tool").map(toolKey));
@@ -138,6 +168,23 @@ function Workspace({ id }: { id: string }) {
       results,
     };
   }, [state.entries]);
+
+  const timeline = useMemo(
+    () =>
+      [
+        ...entries.map((entry) => ({
+          position: entry.sequence ?? Number.parseInt(entry.id, 10),
+          entry,
+          command: undefined,
+        })),
+        ...state.commands.map((command) => ({
+          position: command.afterSequence + 0.5,
+          entry: undefined,
+          command,
+        })),
+      ].sort((a, b) => a.position - b.position),
+    [entries, state.commands],
+  );
 
   const completed = state.entries.findLast(
     (entry) => entry.kind === "status" && Object.hasOwn(completionLabels, entry.text),
@@ -164,7 +211,7 @@ function Workspace({ id }: { id: string }) {
         </p>
         <Conversation className="transcript" aria-label="Workspace transcript" aria-live="off">
           <ConversationContent className="transcript-content">
-            {state.entries.length === 0 && !state.pending && (
+            {state.entries.length === 0 && state.commands.length === 0 && !state.pending && (
               <div className="welcome">
                 <small>FULL FILESYSTEM + BASH</small>
                 <h2>From a prompt to working files.</h2>
@@ -184,27 +231,32 @@ function Workspace({ id }: { id: string }) {
             {state.entries.length >= 500 && (
               <p className="muted">Showing the latest 500 entries.</p>
             )}
-            {entries.map((entry) => (
-              <TranscriptEntry
-                key={entry.id}
-                entry={entry}
-                result={results.get(toolKey(entry))}
-                active={state.active !== null && entry.runId === state.runId}
-              />
-            ))}
-            {state.pending && (
-              <Message from="user">
-                <small>
-                  You ·{" "}
-                  {state.uncertain
-                    ? "Checking delivery"
-                    : state.pending.submissionId
-                      ? "Accepted; awaiting history"
-                      : "Sending…"}
-                </small>
-                <p className="whitespace-pre-wrap">{state.pending.text}</p>
-              </Message>
+            {timeline.map(({ entry, command }) =>
+              entry ? (
+                <TranscriptEntry
+                  key={entry.id}
+                  entry={entry}
+                  result={results.get(toolKey(entry))}
+                  active={state.active !== null && entry.runId === state.runId}
+                />
+              ) : command ? (
+                <CommandEntry key={`command:${command.requestId}`} command={command} />
+              ) : null,
             )}
+            {state.pending &&
+              !state.commands.some((command) => command.requestId === state.pending?.requestId) && (
+                <Message from="user">
+                  <small>
+                    You ·{" "}
+                    {state.uncertain
+                      ? "Checking delivery"
+                      : state.pending.submissionId
+                        ? "Accepted; awaiting history"
+                        : "Sending…"}
+                  </small>
+                  <p className="whitespace-pre-wrap">{state.pending.text}</p>
+                </Message>
+              )}
             {state.drafts.map((entry) => (
               <TranscriptEntry key={entry.id} entry={entry} streaming />
             ))}
@@ -233,10 +285,12 @@ function Workspace({ id }: { id: string }) {
               Could not send. Check your prompt and try again.
             </p>
           )}
-          <label htmlFor="prompt">Your coding task</label>
+          <label htmlFor="prompt">
+            {draft.trimStart().startsWith("!") ? "Run a command" : "Your coding task"}
+          </label>
           <textarea
             id="prompt"
-            placeholder="What would you like to build?"
+            placeholder="Ask the agent, or use ! to run a command"
             value={draft}
             maxLength={8000}
             onChange={(event) => setDraft(event.target.value)}
@@ -250,26 +304,41 @@ function Workspace({ id }: { id: string }) {
           />
           <div className="bar">
             <small>
-              {state.active
-                ? "Agent is working"
-                : state.reviewRequired
-                  ? "Review required"
-                  : state.uncertain
-                    ? "Awaiting delivery status"
-                    : "⌘ / Ctrl + Enter to send"}
+              {state.pending?.command
+                ? state.admissionRequestId
+                  ? "Sending command…"
+                  : "Command is running"
+                : state.active
+                  ? "Agent is working"
+                  : state.reviewRequired
+                    ? "Review required"
+                    : state.uncertain
+                      ? "Awaiting delivery status"
+                      : "! runs Bash · ⌘ / Ctrl + Enter to send"}
             </small>
-            {state.active ? (
+            {state.pending?.command && state.uncertain ? (
+              <Button variant="outline" type="button" onClick={() => reconnectCommand()}>
+                Reconnect
+              </Button>
+            ) : state.active || state.pending?.command ? (
               <Button
                 variant="outline"
                 type="button"
-                disabled={stopped.waiting}
+                disabled={
+                  stopped.waiting ||
+                  !!state.admissionRequestId ||
+                  (state.pending?.command &&
+                    !state.commands.some(
+                      (command) => command.requestId === state.pending?.requestId,
+                    ))
+                }
                 onClick={() => stop()}
               >
                 {stopped.waiting ? "Stopping…" : "■ Stop"}
               </Button>
             ) : (
               <Button variant="default" disabled={busy || !draft.trim()} type="submit">
-                Send ↑
+                {draft.trimStart().startsWith("!") ? "Run ↵" : "Send ↑"}
               </Button>
             )}
           </div>
@@ -277,6 +346,51 @@ function Workspace({ id }: { id: string }) {
       </section>
       <Files id={id} />
     </main>
+  );
+}
+
+function CommandEntry({ command }: { command: ShellCommand }) {
+  const output = command.output;
+  const running = command.status === "queued" || command.status === "running";
+
+  return (
+    <article className="rounded-lg border border-border bg-muted/30 p-4" aria-label="Shell command">
+      <div className="mb-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        <span>Shell · /workspace</span>
+        <span role="status">
+          {running
+            ? "Running…"
+            : command.status === "unknown"
+              ? "Outcome unknown"
+              : output?.timedOut
+                ? "Timed out"
+                : `Exit ${output?.exitCode ?? "—"}`}
+        </span>
+      </div>
+      <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-sm">
+        $ {command.script}
+      </pre>
+      {output && (
+        <div className="mt-3 border-t border-border pt-3">
+          {output.stdout && (
+            <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-sm">
+              {output.stdout}
+            </pre>
+          )}
+          {output.stderr && (
+            <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-sm text-destructive">
+              {output.stderr}
+            </pre>
+          )}
+          {!output.stdout && !output.stderr && (
+            <p className="text-xs text-muted-foreground">No output.</p>
+          )}
+          {output.truncated && (
+            <p className="mt-2 text-xs text-muted-foreground">Output was truncated.</p>
+          )}
+        </div>
+      )}
+    </article>
   );
 }
 

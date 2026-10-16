@@ -8,7 +8,7 @@ import {
 import { Context, Effect, Layer, Schema } from "effect";
 import { DurableObjectState } from "effect-cf";
 
-/** Only a coding tool may create a workspace; readers require its retained instance. */
+/** Tools and direct commands may create a workspace; readers require its retained instance. */
 export class Workspace extends Context.Service<
   Workspace,
   {

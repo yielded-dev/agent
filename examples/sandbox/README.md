@@ -1,6 +1,8 @@
 # Sandbox coding agent
 
-A signed-in coding workspace at `agent.yielded.dev/sandbox/`.
+A signed-in coding workspace at `agent.yielded.dev/sandbox/<workspace-id>`.
+Opening `/sandbox/` resumes this browser's last workspace for the signed-in account.
+Workspace links select within that account; knowing an ID does not grant access.
 
 `@yielded/agent` runs the conversation and tools in a durable Thread Object.
 `@yielded/sandbox` supplies the isolated container, filesystem and process receipts.
@@ -12,6 +14,13 @@ Durable Steps, and retries retain the original deadline and workspace identity.
 The browser reconciles live assistant text and provider reasoning summaries with
 canonical history, so reconnecting never resubmits work. `@yielded/ui` renders the
 conversation, Markdown, and paired tool results; the example owns its Tailwind theme.
+
+Prefix a message with `!` to run Bash directly, for example
+`!python3 summarize.py sample.txt -n 2`. These commands do not call the model.
+Each starts in `/workspace`, runs for up to 30 seconds, and retains its output and
+exit status. There is no interactive stdin or persistent shell session. Commands
+and agent work cannot overlap. A workspace retains up to 100 command receipts;
+reconnecting or retrying the same request resumes its original process.
 
 A workspace belongs to the authenticated account. Files are temporary: the
 container expires after 30 minutes of inactivity. An expired workspace cannot be

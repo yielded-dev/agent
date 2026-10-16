@@ -15,6 +15,45 @@ export const MessageInput = Schema.Struct({ workspaceId: WorkspaceId, ...CodingI
 
 export const Accepted = Schema.Struct({ submissionId: Schema.String });
 
+export const CommandInput = Schema.Struct({
+  requestId: WorkspaceId,
+  script: Schema.NonEmptyString.check(
+    Schema.isMaxLength(8_000),
+    Schema.makeFilter((value: string) => !value.includes("\0"), {
+      expected: "a command without NUL characters",
+    }),
+  ),
+});
+
+export const CommandOutput = Schema.Struct({
+  stdout: Schema.String.check(Schema.isMaxLength(16 * 1024)),
+  stderr: Schema.String.check(Schema.isMaxLength(16 * 1024)),
+  exitCode: Schema.Int,
+  timedOut: Schema.Boolean,
+  truncated: Schema.Boolean,
+  nextOffset: Schema.NullOr(Schema.Natural),
+});
+
+export const ShellCommand = Schema.Struct({
+  ...CommandInput.fields,
+  afterSequence: Schema.Natural,
+  createdAt: Schema.Finite,
+  status: Schema.Literals(["queued", "running", "completed", "unknown"]),
+  output: Schema.optionalKey(CommandOutput),
+});
+
+export type ShellCommand = typeof ShellCommand.Type;
+
+export class CommandRejected extends Schema.TaggedError<CommandRejected>()("CommandRejected", {
+  message: Schema.String,
+  status: Schema.Literals([400, 409, 429]),
+}) {}
+
+export const CommandAccepted = Schema.Union([
+  Schema.Struct({ command: ShellCommand }),
+  Schema.Struct({ error: CommandRejected }),
+]);
+
 export const Entry = Schema.Struct({
   id: Schema.String,
   kind: Schema.Literals(["user", "assistant", "reasoning", "tool", "result", "status"]),
@@ -28,6 +67,7 @@ export const Entry = Schema.Struct({
   turnId: Schema.optionalKey(Schema.String),
   toolCallId: Schema.optionalKey(Schema.String),
   toolResultId: Schema.optionalKey(Schema.String),
+  sequence: Schema.optionalKey(Schema.Natural),
 });
 
 export type Entry = typeof Entry.Type;

@@ -1,10 +1,11 @@
 import { ContextWindow } from "@yielded/agent/context-window";
 import { DurableStep, ToolExecutionClass } from "@yielded/agent/durable-step";
 import { ThreadWorkDiscovery, type ThreadWorkRequest } from "@yielded/agent/thread-work";
-import type { SandboxCommand } from "@yielded/sandbox/cloudflare";
+import type { SandboxCommand, SandboxProcessHandle } from "@yielded/sandbox/cloudflare";
 import { Clock, Effect, Schema } from "effect";
 import { Tool, Toolkit } from "effect/ai";
 
+import { CommandOutput } from "./contract.ts";
 import { Workspace } from "./workspace.ts";
 
 export const CODING_ROOT = "/workspace";
@@ -38,18 +39,11 @@ const failure = (
 };
 
 /** Output is a combined UTF-8 byte budget, independently of the native capture budget. */
-export const CodingToolResult = Schema.Struct({
-  stdout: OutputText,
-  stderr: OutputText,
-  exitCode: Schema.Int,
-  timedOut: Schema.Boolean,
-  truncated: Schema.Boolean,
-  nextOffset: Schema.NullOr(Schema.Natural),
-});
+export const CodingToolResult = CommandOutput;
 
 type CodingToolResult = typeof CodingToolResult.Type;
 
-const Allocation = Schema.Struct({
+export const Allocation = Schema.Struct({
   processId: Schema.NonEmptyString,
   instanceId: Schema.NonEmptyString,
   deadlineAt: Schema.Finite,
@@ -83,6 +77,91 @@ const boundedResult = (result: CodingToolResult): CodingToolResult => {
     truncated: result.truncated || stdout !== result.stdout || stderr !== result.stderr,
   };
 };
+
+export const allocateCommand = Effect.fnUntraced(function* (
+  deadlineAt?: number,
+  timeoutMs = 30_000,
+) {
+  const workspace = yield* Workspace;
+  const sandbox = yield* workspace.open;
+  const { instanceId } = yield* sandbox.ensure();
+  const processId = yield* sandbox.allocateProcess();
+
+  if (!processId.startsWith(`process:${instanceId}:`))
+    return yield* failure(
+      "workspace",
+      "Workspace changed while allocating a process; no command was dispatched.",
+      "not-started",
+    );
+
+  return {
+    processId,
+    instanceId,
+    workspaceIdentity: workspace.identity,
+    deadlineAt: deadlineAt ?? (yield* Clock.currentTimeMillis) + timeoutMs,
+  };
+});
+
+/** The caller retains the allocation before dispatch and the result before acknowledgement. */
+export const executeCommand = Effect.fnUntraced(function* (
+  command: SandboxCommand,
+  allocation: typeof Allocation.Type,
+  structured = false,
+) {
+  const sandbox = yield* (yield* Workspace).open;
+
+  yield* sandbox.ensure({
+    expectedInstanceId: allocation.instanceId,
+    recovery: "exactWorkspaceRequired",
+  });
+
+  const process = yield* sandbox.exec(command, {
+    processId: allocation.processId,
+    cwd: CODING_ROOT,
+    deadlineAt: allocation.deadlineAt,
+    workspaceIdentity: allocation.workspaceIdentity,
+  });
+
+  return yield* readCommandOutput(process, allocation.deadlineAt, structured);
+});
+
+export const readCommandOutput = Effect.fnUntraced(function* (
+  process: SandboxProcessHandle,
+  deadlineAt: number,
+  structured = false,
+) {
+  const remaining = Math.max(1, deadlineAt - (yield* Clock.currentTimeMillis) + 10_000);
+
+  const output = yield* process.outputText({
+    timeout: remaining,
+    maxBytes: 128 * 1024,
+    acknowledge: false,
+  });
+
+  if (structured && output.exitCode === 0 && !output.timedOut) {
+    if (output.truncated)
+      return yield* failure(
+        "protocol",
+        "The filesystem helper returned an oversized response; retain its receipt.",
+        "unknown",
+      );
+
+    const reply = yield* Schema.decodeEffect(Schema.fromJsonString(FileReply))(output.stdout).pipe(
+      Effect.mapError((cause) =>
+        failure(
+          "protocol",
+          "The filesystem helper returned an invalid response; retain its receipt.",
+          "unknown",
+          cause,
+        ),
+      ),
+    );
+
+    return boundedResult({ ...reply, timedOut: false });
+  }
+
+  return boundedResult({ ...output, nextOffset: null });
+});
 
 /**
  * The host provides an exact-bound Workspace for the authorized materialization
@@ -126,82 +205,13 @@ const run = Effect.fn("CodingTools.run")(
     const allocation = yield* steps.do(
       "allocate",
       Allocation,
-      Effect.gen(function* () {
-        const workspaceIdentity = workspace.identity;
-
-        const { instanceId } = yield* sandbox.ensure();
-        const processId = yield* sandbox.allocateProcess();
-
-        if (!processId.startsWith(`process:${instanceId}:`))
-          return yield* failure(
-            "workspace",
-            "Workspace changed while allocating a process; no command was dispatched.",
-            "not-started",
-          );
-
-        return {
-          processId,
-          instanceId,
-          workspaceIdentity,
-          deadlineAt: (yield* Clock.currentTimeMillis) + timeoutMs,
-        };
-      }),
+      allocateCommand(undefined, timeoutMs),
     );
 
     const result = yield* steps.do(
       "terminal",
       CodingToolResult,
-      Effect.gen(function* () {
-        yield* sandbox.ensure({
-          expectedInstanceId: allocation.instanceId,
-          recovery: "exactWorkspaceRequired",
-        });
-
-        const process = yield* sandbox.exec(command, {
-          processId: allocation.processId,
-          cwd: CODING_ROOT,
-          deadlineAt: allocation.deadlineAt,
-          workspaceIdentity: allocation.workspaceIdentity,
-        });
-
-        // Native deadlines kill the process group. This timeout only bounds observation, with cleanup grace.
-        const remaining = Math.max(
-          1,
-          allocation.deadlineAt - (yield* Clock.currentTimeMillis) + 10_000,
-        );
-
-        const output = yield* process.outputText({
-          timeout: remaining,
-          maxBytes: 128 * 1024,
-          acknowledge: false,
-        });
-
-        if (structured && output.exitCode === 0 && !output.timedOut) {
-          if (output.truncated)
-            return yield* failure(
-              "protocol",
-              "The filesystem helper returned an oversized response; retain its receipt.",
-              "unknown",
-            );
-
-          const reply = yield* Schema.decodeEffect(Schema.fromJsonString(FileReply))(
-            output.stdout,
-          ).pipe(
-            Effect.mapError((cause) =>
-              failure(
-                "protocol",
-                "The filesystem helper returned an invalid response; retain its receipt.",
-                "unknown",
-                cause,
-              ),
-            ),
-          );
-
-          return boundedResult({ ...reply, timedOut: false });
-        }
-
-        return boundedResult({ ...output, nextOffset: null });
-      }).pipe(
+      executeCommand(command, allocation, structured).pipe(
         // A lost response is not permission to dispatch again with a different identity.
         // Interrupting this attempt fences even an allocated, not-yet-dispatched ticket.
         Effect.onInterrupt(() => sandbox.signalProcess(allocation.processId, 9)),
