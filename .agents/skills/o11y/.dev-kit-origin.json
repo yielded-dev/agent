@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "selector": "o11y",
+  "name": "o11y",
+  "baseDigest": "sha256:1f1fe250cccc71692c71b23b2f68dd4fb3d370b0057fe364f67db1f863dc01b5",
+  "source": {
+    "type": "git",
+    "source": "dan-skills",
+    "repository": "https://github.com/danieljvdm/skills.git",
+    "resolved": "0d50b6c37d3afb8b153dac6bff52e8ccac756cab"
+  }
+}

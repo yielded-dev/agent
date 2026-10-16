@@ -1,0 +1,6 @@
+Portions of the structural checks guidance in references/harness-design.md adapt ideas from Lauren Tan's pstack engineering principles, distributed under the MIT license in LICENSE.
+
+Source: https://github.com/cursor/plugins/tree/99743e9c151c8537cbbf1f98bb38f34ef3368453/pstack/skills
+Copyright (c) 2026 Lauren Tan
+
+Adaptations select and combine guidance for Dan's stack. They preserve deliberate one-consumer library boundaries, proportionate reusable verification, scoped autonomy, and explicit publication permissions. Other material expresses Dan's independently supplied preferences. docs/principles.md records the selected sources and substantive differences; it is provenance material, not a runtime prerequisite.

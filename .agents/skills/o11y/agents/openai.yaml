@@ -1,0 +1,3 @@
+interface:
+  display_name: "Observability"
+  short_description: "Trace apps with Maple, Cloudflare, and Effect OTLP"

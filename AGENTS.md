@@ -53,9 +53,16 @@ Before editing code:
 4. Read the relevant guide, API comments, and neighboring tests for the modules in scope.
 5. Read `node_modules/effect/AGENTS.md` before writing Effect code (the canonical Effect
    guidance; `.agents/skills` carries the focused task skills).
-6. Read `.agents/skills/effect-development/references/cli/index.md` before creating or
+6. Read `.agents/skills/effect/references/cli/index.md` before creating or
    changing repository scripts.
 7. Inspect neighboring package tests before introducing a new pattern.
+
+Use the repository's exact `.agents/skills` paths for required workflows; do not
+rely on a client choosing these over skills installed elsewhere. Read
+`.agents/skills/effect/SKILL.md` for Effect work and
+`.agents/skills/cloudflare/SKILL.md` for Cloudflare work, then follow the relevant
+references. The installed Effect package's `AGENTS.md` remains authoritative for
+its APIs.
 
 Keep user-facing behavior in existing guides, implementation contracts beside the code, and
 verification evidence in the task or PR artifacts. Explain change rationale in the pull request.
@@ -157,8 +164,10 @@ packages.
 - The root catalog is the single source for the exact Effect v4 version. Do not pin Effect
   independently in a package.
 - After changing an Effect-family version, run `vp install` and `vp run check`.
-- Contributor skills under `.agents/skills` are repo-owned. Dev Kit copies track their source
-  in a `.dev-kit-origin.json` receipt. Check for upstream updates with
+- Shared contributor skills under `.agents/skills` are authored in
+  [danieljvdm/skills](https://github.com/danieljvdm/skills) and distributed by
+  Dev Kit. Copies track their source in a `.dev-kit-origin.json` receipt. Check for
+  upstream updates with
   `bunx @danieljvdm/dev-kit@latest skills status`, and fast-forward an unmodified skill with
   `bunx @danieljvdm/dev-kit@latest skills update <name>`; a skill with local edits is left for an
   agent merge instead of being overwritten. Add a new skill from the approved catalog with
@@ -171,20 +180,23 @@ packages.
   asking for a personal Infisical login; otherwise use provider keys already in the environment.
 - For lockfile-only PR fixes, push after `vp install --frozen-lockfile` passes; finish full validation afterward.
 
-Keep shared Dev Kit skills identical to their published source. Put
+Keep shared skills identical to their pinned source. Improve shared guidance in
+the source repository, then refresh the copies through Dev Kit. Put
 repository-specific commands, gates, and constraints in this file or linked
-guidance. Keep contributor skills committed so fresh checkouts are self-contained.
+guidance. `.agents/skills/test-audit` remains local. Keep contributor skills
+committed so fresh checkouts are self-contained.
 
 ## Change discipline
 
 - This library is a v0 beta. Prefer simpler machinery and measured performance gains over
   compatibility with superseded APIs or storage formats.
 - Add or update Effect Schema definitions before implementing new wire or persisted values.
-- Use the [simplify skill](.agents/skills/simplify/SKILL.md) to consider removing unnecessary
-  mechanisms within the affected workflow. Public APIs and persisted formats may change to
-  simplify the architecture or meet the task's requirements. Do not preserve obsolete paths or
-  add compatibility layers unless the user explicitly requires compatibility. Keep unrelated
-  cleanup out of scope; the architecture and durability rules above still apply.
+- Keep ordinary changes lean and scoped to the requested outcome. Load
+  `.agents/skills/simplify/SKILL.md` when the user explicitly asks for simplification;
+  do not automatically run a broad simplify pass. Public APIs and persisted formats may
+  change to simplify the architecture or meet the task's requirements. Do not preserve
+  obsolete paths or add compatibility layers unless the user explicitly requires
+  compatibility. The architecture and durability rules above still apply.
 - Update existing guides or API comments when a change affects their documented behavior.
 - Explain rejected alternatives in the pull request when a future agent could reasonably
   re-propose them.
@@ -213,6 +225,11 @@ code. New or expanded committed automation requires a current regression or an
 explicit human test request, plus a concrete gap existing proof cannot cover.
 Being a library does not waive this bar or require tests for every transition.
 
+For a new regression, cite its pre-existing public issue or offending commit beside
+the test. For an explicit human test request, record the requested seam before
+implementation. A current PR, invented incident, or private identifier is not
+regression provenance, and a citation alone does not establish test value.
+
 Load the [testing skill](.agents/skills/testing/SKILL.md) before planning proof
 or adding, retaining, or removing tests. It owns selection, failure-first
 isolation, artifacts, evidence reuse and placement. Keep useful public-contract,
@@ -221,6 +238,15 @@ matrices and implementation mirrors. The final `vp run ready` gate still applies
 
 For audits of existing tests, use [test-audit](.agents/skills/test-audit/SKILL.md)
 for read-only discovery, candidate evidence, and retention checks before cleanup.
+
+For performance-sensitive changes, read `.agents/skills/measure-performance/SKILL.md`
+and use the existing harness that answers the concrete question. For deployed durable
+runtime comparisons, follow [the durable benchmark](examples/durable-bench/README.md):
+start with its quick preset and deterministic provider, reuse saved fixtures, and
+avoid new benchmark infrastructure or lockfile changes. For first-request startup
+or CPU attribution, follow [the cold-start reproduction](examples/cold-start/README.md);
+collect CPU profiles separately from latency measurements. Documentation-only changes
+do not require benchmark runs.
 
 Use [pull-requests](.agents/skills/pull-requests/SKILL.md) for concise
 PR descriptions. Add diagrams only for meaningful architecture changes and code

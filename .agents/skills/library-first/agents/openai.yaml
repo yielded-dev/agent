@@ -1,0 +1,3 @@
+interface:
+  display_name: "Library first"
+  short_description: "Build reliable libraries within or across repos"

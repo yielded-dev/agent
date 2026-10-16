@@ -1,0 +1,3 @@
+interface:
+  display_name: "Measure and protect performance"
+  short_description: "Verify critical paths and prevent performance regressions"

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Project setup"
+  short_description: "Set up repo-owned TypeScript and Cloudflare projects"

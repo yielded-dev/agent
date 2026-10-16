@@ -1,0 +1,11 @@
+# Designing the shared harness
+
+Find and use the existing application or library harness first. If a recurring question lacks one, improve the owning repository's tooling. Exercise the real public interface and share scenario setup, measurement, and result definitions across agent commands, tests, and CI. Keep those entrypoints thin. Do not copy a script for each agent or recreate product behavior inside the harness. Use stable contracts and meaningful work budgets as fast CI regression checks. Calibrate timing gates to observed variation and report inconclusive runs explicitly.
+
+Start with one concrete operation and the result needed to answer the current question. For repeatable comparisons, support selected workloads, explicit revisions/settings, reproducible fixtures, machine-readable results, and a short human summary as needed. Use seeded inputs or scripted providers to isolate runtime work. Deterministic setup and operation counts do not make network latency or live model behavior deterministic; measure those separately when they are the question. Generalize the measurement that recurs; defer generic runners, plugin systems, and broad scenario matrices until actual use requires them.
+
+For Effect workloads, exercise the real service through the repository's test Layers and Effect-aware test runner. Use its controlled Clock and other test services when determinism is the question; do not build a competing scheduler or use sleeps to stabilize tests. Timing benchmarks still need real elapsed-time measurements. Keep actual storage and runtime adapters when their transactions, recovery, or lifecycle guarantees are what the check must prove.
+
+Small exploratory probes are useful for locating a cause. Promote the useful measurement into the shared harness before relying on it repeatedly. Keep reusable code with its owner and raw run evidence in artifacts.
+
+When a recurring correction can be checked mechanically, encode it at the owner: a type or schema, lint rule, runtime invariant, or focused regression check. Prefer one authoritative enforcement mechanism to repeated prompt warnings. Keep judgment-based guidance concise and explain the failure it prevents. A new check should distinguish a real failure and earn its ongoing execution cost.

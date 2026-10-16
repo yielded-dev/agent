@@ -2,9 +2,9 @@
   "version": 1,
   "selector": "dev-kit",
   "name": "dev-kit",
-  "baseDigest": "sha256:fff2f65412a65d3cf1f37f3fe20ffd0ba7a9e620e9f6340bf8a8be3b09af3f0d",
+  "baseDigest": "sha256:4535489cd23d14545eb487abf22bd068f0aa2ece4784af059da3fabd88ad48ca",
   "source": {
     "type": "bundled",
-    "version": "2.1.1"
+    "version": "2.1.2"
   }
 }

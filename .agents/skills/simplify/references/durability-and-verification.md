@@ -1,0 +1,9 @@
+# Durability and verification
+
+Treat durability, verification, and validation as design choices with latency and maintenance costs. A direct call with ordinary error handling is often enough. Before adding or retaining queues, journals, receipts, retry loops, reconciliation, or verification stages, identify the required guarantee, the concrete failure they prevent, and why the existing owner cannot handle it. Hypothetical future scale and just-in-case robustness do not justify machinery. Keep durable coordination where interruption, duplicate delivery, or uncertain external outcomes actually require it.
+
+Use existing evidence and checks first. Add validation only for a concrete gap in what must be established. Remove duplicate checks that establish no additional guarantee. Avoid tests that mirror the implementation and new validation frameworks for ordinary changes. Preserve required authorization, decoding of untrusted input, repository checks, and safeguards against consequential races. This preserves present requirements without inventing a general policy or validation system.
+
+Audit agent prompts as well as code: mandatory failure reproduction, serial checks, and repeated proof can add unnecessary work. Reproduce when diagnosis needs it, run focused checks, and reuse valid results for unchanged inputs. Keep the full validation gate with its existing owner. Use [feedback-loops](../../feedback-loops/SKILL.md) when recurring checks need shared tooling.
+
+Consider latency through useful completion. Moving necessary work into a slow retry queue can delay the outcome even when the initial request returns faster. Use [measure-performance](../../measure-performance/SKILL.md) for critical-path evidence and [reliable operations](../../library-first/references/reliable-operations.md) only when the retained behavior needs those guarantees.

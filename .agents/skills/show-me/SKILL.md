@@ -1,127 +1,25 @@
 ---
 name: show-me
 description: Help the user understand the current topic visually with concise diagrams, code-shape sketches, and focused HTML artifacts.
+metadata:
+  source: "https://github.com/humanlayer/skills/tree/3c2629142c5d437428269b1b722b08c0b87f574d/plugins/show-me/skills/show-me"
+  source_commit: "3c2629142c5d437428269b1b722b08c0b87f574d"
+  source_skill: "show-me"
 ---
 
-Help the user understand the current topic of conversation visually. Skip the preamble and keep prose brief. Pick the smallest view that makes the key point clear.
+# Show me
 
-- Show logic or an algorithm as pseudocode:
+Help the user understand the current topic visually. Skip the preamble and keep prose brief. Pick the smallest view that makes the key point clear; a simple answer may need no visual.
 
-```text
-on(save)
-  if content is unchanged
-    return cached result
-  write new content
-  return fresh result
-```
+- Logic or algorithms: pseudocode.
+- Runtime control flow: a call tree.
+- UI structure: a component tree with the state and module boundaries that matter.
+- File responsibility or a broad refactor: a shallow file tree.
+- Component interaction or data flow: Mermaid; use a sequence diagram when call order matters.
+- A change to an existing shape: a small `diff`. Show the whole block when it is mostly new, omitted context would hide ownership or order, or the user needs a copyable target.
 
-- Show runtime control flow as a call tree:
+Use [examples](references/examples.md) when choosing or shaping one of these views. Keep only the calls, files, props, states, and boundaries needed for the current question. Put each visual beside the short text it supports; one useful view is usually enough.
 
-```text
-submitForm
-  createSession
-    persistPrompt
-    launchAgent
-  navigateToSession
-```
+For a UI layout, state comparison, or concept that benefits from richer presentation, use an inline artifact if the client supports it, otherwise one focused HTML file. Match the product's visual language and use real labels and representative data. Add interaction only when it helps answer the question. Link the result and open it with the environment's available preview or browser tool when useful; do not assume a particular harness tool or operating-system command.
 
-- Show UI structure as a component tree, including state and module boundaries that matter:
-
-```tsx
-<SessionPage> (apps/example/src/routes/session.tsx)
-  useSessionEvents()
-  <SessionToolbar>
-    <RunSkillButton> (packages/ui)
-```
-
-- Show file responsibility or a broad refactor as a shallow file tree:
-
-```text
-src/
-├── commands/       # parses user actions
-├── sessions/       # owns session state
-└── transport/      # sends API requests
-```
-
-- Show component interaction, control flow, or data flow with Mermaid:
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant UI
-    participant Daemon
-    User->>UI: choose command
-    UI->>Daemon: send expanded prompt
-    Daemon-->>UI: stream result
-```
-
-- Use `diff` when the point is what changes and the surrounding shape already exists. Match the diff shape to the topic.
-
-For a component change:
-
-```diff
- <SessionPage>
-   useSessionEvents()
-   <SessionToolbar>
-+    <RunSkillButton />
-   <SessionTimeline>
-+    <SkillResultCard />
-```
-
-For a file-layout change:
-
-```diff
- src/
- ├── commands/
-+│   └── show-me.ts       # expands the slash command
- ├── sessions/
--└── transport.ts
-+└── transport/
-+    ├── client.ts
-+    └── stream.ts
-```
-
-For a call-tree or call-stack change:
-
-```diff
- submitForm
-   createSession
-     persistPrompt
-+    expandSkillMention
-     launchAgent
--  navigateToSession
-+  navigateToSession
-+    subscribeToEvents
-```
-
-For a state or control-flow change:
-
-```diff
- on(save)
--  write content
-+  if content is unchanged
-+    return cached result
-+  write new content
-+  invalidate cache
-```
-
-- Show the whole block when most of it is new, when omitted context would hide ownership or order, or when the user needs a copyable target shape:
-
-```ts
-function expandSkill(command: string): string {
-  const skillName = command.slice(1)
-  return `use the ${skillName} skill`
-}
-```
-
-- For a visual UI, layout, state comparison, or concept too dense for Mermaid, write one focused HTML file — a diagram, an infographic, or a short slide deck, whichever fits the point. Match the product's colors, type, spacing, and components; use real labels and data; support desktop and mobile. Then open it for the user:
-
-```
-Bash(open path/to/show-me-{description}.html)
-```
-
-### guidance
-
-Place each visual next to the short text it supports. Keep only the calls, files, props, states, and boundaries needed to answer the user's current question or the options to resolve the current discussion point.
-
-You may use one of these, you may use several, it is unlikely you will use all of them. Use your judgement and don't overwhelm the user.
+Match the destination's rendering support. GitHub PRs support Mermaid and fenced code; use the shared [PR explanation guidance](../pull-requests/references/explanation.md). Distinguish proposed or illustrative behavior from the running implementation, and do not present invented measurements as observed results.

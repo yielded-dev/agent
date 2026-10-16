@@ -1,0 +1,13 @@
+# Domain modeling and ownership
+
+Model the states and operations the current use case needs. Choose data structures that keep those operations and invariants clear. A discriminated union can replace booleans that must stay synchronized; a keyed collection can remove repeated searches. Do not enumerate speculative states or build a generic state-machine framework for a local workflow.
+
+Group code around the domain knowledge and rules it owns. Splitting a workflow into load, validate, transform, and save modules is not useful if every phase must know the same invariants. Put that knowledge behind one boundary and let callers express intent.
+
+Parse external data into trusted domain values at ingress. Derive types and codecs from the authoritative schema; avoid parallel definitions that can drift. Distinguish semantically different primitives when mixing them would be a real error. Keep pure transformations independent of transport and framework wiring.
+
+In Effect code, follow the installed guidance selected by the [Effect skill](../../effect/SKILL.md). Use Effect Schema for domain models, decoding, and derived transport variants rather than hand-written validators or parallel interfaces. Effectful domain workflows belong in services and compose as Effects; business logic need not be pure to belong in the domain. Keep service requirements visible and choose concrete Layers at the owning composition boundary. Do not replace Effect's service model with callback bags, ad hoc dependency injection, or nested runtime execution to satisfy a generic architecture principle.
+
+Avoid repeating checks for facts already established by parsing. When the current workflow requires authorization, freshness, or concurrency guarantees, enforce them at the authoritative boundary; types alone do not establish them. Keep that enforcement specific to the requirement. Do not add a generic policy or validation system because the domain might need one later. Preserve meaningful errors and resource lifetimes across adapters.
+
+Design interfaces that hide real decisions: invariants, lifecycle, storage strategy, or recovery. Judge an abstraction by how much less a caller or maintainer must understand to use or change it. If understanding a call still requires tracing every pass-through layer, collapse the layers that own no useful decision. Reduce hidden mutable state; derive values instead of maintaining synchronized copies. A one-consumer library boundary can still earn its place by owning reusable behavior. Preserve useful Effect services and resource scopes; do not inline them merely because they have one caller. Use [library-first](../../library-first/SKILL.md) for the full reusable contract.
