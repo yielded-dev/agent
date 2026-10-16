@@ -149,82 +149,100 @@ const failure = (operation: string, cause: unknown) =>
     cause,
   });
 
-const Header = Schema.Struct({
-  ...Struct.pick(ThreadRow.fields, ["thread_id", "tail_sequence"]),
-});
+// Share archive row schemas after the first import, export, or verification operation.
+const makeImportSchemas = () => {
+  const Header = Schema.Struct({
+    ...Struct.pick(ThreadRow.fields, ["thread_id", "tail_sequence"]),
+  });
 
-const Row = Schema.Struct({
-  ...Struct.pick(RecordRow.fields, ["batch_id", "sequence", "record_json", "record_id"]),
-  thread_id: ThreadId,
-});
+  const Row = Schema.Struct({
+    ...Struct.pick(RecordRow.fields, ["batch_id", "sequence", "record_json", "record_id"]),
+    thread_id: ThreadId,
+  });
 
-const WireBatch = Schema.Struct({
-  ...ThreadExportBatch.fields,
-  records: Schema.NonEmptyArray(RecordJson).check(Schema.isMaxLength(256)),
-});
+  const WireBatch = Schema.Struct({
+    ...ThreadExportBatch.fields,
+    records: Schema.NonEmptyArray(RecordJson).check(Schema.isMaxLength(256)),
+  });
 
-const ExecutionRow = Schema.Struct({
-  thread_id: ThreadId,
-  run_id: Schema.fromJsonString(RunId),
-  input_sequence: SqlInteger.pipe(
-    Schema.decodeTo(CanonicalSequence.check(Schema.isGreaterThan(0))),
-  ),
-  revision: SqlInteger.check(Schema.isGreaterThan(0)),
-  checkpoint_json: Schema.String.check(Schema.isMaxLength(16 * 1024 * 1024)),
-});
+  const ExecutionRow = Schema.Struct({
+    thread_id: ThreadId,
+    run_id: Schema.fromJsonString(RunId),
+    input_sequence: SqlInteger.pipe(
+      Schema.decodeTo(CanonicalSequence.check(Schema.isGreaterThan(0))),
+    ),
+    revision: SqlInteger.check(Schema.isGreaterThan(0)),
+    checkpoint_json: Schema.String.check(Schema.isMaxLength(16 * 1024 * 1024)),
+  });
 
-const decodeStoredIdentifiers = Schema.decodeEffect(Schema.Array(ThreadRow.fields.thread_id));
+  const decodeStoredIdentifiers = Schema.decodeEffect(Schema.Array(ThreadRow.fields.thread_id));
 
-const AdmissionRow = Schema.Struct({
-  submission_id: Schema.String,
-  thread_id: Schema.String,
-  receipt_id: Schema.String,
-  queue_sequence: SqlInteger,
-  principal: Schema.String,
-  idempotency_key: Schema.String,
-  agent_id: Schema.String,
-  agent_digests_json: Schema.String,
-  deployment_id: Schema.String,
-  input_json: Schema.String,
-  input_digest: Schema.String,
-  created_at: Schema.String,
-  finalized_at: Schema.NullOr(Schema.String),
-  parent_submission_id: Schema.NullOr(Schema.String),
-  parent_tool_call_id: Schema.NullOr(Schema.String),
-  worker_admission_json: Schema.NullOr(Schema.String),
-  message_admission_json: Schema.NullOr(Schema.String),
-  admission_group: Schema.NullOr(Schema.String),
-  admission_fence_json: Schema.NullOr(Schema.String),
-});
+  const AdmissionRow = Schema.Struct({
+    submission_id: Schema.String,
+    thread_id: Schema.String,
+    receipt_id: Schema.String,
+    queue_sequence: SqlInteger,
+    principal: Schema.String,
+    idempotency_key: Schema.String,
+    agent_id: Schema.String,
+    agent_digests_json: Schema.String,
+    deployment_id: Schema.String,
+    input_json: Schema.String,
+    input_digest: Schema.String,
+    created_at: Schema.String,
+    finalized_at: Schema.NullOr(Schema.String),
+    parent_submission_id: Schema.NullOr(Schema.String),
+    parent_tool_call_id: Schema.NullOr(Schema.String),
+    worker_admission_json: Schema.NullOr(Schema.String),
+    message_admission_json: Schema.NullOr(Schema.String),
+    admission_group: Schema.NullOr(Schema.String),
+    admission_fence_json: Schema.NullOr(Schema.String),
+  });
 
-const AbortRow = Schema.Struct({
-  queue_sequence: SqlInteger,
-  submission_id: Schema.String,
-  author: Schema.String,
-  reason: Schema.String,
-  requested_at: Schema.String,
-});
+  const AbortRow = Schema.Struct({
+    queue_sequence: SqlInteger,
+    submission_id: Schema.String,
+    author: Schema.String,
+    reason: Schema.String,
+    requested_at: Schema.String,
+  });
 
-const ApprovalRow = Schema.Struct({
-  queue_sequence: SqlInteger,
-  submission_id: Schema.String,
-  tool_call_id: Schema.String,
-  decision: Schema.String,
-  resolver: Schema.String,
-  reason: Schema.String,
-  decided_at: Schema.String,
-});
+  const ApprovalRow = Schema.Struct({
+    queue_sequence: SqlInteger,
+    submission_id: Schema.String,
+    tool_call_id: Schema.String,
+    decision: Schema.String,
+    resolver: Schema.String,
+    reason: Schema.String,
+    decided_at: Schema.String,
+  });
 
-const ResolutionRow = Schema.Struct({
-  queue_sequence: SqlInteger,
-  submission_id: Schema.String,
-  tool_call_id: Schema.String,
-  resolution_kind: UnknownResolutionKind,
-  author: Schema.String,
-  reason: Schema.String,
-  resolution_json: Schema.String,
-  resolved_at: Schema.String,
-});
+  const ResolutionRow = Schema.Struct({
+    queue_sequence: SqlInteger,
+    submission_id: Schema.String,
+    tool_call_id: Schema.String,
+    resolution_kind: UnknownResolutionKind,
+    author: Schema.String,
+    reason: Schema.String,
+    resolution_json: Schema.String,
+    resolved_at: Schema.String,
+  });
+
+  return {
+    Header,
+    Row,
+    WireBatch,
+    ExecutionRow,
+    decodeStoredIdentifiers,
+    AdmissionRow,
+    AbortRow,
+    ApprovalRow,
+    ResolutionRow,
+  };
+};
+
+let importSchemas: ReturnType<typeof makeImportSchemas> | undefined;
+const getImportSchemas = () => (importSchemas ??= makeImportSchemas());
 
 const decode = <A, I>(schema: Schema.Codec<A, I>, value: unknown) =>
   Schema.decodeUnknownEffect(schema)(value).pipe(
@@ -282,9 +300,11 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
       sql`SELECT r.thread_id, ${recordBatchId(sql, options.namespace, "r")} AS batch_id, r.sequence, r.record_id, ${recordJson} AS record_json
       FROM ${table("effect_agent_canonical_records")} r WHERE r.thread_id=${threadId} AND ${predicate}
       ORDER BY r.sequence LIMIT ${limit}`,
-    ).pipe(Effect.flatMap((value) => decode(Schema.Array(Row), value)));
+    ).pipe(Effect.flatMap((value) => decode(Schema.Array(getImportSchemas().Row), value)));
 
-  const envelope = Effect.fnUntraced(function* (row: typeof Row.Type) {
+  const envelope = Effect.fnUntraced(function* (
+    row: ReturnType<typeof makeImportSchemas>["Row"]["Type"],
+  ) {
     const record = yield* decodeExportRecordJson(row.record_json).pipe(
       Effect.mapError((e) => failure("decode transfer record", e)),
     );
@@ -311,7 +331,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         query(
           sql`SELECT thread_id, tail_sequence FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId} AND created_at IS NOT NULL`,
         ).pipe(
-          Effect.flatMap((value) => decode(Schema.Array(Header), value)),
+          Effect.flatMap((value) => decode(Schema.Array(getImportSchemas().Header), value)),
           Effect.map((headers) => headers[0]),
         ),
     }),
@@ -321,9 +341,11 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     query(
       sql`SELECT s.*, ${definitionJson(sql, options.namespace, "s")} AS agent_digests_json FROM ${table("effect_agent_submissions")} s WHERE s.thread_id=${threadId} AND ${predicate}
       ORDER BY s.queue_sequence LIMIT ${limit}`,
-    ).pipe(Effect.flatMap((value) => decode(Schema.Array(AdmissionRow), value)));
+    ).pipe(Effect.flatMap((value) => decode(Schema.Array(getImportSchemas().AdmissionRow), value)));
 
-  const admission = Effect.fnUntraced(function* (row: typeof AdmissionRow.Type) {
+  const admission = Effect.fnUntraced(function* (
+    row: ReturnType<typeof makeImportSchemas>["AdmissionRow"]["Type"],
+  ) {
     const fact = yield* decodeAdmissionFact(row).pipe(
       Effect.mapError((e) => failure("decode transfer admission", e)),
     );
@@ -342,7 +364,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
       FROM ${table("effect_agent_executions")} e WHERE e.thread_id=${threadId} AND ${predicate}
       ORDER BY e.input_sequence LIMIT 1`).pipe(
         Effect.flatMap((value) =>
-          decode(Schema.Array(ExecutionRow).check(Schema.isMaxLength(1)), value),
+          decode(Schema.Array(getImportSchemas().ExecutionRow).check(Schema.isMaxLength(1)), value),
         ),
       );
 
@@ -389,7 +411,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
     if (section === "aborts") {
       const rows = yield* query(selected).pipe(
-        Effect.flatMap((r) => decode(Schema.Array(AbortRow), r)),
+        Effect.flatMap((r) => decode(Schema.Array(getImportSchemas().AbortRow), r)),
       );
 
       return {
@@ -408,7 +430,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     }
     if (section === "approvals") {
       const rows = yield* query(selected).pipe(
-        Effect.flatMap((r) => decode(Schema.Array(ApprovalRow), r)),
+        Effect.flatMap((r) => decode(Schema.Array(getImportSchemas().ApprovalRow), r)),
       );
 
       return {
@@ -429,7 +451,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     }
 
     const rows = yield* query(selected).pipe(
-      Effect.flatMap((r) => decode(Schema.Array(ResolutionRow), r)),
+      Effect.flatMap((r) => decode(Schema.Array(getImportSchemas().ResolutionRow), r)),
     );
 
     return {
@@ -530,7 +552,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         // A delivery owner can retain closed receipts before its conversation is materialized.
         const headers = yield* query(
           sql`SELECT thread_id, tail_sequence FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
-        ).pipe(Effect.flatMap((r) => decode(Schema.Array(Header), r)));
+        ).pipe(Effect.flatMap((r) => decode(Schema.Array(getImportSchemas().Header), r)));
 
         const header = headers[0];
 
@@ -668,7 +690,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
         AND last_sequence>=${row.first_sequence} LIMIT 1`)).length > 0
         )
           return yield* failure("export batch", "Overlapping canonical batch ranges");
-        const batch = yield* json(WireBatch, row.batch_json);
+        const batch = yield* json(getImportSchemas().WireBatch, row.batch_json);
 
         const selected = yield* rows(
           threadId,
@@ -894,7 +916,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             LEFT JOIN ${table("effect_agent_canonical_records")} r ON r.thread_id=rr.thread_id AND r.sequence=rr.sequence
             WHERE rr.thread_id=${id} AND rr.run_id=${runKey(sql, sql`${id}`, sql`${JSON.stringify(runId)}`, options.namespace)} AND rr.sequence>${after} AND rr.sequence<=${tailSequence}
             ORDER BY rr.sequence LIMIT 1`).pipe(
-              Effect.flatMap((value) => decode(Schema.Array(Row), value)),
+              Effect.flatMap((value) => decode(Schema.Array(getImportSchemas().Row), value)),
             );
 
           const row = selected[0];
@@ -1056,15 +1078,17 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
               : Effect.void;
 
           const checkIdentifiers = (values: ReadonlyArray<string | undefined>) =>
-            decodeStoredIdentifiers(values.filter((v) => v !== undefined)).pipe(
-              Effect.mapError(() =>
-                reject(
-                  "unsupported-capacity",
-                  "Imported identifier exceeds the destination row schema",
+            getImportSchemas()
+              .decodeStoredIdentifiers(values.filter((v) => v !== undefined))
+              .pipe(
+                Effect.mapError(() =>
+                  reject(
+                    "unsupported-capacity",
+                    "Imported identifier exceeds the destination row schema",
+                  ),
                 ),
-              ),
-              Effect.andThen(checkValues(values)),
-            );
+                Effect.andThen(checkValues(values)),
+              );
 
           yield* Stream.runForEach(captured, (input) =>
             Effect.gen(function* () {
@@ -1076,7 +1100,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
 
                 const headers = yield* query(
                   sql`SELECT thread_id, tail_sequence FROM ${table("effect_agent_threads")} WHERE thread_id=${threadId}`,
-                ).pipe(Effect.flatMap((r) => decode(Schema.Array(Header), r)));
+                ).pipe(Effect.flatMap((r) => decode(Schema.Array(getImportSchemas().Header), r)));
 
                 for (const name of [
                   "effect_agent_submissions",
@@ -1687,7 +1711,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
                 const evidence =
                   yield* query(sql`SELECT s.*, ${definitionJson(sql, options.namespace, "s")} AS agent_digests_json FROM ${table("effect_agent_submissions")} s WHERE thread_id=${d.receipt.threadId}
           AND submission_id=${d.receipt.submissionId} LIMIT 1`).pipe(
-                    Effect.flatMap((r) => decode(Schema.Array(AdmissionRow), r)),
+                    Effect.flatMap((r) => decode(Schema.Array(getImportSchemas().AdmissionRow), r)),
                   );
 
                 const destinationRow = evidence[0];
@@ -1842,7 +1866,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
           yield* work.verifyPointers(id);
 
           const LedgerRow = Schema.Struct({
-            ...AdmissionRow.fields,
+            ...getImportSchemas().AdmissionRow.fields,
             state: SubmissionState,
             settled_outcome: Schema.NullOr(SettlementOutcome),
             ready_at: Schema.NullOr(Schema.String),
