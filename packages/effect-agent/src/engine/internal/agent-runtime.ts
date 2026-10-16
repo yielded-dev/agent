@@ -6582,7 +6582,10 @@ const makeTurn = <
                               if (
                                 part.type === "text-start" ||
                                 part.type === "text-delta" ||
-                                part.type === "text-end"
+                                part.type === "text-end" ||
+                                part.type === "reasoning-start" ||
+                                part.type === "reasoning-delta" ||
+                                part.type === "reasoning-end"
                               )
                                 provisionalText.offerUnsafe(part);
                             }

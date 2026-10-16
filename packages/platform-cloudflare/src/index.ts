@@ -7,6 +7,7 @@ export * as CloudflareMemory from "./CloudflareMemory.ts";
 export * as CloudflareScheduling from "./CloudflareScheduling.ts";
 export * as CloudflareSubscriptions from "./CloudflareSubscriptions.ts";
 export * as CloudflareThreadClient from "./CloudflareThreadClient.ts";
+export * as LiveText from "./LiveText.ts";
 export * as ThreadObject from "./ThreadObject.ts";
 export * as WakeScheduler from "./WakeScheduler.ts";
 export * as CloudflareAiGateway from "./CloudflareAiGateway.ts";

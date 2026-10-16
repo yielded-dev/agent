@@ -50,6 +50,7 @@ export default defineConfig({
       "src/CloudflareScheduling.ts",
       "src/CloudflareSubscriptions.ts",
       "src/CloudflareThreadClient.ts",
+      "src/LiveText.ts",
       "src/InteractiveBrowser.ts",
       "src/BrowserSession.ts",
       "src/BrowserUse.ts",

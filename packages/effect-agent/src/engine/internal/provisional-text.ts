@@ -53,11 +53,11 @@ const makeAttempt = Effect.fnUntraced(function* (
         offerUnsafe: (part) => {
           if (!open || closed) return false;
 
-          // processModelPart retains the original. Copy only native text fields so a
+          // processModelPart retains the original. Copy only native text/reasoning fields so a
           // publisher cannot mutate that trace or observe provider metadata.
           const detached =
-            part.type === "text-delta"
-              ? Response.makePart("text-delta", { id: part.id, delta: part.delta })
+            part.type === "text-delta" || part.type === "reasoning-delta"
+              ? Response.makePart(part.type, { id: part.id, delta: part.delta })
               : Response.makePart(part.type, { id: part.id });
 
           return offerUnsafe({

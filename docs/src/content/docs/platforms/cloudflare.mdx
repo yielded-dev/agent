@@ -94,11 +94,12 @@ for retained updates. Cancelling observation does not abort accepted work.
 
 <a id="preview-live-text"></a>
 
-`watchText(threadId)` supplies provisional text. Reconcile it against canonical
+`watchText(threadId)` supplies provisional text and provider reasoning summaries. Reconcile it against canonical
 records; reset or discard drafts as directed by its frames. Canonical completion
 permanently retires matching drafts, including after reconnects. Drafts disappear on eviction. Intermediary Workers can forward `watchTextBytes(threadId)`
 without decoding or re-encoding NDJSON. At the final consumer, pass the byte stream to
-`decodeLiveText(threadId, bytes)` to validate its frames and lifecycle. Both streaming
+`decodeLiveText(threadId, bytes)` from `@yielded/agent-platform-cloudflare/live-text`
+to validate its frames and lifecycle in a browser or Worker. Both streaming
 client methods cancel the remote subscription when their stream scope closes.
 
 ## Recovery and limits

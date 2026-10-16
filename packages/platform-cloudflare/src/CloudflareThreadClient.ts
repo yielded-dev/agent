@@ -63,16 +63,16 @@ import {
 import { AdmissionLimitExceeded } from "./CloudflareConfig.ts";
 import { cloudflareFailureSignals, safeCauseMessage } from "./internal/boundary.ts";
 import { cloudflareCryptoLayer } from "./internal/crypto.ts";
+import { boundHostDiagnostic, HostProtocolError } from "./internal/host-protocol-error.ts";
+import { Observation as LiveTextObservation } from "./internal/live-text-observation.ts";
 import {
-  Frame as LiveTextFrame,
-  isBoundedEvent,
-  MAX_DRAFT_PARTS,
-  MAX_FRAME_BYTES,
-  Observation as LiveTextObservation,
+  liveTextProtocolFailure,
   Request as WatchTextRequest,
 } from "./internal/live-text-protocol.ts";
+import { decodeLiveText, type LiveTextFrame } from "./LiveText.ts";
 
-export { Frame as LiveTextFrame } from "./internal/live-text-protocol.ts";
+export { boundHostDiagnostic, HostProtocolError } from "./internal/host-protocol-error.ts";
+export { decodeLiveText, LiveTextFrame } from "./LiveText.ts";
 
 /**
  * The Worker↔Thread-Object host protocol (plan §1.4): Schema envelopes for the host
@@ -83,28 +83,7 @@ export { Frame as LiveTextFrame } from "./internal/live-text-protocol.ts";
  * (error-tag fidelity), and protocol anomalies are answered typed instead of thrown.
  */
 
-/** Ceiling for host protocol diagnostic strings. */
-const MAX_HOST_DIAGNOSTIC_LENGTH = 4_096;
 const PROGRESS_CANCELLATION_TIMEOUT = "1 second";
-
-const BoundedDiagnostic = Schema.String.check(Schema.isMaxLength(MAX_HOST_DIAGNOSTIC_LENGTH));
-
-/** Truncate a diagnostic string to the host protocol's bounded length. */
-export const boundHostDiagnostic = (value: string): string =>
-  value.length > MAX_HOST_DIAGNOSTIC_LENGTH
-    ? `${value.slice(0, MAX_HOST_DIAGNOSTIC_LENGTH - 3)}...`
-    : value;
-
-/**
- * The envelope itself could not be honored: the Object could not decode the request, or a
- * response could not be encoded/decoded. Never carries operation semantics.
- */
-export class HostProtocolError extends Schema.TaggedError<HostProtocolError>()(
-  "HostProtocolError",
-  {
-    message: BoundedDiagnostic,
-  },
-) {}
 
 /** The Worker-side stub call itself failed (RPC rejection, overload, eviction mid-call). */
 export class ThreadClientError extends Schema.TaggedError<ThreadClientError>()(
@@ -390,126 +369,6 @@ export type ClientProgressFailure = ClientObserveFailure;
 export type ClientAbortFailure = typeof ClientAbortHostFailure.Type | ThreadClientError;
 export type ClientApprovalFailure = typeof ClientApprovalHostFailure.Type | ThreadClientError;
 export type ClientUnknownFailure = typeof ClientUnknownHostFailure.Type | ThreadClientError;
-
-const liveTextProtocolFailure = () =>
-  HostProtocolError.make({
-    message: "Provisional text is incomplete or invalid; discard drafts and read canonical records",
-  });
-
-const decodeLiveTextFrame = Schema.decodeUnknownSync(Schema.fromJsonString(LiveTextFrame));
-
-/**
- * Validate untrusted NDJSON at the final consumer, including frame bounds, thread,
- * sequence and text lifecycle. Stream loss invalidates all provisional drafts.
- */
-export const decodeLiveText = <E, R>(
-  threadId: ThreadId,
-  source: Stream.Stream<Uint8Array, E, R>,
-): Stream.Stream<LiveTextFrame, E | HostProtocolError, R> =>
-  Stream.suspend(() => {
-    const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false });
-    let pending = "";
-    let pendingBytes = 0;
-    let expected = 0;
-    let streamId: string | undefined;
-    const models = new Map<string, { attemptId: string; parts: Set<string> }>();
-
-    const accept = Effect.fnUntraced(function* (frame: LiveTextFrame) {
-      if (frame._tag === "Reset") {
-        if (frame.streamId === streamId || frame.threadId !== threadId)
-          return yield* liveTextProtocolFailure();
-        streamId = frame.streamId;
-        expected = 1;
-        models.clear();
-
-        return true;
-      }
-      if (
-        streamId === undefined ||
-        frame.streamId !== streamId ||
-        frame.sequence !== expected++ ||
-        frame.event.threadId !== threadId ||
-        !isBoundedEvent(frame.event)
-      )
-        return yield* liveTextProtocolFailure();
-      const event = frame.event;
-
-      if (event._tag === "AttemptEnded") {
-        for (const [key, model] of models)
-          if (model.attemptId === event.attemptId) models.delete(key);
-
-        return true;
-      }
-      const key = JSON.stringify([event.attemptId, event.runId, event.turnId, event.generation]);
-
-      if (event._tag === "Discard") {
-        models.delete(key);
-
-        return true;
-      }
-      let model = models.get(key);
-
-      if (event.part.type === "text-start") {
-        if (model?.parts.has(event.part.id)) return yield* liveTextProtocolFailure();
-        if (
-          [...models.values()].reduce((size, value) => size + value.parts.size, 0) >=
-          MAX_DRAFT_PARTS
-        )
-          return yield* liveTextProtocolFailure();
-        if (model === undefined) {
-          model = { attemptId: event.attemptId, parts: new Set() };
-          models.set(key, model);
-        }
-        model.parts.add(event.part.id);
-
-        return true;
-      }
-      if (!model?.parts.has(event.part.id)) return yield* liveTextProtocolFailure();
-      if (event.part.type === "text-end") {
-        model.parts.delete(event.part.id);
-        if (model.parts.size === 0) models.delete(key);
-      }
-
-      return true;
-    });
-
-    return source.pipe(
-      Stream.mapEffect(
-        Effect.fnUntraced(function* (chunk) {
-          if (!(chunk instanceof Uint8Array)) return yield* liveTextProtocolFailure();
-          const frames: LiveTextFrame[] = [];
-
-          for (let offset = 0; offset < chunk.byteLength;) {
-            const newline = chunk.indexOf(10, offset);
-            const end = newline < 0 ? chunk.byteLength : newline;
-
-            pendingBytes += end - offset;
-            if (pendingBytes > MAX_FRAME_BYTES) return yield* liveTextProtocolFailure();
-            pending += yield* Effect.try({
-              try: () => decoder.decode(chunk.subarray(offset, end), { stream: newline < 0 }),
-              catch: liveTextProtocolFailure,
-            });
-            offset = end + 1;
-            if (newline < 0) break;
-
-            const frame = yield* Effect.try({
-              try: () => decodeLiveTextFrame(pending),
-              catch: liveTextProtocolFailure,
-            });
-
-            pending = "";
-            pendingBytes = 0;
-            if (yield* accept(frame)) frames.push(frame);
-          }
-
-          return frames;
-        }),
-      ),
-      Stream.flatMap(Stream.fromArray),
-      // This connection is open-ended. Clean EOF is also loss of provisional state.
-      Stream.concat(Stream.fail(liveTextProtocolFailure())),
-    );
-  });
 
 const outOfContract = (threadId: string, operation: string, observed: string): ThreadClientError =>
   ThreadClientError.make({
