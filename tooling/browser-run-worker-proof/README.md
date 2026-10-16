@@ -106,10 +106,10 @@ The ignored `.checkout-proof/<run>/report.json` in this workspace retains the co
 Worker name, dispatch status, sanitized independent evidence, allowlisted Worker failure codes,
 the last checkout operation, login request count, failure stage/status,
 up to sixteen sanitized browser operation/reason/status diagnostics with a safe SDK error name when available, separate cleanup failure, cleanup result, and total, checkout, and cleanup milliseconds.
-HTTP failures include allowlisted response headers (including `cf-ray` and the
-deployment stamp) and a short recognized body excerpt or sanitized evidence summary.
-Unrecognized bodies and foreign stamp values are redacted; cookies and locations
-are omitted. A `cf-ray` identifies edge traffic, not Worker execution.
+HTTP failures include status, `cf-ray`, whether the deployment stamp was present
+and matched, and a body excerpt limited to edge error codes, `Not found`, or
+`Unauthorized`. All other response bodies are redacted. A `cf-ray` identifies
+edge traffic, not Worker execution.
 Total time includes deployment and retirement. Checkout time measures dispatch,
 including any pre-dispatch 404 retries; cleanup time measures closure, its independent
 confirmation, and Worker retirement. Evidence is
