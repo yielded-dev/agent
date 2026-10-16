@@ -11,10 +11,15 @@
   "durable_objects": {
     "bindings": [
       { "name": "THREADS", "class_name": "CodingThread" },
+      { "name": "WORKSPACES", "class_name": "AccountWorkspaces" },
       { "name": "SANDBOXES", "class_name": "CodingSandbox" },
     ],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CodingThread", "CodingSandbox"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["CodingThread", "CodingSandbox"] },
+    { "tag": "v2", "new_sqlite_classes": ["AccountWorkspaces"] },
+  ],
+  "rules": [{ "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }],
   "containers": [
     {
       "name": "yielded-agent-sandbox",

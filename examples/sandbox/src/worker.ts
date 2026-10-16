@@ -27,12 +27,16 @@ import {
   MAX_INPUT_BYTES,
   MessageInput,
   WorkspaceId,
+  WorkspacePage,
+  WorkspaceSummary,
   type Entry,
+  type ShellCommand,
 } from "./contract.ts";
 import { workspaceIdFromPath } from "./location.ts";
 import { CodingThread } from "./runtime.ts";
+import { AccountWorkspaces } from "./workspaces.ts";
 
-export { CodingThread };
+export { CodingThread, AccountWorkspaces };
 
 const containerOptions = {
   namespaceBinding: "SANDBOXES",
@@ -47,6 +51,7 @@ declare global {
   namespace Cloudflare {
     interface Env extends AuthEnvironment {
       THREADS: DurableObjectNamespace<CodingThread>;
+      WORKSPACES: DurableObjectNamespace<AccountWorkspaces>;
       SANDBOXES: DurableObjectNamespace<CodingSandbox>;
       ASSETS: Fetcher;
       RUN_LIMIT: RateLimit;
@@ -237,6 +242,114 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
   const address = (id: string) =>
     ThreadId.make(`${session.accountId.toLowerCase()}--${id.toLowerCase()}`);
 
+  const directory = env.WORKSPACES.getByName(session.accountId.toLowerCase());
+  const titleFor = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 120) || null;
+
+  const remember = Effect.fnUntraced(function* (id: string, title: string | null) {
+    return yield* Schema.decodeEffect(WorkspaceSummary)(
+      yield* Effect.tryPromise(() => directory.remember({ id, title })),
+    );
+  });
+
+  const firstPage = Effect.fnUntraced(function* (id: string) {
+    const client = yield* CloudflareThreadClient;
+
+    return yield* client
+      .readPage(address(id), { afterSequence: CanonicalSequence.make(0), limit: 64 })
+      .pipe(Effect.catchTag("ThreadNotMaterialized", () => Effect.succeed([])));
+  });
+
+  // Legacy titles use recorded user messages and saved commands.
+  const rememberHistory = Effect.fnUntraced(function* (
+    id: string,
+    records: ReadonlyArray<CanonicalRecordEnvelope>,
+    commands?: ReadonlyArray<ShellCommand>,
+    fallback?: string | null,
+  ) {
+    const command = (commands ??
+      (yield* Effect.tryPromise(() => env.THREADS.getByName(address(id)).commands())))[0];
+
+    if (records.length === 0 && command === undefined && fallback === undefined) return;
+
+    const firstInput = (page: ReadonlyArray<CanonicalRecordEnvelope>) =>
+      page.flatMap(({ sequence, record: { payload } }) =>
+        payload._tag === "UserInputRecorded" && Schema.is(CodingInput)(payload.input)
+          ? [{ sequence, text: payload.input.message }]
+          : [],
+      )[0];
+
+    let page = records;
+    let input = firstInput(page);
+
+    if (input === undefined && page.length === 64) {
+      // Recovery records can precede the first input. Only untitled entries need the scan.
+      if ((yield* remember(id, null)).title !== null) return;
+      const client = yield* CloudflareThreadClient;
+
+      while (input === undefined && page.length === 64) {
+        const last = page.at(-1);
+
+        if (last === undefined || (command && last.sequence >= command.afterSequence)) break;
+        page = yield* client.readPage(address(id), { afterSequence: last.sequence, limit: 64 });
+        input = firstInput(page);
+      }
+    }
+
+    // Commands follow their recorded canonical tail, before the next agent input.
+    const text =
+      command && (input === undefined || command.afterSequence < input.sequence)
+        ? `!${command.script}`
+        : input?.text;
+
+    yield* remember(id, text === undefined ? (fallback ?? null) : titleFor(text));
+  }, Effect.provide(clientLayer));
+
+  const rememberRequest = Effect.fnUntraced(function* (id: string, title: string | null) {
+    const entry = yield* remember(id, null);
+
+    // The existing registration call returns indexed titles without reading history.
+    if (entry.title !== null) return;
+
+    const records = yield* firstPage(id).pipe(Effect.provide(clientLayer));
+
+    yield* rememberHistory(id, records, undefined, title);
+  });
+
+  if (request.method === "POST" && url.pathname === "/sandbox/api/workspaces") {
+    const input = yield* Schema.decodeEffect(
+      Schema.fromJsonString(Schema.Struct({ workspaceId: WorkspaceId })),
+    )(yield* boundedBody(request));
+
+    const limit = yield* Effect.promise(() => env.RUN_LIMIT.limit({ key: session.accountId }));
+
+    if (!limit.success)
+      return json({ message: "Please wait before creating another workspace." }, 429);
+    yield* remember(input.workspaceId, null);
+
+    return json({});
+  }
+  if (request.method === "GET" && url.pathname === "/sandbox/api/workspaces") {
+    const before = yield* Schema.decodeEffect(Schema.NullOr(Schema.Natural))(
+      url.searchParams.has("before") ? Number(url.searchParams.get("before")) : null,
+    );
+
+    const previous = url.searchParams.get("previous");
+
+    if (previous !== null) {
+      const id = yield* Schema.decodeEffect(WorkspaceId)(previous);
+
+      const records = yield* firstPage(id).pipe(Effect.provide(clientLayer));
+
+      yield* rememberHistory(id, records);
+    }
+
+    return json(
+      yield* Schema.decodeEffect(WorkspacePage)(
+        yield* Effect.tryPromise(() => directory.list(before)),
+      ),
+    );
+  }
+
   if (request.method === "POST" && url.pathname === "/sandbox/api/commands") {
     const input = yield* Schema.decodeEffect(
       Schema.fromJsonString(Schema.Struct({ workspaceId: WorkspaceId, ...CommandInput.fields })),
@@ -246,6 +359,8 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
     if (!limit.success)
       return json({ message: "Please wait a moment before running another command." }, 429);
+
+    yield* rememberRequest(input.workspaceId, titleFor(`!${input.script}`));
 
     const reply = yield* Effect.tryPromise(
       async () => await env.THREADS.getByName(address(input.workspaceId)).command(input),
@@ -280,6 +395,8 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
       return json({ message: "Please wait a moment before sending another request." }, 429);
     if (!(yield* hostedModelAccess(session.accountId, env)))
       return json({ message: "Hosted model access is not available for this account." }, 403);
+
+    yield* rememberRequest(input.workspaceId, titleFor(input.message));
 
     const receipt = yield* Effect.gen(function* () {
       const client = yield* CloudflareThreadClient;
@@ -332,8 +449,17 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
     const threadId = address(workspaceId);
 
-    if (url.pathname === "/sandbox/api/commands")
-      return json(yield* Effect.tryPromise(() => env.THREADS.getByName(threadId).commands()));
+    if (url.pathname === "/sandbox/api/commands") {
+      const commands = yield* Effect.tryPromise(() => env.THREADS.getByName(threadId).commands());
+
+      if (commands[0]) {
+        const records = yield* firstPage(workspaceId).pipe(Effect.provide(clientLayer));
+
+        yield* rememberHistory(workspaceId, records, commands);
+      }
+
+      return json(commands);
+    }
     if (url.pathname === "/sandbox/api/command-result") {
       const requestId = yield* Schema.decodeEffect(WorkspaceId)(
         url.searchParams.get("requestId") ?? "",
@@ -446,6 +572,7 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
                   ),
                 );
 
+              if (cursor === 0) yield* rememberHistory(workspaceId, records);
               const next = records.at(-1)?.sequence ?? cursor;
 
               const page: EventPage = {

@@ -1,0 +1,67 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "5f0f7350-29de-4489-a2a6-fe0905e11a27",
+  "prevIds": ["00000000-0000-0000-0000-000000000000"],
+  "ddl": [
+    {
+      "name": "workspaces",
+      "entityType": "tables"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "name": "position",
+      "entityType": "columns",
+      "table": "workspaces"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "workspaces"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "title",
+      "entityType": "columns",
+      "table": "workspaces"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "added_at",
+      "entityType": "columns",
+      "table": "workspaces"
+    },
+    {
+      "columns": ["position"],
+      "nameExplicit": false,
+      "name": "workspaces_pk",
+      "table": "workspaces",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "workspaces_id_unique",
+      "entityType": "uniques",
+      "table": "workspaces"
+    }
+  ],
+  "renames": []
+}

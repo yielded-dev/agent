@@ -17,6 +17,7 @@ import {
   ShellCommand,
   WorkspaceEvent,
   WorkspaceId,
+  WorkspacePage,
   type Draft,
   type Entry,
 } from "./contract";
@@ -26,80 +27,55 @@ const runtime = Atom.runtime(Layer.empty);
 const problem = (message: string) => SandboxError.make({ message });
 const storageKey = (subject: string) => `yielded:sandbox:${subject}`;
 
-const saveWorkspace = (subject: string, id: string) => {
-  try {
-    localStorage.setItem(storageKey(subject), id);
-  } catch {
-    /* Storage is optional. */
-  }
-
-  return id;
-};
-
 const storedWorkspace = (subject: string) => {
   try {
     const id = localStorage.getItem(storageKey(subject));
 
-    if (Schema.is(WorkspaceId)(id)) return id;
+    return Schema.is(WorkspaceId)(id) ? id.toLowerCase() : null;
   } catch {
-    /* Keep the workspace in memory when storage is unavailable. */
+    return null;
   }
-
-  return saveWorkspace(subject, crypto.randomUUID());
 };
 
-/** A malformed route has no workspace; the account registry owns the location listener. */
-export const workspaceId = Atom.family((subject: string) =>
-  Atom.writable(
-    (get) => {
-      const read = () => {
-        const pathname = window.location.pathname;
+type Location =
+  | { readonly page: "list" }
+  | { readonly page: "workspace"; readonly id: string }
+  | { readonly page: "not-found" };
 
-        const id =
-          pathname === "/sandbox" || pathname === "/sandbox/"
-            ? storedWorkspace(subject).toLowerCase()
-            : workspaceIdFromPath(pathname);
+/** The authenticated account's Atom registry owns navigation and its listener. */
+export const location = Atom.writable(
+  (get) => {
+    const read = (): Location => {
+      const pathname = window.location.pathname;
 
-        if (id !== null && pathname !== `/sandbox/${id}`)
-          window.history.replaceState(
-            window.history.state,
-            "",
-            `/sandbox/${id}${window.location.search}${window.location.hash}`,
-          );
+      if (pathname === "/sandbox" || pathname === "/sandbox/") return { page: "list" };
+      const id = workspaceIdFromPath(pathname);
 
-        return id === null ? null : saveWorkspace(subject, id);
-      };
+      if (id === null) return { page: "not-found" };
+      if (pathname !== `/sandbox/${id}`)
+        window.history.replaceState(window.history.state, "", `/sandbox/${id}`);
 
-      const update = () => get.setSelf(read());
+      return { page: "workspace", id };
+    };
 
-      window.addEventListener("popstate", update);
-      get.addFinalizer(() => window.removeEventListener("popstate", update));
+    const update = () => get.setSelf(read());
 
-      return read();
-    },
-    (get, id: string) => {
-      const next = Schema.decodeSync(WorkspaceId)(id).toLowerCase();
+    window.addEventListener("popstate", update);
+    get.addFinalizer(() => window.removeEventListener("popstate", update));
 
-      window.history.pushState(
-        window.history.state,
-        "",
-        `/sandbox/${next}${window.location.search}${window.location.hash}`,
-      );
-      get.setSelf(saveWorkspace(subject, next));
-    },
-  ).pipe(Atom.keepAlive),
-);
+    return read();
+  },
+  (get, id: string | null) => {
+    const next = id === null ? null : Schema.decodeSync(WorkspaceId)(id).toLowerCase();
 
-export const newWorkspace = Atom.fnSync((subject: string, get) => {
-  const id = get(workspaceId(subject));
-
-  if (id !== null) {
-    const current = get(workspace(id).state);
-
-    if (current.active || current.pending || current.admissionRequestId) return;
-  }
-  get.set(workspaceId(subject), crypto.randomUUID());
-});
+    window.history.pushState(
+      window.history.state,
+      "",
+      next === null ? "/sandbox/" : `/sandbox/${next}`,
+    );
+    get.setSelf(next === null ? { page: "list" } : { page: "workspace", id: next });
+  },
+).pipe(Atom.keepAlive);
 
 class RequestRejected extends Schema.TaggedError<RequestRejected>()("RequestRejected", {
   status: Schema.Int,
@@ -162,6 +138,77 @@ const json = Effect.fnUntraced(function* <A>(
 
   return yield* Schema.decodeEffect(Schema.fromJsonString(schema))(text);
 }, Effect.scoped);
+
+export const workspaceList = Atom.family((subject: string) => {
+  const cursors = Atom.make<ReadonlyArray<number>>([]);
+
+  const page = runtime
+    .atom((get) => {
+      const before = get(cursors).at(-1);
+
+      return Effect.gen(function* () {
+        const params = new URLSearchParams();
+        const previous = storedWorkspace(subject);
+
+        if (before !== undefined) params.set("before", String(before));
+        if (previous !== null) params.set("previous", previous);
+        const result = yield* json(`workspaces?${params}`, WorkspacePage);
+
+        // A successful list can precede recovery of an admitted workspace's history.
+        if (previous !== null && result.entries.some((entry) => entry.id === previous))
+          yield* Effect.try(() => {
+            if (storedWorkspace(subject) === previous) localStorage.removeItem(storageKey(subject));
+          }).pipe(Effect.ignore);
+
+        return result;
+      });
+    })
+    .pipe(runtime.factory.withReactivity(["sandbox-workspaces"]), Atom.setIdleTTL(0));
+
+  return {
+    page,
+    cursors,
+    next: Atom.fnSync((_, get) => {
+      const current = get(page);
+
+      if (AsyncResult.isSuccess(current) && current.value.next !== null)
+        get.set(cursors, [...get(cursors), current.value.next]);
+    }),
+    previous: Atom.fnSync((_, get) => get.set(cursors, get(cursors).slice(0, -1))),
+    refresh: Atom.fnSync((_, get) => {
+      get.set(cursors, []);
+      get.refresh(page);
+    }),
+  };
+});
+
+const pendingWorkspaceId = Atom.make<string | null>(null).pipe(Atom.keepAlive);
+
+const createWorkspace = runtime.fn<void>()(
+  Effect.fnUntraced(function* (_, get) {
+    const currentLocation = get(location);
+
+    if (currentLocation.page === "workspace") {
+      const current = get(workspace(currentLocation.id).state);
+
+      if (current.active || current.pending || current.admissionRequestId) return;
+    }
+    const id = get(pendingWorkspaceId) ?? crypto.randomUUID();
+
+    get.set(pendingWorkspaceId, id);
+    yield* json("workspaces", Schema.Struct({}), { workspaceId: id });
+    get.set(pendingWorkspaceId, null);
+    get.set(location, id);
+  }),
+  { reactivityKeys: ["sandbox-workspaces"] },
+);
+
+export const newWorkspace = Atom.writable(
+  (get) => get(createWorkspace),
+  (get, _: void) => {
+    if (!get.get(createWorkspace).waiting) get.set(createWorkspace, undefined);
+  },
+);
 
 const query = (id: string, path: string) =>
   new URLSearchParams({ workspaceId: id, path }).toString();
