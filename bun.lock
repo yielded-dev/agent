@@ -94,6 +94,22 @@
         "wrangler": "catalog:",
       },
     },
+    "examples/cold-start": {
+      "name": "@yielded/agent-example-cold-start",
+      "devDependencies": {
+        "@cloudflare/workers-types": "catalog:",
+        "@effect/ai-openai-compat": "catalog:",
+        "@effect/platform-browser": "catalog:",
+        "@effect/platform-node": "catalog:",
+        "@types/node": "catalog:",
+        "@yielded/agent": "workspace:*",
+        "@yielded/agent-platform-cloudflare": "workspace:*",
+        "effect": "catalog:",
+        "effect-cf": "catalog:",
+        "esbuild": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "examples/durable-bench": {
       "name": "@yielded/agent-example-durable-bench",
       "devDependencies": {
@@ -1841,6 +1857,8 @@
     "@yielded/agent-example-browser-speed": ["@yielded/agent-example-browser-speed@workspace:examples/browser-speed"],
 
     "@yielded/agent-example-cloudflare-memory": ["@yielded/agent-example-cloudflare-memory@workspace:tooling/cloudflare-memory"],
+
+    "@yielded/agent-example-cold-start": ["@yielded/agent-example-cold-start@workspace:examples/cold-start"],
 
     "@yielded/agent-example-context-continuity-eval": ["@yielded/agent-example-context-continuity-eval@workspace:tooling/context-continuity-eval"],
 

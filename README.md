@@ -82,7 +82,8 @@ setup, installation, and an executable entry point.
 [Packages](https://yielded.dev/agent/reference/packages/)
 
 See the [travel planner](examples/travel-planner/), [runnable snippets](docs/snippets/travel-planner/),
-and [durable benchmark](examples/durable-bench/) for complete applications and comparisons.
+[durable benchmark](examples/durable-bench/), and [cold-start reproduction](examples/cold-start/)
+for complete applications and comparisons.
 
 ## Development
 
