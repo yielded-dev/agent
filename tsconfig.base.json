@@ -86,7 +86,7 @@
         },
         "overrides": [
           {
-            "include": ["**/examples/**"],
+            "include": ["examples/**/*", "../examples/**/*", "../../examples/**/*"],
             "options": {
               "namespaceImportPackages": [],
               "diagnosticSeverity": {
