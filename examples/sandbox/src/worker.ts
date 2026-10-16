@@ -11,7 +11,7 @@ import { CanonicalSequence, type CanonicalRecordEnvelope } from "@yielded/agent/
 import { toolCallSettledRecordId } from "@yielded/agent/run-journal";
 import { AbortCommand, Principal, IdempotencyKey } from "@yielded/agent/submission-ledger";
 import { makeSandboxAgentContainer, makeSandboxAgentOutbound } from "@yielded/sandbox/cloudflare";
-import { Cause, Deferred, Effect, Layer, Schema, Stream } from "effect";
+import { Cause, Deferred, Effect, Layer, Schedule, Schema, Stream } from "effect";
 import { Rpc, Worker, WorkerEnvironment } from "effect-cf";
 import { Prompt } from "effect/ai";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
@@ -418,6 +418,9 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
         Stream.splitLines,
         Stream.map((line) => `${line}\n`),
         Stream.encodeText,
+        // Command hints can lag a deployment without closing canonical history.
+        Stream.catch(() => Stream.empty),
+        Stream.repeat(Schedule.spaced("2 seconds")),
       );
 
       const pages = Stream.unwrap(
