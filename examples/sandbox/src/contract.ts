@@ -27,6 +27,7 @@ export const Entry = Schema.Struct({
   runId: Schema.optionalKey(Schema.String),
   turnId: Schema.optionalKey(Schema.String),
   toolCallId: Schema.optionalKey(Schema.String),
+  toolResultId: Schema.optionalKey(Schema.String),
 });
 
 export type Entry = typeof Entry.Type;

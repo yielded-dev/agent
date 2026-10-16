@@ -6,8 +6,9 @@ import {
 } from "@yielded/agent-example-auth/server";
 import { CloudflareThreadClient } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import { digestDefinitions } from "@yielded/agent/digest";
-import { ThreadId, SubmissionId } from "@yielded/agent/identifiers";
+import { ThreadId, SubmissionId, ToolCallId } from "@yielded/agent/identifiers";
 import { CanonicalSequence, type CanonicalRecordEnvelope } from "@yielded/agent/records";
+import { toolCallSettledRecordId } from "@yielded/agent/run-journal";
 import { AbortCommand, Principal, IdempotencyKey } from "@yielded/agent/submission-ledger";
 import { makeSandboxAgentContainer, makeSandboxAgentOutbound } from "@yielded/sandbox/cloudflare";
 import { Deferred, Effect, Layer, Schema, Stream } from "effect";
@@ -132,6 +133,11 @@ const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
                     name: part.name,
                     text: JSON.stringify(part.params, null, 2),
                     toolCallId: part.id,
+                    toolResultId: toolCallSettledRecordId(
+                      p.runId,
+                      p.turn,
+                      ToolCallId.make(part.id),
+                    ),
                     runId: p.runId,
                     turnId: p.turnId,
                   },
@@ -150,6 +156,7 @@ const entriesFor = ({ sequence, record }: CanonicalRecordEnvelope): Entry[] => {
           text: JSON.stringify(p.result, null, 2),
           failed: p.isFailure,
           toolCallId: p.toolCallId,
+          toolResultId: record.recordId,
           runId: p.runId,
         },
       ];

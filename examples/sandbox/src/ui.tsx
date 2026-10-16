@@ -287,8 +287,8 @@ const completionLabels: Readonly<Record<string, string>> = {
   Unknown: "An action needs review before the agent can continue.",
 };
 
-const toolKey = (entry: Entry) =>
-  entry.toolCallId ? JSON.stringify([entry.runId, entry.toolCallId]) : entry.id;
+// Provider call IDs may repeat across Turns; canonical result IDs do not.
+const toolKey = (entry: Entry) => entry.toolResultId ?? entry.id;
 
 const toolTitles: Readonly<Record<string, string>> = {
   list_files: "List files",
