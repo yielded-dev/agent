@@ -577,9 +577,12 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
           const client = yield* CloudflareThreadClient;
 
           let needsRecoveryCheck = after > 0;
+          let recoveryUnavailable = false;
 
           return Stream.unfold({ cursor: after, wait: false }, ({ cursor, wait }) =>
             Effect.gen(function* () {
+              // Deliver history first, then let the client's reconnect delay retry authority.
+              if (recoveryUnavailable) return;
               if (wait) yield* client.awaitProgress(threadId, cursor);
 
               const records = yield* client
@@ -606,6 +609,14 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
                 needsRecoveryCheck && records.length < 64
                   ? yield* Effect.tryPromise(() =>
                       env.THREADS.getByName(threadId).recoveryRequired(),
+                    ).pipe(
+                      Effect.catch(() =>
+                        Effect.sync(() => {
+                          recoveryUnavailable = true;
+
+                          return undefined;
+                        }),
+                      ),
                     )
                   : undefined;
 
@@ -613,7 +624,7 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
               const page: EventPage = {
                 cursor: next,
-                caughtUp: records.length < 64,
+                caughtUp: records.length < 64 && !recoveryUnavailable,
                 entries,
                 ...(reviewRequired === undefined ? {} : { reviewRequired }),
                 committedTurns: records.flatMap(({ record: { payload } }) =>
