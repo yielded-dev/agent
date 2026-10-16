@@ -44,8 +44,15 @@ import {
   ThreadNotMaterialized,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
-import { Context, Crypto, Duration, Effect, Layer, Predicate, Schema, Stream } from "effect";
 import { RpcTargets, RpcTracing } from "effect-cf";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import {
   callThreadObject,

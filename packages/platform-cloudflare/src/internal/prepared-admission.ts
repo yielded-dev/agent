@@ -10,7 +10,8 @@ import {
   ScheduleStorageError,
 } from "@yielded/agent/schedule";
 import { type PreparedInput } from "@yielded/agent/subscription";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import { CloudflareThreadClient, type ThreadClientError } from "../CloudflareThreadClient.ts";
 

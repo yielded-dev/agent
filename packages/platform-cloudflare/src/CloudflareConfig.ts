@@ -1,6 +1,7 @@
 import { DEFAULT_MAX_STORED_VALUE_BYTES } from "@yielded/agent-storage-cloudflare/do-storage-config";
 import { DeploymentId } from "@yielded/agent/records";
-import { Context, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as Schema from "effect/Schema";
 
 /**
  * Schema-validated configuration for the Cloudflare durable runtime (deployment spec §4:

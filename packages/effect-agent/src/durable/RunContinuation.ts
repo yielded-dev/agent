@@ -1,4 +1,11 @@
-import { Context, DateTime, Effect, Option, Result, Schema, Semaphore, Stream } from "effect";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
+import * as Stream from "effect/Stream";
 
 import { AgentPersistenceCapacityError } from "../core/AgentError.ts";
 import type { RunId, SubmissionId, ThreadId } from "../core/Identifiers.ts";

@@ -19,7 +19,10 @@ import {
   type PreparedAppend,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
-import { Effect, Option, Result, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 import type { Statement } from "effect/sql/Statement";

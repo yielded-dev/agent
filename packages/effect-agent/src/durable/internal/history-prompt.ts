@@ -1,5 +1,8 @@
-import { Effect, Schema, SchemaParser, SchemaTransformation } from "effect";
-import { Prompt } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SchemaParser from "effect/SchemaParser";
+import * as SchemaTransformation from "effect/SchemaTransformation";
 
 function restorePart(part: Prompt.UserMessagePartEncoded): Prompt.UserMessagePart;
 function restorePart(part: Prompt.AssistantMessagePartEncoded): Prompt.AssistantMessagePart;

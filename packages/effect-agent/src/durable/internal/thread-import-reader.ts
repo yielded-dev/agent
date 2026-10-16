@@ -1,4 +1,7 @@
-import { Context, type Effect, Layer, type Stream } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as Stream from "effect/Stream";
 
 import type { AgentId, RunId, SubmissionId, ThreadId } from "../../core/Identifiers.ts";
 import type { IdempotencyKey } from "../../core/Receipt.ts";

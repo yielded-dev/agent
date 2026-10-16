@@ -1,4 +1,5 @@
-import { Context, type Effect } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
 import type * as SqlClientService from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 

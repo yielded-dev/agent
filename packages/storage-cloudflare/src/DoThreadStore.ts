@@ -37,9 +37,17 @@ import {
   SaveCheckpointRequest,
 } from "@yielded/agent/thread-store";
 import { checkExportSource } from "@yielded/agent/thread-transfer";
-import { Clock, Context, Crypto, Effect, Layer, Option, Ref, Schema, Stream } from "effect";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { isSqlError } from "effect/sql/SqlError";
+import * as Stream from "effect/Stream";
 
 import {
   DEFAULT_MAX_STORED_VALUE_BYTES,

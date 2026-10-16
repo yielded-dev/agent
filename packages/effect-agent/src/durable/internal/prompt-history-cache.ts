@@ -1,5 +1,9 @@
-import { Effect, Option, Result, Schema, Stream } from "effect";
-import { Prompt } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import type { RunId, ThreadId } from "../../core/Identifiers.ts";
 import { boundedValueFootprint } from "../../engine/internal/bounded-value.ts";

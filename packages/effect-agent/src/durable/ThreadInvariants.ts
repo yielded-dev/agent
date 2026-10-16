@@ -1,4 +1,6 @@
-import { Effect, Schema, Stream } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import type { RunId, ThreadId } from "../core/Identifiers.ts";
 import { IntegrityCheck, IntegrityReport, type IntegrityCheckName } from "./Admin.ts";

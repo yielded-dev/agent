@@ -1,4 +1,10 @@
-import { Clock, Crypto, DateTime, Effect, Option, Schema, Stream } from "effect";
+import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import type { InboxPage } from "../../capabilities/Messaging.ts";
 import {
