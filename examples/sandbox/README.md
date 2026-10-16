@@ -33,11 +33,17 @@ call only when its complete saved history proves no native operation started.
 An operation that may have run stays blocked until its outcome is known; checking
 recovery never resends the request or reruns the model.
 
-A workspace belongs to the authenticated account. Files are temporary: the
-container expires after 30 minutes of inactivity. An expired workspace cannot be
-silently replaced during recovery. Its conversation remains readable; the UI marks
-its files as expired and stops accepting new work. Start a new workspace for fresh
-work. Commands have no production credentials; network access is limited to the public npm
+Files are saved to the host's R2 bucket after agent work or a direct command settles.
+Saving runs through the Thread's existing alarms and keeps the latest confirmed
+snapshot. The file panel shows when it was saved and offers a retry if saving failed.
+Containers still stop after 30 minutes idle. **Restore workspace** loads the saved
+files into a new container under the same account, URL and conversation. It restores
+files, including hidden and ignored files, but not running processes or native
+process receipts. An unresolved command stays unresolved after restoration.
+
+Changes since the last successful save can be lost when a container stops. Older
+workspaces without a saved snapshot cannot recover files that have already expired.
+Commands have no production credentials; network access is limited to the public npm
 registry. The host caps concurrent containers at four.
 
 ## Development and deployment
@@ -70,6 +76,13 @@ also check the account's current hosted-model permission.
 vp run -F @yielded/agent-example-sandbox deploy:production
 ```
 
+Create the `yielded-agent-sandbox-workspaces` R2 bucket before deploying; Wrangler
+binds it as `BACKUPS`. Keep this bucket private. A capture interrupted before its
+receipt reaches the Thread may leave an unreferenced object, because the Sandbox
+SDK allocates backup IDs during capture. Recovery keeps the last confirmed snapshot
+and does not repeat that capture automatically.
+
+Sandbox deployment is currently manual; merging a PR runs CI.
 The checked-in Wrangler configuration owns the Sandbox route and its Thread,
 container, and account workspace-directory namespaces. It does not own the shared authentication gateway.
 Wrangler 4.151 is scoped to this example because it supports the native

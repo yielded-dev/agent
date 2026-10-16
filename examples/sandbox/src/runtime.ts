@@ -20,11 +20,13 @@ import {
   MAX_INPUT_BYTES,
   type ModelSettings,
   SandboxError,
+  SavedFiles,
   ShellCommand,
   WorkspaceEvent,
   WorkspaceId,
 } from "./contract.ts";
 import { codingReconciler, recoverWorkspace, workspaceRecoveryRequired } from "./recovery.ts";
+import { snapshotLane, WorkspaceSnapshots } from "./snapshots.ts";
 import { codingToolsLive } from "./tools.ts";
 import { Workspace } from "./workspace.ts";
 
@@ -147,12 +149,17 @@ const registered = DurableAgentRuntime.layerRegistered([
 
 // Share the owner's existing storage with tools; alarms use the registered runtime.
 const owner = ThreadWorkDiscovery.layer.pipe(
-  Layer.provideMerge(ThreadObject.layer([]).pipe(Layer.provide(commandAdmission))),
+  Layer.provideMerge(
+    ThreadObject.layer([], {
+      hostLanesForMutation: (mutation) => (mutation._tag === "Admission" ? [] : [snapshotLane]),
+    }).pipe(Layer.provide(commandAdmission)),
+  ),
 );
 
 const application = Layer.fresh(ThreadMaintenance.layer).pipe(
   Layer.provideMerge(commandMaintenance),
   Layer.provideMerge(ShellCommands.layer),
+  Layer.provideMerge(WorkspaceSnapshots.layer),
   Layer.provideMerge(registered),
   Layer.provideMerge(owner),
   Layer.provideMerge(Workspace.layer),
@@ -173,6 +180,19 @@ export class CodingThread extends ThreadObject.make(application, {
   maxQueueDepthPerLane: 1,
   maxInputBytes: MAX_INPUT_BYTES,
 }) {
+  fileAction(action: "save" | "restore") {
+    return this[DurableObject.RunSymbol](
+      Effect.gen(function* () {
+        const snapshots = yield* WorkspaceSnapshots;
+
+        yield* action === "save" ? snapshots.requestSave : snapshots.requestRestore;
+
+        return { saved: yield* snapshots.status };
+      }).pipe(
+        Effect.catchTag("SnapshotRejected", (error) => Effect.succeed({ error: error.message })),
+      ),
+    );
+  }
   recoveryRequired() {
     return this[DurableObject.RunSymbol](workspaceRecoveryRequired());
   }
@@ -198,6 +218,7 @@ export class CodingThread extends ThreadObject.make(application, {
     return this[DurableObject.RunSymbol](
       Effect.gen(function* () {
         const commands = yield* ShellCommands;
+        const snapshots = yield* WorkspaceSnapshots;
 
         const changed = yield* Schema.encodeEffect(Schema.fromJsonString(WorkspaceEvent))({
           _tag: "CommandHistoryChanged",
@@ -207,7 +228,15 @@ export class CodingThread extends ThreadObject.make(application, {
 
         const stream = commands.watch.pipe(
           Stream.mapEffect((commands) =>
-            Schema.encodeEffect(Schema.fromJsonString(Schema.Array(ShellCommand)))(commands),
+            snapshots.status.pipe(
+              Effect.flatMap((saved) =>
+                Schema.encodeEffect(
+                  Schema.fromJsonString(
+                    Schema.Struct({ commands: Schema.Array(ShellCommand), saved: SavedFiles }),
+                  ),
+                )({ commands, saved }),
+              ),
+            ),
           ),
           Stream.changes,
           Stream.as(`${changed}\n`),
@@ -244,8 +273,9 @@ export class CodingThread extends ThreadObject.make(application, {
     return this[DurableObject.RunSymbol](
       Effect.gen(function* () {
         const { sandbox, expired } = yield* (yield* Workspace).inspect;
+        const saved = yield* (yield* WorkspaceSnapshots).status;
 
-        if (sandbox === null || expired) return { entries: [], expired };
+        if (sandbox === null || expired) return { entries: [], expired, saved };
         const directory = yield* pathInWorkspace(path);
         const entries = yield* sandbox.readDirectory(directory);
 
@@ -258,6 +288,7 @@ export class CodingThread extends ThreadObject.make(application, {
               directory: entry.type === "directory",
             })),
           expired: false,
+          saved,
         };
       }),
     );

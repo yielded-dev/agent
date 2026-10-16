@@ -26,7 +26,7 @@ import { signIn } from "./location";
 import { location, newWorkspace, workspace, workspaceList } from "./state";
 
 const workspaceDescription =
-  "Workspace files expire after 30 minutes idle. Conversation history is kept.";
+  "Files are saved after work settles. Processes stop after 30 minutes idle; conversation history is kept.";
 
 const settingControl =
   "mt-1 w-full min-w-0 rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground";
@@ -263,6 +263,8 @@ function Workspace({ id }: { id: string }) {
   const [recovery, recover] = useAtom(atoms.recover);
   const reconnectCommand = useAtomSet(atoms.reconnectCommand);
   const expired = useAtomValue(atoms.expired);
+  const saved = useAtomValue(atoms.saved);
+  const fileOperation = useAtomValue(atoms.fileOperation);
   const settings = useAtomValue(atoms.settings);
   const changeSettings = useAtomSet(atoms.changeSettings);
 
@@ -307,6 +309,7 @@ function Workspace({ id }: { id: string }) {
   const busy =
     !state.historyReady ||
     expired ||
+    fileOperation !== "idle" ||
     state.reviewRequired ||
     state.active !== null ||
     state.pending !== null ||
@@ -394,8 +397,9 @@ function Workspace({ id }: { id: string }) {
         >
           {expired && (
             <p className="error" role="alert">
-              This workspace has expired and its files are no longer available. Your conversation is
-              still here. Start a new workspace to run code again.
+              {saved !== undefined && saved.savedAt !== null
+                ? "This workspace has expired. Restore its last saved files from the file browser. Your conversation is kept."
+                : "This workspace expired without saved files. Its old files cannot be recovered. Your conversation is still here; start a new workspace to run code."}
             </p>
           )}
           {state.error && (
@@ -502,7 +506,13 @@ function Workspace({ id }: { id: string }) {
                       ? "Awaiting delivery status"
                       : !state.historyReady
                         ? "Loading history…"
-                        : "! runs Bash · ⌘ / Ctrl + Enter to send"}
+                        : fileOperation === "saving"
+                          ? "Saving files…"
+                          : fileOperation === "restoring"
+                            ? saved?.restoreFailed
+                              ? "Restore needs a retry"
+                              : "Restoring files…"
+                            : "! runs Bash · ⌘ / Ctrl + Enter to send"}
             </small>
             {state.reviewRequired ? (
               <Button
@@ -521,7 +531,9 @@ function Workspace({ id }: { id: string }) {
               <Button
                 variant="outline"
                 type="button"
-                disabled={expired || sent.waiting || !!state.admissionRequestId}
+                disabled={
+                  expired || fileOperation !== "idle" || sent.waiting || !!state.admissionRequestId
+                }
                 onClick={() => send()}
               >
                 Retry delivery
@@ -578,7 +590,7 @@ function CommandEntry({ command }: { command: ShellCommand }) {
       {command.failure && (
         <p className="mt-3 border-t border-border pt-3 text-sm text-destructive">
           {command.failure === "workspace-expired"
-            ? "The temporary workspace is no longer available. This command was not run. Start a new workspace."
+            ? "The workspace had expired. This command was not run. Restore saved files, if available, or start a new workspace."
             : "The command could not start before its deadline. It was not run."}
         </p>
       )}
@@ -685,7 +697,30 @@ function Files({ id }: { id: string }) {
   const [selected, setSelected] = useAtom(atoms.selectedFile);
   const files = useAtomValue(atoms.files);
   const file = useAtomValue(atoms.file);
+  const saved = useAtomValue(atoms.saved);
+  const expired = useAtomValue(atoms.expired);
+  const fileOperation = useAtomValue(atoms.fileOperation);
+  const state = useAtomValue(atoms.state);
+  const [restored, restore] = useAtom(atoms.restore);
+  const [savedResult, save] = useAtom(atoms.save);
   const refresh = useAtomSet(atoms.refresh);
+  const listing = AsyncResult.getOrElse(files, () => null);
+  const savedAt = saved?.savedAt ?? null;
+  const hasSavedFiles = savedAt !== null;
+  const restoreFailed = saved?.restoreFailed && !restored.waiting;
+  const saveFailed = saved?.saveFailed && !savedResult.waiting;
+
+  const canSave =
+    listing !== null &&
+    !expired &&
+    fileOperation === "idle" &&
+    (!hasSavedFiles || saveFailed) &&
+    state.historyReady &&
+    !state.active &&
+    !state.pending &&
+    !state.admissionRequestId &&
+    !state.reviewRequired &&
+    !state.uncertain;
 
   return (
     <section className="files" aria-label="Workspace files">
@@ -697,6 +732,73 @@ function Files({ id }: { id: string }) {
           ↻ Refresh
         </Button>
       </div>
+      {listing !== null && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 text-xs">
+          <div className="min-w-0">
+            <p className="text-muted-foreground">
+              {savedAt !== null
+                ? `Last saved ${DateTime.formatLocal(DateTime.makeUnsafe(savedAt), {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}`
+                : "No saved files yet"}
+            </p>
+            {fileOperation !== "idle" && !restoreFailed && (
+              <p className="mt-1 flex items-center gap-2 text-muted-foreground" role="status">
+                <LoaderCircle className="size-3.5 motion-safe:animate-spin" aria-hidden="true" />
+                {fileOperation === "restoring" ? "Restoring files…" : "Saving files…"}
+              </p>
+            )}
+            {restoreFailed && (
+              <p className="mt-1 text-destructive" role="alert">
+                Files could not be restored. Retry restore to continue.
+              </p>
+            )}
+            {saveFailed && fileOperation === "idle" && (
+              <p className="mt-1 text-destructive" role="alert">
+                The latest files could not be saved.
+              </p>
+            )}
+            {expired && fileOperation === "idle" && AsyncResult.isFailure(restored) && (
+              <p className="mt-1 text-destructive" role="alert">
+                Could not confirm restoration. Refresh to check its status, then retry.
+              </p>
+            )}
+            {canSave && AsyncResult.isFailure(savedResult) && (
+              <p className="mt-1 text-destructive" role="alert">
+                Could not confirm the save. Refresh to check its status, then retry.
+              </p>
+            )}
+            {expired && hasSavedFiles && state.reviewRequired && (
+              <p className="mt-1 text-muted-foreground">
+                Restoring files leaves operations awaiting review.
+              </p>
+            )}
+          </div>
+          {expired && hasSavedFiles ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={
+                restored.waiting ||
+                savedResult.waiting ||
+                (fileOperation !== "idle" && !restoreFailed)
+              }
+              onClick={() => restore()}
+            >
+              {fileOperation === "restoring" && !restoreFailed
+                ? "Restoring…"
+                : restoreFailed || AsyncResult.isFailure(restored)
+                  ? "Retry restore"
+                  : "Restore workspace"}
+            </Button>
+          ) : canSave ? (
+            <Button variant="outline" size="sm" onClick={() => save()}>
+              {saveFailed || AsyncResult.isFailure(savedResult) ? "Retry save" : "Save files"}
+            </Button>
+          ) : null}
+        </div>
+      )}
       <div className="file-browser">
         <nav aria-label="File browser">
           <div className="directory">
@@ -722,7 +824,11 @@ function Files({ id }: { id: string }) {
           )}
           {AsyncResult.isSuccess(files) && files.value.entries.length === 0 && (
             <p className="muted">
-              {files.value.expired ? "This workspace's files have expired." : "No files here yet."}
+              {files.value.expired
+                ? hasSavedFiles
+                  ? "Restore this workspace to browse its saved files."
+                  : "These expired files cannot be recovered; no saved files are available."
+                : "No files here yet."}
             </p>
           )}
           {AsyncResult.isSuccess(files) &&
@@ -769,7 +875,7 @@ function Files({ id }: { id: string }) {
           )}
         </div>
       </div>
-      <footer>Read-only file viewer · Workspace files are temporary</footer>
+      <footer>Read-only file viewer · Files saved after work settles</footer>
     </section>
   );
 }
