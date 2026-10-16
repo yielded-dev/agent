@@ -9,7 +9,7 @@ import { AdmissionPolicyError, SubmissionAdmissionFence } from "@yielded/agent/s
 import { ThreadMaterialization, ThreadStore, ThreadTailRequest } from "@yielded/agent/thread-store";
 import { ThreadWorkDiscovery } from "@yielded/agent/thread-work";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Clock, Context, Effect, Layer, Option, Schema, Struct } from "effect";
+import { Clock, Context, Effect, Layer, Option, Schedule, Schema, Stream, Struct } from "effect";
 import { DurableObjectState } from "effect-cf";
 import { SqlClient } from "effect/sql";
 
@@ -122,8 +122,20 @@ const make = Effect.gen(function* () {
     return commands.map(publicCommand).sort((a, b) => a.createdAt - b.createdAt);
   });
 
+  const watch = Stream.unwrap(
+    Effect.gen(function* () {
+      // Subscribe before reading so admission between the snapshot and waiting cannot be lost.
+      const changed = yield* wake.subscribe(threadId);
+      const commands = yield* list;
+
+      return Stream.succeed(commands).pipe(
+        Stream.concat(Stream.fromEffect(changed).pipe(Stream.drain)),
+      );
+    }),
+  ).pipe(Stream.scoped, Stream.repeat(Schedule.forever));
+
   const accept = Effect.fnUntraced(function* (input: typeof CommandInput.Type) {
-    return yield* mutations.withMutation(
+    const accepted = yield* mutations.withMutation(
       transaction(
         Effect.gen(function* () {
           const existing = yield* read(input.requestId);
@@ -171,6 +183,10 @@ const make = Effect.gen(function* () {
       ),
       { invalidatesRecovery: false, lanes: [lane] },
     );
+
+    yield* wake.notify(threadId, "progress");
+
+    return accepted;
   });
 
   const update = (command: SavedCommand, complete = false) =>
@@ -234,15 +250,8 @@ const make = Effect.gen(function* () {
         command.stopRequested
           ? Effect.gen(function* () {
               yield* sandbox.signalProcess(allocation.processId, 9);
-              const process = yield* sandbox.getProcess(allocation.processId);
 
-              if (Option.isNone(process))
-                return yield* DurableAlarmError.make({
-                  operation: "sandbox-shell",
-                  message: "The stopped command's process receipt is unavailable.",
-                });
-
-              return yield* readCommandOutput(process.value, allocation.deadlineAt);
+              return yield* readCommandOutput(allocation);
             })
           : executeCommand(["bash", "--noprofile", "--norc", "-c", command.script], allocation)
       ).pipe(Effect.result);
@@ -313,7 +322,7 @@ const make = Effect.gen(function* () {
     return command !== null;
   });
 
-  return { accept, list, wait, stop, run };
+  return { accept, list, watch, wait, stop, run };
 });
 
 export class ShellCommands extends Context.Service<ShellCommands, Effect.Success<typeof make>>()(

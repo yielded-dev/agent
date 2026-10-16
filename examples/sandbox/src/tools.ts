@@ -1,8 +1,8 @@
 import { ContextWindow } from "@yielded/agent/context-window";
 import { DurableStep, ToolExecutionClass } from "@yielded/agent/durable-step";
 import { ThreadWorkDiscovery, type ThreadWorkRequest } from "@yielded/agent/thread-work";
-import type { SandboxCommand, SandboxProcessHandle } from "@yielded/sandbox/cloudflare";
-import { Clock, Effect, Schema } from "effect";
+import type { SandboxCommand } from "@yielded/sandbox/cloudflare";
+import { Clock, Effect, Option, Schema } from "effect";
 import { Tool, Toolkit } from "effect/ai";
 
 import { CommandOutput } from "./contract.ts";
@@ -115,24 +115,28 @@ export const executeCommand = Effect.fnUntraced(function* (
     recovery: "exactWorkspaceRequired",
   });
 
-  const process = yield* sandbox.exec(command, {
+  yield* sandbox.exec(command, {
     processId: allocation.processId,
     cwd: CODING_ROOT,
     deadlineAt: allocation.deadlineAt,
     workspaceIdentity: allocation.workspaceIdentity,
   });
 
-  return yield* readCommandOutput(process, allocation.deadlineAt, structured);
+  return yield* readCommandOutput(allocation, structured);
 });
 
 export const readCommandOutput = Effect.fnUntraced(function* (
-  process: SandboxProcessHandle,
-  deadlineAt: number,
+  allocation: typeof Allocation.Type,
   structured = false,
 ) {
-  const remaining = Math.max(1, deadlineAt - (yield* Clock.currentTimeMillis) + 10_000);
+  const sandbox = yield* (yield* Workspace).open;
+  const process = yield* sandbox.getProcess(allocation.processId);
 
-  const output = yield* process.outputText({
+  if (Option.isNone(process))
+    return yield* failure("execution", "The command's process receipt is unavailable.", "unknown");
+  const remaining = Math.max(1, allocation.deadlineAt - (yield* Clock.currentTimeMillis) + 10_000);
+
+  const output = yield* process.value.outputText({
     timeout: remaining,
     maxBytes: 128 * 1024,
     acknowledge: false,

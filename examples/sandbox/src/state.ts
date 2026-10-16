@@ -7,13 +7,13 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import {
   Accepted,
   CommandInput,
-  EventPage,
   FileContent,
   FileList,
   LIVE_TEXT_THREAD_HEADER,
   MessageInput,
   SandboxError,
   ShellCommand,
+  WorkspaceEvent,
   WorkspaceId,
   type Draft,
   type Entry,
@@ -298,24 +298,6 @@ export const workspace = Atom.family((id: string) => {
           commands = [...commands, accepted];
         }
         apply(commands);
-
-        const active = commands.find(
-          (command) => command.status === "queued" || command.status === "running",
-        );
-
-        if (active) {
-          const result = yield* json(
-            `command-result?${new URLSearchParams({ workspaceId: id, requestId: active.requestId })}`,
-            Schema.NullOr(ShellCommand),
-          );
-
-          if (result) {
-            commands = commands.map((command) =>
-              command.requestId === result.requestId ? result : command,
-            );
-            apply(commands);
-          }
-        }
       }).pipe(
         Effect.tapError(() =>
           Effect.sync(() => {
@@ -386,9 +368,16 @@ export const workspace = Atom.family((id: string) => {
           ),
           Stream.splitLines,
           Stream.filter((line) => line.trim().length > 0),
-          Stream.mapEffect((line) => Schema.decodeEffect(Schema.fromJsonString(EventPage))(line)),
+          Stream.mapEffect((line) =>
+            Schema.decodeEffect(Schema.fromJsonString(WorkspaceEvent))(line),
+          ),
           Stream.runForEach((page) =>
             Effect.sync(() => {
+              if ("_tag" in page) {
+                get.set(commandRevision, get.once(commandRevision) + 1);
+
+                return;
+              }
               const current = get.once(state);
 
               if (page.cursor < current.cursor) return;

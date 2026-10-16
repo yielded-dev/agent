@@ -7,14 +7,21 @@ import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudfl
 import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { ThreadWorkDiscovery } from "@yielded/agent/thread-work";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Schema, Stream } from "effect";
 import { DurableObject, WorkerEnvironment } from "effect-cf";
 import { Model } from "effect/ai";
 import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 
 import { codingAgent, definitions } from "./agent.ts";
 import { commandAdmission, commandMaintenance, ShellCommands } from "./commands.ts";
-import { CommandInput, MAX_INPUT_BYTES, SandboxError, WorkspaceId } from "./contract.ts";
+import {
+  CommandInput,
+  MAX_INPUT_BYTES,
+  SandboxError,
+  ShellCommand,
+  WorkspaceEvent,
+  WorkspaceId,
+} from "./contract.ts";
 import { codingToolsLive } from "./tools.ts";
 import { Workspace } from "./workspace.ts";
 
@@ -118,6 +125,34 @@ export class CodingThread extends ThreadObject.make(application, {
   commands() {
     return this[DurableObject.RunSymbol](
       Effect.flatMap(ShellCommands, (commands) => commands.list),
+    );
+  }
+  commandEvents() {
+    return this[DurableObject.RunSymbol](
+      Effect.gen(function* () {
+        const commands = yield* ShellCommands;
+
+        const changed = yield* Schema.encodeEffect(Schema.fromJsonString(WorkspaceEvent))({
+          _tag: "CommandHistoryChanged",
+        });
+
+        return yield* commands.watch.pipe(
+          Stream.mapEffect((commands) =>
+            Schema.encodeEffect(Schema.fromJsonString(Schema.Array(ShellCommand)))(commands),
+          ),
+          Stream.changes,
+          Stream.as(`${changed}\n`),
+          Stream.encodeText,
+          Stream.merge(
+            Stream.tick("15 seconds").pipe(
+              Stream.drop(1),
+              Stream.map(() => new Uint8Array([10])),
+            ),
+            { haltStrategy: "left" },
+          ),
+          (stream) => Stream.toReadableStreamEffect(stream),
+        );
+      }),
     );
   }
   commandResult(id: string) {

@@ -11,8 +11,8 @@ import { CanonicalSequence, type CanonicalRecordEnvelope } from "@yielded/agent/
 import { toolCallSettledRecordId } from "@yielded/agent/run-journal";
 import { AbortCommand, Principal, IdempotencyKey } from "@yielded/agent/submission-ledger";
 import { makeSandboxAgentContainer, makeSandboxAgentOutbound } from "@yielded/sandbox/cloudflare";
-import { Deferred, Effect, Layer, Schema, Stream } from "effect";
-import { Worker, WorkerEnvironment } from "effect-cf";
+import { Cause, Deferred, Effect, Layer, Schema, Stream } from "effect";
+import { Rpc, Worker, WorkerEnvironment } from "effect-cf";
 import { Prompt } from "effect/ai";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 
@@ -357,6 +357,20 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
       const bodyClosed = yield* Deferred.make<void>();
 
+      const commandChanges = Stream.unwrap(
+        Effect.gen(function* () {
+          const body = yield* Effect.acquireRelease(
+            Effect.tryPromise(() => env.THREADS.getByName(threadId).commandEvents()),
+            Rpc.dispose,
+          );
+
+          return Stream.fromReadableStream({
+            evaluate: () => body,
+            onError: (cause) => new Cause.UnknownError(cause),
+          });
+        }),
+      );
+
       const pages = Stream.unwrap(
         Effect.gen(function* () {
           const client = yield* CloudflareThreadClient;
@@ -396,6 +410,7 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
             `${Schema.encodeSync(Schema.fromJsonString(EventPage))(page)}\n`,
           ),
         ),
+        Stream.merge(commandChanges, { haltStrategy: "either" }),
         // Both sources emit complete NDJSON lines; idle writes expose disconnects.
         Stream.merge(
           Stream.tick("15 seconds").pipe(

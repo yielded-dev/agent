@@ -95,6 +95,11 @@ export const EventPage = Schema.Struct({
 
 export type EventPage = typeof EventPage.Type;
 
+export const WorkspaceEvent = Schema.Union([
+  EventPage,
+  Schema.TaggedStruct("CommandHistoryChanged", {}),
+]);
+
 export const FileList = Schema.Struct({
   entries: Schema.Array(Schema.Struct({ path: Schema.String, directory: Schema.Boolean })),
   expired: Schema.Boolean,
