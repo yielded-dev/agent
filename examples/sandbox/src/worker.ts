@@ -270,11 +270,29 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
     if (records.length === 0 && command === undefined && fallback === undefined) return;
 
-    const input = records.flatMap(({ sequence, record: { payload } }) =>
-      payload._tag === "UserInputRecorded" && Schema.is(CodingInput)(payload.input)
-        ? [{ sequence, text: payload.input.message }]
-        : [],
-    )[0];
+    const firstInput = (page: ReadonlyArray<CanonicalRecordEnvelope>) =>
+      page.flatMap(({ sequence, record: { payload } }) =>
+        payload._tag === "UserInputRecorded" && Schema.is(CodingInput)(payload.input)
+          ? [{ sequence, text: payload.input.message }]
+          : [],
+      )[0];
+
+    let page = records;
+    let input = firstInput(page);
+
+    if (input === undefined && page.length === 64) {
+      // Recovery records can precede the first input. Only untitled entries need the scan.
+      if ((yield* remember(id, null)).title !== null) return;
+      const client = yield* CloudflareThreadClient;
+
+      while (input === undefined && page.length === 64) {
+        const last = page.at(-1);
+
+        if (last === undefined || (command && last.sequence >= command.afterSequence)) break;
+        page = yield* client.readPage(address(id), { afterSequence: last.sequence, limit: 64 });
+        input = firstInput(page);
+      }
+    }
 
     // Commands follow their recorded canonical tail, before the next agent input.
     const text =
@@ -283,7 +301,7 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
         : input?.text;
 
     yield* remember(id, text === undefined ? (fallback ?? null) : titleFor(text));
-  });
+  }, Effect.provide(clientLayer));
 
   const rememberRequest = Effect.fnUntraced(function* (id: string, title: string | null) {
     const entry = yield* remember(id, null);
