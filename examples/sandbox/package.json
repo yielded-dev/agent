@@ -1,0 +1,34 @@
+{
+  "name": "@yielded/agent-example-sandbox",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev"
+  },
+  "dependencies": {
+    "@effect/ai-openai": "catalog:",
+    "@effect/atom-react": "catalog:",
+    "@effect/platform-browser": "catalog:",
+    "@fontsource-variable/ibm-plex-sans": "catalog:",
+    "@fontsource/ibm-plex-mono": "catalog:",
+    "@yielded/agent": "workspace:*",
+    "@yielded/agent-example-auth": "workspace:*",
+    "@yielded/agent-platform-cloudflare": "workspace:*",
+    "@yielded/sandbox": "0.1.0",
+    "effect": "catalog:",
+    "effect-cf": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "wrangler": "4.151.0"
+  }
+}
