@@ -104,6 +104,7 @@ export interface Draft {
 
 export const EventPage = Schema.Struct({
   cursor: Schema.Int,
+  caughtUp: Schema.optionalKey(Schema.Boolean),
   entries: Schema.Array(Entry),
   // Empty model responses still replace provisional output for their Turn.
   committedTurns: Schema.optionalKey(

@@ -450,6 +450,7 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
               const page: EventPage = {
                 cursor: next,
+                caughtUp: records.length < 64,
                 entries: records.flatMap(entriesFor),
                 committedTurns: records.flatMap(({ record: { payload } }) =>
                   payload._tag === "ModelResponseRecorded"

@@ -174,6 +174,7 @@ interface Pending {
   readonly settings?: ModelSettings;
 }
 interface Workspace {
+  readonly historyReady: boolean;
   readonly acceptedSettings: ModelSettings;
   readonly entries: ReadonlyArray<Entry>;
   readonly commands: ReadonlyArray<ShellCommand>;
@@ -192,6 +193,7 @@ interface Workspace {
 
 export const workspace = Atom.family((id: string) => {
   const state = Atom.make<Workspace>({
+    historyReady: false,
     acceptedSettings: defaultModelSettings,
     entries: [],
     commands: [],
@@ -355,6 +357,8 @@ export const workspace = Atom.family((id: string) => {
       });
 
       const pages = Effect.gen(function* () {
+        get.set(state, { ...get.once(state), historyReady: false });
+
         const response = yield* request(
           "events?" +
             new URLSearchParams({ workspaceId: id, after: String(get.once(state).cursor) }),
@@ -457,6 +461,7 @@ export const workspace = Atom.family((id: string) => {
                 ...current,
                 entries: [...entries.values()].slice(-500),
                 acceptedSettings,
+                historyReady: page.caughtUp === true,
                 drafts: drafts.filter(
                   (draft) => draft.runId !== runId || !committedTurns.includes(draft.turnId),
                 ),
@@ -470,7 +475,7 @@ export const workspace = Atom.family((id: string) => {
                 error: reviewRequired
                   ? "A workspace operation needs review. Review the transcript and files, or start a new workspace. Further changes are blocked here."
                   : error,
-                connection: "Live",
+                connection: page.caughtUp === true ? "Live" : "Loading history…",
               });
             }),
           ),
@@ -583,7 +588,12 @@ export const workspace = Atom.family((id: string) => {
           Effect.gen(function* () {
             while (true) {
               yield* pages.pipe(Effect.scoped, Effect.ignore);
-              get.set(state, { ...get.once(state), drafts: [], connection: "Reconnecting…" });
+              get.set(state, {
+                ...get.once(state),
+                historyReady: false,
+                drafts: [],
+                connection: "Reconnecting…",
+              });
               yield* Effect.sleep("2 seconds");
             }
           }),
@@ -611,7 +621,7 @@ export const workspace = Atom.family((id: string) => {
         current.active ||
         current.reviewRequired ||
         current.admissionRequestId ||
-        (!retry && (current.pending || current.uncertain))
+        (!retry && (!current.historyReady || current.pending || current.uncertain))
       )
         return;
 
@@ -766,7 +776,7 @@ export const workspace = Atom.family((id: string) => {
         current.active ||
         current.reviewRequired ||
         current.admissionRequestId ||
-        (!retry && (current.pending || current.uncertain))
+        (!retry && (!current.historyReady || current.pending || current.uncertain))
       )
         return;
       get.set(admission, value);

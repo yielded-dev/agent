@@ -198,6 +198,7 @@ function Workspace({ id }: { id: string }) {
   );
 
   const busy =
+    !state.historyReady ||
     expired ||
     state.active !== null ||
     state.pending !== null ||
@@ -388,7 +389,9 @@ function Workspace({ id }: { id: string }) {
                     ? "Review required"
                     : state.uncertain
                       ? "Awaiting delivery status"
-                      : "! runs Bash · ⌘ / Ctrl + Enter to send"}
+                      : !state.historyReady
+                        ? "Loading history…"
+                        : "! runs Bash · ⌘ / Ctrl + Enter to send"}
             </small>
             {state.pending?.command && state.uncertain ? (
               <Button variant="outline" type="button" onClick={() => reconnectCommand()}>
