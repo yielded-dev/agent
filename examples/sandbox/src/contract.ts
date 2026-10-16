@@ -117,9 +117,15 @@ export interface Draft {
   readonly generation: number;
 }
 
+export const RecoveryResult = Schema.Struct({
+  recovered: Schema.Natural,
+  reviewRequired: Schema.Boolean,
+});
+
 export const EventPage = Schema.Struct({
   cursor: Schema.Int,
   caughtUp: Schema.optionalKey(Schema.Boolean),
+  reviewRequired: Schema.optionalKey(Schema.Boolean),
   entries: Schema.Array(Entry),
   // Empty model responses still replace provisional output for their Turn.
   committedTurns: Schema.optionalKey(

@@ -350,6 +350,22 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
     );
   }
 
+  if (request.method === "POST" && url.pathname === "/sandbox/api/recover") {
+    const input = yield* Schema.decodeEffect(
+      Schema.fromJsonString(Schema.Struct({ workspaceId: WorkspaceId })),
+    )(yield* boundedBody(request));
+
+    const limit = yield* Effect.promise(() => env.RUN_LIMIT.limit({ key: session.accountId }));
+
+    if (!limit.success)
+      return json({ message: "Please wait before checking recovery again." }, 429);
+
+    return json(
+      yield* Effect.tryPromise(() =>
+        env.THREADS.getByName(address(input.workspaceId)).recoverWorkspace(),
+      ),
+    );
+  }
   if (request.method === "POST" && url.pathname === "/sandbox/api/commands") {
     const input = yield* Schema.decodeEffect(
       Schema.fromJsonString(Schema.Struct({ workspaceId: WorkspaceId, ...CommandInput.fields })),
@@ -560,8 +576,13 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
         Effect.gen(function* () {
           const client = yield* CloudflareThreadClient;
 
+          let needsRecoveryCheck = after > 0;
+          let recoveryUnavailable = false;
+
           return Stream.unfold({ cursor: after, wait: false }, ({ cursor, wait }) =>
             Effect.gen(function* () {
+              // Deliver history first, then let the client's reconnect delay retry authority.
+              if (recoveryUnavailable) return;
               if (wait) yield* client.awaitProgress(threadId, cursor);
 
               const records = yield* client
@@ -574,11 +595,38 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
               if (cursor === 0) yield* rememberHistory(workspaceId, records);
               const next = records.at(-1)?.sequence ?? cursor;
+              const entries = records.flatMap(entriesFor);
+
+              needsRecoveryCheck ||=
+                entries.some(
+                  (entry) =>
+                    entry.reviewRequired ||
+                    (entry.kind === "status" &&
+                      ["Unknown", "Failed", "Stopped"].includes(entry.text)),
+                ) || records.some(({ record: { payload } }) => payload._tag === "ToolCallResolved");
+
+              const reviewRequired =
+                needsRecoveryCheck && records.length < 64
+                  ? yield* Effect.tryPromise(() =>
+                      env.THREADS.getByName(threadId).recoveryRequired(),
+                    ).pipe(
+                      Effect.catch(() =>
+                        Effect.sync(() => {
+                          recoveryUnavailable = true;
+
+                          return undefined;
+                        }),
+                      ),
+                    )
+                  : undefined;
+
+              if (reviewRequired !== undefined) needsRecoveryCheck = reviewRequired;
 
               const page: EventPage = {
                 cursor: next,
-                caughtUp: records.length < 64,
-                entries: records.flatMap(entriesFor),
+                caughtUp: records.length < 64 && !recoveryUnavailable,
+                entries,
+                ...(reviewRequired === undefined ? {} : { reviewRequired }),
                 committedTurns: records.flatMap(({ record: { payload } }) =>
                   payload._tag === "ModelResponseRecorded"
                     ? [{ runId: payload.runId, turnId: payload.turnId }]
