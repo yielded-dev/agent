@@ -1,6 +1,12 @@
 import { SqliteClient } from "@effect/sql-sqlite-do";
 import { makeStorageOwner, type StorageOwner } from "@yielded/agent/run-storage";
-import { Deferred, Effect, Exit, Predicate, Schema, Scope, Semaphore } from "effect";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Semaphore from "effect/Semaphore";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 

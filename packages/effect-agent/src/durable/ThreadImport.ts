@@ -1,4 +1,9 @@
-import { Context, Effect, Pull, Schema, Stream, type Scope } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Pull from "effect/Pull";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 import { InputMessage } from "../capabilities/Messaging.ts";
 import type { RunId } from "../core/Identifiers.ts";

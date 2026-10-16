@@ -1,4 +1,5 @@
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 export const LaneId = Schema.NonEmptyString.check(Schema.isMaxLength(256));
 

@@ -35,8 +35,14 @@ import {
   SaveCheckpointRequest,
   canonicalBatchFitsTransfer,
 } from "@yielded/agent/thread-store";
-import { Clock, Crypto, Effect, Option, Ref, Schema, Stream } from "effect";
+import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import { SqlClient } from "effect/sql/SqlClient";
+import * as Stream from "effect/Stream";
 
 import { capturePreparedRecordStorage } from "./SqlCanonicalStorage.ts";
 import {

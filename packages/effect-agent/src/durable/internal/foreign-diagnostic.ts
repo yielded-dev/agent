@@ -1,4 +1,5 @@
-import { Option, Schema } from "effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 const ErrorMessage = Schema.Struct({ message: Schema.String });
 const ErrorTag = Schema.Struct({ _tag: Schema.NonEmptyString });

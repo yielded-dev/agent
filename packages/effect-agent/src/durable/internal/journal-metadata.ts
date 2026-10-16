@@ -1,4 +1,4 @@
-import { Brand } from "effect";
+import * as Brand from "effect/Brand";
 
 import { type RunId, type ToolCallId } from "../../core/Identifiers.ts";
 import {

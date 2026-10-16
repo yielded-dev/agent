@@ -3,7 +3,10 @@
 import { createHash } from "node:crypto";
 
 import { BrowserCrypto } from "@effect/platform-browser";
-import { Crypto, Effect, Layer, PlatformError } from "effect";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as PlatformError from "effect/PlatformError";
 
 /** Workers use native SHA-256 while retaining BrowserCrypto's services and overrides. */
 export const cloudflareCryptoLayer: Layer.Layer<Crypto.Crypto> = Layer.effect(

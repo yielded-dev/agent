@@ -30,23 +30,21 @@ import {
   ThreadStoreDiagnostic,
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
-import {
-  Cause,
-  Clock,
-  Context,
-  Effect,
-  Layer,
-  Option,
-  Predicate,
-  References,
-  Result,
-  Schema,
-  Stream,
-  Tracer,
-} from "effect";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as References from "effect/References";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import { classifySqliteError, SqlError } from "effect/sql/SqlError";
 import { CurrentTransformer, type Statement } from "effect/sql/Statement";
+import * as Stream from "effect/Stream";
+import * as Tracer from "effect/Tracer";
 
 import { DoStorageConfig } from "../DoStorageConfig.ts";
 import {

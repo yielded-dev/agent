@@ -1,4 +1,4 @@
-import { Predicate } from "effect";
+import * as Predicate from "effect/Predicate";
 
 const MAX_FOREIGN_DIAGNOSTIC_LENGTH = 8_192;
 

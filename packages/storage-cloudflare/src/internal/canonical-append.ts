@@ -1,7 +1,7 @@
 import { prepareSqlAppend } from "@yielded/agent-storage-sql/sql-thread-store";
 import type { AppendRequest } from "@yielded/agent/thread-store";
 import { PreparedAppend } from "@yielded/agent/thread-store";
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 
 export const DO_OFFSET_PREFIX = "effect-agent-do@1:";
 

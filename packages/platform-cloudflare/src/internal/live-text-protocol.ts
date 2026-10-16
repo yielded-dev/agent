@@ -1,7 +1,7 @@
 import { ThreadId } from "@yielded/agent/identifiers";
 import { Event } from "@yielded/agent/provisional-text";
-import { Schema } from "effect";
 import { Rpc } from "effect-cf";
+import * as Schema from "effect/Schema";
 
 export const MAX_FRAME_BYTES = 32 * 1_024;
 export const MAX_ID_LENGTH = 256;

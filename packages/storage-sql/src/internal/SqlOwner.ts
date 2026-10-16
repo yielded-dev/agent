@@ -1,5 +1,9 @@
 import { makeStorageOwner, type StorageOwner } from "@yielded/agent/run-storage";
-import { Deferred, Effect, Exit, Scope, Semaphore } from "effect";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Scope from "effect/Scope";
+import * as Semaphore from "effect/Semaphore";
 import type { SqlClient } from "effect/sql/SqlClient";
 
 interface RetainedOwner {

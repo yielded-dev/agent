@@ -1,4 +1,5 @@
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { ThreadId, SettlementId, SubmissionId, ToolCallId } from "../core/Identifiers.ts";
 import { ApprovalDecision, SettlementOutcome, DeclaredToolCall } from "./Records.ts";

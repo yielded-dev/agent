@@ -1,4 +1,7 @@
-import { Array, Predicate, Result, Schema } from "effect";
+import * as Array from "effect/Array";
+import * as Predicate from "effect/Predicate";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 interface JsonLimits {
   readonly depth: number;

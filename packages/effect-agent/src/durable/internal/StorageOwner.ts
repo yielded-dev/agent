@@ -1,4 +1,8 @@
-import { Context, Effect, Option, Semaphore, type Scope } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import type * as Scope from "effect/Scope";
+import * as Semaphore from "effect/Semaphore";
 
 import type { ThreadId } from "../../core/Identifiers.ts";
 import { type Claim, LedgerError, OwnershipLost } from "../SubmissionLedger.ts";

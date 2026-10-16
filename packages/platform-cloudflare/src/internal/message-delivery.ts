@@ -5,7 +5,13 @@ import {
   MessageDeliveryStore,
 } from "@yielded/agent/message-delivery";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Clock, Context, Duration, Effect, Exit, Layer, Option } from "effect";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 
 import { DurableAlarmError, ThreadMessageDelivery, ThreadMutationGate } from "../Alarm.ts";
 import { ThreadObjectPlacement } from "../CloudflareBindings.ts";

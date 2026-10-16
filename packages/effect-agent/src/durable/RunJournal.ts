@@ -1,5 +1,10 @@
-import { Brand, Effect, Predicate, Schema, Stream, type DateTime } from "effect";
-import { Prompt } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as Brand from "effect/Brand";
+import type * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import {
   type RunId,

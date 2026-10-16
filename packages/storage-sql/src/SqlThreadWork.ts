@@ -34,7 +34,9 @@ import {
   type ThreadWorkEntry,
   type WorkerReportingMode,
 } from "@yielded/agent/thread-work";
-import { Crypto, Effect, Schema } from "effect";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { Statement } from "effect/sql/Statement";
 

@@ -52,13 +52,19 @@ import {
 } from "@yielded/agent/thread-store";
 import { WorkDiscoveryUnavailable } from "@yielded/agent/thread-work";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Context, Effect, Layer, Option, Schema, Stream, type Scope } from "effect";
 import {
   DurableObject as EffectCfDurableObject,
   DurableObjectAlarm,
   DurableObjectState as EffectCfDurableObjectState,
   WorkerEnvironment,
 } from "effect-cf";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 import {
   ThreadMaintenance,
