@@ -1,5 +1,13 @@
 # @yielded/agent-storage-sqlite
 
+## 0.1.0-beta.186
+
+### Patch Changes
+
+- Updated dependencies [[`b0d1062`](https://github.com/yielded-dev/agent/commit/b0d10629a17a063cc0a131a2b1854dd7c9d506f9), [`481ab30`](https://github.com/yielded-dev/agent/commit/481ab30de77b9dad7137b84a2b1c6d4b2168ec4f), [`357e8fa`](https://github.com/yielded-dev/agent/commit/357e8fa30805ebfe43e3248a5158fc1f365ee398)]:
+  - @yielded/agent@0.1.0-beta.186
+  - @yielded/agent-storage-sql@0.1.0-beta.186
+
 ## 0.1.0-beta.185
 
 ### Patch Changes

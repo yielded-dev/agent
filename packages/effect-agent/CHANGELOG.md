@@ -1,5 +1,15 @@
 # @yielded/agent
 
+## 0.1.0-beta.186
+
+### Patch Changes
+
+- [#1022](https://github.com/yielded-dev/agent/pull/1022) [`b0d1062`](https://github.com/yielded-dev/agent/commit/b0d10629a17a063cc0a131a2b1854dd7c9d506f9) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Keep durable history recoverable when new input restarts an unfinished model response, including across eviction.
+
+- [#1014](https://github.com/yielded-dev/agent/pull/1014) [`481ab30`](https://github.com/yielded-dev/agent/commit/481ab30de77b9dad7137b84a2b1c6d4b2168ec4f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Import Effect modules by subpath so bundlers can drop unused Effect code.
+
+- [#1013](https://github.com/yielded-dev/agent/pull/1013) [`357e8fa`](https://github.com/yielded-dev/agent/commit/357e8fa30805ebfe43e3248a5158fc1f365ee398) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Start newly admitted Cloudflare work from the submit event without waiting for the post-event dispatcher. Keep receipts independent of execution and retain alarm recovery after interruption.
+
 ## 0.1.0-beta.185
 
 No changes in this release.
