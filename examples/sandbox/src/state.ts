@@ -702,7 +702,13 @@ export const workspace = Atom.family((id: string) => {
           Effect.sync(() => {
             const latest = get(state);
 
-            if (latest.reviewRequired || latest.admissionRequestId !== input.requestId) return;
+            // Preserve canonical reconciliation after its entry leaves the displayed history.
+            if (
+              latest.reviewRequired ||
+              latest.admissionRequestId !== input.requestId ||
+              latest.pending?.requestId !== input.requestId
+            )
+              return;
 
             const durable = latest.entries.some(
               (entry) => entry.kind === "user" && entry.requestId === input.requestId,
@@ -731,7 +737,12 @@ export const workspace = Atom.family((id: string) => {
           Effect.sync(() => {
             const latest = get(state);
 
-            if (latest.reviewRequired || latest.admissionRequestId !== input.requestId) return;
+            if (
+              latest.reviewRequired ||
+              latest.admissionRequestId !== input.requestId ||
+              latest.pending?.requestId !== input.requestId
+            )
+              return;
             // A later refusal cannot prove that the original request was never accepted.
             const rejected = !retry && Schema.is(RequestRejected)(error) && error.status < 500;
 
