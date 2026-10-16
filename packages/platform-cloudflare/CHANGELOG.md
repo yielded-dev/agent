@@ -1,5 +1,23 @@
 # @yielded/agent-platform-cloudflare
 
+## 0.1.0-beta.186
+
+### Minor Changes
+
+- [#997](https://github.com/yielded-dev/agent/pull/997) [`c2b7e78`](https://github.com/yielded-dev/agent/commit/c2b7e7812ccbfc56d85e4e40ee3c82cced26e313) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Configure a recovery window to reuse alarms across nearby requests while keeping alarm-driven work prompt.
+
+  BEHAVIOR CHANGE: Without a client, recovery can now take up to the configured window (60 seconds by default). Lower `recoveryWindowMillis` for faster recovery at the cost of an alarm write before the first model request; `0` restores the previous recovery deadlines.
+
+### Patch Changes
+
+- [#1014](https://github.com/yielded-dev/agent/pull/1014) [`481ab30`](https://github.com/yielded-dev/agent/commit/481ab30de77b9dad7137b84a2b1c6d4b2168ec4f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Import Effect modules by subpath so bundlers can drop unused Effect code.
+
+- [#1013](https://github.com/yielded-dev/agent/pull/1013) [`357e8fa`](https://github.com/yielded-dev/agent/commit/357e8fa30805ebfe43e3248a5158fc1f365ee398) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Start newly admitted Cloudflare work from the submit event without waiting for the post-event dispatcher. Keep receipts independent of execution and retain alarm recovery after interruption.
+- Updated dependencies [[`b0d1062`](https://github.com/yielded-dev/agent/commit/b0d10629a17a063cc0a131a2b1854dd7c9d506f9), [`481ab30`](https://github.com/yielded-dev/agent/commit/481ab30de77b9dad7137b84a2b1c6d4b2168ec4f), [`357e8fa`](https://github.com/yielded-dev/agent/commit/357e8fa30805ebfe43e3248a5158fc1f365ee398)]:
+  - @yielded/agent@0.1.0-beta.186
+  - @yielded/agent-storage-cloudflare@0.1.0-beta.186
+  - @yielded/agent-storage-sql@0.1.0-beta.186
+
 ## 0.1.0-beta.185
 
 ### Patch Changes
