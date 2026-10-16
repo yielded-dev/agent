@@ -1,29 +1,17 @@
 ---
 name: dev-kit
-description: Set up TypeScript repositories, change project tooling, migrate legacy Dev Kit management, or maintain repository skills.
+description: Set up repositories with shared project guidance, migrate legacy Dev Kit management, or maintain repository skills.
 ---
 
 # Dev Kit
 
-Build from the user's requirements and leave outputs under normal repository
-ownership. Use the transient CLI for catalog and migration mechanics; inspect
-the existing repository before changing its architecture or configuration.
+Build from the user's requirements and leave outputs under normal repository ownership. Use the transient CLI for catalog and migration mechanics. Preserve repository conventions and existing authorization; generated repositories keep no Dev Kit runtime dependency or lifecycle manager.
 
-Read only the references for the requested work:
+For repository setup, TypeScript tooling, or a Cloudflare Worker API, read `.agents/skills/project-setup/SKILL.md`. `dev-kit setup` installs it alongside this entrypoint. For an older installation, add it with `bunx @danieljvdm/dev-kit@latest skills add project-setup`. Its canonical source is [danieljvdm/skills](https://github.com/danieljvdm/skills/tree/main/skills/project-setup).
 
-- Scaffold or reorganize a repository: [repository setup](references/repository-setup.md).
-- Adopt the Dev Kit default or Vite+ foundation:
-  [TypeScript defaults](references/default-typescript-repository.md).
-- Add or configure a Cloudflare Worker API:
-  [Worker API](references/cloudflare-worker-api.md).
-- Remove legacy Dev Kit manifests or managed configuration:
-  [legacy ejection](references/legacy-eject.md).
+Install only the skills relevant to the repository and the linked support needed by those workflows. Keep repository copies self-contained and name their exact paths in required repository workflows, even when a same-named global skill is available. Follow the [skill installation guidance](references/skills.md) to check relative links and preserve local deviations when refreshing copies.
+
+- Remove legacy Dev Kit manifests or managed configuration: [legacy ejection](references/legacy-eject.md).
 - Discover, add, update, fork, or detach skills: [skills](references/skills.md).
 
-Preserve repository conventions and existing authorization. Explain material
-architecture or dependency choices when they affect the outcome; infer routine
-placement and naming from the project. Follow installed API documentation and
-the repository's command authority, including its Effect and testing policies.
-
-Verify the changed entrypoints with the normal project commands. Generated
-repositories keep no Dev Kit runtime dependency or lifecycle manager.
+Follow installed API documentation and the repository's command, Effect, and testing policies. Verify changed entrypoints with the resulting project's normal commands.

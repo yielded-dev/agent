@@ -1,87 +1,37 @@
 # Test selection
 
-## Default: write no new tests
+## Default to existing verification
 
-A feature request or "test/verify this" authorizes verification, not new
-committed automation. Run existing checks or exercise the real workflow and
-save [replayable evidence](e2e.md). A missing E2E suite does not oblige you to
-create one. Types, static checks, and a focused interaction may already suffice.
+Committed tests must prove durable value. Tests are permanent product code, not a reflexive companion to each source file. A request to implement or verify a feature does not by itself require new automation. Prefer existing checks and direct workflow observation; a missing suite does not oblige you to build one.
 
-Before adding or expanding a committed test of any kind, both must hold:
+Before adding or expanding a committed test, both must hold:
 
-- You are reproducing a current failure, or a human explicitly requested
-  committed automated tests, TDD, or a named test seam.
-- You can name the concrete uncovered failure, explain why existing checks or
-  direct workflow verification are insufficient, and justify the continuing
-  maintenance and runtime cost.
+- The user explicitly requested automated tests, TDD, or a named test seam, or you are reproducing a real regression.
+- You can name the concrete uncovered failure, explain why existing tests, types, static checks, or direct workflow verification are insufficient, and justify the continuing maintenance and runtime cost.
 
-These are necessary conditions, not a test-writing quota. Apply them to added
-cases, parameter tables, assertions, fixtures, mocks, and harnesses inside
-existing suites as well as new files. An incident citation or allowlist alone
-does not establish value. Do not invent failure scenarios to qualify a test.
+Apply this gate to cases, assertions, fixtures, mocks, and harnesses inside existing suites as well as new files. Do not invent failure scenarios to qualify a test. Honor an explicit test request within its scope; the following criteria guide which cases and boundaries provide useful protection.
 
-Prefer the smallest addition at an existing real boundary when automation is
-justified. Never turn a rejected unit test into a browser test, larger
-integration suite, or "E2E" harness. Do not add replacements merely to preserve
-the count or apparent coverage of deleted tests. Do not copy business logic into
-fixtures or build fake applications, elaborate setup, or new reporting systems
-merely to comply with a testing preference.
+## Choose durable protection
 
-Temporary verification code also needs a concrete question and proportional
-cost. Prefer direct tools and existing commands; use a small task-local script
-only when it materially simplifies the proof. Leaving a harness uncommitted
-does not justify building it. Stop once the requested outcomes are proven.
+Write a test only when every condition holds:
 
-## Explain why automation is necessary
+- It protects stable product behavior rather than an implementation detail.
+- A regression is plausible and would be costly.
+- The behavior is observable through a stable public seam.
+- The test will survive likely refactors.
+- The expected result is independent of the implementation.
+- Existing evidence cannot cover the risk adequately.
 
-For a new regression, cite its pre-existing public issue or offending commit
-beside the test. For an explicit human request, record the requested test seam
-before implementation. A current PR, invented incident, or private customer
-identifier is not evidence. Provenance does not establish necessity.
+If any condition fails, skip the test and use the cheapest sufficient verification instead. Moving MVP behavior often warrants no committed tests.
 
-Review must check additions inside existing declarations, fixtures and parameter
-tables as well as new test files. A passing suite does not establish value or
-test-first order.
+Test capabilities, not files. Use the fewest tests that protect the risk, and ignore coverage targets unless the user explicitly asks for them. Never turn a rejected unit test into a larger integration suite, browser test, or E2E harness. Do not add replacements merely to preserve the count or apparent coverage of removed tests. Temporary verification scripts also need a concrete question and proportional cost; leaving a harness uncommitted does not justify building it.
 
-This is a public library, which makes some stable contract checks valuable but
-is not a blanket exemption. Preserve narrow compile-time checks for costly
-silent error/requirement inference regressions and independent adapter proof
-where workflow verification cannot expose the failure. Do not execute runtime
-tests merely to repeat type declarations, schema definitions or export maps.
+If isolation is necessary, explain the failure that the real workflow cannot adequately exercise and follow [failure-first development](tdd.md) before changing the implementation. Convenience, package size, and coverage targets do not establish that need. Map already-covered cases to existing proof rather than adding a test for each possible failure.
 
-## Exceptions for isolation
+## Reuse evidence and audit retained tests
 
-Explain the specific failure E2E cannot adequately exercise, such as a storage
-crash window or a nondeterministic race. Convenience, coverage targets, package
-size, or being a library do not establish that need. Choose the real integration
-boundary before a unit seam. The selection rules above still apply.
+Reuse passing evidence until a relevant source, dependency, configuration, or environment change invalidates it. After a fix, rerun the affected proof; repeat the wider workflow only when its earlier evidence is invalid. An unchanged failure does not justify another broad run. Keep blocked required verification explicit and do not turn unrelated findings into new delivery requirements.
 
-Write the failure inventory and necessary failing tests before implementation
-or the fix, following [failure-first development](tdd.md). Use existing proof
-for already-covered cases; an inventory does not require a new test per item.
+Judge existing tests by the failures they catch. Remove redundant checks and tests that only repeat schemas, constants, types, implementation calculations, or internal call order when test cleanup is in scope. Retain independent protection for costly failures that the remaining checks cannot reliably expose; age alone is not a reason to delete it. Remove orphaned fixtures and runner entries with the tests that needed them, while preserving shared infrastructure with live callers.
 
-## Audit existing tests
-
-Judge what a test can actually catch, not its length, file name, or citation.
-Delete tests that only restate schemas, constants, configuration, or types;
-assert internal call order or mock setup; duplicate the implementation's
-algorithm; or test private graphs and incidental rendering details. Remove
-duplicate coverage when a stronger retained scenario catches the same failure.
-
-Retention also needs a concrete answer: which costly production failure would
-escape the remaining checks, and why is repeatable workflow verification
-insufficient? A citation, real database, browser, or authorization/recovery
-label does not answer that question. Apply this bar to the whole suite,
-including the fake application or infrastructure needed to run it.
-
-Retain independent expected results at stable boundaries for failures that E2E
-cannot reliably force, such as data loss, authorization races, or crash recovery.
-Keep only the cases needed to expose those failures; useful protection does not
-justify the surrounding feature matrix. Do not delete such protection solely
-because it predates this policy or invent a historical test-first claim.
-
-Keep one regression per incident at the strongest seam, with only the cases
-needed to distinguish its failure modes. Weigh suite runtime and maintenance
-against the risk it protects. Delete orphaned fixtures, mocks, and runner
-entries with the tests that required them; preserve shared live acceptance
-infrastructure. Do not write replacement unit tests as part of cleanup.
+Never commit an intentionally failing or red-only suite. Keep time-driven tests deterministic instead of stabilizing them with wall-clock sleeps. A shared fake or in-memory implementation must fully provide the behavior its name promises; keep partial substitutes local to the tests that need them.

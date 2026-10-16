@@ -1,0 +1,6 @@
+The references domain-modeling.md, reliable-operations.md, and evolving-designs.md adapt ideas from Lauren Tan's pstack engineering principles and Poteto mode workflows, distributed under the MIT license in LICENSE.
+
+Source: https://github.com/cursor/plugins/tree/99743e9c151c8537cbbf1f98bb38f34ef3368453/pstack/skills
+Copyright (c) 2026 Lauren Tan
+
+Adaptations preserve minimum useful implementations, existing contracts, Effect compatibility, and proportionate verification. Other material expresses independently supplied engineering preferences.

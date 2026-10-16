@@ -1,0 +1,8 @@
+Adapted from HumanLayer's show-me skill.
+
+Source: https://github.com/humanlayer/skills/tree/3c2629142c5d437428269b1b722b08c0b87f574d/plugins/show-me/skills/show-me
+Revision: 3c2629142c5d437428269b1b722b08c0b87f574d
+Copyright (c) 2026 HumanLayer
+License: MIT (see LICENSE)
+
+Adaptations: progressive disclosure for examples, portable artifact presentation, Codex metadata, and links to shared PR guidance.

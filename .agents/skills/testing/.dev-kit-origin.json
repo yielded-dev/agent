@@ -2,9 +2,11 @@
   "version": 1,
   "selector": "testing",
   "name": "testing",
-  "baseDigest": "sha256:b58c8dbc7b758b96668c3a8db3d74646523603dab56bcfce6287af32e46cc25d",
+  "baseDigest": "sha256:1ca7a7f772bb588267478464306348ad6a0a4d5cc1f22be86153178f150a4dff",
   "source": {
-    "type": "bundled",
-    "version": "1.0.2"
+    "type": "git",
+    "source": "dan-skills",
+    "repository": "https://github.com/danieljvdm/skills.git",
+    "resolved": "0d50b6c37d3afb8b153dac6bff52e8ccac756cab"
   }
 }

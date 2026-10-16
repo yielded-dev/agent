@@ -5,3 +5,5 @@ Includes the repository-owned TDD guidance previously distributed by Dev Kit.
 
 Modified by Dev Kit to reuse user-selected boundaries, avoid redundant
 confirmation, and let repository testing policy own committed test decisions.
+
+Personal stack: copied from Dev Kit commit 2bda762e1573fbfdaf5c5aa6c06abe952d812a0b; added source metadata and portable UI metadata where needed, and removed manual prose wrapping.

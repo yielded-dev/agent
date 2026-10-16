@@ -1,0 +1,6 @@
+interface:
+  display_name: "Simplify"
+  short_description: "Apply Dan's personal simplification review"
+  default_prompt: "Use $simplify to simplify the requested code or workflow."
+policy:
+  allow_implicit_invocation: false
