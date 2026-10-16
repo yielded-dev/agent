@@ -14,7 +14,7 @@ import { DurableObjectState } from "effect-cf";
 import { SqlClient } from "effect/sql";
 
 import type { CommandInput } from "./contract.ts";
-import { CommandRejected, ShellCommand } from "./contract.ts";
+import { CODING_ADMISSION_GROUP, CommandRejected, ShellCommand } from "./contract.ts";
 import { Allocation, allocateCommand, executeCommand, readCommandOutput } from "./tools.ts";
 import { Workspace } from "./workspace.ts";
 
@@ -57,6 +57,7 @@ const stoppedOutput = {
 
 // The native ledger checks this inside fresh admission's transaction, after replay lookup.
 // Command admission writes the same key under the same SQL transaction owner.
+// Old accepted inputs can still replay; fresh inputs must use the exclusive coding group.
 export const commandAdmission = Layer.effect(
   SubmissionAdmissionFence,
   Effect.gen(function* () {
@@ -77,11 +78,18 @@ export const commandAdmission = Layer.effect(
               ? Effect.fail(
                   AdmissionPolicyError.make({ reason: "refused", code: "unsupported-policy" }),
                 )
-              : active === undefined
-                ? Effect.void
-                : Effect.fail(
-                    AdmissionPolicyError.make({ reason: "occupied", code: "sandbox-shell-active" }),
-                  ),
+              : request.admissionGroup !== CODING_ADMISSION_GROUP
+                ? Effect.fail(
+                    AdmissionPolicyError.make({ reason: "refused", code: "sandbox-reload" }),
+                  )
+                : active === undefined
+                  ? Effect.void
+                  : Effect.fail(
+                      AdmissionPolicyError.make({
+                        reason: "occupied",
+                        code: "sandbox-shell-active",
+                      }),
+                    ),
           ),
         ),
     });

@@ -7,10 +7,12 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import {
   Accepted,
   CommandInput,
+  defaultModelSettings,
   FileContent,
   FileList,
   LIVE_TEXT_THREAD_HEADER,
   MessageInput,
+  ModelSettings,
   SandboxError,
   ShellCommand,
   WorkspaceEvent,
@@ -204,6 +206,22 @@ export const workspace = Atom.family((id: string) => {
   }).pipe(Atom.setIdleTTL("5 minutes"));
 
   const draft = Atom.make("").pipe(Atom.setIdleTTL("5 minutes"));
+  const settingsDraft = Atom.make<ModelSettings | null>(null);
+
+  const settings = Atom.make(
+    (get) =>
+      get(settingsDraft) ??
+      get(state).entries.findLast((entry) => entry.kind === "user")?.settings ??
+      defaultModelSettings,
+  );
+
+  const changeSettings = Atom.fnSync((change: Partial<Record<keyof ModelSettings, string>>, get) =>
+    get.set(
+      settingsDraft,
+      Schema.decodeUnknownSync(ModelSettings)({ ...get(settings), ...change }),
+    ),
+  );
+
   const directory = Atom.make("");
   const selectedFile = Atom.make<string | null>(null);
   const revision = Atom.make(0);
@@ -599,6 +617,7 @@ export const workspace = Atom.family((id: string) => {
         workspaceId: id,
         requestId: crypto.randomUUID(),
         message,
+        settings: get(settings),
       });
 
       const pending: Pending = { requestId: input.requestId, text: message };
@@ -790,6 +809,8 @@ export const workspace = Atom.family((id: string) => {
   return {
     state: visibleState,
     draft,
+    settings,
+    changeSettings,
     directory,
     selectedFile,
     files,

@@ -19,6 +19,7 @@ import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { codingAgent, definitions } from "./agent.ts";
 import {
   CodingInput,
+  CODING_ADMISSION_GROUP,
   CommandAccepted,
   CommandInput,
   EventPage,
@@ -102,6 +103,7 @@ const entriesForRecord = ({ sequence, record }: CanonicalRecordEnvelope): Entry[
           id,
           kind: "user",
           text: p.input.message,
+          ...(p.input.settings === undefined ? {} : { settings: p.input.settings }),
           requestId: p.input.requestId,
           submissionId: p.submissionId,
           ...(p.runId === undefined ? {} : { runId: p.runId }),
@@ -284,12 +286,17 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
       return yield* client.submit(
         { definition: codingAgent },
-        { requestId: input.requestId, message: input.message },
+        {
+          requestId: input.requestId,
+          message: input.message,
+          ...(input.settings === undefined ? {} : { settings: input.settings }),
+        },
         {
           threadId: address(input.workspaceId),
           principal: Principal.make(session.accountId),
           idempotencyKey: IdempotencyKey.make(input.requestId),
-          definitions: yield* digestDefinitions(definitions).pipe(
+          ...(input.settings === undefined ? {} : { admissionGroup: CODING_ADMISSION_GROUP }),
+          definitions: yield* digestDefinitions(definitions(input.settings)).pipe(
             Effect.provide(BrowserCrypto.layer),
           ),
         },
@@ -512,6 +519,10 @@ export default Worker.make(Layer.empty, {
       AccountError: (error) =>
         Effect.succeed(json({ message: error.message }, error.code === "unauthorized" ? 401 : 503)),
       SchemaError: () => Effect.succeed(json({ message: "Invalid request." }, 400)),
+      AdmissionConflict: () =>
+        Effect.succeed(
+          json({ message: "This message ID already belongs to different input." }, 409),
+        ),
       AdmissionLimitExceeded: (error) =>
         Effect.succeed(
           json(
@@ -524,9 +535,13 @@ export default Worker.make(Layer.empty, {
           json(
             {
               message:
-                error.code === "sandbox-shell-active"
-                  ? "Wait for the current command to finish before messaging the agent."
-                  : "This workspace is not accepting new work.",
+                error.code === "sandbox-reload"
+                  ? "Reload this page to choose model settings before sending a new message."
+                  : error.code === "admission-group"
+                    ? "Wait for the current message to finish before sending another."
+                    : error.code === "sandbox-shell-active"
+                      ? "Wait for the current command to finish before messaging the agent."
+                      : "This workspace is not accepting new work.",
             },
             error.reason === "unavailable" ? 503 : 409,
           ),

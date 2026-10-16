@@ -6,9 +6,26 @@ export const LIVE_TEXT_THREAD_HEADER = "x-yielded-thread-id";
 
 export const WorkspaceId = Schema.String.check(Schema.isUUID());
 
+export const CODING_ADMISSION_GROUP = "sandbox-coding";
+
+export const ModelSettings = Schema.Struct({
+  model: Schema.Literals(["gpt-6.1-sol", "gpt-6-astra"]),
+  reasoningEffort: Schema.Literals(["low", "medium", "high", "xhigh", "max"]),
+  serviceTier: Schema.Literals(["ultrafast", "fast", "default"]),
+});
+
+export type ModelSettings = typeof ModelSettings.Type;
+
+export const defaultModelSettings: ModelSettings = {
+  model: "gpt-6.1-sol",
+  reasoningEffort: "medium",
+  serviceTier: "ultrafast",
+};
+
 export const CodingInput = Schema.Struct({
   requestId: Schema.String.check(Schema.isUUID()),
   message: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(8_000)),
+  settings: Schema.optionalKey(ModelSettings),
 });
 
 export const MessageInput = Schema.Struct({ workspaceId: WorkspaceId, ...CodingInput.fields });
@@ -69,6 +86,7 @@ export const Entry = Schema.Struct({
   toolCallId: Schema.optionalKey(Schema.String),
   toolResultId: Schema.optionalKey(Schema.String),
   sequence: Schema.optionalKey(Schema.Natural),
+  settings: Schema.optionalKey(ModelSettings),
 });
 
 export type Entry = typeof Entry.Type;

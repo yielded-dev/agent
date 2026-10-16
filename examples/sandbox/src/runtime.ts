@@ -1,22 +1,24 @@
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
-import type { CreateResponse } from "@effect/ai-openai/Generated";
-import { Agent } from "@yielded/agent";
 import { hostedModelAccess } from "@yielded/agent-example-auth/server";
 import { ThreadMaintenance } from "@yielded/agent-platform-cloudflare/alarm";
 import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
+import { SubmissionLedger, SubmissionLookupById } from "@yielded/agent/submission-ledger";
 import { ThreadWorkDiscovery } from "@yielded/agent/thread-work";
-import { Effect, Layer, Schema, Stream } from "effect";
+import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
 import { DurableObject, Rpc, WorkerEnvironment } from "effect-cf";
-import { Model } from "effect/ai";
+import { AiError, LanguageModel, Model } from "effect/ai";
 import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 
-import { codingAgent, definitions } from "./agent.ts";
+import { codingAgent, definitions, modelOptions } from "./agent.ts";
 import { commandAdmission, commandMaintenance, ShellCommands } from "./commands.ts";
 import {
+  CodingInput,
   CommandInput,
+  defaultModelSettings,
   MAX_INPUT_BYTES,
+  type ModelSettings,
   SandboxError,
   ShellCommand,
   WorkspaceEvent,
@@ -71,25 +73,75 @@ const provider = Layer.effect(
   }),
 ).pipe(Layer.provide(FetchHttpClient.layer));
 
-// The provider passes through this Responses option; its Config type omits it.
-const modelConfig: typeof OpenAiLanguageModel.Config.Service &
-  Pick<CreateResponse, "parallel_tool_calls"> = {
-  reasoning: { effort: "low", summary: "auto" },
-  max_output_tokens: 16_384,
-  parallel_tool_calls: false,
-};
+class RunSettings extends Context.Service<
+  RunSettings,
+  { readonly read: Effect.Effect<ModelSettings | undefined, AiError.AiError> }
+>()("sandbox-example/RunSettings") {}
 
-const model = Model.make(
-  "openai",
-  "gpt-6.1-sol",
-  OpenAiLanguageModel.layer({
-    model: "gpt-6.1-sol",
-    config: modelConfig,
-  }).pipe(Layer.provide(provider)),
-);
+const model = Layer.unwrap(
+  Effect.gen(function* () {
+    const selected = yield* (yield* RunSettings).read.pipe(Effect.result);
+
+    if (selected._tag === "Failure")
+      return Model.make(
+        "openai",
+        "unavailable",
+        Layer.effect(
+          LanguageModel.LanguageModel,
+          LanguageModel.make({
+            generateText: () => Effect.fail(selected.failure),
+            streamText: () => Stream.fail(selected.failure),
+          }),
+        ),
+      );
+
+    const { model, ...config } = modelOptions(selected.success);
+
+    return OpenAiLanguageModel.model(model, config);
+  }),
+).pipe(Layer.provide(provider));
 
 const registered = DurableAgentRuntime.layerRegistered([
-  { agent: Agent.withModel(codingAgent, model), definitions },
+  {
+    agent: codingAgent,
+    model,
+    definitions: definitions(defaultModelSettings),
+    attemptLayer: ({ submissionId, threadId }) =>
+      Layer.effect(
+        RunSettings,
+        Effect.gen(function* () {
+          const ledger = yield* SubmissionLedger;
+
+          return {
+            read: Effect.gen(function* () {
+              const found = yield* ledger.lookup(SubmissionLookupById.make({ submissionId }));
+
+              if (Option.isNone(found) || found.value.threadId !== threadId)
+                return yield* SandboxError.make({ message: "The accepted input is unavailable." });
+
+              const input = yield* Schema.decodeUnknownEffect(CodingInput)(
+                found.value.inputPayload,
+              );
+
+              return input.settings;
+            }).pipe(
+              Effect.mapError((cause) =>
+                AiError.make({
+                  module: "Sandbox",
+                  method: "modelSettings",
+                  reason: Object.assign(
+                    AiError.UnknownError.make({
+                      description: "The admitted model settings could not be read.",
+                    }),
+                    { cause },
+                  ),
+                }),
+              ),
+            ),
+          };
+        }),
+      ),
+  },
 ]).pipe(Layer.provide(codingToolsLive));
 
 // Share the owner's existing storage with tools; alarms use the registered runtime.
@@ -117,7 +169,7 @@ export class CodingThread extends ThreadObject.make(application, {
   namespaceBinding: "THREADS",
   deploymentId: "sandbox-v1",
   producerPrefix: "sandbox",
-  maxQueueDepthPerLane: 2,
+  maxQueueDepthPerLane: 1,
   maxInputBytes: MAX_INPUT_BYTES,
 }) {
   command(input: unknown) {

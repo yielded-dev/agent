@@ -3,7 +3,7 @@ import { text } from "@yielded/agent/output";
 import { DefinitionDigestInput } from "@yielded/agent/records";
 import { Schema } from "effect";
 
-import { CodingInput } from "./contract.ts";
+import { CodingInput, type ModelSettings } from "./contract.ts";
 import { codingTools } from "./tools.ts";
 
 export const codingAgent = Agent.make("sandbox-coder", {
@@ -26,14 +26,29 @@ For questions that need no workspace, answer directly. For coding requests, fini
   },
 });
 
-export const definitions = DefinitionDigestInput.make({
-  agent: { id: codingAgent.id, revision: 1 },
-  model: {
-    provider: "openai",
-    name: "gpt-6.1-sol",
-    reasoning: "low",
-    maxOutputTokens: 16_384,
-    parallelToolCalls: false,
-  },
-  tools: { revision: 1, names: Object.keys(codingTools.tools) },
-});
+// Inputs accepted before model controls retain their original provider settings.
+export const modelOptions = (settings?: ModelSettings) =>
+  ({
+    model: settings?.model ?? "gpt-6.1-sol",
+    reasoning: { effort: settings?.reasoningEffort ?? "low", summary: "auto" },
+    ...(settings === undefined ? {} : { service_tier: settings.serviceTier }),
+    max_output_tokens: 16_384,
+    parallel_tool_calls: false,
+  }) as const;
+
+export const definitions = (settings?: ModelSettings) => {
+  const options = modelOptions(settings);
+
+  return DefinitionDigestInput.make({
+    agent: { id: codingAgent.id, revision: 1 },
+    model: {
+      provider: "openai",
+      name: options.model,
+      reasoning: options.reasoning.effort,
+      ...(settings === undefined ? {} : { serviceTier: settings.serviceTier }),
+      maxOutputTokens: options.max_output_tokens,
+      parallelToolCalls: options.parallel_tool_calls,
+    },
+    tools: { revision: 1, names: Object.keys(codingTools.tools) },
+  });
+};

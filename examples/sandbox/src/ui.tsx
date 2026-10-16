@@ -27,6 +27,9 @@ import { newWorkspace, workspace, workspaceId } from "./state";
 const workspaceDescription =
   "Workspace files expire after 30 minutes idle. Conversation history is kept.";
 
+const settingControl =
+  "mt-1 w-full min-w-0 rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground";
+
 const Brand = () => (
   <a className="brand" href="/">
     ✳ yielded <span>/ agent</span>
@@ -153,6 +156,8 @@ function Workspace({ id }: { id: string }) {
   const [stopped, stop] = useAtom(atoms.stop);
   const reconnectCommand = useAtomSet(atoms.reconnectCommand);
   const expired = useAtomValue(atoms.expired);
+  const settings = useAtomValue(atoms.settings);
+  const changeSettings = useAtomSet(atoms.changeSettings);
 
   const { entries, results } = useMemo(() => {
     const calls = new Set(state.entries.filter((entry) => entry.kind === "tool").map(toolKey));
@@ -307,6 +312,52 @@ function Workspace({ id }: { id: string }) {
               Could not send. Check your prompt and try again.
             </p>
           )}
+          <fieldset
+            className="mb-3 grid grid-cols-2 gap-2 disabled:opacity-50 sm:grid-cols-[minmax(0,1.4fr)_1fr_1fr]"
+            disabled={busy || draft.trimStart().startsWith("!")}
+          >
+            <legend className="sr-only">Model settings</legend>
+            <label htmlFor="model" className="col-span-2 min-w-0 sm:col-span-1">
+              Model
+              <select
+                id="model"
+                className={settingControl}
+                value={settings.model}
+                onChange={(event) => changeSettings({ model: event.target.value })}
+              >
+                <option value="gpt-6.1-sol">GPT-6.1 Sol</option>
+                <option value="gpt-6-astra">GPT-6 Astra</option>
+              </select>
+            </label>
+            <label htmlFor="reasoning" className="min-w-0">
+              Reasoning
+              <select
+                id="reasoning"
+                className={settingControl}
+                value={settings.reasoningEffort}
+                onChange={(event) => changeSettings({ reasoningEffort: event.target.value })}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="xhigh">Extra high</option>
+                <option value="max">Maximum</option>
+              </select>
+            </label>
+            <label htmlFor="priority" className="min-w-0">
+              Priority
+              <select
+                id="priority"
+                className={settingControl}
+                value={settings.serviceTier}
+                onChange={(event) => changeSettings({ serviceTier: event.target.value })}
+              >
+                <option value="ultrafast">Ultrafast</option>
+                <option value="fast">Fast</option>
+                <option value="default">Standard</option>
+              </select>
+            </label>
+          </fieldset>
           <label htmlFor="prompt">
             {draft.trimStart().startsWith("!") ? "Run a command" : "Your coding task"}
           </label>
