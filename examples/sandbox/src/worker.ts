@@ -28,6 +28,7 @@ import {
   MessageInput,
   WorkspaceId,
   WorkspacePage,
+  WorkspaceSummary,
   type Entry,
   type ShellCommand,
 } from "./contract.ts";
@@ -245,7 +246,9 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
   const titleFor = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 120) || null;
 
   const remember = Effect.fnUntraced(function* (id: string, title: string | null) {
-    yield* Effect.tryPromise(() => directory.remember({ id, title }));
+    return yield* Schema.decodeEffect(WorkspaceSummary)(
+      yield* Effect.tryPromise(() => directory.remember({ id, title })),
+    );
   });
 
   const firstPage = Effect.fnUntraced(function* (id: string) {
@@ -283,22 +286,10 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
   });
 
   const rememberRequest = Effect.fnUntraced(function* (id: string, title: string | null) {
-    let before: number | null = null;
+    const entry = yield* remember(id, null);
 
-    // Indexed titles are final; only missing or untitled entries need history recovery.
-    do {
-      const page = yield* Schema.decodeEffect(WorkspacePage)(
-        yield* Effect.tryPromise(() => directory.list(before)),
-      );
-
-      const entry = page.entries.find((entry) => entry.id === id.toLowerCase());
-
-      if (entry !== undefined) {
-        if (entry.title !== null) return;
-        break;
-      }
-      before = page.next;
-    } while (before !== null);
+    // The existing registration call returns indexed titles without reading history.
+    if (entry.title !== null) return;
 
     const records = yield* firstPage(id).pipe(Effect.provide(clientLayer));
 

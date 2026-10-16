@@ -22,7 +22,7 @@ class Directory extends Context.Service<
   {
     readonly remember: (
       input: typeof WorkspaceRegistration.Type,
-    ) => Effect.Effect<void, DirectoryError>;
+    ) => Effect.Effect<typeof WorkspaceSummary.Type, DirectoryError>;
     readonly list: (
       before: number | null,
     ) => Effect.Effect<typeof WorkspacePage.Type, DirectoryError>;
@@ -43,19 +43,25 @@ class Directory extends Context.Service<
 
           // Reserve navigation before admission, including when its response is lost.
           // Replays retain the first title and position; this is not an activity journal.
-          yield* Effect.try({
+          const row = yield* Effect.try({
             try: () =>
               db
                 .insert(workspaces)
                 .values({ ...entry, id: entry.id.toLowerCase(), addedAt })
                 .onConflictDoUpdate({
                   target: workspaces.id,
-                  set: { title: sql`excluded.title` },
-                  setWhere: sql`${workspaces.title} IS NULL AND excluded.title IS NOT NULL`,
+                  set: { title: sql`coalesce(${workspaces.title}, excluded.title)` },
                 })
-                .run(),
+                .returning({
+                  id: workspaces.id,
+                  title: workspaces.title,
+                  addedAt: workspaces.addedAt,
+                })
+                .get(),
             catch: failure,
           });
+
+          return yield* Schema.decodeEffect(WorkspaceSummary)(row);
         }, Effect.mapError(failure)),
         list: Effect.fn("WorkspaceDirectory.list")(function* (before) {
           const cursor = yield* Schema.decodeEffect(Schema.NullOr(Schema.Natural))(before);
