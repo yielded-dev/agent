@@ -15,9 +15,16 @@ import * as DoThreadStore from "@yielded/agent-storage-cloudflare/do-thread-stor
 import * as PersistentHistory from "@yielded/agent/persistent-history";
 import { ThreadHistory } from "@yielded/agent/thread-history";
 import { DurableObject } from "cloudflare:workers";
-import { Context, Effect, Layer, Redacted, Schema, Struct } from "effect";
-import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
-import { HttpApiBuilder } from "effect/http-api";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpRouter from "effect/http/HttpRouter";
+import * as HttpServer from "effect/http/HttpServer";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 
 import { type Account, LabApi, LabError, ModelApi, modelChoices } from "./contract.ts";
 import { connectKitesurf } from "./kitesurf.ts";

@@ -1,5 +1,9 @@
-import { Context, Effect, Option, Schema } from "effect";
-import { Tool, Toolkit } from "effect/ai";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 import type { CodeExecutionLimits } from "../sandbox/CodeExecutor.ts";
 import * as CodeMode from "./CodeMode.ts";

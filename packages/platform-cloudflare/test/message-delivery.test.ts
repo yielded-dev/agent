@@ -3,9 +3,10 @@ import { type AgentId } from "@yielded/agent/identifiers";
 import { MessageDeliveryStore, prepareMessageDelivery } from "@yielded/agent/message-delivery";
 import { ApprovalDecisionCommand } from "@yielded/agent/submission-ledger";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Clock, Effect } from "effect";
 import { DurableObject } from "effect-cf";
-import { TestClock } from "effect/testing";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as TestClock from "effect/testing/TestClock";
 import { describe, expect, it } from "vite-plus/test";
 
 import { CloudflareThreadClient } from "../src/CloudflareThreadClient.ts";

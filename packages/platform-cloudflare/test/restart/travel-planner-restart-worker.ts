@@ -1,4 +1,4 @@
-import { BrowserCrypto } from "@effect/platform-browser";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import {
   ThreadObjectNamespace,
   type ThreadObjectRpc,
@@ -18,7 +18,9 @@ import {
 import { Receipt } from "@yielded/agent/durable-agent-runtime";
 import { DurableRuntimeFailpointLocation } from "@yielded/agent/durable-failpoint";
 import { type CanonicalRecordEnvelope } from "@yielded/agent/records";
-import { Effect, Layer, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { layerFromBindings } from "../../src/internal/layers.ts";
 import {

@@ -11,8 +11,8 @@ not need another model turn. Your host fixes the callable methods and their auth
 
 ```ts twoslash
 import { CodeMode } from "@yielded/agent";
-import { Schema } from "effect";
-import { Tool } from "effect/ai";
+import * as Tool from "effect/ai/Tool";
+import * as Schema from "effect/Schema";
 
 const Sales = Tool.make("read_sales", {
   parameters: Schema.Struct({ region: Schema.String }),

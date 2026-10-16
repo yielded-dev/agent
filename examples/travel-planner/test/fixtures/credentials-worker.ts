@@ -1,6 +1,9 @@
-import { Effect, Layer, Redacted, Schema } from "effect";
 import { DurableObject } from "effect-cf";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { PlannerError, TripSiteStore } from "../../src/domain.ts";
 import { makeTravelPlannerThread, plannerApplication } from "../../src/server/cloudflare.ts";
@@ -25,7 +28,7 @@ export class TravelPlannerThread extends makeTravelPlannerThread(
   fetch(request: Request): Promise<Response> {
     return this[DurableObject.RunSymbol](
       Effect.gen(function* () {
-        const sql = yield* SqlClient;
+        const sql = yield* SqlClient.SqlClient;
 
         if (request.method === "PUT") {
           const value = yield* Effect.promise(() => request.text());

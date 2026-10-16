@@ -1,17 +1,15 @@
 /// <reference types="@cloudflare/workers-types" />
 
-import {
-  Cause,
-  Clock,
-  Context,
-  Effect,
-  Exit,
-  Layer,
-  Redacted,
-  Schema,
-  Semaphore,
-  Scope,
-} from "effect";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Semaphore from "effect/Semaphore";
 import type { Browser, Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
 import {

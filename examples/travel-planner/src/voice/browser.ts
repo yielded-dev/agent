@@ -1,5 +1,9 @@
 import { fetchWithSession } from "@yielded/agent-example-auth/client";
-import { Cause, Effect, Queue, Schema, Stream } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Queue from "effect/Queue";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { LiveEvent, VoiceAnswer, VoiceError, type VoiceOffer } from "./protocol.ts";
 import type { VoiceConnection } from "./session.ts";

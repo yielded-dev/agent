@@ -1,4 +1,5 @@
-import { NodeCrypto, NodeFileSystem } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, it } from "@effect/vitest";
 import { Agent } from "@yielded/agent";
 import { AgentWorkflow } from "@yielded/agent-workflow";
@@ -7,9 +8,17 @@ import { WorkflowDispatchFailpoint } from "@yielded/agent-workflow/workflow-disp
 import type { Receipt } from "@yielded/agent/durable-agent-runtime";
 import { ToolCallId } from "@yielded/agent/identifiers";
 import { AbortCommand, ApprovalDecisionCommand } from "@yielded/agent/submission-ledger";
-import { Deferred, Effect, Layer, Option, Ref, Schema, Stream } from "effect";
-import { Tool, Toolkit, type Response } from "effect/ai";
-import { Workflow } from "effect/workflow";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as Workflow from "effect/workflow/Workflow";
 
 import {
   definitionsFor,

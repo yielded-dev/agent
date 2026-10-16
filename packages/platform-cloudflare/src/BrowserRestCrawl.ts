@@ -10,24 +10,20 @@ import {
   type PageCrawlRequest,
 } from "@yielded/agent/page-crawl";
 import { SandboxImplementation } from "@yielded/agent/sandbox";
-import {
-  Duration,
-  Effect,
-  Layer,
-  Option,
-  Redacted,
-  Ref,
-  Schedule,
-  Schema,
-  Scope,
-  Stream,
-} from "effect";
-import {
-  HttpClient,
-  HttpClientRequest,
-  type HttpClientError,
-  type HttpClientResponse,
-} from "effect/http";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as HttpClient from "effect/http/HttpClient";
+import type * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import type * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Ref from "effect/Ref";
+import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 /** Node-safe REST crawl implementation. It never exposes or persists provider job identity. */
 export const browserRestCrawlImplementation = SandboxImplementation.make({

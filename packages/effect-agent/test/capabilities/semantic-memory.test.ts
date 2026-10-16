@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import * as MemoryNamespace from "@yielded/agent/memory-namespace";
 import { MemoryAccess } from "@yielded/agent/memory-revalidation";
@@ -25,9 +25,12 @@ import {
   SemanticMemoryProfile,
 } from "@yielded/agent/semantic-memory-index";
 import { type SemanticMemoryError } from "@yielded/agent/semantic-memory-revalidation";
-import { Schema as NamespaceSchema, type Crypto, Effect, Layer } from "effect";
-import type { AiError } from "effect/ai";
-import { EmbeddingModel } from "effect/ai";
+import type * as AiError from "effect/ai/AiError";
+import * as EmbeddingModel from "effect/ai/EmbeddingModel";
+import type * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as NamespaceSchema from "effect/Schema";
 
 const TestNamespace = MemoryNamespace.define({
   name: "test/memory",

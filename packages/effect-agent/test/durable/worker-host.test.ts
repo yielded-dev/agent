@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, layer } from "@effect/vitest";
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
@@ -26,21 +26,19 @@ import {
 } from "@yielded/agent/subagent-host";
 import { ToolResultBounds } from "@yielded/agent/tool-result";
 import { WorkerCompletion, WorkerError, WorkerUpdate } from "@yielded/agent/worker";
-import {
-  Clock,
-  Crypto,
-  DateTime,
-  Deferred,
-  Duration,
-  Effect,
-  Fiber,
-  Option,
-  Schema,
-  Semaphore,
-  Stream,
-} from "effect";
-import { Toolkit } from "effect/ai";
-import { TestClock } from "effect/testing";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import { automaticReporting } from "../../src/capabilities/internal/subagent-reporting.ts";
 import {

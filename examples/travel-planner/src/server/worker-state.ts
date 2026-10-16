@@ -8,8 +8,11 @@ import { SubmissionLedger, SubmissionLookupByKey } from "@yielded/agent/submissi
 import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
 import { WorkerRef } from "@yielded/agent/worker";
 import { WorkerHostAuthorizer } from "@yielded/agent/worker-host";
-import { Effect, Option, Schema, Stream } from "effect";
 import { WorkerEnvironment } from "effect-cf";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { PlannerError, PlannerWorkerDetail, PlannerWorkerRequest } from "../domain.ts";
 import { ScoutFindings } from "../research/contracts.ts";

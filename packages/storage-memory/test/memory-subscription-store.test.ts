@@ -4,7 +4,7 @@ import {
   subscriptionConformancePartition,
   subscriptionStoreConformanceCases,
 } from "@yielded/agent/testing/subscription-store-conformance";
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 
 describe("MemorySubscriptionStore", () => {
   for (const testCase of subscriptionStoreConformanceCases) {

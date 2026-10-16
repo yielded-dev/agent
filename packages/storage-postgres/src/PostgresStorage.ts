@@ -25,7 +25,10 @@ import { ThreadImport } from "@yielded/agent/thread-import";
 import type { ThreadExportRequest } from "@yielded/agent/thread-store";
 import { ThreadReader, ThreadStore } from "@yielded/agent/thread-store";
 import { checkExportSource } from "@yielded/agent/thread-transfer";
-import { Context, Effect, Layer, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import {

@@ -1,5 +1,6 @@
 /** Restore idle fixture bytes before acquiring the production runtime. */
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { tables } from "../../src/serve.ts";
 import { BulkFixture, errorText, RESTORE_BYTES, RestoreChunk, type Query } from "./protocol.ts";

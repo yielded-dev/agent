@@ -1,4 +1,8 @@
-import { Context, DateTime, Effect, Layer, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import git, { type HttpClient } from "isomorphic-git";
 import { memfs } from "memfs";
 

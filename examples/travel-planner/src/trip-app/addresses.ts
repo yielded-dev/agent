@@ -1,4 +1,6 @@
-import { Effect, Option, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 import { AppSiteName, AppSiteRegistration, PlannerError, type TripApp } from "../domain.ts";
 import { TripFailpoint } from "../server/trips.ts";

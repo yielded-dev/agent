@@ -93,8 +93,8 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { SqlClient } from "effect/sql/SqlClient";
-import type { Fragment } from "effect/sql/Statement";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 import * as Stream from "effect/Stream";
 import * as Struct from "effect/Struct";
 
@@ -252,7 +252,7 @@ const encode = <A, I>(schema: Schema.Codec<A, I>, value: A) =>
 export const makeSqlThreadImport = Effect.fnUntraced(function* <
   E extends { readonly message: string },
 >(options: SqlThreadImportOptions<E>) {
-  const sql = yield* SqlClient;
+  const sql = yield* SqlClient.SqlClient;
   const crypto = yield* Crypto.Crypto;
   const deliveryLimits = options.deliveryLimits ?? defaultMessageDeliveryStoreLimits;
   const { table, execute } = yield* makeSqlQuery(options.namespace);
@@ -284,7 +284,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
   const recordJson = canonicalRecordJson(sql, options.namespace, "r");
   const batchJson = canonicalBatchJson(sql, options.namespace, "b");
 
-  const rows = (threadId: ThreadId, predicate: Fragment, limit: number) =>
+  const rows = (threadId: ThreadId, predicate: Statement.Fragment, limit: number) =>
     query(
       sql`SELECT r.thread_id, ${recordBatchId(sql, options.namespace, "r")} AS batch_id, r.sequence, r.record_id, ${recordJson} AS record_json
       FROM ${table("effect_agent_canonical_records")} r WHERE r.thread_id=${threadId} AND ${predicate}
@@ -324,7 +324,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     }),
   );
 
-  const admissionRows = (threadId: ThreadId, predicate: Fragment, limit: number) =>
+  const admissionRows = (threadId: ThreadId, predicate: Statement.Fragment, limit: number) =>
     query(
       sql`SELECT s.*, ${definitionJson(sql, options.namespace, "s")} AS agent_digests_json FROM ${table("effect_agent_submissions")} s WHERE s.thread_id=${threadId} AND ${predicate}
       ORDER BY s.queue_sequence LIMIT ${limit}`,
@@ -343,7 +343,10 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
     });
   });
 
-  const executions = Effect.fnUntraced(function* (threadId: ThreadId, predicate: Fragment) {
+  const executions = Effect.fnUntraced(function* (
+    threadId: ThreadId,
+    predicate: Statement.Fragment,
+  ) {
     const selected =
       yield* query(sql`SELECT e.thread_id, e.run_id, e.input_sequence, e.revision, e.checkpoint_json
       FROM ${table("effect_agent_executions")} e WHERE e.thread_id=${threadId} AND ${predicate}
@@ -376,7 +379,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
   const commandFacts = Effect.fnUntraced(function* (
     threadId: ThreadId,
     section: "aborts" | "approvals" | "resolutions",
-    predicate: Fragment,
+    predicate: Statement.Fragment,
     limit: number,
   ) {
     const factTable =
@@ -1868,7 +1871,7 @@ export const makeSqlThreadImport = Effect.fnUntraced(function* <
             });
           });
 
-          const scan = (predicate: (after: number) => Fragment) =>
+          const scan = (predicate: (after: number) => Statement.Fragment) =>
             Stream.paginate(-1, (after) =>
               Effect.gen(function* () {
                 const rows = yield* query(

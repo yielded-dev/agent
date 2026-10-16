@@ -1,4 +1,5 @@
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { requireReplayCpu } from "./replay-cpu-build.ts";
 import { ReplayCpuOperation, ReplayCpuRole } from "./replay-cpu-contracts.ts";

@@ -1,7 +1,8 @@
 import { type RecordEnvelope, SettlementFailureDiagnostic } from "@yielded/agent/records";
 import { FrameworkMessage } from "@yielded/agent/worker";
-import { DateTime, Schema } from "effect";
-import { Prompt } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as DateTime from "effect/DateTime";
+import * as Schema from "effect/Schema";
 
 import { PlannerInput, type PlannerActivity } from "../domain.ts";
 import {

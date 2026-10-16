@@ -3,7 +3,8 @@ import { type Receipt } from "@yielded/agent/durable-agent-runtime";
 import type { CanonicalSequence } from "@yielded/agent/records";
 import { ApprovalDecisionCommand } from "@yielded/agent/submission-ledger";
 import { runInDurableObject } from "cloudflare:test";
-import { Effect, Fiber } from "effect";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import { describe, expect, it, onTestFinished } from "vite-plus/test";
 
 import { ProgressWaitRegistry } from "../src/internal/progress-wait.ts";

@@ -1,5 +1,9 @@
-import { Effect, Option, Schema } from "effect";
-import { LanguageModel, Tool, Toolkit } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { ToolExecutionClass } from "../engine/DurableStep.ts";

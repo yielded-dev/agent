@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { Agent } from "@yielded/agent";
 import { NodeDurableHost } from "@yielded/agent-platform-node/node-durable-host";
 import { ScriptedModel, type ScriptedStreamPart } from "@yielded/agent-testing/scripted-model";
@@ -19,8 +19,19 @@ import {
   ThreadStore,
   type ExecutionCheckpoint,
 } from "@yielded/agent/thread-store";
-import { Clock, Deferred, Effect, Fiber, FileSystem, Layer, Option, Path, Schema } from "effect";
-import { AiError, Model, Tool, Toolkit } from "effect/ai";
+import * as AiError from "effect/ai/AiError";
+import * as Model from "effect/ai/Model";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Clock from "effect/Clock";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 
 import { BenchmarkError, check } from "./contracts.js";
 import { fairnessCases } from "./diagnostic-cases.js";

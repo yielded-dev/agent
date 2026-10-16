@@ -17,8 +17,18 @@ import {
 } from "@yielded/agent/run-options";
 import { type ThreadHistory } from "@yielded/agent/thread-history";
 import { RunToolVisibility } from "@yielded/agent/tool-exposure";
-import { Context, Effect, Layer, Option, Schema, SchemaGetter, type Scope, Stream } from "effect";
-import { LanguageModel, Model, Tool, Toolkit } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
+import type * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 import type { expectTypeOf as ExpectTypeOf } from "vite-plus/test";
 
 class Instructions extends Context.Service<Instructions, string>()("api-types/Instructions") {}

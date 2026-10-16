@@ -8,8 +8,15 @@ import * as Subagent from "@yielded/agent/subagent";
 import { delegationAllocationFromPolicy } from "@yielded/agent/subagent";
 import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservations";
 import { Principal, type IdempotencyKey } from "@yielded/agent/submission-ledger";
-import { Effect, Layer, Ref, Schema, Stream } from "effect";
-import { LanguageModel, Model, type Response, type Toolkit } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import type * as Toolkit from "effect/ai/Toolkit";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { DeterministicIdGeneratorLayer } from "./deterministic-layers.ts";
 import type {

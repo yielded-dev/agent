@@ -1,8 +1,16 @@
 import { Receipt } from "@yielded/agent/durable-agent-runtime";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
-import type { Redacted } from "effect";
-import { Clock, Effect, Exit, FileSystem, Path, Schedule, Schema } from "effect";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Path from "effect/Path";
+import type * as Redacted from "effect/Redacted";
+import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
 
 import { EvaluationError } from "./contracts.ts";
 import type { PerformanceIdentity } from "./performance-contracts.ts";

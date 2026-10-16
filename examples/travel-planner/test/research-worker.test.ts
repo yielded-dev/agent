@@ -4,7 +4,8 @@ import { join } from "node:path";
 
 import { CanonicalRecordEnvelope, SettlementFailureDiagnostic } from "@yielded/agent/records";
 import { WorkerCompletion } from "@yielded/agent/worker";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import { build } from "esbuild";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { afterAll, beforeAll, expect, it } from "vite-plus/test";

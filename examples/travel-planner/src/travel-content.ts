@@ -1,4 +1,5 @@
-import { Option, Schema } from "effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 const Label = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(240));
 const Detail = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(600));

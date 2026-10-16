@@ -1,5 +1,6 @@
-import { Effect, Schema } from "effect";
-import { Prompt } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { RunId } from "../core/Identifiers.ts";
 import { contextWindowId } from "../engine/Compaction.ts";

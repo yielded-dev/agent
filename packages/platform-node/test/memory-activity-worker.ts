@@ -1,5 +1,5 @@
-import { NodeCrypto } from "@effect/platform-node";
-import { SqliteClient } from "@effect/sql-sqlite-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { activityProcessorStoreLayer } from "@yielded/agent-storage-sqlite/sqlite-activity-store";
 import {
   threadStoreLayer,
@@ -16,7 +16,12 @@ import {
 } from "@yielded/agent/memory-store";
 import { type CanonicalRecordEnvelope } from "@yielded/agent/records";
 import { memoryStoreLayerWithFailpoints } from "@yielded/agent/sql-memory-store";
-import { Config, Console, Effect, Layer, Ref, Schema } from "effect";
+import * as Config from "effect/Config";
+import * as Console from "effect/Console";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 
 import {
   ActivityMemoryOutput,

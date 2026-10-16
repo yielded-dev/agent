@@ -1,8 +1,10 @@
 import type { Sandbox } from "@cloudflare/sandbox";
 import start from "@tanstack/react-start/server-entry";
 import type { AuthEnvironment } from "@yielded/agent-example-auth/server";
-import { Effect, Layer, Schema } from "effect";
 import { CloudflareTracer, Worker, WorkerEnvironment } from "effect-cf";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { artifactsLayer } from "./artifacts";
 import { authenticate, type PlannerAuthV2 } from "./auth/worker";

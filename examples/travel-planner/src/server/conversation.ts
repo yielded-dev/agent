@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { PlannerAnswer, Text, type PlannerSnapshot } from "../domain.ts";
 

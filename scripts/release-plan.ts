@@ -1,6 +1,12 @@
-import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Cause, Config, Console, Effect, Exit, FileSystem } from "effect";
-import { FetchHttpClient } from "effect/http";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Cause from "effect/Cause";
+import * as Config from "effect/Config";
+import * as Console from "effect/Console";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 
 import { proveGatedRelease } from "./release-ci.ts";
 import { hasUnpublishedRelease, readWorkspacePackages } from "./release-publish.ts";

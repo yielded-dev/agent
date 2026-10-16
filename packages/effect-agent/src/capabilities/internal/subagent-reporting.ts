@@ -1,4 +1,5 @@
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { utf8ByteLength } from "../../core/internal/utf8.ts";
 import { Receipt } from "../../core/Receipt.ts";

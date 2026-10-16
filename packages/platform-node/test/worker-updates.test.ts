@@ -1,4 +1,4 @@
-import { NodeFileSystem } from "@effect/platform-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, it } from "@effect/vitest";
 import * as NodeHost from "@yielded/agent-platform-node/node-durable-host";
 import * as Agent from "@yielded/agent/agent";
@@ -13,8 +13,19 @@ import { readTestThread } from "@yielded/agent/testing/thread-store-conformance"
 import { ThreadExportRequest, ThreadStore, ThreadReader } from "@yielded/agent/thread-store";
 import { WorkerError, WorkerUpdate } from "@yielded/agent/worker";
 import { WorkerHostAuthorizer } from "@yielded/agent/worker-host";
-import { Context, Deferred, Effect, Exit, FileSystem, Layer, Schema, Scope, Stream } from "effect";
-import { LanguageModel, Model, Toolkit, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 const input = Schema.Struct({ question: Schema.String });
 const output = Schema.Struct({ answer: Schema.String });

@@ -12,7 +12,7 @@ can end with the process. No storage package is required.
 ```ts twoslash
 // ---cut---
 import { AgentRuntime, InMemory } from "@yielded/agent";
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 
 import { planner } from "./node-agent.ts";
 

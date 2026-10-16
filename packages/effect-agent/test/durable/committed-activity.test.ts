@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import { type PreparedActivity } from "@yielded/agent/activity-store";
 import {
@@ -21,19 +21,17 @@ import {
   UserInputRecorded,
 } from "@yielded/agent/records";
 import { ThreadStore, ThreadTail } from "@yielded/agent/thread-store";
-import {
-  Cause,
-  Clock,
-  DateTime,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  Layer,
-  Schema,
-  Stream,
-} from "effect";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 const threadId = Schema.decodeSync(ThreadId)("dan-chad");
 const sequence = Schema.decodeSync(CanonicalSequence);

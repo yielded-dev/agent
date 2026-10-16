@@ -120,23 +120,21 @@ import {
   transferPageFits,
 } from "@yielded/agent/thread-store";
 import { admissionWork } from "@yielded/agent/thread-work";
-import {
-  Clock,
-  Context,
-  Cause,
-  Crypto,
-  Exit,
-  Fiber,
-  DateTime,
-  Effect,
-  Layer,
-  MutableRef,
-  Option,
-  Ref,
-  Result,
-  Schema,
-  Stream,
-} from "effect";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as MutableRef from "effect/MutableRef";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { MemoryThreadStoreKernel } from "./internal/MemoryThreadStoreKernel.ts";
 import { boundedWorkSelection } from "./internal/WorkSelection.ts";

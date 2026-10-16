@@ -7,7 +7,10 @@ import {
 import { ThreadPortTransport } from "@yielded/agent-storage-cloudflare/port-routing";
 import { SubmissionLookupByKey } from "@yielded/agent/submission-ledger";
 import { env, runInDurableObject } from "cloudflare:test";
-import { Effect, Layer, Option, Tracer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Tracer from "effect/Tracer";
 
 import { threadPortTransportLayer } from "../src/internal/transport.ts";
 import { decodeIdempotencyKey, decodeThreadId, TEST_PRINCIPAL } from "./fixtures.ts";

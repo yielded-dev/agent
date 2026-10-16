@@ -12,8 +12,11 @@ import {
 import * as Memory from "@yielded/agent/memory";
 import { MemoryAccess } from "@yielded/agent/memory-revalidation";
 import { Principal } from "@yielded/agent/submission-ledger";
-import { Clock, Effect, Layer, Schema } from "effect";
 import { DurableObject, WorkerEnvironment } from "effect-cf";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import {
   BenchmarkCase,

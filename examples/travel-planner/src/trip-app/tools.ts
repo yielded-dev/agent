@@ -1,6 +1,7 @@
 import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
-import { Schema } from "effect";
-import { Tool, Toolkit } from "effect/ai";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Schema from "effect/Schema";
 
 import {
   AppCommit,

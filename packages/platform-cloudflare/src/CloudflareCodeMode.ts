@@ -19,7 +19,15 @@ import {
 } from "@yielded/agent/code-executor";
 import { SandboxImplementation } from "@yielded/agent/sandbox";
 import { RpcTarget } from "cloudflare:workers";
-import { Clock, Duration, Effect, Exit, Fiber, Layer, Option, Queue, Schema } from "effect";
+import * as Clock from "effect/Clock";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Queue from "effect/Queue";
+import * as Schema from "effect/Schema";
 
 import { safeCauseDiagnostic, safeCauseMessage } from "./internal/boundary.ts";
 

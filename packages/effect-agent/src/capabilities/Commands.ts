@@ -1,4 +1,7 @@
-import { Effect, Option, Queue, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Queue from "effect/Queue";
+import * as Schema from "effect/Schema";
 
 import { ThreadId, RunId } from "../core/Identifiers.ts";
 import { ThreadText } from "../core/Thread.ts";

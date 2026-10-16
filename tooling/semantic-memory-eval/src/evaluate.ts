@@ -1,5 +1,5 @@
-import { NodeCrypto } from "@effect/platform-node";
-import { SqliteClient } from "@effect/sql-sqlite-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import {
   InMemorySemanticIndexCapacity,
   inMemorySemanticIndexLayer,
@@ -44,9 +44,18 @@ import {
   ThreadStore,
   ThreadTailRequest,
 } from "@yielded/agent/thread-store";
-import { Clock, Crypto, DateTime, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
-import { AiError, EmbeddingModel } from "effect/ai";
-import { Hex } from "effect/encoding";
+import * as AiError from "effect/ai/AiError";
+import * as EmbeddingModel from "effect/ai/EmbeddingModel";
+import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 
 import {
   CORPUS_SHA256,

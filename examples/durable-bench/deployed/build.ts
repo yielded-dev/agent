@@ -2,8 +2,10 @@ import { builtinModules } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Effect, FileSystem, Schema } from "effect";
-import { ChildProcess } from "effect/process";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as Schema from "effect/Schema";
 import { build as bundle, type Plugin } from "esbuild";
 
 import {

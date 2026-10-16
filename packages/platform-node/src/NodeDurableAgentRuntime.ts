@@ -1,5 +1,5 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import { SqliteClient } from "@effect/sql-sqlite-node";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { messageDeliveryStoreLayer } from "@yielded/agent-storage-sqlite/sqlite-message-delivery-store";
 import { scheduleStoreLayer } from "@yielded/agent-storage-sqlite/sqlite-schedule-store";
 import {
@@ -43,9 +43,15 @@ import {
 import { layer as runStorageLayer } from "@yielded/agent/run-storage";
 import { ThreadReader } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
-import { Context, Crypto, Duration, Effect, Layer, Schema, Scope } from "effect";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 import * as SqlClientService from "effect/sql/SqlClient";
-import { CurrentTransformer } from "effect/sql/Statement";
+import * as Statement from "effect/sql/Statement";
 
 import { applicationInvocationContext } from "./internal/application-context.ts";
 import { ExclusiveSqliteHost } from "./internal/exclusive-host.ts";
@@ -303,7 +309,7 @@ const privateMessageDeliveryLayer = Layer.effect(MessageDeliveryStore)(
         Effect.setContext(
           effect,
           Context.merge(
-            Context.omit(CurrentTransformer, sql.transactionService)(live),
+            Context.omit(Statement.CurrentTransformer, sql.transactionService)(live),
             storageContext,
           ),
         ),

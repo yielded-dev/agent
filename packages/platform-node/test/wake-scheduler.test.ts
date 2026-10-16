@@ -1,22 +1,20 @@
-import { NodeFileSystem } from "@effect/platform-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, it } from "@effect/vitest";
 import { layer as threadStoreLayer } from "@yielded/agent-storage-sqlite/sqlite-thread-store";
 import type { SubmissionLedger } from "@yielded/agent/submission-ledger";
 import { SubmissionSnapshot } from "@yielded/agent/submission-ledger";
 import { ThreadStore, ThreadStoreError } from "@yielded/agent/thread-store";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import {
-  Deferred,
-  Duration,
-  Effect,
-  Fiber,
-  FileSystem,
-  Layer,
-  Queue,
-  Schema,
-  Stream,
-} from "effect";
-import { TestClock } from "effect/testing";
+import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Queue from "effect/Queue";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import { NodeWakeSchedulerConfig, nodeWakeSchedulerLayer } from "../src/NodeWakeScheduler.ts";
 

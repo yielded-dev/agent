@@ -1,11 +1,12 @@
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import {
   DoScheduleTransaction,
   scheduleStoreLayer,
 } from "@yielded/agent-storage-cloudflare/do-schedule-store";
 import { ScheduleStorageError, ScheduleStore } from "@yielded/agent/schedule";
 import { scheduleStoreConformanceCases } from "@yielded/agent/testing/schedule-store-conformance";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { describe, expect, it } from "vite-plus/test";
 

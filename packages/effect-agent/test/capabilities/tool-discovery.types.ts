@@ -1,8 +1,10 @@
 import * as ToolDiscovery from "@yielded/agent/tool-discovery";
 import type { CurrentToolCatalog } from "@yielded/agent/tool-exposure";
-import type { Layer } from "effect";
-import { Context, Effect, Schema } from "effect";
-import type { Tool } from "effect/ai";
+import type * as Tool from "effect/ai/Tool";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import type * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import type { expectTypeOf as ExpectTypeOf } from "vite-plus/test";
 
 class SearchError extends Schema.TaggedError<SearchError>()("SearchError", {

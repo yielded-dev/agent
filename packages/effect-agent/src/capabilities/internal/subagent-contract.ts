@@ -1,4 +1,5 @@
-import { Duration, Schema } from "effect";
+import * as Duration from "effect/Duration";
+import * as Schema from "effect/Schema";
 
 import * as FailureDiagnostic from "../../core/FailureDiagnostic.ts";
 import { AgentId, DelegationId } from "../../core/Identifiers.ts";

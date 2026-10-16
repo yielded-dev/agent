@@ -1,8 +1,12 @@
 import { fileURLToPath } from "node:url";
 
-import { NodeServices } from "@effect/platform-node";
-import { Effect, FileSystem, Layer, Redacted, Schema } from "effect";
-import { FetchHttpClient } from "effect/http";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import { build } from "esbuild";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { expect, it } from "vite-plus/test";

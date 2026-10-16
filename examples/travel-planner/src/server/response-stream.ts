@@ -1,5 +1,5 @@
 import { JSONParser } from "@streamparser/json";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 /** Disposable preview only. The native tool boundary validates the complete response. */
 export const responseTextPreview = () => {

@@ -1,5 +1,12 @@
-import { Config, Console, Effect, Exit, FileSystem, Path, Redacted, Schema } from "effect";
-import { ChildProcess } from "effect/process";
+import * as Config from "effect/Config";
+import * as Console from "effect/Console";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import {
   EvaluationError,

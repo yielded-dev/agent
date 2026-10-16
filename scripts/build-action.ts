@@ -1,7 +1,13 @@
-import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Console, Effect, FileSystem, Path, Schema, Stream } from "effect";
-import { Command as CliCommand } from "effect/cli";
-import { ChildProcess } from "effect/process";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as CliCommand from "effect/cli/Command";
+import * as Console from "effect/Console";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 // ---------------------------------------------------------------------------
 // Build the PR-review Action for local use and CI distribution. Generated

@@ -11,8 +11,10 @@ import {
   SubmissionLookupByKey,
 } from "@yielded/agent/submission-ledger";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Deferred, Effect, Option } from "effect";
 import { DurableObject } from "effect-cf";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

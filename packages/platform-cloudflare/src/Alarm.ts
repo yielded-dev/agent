@@ -40,8 +40,8 @@ import * as Scheduler from "effect/Scheduler";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
-import { SqlClient } from "effect/sql/SqlClient";
-import { SqlError, UnknownError } from "effect/sql/SqlError";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as SqlError from "effect/sql/SqlError";
 import * as Stream from "effect/Stream";
 import * as Struct from "effect/Struct";
 
@@ -84,7 +84,7 @@ const alarmFailure =
 // SQL and raw KV/alarm operations share one physical SQLite transaction. Reserve its
 // connection for each short storage operation, never around a mutation or snapshot body.
 const makeStorageEffect = Effect.gen(function* () {
-  const sql = yield* SqlClient;
+  const sql = yield* SqlClient.SqlClient;
   const { ctx } = yield* DurableObjectContext;
   const invalidate = Effect.sync(() => DueQueue.invalidate(ctx.storage));
 
@@ -227,13 +227,13 @@ const CurrentCheckpoint = Context.Reference<MaintenanceCheckpoint | undefined>(
 /** One source transaction owns queue intent and the library checkpoint through commit. */
 const makeAlarmOperation = Effect.gen(function* () {
   const alarms = yield* ThreadMaintenanceAlarm;
-  const sql = yield* SqlClient;
+  const sql = yield* SqlClient.SqlClient;
   const { ctx } = yield* DurableObjectContext;
   const queue = DueQueue.make(ctx.storage);
 
   const transaction = <A, E, R>(
     body: (owner: Fiber.Fiber<unknown, unknown>) => Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E | SqlError, R> =>
+  ): Effect.Effect<A, E | SqlError.SqlError, R> =>
     alarms
       .transaction(
         (mutations) =>
@@ -259,8 +259,8 @@ const makeAlarmOperation = Effect.gen(function* () {
       .pipe(
         Effect.mapError((cause) =>
           cause instanceof DurableObjectStorage.StorageOperationError
-            ? SqlError.make({
-                reason: UnknownError.make({
+            ? SqlError.SqlError.make({
+                reason: SqlError.UnknownError.make({
                   operation: "commit maintenance checkpoint",
                   message: "Source facts and maintenance checkpoint could not commit",
                   cause,
@@ -276,8 +276,8 @@ const makeAlarmOperation = Effect.gen(function* () {
 
       if (ambient._tag === "Some" && !DueQueue.ownsTransaction(ctx.storage, ambient.value[1]))
         return Effect.fail(
-          SqlError.make({
-            reason: UnknownError.make({
+          SqlError.SqlError.make({
+            reason: SqlError.UnknownError.make({
               operation: "begin maintenance source transaction",
               message: "Use ThreadMutationGate.withTransaction at the outermost source transaction",
               cause: "Unwrapped SQL transaction cannot own buffered maintenance intent",
@@ -292,8 +292,8 @@ const makeAlarmOperation = Effect.gen(function* () {
             const current = Context.getOption(owner.context, sql.transactionService);
 
             if (current._tag === "None")
-              return SqlError.make({
-                reason: UnknownError.make({
+              return SqlError.SqlError.make({
+                reason: SqlError.UnknownError.make({
                   operation: "begin maintenance source transaction",
                   message: "SQL transaction unavailable",
                   cause: "SQL transaction unavailable",
@@ -311,8 +311,8 @@ const makeAlarmOperation = Effect.gen(function* () {
                   return value;
                 },
                 catch: (cause) =>
-                  SqlError.make({
-                    reason: UnknownError.make({
+                  SqlError.SqlError.make({
+                    reason: SqlError.UnknownError.make({
                       cause,
                       operation: "flush maintenance due queue",
                       message: "Maintenance intent could not commit",
@@ -332,7 +332,7 @@ const makeAlarmOperation = Effect.gen(function* () {
           Effect.provideService(Scheduler.PreventSchedulerYield, true),
         ),
       );
-    }).pipe(Effect.provideService(SqlClient, sql));
+    }).pipe(Effect.provideService(SqlClient.SqlClient, sql));
 
   const run = <A>(
     operation: string,
@@ -893,7 +893,7 @@ export class ThreadMutationGate extends Context.Service<
      * failed or interrupted transactions discard their queue view. */
     readonly withTransaction: <A, E, R>(
       body: Effect.Effect<A, E, R>,
-    ) => Effect.Effect<A, E | SqlError, R>;
+    ) => Effect.Effect<A, E | SqlError.SqlError, R>;
     readonly withMutation: <A, E, R>(
       body: Effect.Effect<A, E, R>,
       /**
@@ -941,7 +941,7 @@ export class ThreadMutationGate extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const { ctx } = yield* DurableObjectContext;
-      const sql = yield* SqlClient;
+      const sql = yield* SqlClient.SqlClient;
       const dueQueue = DueQueue.make(ctx.storage);
       const placement = yield* Effect.serviceOption(ThreadObjectPlacement);
       const singleThread = Option.isSome(placement) && placement.value.threadId !== undefined;
@@ -1308,7 +1308,7 @@ export class ThreadMaintenance extends Context.Service<
     | ThreadMaintenanceFailpoint
     | CloudflareDurableRuntimeConfig
     | DurableObjectContext
-    | SqlClient
+    | SqlClient.SqlClient
   > = Layer.effect(ThreadMaintenance)(
     Effect.gen(function* () {
       const runtime = yield* DurableAgentRuntime;
@@ -1330,7 +1330,7 @@ export class ThreadMaintenance extends Context.Service<
       const publication = yield* ThreadPublication;
 
       const publicationContext = yield* Effect.context<
-        ThreadPublication | DurableObjectContext | SqlClient
+        ThreadPublication | DurableObjectContext | SqlClient.SqlClient
       >();
 
       const projection = yield* ThreadProjectionMaintenance;

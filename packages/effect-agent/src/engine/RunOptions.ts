@@ -1,6 +1,10 @@
-import type { Cause, DateTime } from "effect";
-import type { LanguageModel, Model, Prompt, Response } from "effect/ai";
+import type * as LanguageModel from "effect/ai/LanguageModel";
+import type * as Model from "effect/ai/Model";
+import type * as Prompt from "effect/ai/Prompt";
+import type * as Response from "effect/ai/Response";
+import type * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
+import type * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";

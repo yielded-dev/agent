@@ -1,7 +1,7 @@
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import type * as SqlClientService from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
+import type * as SqlError from "effect/sql/SqlError";
 
 /**
  * An exclusive database owner's transaction gate. All cached services over that database
@@ -15,7 +15,7 @@ export interface SqlStorageOwner {
   readonly read: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
   readonly transaction: <A, E, R>(
     effect: Effect.Effect<A, E, R>,
-  ) => Effect.Effect<A, E | SqlError, R | SqlClientService.SqlClient>;
+  ) => Effect.Effect<A, E | SqlError.SqlError, R | SqlClientService.SqlClient>;
   readonly invalidators: Set<() => void>;
 }
 

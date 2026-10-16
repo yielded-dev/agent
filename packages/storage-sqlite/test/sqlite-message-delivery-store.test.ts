@@ -1,5 +1,6 @@
-import { NodeCrypto, NodeFileSystem } from "@effect/platform-node";
-import { SqliteClient } from "@effect/sql-sqlite-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { expect, it } from "@effect/vitest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import {
@@ -22,8 +23,12 @@ import {
   messageDeliveryStoreConformanceCases,
 } from "@yielded/agent/testing/message-delivery-store-conformance";
 import { ThreadMaterialization, ThreadStore } from "@yielded/agent/thread-store";
-import { DateTime, Effect, FileSystem, Layer, Option } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { messageDeliveryStoreLayer } from "../src/SqliteMessageDeliveryStore.ts";
 import { SqliteStorageFailpoint } from "../src/SqliteStorageFailpoint.ts";
@@ -215,7 +220,7 @@ it.effect(
           expect((yield* publications.pending(now, 1))[0]).toHaveLength(3);
           // beta.161 operator repair moved the deadline and deleted the retry row.
           // That supported reset must receive its full fresh attempt budget after upgrade.
-          const sql = yield* SqlClient;
+          const sql = yield* SqlClient.SqlClient;
 
           yield* sql`DELETE FROM effect_agent_lifecycle_publication_retries WHERE id = ${batch[0].id}`;
           expect(yield* publications.claim(batch, now, 10)).toBe(true);

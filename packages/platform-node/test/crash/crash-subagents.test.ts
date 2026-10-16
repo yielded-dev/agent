@@ -1,4 +1,4 @@
-import { NodeFileSystem } from "@effect/platform-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, layer } from "@effect/vitest";
 import { NodeDurableHost } from "@yielded/agent-platform-node/node-durable-host";
 import { DurableAgentRuntime, DurableRuntimeConfig } from "@yielded/agent/durable-agent-runtime";
@@ -24,7 +24,10 @@ import {
   SubmissionLookupByKey,
 } from "@yielded/agent/submission-ledger";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
-import { Effect, Fiber, Layer, Option } from "effect";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 
 import {
   CHILD_MODEL_OP,

@@ -1,8 +1,11 @@
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import { runInDurableObject } from "cloudflare:test";
-import { Effect, Exit, Fiber, Layer } from "effect";
 import { DurableObject } from "effect-cf";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as SqlClient from "effect/sql/SqlClient";
 import { expect, it } from "vite-plus/test";
 
 import { instrumentedStorage } from "../../../test/fixtures/instrumented-storage.ts";
@@ -55,12 +58,12 @@ it("coalesces source intent and reads it once even above the warm cache limit", 
         });
 
         yield* Effect.gen(function* () {
-          const client = yield* SqlClient;
+          const client = yield* SqlClient.SqlClient;
           const originalTransaction = client.withTransaction;
 
           yield* Effect.gen(function* () {
             const gate = yield* ThreadMutationGate;
-            const sql = yield* SqlClient;
+            const sql = yield* SqlClient.SqlClient;
 
             expect(sql.withTransaction).toBe(originalTransaction);
             for (let index = 0; index < 129; index++)
@@ -131,7 +134,7 @@ it("discards aborted intent and preserves parent intent across child rollback", 
     instance[DurableObject.RunSymbol](
       Effect.gen(function* () {
         const gate = yield* ThreadMutationGate;
-        const sql = yield* SqlClient;
+        const sql = yield* SqlClient.SqlClient;
         const queue = DueQueue.make(state.storage);
         const future = Date.now() + 86_400_000;
 

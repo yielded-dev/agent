@@ -62,7 +62,7 @@ provider. Reuse the [example agent and provider setup](https://github.com/yielde
 import { definitions, ModelLive, OpenAiLive, planner } from "./node-agent.ts";
 // ---cut---
 import { ThreadObject } from "@yielded/agent-platform-cloudflare";
-import { Layer } from "effect";
+import * as Layer from "effect/Layer";
 
 const RuntimeLive = ThreadObject.layer([{ agent: planner, model: ModelLive, definitions }]).pipe(
   Layer.provide(OpenAiLive),

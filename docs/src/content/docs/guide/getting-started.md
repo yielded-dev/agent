@@ -23,12 +23,16 @@ use native Effect AI model Layers too.
 Save as `agent.ts`. Supply `OPENAI_API_KEY` through your environment or secret manager.
 
 ```ts twoslash title="agent.ts"
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
-import { BunRuntime } from "@effect/platform-bun";
+import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
+import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
+import * as BunRuntime from "@effect/platform-bun/BunRuntime";
 import { Agent, AgentRuntime, InMemory } from "@yielded/agent";
-import { Config, Console, Effect, Schema } from "effect";
-import { Toolkit } from "effect/ai";
-import { FetchHttpClient } from "effect/http";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Config from "effect/Config";
+import * as Console from "effect/Console";
+import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as Schema from "effect/Schema";
 
 const triage = Agent.make("triage", {
   input: Schema.String,

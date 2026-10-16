@@ -34,10 +34,18 @@ import {
   ThreadStore,
   ThreadTailRequest,
 } from "@yielded/agent/thread-store";
-import { Clock, Context, DateTime, Effect, FileSystem, Layer, Schema, Stream } from "effect";
-import { Model, Toolkit } from "effect/ai";
-import { SqlClient } from "effect/sql/SqlClient";
-import { CurrentTransformer, type Statement } from "effect/sql/Statement";
+import * as Model from "effect/ai/Model";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as Statement from "effect/sql/Statement";
+import * as Stream from "effect/Stream";
 
 import { BenchmarkError, check } from "./contracts.js";
 import { ledgerCases } from "./diagnostic-cases.js";
@@ -195,13 +203,13 @@ export class DiagnosticLedgerSeeds extends Context.Service<
   static readonly layer = Layer.effect(DiagnosticLedgerSeeds, makeSeeds);
 }
 
-type Query = ReturnType<Statement<unknown>["compile"]>;
+type Query = ReturnType<Statement.Statement<unknown>["compile"]>;
 
 const inspectQueries = Effect.fn("diagnostic.ledger.inspectQueries")(function* (
   queries: ReadonlyArray<Query>,
   started: bigint,
 ) {
-  const sql = yield* SqlClient;
+  const sql = yield* SqlClient.SqlClient;
   const progress = yield* DiagnosticProgress;
   let indexedPlans = 0;
   let searchedPlans = 0;
@@ -250,7 +258,7 @@ const scanCase = Effect.fn("diagnostic.ledger.scan")(function* (
   const started = yield* Clock.monotonicTimeNanos;
 
   const rows = yield* Stream.runCollect(ledger.scanNonterminal).pipe(
-    Effect.provideService(CurrentTransformer, (statement) =>
+    Effect.provideService(Statement.CurrentTransformer, (statement) =>
       Effect.sync(() => {
         queries.push(statement.compile());
 
@@ -375,7 +383,7 @@ const settledCase = Effect.fn("diagnostic.ledger.settled")(function* (
         ? yield* runtime.submissionStatus(receipt)
         : yield* ledger.finalizeSettlement(request);
     }).pipe(
-      Effect.provideService(CurrentTransformer, (statement) =>
+      Effect.provideService(Statement.CurrentTransformer, (statement) =>
         Effect.sync(() => {
           queries.push(statement.compile());
 

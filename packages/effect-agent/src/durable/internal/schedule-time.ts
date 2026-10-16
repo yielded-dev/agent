@@ -1,4 +1,8 @@
-import { Cron, DateTime, Option, Result, Schema } from "effect";
+import * as Cron from "effect/Cron";
+import * as DateTime from "effect/DateTime";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import {
   ScheduleValidationError,

@@ -1,6 +1,10 @@
 import { ReviewRequest } from "@yielded/agent-pr-review/review";
-import { Crypto, Effect, FileSystem, Schema, Stream } from "effect";
-import { Hex } from "effect/encoding";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
+import * as FileSystem from "effect/FileSystem";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import {
   EvalDataError,

@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 
 import type { DoStorageFailpointLocation } from "./DoStorageError.ts";
 import type { DoStorageFailpointHandler } from "./DoStorageFailpoint.ts";

@@ -1,8 +1,16 @@
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
 import { type DurableWorkerRequirements } from "@yielded/agent/durable-agent-runtime";
-import { type Crypto, Context, Effect, Schema, SchemaGetter, Layer } from "effect";
-import { Toolkit, type LanguageModel, type Model, Tool } from "effect/ai";
+import type * as LanguageModel from "effect/ai/LanguageModel";
+import type * as Model from "effect/ai/Model";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import type * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
 
 import { compileRegistrations } from "../../src/durable/internal/agent-registration.ts";
 import { DefinitionDigestInput } from "../../src/durable/Records.ts";

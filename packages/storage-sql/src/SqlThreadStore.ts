@@ -41,7 +41,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Stream from "effect/Stream";
 
 import { capturePreparedRecordStorage } from "./SqlCanonicalStorage.ts";
@@ -453,7 +453,7 @@ export const makeSqlThreadStoreKernel = Effect.fnUntraced(function* <
   // Opt-in offline audit holds one read snapshot and hydrates one bounded batch at a time.
   // No database-wide arrays or lifetime directories.
   if (config.verifyOnOpen) {
-    const sql = yield* SqlClient;
+    const sql = yield* SqlClient.SqlClient;
     const { table, execute } = yield* makeSqlQuery(options.namespace);
 
     const audit = Effect.gen(function* () {

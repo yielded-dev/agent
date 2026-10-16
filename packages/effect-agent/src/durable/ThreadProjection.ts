@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { ThreadId, RunId, ToolCallId } from "../core/Identifiers.ts";
 import type { CanonicalRecordEnvelope } from "./Records.ts";

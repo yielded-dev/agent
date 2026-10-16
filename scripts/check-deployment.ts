@@ -1,6 +1,10 @@
-import { BunRuntime, BunServices } from "@effect/platform-bun";
-import { Effect, FileSystem, Path, Schema } from "effect";
-import { ChildProcess } from "effect/process";
+import * as BunRuntime from "@effect/platform-bun/BunRuntime";
+import * as BunServices from "@effect/platform-bun/BunServices";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as Schema from "effect/Schema";
 
 class DeploymentCheckError extends Schema.TaggedError<DeploymentCheckError>()(
   "DeploymentCheckError",

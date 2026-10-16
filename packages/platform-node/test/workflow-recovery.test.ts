@@ -1,4 +1,5 @@
-import { NodeCrypto, NodeFileSystem } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, it } from "@effect/vitest";
 import { WorkflowAgentHost } from "@yielded/agent-workflow/workflow-agent-host";
 import * as Agent from "@yielded/agent/agent";
@@ -7,8 +8,14 @@ import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { StorageOwner } from "@yielded/agent/run-storage";
 import * as Subagent from "@yielded/agent/subagent";
 import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservations";
-import { Deferred, Effect, Fiber, Layer, Ref, Stream } from "effect";
-import { Toolkit, type Response } from "effect/ai";
+import type * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Stream from "effect/Stream";
 
 import {
   definitionsFor,

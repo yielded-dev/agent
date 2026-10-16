@@ -5,8 +5,13 @@ import {
   ThreadProjectionMaintenance,
 } from "@yielded/agent/thread-projection-maintenance";
 import { ThreadRead, ThreadStore, ThreadTailRequest } from "@yielded/agent/thread-store";
-import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as Stream from "effect/Stream";
 
 import { ThreadHostMaintenance, type ThreadHostMaintenanceLane } from "../src/Alarm.ts";
 import { ThreadObjectIdentity } from "../src/CloudflareBindings.ts";
@@ -46,7 +51,7 @@ export class ProjectionIndex extends Context.Service<
   {
     readonly lookup: Effect.Effect<number, ThreadProjectionError>;
     readonly watermark: Effect.Effect<number, ThreadProjectionError>;
-    readonly ownerSql: SqlClient;
+    readonly ownerSql: SqlClient.SqlClient;
   }
 >()("test/ProjectionIndex") {}
 
@@ -62,7 +67,7 @@ export const projectionLayer = Layer.effectContext(
   Effect.gen(function* () {
     const { threadId } = yield* ThreadObjectIdentity;
     const store = yield* ThreadStore;
-    const sql = yield* SqlClient;
+    const sql = yield* SqlClient.SqlClient;
 
     yield* sql`CREATE TABLE IF NOT EXISTS test_projection_rows (sequence INTEGER PRIMARY KEY, record_id TEXT NOT NULL)`;
     yield* sql`CREATE TABLE IF NOT EXISTS test_projection_cursor (singleton INTEGER PRIMARY KEY, watermark INTEGER NOT NULL)`;

@@ -1,5 +1,5 @@
-import { OpenAiTool } from "@effect/ai-openai";
-import { NodeCrypto } from "@effect/platform-node";
+import * as OpenAiTool from "@effect/ai-openai/OpenAiTool";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, layer } from "@effect/vitest";
 import { MemorySubmissionLedgerLive } from "@yielded/agent-storage-memory/memory-submission-ledger";
 import { MemoryThreadStoreLive } from "@yielded/agent-storage-memory/memory-thread-store";
@@ -63,23 +63,27 @@ import {
   ToolReconciler,
 } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler, makeWakeSubscriptionHub } from "@yielded/agent/wake-scheduler";
-import {
-  Cause,
-  Context,
-  DateTime,
-  Deferred,
-  Duration,
-  Effect,
-  Exit,
-  Fiber,
-  Layer,
-  Option,
-  Ref,
-  Schema,
-  Stream,
-} from "effect";
-import { AiError, LanguageModel, Model, Prompt, Tool, Toolkit, type Response } from "effect/ai";
-import { TestClock } from "effect/testing";
+import * as AiError from "effect/ai/AiError";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import * as Prompt from "effect/ai/Prompt";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 const SHA_A = Schema.decodeSync(Digest)("a".repeat(64));
 const PRINCIPAL = Schema.decodeSync(Principal)("principal-durable");

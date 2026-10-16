@@ -1,5 +1,8 @@
-import { NodeCrypto, NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Effect, Layer } from "effect";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import { workflowCrashWorker } from "./workflow-worker.ts";
 

@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import {
   MemorySubmissionLedgerLive,
@@ -17,7 +17,9 @@ import {
   SubmissionLookupByKey,
 } from "@yielded/agent/submission-ledger";
 import { submissionLedgerConformanceCases } from "@yielded/agent/testing/submission-ledger-conformance";
-import { Effect, Layer, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 const testLayer = MemorySubmissionLedgerLive.pipe(
   Layer.provideMerge(MemoryThreadStoreLive),

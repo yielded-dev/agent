@@ -1,5 +1,5 @@
 import type { CanonicalRecordEnvelope } from "@yielded/agent/records";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import type { EditorActivity } from "../domain.ts";
 import { emptyProgress } from "../server/progress.ts";

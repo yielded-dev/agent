@@ -1,6 +1,7 @@
 import { Session } from "node:inspector/promises";
 
-import { Effect, Exit } from "effect";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 
 import { BenchmarkError, STEADY_STATE } from "./contracts.js";
 import { writeEvidence } from "./evidence.js";

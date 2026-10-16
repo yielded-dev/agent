@@ -1,5 +1,5 @@
 import type { BrowserSelectFileRequest } from "@yielded/agent/interactive-browser";
-import { Base64 } from "effect/encoding";
+import * as Base64 from "effect/encoding/Base64";
 import type { Page } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
 import { pageFunction } from "./page-function.ts";

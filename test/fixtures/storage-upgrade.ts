@@ -5,7 +5,8 @@ import {
   SubscriptionStore,
   defaultSubscriptionLimits,
 } from "@yielded/agent/subscription";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import { expect } from "vite-plus/test";
 

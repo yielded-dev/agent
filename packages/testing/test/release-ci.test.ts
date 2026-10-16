@@ -1,8 +1,12 @@
-import { NodeServices } from "@effect/platform-node";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it, layer } from "@effect/vitest";
-import { Effect, Exit, Fiber, FileSystem } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/http";
-import { TestClock } from "effect/testing";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as TestClock from "effect/testing/TestClock";
 
 import { verifyPackedFiles } from "../../../scripts/check-release-packages.ts";
 import {

@@ -3,6 +3,7 @@
   "compilerOptions": {
     "target": "es2023",
     "lib": ["ES2023"],
+    "types": ["node"],
     "module": "esnext",
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
@@ -18,6 +19,7 @@
     "plugins": [
       {
         "name": "@effect/language-service",
+        "namespaceImportPackages": ["effect", "@effect/*"],
         "effectFn": ["span", "untraced"],
         "allowedUnstableApis": [
           "@effect/ai-anthropic",
@@ -70,6 +72,7 @@
           "nestedEffectGenYield": "suggestion",
           "newSchemaClass": "error",
           "optionMatchToFromOption": "warning",
+          "preferNamespaceImport": "error",
           "preferSchemaTypeProperty": "suggestion",
           "preferTypedSchemaDecoder": "warning",
           "provideLayerSucceedToProvideService": "warning",

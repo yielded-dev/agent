@@ -5,8 +5,10 @@ import {
   CredentialFillError,
 } from "@yielded/agent-platform-cloudflare/browser-credentials";
 import { PageCaptureEngine } from "@yielded/agent/page-capture";
-import { Schema } from "effect";
-import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
+import * as HttpApi from "effect/http-api/HttpApi";
+import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
+import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import * as Schema from "effect/Schema";
 
 export const BrowserEngine = PageCaptureEngine;
 export const browserCommandTimeoutMillis = 60_000;

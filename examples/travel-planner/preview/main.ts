@@ -1,5 +1,9 @@
-import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Config, Console, Effect, Schema } from "effect";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Config from "effect/Config";
+import * as Console from "effect/Console";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { localPreview } from "./runtime.ts";
 

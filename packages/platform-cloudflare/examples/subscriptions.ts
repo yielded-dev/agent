@@ -14,8 +14,10 @@ import { Principal } from "@yielded/agent/submission-ledger";
 import { type SourcePartition, type SubscriptionAuthorizer } from "@yielded/agent/subscription";
 import { type SubscriptionInputBindings } from "@yielded/agent/subscription-input";
 import { SubscriptionIntake, Subscriptions } from "@yielded/agent/subscriptions";
-import { Effect, Layer, Schema } from "effect";
 import type { DurableObjectState, WorkerEnvironment } from "effect-cf";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 /**
  * Export the returned class under a SQLite Durable Object binding. The cached host Layer binds

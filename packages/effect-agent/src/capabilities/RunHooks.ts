@@ -1,5 +1,8 @@
-import { Clock, DateTime, Effect, Schema } from "effect";
-import type { Prompt } from "effect/ai";
+import type * as Prompt from "effect/ai/Prompt";
+import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import {
   type ThreadEncodingError,

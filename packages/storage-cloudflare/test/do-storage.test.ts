@@ -1,5 +1,5 @@
-import { BrowserCrypto } from "@effect/platform-browser";
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import {
   DoStorageCompatibilityError,
   DoStorageFailpointError,
@@ -55,9 +55,16 @@ import {
   LoadCheckpointRequest,
   SaveCheckpointRequest,
 } from "@yielded/agent/thread-store";
-import { Cause, Effect, Exit, Layer, Option, Schema, Stream, Tracer } from "effect";
-import { Prompt } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
+import * as Stream from "effect/Stream";
+import * as Tracer from "effect/Tracer";
 import { describe, expect, it } from "vite-plus/test";
 
 import { seedCheckpoint, assertCheckpoint } from "../../../test/fixtures/checkpoints.ts";

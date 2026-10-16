@@ -1,13 +1,23 @@
-import { OpenAiClient, OpenAiSchema } from "@effect/ai-openai";
+import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
+import * as OpenAiSchema from "@effect/ai-openai/OpenAiSchema";
 import {
   type ReviewCostControl,
   ReviewCostSnapshot,
   type ReviewRequest,
   ReviewUsage,
 } from "@yielded/agent-pr-review/review";
-import { Config, Effect, Exit, Option, Ref, Schema, Semaphore, Stream } from "effect";
-import { AiError } from "effect/ai";
-import { HttpBody, HttpClientError, HttpClientResponse } from "effect/http";
+import * as AiError from "effect/ai/AiError";
+import * as Config from "effect/Config";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as HttpBody from "effect/http/HttpBody";
+import * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
+import * as Stream from "effect/Stream";
 
 export const reviewModel = Config.schema(Schema.Trim.check(Schema.isNonEmpty()), "PR_REVIEW_MODEL");
 

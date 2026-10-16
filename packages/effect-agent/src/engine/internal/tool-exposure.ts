@@ -1,4 +1,4 @@
-import type { LanguageModel } from "effect/ai";
+import type * as LanguageModel from "effect/ai/LanguageModel";
 import * as Tool from "effect/ai/Tool";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";

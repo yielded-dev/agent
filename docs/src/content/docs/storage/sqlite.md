@@ -13,7 +13,8 @@ Runs. Use the [Node host](/platforms/node/) when unfinished work must recover to
 // ---cut---
 import { AgentRuntime, PersistentHistory } from "@yielded/agent";
 import { SqliteThreadStore } from "@yielded/agent-storage-sqlite";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import { planner } from "./node-agent.ts";
 

@@ -1,8 +1,9 @@
-import type { Option, Stream } from "effect";
 import * as Brand from "effect/Brand";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import type * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import type * as Stream from "effect/Stream";
 
 import { InputMessage } from "../capabilities/Messaging.ts";
 import * as FailureDiagnostic from "../core/FailureDiagnostic.ts";

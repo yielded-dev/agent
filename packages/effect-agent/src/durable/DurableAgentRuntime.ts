@@ -1,4 +1,3 @@
-import type { Scope } from "effect";
 import * as Prompt from "effect/ai/Prompt";
 import type * as Tool from "effect/ai/Tool";
 import * as Cause from "effect/Cause";
@@ -16,6 +15,7 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 

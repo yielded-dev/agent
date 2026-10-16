@@ -1,4 +1,4 @@
-import { BrowserCrypto } from "@effect/platform-browser";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { SqlLifecycleSource } from "@yielded/agent-storage-sql/sql-lifecycle-publication";
 import { makeSqlMessageDeliveryStore } from "@yielded/agent-storage-sql/sql-message-delivery-store";
 import {

@@ -10,11 +10,12 @@ client. Your host must route each Thread to one live process. The adapter does n
 provide distributed ownership, lease-based takeover, or a worker service.
 
 ```ts twoslash
-import { NodeCrypto } from "@effect/platform-node";
-import { PgClient } from "@effect/sql-pg";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as PgClient from "@effect/sql-pg/PgClient";
 import { PersistentHistory } from "@yielded/agent";
 import { PostgresStorage } from "@yielded/agent-storage-postgres";
-import { Config, Layer } from "effect";
+import * as Config from "effect/Config";
+import * as Layer from "effect/Layer";
 
 const Database = PgClient.layerConfig({
   url: Config.Redacted("DATABASE_URL"),

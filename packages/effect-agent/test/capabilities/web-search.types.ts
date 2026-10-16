@@ -1,8 +1,13 @@
 import * as WebSearch from "@yielded/agent/web-search";
-import type { Layer } from "effect";
-import { Context, Effect, Schema, SchemaGetter, Stream } from "effect";
-import type { AiError, LanguageModel } from "effect/ai";
-import { Tool } from "effect/ai";
+import type * as AiError from "effect/ai/AiError";
+import type * as LanguageModel from "effect/ai/LanguageModel";
+import * as Tool from "effect/ai/Tool";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import type * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
+import * as Stream from "effect/Stream";
 import type { expectTypeOf as ExpectTypeOf } from "vite-plus/test";
 
 const hostedSearch = Tool.providerDefined({

@@ -1,4 +1,6 @@
-import { Effect, FileSystem, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Schema from "effect/Schema";
 import { convertV4MiniflareOptions, Log, LogLevel, Miniflare } from "miniflare";
 
 import { BenchError } from "./platform.ts";

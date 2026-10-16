@@ -1,5 +1,5 @@
-import { BrowserCrypto } from "@effect/platform-browser";
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import { doMessageDeliveryStoreLayer } from "@yielded/agent-storage-cloudflare/do-message-delivery-store";
 import { DoStorageFailpoint } from "@yielded/agent-storage-cloudflare/do-storage-failpoint";
 import { ledgerLayer } from "@yielded/agent-storage-cloudflare/do-submission-ledger";
@@ -49,8 +49,13 @@ import {
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
 import { runInDurableObject } from "cloudflare:test";
-import type { Crypto, Scope } from "effect";
-import { Effect, Layer, Option, Schema, Stream } from "effect";
+import type * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

@@ -17,7 +17,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { makeSqlQuery, SqlInteger } from "./SqlStorage.ts";
 import { SqlStorageProgress } from "./SqlStorageProgress.ts";
@@ -119,7 +119,7 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
 
   if (Option.isNone(active)) return undefined;
   const progress = yield* SqlStorageProgress;
-  const sql = yield* SqlClient;
+  const sql = yield* SqlClient.SqlClient;
   const crypto = active.value;
   const { table, execute } = yield* makeSqlQuery(namespace);
   const relation = table("effect_agent_lifecycle_publications");
@@ -197,7 +197,7 @@ export const makeSqlLifecyclePublication = Effect.fnUntraced(function* (
 
   const transaction = <A, E>(body: Effect.Effect<A, E>) =>
     (owner === undefined ? sql.withTransaction(body) : owner.transaction(body)).pipe(
-      Effect.provideService(SqlClient, sql),
+      Effect.provideService(SqlClient.SqlClient, sql),
       Effect.catchTag("SqlError", failure),
     );
 

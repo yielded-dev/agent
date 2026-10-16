@@ -1,6 +1,10 @@
 import { basename, join } from "node:path";
 
-import { Clock, Console, Effect, FileSystem, Schema } from "effect";
+import * as Clock from "effect/Clock";
+import * as Console from "effect/Console";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Schema from "effect/Schema";
 
 import { build } from "./build.ts";
 import { Cloudflare, request } from "./cloudflare.ts";

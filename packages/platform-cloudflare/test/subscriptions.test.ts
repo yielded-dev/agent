@@ -5,8 +5,10 @@ import {
 } from "@yielded/agent-platform-cloudflare/cloudflare-subscriptions";
 import { SubscriptionIntake, Subscriptions } from "@yielded/agent/subscriptions";
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { DateTime, Effect, Layer } from "effect";
 import { DurableObject, DurableObjectAlarm } from "effect-cf";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import { expect, it } from "vite-plus/test";
 
 import { laneRows } from "./harness.ts";

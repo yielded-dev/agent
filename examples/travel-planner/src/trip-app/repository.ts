@@ -1,5 +1,8 @@
-import { Context, Effect, Layer, Schema } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { AppId, PlannerError, Revision, TripApp, TripId } from "../domain.ts";
 import { TripFailpoint } from "../server/trips.ts";
@@ -44,7 +47,7 @@ const invalid = () => PlannerError.make({ code: "invalid", message: "Invalid tri
 export const AppRepositoryLive = Layer.effect(
   AppRepository,
   Effect.gen(function* () {
-    const sql = yield* SqlClient;
+    const sql = yield* SqlClient.SqlClient;
     const failpoint = yield* TripFailpoint;
 
     yield* failpoint.hit("app:schema:before");

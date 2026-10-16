@@ -1,6 +1,9 @@
 import { ReviewDependencySource } from "@yielded/agent-pr-review/review-repository";
-import type { Redacted } from "effect";
-import { Effect, Option, Result, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import type * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import { makeGitHubClient, type RepositorySnapshot, type GitHubApiFailure } from "./github.ts";
 

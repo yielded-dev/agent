@@ -1,7 +1,8 @@
-import { OpenAiTool } from "@effect/ai-openai";
+import * as OpenAiTool from "@effect/ai-openai/OpenAiTool";
 import { Agent, Output, WebSearch } from "@yielded/agent";
-import { DateTime, Effect } from "effect";
-import { Toolkit } from "effect/ai";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
 
 import { DeliverResponse, ShowTravelOptions, TripTools } from "../agent.ts";
 import { PlannerInput, Text } from "../domain.ts";

@@ -1,4 +1,6 @@
-import { OpenAiClient, OpenAiLanguageModel, OpenAiTool } from "@effect/ai-openai";
+import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
+import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
+import * as OpenAiTool from "@effect/ai-openai/OpenAiTool";
 import {
   isCommentableLine,
   makeReviewer,
@@ -20,20 +22,18 @@ import {
   ReviewSearchResult,
   ReviewSource,
 } from "@yielded/agent-pr-review/review-repository";
-import {
-  Cause,
-  Config,
-  ConfigProvider,
-  Console,
-  Context,
-  Effect,
-  Exit,
-  FileSystem,
-  Option,
-  Result,
-  Redacted,
-  Schema,
-} from "effect";
+import * as Cause from "effect/Cause";
+import * as Config from "effect/Config";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as Console from "effect/Console";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import {
   DependencySources,

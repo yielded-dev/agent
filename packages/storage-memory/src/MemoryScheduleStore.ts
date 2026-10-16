@@ -23,7 +23,11 @@ import {
   scheduleKeyOf,
   scheduleOwnerKey,
 } from "@yielded/agent/schedule-transition";
-import { Effect, Layer, Ref, Result, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 interface MemoryScheduleState {
   readonly records: ReadonlyMap<string, string>;

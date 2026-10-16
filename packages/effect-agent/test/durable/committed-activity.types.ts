@@ -17,7 +17,11 @@ import {
   type ThreadStore,
   type ThreadStoreError,
 } from "@yielded/agent/thread-store";
-import { Context, Effect, Schema, type Crypto, type Scope } from "effect";
+import * as Context from "effect/Context";
+import type * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 type Equal<L, R> =
   (<T>() => T extends L ? 1 : 2) extends <T>() => T extends R ? 1 : 2

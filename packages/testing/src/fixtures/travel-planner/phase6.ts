@@ -10,8 +10,14 @@ import {
 } from "@yielded/agent/records";
 import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservations";
 import { type ToolReconciler } from "@yielded/agent/tool-reconciler";
-import { Duration, Effect, Layer, Schema, Stream } from "effect";
-import { LanguageModel, Model, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { TravelPlan, TripRequest } from "./definition.ts";
 import {

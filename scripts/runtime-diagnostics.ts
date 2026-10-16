@@ -1,9 +1,19 @@
 import { createHash } from "node:crypto";
 import { arch, cpus, platform, release, totalmem } from "node:os";
 
-import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Cause, Clock, Console, Effect, Exit, FileSystem, Option, Path, Schema } from "effect";
-import { Command, Flag } from "effect/cli";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Cause from "effect/Cause";
+import * as Command from "effect/cli/Command";
+import * as Flag from "effect/cli/Flag";
+import * as Clock from "effect/Clock";
+import * as Console from "effect/Console";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
+import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 import { build, version as esbuildVersion } from "esbuild";
 
 import {

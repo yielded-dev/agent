@@ -1,11 +1,20 @@
+import * as AiError from "effect/ai/AiError";
+import * as Decision from "effect/ai/Decision";
+import * as DecisionModel from "effect/ai/DecisionModel";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
 /**
  * Choose a native model when a thread is created, then restore that choice for
  * later runs. Selection uses the existing DecisionModel service.
  *
  * @since 0.1.0
  */
-import { Context, Effect, Layer, Schema, Semaphore, Stream } from "effect";
-import { AiError, Decision, DecisionModel, LanguageModel, Model } from "effect/ai";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
+import * as Stream from "effect/Stream";
 
 /**
  * An application-approved model profile. Configure effort, provider options,

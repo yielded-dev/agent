@@ -9,9 +9,14 @@ import {
 } from "@yielded/agent/submission-ledger";
 import { ThreadImport, type ThreadArchive } from "@yielded/agent/thread-import";
 import { ThreadStore, ThreadReader } from "@yielded/agent/thread-store";
-import { Channel, Context, Crypto, Effect, Scope, Stream } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
-import { CurrentTransformer } from "effect/sql/Statement";
+import * as Channel from "effect/Channel";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Scope from "effect/Scope";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as Statement from "effect/sql/Statement";
+import * as Stream from "effect/Stream";
 
 import type { makeSqlJournalKernel, RawAppendRequest } from "./SqlJournal.ts";
 import type { Diagnostic } from "./SqlStorage.ts";
@@ -33,19 +38,22 @@ export const makeSqlRunStorage = Effect.fnUntraced(function* <
   ledgerOptions: SqlSubmissionLedgerOptions<S, C, F>,
 ) {
   const context = Context.pick(
-    SqlClient,
+    SqlClient.SqlClient,
     Crypto.Crypto,
-  )(yield* Effect.context<SqlClient | Crypto.Crypto>());
+  )(yield* Effect.context<SqlClient.SqlClient | Crypto.Crypto>());
 
   const owner = journalKernel.journal.owner;
   const storeKernel = yield* makeSqlThreadStoreKernel(journalKernel.journal, storeOptions);
   const ledgerKernel = yield* makeSqlSubmissionLedgerKernel(journalKernel.journal, ledgerOptions);
   const rawStore = storeKernel.store;
   const rawLedger = ledgerKernel.ledger;
-  const sql = Context.get(context, SqlClient);
+  const sql = Context.get(context, SqlClient.SqlClient);
 
   const storageContext = <R>(live: Context.Context<R>) =>
-    Context.merge(Context.omit(CurrentTransformer, sql.transactionService)(live), context);
+    Context.merge(
+      Context.omit(Statement.CurrentTransformer, sql.transactionService)(live),
+      context,
+    );
 
   const bind = <A, E>(effect: Effect.Effect<A, E>) =>
     Effect.contextWith((live: Context.Context<never>) =>

@@ -4,7 +4,8 @@ import * as asyncHooks from "node:async_hooks";
 import process from "node:process";
 import * as vm from "node:vm";
 
-import { Effect, FileSystem } from "effect";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 
 import { HeapProbeError, NodeSample } from "./heap-contracts.ts";
 

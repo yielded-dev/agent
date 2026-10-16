@@ -1,4 +1,5 @@
-import { NodeCrypto, NodeFileSystem } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { describe, expect, it } from "@effect/vitest";
 import {
   NodeDurableAgentRuntime,
@@ -38,23 +39,26 @@ import {
 } from "@yielded/agent/submission-ledger";
 import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
-import type { PlatformError } from "effect";
-import {
-  Cause,
-  Context,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  FileSystem,
-  Layer,
-  Option,
-  Ref,
-  Schema,
-  Stream,
-} from "effect";
-import { LanguageModel, Model, Prompt, Tool, Toolkit, type Response } from "effect/ai";
-import { TestClock } from "effect/testing";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import * as Prompt from "effect/ai/Prompt";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import type * as PlatformError from "effect/PlatformError";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 const hostLayerProbe = NodeDurableHost.layer;
 

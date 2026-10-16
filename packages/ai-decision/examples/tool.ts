@@ -1,5 +1,11 @@
-import { Effect, Schema, Stream } from "effect";
-import { AiError, Decision, DecisionModel, Tool, Toolkit } from "effect/ai";
+import * as AiError from "effect/ai/AiError";
+import * as Decision from "effect/ai/Decision";
+import * as DecisionModel from "effect/ai/DecisionModel";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 const Assessment = Decision.make({
   input: Schema.Struct({ message: Schema.String }),

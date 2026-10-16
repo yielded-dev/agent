@@ -28,8 +28,13 @@ import {
   type BrowserHandle,
   type InteractiveBrowserNetworkPolicy,
 } from "@yielded/agent/interactive-browser";
-import { Duration, Effect, Fiber, Layer, Redacted, Schema } from "effect";
-import { TestClock } from "effect/testing";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 
 type CloseTarget =
   | "page"

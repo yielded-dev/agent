@@ -1,16 +1,14 @@
-import {
-  Config,
-  Context,
-  Effect,
-  Layer,
-  Option,
-  Redacted,
-  Schema,
-  Schedule,
-  Stream,
-  type Duration,
-} from "effect";
-import { Ndjson } from "effect/encoding";
+import * as Config from "effect/Config";
+import * as Context from "effect/Context";
+import type * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Ndjson from "effect/encoding/Ndjson";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import {
   DriverRequest,

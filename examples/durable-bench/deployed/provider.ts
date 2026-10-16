@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { fingerprint, history, MEASURED_TOOLS, next, turn } from "../src/plan.ts";
 import { PREAMBLE, responseText } from "./text.ts";

@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import { NodeServices } from "@effect/platform-node";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import {
   ReviewFinding,
@@ -11,7 +11,9 @@ import {
   ReviewResolution,
   type ReviewSeverity,
 } from "@yielded/agent-pr-review/review";
-import { DateTime, Effect, Schema } from "effect";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import type { EvalObservationSetDigest, EvalOracleSetDigest } from "../src/index.ts";
 import {

@@ -1,5 +1,5 @@
-import { BrowserCrypto } from "@effect/platform-browser";
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import {
   makeSqlLifecyclePublication,
   type SqlLifecyclePublicationInput,
@@ -24,8 +24,15 @@ import {
   ThreadExport,
   ThreadExportRequest,
 } from "@yielded/agent/thread-store";
-import { DateTime, Effect, Layer, Option, Result, Schema, Stream, Tracer } from "effect";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
+import * as Stream from "effect/Stream";
+import * as Tracer from "effect/Tracer";
 import { expect, it } from "vite-plus/test";
 
 import { doMessageDeliveryStoreLayer } from "../src/DoMessageDeliveryStore.ts";

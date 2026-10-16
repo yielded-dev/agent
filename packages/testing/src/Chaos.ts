@@ -46,8 +46,21 @@ import {
   ThreadStore,
   streamExport,
 } from "@yielded/agent/thread-store";
-import { Cause, Effect, Exit, Layer, Option, Ref, Schema, Stream, Arbitrary } from "effect";
-import { LanguageModel, Model, Tool, Toolkit, type Prompt, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Prompt from "effect/ai/Prompt";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Arbitrary from "effect/Arbitrary";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 /**
  * P7 WP4 chaos machinery (plan §5): a Schema-first `ChaosPlan`, a seeded generator over

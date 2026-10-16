@@ -1,7 +1,11 @@
 import { expectTypeOf } from "@effect/vitest";
 import type { AppendConflict, ThreadStoreError } from "@yielded/agent/thread-store";
-import { Context, Effect, Schema, type Crypto, type Scope } from "effect";
-import type { SqlClient } from "effect/sql/SqlClient";
+import * as Context from "effect/Context";
+import type * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
+import type * as SqlClient from "effect/sql/SqlClient";
 
 import type { makeSqlJournal, SqlJournal } from "../src/SqlJournal.ts";
 import type { makeSqlSubmissionLedger } from "../src/SqlSubmissionLedger.ts";
@@ -27,14 +31,18 @@ type LedgerConstruction = ReturnType<
 
 expectTypeOf<Effect.Error<JournalConstruction>>().toEqualTypeOf<StorageFailure>();
 expectTypeOf<Effect.Services<JournalConstruction>>().toEqualTypeOf<
-  SqlClient | Crypto.Crypto | Scope.Scope
+  SqlClient.SqlClient | Crypto.Crypto | Scope.Scope
 >();
 expectTypeOf<Effect.Error<ReturnType<Journal["append"]>>>().toEqualTypeOf<
   StorageFailure | Corruption | Contention | InjectedFailure | AppendConflict | ThreadStoreError
 >();
-expectTypeOf<Effect.Services<ThreadConstruction>>().toEqualTypeOf<SqlClient | Crypto.Crypto>();
+expectTypeOf<Effect.Services<ThreadConstruction>>().toEqualTypeOf<
+  SqlClient.SqlClient | Crypto.Crypto
+>();
 expectTypeOf<Effect.Error<ThreadConstruction>>().toEqualTypeOf<StorageFailure | Corruption>();
-expectTypeOf<Effect.Services<LedgerConstruction>>().toEqualTypeOf<SqlClient | Crypto.Crypto>();
+expectTypeOf<Effect.Services<LedgerConstruction>>().toEqualTypeOf<
+  SqlClient.SqlClient | Crypto.Crypto
+>();
 expectTypeOf<Effect.Error<LedgerConstruction>>().toEqualTypeOf<never>();
 
 export const preservesTransactionChannels = (journal: Journal) => {

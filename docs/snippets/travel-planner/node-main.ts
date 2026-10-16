@@ -1,6 +1,6 @@
-import { NodeRuntime } from "@effect/platform-node";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { NodeDurableHost } from "@yielded/agent-platform-node";
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 
 import { HostLive } from "./node-host.ts";
 

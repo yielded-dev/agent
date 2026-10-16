@@ -1,6 +1,7 @@
-import { BunRuntime, BunServices } from "@effect/platform-bun";
-import { Effect } from "effect";
-import { Command } from "effect/cli";
+import * as BunRuntime from "@effect/platform-bun/BunRuntime";
+import * as BunServices from "@effect/platform-bun/BunServices";
+import * as Command from "effect/cli/Command";
+import * as Effect from "effect/Effect";
 
 import { Cloudflare } from "./cloudflare.ts";
 import { command } from "./command.ts";

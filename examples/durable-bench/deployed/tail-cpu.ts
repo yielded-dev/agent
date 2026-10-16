@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 
 import { request } from "./cloudflare.ts";
 import { type Invocation } from "./model.ts";

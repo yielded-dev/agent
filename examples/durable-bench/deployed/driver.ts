@@ -1,7 +1,15 @@
 import { decodeLiveText } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import { ThreadId } from "@yielded/agent/identifiers";
-import { Cause, Clock, Deferred, Effect, Exit, Fiber, Option, Schema, Stream } from "effect";
-import { Ndjson } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Ndjson from "effect/encoding/Ndjson";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import {
   BuildEvent,

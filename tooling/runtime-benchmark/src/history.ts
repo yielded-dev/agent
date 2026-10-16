@@ -1,5 +1,5 @@
 import * as ThreadHistory from "@yielded/agent/thread-history";
-import type { Layer } from "effect";
+import type * as Layer from "effect/Layer";
 
 // The comparison fixture also runs against releases before in-memory history became the default.
 const selectHistory = (module: {

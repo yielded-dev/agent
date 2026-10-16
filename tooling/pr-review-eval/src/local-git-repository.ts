@@ -6,8 +6,13 @@ import {
 } from "@yielded/agent-pr-review-action/review-repository";
 import { type ReviewRequest } from "@yielded/agent-pr-review/review";
 import { type ReviewRepository } from "@yielded/agent-pr-review/review-repository";
-import { Effect, Path, Result, Schema, Stream } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import * as Effect from "effect/Effect";
+import * as Path from "effect/Path";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { EvalConfigurationError, type EvalInputDigest } from "./contracts.ts";
 import { digestText } from "./corpus.ts";

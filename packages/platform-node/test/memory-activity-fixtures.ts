@@ -4,7 +4,7 @@ import * as MemoryNamespace from "@yielded/agent/memory-namespace";
 import { MemoryContent } from "@yielded/agent/memory-reference";
 import { MemoryKey, MemoryScope } from "@yielded/agent/memory-store";
 import { Digest } from "@yielded/agent/records";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 export const MEMORY_NAMESPACE = MemoryNamespace.define({
   name: "test/committed-memory",

@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 export class HeapProbeError extends Schema.TaggedError<HeapProbeError>()("HeapProbeError", {
   operation: Schema.String,

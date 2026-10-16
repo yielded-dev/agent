@@ -1,4 +1,10 @@
-import { Clock, Context, Effect, Exit, Layer, Option, Ref } from "effect";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
 
 import { type PlannerProgress, type PlannerSettings, type PlannerError } from "../domain.ts";
 import { recordDiagnostic } from "./diagnostics.ts";

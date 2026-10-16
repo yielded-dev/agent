@@ -1,4 +1,4 @@
-import { NodeHttpClient } from "@effect/platform-node";
+import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import { type NodeDurableAgentRuntimeOptions } from "@yielded/agent-platform-node/node-durable-agent-runtime";
 import { NodeDurableHost } from "@yielded/agent-platform-node/node-durable-host";
 import { NodeSubscriptions } from "@yielded/agent-platform-node/node-subscriptions";
@@ -23,7 +23,10 @@ import {
   type SubscriptionInputBinding,
 } from "@yielded/agent/subscription-input";
 import { SubscriptionIntake, Subscriptions } from "@yielded/agent/subscriptions";
-import { Effect, Layer, Schema, type Redacted } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 const subscriptionRuntimeFromSourcesLayer = <E, R>(options: {
   readonly runtime: NodeDurableAgentRuntimeOptions;

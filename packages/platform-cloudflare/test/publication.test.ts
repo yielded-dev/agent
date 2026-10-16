@@ -8,9 +8,12 @@ import {
   RecoverySnapshotRequest,
 } from "@yielded/agent/submission-ledger";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Clock, Effect, Option, Schema } from "effect";
 import { DurableObject } from "effect-cf";
-import { TestClock } from "effect/testing";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { DurableAlarmService, ThreadMaintenance, ThreadMutationGate } from "../src/Alarm.ts";

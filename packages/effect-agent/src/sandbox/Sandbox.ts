@@ -1,4 +1,7 @@
-import { Context, Duration, Schema, type Stream } from "effect";
+import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
+import * as Schema from "effect/Schema";
+import type * as Stream from "effect/Stream";
 
 const BoundedName = Schema.NonEmptyString.check(Schema.isMaxLength(256));
 const BoundedPath = Schema.NonEmptyString.check(Schema.isMaxLength(4 * 1024));

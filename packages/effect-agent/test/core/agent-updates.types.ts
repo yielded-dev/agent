@@ -1,6 +1,9 @@
-import { Context, Effect, Schema, SchemaGetter } from "effect";
-import type { Tool } from "effect/ai";
-import { Toolkit } from "effect/ai";
+import type * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
 
 import * as Agent from "../../src/core/Agent.ts";
 import * as AgentUpdates from "../../src/core/AgentUpdates.ts";

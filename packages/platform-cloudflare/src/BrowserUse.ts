@@ -7,7 +7,11 @@ import {
   SendRequest,
   Tab,
 } from "@yielded/agent/browser-use";
-import { Cause, Effect, Layer, Schema, Semaphore } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import type {
   CDPSession,
   Frame,

@@ -1,6 +1,6 @@
 import { WebCapture } from "@yielded/agent";
-import { Effect } from "effect";
-import { Toolkit } from "effect/ai";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Effect from "effect/Effect";
 
 import { ReadTravelPage } from "../../src/research.ts";
 

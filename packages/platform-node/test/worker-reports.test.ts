@@ -1,4 +1,4 @@
-import { NodeFileSystem } from "@effect/platform-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, it } from "@effect/vitest";
 import * as NodeHost from "@yielded/agent-platform-node/node-durable-host";
 import * as Agent from "@yielded/agent/agent";
@@ -15,20 +15,22 @@ import { readTestThread } from "@yielded/agent/testing/thread-store-conformance"
 import { ThreadExportRequest, ThreadStore, ThreadReader } from "@yielded/agent/thread-store";
 import { WorkerCompletion, WorkerError } from "@yielded/agent/worker";
 import { WorkerHostAuthorizer } from "@yielded/agent/worker-host";
-import {
-  Clock,
-  Context,
-  Effect,
-  Exit,
-  FileSystem,
-  Layer,
-  Option,
-  Ref,
-  Schema,
-  Scope,
-  Stream,
-} from "effect";
-import { LanguageModel, Model, Toolkit, type Response, type Tool } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import type * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 const principal = Schema.decodeSync(Principal)("report-owner");
 const sourceThreadId = Schema.decodeSync(ThreadId)("report-source");

@@ -1,6 +1,11 @@
-import { OpenAiClient } from "@effect/ai-openai";
-import { Effect, Exit, Layer, Redacted, Ref } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/http";
+import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Ref from "effect/Ref";
 import { expect, it } from "vite-plus/test";
 
 import { type ModelUsage } from "../src/contracts.ts";

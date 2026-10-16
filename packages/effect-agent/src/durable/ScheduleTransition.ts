@@ -1,4 +1,5 @@
-import { Result, Schema } from "effect";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import { DefinitionDigests, PersistedJson } from "./Records.ts";
 import {

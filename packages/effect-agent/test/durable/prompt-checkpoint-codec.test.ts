@@ -1,6 +1,7 @@
 import { expect, it } from "@effect/vitest";
-import { Effect, Schema } from "effect";
-import { Prompt } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { decodeCheckpointPrefix } from "../../src/durable/internal/prompt-history-cache.ts";
 

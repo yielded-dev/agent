@@ -1,7 +1,10 @@
 import { builtinModules } from "node:module";
 
-import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Effect, FileSystem, Schema } from "effect";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Schema from "effect/Schema";
 import { build } from "esbuild";
 
 class BuildError extends Schema.TaggedError<BuildError>()("BuildError", {

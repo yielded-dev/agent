@@ -1,10 +1,12 @@
-import { BrowserCrypto } from "@effect/platform-browser";
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import type { StorageOwner } from "@yielded/agent/run-storage";
 import type { SettlementPublisher } from "@yielded/agent/settlement-publisher";
 import type { SubmissionLedger } from "@yielded/agent/submission-ledger";
 import type { ThreadStore } from "@yielded/agent/thread-store";
-import { Effect, Layer, type Crypto } from "effect";
+import type * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
 import { describe, it } from "vite-plus/test";
 

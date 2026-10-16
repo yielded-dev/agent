@@ -1,7 +1,7 @@
 import { CloudflareMemoryClient } from "@yielded/agent-platform-cloudflare/cloudflare-memory";
 import { MemoryWrite } from "@yielded/agent/memory-store";
 import { env } from "cloudflare:test";
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

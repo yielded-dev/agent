@@ -6,20 +6,22 @@ import * as AgentRuntime from "@yielded/agent/agent-runtime";
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
 import { type RunEvent } from "@yielded/agent/run-event";
-import {
-  Cause,
-  Effect,
-  ErrorReporter,
-  Exit,
-  Layer,
-  Option,
-  Ref,
-  Schema,
-  Stream,
-  Tracer,
-} from "effect";
-import type { Response } from "effect/ai";
-import { AiError, LanguageModel, Model, Tool, Toolkit } from "effect/ai";
+import * as AiError from "effect/ai/AiError";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as ErrorReporter from "effect/ErrorReporter";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as Tracer from "effect/Tracer";
 
 import { RunContextPreparationPassthrough } from "../../src/engine/RunOptions.ts";
 import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";

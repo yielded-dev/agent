@@ -1,4 +1,4 @@
-import { NodeFileSystem } from "@effect/platform-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, it } from "@effect/vitest";
 import { NodeDurableHost } from "@yielded/agent-platform-node/node-durable-host";
 import { NodeScheduling } from "@yielded/agent-platform-node/node-scheduling";
@@ -15,9 +15,17 @@ import {
 } from "@yielded/agent/schedule";
 import { Scheduling } from "@yielded/agent/scheduling";
 import { Principal } from "@yielded/agent/submission-ledger";
-import type { PlatformError } from "effect";
-import { Context, Deferred, Effect, Exit, FileSystem, Layer, Ref, Schema, Scope } from "effect";
-import { TestClock } from "effect/testing";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import type * as PlatformError from "effect/PlatformError";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as TestClock from "effect/testing/TestClock";
 
 const digest = Schema.decodeSync(Digest)("a".repeat(64));
 const definitions = DefinitionDigests.make({ agent: digest, model: digest, tools: digest });

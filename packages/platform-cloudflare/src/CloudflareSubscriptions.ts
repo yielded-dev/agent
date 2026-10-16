@@ -1,4 +1,4 @@
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import {
   DoSubscriptionAlarmControl,
   DoSubscriptionTransaction,
@@ -30,13 +30,20 @@ import {
   SubscriptionIntake,
   Subscriptions,
 } from "@yielded/agent/subscriptions";
-import { Cause, Clock, Context, DateTime, Effect, Layer, Schema, type Scope } from "effect";
 import {
   DurableObject as EffectCfDurableObject,
   DurableObjectAlarm,
   DurableObjectState as EffectCfDurableObjectState,
   type WorkerEnvironment,
 } from "effect-cf";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import { type ThreadObjectNamespace } from "./CloudflareBindings.ts";
 import { CloudflareThreadClient } from "./CloudflareThreadClient.ts";

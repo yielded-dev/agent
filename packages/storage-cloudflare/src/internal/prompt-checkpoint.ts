@@ -10,7 +10,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import type { DoJournal } from "./do-journal.ts";
 
@@ -46,7 +46,7 @@ const keyFor = (prefix: string, chunk: number) => prefix + String(chunk).padStar
  * the checkpoint, so append-only growth writes at most the old tail and new chunks.
  */
 export const makePromptCheckpoints = (
-  sql: SqlClient,
+  sql: SqlClient.SqlClient,
   journal: DoJournal,
   maxValueBytes: number,
 ): PromptCheckpoints => ({
@@ -150,7 +150,7 @@ export const makePromptCheckpoints = (
                 WHERE effect_agent_meta.value <> excluded.value`;
           }),
         )
-        .pipe(Effect.provideService(SqlClient, sql));
+        .pipe(Effect.provideService(SqlClient.SqlClient, sql));
     },
     (effect) =>
       effect.pipe(

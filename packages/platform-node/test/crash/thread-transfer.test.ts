@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 
-import { NodeFileSystem } from "@effect/platform-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, layer } from "@effect/vitest";
 import { NodeDurableHost } from "@yielded/agent-platform-node/node-durable-host";
 import * as SqliteThreadStore from "@yielded/agent-storage-sqlite/sqlite-thread-store";
@@ -17,8 +17,16 @@ import {
   ThreadStore,
   streamExport,
 } from "@yielded/agent/thread-store";
-import { Effect, FileSystem, Layer, Option, Result, Schema, Stream } from "effect";
-import { LanguageModel, Model, type Prompt } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Prompt from "effect/ai/Prompt";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import {
   CHECKPOINT_HANDOFF,

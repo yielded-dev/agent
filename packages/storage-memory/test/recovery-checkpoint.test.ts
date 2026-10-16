@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import * as Agent from "@yielded/agent/agent";
 import { DurableWorkerBinding } from "@yielded/agent/agent-registration";
@@ -43,9 +43,20 @@ import {
 } from "@yielded/agent/thread-store";
 import { ToolReconciler } from "@yielded/agent/tool-reconciler";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
-import { Context, Effect, Exit, Layer, Option, Result, Schema, Stream } from "effect";
-import type { Prompt, Response } from "effect/ai";
-import { LanguageModel, Model, Tool, Toolkit } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Prompt from "effect/ai/Prompt";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { MemorySubmissionLedgerLive } from "../src/MemorySubmissionLedger.ts";
 import { MemoryThreadStoreLive } from "../src/MemoryThreadStore.ts";

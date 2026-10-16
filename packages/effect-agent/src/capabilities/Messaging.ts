@@ -1,6 +1,10 @@
-import { Crypto, Effect, Option, Schema } from "effect";
-import { Tool, Toolkit } from "effect/ai";
-import { Hex } from "effect/encoding";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 import type { AnyDefinition } from "../core/Agent.ts";
 import {

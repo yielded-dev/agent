@@ -1,5 +1,6 @@
-import { SqliteClient } from "@effect/sql-sqlite-node";
-import { Effect, Layer } from "effect";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import { SqliteStorageError } from "../SqliteStorageError.ts";
 

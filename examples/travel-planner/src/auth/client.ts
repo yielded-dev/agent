@@ -1,5 +1,6 @@
 import { auth, sessionObservation as observeSession } from "@yielded/agent-example-auth/client";
-import { AsyncResult, Atom } from "effect/reactivity";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
+import * as Atom from "effect/reactivity/Atom";
 
 export { runtime, auth, accountLifetime } from "@yielded/agent-example-auth/client";
 

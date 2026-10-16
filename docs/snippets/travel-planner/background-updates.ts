@@ -1,6 +1,6 @@
 import { Agent, Subagent } from "@yielded/agent";
-import { Schema } from "effect";
-import { Toolkit } from "effect/ai";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Schema from "effect/Schema";
 
 export const HotelRequest = Schema.Struct({
   city: Schema.String,

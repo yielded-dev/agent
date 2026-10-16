@@ -7,23 +7,25 @@ import { IdGenerator } from "@yielded/agent/id-generator";
 import { ThreadId, RunId, TurnId } from "@yielded/agent/identifiers";
 import { type RunEvent } from "@yielded/agent/run-event";
 import { RunContextPreparationPassthrough, type RunTurnResume } from "@yielded/agent/run-options";
-import {
-  Cause,
-  Clock,
-  DateTime,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  Layer,
-  Option,
-  Ref,
-  Schema,
-  SchemaGetter,
-  Stream,
-} from "effect";
-import { LanguageModel, Model, type Response, Tool, Toolkit } from "effect/ai";
-import { TestClock } from "effect/testing";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";
 

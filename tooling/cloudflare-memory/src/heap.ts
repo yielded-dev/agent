@@ -1,7 +1,14 @@
-import { Console, Crypto, Effect, FileSystem, Path, Schema, Stream } from "effect";
-import { Command, Flag } from "effect/cli";
-import { Hex } from "effect/encoding";
-import { ChildProcess } from "effect/process";
+import * as Command from "effect/cli/Command";
+import * as Flag from "effect/cli/Flag";
+import * as Console from "effect/Console";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { HeapProbeError, NodeSample, WorkerdSample } from "./heap-contracts.ts";
 import { measureWorkerd } from "./heap-workerd.ts";

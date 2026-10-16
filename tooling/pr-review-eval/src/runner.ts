@@ -1,6 +1,12 @@
 import { type ReviewOutcome, type ReviewRequest } from "@yielded/agent-pr-review/review";
 import { ReviewRepository } from "@yielded/agent-pr-review/review-repository";
-import { Clock, DateTime, Effect, Layer, Result, Schema, Stream } from "effect";
+import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import {
   CURRENT_RUNNER_VERSION,

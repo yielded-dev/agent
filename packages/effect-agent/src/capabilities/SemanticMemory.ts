@@ -1,6 +1,9 @@
-import { Clock, Crypto, Effect, Schema } from "effect";
-import { EmbeddingModel } from "effect/ai";
-import { Hex } from "effect/encoding";
+import * as EmbeddingModel from "effect/ai/EmbeddingModel";
+import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
+import * as Schema from "effect/Schema";
 
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import type * as MemoryNamespace from "../core/MemoryNamespace.ts";

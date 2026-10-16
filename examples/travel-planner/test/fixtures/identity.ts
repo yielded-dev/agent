@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 export const ownerEmail = "owner@example.com";
 export const Email = Schema.String.check(Schema.isPattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/));
 

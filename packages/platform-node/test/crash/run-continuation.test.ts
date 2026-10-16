@@ -1,12 +1,17 @@
-import { NodeFileSystem } from "@effect/platform-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, layer } from "@effect/vitest";
 import { NodeDurableHost } from "@yielded/agent-platform-node/node-durable-host";
 import * as Agent from "@yielded/agent/agent";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { runIdForSubmission } from "@yielded/agent/run-journal";
 import { ThreadStore } from "@yielded/agent/thread-store";
-import { Effect, Layer, Option, Stream } from "effect";
-import { LanguageModel, Model, type Prompt } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Prompt from "effect/ai/Prompt";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Stream from "effect/Stream";
 
 import {
   CHECKPOINT_HANDOFF,

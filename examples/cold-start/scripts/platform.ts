@@ -3,8 +3,11 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 
-import { Effect, FileSystem, Schema } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import * as Schema from "effect/Schema";
 
 export class BenchError extends Schema.TaggedError<BenchError>()("BenchError", {
   message: Schema.String,

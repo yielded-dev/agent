@@ -1,6 +1,7 @@
 import { makeSqlScheduleStore } from "@yielded/agent-storage-sql/sql-schedule-store";
 import { ScheduleStore } from "@yielded/agent/schedule";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import { initializeSqliteStorage } from "./internal/sqlite-journal.ts";

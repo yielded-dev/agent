@@ -38,7 +38,7 @@ import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
-import type { Statement } from "effect/sql/Statement";
+import type * as Statement from "effect/sql/Statement";
 
 import { sqliteJsonText } from "./internal/sql-json.ts";
 import { makeCanonicalStorage, recordBatchId, RECORD_TAGS } from "./SqlCanonicalStorage.ts";
@@ -646,7 +646,7 @@ export const makeSqlThreadWork = Effect.fnUntraced(function* (options: SqlThread
     // Leave admission and its byte bound to that fold when this plan cannot fit.
     if (new TextEncoder().encode(encoded).byteLength > MAX_WORK_ENTRY_BYTES) return undefined;
 
-    const pointers: Array<Statement<object>> = [];
+    const pointers: Array<Statement.Statement<object>> = [];
 
     for (let index = 0; index < records.length; index++) {
       const metadata = canonicalRecordPointers(records[index]!);

@@ -7,7 +7,7 @@ import {
   ResolutionNeverHappened,
   UnknownResolutionCommand,
 } from "@yielded/agent/submission-ledger";
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

@@ -1,7 +1,9 @@
 import { generateKeyPairSync, sign } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-import { Effect, FileSystem, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Schema from "effect/Schema";
 import { build } from "esbuild";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 

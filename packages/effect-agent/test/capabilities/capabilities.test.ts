@@ -12,8 +12,13 @@ import {
   layerMemory,
   toPrompt,
 } from "@yielded/agent/thread";
-import { Clock, Context, Deferred, Effect, Fiber, Schema } from "effect";
-import { Prompt } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Schema from "effect/Schema";
 import type { expectTypeOf as ExpectTypeOf } from "vite-plus/test";
 
 const threadId = Schema.decodeSync(ThreadId)("trip-1");

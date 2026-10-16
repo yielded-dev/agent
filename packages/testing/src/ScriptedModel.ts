@@ -1,5 +1,13 @@
-import { Context, Effect, Layer, Ref, Schema, Stream } from "effect";
-import { AiError, LanguageModel, Response, Toolkit } from "effect/ai";
+import * as AiError from "effect/ai/AiError";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 const ScriptedPartMetadata = Schema.Record(Schema.String, Schema.NullOr(Schema.Json));
 

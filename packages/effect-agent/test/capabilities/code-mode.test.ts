@@ -5,8 +5,15 @@ import { ToolExecutionClass } from "@yielded/agent/durable-step";
 import { SandboxImplementation } from "@yielded/agent/sandbox";
 import { ToolBroker } from "@yielded/agent/tool-broker";
 import { CurrentToolCatalog } from "@yielded/agent/tool-exposure";
-import { Context, Duration, Effect, Layer, Ref, Schema, Stream } from "effect";
-import { Tool, Toolkit } from "effect/ai";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 const Query = Tool.make("query_warehouse", {
   description: "Run one read-only SQL query",

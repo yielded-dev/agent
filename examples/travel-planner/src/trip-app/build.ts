@@ -1,6 +1,13 @@
-import { Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema } from "effect";
 import { CloudflareTracer, WorkerEnvironment, Workflow } from "effect-cf";
 import * as Sandbox from "effect-cf/sandbox";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
 
 import {
   AppBuildRequest,

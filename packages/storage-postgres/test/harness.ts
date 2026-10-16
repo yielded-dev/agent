@@ -1,8 +1,10 @@
-import { NodeCrypto } from "@effect/platform-node";
-import { PgClient } from "@effect/sql-pg";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as PgClient from "@effect/sql-pg/PgClient";
 import * as PostgresStorage from "@yielded/agent-storage-postgres/postgres-storage";
 import type { MessageDeliveryStoreLimits } from "@yielded/agent/message-delivery";
-import { Effect, Layer, Redacted } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
 
 /**
  * A live Postgres is required for transaction rollback and connection cleanup;

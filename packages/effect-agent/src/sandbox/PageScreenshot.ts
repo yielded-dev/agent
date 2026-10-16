@@ -1,4 +1,6 @@
-import { Context, Schema, type Effect } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import {
   PageCaptureEngine,

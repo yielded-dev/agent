@@ -1,5 +1,11 @@
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { Argument, Command, Flag } from "effect/cli";
+import * as Argument from "effect/cli/Argument";
+import * as Command from "effect/cli/Command";
+import * as Flag from "effect/cli/Flag";
+import * as Console from "effect/Console";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 
 import { arms, Capture, Cleanup, Plan, Uploads } from "./evidence.ts";
 import { BenchError, check as requireEvidence, hash, read, save } from "./platform.ts";

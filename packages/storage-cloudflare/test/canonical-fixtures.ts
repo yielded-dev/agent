@@ -1,5 +1,5 @@
 import { CanonicalBatch, CanonicalRecord, UserInputRecorded } from "@yielded/agent/records";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { at, id, TEST_DEPLOYMENT, TEST_PRODUCER } from "./harness.ts";
 

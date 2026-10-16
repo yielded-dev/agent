@@ -1,5 +1,10 @@
 import { expect, it } from "@effect/vitest";
-import { Config, Effect, Layer, Option, Redacted, Schema } from "effect";
+import * as Config from "effect/Config";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import nativePuppeteer from "puppeteer-core";
 import browserPuppeteer, {
   type Page,

@@ -1,5 +1,5 @@
-import { BrowserCrypto } from "@effect/platform-browser";
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import {
   DoStorageFailpointError,
   type DoStorageFailpointLocation,
@@ -39,7 +39,13 @@ import {
   submissionInputRecordId,
 } from "@yielded/agent/submission-ledger";
 import type { ThreadStore } from "@yielded/agent/thread-store";
-import { Cause, Effect, Exit, Option, Ref, Schema, type Crypto } from "effect";
+import * as Cause from "effect/Cause";
+import type * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { describe, expect, it } from "vite-plus/test";
 

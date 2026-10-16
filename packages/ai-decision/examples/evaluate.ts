@@ -1,7 +1,9 @@
-import type { TypeSafeSchema } from "@effect/ai-typesafe";
-import { TypeSafeClient } from "@effect/ai-typesafe";
-import { Effect, Layer, Schedule } from "effect";
-import { FetchHttpClient } from "effect/http";
+import * as TypeSafeClient from "@effect/ai-typesafe/TypeSafeClient";
+import type * as TypeSafeSchema from "@effect/ai-typesafe/TypeSafeSchema";
+import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as Layer from "effect/Layer";
+import * as Schedule from "effect/Schedule";
 
 export const questions = {
   department: {

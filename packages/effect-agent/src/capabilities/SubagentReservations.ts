@@ -1,9 +1,9 @@
-import type { Scope } from "effect";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 
 import { RunId, ToolCallId } from "../core/Identifiers.ts";

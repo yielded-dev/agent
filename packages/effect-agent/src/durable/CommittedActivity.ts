@@ -1,4 +1,9 @@
-import { Clock, Effect, Schema, Stream, type Crypto, type Scope } from "effect";
+import * as Clock from "effect/Clock";
+import type * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 import {
   ActivityProgress,

@@ -11,7 +11,7 @@ it does not by itself make execution durable or authorize access.
 
 ```ts twoslash
 import { AgentRuntime, InMemory } from "@yielded/agent";
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 
 import { planner, ModelLive, OpenAiLive } from "./node-agent.ts";
 // ---cut---

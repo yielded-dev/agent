@@ -1,7 +1,10 @@
 import * as Agent from "@yielded/agent/agent";
 import { AgentPolicy } from "@yielded/agent/agent-policy";
-import { Context, Effect, Schema } from "effect";
-import { Tool, Toolkit } from "effect/ai";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 export const AirportCode = Schema.NonEmptyString.pipe(
   Schema.brand("@effect-agent/testing/travel-planner/AirportCode"),

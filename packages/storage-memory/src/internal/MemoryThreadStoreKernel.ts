@@ -24,7 +24,9 @@ import type {
   WorkThreadsRequest,
   WorkThreadsPage,
 } from "@yielded/agent/thread-work";
-import { Context, type Effect, type Stream } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import type * as Stream from "effect/Stream";
 
 export interface PreparedMemoryAppend {
   readonly request: AppendRequest;

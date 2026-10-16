@@ -10,9 +10,14 @@ import type {
   SubagentHost,
 } from "@yielded/agent/subagent-host";
 import type { WorkerError } from "@yielded/agent/worker";
-import { Context, type Crypto, Effect, type Layer, Schema, SchemaGetter } from "effect";
-import type { Tool } from "effect/ai";
-import { Toolkit } from "effect/ai";
+import type * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import type * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import type * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
 
 import type { SubagentReservations } from "../../src/capabilities/SubagentReservations.ts";
 

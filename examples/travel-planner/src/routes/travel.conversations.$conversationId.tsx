@@ -1,5 +1,5 @@
 import { ClientOnly, createFileRoute, notFound } from "@tanstack/react-router";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { ConversationId } from "../domain";
 import { Planner } from "../planner";

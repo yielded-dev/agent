@@ -2,8 +2,14 @@ import { type ThreadId } from "@yielded/agent/identifiers";
 import type { ThreadStore } from "@yielded/agent/thread-store";
 import { ThreadWorkDiscovery } from "@yielded/agent/thread-work";
 import { makeWakeSubscriptionHub, WakeScheduler } from "@yielded/agent/wake-scheduler";
-import type { Duration } from "effect";
-import { Clock, Context, Effect, Layer, Option, PubSub, Stream } from "effect";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import type * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as PubSub from "effect/PubSub";
+import * as Stream from "effect/Stream";
 
 /**
  * Bounded in-process wake buffer. Wake hints are droppable by contract (native work inventory

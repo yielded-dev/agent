@@ -1,5 +1,12 @@
-import { NodeCrypto, NodeServices } from "@effect/platform-node";
-import { Deferred, Effect, Exit, Fiber, FileSystem, Layer, Schema } from "effect";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import { expect, it } from "vite-plus/test";
 
 import { diagnosticCases } from "../src/diagnostic-cases.ts";

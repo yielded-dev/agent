@@ -2,9 +2,15 @@ import { ScheduleId, defaultSchedulingLimits, type ScheduleOwner } from "@yielde
 import { scheduleOwnerKey } from "@yielded/agent/schedule-transition";
 import { Scheduling } from "@yielded/agent/scheduling";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Cause, Clock, Deferred, Effect, Exit, Fiber, Schema } from "effect";
 import { DurableObject } from "effect-cf";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 import { describe, expect, it } from "vite-plus/test";
 
 import { scheduleAlarmHandler } from "../src/CloudflareScheduling.ts";

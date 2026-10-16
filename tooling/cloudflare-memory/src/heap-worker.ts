@@ -6,9 +6,19 @@ import { digestDefinitions } from "@yielded/agent/digest";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { DefinitionDigestInput } from "@yielded/agent/records";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
-import { Context, Deferred, Effect, Layer, Ref, Schema, Stream } from "effect";
 import { DurableObject } from "effect-cf";
-import { LanguageModel, Model, Tool, Toolkit, type Response as AiResponse } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as AiResponse from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { ObjectStatus } from "./heap-contracts.ts";
 

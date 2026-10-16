@@ -8,9 +8,11 @@ import {
   type MemoryMutationFailure,
 } from "@yielded/agent/memory-store";
 import * as Protocol from "@yielded/agent/remembering-store";
-import type { Effect } from "effect";
-import { Context, Schema } from "effect";
-import type { AiError, LanguageModel } from "effect/ai";
+import type * as AiError from "effect/ai/AiError";
+import type * as LanguageModel from "effect/ai/LanguageModel";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import * as Remembering from "../../src/capabilities/Remembering.ts";
 

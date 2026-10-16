@@ -3,9 +3,17 @@ import { WorkflowAgentHost } from "@yielded/agent-workflow/workflow-agent-host";
 import { WorkflowDispatchFailpoint } from "@yielded/agent-workflow/workflow-dispatch";
 import * as Agent from "@yielded/agent/agent";
 import { digestDefinitions } from "@yielded/agent/digest";
-import { Config, Console, Effect, FileSystem, Layer, Schema, Stream } from "effect";
-import { Tool, Toolkit, type Response } from "effect/ai";
-import { Workflow } from "effect/workflow";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Config from "effect/Config";
+import * as Console from "effect/Console";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as Workflow from "effect/workflow/Workflow";
 
 import {
   definitionsFor,

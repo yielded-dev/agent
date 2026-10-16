@@ -13,8 +13,8 @@ when the sender also owns the recipient's creation and lifetime.
 
 ```ts twoslash
 import { Agent, Messaging } from "@yielded/agent";
-import { Schema } from "effect";
-import { Toolkit } from "effect/ai";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Schema from "effect/Schema";
 
 const advisor = Agent.make("advisor", {
   input: Schema.String,

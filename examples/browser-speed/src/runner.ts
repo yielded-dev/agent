@@ -1,16 +1,22 @@
-import { OpenAiClient, OpenAiLanguageModel, OpenAiTool } from "@effect/ai-openai";
-import {
-  OpenAiClient as CompletionsClient,
-  OpenAiLanguageModel as CompletionsModel,
-} from "@effect/ai-openai-compat";
+import * as CompletionsClient from "@effect/ai-openai-compat/OpenAiClient";
+import * as CompletionsModel from "@effect/ai-openai-compat/OpenAiLanguageModel";
+import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
+import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
+import * as OpenAiTool from "@effect/ai-openai/OpenAiTool";
 import { Agent, AgentRuntime } from "@yielded/agent";
 import { CompactionPolicy } from "@yielded/agent/agent-policy";
 import * as BrowserUse from "@yielded/agent/browser-use";
 import { CodeExecutionLimits, CodeExecutor } from "@yielded/agent/code-executor";
 import type { ThreadId } from "@yielded/agent/identifiers";
-import { Duration, Effect, Layer, Redacted, Schema } from "effect";
-import { Toolkit } from "effect/ai";
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import { TaskResult, Browser, completionTools } from "./browser.ts";
 import { LabError, defaultChallenge, type ModelApi, type RunInput } from "./contract.ts";

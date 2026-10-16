@@ -4,10 +4,18 @@ import {
   ReviewFollowUp,
 } from "@yielded/agent-pr-review/review";
 import { createTwoFilesPatch } from "diff";
-import type { Redacted } from "effect";
-import { Clock, Context, DateTime, Effect, Option, Result, Schema } from "effect";
-import { Base64 } from "effect/encoding";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64 from "effect/encoding/Base64";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Option from "effect/Option";
+import type * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import { MAX_REVIEW_BODY_CHARS } from "./presentation.ts";
 import { dismissedReviews, unresolvedChangeRequests, type ReviewHistoryItem } from "./selection.ts";

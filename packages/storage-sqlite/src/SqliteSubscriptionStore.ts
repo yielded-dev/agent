@@ -1,6 +1,8 @@
 import { makeSqlSubscriptionStore } from "@yielded/agent-storage-sql/sql-subscription-store";
 import { SourcePartition, SubscriptionError, SubscriptionStore } from "@yielded/agent/subscription";
-import { Effect, Layer, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import type * as SqlClientService from "effect/sql/SqlClient";
 
 import { initializeSqliteStorage } from "./internal/sqlite-journal.ts";

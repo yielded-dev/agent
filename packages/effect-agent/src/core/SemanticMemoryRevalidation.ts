@@ -1,5 +1,6 @@
-import { Effect, Schema } from "effect";
-import { Hex } from "effect/encoding";
+import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
+import * as Schema from "effect/Schema";
 
 import { utf8ByteLength as byteLength } from "./internal/utf8.ts";
 import { MemoryLookup, MemoryPassage } from "./MemoryReference.ts";

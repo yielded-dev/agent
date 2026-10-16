@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 export const RunId = Schema.String.check(Schema.isPattern(/^[a-z0-9-]{1,24}$/));
 

@@ -1,12 +1,15 @@
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import { type ResolvedBinding } from "@yielded/agent/agent-registration";
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { type ThreadId } from "@yielded/agent/identifiers";
 import { PreparedInputAdmission } from "@yielded/agent/prepared-input-admission";
 import { ThreadProjectionMaintenance } from "@yielded/agent/thread-projection-maintenance";
 import { ThreadStore } from "@yielded/agent/thread-store";
-import { Context, Effect, Layer, ManagedRuntime } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as ManagedRuntime from "effect/ManagedRuntime";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { ThreadMutationGate, ThreadMaintenanceAlarm } from "../src/Alarm.ts";
 import { DurableObjectContext, ThreadObjectNamespace } from "../src/CloudflareBindings.ts";
@@ -35,7 +38,7 @@ export const sharedOwnerRuntime = (
   const application = Layer.unwrap(
     Effect.gen(function* () {
       // Each service is supplied by layerInHost before the application is constructed.
-      yield* SqlClient;
+      yield* SqlClient.SqlClient;
       yield* PreparedInputAdmission;
       yield* ThreadMutationGate;
       yield* LocalReads;

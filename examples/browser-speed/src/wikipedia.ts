@@ -1,4 +1,5 @@
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import type { Frame } from "puppeteer-core/lib/esm/puppeteer/puppeteer-core-browser.js";
 
 import { Browser } from "./browser.ts";

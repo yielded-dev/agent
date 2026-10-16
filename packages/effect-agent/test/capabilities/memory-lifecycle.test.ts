@@ -15,7 +15,9 @@ import {
   MemoryKey,
   MemoryReader,
 } from "@yielded/agent/memory-store";
-import { Schema as NamespaceSchema, Effect, Ref } from "effect";
+import * as Effect from "effect/Effect";
+import * as Ref from "effect/Ref";
+import * as NamespaceSchema from "effect/Schema";
 
 const TestNamespace = MemoryNamespace.define({
   name: "test/memory",

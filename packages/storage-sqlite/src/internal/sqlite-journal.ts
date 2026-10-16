@@ -5,10 +5,12 @@ import {
   type CorruptionErrorFields,
   type StorageErrorFields,
 } from "@yielded/agent-storage-sql/sql-storage";
-import { Effect, Option, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
-import type { Connection } from "effect/sql/SqlConnection";
-import { isSqlError, type SqlError } from "effect/sql/SqlError";
+import type * as SqlConnection from "effect/sql/SqlConnection";
+import * as SqlError from "effect/sql/SqlError";
 
 import { SqliteStorageConfig } from "../SqliteStorageConfig.ts";
 import {
@@ -26,7 +28,7 @@ class SqliteJournalModeRow extends Schema.Class<SqliteJournalModeRow>("SqliteJou
 
 const storageError =
   (operation: string) =>
-  (error: SqlError): SqliteStorageError =>
+  (error: SqlError.SqlError): SqliteStorageError =>
     SqliteStorageError.make({
       cause: error,
       operation,
@@ -48,7 +50,7 @@ const DatabaseHeader = Schema.Tuple([
   Schema.Struct({ user_version: Schema.Int, schema_object_count: Schema.Natural }),
 ]);
 
-const connectionModes = new WeakMap<Connection, "FULL" | "NORMAL">();
+const connectionModes = new WeakMap<SqlConnection.Connection, "FULL" | "NORMAL">();
 
 /** Select once per actual connection, including aliases with different SQL transformations. */
 export const configureSqliteSynchronous = Effect.fnUntraced(function* () {
@@ -168,7 +170,7 @@ export const initializeSqliteJournalKernel = Effect.fnUntraced(function* () {
 
   const classifyWriteFailure =
     (operation: string) =>
-    (error: SqlError): SqliteStorageError | SqliteWriteContention =>
+    (error: SqlError.SqlError): SqliteStorageError | SqliteWriteContention =>
       error.reason._tag === "LockTimeoutError"
         ? SqliteWriteContention.make({
             cause: error,
@@ -186,7 +188,7 @@ export const initializeSqliteJournalKernel = Effect.fnUntraced(function* () {
         <A, E, R>(body: Effect.Effect<A, E, R>) =>
           makeSqlTransaction(sql, { begin: "BEGIN IMMEDIATE" })(body).pipe(
             Effect.mapError((error) =>
-              isSqlError(error) ? classifyWriteFailure(operation)(error) : error,
+              SqlError.isSqlError(error) ? classifyWriteFailure(operation)(error) : error,
             ),
           ),
       withReadTransaction:
@@ -194,7 +196,7 @@ export const initializeSqliteJournalKernel = Effect.fnUntraced(function* () {
         <A, E, R>(body: Effect.Effect<A, E, R>) =>
           makeSqlTransaction(sql, { begin: "BEGIN" })(body).pipe(
             Effect.mapError((error) =>
-              isSqlError(error) ? storageError(operation)(error) : error,
+              SqlError.isSqlError(error) ? storageError(operation)(error) : error,
             ),
           ),
       isTransactionFailure: Schema.is(Schema.Union([SqliteStorageError, SqliteWriteContention])),

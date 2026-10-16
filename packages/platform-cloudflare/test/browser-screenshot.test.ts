@@ -11,7 +11,8 @@ import {
   PageScreenshotRequest,
   type PageScreenshotError,
 } from "@yielded/agent/page-screenshot";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import { describe, expect, it } from "vite-plus/test";
 
 interface RequestOverrides {

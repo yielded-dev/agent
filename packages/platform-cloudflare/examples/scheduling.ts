@@ -7,8 +7,10 @@ import {
 import { type DurableSubmitAgent } from "@yielded/agent/durable-agent-runtime";
 import { type ScheduleAuthorizer } from "@yielded/agent/schedule";
 import { type ScheduleCreateOptions, Scheduling } from "@yielded/agent/scheduling";
-import { Effect, Layer, type Schema } from "effect";
 import { WorkerEnvironment } from "effect-cf";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as Schema from "effect/Schema";
 
 /**
  * Export the returned class. The cached policy Layer must not acquire resources that need

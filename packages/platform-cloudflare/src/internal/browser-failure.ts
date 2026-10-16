@@ -1,5 +1,9 @@
-import type { Effect } from "effect";
-import { Cause, Data, ErrorReporter, Predicate, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Data from "effect/Data";
+import type * as Effect from "effect/Effect";
+import * as ErrorReporter from "effect/ErrorReporter";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
 
 /** Source-authored stages and classifications only; never retain SDK text or session capabilities. */
 export class BrowserRunFailure extends Data.TaggedError("BrowserRunFailure")<{

@@ -10,7 +10,10 @@ import {
   SubagentReservations,
   SubagentReservationsMemoryLive,
 } from "@yielded/agent/subagent-reservations";
-import { Deferred, Effect, Fiber, Schema } from "effect";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Schema from "effect/Schema";
 
 const decodeRunId = Schema.decodeSync(RunId);
 const decodeToolCallId = Schema.decodeSync(ToolCallId);

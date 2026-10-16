@@ -1,6 +1,13 @@
 import { toolFailureObserverLayer } from "@yielded/agent/run-options";
-import { Context, DateTime, Effect, Layer, Option, Predicate, Redacted, Schema } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { PlannerError } from "../domain.ts";
 
@@ -179,7 +186,7 @@ const unavailable = () =>
 export const FailureDiagnosticsLive = Layer.effect(
   FailureDiagnostics,
   Effect.gen(function* () {
-    const sql = yield* SqlClient;
+    const sql = yield* SqlClient.SqlClient;
     const failpoint = yield* DiagnosticFailpoint;
 
     yield* failpoint.hit("schema:before");

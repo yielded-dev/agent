@@ -1,5 +1,5 @@
-import { NodeCrypto } from "@effect/platform-node";
-import { PgClient } from "@effect/sql-pg";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as PgClient from "@effect/sql-pg/PgClient";
 import { expect, it } from "@effect/vitest";
 import * as PostgresStorage from "@yielded/agent-storage-postgres/postgres-storage";
 import {
@@ -11,7 +11,9 @@ import {
 import { DurableRuntimeFailpointLocation } from "@yielded/agent/durable-failpoint";
 import { submissionLedgerConformanceCases } from "@yielded/agent/testing/submission-ledger-conformance";
 import { threadStoreConformanceCases } from "@yielded/agent/testing/thread-store-conformance";
-import { Effect, Layer, Redacted } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
 
 /**
  * Keep certification outside the adapter package to avoid a storage-postgres -> testing cycle.

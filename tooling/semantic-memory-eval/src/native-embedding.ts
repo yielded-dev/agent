@@ -1,6 +1,11 @@
 import { pipeline, type FeatureExtractionPipeline } from "@huggingface/transformers";
-import { Clock, Effect, Layer, Ref, Semaphore } from "effect";
-import { AiError, EmbeddingModel } from "effect/ai";
+import * as AiError from "effect/ai/AiError";
+import * as EmbeddingModel from "effect/ai/EmbeddingModel";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Semaphore from "effect/Semaphore";
 
 import { MODEL_ID, MODEL_REVISION } from "./contracts.ts";
 

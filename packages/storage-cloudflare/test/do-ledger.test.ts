@@ -1,5 +1,5 @@
-import { BrowserCrypto } from "@effect/platform-browser";
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import { DoValueBoundExceeded } from "@yielded/agent-storage-cloudflare/do-storage-error";
 import { DoStorageFailpoint } from "@yielded/agent-storage-cloudflare/do-storage-failpoint";
 import {
@@ -29,8 +29,14 @@ import {
 } from "@yielded/agent/submission-ledger";
 import { submissionLedgerConformanceCases } from "@yielded/agent/testing/submission-ledger-conformance";
 import { runInDurableObject } from "cloudflare:test";
-import { Cause, Effect, Exit, Layer, Option, Schema, Stream } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
+import * as Stream from "effect/Stream";
 import { describe, expect, it } from "vite-plus/test";
 
 import { instrumentedStorage } from "../../../test/fixtures/instrumented-storage.ts";

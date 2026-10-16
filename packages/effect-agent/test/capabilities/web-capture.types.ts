@@ -1,8 +1,11 @@
 import type { PageCapture } from "@yielded/agent/page-capture";
 import * as WebCapture from "@yielded/agent/web-capture";
-import type { Layer } from "effect";
-import { Context, Effect, Schema, SchemaGetter } from "effect";
-import type { Tool } from "effect/ai";
+import type * as Tool from "effect/ai/Tool";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import type * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
 
 const PricingSchema = Schema.Struct({
   plans: Schema.Array(Schema.Struct({ name: Schema.String, monthlyUsd: Schema.Number })),

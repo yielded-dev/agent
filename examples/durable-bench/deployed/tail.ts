@@ -1,4 +1,5 @@
-import { Option, Schema } from "effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 import { Invocation } from "./model.ts";
 import { Target } from "./worker/protocol.ts";

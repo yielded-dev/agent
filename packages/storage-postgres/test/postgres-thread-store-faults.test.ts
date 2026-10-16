@@ -29,8 +29,17 @@ import {
   ThreadStoreError,
   type AppendResult,
 } from "@yielded/agent/thread-store";
-import { Cause, DateTime, Effect, Exit, Fiber, Layer, Option, Ref, Schema, Stream } from "effect";
+import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
+import * as Stream from "effect/Stream";
 
 import {
   clientLayer,

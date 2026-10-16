@@ -1,4 +1,4 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {
   type ScheduleAuthorizer,
   type SchedulingLimits,
@@ -9,7 +9,13 @@ import {
   defaultSchedulingLimits,
 } from "@yielded/agent/schedule";
 import { type ScheduleProcessFailure, Scheduling, ScheduleDriver } from "@yielded/agent/scheduling";
-import { Cause, Duration, Effect, Layer, Option, PubSub, Result } from "effect";
+import * as Cause from "effect/Cause";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as PubSub from "effect/PubSub";
+import * as Result from "effect/Result";
 
 import type { NodeDurableHost } from "./NodeDurableHost.ts";
 import { nodeScheduledInputAdmissionLayer } from "./NodeSubscriptions.ts";

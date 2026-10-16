@@ -1,4 +1,6 @@
-import { Effect, FileSystem, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Schema from "effect/Schema";
 
 import { EvalDataError, type EvalObservation } from "./contracts.ts";
 import { decodeObservationLines } from "./corpus.ts";

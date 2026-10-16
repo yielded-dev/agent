@@ -1,5 +1,6 @@
 import { parsePatch } from "diff";
-import { Option, Schema } from "effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 /** Host-authored disclosure; omitted payloads are never claimed as reviewed. */
 export class GeneratedContentOmission extends Schema.Class<GeneratedContentOmission>(

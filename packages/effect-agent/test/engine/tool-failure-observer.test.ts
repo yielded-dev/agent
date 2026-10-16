@@ -17,23 +17,25 @@ import {
   type ToolBrokerPass,
   type ToolBrokerService,
 } from "@yielded/agent/tool-broker";
-import {
-  Cause,
-  Context,
-  Deferred,
-  Effect,
-  ErrorReporter,
-  Exit,
-  Fiber,
-  Layer,
-  Logger,
-  Ref,
-  References,
-  Schema,
-  Stream,
-  Tracer,
-} from "effect";
-import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as ErrorReporter from "effect/ErrorReporter";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as Ref from "effect/Ref";
+import * as References from "effect/References";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as Tracer from "effect/Tracer";
 import type { expectTypeOf as ExpectTypeOf } from "vite-plus/test";
 
 import { deliverToolFailure } from "../../src/engine/internal/tool-derivative.ts";

@@ -5,10 +5,13 @@ import {
   McpToolkitMismatch,
   type McpConnection,
 } from "@yielded/agent/mcp";
-import type { JsonSchema } from "effect";
-import { Effect, JsonPointer, Layer, Schema } from "effect";
-import { Tool } from "effect/ai";
 import * as McpSchema from "effect/ai/McpSchema";
+import * as Tool from "effect/ai/Tool";
+import * as Effect from "effect/Effect";
+import * as JsonPointer from "effect/JsonPointer";
+import type * as JsonSchema from "effect/JsonSchema";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { DocContentToolkit, FetchDocument } from "./definition.ts";
 

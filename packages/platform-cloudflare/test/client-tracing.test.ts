@@ -1,4 +1,4 @@
-import { BrowserCrypto } from "@effect/platform-browser";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import { describe, expect, it } from "@effect/vitest";
 import {
   threadNamespaceLayer,
@@ -6,8 +6,14 @@ import {
 } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import { CloudflareThreadClient } from "@yielded/agent-platform-cloudflare/cloudflare-thread-client";
 import { CanonicalSequence } from "@yielded/agent/records";
-import { Cause, Deferred, Effect, Exit, Fiber, Layer, Schema } from "effect";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 
 import { decodeThreadId } from "./fixtures.ts";
 

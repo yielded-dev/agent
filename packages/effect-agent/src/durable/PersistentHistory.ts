@@ -1,5 +1,9 @@
-import { DateTime, Effect, Layer, Schema, Stream } from "effect";
-import { Prompt } from "effect/ai";
+import * as Prompt from "effect/ai/Prompt";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { type ThreadId, type RunId } from "../core/Identifiers.ts";
 import { type RunCompleted as RunCompletedEvent } from "../core/RunEvent.ts";

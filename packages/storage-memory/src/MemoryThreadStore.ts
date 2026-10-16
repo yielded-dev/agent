@@ -130,20 +130,18 @@ import {
   type WorkerReportingMode,
   type ThreadWorkStorage,
 } from "@yielded/agent/thread-work";
-import {
-  Context,
-  Crypto,
-  Effect,
-  Layer,
-  MutableRef,
-  Option,
-  PubSub,
-  Ref,
-  Schema,
-  Semaphore,
-  Stream,
-} from "effect";
-import { Base64 } from "effect/encoding";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Base64 from "effect/encoding/Base64";
+import * as Layer from "effect/Layer";
+import * as MutableRef from "effect/MutableRef";
+import * as Option from "effect/Option";
+import * as PubSub from "effect/PubSub";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
+import * as Stream from "effect/Stream";
 
 import {
   MemoryThreadStoreKernel,

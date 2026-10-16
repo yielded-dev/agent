@@ -47,8 +47,8 @@ bun add @yielded/agent@beta effect
 
 ```ts
 import { Agent, AgentRuntime } from "@yielded/agent";
-import { Schema } from "effect";
-import { Toolkit } from "effect/ai";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Schema from "effect/Schema";
 
 const triage = Agent.make("triage", {
   input: Schema.String,

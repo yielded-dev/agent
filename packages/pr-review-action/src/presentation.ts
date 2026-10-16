@@ -7,7 +7,7 @@ import {
   type ReviewReport,
   type ReviewSeverity,
 } from "@yielded/agent-pr-review/review";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { type GeneratedContentOmission } from "./generated-content.ts";
 import { reviewMarker, reviewPauseMarker, type ReviewHistoryItem } from "./selection.ts";

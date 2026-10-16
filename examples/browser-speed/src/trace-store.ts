@@ -1,4 +1,8 @@
-import { Clock, Context, Effect, Schema, Semaphore } from "effect";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 
 import { LabError, PrivateEntry, Report, TraceArchive, TraceEvent } from "./contract.ts";
 

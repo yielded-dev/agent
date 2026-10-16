@@ -1,4 +1,4 @@
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import {
   makeCanonicalStorage,
   recordBatchId,
@@ -41,8 +41,8 @@ import * as References from "effect/References";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
-import { classifySqliteError, SqlError } from "effect/sql/SqlError";
-import { CurrentTransformer, type Statement } from "effect/sql/Statement";
+import * as SqlError from "effect/sql/SqlError";
+import * as Statement from "effect/sql/Statement";
 import * as Stream from "effect/Stream";
 import * as Tracer from "effect/Tracer";
 
@@ -82,7 +82,7 @@ const MAX_RECORD_CACHE_JSON_BYTES = 8 * 1024 * 1024;
 const MAX_RECORD_CACHE_ENTRIES = 4_096;
 /** Durable Object SQL storage allows at most 100 bound parameters per statement. */
 const MAX_BOUND_PARAMETERS = 100;
-const isSqlError = Schema.is(SqlError);
+const isSqlError = Schema.is(SqlError.SqlError);
 
 const isNativeClient = Schema.is(
   Schema.declare<SqliteClient.SqliteClient>((value): value is SqliteClient.SqliteClient =>
@@ -260,7 +260,7 @@ const noFailpoint: DoJournalFailpoint = () => Effect.void;
 
 const storageError =
   (operation: string) =>
-  (error: SqlError): DoStorageError =>
+  (error: SqlError.SqlError): DoStorageError =>
     DoStorageError.make({
       cause: error,
       operation,
@@ -678,7 +678,7 @@ const makeJournal = Effect.fnUntraced(function* (
     // Effectful statement transformers and exported SQL spans retain the ordinary path.
     const ordinaryStatement = yield* Effect.withFiber((fiber) =>
       Effect.succeed(
-        fiber.getRef(CurrentTransformer) !== undefined ||
+        fiber.getRef(Statement.CurrentTransformer) !== undefined ||
           (fiber.getRef(References.TracerEnabled) &&
             fiber.getRef(Tracer.Tracer) !== Tracer.nativeTracer),
       ),
@@ -703,7 +703,7 @@ const makeJournal = Effect.fnUntraced(function* (
     if (workPlan === undefined) return false;
 
     const native = yield* Effect.suspend(() => {
-      const query = (statement: Statement<object>, operation: string) =>
+      const query = (statement: Statement.Statement<object>, operation: string) =>
         Result.try({
           try: () => {
             const [text, parameters] = statement.compile();
@@ -712,8 +712,8 @@ const makeJournal = Effect.fnUntraced(function* (
           },
           catch: (cause) =>
             storageError(operation)(
-              SqlError.make({
-                reason: classifySqliteError(cause, {
+              SqlError.SqlError.make({
+                reason: SqlError.classifySqliteError(cause, {
                   operation,
                   message: "Native canonical statement failed",
                 }),

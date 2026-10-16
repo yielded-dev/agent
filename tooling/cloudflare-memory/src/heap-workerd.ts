@@ -1,6 +1,11 @@
-import { Effect, Fiber, FileSystem, Schedule, Schema } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/http";
-import { Socket } from "effect/socket";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
+import * as Socket from "effect/socket/Socket";
 import { convertV4MiniflareOptions, Log, LogLevel, Miniflare } from "miniflare";
 
 import { HeapProbeError, HeapUsage, ObjectStatus, WorkerdSample } from "./heap-contracts.ts";

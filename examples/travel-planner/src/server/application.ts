@@ -20,8 +20,12 @@ import {
   getRecord,
 } from "@yielded/agent/thread-store";
 import { FrameworkMessage } from "@yielded/agent/worker";
-import { Context, Effect, Option, Schema, Stream } from "effect";
 import { WorkerEnvironment } from "effect-cf";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { mergeSpeech } from "../conversation.ts";
 import {

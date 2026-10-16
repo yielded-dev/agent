@@ -1,9 +1,9 @@
-import { OpenAiTool } from "@effect/ai-openai";
+import * as OpenAiTool from "@effect/ai-openai/OpenAiTool";
 import { Subagent, Agent } from "@yielded/agent";
 import { ThreadObjectIdentity } from "@yielded/agent-platform-cloudflare/cloudflare-bindings";
 import { SubagentGrant } from "@yielded/agent/subagent-contract";
-import { Effect } from "effect";
-import { Toolkit } from "effect/ai";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Effect from "effect/Effect";
 
 import { PlannerError } from "../domain.ts";
 import { ReadTravelPage } from "../research.ts";

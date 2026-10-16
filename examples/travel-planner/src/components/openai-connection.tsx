@@ -1,6 +1,7 @@
 import { useAtom, useAtomSet, useAtomValue } from "@effect/atom-react";
-import { Option, Redacted } from "effect";
-import { AsyncResult } from "effect/reactivity";
+import * as Option from "effect/Option";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
+import * as Redacted from "effect/Redacted";
 import { useState } from "react";
 
 import {

@@ -1,7 +1,7 @@
 import { Subagent } from "@yielded/agent";
 import { NodeDurableHost } from "@yielded/agent-platform-node";
 import { SubagentReservationsMemoryLive } from "@yielded/agent/subagent-reservations";
-import { Layer } from "effect";
+import * as Layer from "effect/Layer";
 
 import { Coordinator } from "./coordinator.ts";
 import { Research } from "./delegation.ts";

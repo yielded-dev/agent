@@ -1,5 +1,12 @@
-import { Effect, Layer, Option, Schema, Stream } from "effect";
-import { LanguageModel, Model, type Prompt, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Prompt from "effect/ai/Prompt";
+import type * as Response from "effect/ai/Response";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { PlannerInput, Trip, SaveTripRequest, PlannerSettings } from "../../src/domain.ts";
 import { PlannerAttempt, trackTool } from "../../src/server/progress.ts";

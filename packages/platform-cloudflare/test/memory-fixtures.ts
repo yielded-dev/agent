@@ -17,8 +17,10 @@ import {
   type MemoryMutationPoint,
 } from "@yielded/agent/memory-store";
 import { Principal } from "@yielded/agent/submission-ledger";
-import { Effect, Layer, Schema } from "effect";
 import { DurableObjectState } from "effect-cf";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 export const MemoryProjects = MemoryNamespace.define({
   name: "test/projects",

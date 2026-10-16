@@ -1,22 +1,22 @@
 import { fileURLToPath } from "node:url";
 
-import { NodeServices } from "@effect/platform-node";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, layer } from "@effect/vitest";
-import {
-  Cause,
-  ConfigProvider,
-  Effect,
-  Exit,
-  FileSystem,
-  Option,
-  Path,
-  PlatformError,
-  Schema,
-  Stream,
-} from "effect";
-import { Yaml } from "effect/encoding";
-import { HttpClient, HttpClientResponse } from "effect/http";
-import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import * as Cause from "effect/Cause";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as Effect from "effect/Effect";
+import * as Yaml from "effect/encoding/Yaml";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Option from "effect/Option";
+import * as Path from "effect/Path";
+import * as PlatformError from "effect/PlatformError";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { publishRelease, withTemporaryManifest } from "../../../scripts/release-publish.ts";
 

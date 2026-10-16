@@ -1,7 +1,9 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { describe, it } from "@effect/vitest";
 import { submissionLedgerConformanceCases } from "@yielded/agent/testing/submission-ledger-conformance";
-import { Effect, Layer, String } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as String from "effect/String";
 
 import { storage as makeStorage, withTemporaryDatabase } from "./harness.ts";
 

@@ -1,5 +1,6 @@
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
-import { BrowserCrypto } from "@effect/platform-browser";
+import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
+import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
+import * as BrowserCrypto from "@effect/platform-browser/BrowserCrypto";
 import {
   DurableObjectContext,
   ThreadObjectIdentity,
@@ -10,9 +11,14 @@ import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object"
 import { digestDefinitions } from "@yielded/agent/digest";
 import { ThreadId } from "@yielded/agent/identifiers";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
-import { Context, Effect, Layer, Redacted, Ref, Schema } from "effect";
 import { DurableObject, WorkerEnvironment } from "effect-cf";
-import { FetchHttpClient } from "effect/http";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 
 import { EvaluationError, type ModelUsage } from "./contracts.ts";
 import { readLog } from "./host-evidence.ts";

@@ -1,7 +1,13 @@
-import type { Effect, Layer, Option, Schema } from "effect";
-import type { AiError, LanguageModel, Model, Prompt } from "effect/ai";
+import type * as AiError from "effect/ai/AiError";
+import type * as LanguageModel from "effect/ai/LanguageModel";
+import type * as Model from "effect/ai/Model";
+import type * as Prompt from "effect/ai/Prompt";
 import * as Tool from "effect/ai/Tool";
 import * as Toolkit from "effect/ai/Toolkit";
+import type * as Effect from "effect/Effect";
+import type * as Layer from "effect/Layer";
+import type * as Option from "effect/Option";
+import type * as Schema from "effect/Schema";
 import * as S from "effect/Schema";
 
 import type {

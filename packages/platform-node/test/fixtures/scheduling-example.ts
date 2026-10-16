@@ -4,7 +4,9 @@ import { NodeScheduling } from "@yielded/agent-platform-node/node-scheduling";
 import { type ResolvedBinding } from "@yielded/agent/agent-registration";
 import { type DurableSubmitAgent } from "@yielded/agent/durable-agent-runtime";
 import { type ScheduleCreateOptions, Scheduling } from "@yielded/agent/scheduling";
-import { Effect, Layer, type Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as Schema from "effect/Schema";
 
 /** The caller supplies registered bindings, their real digests, and an explicit authorizer. */
 export const schedulingRuntimeLayer = (

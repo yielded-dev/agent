@@ -1,20 +1,19 @@
-import {
-  Cause,
-  Clock,
-  Config,
-  Console,
-  Context,
-  Effect,
-  Exit,
-  FileSystem,
-  Layer,
-  Option,
-  Path,
-  Redacted,
-  Schedule,
-  Schema,
-} from "effect";
-import { HttpClient, HttpClientRequest } from "effect/http";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Config from "effect/Config";
+import * as Console from "effect/Console";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Path from "effect/Path";
+import * as Redacted from "effect/Redacted";
+import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
 
 import { type Upload, State, type Bundle } from "./evidence.ts";
 import { BenchError, check, hash, nonce, read, save, workspace } from "./platform.ts";

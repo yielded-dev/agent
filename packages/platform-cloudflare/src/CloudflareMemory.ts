@@ -36,13 +36,17 @@ import {
 } from "@yielded/agent/semantic-memory-index";
 import { type SemanticCandidateLimits } from "@yielded/agent/semantic-memory-revalidation";
 import { Principal } from "@yielded/agent/submission-ledger";
-import { Clock, Context, Effect, Layer, Schema } from "effect";
 import {
   DurableObject as EffectCfDurableObject,
   DurableObjectState,
   RpcTargets,
   type WorkerEnvironment,
 } from "effect-cf";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 export interface MemoryObjectRpc extends Rpc.DurableObjectBranded {
   memory(encoded: string): Promise<string>;

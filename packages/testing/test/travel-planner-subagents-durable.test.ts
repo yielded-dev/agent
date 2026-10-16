@@ -1,4 +1,4 @@
-import { NodeFileSystem } from "@effect/platform-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { describe, expect, it } from "@effect/vitest";
 import {
   NodeDurableAgentRuntime,
@@ -30,9 +30,16 @@ import {
   SubmissionLookupById,
 } from "@yielded/agent/submission-ledger";
 import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
-import type { PlatformError } from "effect";
-import { Cause, Duration, Effect, Exit, FileSystem, Option, Schema, Stream } from "effect";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
+import type * as PlatformError from "effect/PlatformError";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 const decodeThreadId = Schema.decodeSync(ThreadId);
 const decodeIdempotencyKey = Schema.decodeSync(IdempotencyKey);

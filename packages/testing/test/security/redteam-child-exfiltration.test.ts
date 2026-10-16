@@ -1,4 +1,5 @@
-import { NodeCrypto, NodeFileSystem } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { describe, expect, it } from "@effect/vitest";
 import {
   NodeDurableAgentRuntime,
@@ -25,7 +26,11 @@ import { type CanonicalRecordEnvelope } from "@yielded/agent/records";
 import { childThreadIdFor, runIdForSubmission } from "@yielded/agent/run-journal";
 import { IdempotencyKey } from "@yielded/agent/submission-ledger";
 import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
-import { Effect, FileSystem, type PlatformError, Schema, Stream } from "effect";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import type * as PlatformError from "effect/PlatformError";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 // ---------------------------------------------------------------------------
 // Red-team suite: child exfiltration through the durable join.

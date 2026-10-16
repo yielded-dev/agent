@@ -1,5 +1,7 @@
-import { Effect, Layer, Schema } from "effect";
 import { WorkerEnvironment } from "effect-cf";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { AccountError } from "../../src/auth/account.ts";
 import { PlannerError, TripSiteStore } from "../../src/domain.ts";

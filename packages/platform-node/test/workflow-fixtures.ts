@@ -1,5 +1,5 @@
-import { NodeCrypto } from "@effect/platform-node";
-import { SqliteClient } from "@effect/sql-sqlite-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import {
   NodeDurableAgentRuntime,
   type NodeDurableAgentRuntimeOptions,
@@ -25,9 +25,19 @@ import {
 } from "@yielded/agent/records";
 import { IdempotencyKey, Principal } from "@yielded/agent/submission-ledger";
 import { ThreadRead, ThreadStore } from "@yielded/agent/thread-store";
-import { Effect, FileSystem, Layer, Ref, Schema, Stream } from "effect";
-import { LanguageModel, Model, Toolkit, type Prompt, type Response } from "effect/ai";
-import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Prompt from "effect/ai/Prompt";
+import type * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as ClusterWorkflowEngine from "effect/cluster/ClusterWorkflowEngine";
+import * as SingleRunner from "effect/cluster/SingleRunner";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 export const deploymentId = Schema.decodeSync(DeploymentId)("workflow-certification");
 export const workflowPrefix = "effect-agent/certification/v1";

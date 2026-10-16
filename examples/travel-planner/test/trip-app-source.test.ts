@@ -3,7 +3,7 @@ import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 
 import { type AppFile, PlannerError } from "../src/domain.ts";

@@ -1,5 +1,5 @@
 import { NodeDurableHost } from "@yielded/agent-platform-node";
-import { Layer } from "effect";
+import * as Layer from "effect/Layer";
 
 import { definitions, ModelLive, OpenAiLive, planner } from "./node-agent.ts";
 

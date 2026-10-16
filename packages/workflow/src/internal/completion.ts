@@ -1,4 +1,4 @@
-import { DurableDeferred } from "effect/workflow";
+import * as DurableDeferred from "effect/workflow/DurableDeferred";
 
 import { WorkflowSettlementReference } from "../WorkflowDispatch.ts";
 

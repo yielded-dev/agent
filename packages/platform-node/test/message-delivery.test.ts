@@ -1,4 +1,5 @@
-import { NodeCrypto, NodeFileSystem } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { describe, expect, it } from "@effect/vitest";
 import { NodeDurableAgentRuntime } from "@yielded/agent-platform-node/node-durable-agent-runtime";
 import * as NodeHost from "@yielded/agent-platform-node/node-durable-host";
@@ -21,23 +22,24 @@ import {
   SubmissionLedger,
   SubmissionLookupByKey,
 } from "@yielded/agent/submission-ledger";
-import {
-  Clock,
-  Context,
-  Deferred,
-  Effect,
-  Exit,
-  FileSystem,
-  Fiber,
-  Layer,
-  Option,
-  Schema,
-  Scope,
-  Stream,
-  type PlatformError,
-} from "effect";
-import { LanguageModel, Model, Toolkit, type Response } from "effect/ai";
-import { TestClock } from "effect/testing";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import type * as PlatformError from "effect/PlatformError";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 const sourceThreadId = Schema.decodeSync(ThreadId)("node-message-source-thread");
 const destinationThreadId = Schema.decodeSync(ThreadId)("node-message-destination-thread");

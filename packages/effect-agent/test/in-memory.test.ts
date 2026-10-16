@@ -1,6 +1,17 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Context, Deferred, Effect, Fiber, Layer, Ref, Schema, Stream } from "effect";
-import { LanguageModel, Model, Prompt, type Response, Toolkit } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import * as Prompt from "effect/ai/Prompt";
+import type * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import type { expectTypeOf as ExpectTypeOf } from "vite-plus/test";
 
 import * as Agent from "../src/core/Agent.ts";

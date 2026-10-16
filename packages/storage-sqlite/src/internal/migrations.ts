@@ -8,9 +8,10 @@ import {
 import { createSqlThreadWorkTables } from "@yielded/agent-storage-sql/sql-thread-work";
 import { makeSqliteLayoutInspection } from "@yielded/agent-storage-sql/sqlite-layout-inspection";
 import { CURRENT_RECORD_FORMAT } from "@yielded/agent/records";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
+import type * as SqlError from "effect/sql/SqlError";
 
 import {
   SqliteStorageCompatibilityError,
@@ -132,7 +133,7 @@ const incompatible = (actualVersion: number, message: string) =>
     message: `${message} Keep the original file; the store was not changed.`,
   });
 
-const storageError = (cause: SqlError) =>
+const storageError = (cause: SqlError.SqlError) =>
   SqliteStorageError.make({ operation: "inspect storage layout", cause, message: cause.message });
 
 const inspection = (version: number, statements: ReadonlyArray<string>) =>

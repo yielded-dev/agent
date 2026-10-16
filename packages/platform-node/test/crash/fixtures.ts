@@ -20,8 +20,18 @@ import {
   ReconciliationUncertain,
   ToolReconciler,
 } from "@yielded/agent/tool-reconciler";
-import { Duration, Effect, Layer, Option, Ref, Schema, Stream } from "effect";
-import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 /**
  * Shared contract between the crash-harness test (`crash.test.ts`) and the child worker process

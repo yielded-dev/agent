@@ -2,8 +2,12 @@ import { ContextCompactor } from "@yielded/agent/context-compactor";
 import * as ContextTools from "@yielded/agent/context-tools";
 import { ToolExecutionClass } from "@yielded/agent/durable-step";
 import * as MemoryNotes from "@yielded/agent/memory-notes";
-import { Effect, Layer, Schema, Stream } from "effect";
-import { Tool, Toolkit } from "effect/ai";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { type CompactionEvidence } from "./contracts.ts";
 import { instructions, makeScenario } from "./scenario.ts";

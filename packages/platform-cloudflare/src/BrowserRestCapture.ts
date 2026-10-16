@@ -21,8 +21,15 @@ import {
   type PageCaptureRequest,
 } from "@yielded/agent/page-capture";
 import { SandboxImplementation } from "@yielded/agent/sandbox";
-import { Effect, Layer, Option, Redacted, Schema, Stream } from "effect";
-import { HttpClient, HttpClientRequest, type HttpClientError } from "effect/http";
+import * as Effect from "effect/Effect";
+import * as HttpClient from "effect/http/HttpClient";
+import type * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import {
   BrowserQuickActionWorkersAi,

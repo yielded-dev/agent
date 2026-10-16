@@ -32,7 +32,8 @@ Start with a read-only explanation:
 ```ts twoslash
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { ThreadId } from "@yielded/agent/identifiers";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 const inspect = Effect.gen(function* () {
   const runtime = yield* DurableAgentRuntime;

@@ -1,4 +1,4 @@
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import { type Receipt } from "@yielded/agent/durable-agent-runtime";
 import { ToolCallId } from "@yielded/agent/identifiers";
 import { type CanonicalRecordEnvelope, type SubagentStarted } from "@yielded/agent/records";
@@ -8,7 +8,8 @@ import {
   toolCallSettledRecordId,
 } from "@yielded/agent/run-journal";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
 import { expect } from "vite-plus/test";
 

@@ -5,9 +5,22 @@ import * as AgentRuntime from "@yielded/agent/agent-runtime";
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { RunId, ThreadId, TurnId } from "@yielded/agent/identifiers";
 import { ThreadHistory } from "@yielded/agent/thread-history";
-import { Cause, Clock, Duration, Effect, Exit, Fiber, Layer, Schema, Stream } from "effect";
-import { AiError, LanguageModel, Model, type Response, Tool, Toolkit } from "effect/ai";
-import { TestClock } from "effect/testing";
+import * as AiError from "effect/ai/AiError";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 let threadSequence = 0;
 

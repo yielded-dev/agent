@@ -1,4 +1,4 @@
-import { SqliteClient } from "@effect/sql-sqlite-do";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import { doMessageDeliveryStoreLayer } from "@yielded/agent-storage-cloudflare/do-message-delivery-store";
 import { DoStorageFailpoint } from "@yielded/agent-storage-cloudflare/do-storage-failpoint";
 import { ledgerLayer } from "@yielded/agent-storage-cloudflare/do-submission-ledger";
@@ -10,7 +10,8 @@ import { handleEncodedPortRequest } from "@yielded/agent-storage-cloudflare/port
 import { DurableRuntimeFailpoint } from "@yielded/agent/durable-failpoint";
 import { WakeScheduler } from "@yielded/agent/wake-scheduler";
 import { DurableObject } from "cloudflare:workers";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 /**
  * SQLite-backed Durable Object shell hosting the WP1/WP2 adapter suites. Tests use

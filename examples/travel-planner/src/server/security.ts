@@ -1,5 +1,7 @@
 import { RunToolAuthorization } from "@yielded/agent/run-options";
-import { Effect, Layer, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { PlannerInput, PublishTripRequest } from "../domain.ts";
 

@@ -16,9 +16,14 @@ import {
   ThreadStoreError,
 } from "@yielded/agent/thread-store";
 import { checkExportSource } from "@yielded/agent/thread-transfer";
-import { Context, Crypto, Effect, Layer, Schema, Scope } from "effect";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 import * as SqlClientService from "effect/sql/SqlClient";
-import { CurrentTransformer } from "effect/sql/Statement";
+import * as Statement from "effect/sql/Statement";
 
 import {
   CurrentSqliteStorageVersion,
@@ -250,7 +255,7 @@ export const exclusiveRunStorageLayer = Layer.effectContext(
         );
       }),
       Context.merge(
-        Context.omit(CurrentTransformer, exclusive.sql.transactionService)(live),
+        Context.omit(Statement.CurrentTransformer, exclusive.sql.transactionService)(live),
         context,
       ),
     );

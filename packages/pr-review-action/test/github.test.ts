@@ -1,9 +1,15 @@
 import { describe, expect, it } from "@effect/vitest";
 import { ReviewFollowUp } from "@yielded/agent-pr-review/review";
-import { Effect, Exit, Fiber, Logger, Redacted, Schema } from "effect";
-import { Base64 } from "effect/encoding";
-import { HttpClient, HttpClientResponse } from "effect/http";
-import { TestClock } from "effect/testing";
+import * as Effect from "effect/Effect";
+import * as Base64 from "effect/encoding/Base64";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Logger from "effect/Logger";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 
 import { makeGitHubClient } from "../src/github.ts";
 import { reviewMarker, reviewPauseMarker, type ReviewHistoryItem } from "../src/selection.ts";

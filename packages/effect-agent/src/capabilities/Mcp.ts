@@ -1,19 +1,18 @@
-import {
-  Array,
-  type JsonSchema,
-  Context,
-  Crypto,
-  Duration,
-  Effect,
-  JsonPointer,
-  type Layer,
-  Option,
-  Schema,
-  type Scope,
-} from "effect";
-import { Tool, type Toolkit } from "effect/ai";
 import * as McpSchema from "effect/ai/McpSchema";
-import { Hex } from "effect/encoding";
+import * as Tool from "effect/ai/Tool";
+import type * as Toolkit from "effect/ai/Toolkit";
+import * as Array from "effect/Array";
+import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
+import * as JsonPointer from "effect/JsonPointer";
+import type * as JsonSchema from "effect/JsonSchema";
+import type * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 

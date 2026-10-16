@@ -13,7 +13,15 @@ import {
 } from "@yielded/agent-platform-cloudflare/browser-session";
 import { ThreadId } from "@yielded/agent/identifiers";
 import type { ThreadHistory } from "@yielded/agent/thread-history";
-import { Cause, Clock, Effect, Exit, Fiber, type Layer, Option, Redacted, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import type * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import { Browser, makeBrowser } from "./browser.ts";
 import {

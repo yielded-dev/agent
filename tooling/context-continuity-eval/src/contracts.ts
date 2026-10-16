@@ -1,5 +1,5 @@
 import { ExecutionCheckpoint } from "@yielded/agent/thread-store";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { ProfileId } from "./profiles.ts";
 

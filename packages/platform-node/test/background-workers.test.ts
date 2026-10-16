@@ -1,4 +1,4 @@
-import { NodeFileSystem } from "@effect/platform-node";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { expect, it } from "@effect/vitest";
 import * as NodeHost from "@yielded/agent-platform-node/node-durable-host";
 import * as Agent from "@yielded/agent/agent";
@@ -28,22 +28,24 @@ import {
 } from "@yielded/agent/thread-store";
 import { AssignmentDisposition, WorkerError, type WorkerSummary } from "@yielded/agent/worker";
 import { WorkerBudgetAuthorizer, WorkerHostAuthorizer } from "@yielded/agent/worker-host";
-import {
-  Clock,
-  Context,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  FileSystem,
-  Layer,
-  Option,
-  Schema,
-  Scope,
-  Stream,
-} from "effect";
-import { LanguageModel, Model, Tool, Toolkit, type Response } from "effect/ai";
-import { TestClock } from "effect/testing";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import type * as Response from "effect/ai/Response";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 const principal = Schema.decodeSync(Principal)("worker-owner");
 const sourceThreadId = Schema.decodeSync(ThreadId)("background-source");

@@ -1,4 +1,5 @@
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
+import * as OpenAiClient from "@effect/ai-openai/OpenAiClient";
+import * as OpenAiLanguageModel from "@effect/ai-openai/OpenAiLanguageModel";
 import { Agent, AgentRuntime, BrowserUse, InMemory } from "@yielded/agent";
 import {
   BrowserSessionError,
@@ -19,19 +20,18 @@ import {
   PageHtmlTarget,
 } from "@yielded/agent/page-capture";
 import { DurableObject } from "cloudflare:workers";
-import {
-  Cause,
-  Effect,
-  ErrorReporter,
-  Layer,
-  Option,
-  Redacted,
-  Result,
-  Schedule,
-  Schema,
-} from "effect";
-import { Tool, Toolkit } from "effect/ai";
-import { FetchHttpClient } from "effect/http";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as ErrorReporter from "effect/ErrorReporter";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
 
 import {
   BrowserDiagnostic,

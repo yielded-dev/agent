@@ -1,6 +1,10 @@
-import { Clock, Context, Effect, Layer, Schema } from "effect";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as SqlClientService from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
+import type * as SqlError from "effect/sql/SqlError";
 
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { type Any as MemoryNamespace, MemoryNamespaceAddress } from "../core/MemoryNamespace.ts";
@@ -274,7 +278,7 @@ const storageError = (
 ): MemoryStorageError => MemoryStorageError.make({ operation, reason });
 
 const query = <A extends object>(
-  effect: Effect.Effect<ReadonlyArray<A>, SqlError>,
+  effect: Effect.Effect<ReadonlyArray<A>, SqlError.SqlError>,
   operation: string,
 ) => effect.pipe(Effect.mapError(() => storageError(operation)));
 

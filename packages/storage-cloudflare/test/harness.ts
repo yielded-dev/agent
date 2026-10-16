@@ -34,8 +34,10 @@ import {
   AppendRequest,
 } from "@yielded/agent/thread-store";
 import { env, runInDurableObject } from "cloudflare:test";
-import { DateTime, Effect, Schema } from "effect";
-import { TestClock } from "effect/testing";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 
 import type { ThreadStorageObject, ScheduleStorageObject } from "./worker.ts";
 

@@ -1,5 +1,9 @@
-import { Context, Option, Predicate, Schema, type Effect } from "effect";
-import { Hex } from "effect/encoding";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
 
 import { SANDBOX_DIAGNOSTIC_MAX_LENGTH, SandboxImplementation } from "./Sandbox.ts";
 

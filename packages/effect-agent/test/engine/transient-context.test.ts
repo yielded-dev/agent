@@ -6,8 +6,18 @@ import { ContextCompactor } from "@yielded/agent/context-compactor";
 import { IdGenerator } from "@yielded/agent/id-generator";
 import { RunId, ThreadId, TurnId } from "@yielded/agent/identifiers";
 import { RunContextPreparation } from "@yielded/agent/run-options";
-import { Context, Effect, Layer, Ref, Schema, Stream } from "effect";
-import { AiError, LanguageModel, Model, Prompt, type Response, Toolkit } from "effect/ai";
+import * as AiError from "effect/ai/AiError";
+import * as LanguageModel from "effect/ai/LanguageModel";
+import * as Model from "effect/ai/Model";
+import * as Prompt from "effect/ai/Prompt";
+import type * as Response from "effect/ai/Response";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { ThreadHistory } from "../../src/engine/ThreadHistory.ts";
 

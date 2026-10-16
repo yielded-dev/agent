@@ -1,15 +1,14 @@
-import {
-  type Layer,
-  Cause,
-  Context,
-  Duration,
-  Effect,
-  Exit,
-  Option,
-  Schema,
-  type Scope,
-} from "effect";
-import { Tool, Toolkit } from "effect/ai";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import type * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { AdditionalToolCatalog, IncludesCatalogDocumentation } from "../core/ToolExposure.ts";

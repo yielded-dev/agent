@@ -8,8 +8,8 @@ import {
   useAtomValue,
 } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
-import { Option } from "effect";
-import { AsyncResult } from "effect/reactivity";
+import * as Option from "effect/Option";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { ArrowUp, ArrowUpRight, Clock3, Map, Menu, Plus, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 

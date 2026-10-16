@@ -6,7 +6,8 @@ import {
   ReviewSearchResult,
   ReviewSource,
 } from "@yielded/agent-pr-review/review-repository";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import { type EvalRepositorySnapshot } from "./contracts.ts";
 

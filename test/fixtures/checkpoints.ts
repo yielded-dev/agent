@@ -17,8 +17,12 @@ import {
   LoadCheckpointRequest,
   SaveCheckpointRequest,
 } from "@yielded/agent/thread-store";
-import { DateTime, Effect, Option, Schema, Stream } from "effect";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
+import * as Stream from "effect/Stream";
 import { expect } from "vite-plus/test";
 
 // Frozen bytes with required compatibility metadata, independent of the current encoder.

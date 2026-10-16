@@ -1,19 +1,17 @@
 import { join } from "node:path";
 
-import {
-  Cause,
-  Clock,
-  Console,
-  DateTime,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  FileSystem,
-  Semaphore,
-  Schema,
-  Stream,
-} from "effect";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Console from "effect/Console";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
+import * as Stream from "effect/Stream";
 
 import {
   history,

@@ -1,5 +1,8 @@
-import { Effect, Schema, type Scope } from "effect";
-import { Tool, Toolkit } from "effect/ai";
+import * as Tool from "effect/ai/Tool";
+import * as Toolkit from "effect/ai/Toolkit";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import { utf8ByteLength } from "../core/internal/utf8.ts";
 import { DiscoveryTool, PinnedTool } from "../core/ToolExposure.ts";

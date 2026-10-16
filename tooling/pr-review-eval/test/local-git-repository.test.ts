@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { NodeServices } from "@effect/platform-node";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import {
   ReviewChange,
@@ -12,7 +12,10 @@ import {
   ReviewReport,
   ReviewRequest,
 } from "@yielded/agent-pr-review/review";
-import { Effect, Result, Schema, Stream } from "effect";
+import * as Effect from "effect/Effect";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { EvalCase, EvalCaseId, EvalSuite, EvalVariantConfiguration } from "../src/contracts.ts";
 import { digestReviewRequest } from "../src/corpus.ts";

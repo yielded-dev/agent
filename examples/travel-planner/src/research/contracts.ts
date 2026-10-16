@@ -1,5 +1,5 @@
 import { ThreadId } from "@yielded/agent/identifiers";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { PlannerSettings, ShortText, Text } from "../domain.ts";
 import { TravelPhoto, TravelUrl } from "../travel-content.ts";

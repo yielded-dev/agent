@@ -1,4 +1,4 @@
-import { Hex } from "effect/encoding";
+import * as Hex from "effect/encoding/Hex";
 
 /** Encode through Effect without requiring browser or Node ambient types in consumers. */
 export const utf8Bytes = (value: string): Uint8Array => {

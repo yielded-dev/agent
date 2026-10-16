@@ -1,8 +1,8 @@
-import type { Scope } from "effect";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 
 import { type ThreadId } from "../core/Identifiers.ts";

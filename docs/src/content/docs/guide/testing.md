@@ -13,7 +13,7 @@ credentials, network calls, or model variance.
 
 ```ts twoslash
 import { ScriptedModel } from "@yielded/agent-testing/scripted-model";
-import { Model } from "effect/ai";
+import * as Model from "effect/ai/Model";
 
 const TestModel = Model.make(
   "scripted",

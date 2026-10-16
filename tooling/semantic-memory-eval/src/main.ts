@@ -1,6 +1,9 @@
-import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Cause, Console, Effect } from "effect";
-import { Command } from "effect/cli";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Cause from "effect/Cause";
+import * as Command from "effect/cli/Command";
+import * as Console from "effect/Console";
+import * as Effect from "effect/Effect";
 
 import { command } from "./command.ts";
 
