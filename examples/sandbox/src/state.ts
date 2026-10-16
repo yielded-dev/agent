@@ -174,6 +174,7 @@ interface Pending {
   readonly settings?: ModelSettings;
 }
 interface Workspace {
+  readonly acceptedSettings: ModelSettings;
   readonly entries: ReadonlyArray<Entry>;
   readonly commands: ReadonlyArray<ShellCommand>;
   readonly drafts: ReadonlyArray<Draft>;
@@ -191,6 +192,7 @@ interface Workspace {
 
 export const workspace = Atom.family((id: string) => {
   const state = Atom.make<Workspace>({
+    acceptedSettings: defaultModelSettings,
     entries: [],
     commands: [],
     drafts: [],
@@ -209,12 +211,7 @@ export const workspace = Atom.family((id: string) => {
   const draft = Atom.make("").pipe(Atom.setIdleTTL("5 minutes"));
   const settingsDraft = Atom.make<ModelSettings | null>(null);
 
-  const settings = Atom.make(
-    (get) =>
-      get(settingsDraft) ??
-      get(state).entries.findLast((entry) => entry.kind === "user")?.settings ??
-      defaultModelSettings,
-  );
+  const settings = Atom.make((get) => get(settingsDraft) ?? get(state).acceptedSettings);
 
   const changeSettings = Atom.fnSync((change: Partial<Record<keyof ModelSettings, string>>, get) =>
     get.set(
@@ -409,6 +406,7 @@ export const workspace = Atom.family((id: string) => {
               let runId = current.runId;
               let drafts = current.drafts;
               let committedTurns = current.committedTurns;
+              let acceptedSettings = current.acceptedSettings;
 
               if (page.cursor > current.cursor) {
                 for (const entry of page.entries) {
@@ -429,6 +427,7 @@ export const workspace = Atom.family((id: string) => {
                   )
                     reviewRequired = true;
                   if (entry.kind === "user") {
+                    acceptedSettings = entry.settings ?? defaultModelSettings;
                     if (entry.submissionId) active = entry.submissionId;
                     if (pending && entry.requestId === pending.requestId) {
                       pending = null;
@@ -457,6 +456,7 @@ export const workspace = Atom.family((id: string) => {
               get.set(state, {
                 ...current,
                 entries: [...entries.values()].slice(-500),
+                acceptedSettings,
                 drafts: drafts.filter(
                   (draft) => draft.runId !== runId || !committedTurns.includes(draft.turnId),
                 ),
