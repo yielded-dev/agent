@@ -1,5 +1,13 @@
 # @yielded/agent
 
+## 0.1.0-beta.187
+
+### Patch Changes
+
+- [#1020](https://github.com/yielded-dev/agent/pull/1020) [`3e18bdd`](https://github.com/yielded-dev/agent/commit/3e18bdd9b3a4a45928ea2d1b88abc008e52b860f) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Allow progress subscriptions at sequence zero to wait for the first submission without creating a Thread.
+
+- [#1023](https://github.com/yielded-dev/agent/pull/1023) [`b5654bb`](https://github.com/yielded-dev/agent/commit/b5654bb685ec47e482e977ee521b8b217dfd0446) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Stream provider reasoning summaries alongside provisional assistant text, with keepalives that release disconnected observers. Export a browser-safe live-text decoder for clients that reconcile previews with canonical history.
+
 ## 0.1.0-beta.186
 
 ### Patch Changes
