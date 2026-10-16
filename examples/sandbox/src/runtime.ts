@@ -8,7 +8,7 @@ import * as ThreadObject from "@yielded/agent-platform-cloudflare/thread-object"
 import { DurableAgentRuntime } from "@yielded/agent/durable-agent-runtime";
 import { ThreadWorkDiscovery } from "@yielded/agent/thread-work";
 import { Effect, Layer, Schema, Stream } from "effect";
-import { DurableObject, WorkerEnvironment } from "effect-cf";
+import { DurableObject, Rpc, WorkerEnvironment } from "effect-cf";
 import { Model } from "effect/ai";
 import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 
@@ -28,6 +28,14 @@ import { Workspace } from "./workspace.ts";
 const Address = Schema.String.check(Schema.isPattern(/^([0-9a-f-]{36})--([0-9a-f-]{36})$/i));
 
 export const ownerOf = (threadId: string) => Schema.decodeSync(Address)(threadId).split("--")[0];
+
+class CommandEventsLifetime extends Rpc.RpcTarget {
+  readonly controller = new AbortController();
+
+  [Symbol.dispose]() {
+    this.controller.abort();
+  }
+}
 
 const provider = Layer.effect(
   OpenAiClient.OpenAiClient,
@@ -136,22 +144,22 @@ export class CodingThread extends ThreadObject.make(application, {
           _tag: "CommandHistoryChanged",
         });
 
-        return yield* commands.watch.pipe(
+        const lifetime = new CommandEventsLifetime();
+
+        const stream = commands.watch.pipe(
           Stream.mapEffect((commands) =>
             Schema.encodeEffect(Schema.fromJsonString(Schema.Array(ShellCommand)))(commands),
           ),
           Stream.changes,
           Stream.as(`${changed}\n`),
           Stream.encodeText,
-          Stream.merge(
-            Stream.tick("15 seconds").pipe(
-              Stream.drop(1),
-              Stream.map(() => new Uint8Array([10])),
-            ),
-            { haltStrategy: "left" },
-          ),
-          (stream) => Stream.toReadableStreamEffect(stream),
+          Stream.toReadableStreamWith(yield* Effect.context(), {
+            signal: lifetime.controller.signal,
+          }),
         );
+
+        // Idle RPC byte streams defer source cancellation until another write.
+        return { stream, lifetime };
       }),
     );
   }

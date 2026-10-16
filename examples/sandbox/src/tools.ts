@@ -1,8 +1,8 @@
 import { ContextWindow } from "@yielded/agent/context-window";
 import { DurableStep, ToolExecutionClass } from "@yielded/agent/durable-step";
 import { ThreadWorkDiscovery, type ThreadWorkRequest } from "@yielded/agent/thread-work";
-import type { SandboxCommand } from "@yielded/sandbox/cloudflare";
-import { Clock, Effect, Option, Schema } from "effect";
+import type { ProcessOutput, SandboxCommand } from "@yielded/sandbox/cloudflare";
+import { Clock, Effect, Option, Result, Schema } from "effect";
 import { Tool, Toolkit } from "effect/ai";
 
 import { CommandOutput } from "./contract.ts";
@@ -115,14 +115,22 @@ export const executeCommand = Effect.fnUntraced(function* (
     recovery: "exactWorkspaceRequired",
   });
 
-  yield* sandbox.exec(command, {
+  const process = yield* sandbox.exec(command, {
     processId: allocation.processId,
     cwd: CODING_ROOT,
     deadlineAt: allocation.deadlineAt,
     workspaceIdentity: allocation.workspaceIdentity,
   });
 
-  return yield* readCommandOutput(allocation, structured);
+  const remaining = Math.max(1, allocation.deadlineAt - (yield* Clock.currentTimeMillis) + 10_000);
+
+  const output = yield* process.outputText({
+    timeout: remaining,
+    maxBytes: 128 * 1024,
+    acknowledge: false,
+  });
+
+  return yield* Effect.fromResult(decodeCommandOutput(output, structured));
 });
 
 export const readCommandOutput = Effect.fnUntraced(function* (
@@ -142,16 +150,25 @@ export const readCommandOutput = Effect.fnUntraced(function* (
     acknowledge: false,
   });
 
+  return yield* Effect.fromResult(decodeCommandOutput(output, structured));
+});
+
+const decodeCommandOutput = (
+  output: ProcessOutput,
+  structured: boolean,
+): Result.Result<CodingToolResult, CodingToolError> => {
   if (structured && output.exitCode === 0 && !output.timedOut) {
     if (output.truncated)
-      return yield* failure(
-        "protocol",
-        "The filesystem helper returned an oversized response; retain its receipt.",
-        "unknown",
+      return Result.fail(
+        failure(
+          "protocol",
+          "The filesystem helper returned an oversized response; retain its receipt.",
+          "unknown",
+        ),
       );
 
-    const reply = yield* Schema.decodeEffect(Schema.fromJsonString(FileReply))(output.stdout).pipe(
-      Effect.mapError((cause) =>
+    return Schema.decodeResult(Schema.fromJsonString(FileReply))(output.stdout).pipe(
+      Result.mapError((cause) =>
         failure(
           "protocol",
           "The filesystem helper returned an invalid response; retain its receipt.",
@@ -159,13 +176,12 @@ export const readCommandOutput = Effect.fnUntraced(function* (
           cause,
         ),
       ),
+      Result.map((reply) => boundedResult({ ...reply, timedOut: false })),
     );
-
-    return boundedResult({ ...reply, timedOut: false });
   }
 
-  return boundedResult({ ...output, nextOffset: null });
-});
+  return Result.succeed(boundedResult({ ...output, nextOffset: null }));
+};
 
 /**
  * The host provides an exact-bound Workspace for the authorized materialization

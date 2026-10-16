@@ -359,16 +359,65 @@ const handle = Effect.fn("Sandbox.fetch")(function* () {
 
       const commandChanges = Stream.unwrap(
         Effect.gen(function* () {
-          const body = yield* Effect.acquireRelease(
-            Effect.tryPromise(() => env.THREADS.getByName(threadId).commandEvents()),
-            Rpc.dispose,
+          type CommandEvents = Awaited<
+            ReturnType<DurableObjectStub<CodingThread>["commandEvents"]>
+          >;
+          let opening: Promise<CommandEvents> | undefined;
+          let received: CommandEvents | undefined;
+          let closed = false;
+
+          const cancel = () => {
+            const observation = received;
+
+            received = undefined;
+
+            try {
+              observation?.lifetime[Symbol.dispose]();
+            } catch {
+              // Disposing the opening RPC may already have revoked this capability.
+            }
+            const body = observation?.stream;
+
+            return body && !body.locked ? body.cancel().catch(() => undefined) : Promise.resolve();
+          };
+
+          // Own the original RPC before awaiting it, including a body returned after cancellation.
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              closed = true;
+            }).pipe(
+              Effect.andThen(Rpc.dispose(opening).pipe(Effect.ignoreCause)),
+              Effect.andThen(
+                Effect.promise(cancel).pipe(
+                  Effect.interruptible,
+                  Effect.timeout("1 second"),
+                  Effect.ignore,
+                ),
+              ),
+            ),
           );
 
+          const observation = yield* Effect.tryPromise(() => {
+            opening = env.THREADS.getByName(threadId).commandEvents();
+
+            return opening.then((value) => {
+              received = value;
+
+              return closed ? cancel().then(() => value) : value;
+            });
+          }).pipe(Effect.interruptible);
+
           return Stream.fromReadableStream({
-            evaluate: () => body,
+            evaluate: () => observation.stream,
+            releaseLockOnEnd: true,
             onError: (cause) => new Cause.UnknownError(cause),
           });
         }),
+      ).pipe(
+        Stream.decodeText(),
+        Stream.splitLines,
+        Stream.map((line) => `${line}\n`),
+        Stream.encodeText,
       );
 
       const pages = Stream.unwrap(
