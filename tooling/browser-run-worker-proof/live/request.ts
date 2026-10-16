@@ -1,10 +1,13 @@
 import { Clock, Effect, Option, type Redacted, Schedule, Schema } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 
-import { Evidence, WorkerFailure, workerRunHeader } from "../src/proof.ts";
+import { Evidence, workerRunHeader } from "../src/proof.ts";
 
 const ResponseDiagnostic = Schema.Struct({
-  headers: Schema.Record(Schema.String, Schema.String),
+  status: Schema.Int,
+  cfRay: Schema.NullOr(Schema.String.check(Schema.isPattern(/^[a-f0-9]{16}-[A-Z]{3}$/))),
+  stampPresent: Schema.Boolean,
+  stampMatched: Schema.Boolean,
   bodyExcerpt: Schema.String,
 });
 
@@ -25,49 +28,11 @@ export const fail = (
   response?: typeof ResponseDiagnostic.Type,
 ) => GateFailure.make({ stage, status, ...(response === undefined ? {} : { response }) });
 
-const safeHeaders = {
-  "cf-ray": Schema.String.check(Schema.isPattern(/^[a-f0-9]{16}-[A-Z]{3}$/)),
-  "cf-cache-status": Schema.Literals([
-    "HIT",
-    "MISS",
-    "DYNAMIC",
-    "BYPASS",
-    "EXPIRED",
-    "STALE",
-    "REVALIDATED",
-    "UPDATING",
-    "NONE",
-    "UNKNOWN",
-  ]),
-  "content-type": Schema.String.check(
-    Schema.isPattern(/^(text\/(plain|html)|application\/json)(;\s*charset=utf-8)?$/i),
-  ),
-  "content-length": Schema.String.check(Schema.isPattern(/^\d{1,12}$/)),
-  server: Schema.Literal("cloudflare"),
-};
-
 // Unknown bodies may echo secrets or account details. Retain only recognized response text.
-const bodyExcerpt = (body: string) => {
-  const known = ["Not found", "Unauthorized", "Attempt already started; never replay it"];
-
-  if (known.includes(body) || /^error code: \d{4}\s*$/.test(body) || body === "")
-    return body.slice(0, 256);
-  const evidence = Schema.decodeOption(Schema.fromJsonString(Evidence))(body);
-
-  if (Option.isSome(evidence))
-    return JSON.stringify({
-      phase: evidence.value.phase,
-      failure: Option.getOrElse(
-        Schema.decodeUnknownOption(Schema.NullOr(WorkerFailure))(evidence.value.failure),
-        () => "worker-failure",
-      ),
-      started: evidence.value.started,
-      attempts: evidence.value.attempts,
-      closed: evidence.value.closed,
-    }).slice(0, 256);
-
-  return "[unrecognized response body redacted]";
-};
+const bodyExcerpt = (body: string) =>
+  body === "Not found" || body === "Unauthorized" || /^error code: \d{4}\s*$/.test(body)
+    ? body.trim()
+    : "[redacted]";
 
 export const request = Effect.fnUntraced(function* (options: {
   readonly operation: "run" | "evidence" | "close";
@@ -92,29 +57,27 @@ export const request = Effect.fnUntraced(function* (options: {
       );
 
     const stamp = response.headers[workerRunHeader];
-    const headers: Record<string, string> = {};
 
-    for (const [name, schema] of Object.entries(safeHeaders)) {
-      const raw = response.headers[name];
-
-      if (raw === undefined) continue;
-      const value = Schema.decodeOption(schema)(raw);
-
-      if (Option.isSome(value)) headers[name] = value.value;
-    }
-    if (stamp !== undefined) headers[workerRunHeader] = stamp === runId ? runId : "[unexpected]";
+    const metadata = {
+      status: response.status,
+      cfRay: Option.getOrNull(
+        Schema.decodeOption(ResponseDiagnostic.fields.cfRay)(response.headers["cf-ray"] ?? null),
+      ),
+      stampPresent: stamp !== undefined,
+      stampMatched: stamp === runId,
+    };
 
     const body = yield* response.text.pipe(
       Effect.timeout("10 seconds"),
       Effect.mapError(() =>
         fail(operation + ":transport-or-timeout", response.status, {
-          headers,
+          ...metadata,
           bodyExcerpt: "[response body unavailable]",
         }),
       ),
     );
 
-    const diagnostic = { headers, bodyExcerpt: bodyExcerpt(body) };
+    const diagnostic = { ...metadata, bodyExcerpt: bodyExcerpt(body) };
 
     // Only this response proves the one-shot request never reached our receiver.
     // Any stamp (even the wrong deployment), transport loss, or 5xx is terminal for /run.
